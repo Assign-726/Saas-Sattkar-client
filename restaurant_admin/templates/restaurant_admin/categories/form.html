@@ -1,0 +1,91 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">{{ title }}</h3>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    {% for field in form %}
+                        <div class="mb-3">
+                            <label for="{{ field.id_for_label }}" class="form-label">
+                                {{ field.label }}
+                                {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            {{ field }}
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                            {% for error in field.errors %}
+                                <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'restaurant_admin:category_list' restaurant_slug=rslug %}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Back to List
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Save
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add Bootstrap classes to form elements
+        const formElements = document.querySelectorAll('input, textarea, select');
+        formElements.forEach(element => {
+            if (element.type !== 'file') {
+                element.classList.add('form-control');
+            }
+        });
+
+        // Add preview for image upload
+        const imageInput = document.querySelector('input[type="file"]');
+        if (imageInput) {
+            const imagePreview = document.createElement('img');
+            imagePreview.id = 'image-preview';
+            imagePreview.style.maxWidth = '200px';
+            imagePreview.style.marginTop = '10px';
+            imagePreview.style.display = 'none';
+            
+            // Check if there's an existing image
+            const existingImage = document.querySelector('.existing-image');
+            if (existingImage) {
+                imagePreview.src = existingImage.src;
+                imagePreview.style.display = 'block';
+                existingImage.parentNode.insertBefore(imagePreview, existingImage);
+                existingImage.remove();
+            } else {
+                imageInput.parentNode.appendChild(imagePreview);
+            }
+
+            imageInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        imagePreview.src = e.target.result;
+                        imagePreview.style.display = 'block';
+                    }
+                    reader.readAsDataURL(file);
+                } else {
+                    imagePreview.style.display = 'none';
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

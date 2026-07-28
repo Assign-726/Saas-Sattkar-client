@@ -1,0 +1,873 @@
+{% extends "restaurant_admin/base.html" %}
+{% load static %}
+
+{% block extra_css %}
+<style>
+/* ── Layout ── */
+.od-page { max-width: 860px; margin: 0 auto; }
+
+/* ── Page header ── */
+.od-top {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 28px; gap: 12px; flex-wrap: wrap;
+}
+.od-back-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: #374151; font-size: 0.9rem; font-weight: 500;
+    text-decoration: none; padding: 7px 14px;
+    border: 1px solid #e2e8f0; border-radius: 8px; background: #fff;
+    transition: all .15s;
+}
+.od-back-btn:hover { border-color: #5E72E4; color: #5E72E4; }
+.od-page-title { font-size: 1.25rem; font-weight: 700; color: #1a202c; margin: 0; }
+
+.od-invoice-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 9px 18px; font-size: 0.83rem; font-weight: 600;
+    border: 1.5px solid #d1d5db; border-radius: 9px;
+    background: #fff; color: #374151; text-decoration: none;
+    transition: all .15s; cursor: pointer;
+}
+.od-invoice-btn:hover { border-color: #5E72E4; color: #5E72E4; }
+
+/* ── Order identity row ── */
+.od-identity { margin-bottom: 24px; }
+.od-number {
+    font-family: 'Courier New', monospace; font-size: 1.6rem;
+    font-weight: 800; color: #5E72E4; letter-spacing: .5px;
+    display: inline-block; margin-right: 12px;
+}
+.od-status-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 14px; border-radius: 20px;
+    font-size: 0.78rem; font-weight: 700; letter-spacing: .3px;
+    vertical-align: middle;
+}
+.osb-pending   { background: #fff8eb; color: #b45309; border: 1.5px solid #fde68a; }
+.osb-served    { background: #ecfdf5; color: #059669; border: 1.5px solid #a7f3d0; }
+.osb-cancelled { background: #fef2f2; color: #dc2626; border: 1.5px solid #fecaca; }
+
+.od-datetime { font-size: 0.83rem; color: #6b7280; margin-top: 5px; display: flex; align-items: center; gap: 6px; }
+.od-datetime i { font-size: 0.8rem; }
+
+/* ── Cards ── */
+.od-card {
+    background: #fff; border: 1px solid #e8edf5; border-radius: 14px;
+    padding: 20px 22px; margin-bottom: 16px;
+}
+
+/* ── Prep timer card ── */
+.prep-card { padding: 20px 22px; }
+.prep-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
+.prep-label { font-size: 0.72rem; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: #6b7280; }
+.prep-status { font-size: 0.75rem; font-weight: 600; color: #5E72E4; }
+.prep-bar-wrap { width: 100%; background: #f1f5f9; border-radius: 99px; height: 7px; overflow: hidden; margin-bottom: 6px; }
+.prep-bar { height: 100%; background: linear-gradient(90deg, #5E72E4, #818cf8); border-radius: 99px; transition: width 1s linear; }
+.prep-times { display: flex; justify-content: space-between; font-size: 0.72rem; color: #94a3b8; margin-bottom: 16px; }
+.prep-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.prep-duration-wrap { display: flex; align-items: center; gap: 6px; }
+.prep-select {
+    border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px;
+    font-size: 0.82rem; color: #374151; background: #f9fafb;
+    outline: none; cursor: pointer;
+}
+.prep-select:focus { border-color: #5E72E4; }
+
+.btn-apply {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 9px 20px; font-size: 0.83rem; font-weight: 600;
+    background: #5E72E4; color: #fff; border: none; border-radius: 8px;
+    cursor: pointer; transition: background .15s;
+}
+.btn-apply:hover { background: #4C63D2; }
+
+.btn-ready {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 9px 18px; font-size: 0.83rem; font-weight: 600;
+    background: #fff; color: #059669;
+    border: 1.5px solid #059669; border-radius: 8px;
+    cursor: pointer; transition: all .15s;
+}
+.btn-ready:hover { background: #ecfdf5; }
+
+/* ── Info cards grid ── */
+.od-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 16px;
+}
+.od-info-card {
+    background: #fff; border: 1px solid #e8edf5; border-radius: 12px;
+    padding: 16px 18px;
+}
+.od-info-label {
+    font-size: 0.68rem; font-weight: 700; letter-spacing: .7px;
+    text-transform: uppercase; color: #94a3b8; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 6px;
+}
+.od-info-label i { font-size: 0.78rem; }
+.od-info-value { font-size: 1.05rem; font-weight: 700; color: #1a202c; }
+
+/* ── Kitchen instructions ── */
+.od-kitchen {
+    background: #fff; border: 1px solid #e8edf5; border-left: 4px solid #5E72E4;
+    border-radius: 12px; padding: 16px 20px; margin-bottom: 16px;
+}
+.od-kitchen-label {
+    font-size: 0.68rem; font-weight: 700; letter-spacing: .7px;
+    text-transform: uppercase; color: #5E72E4; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 6px;
+}
+.od-kitchen-text { font-size: 0.9rem; color: #374151; font-style: italic; line-height: 1.6; }
+
+/* ── Items breakdown ── */
+.od-items-card { background: #fff; border: 1px solid #e8edf5; border-radius: 14px; margin-bottom: 16px; overflow: hidden; }
+.od-items-header { padding: 18px 22px 14px; border-bottom: 1px solid #f1f5f9; }
+.od-items-title { font-size: 1rem; font-weight: 700; color: #1a202c; margin: 0; }
+.od-item-row {
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px 22px; border-bottom: 1px solid #f8fafc;
+    transition: background .12s;
+}
+.od-item-row:last-child { border-bottom: none; }
+.od-item-row:hover { background: #fafbff; }
+.od-item-img {
+    width: 58px; height: 58px; border-radius: 10px;
+    object-fit: cover; flex-shrink: 0; border: 1px solid #e8edf5;
+}
+.od-item-img-placeholder {
+    width: 58px; height: 58px; border-radius: 10px;
+    background: #f1f5f9; display: flex; align-items: center;
+    justify-content: center; flex-shrink: 0; border: 1px solid #e8edf5;
+    color: #cbd5e1; font-size: 1.4rem;
+}
+.od-item-info { flex: 1; min-width: 0; }
+.od-item-name { font-size: 0.95rem; font-weight: 600; color: #1a202c; margin-bottom: 3px; }
+.od-item-qty { font-size: 0.78rem; color: #6b7280; }
+.od-item-price { font-size: 1rem; font-weight: 700; color: #1a202c; white-space: nowrap; }
+
+/* ── Order total card ── */
+.od-total-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.od-total-card { background: #fff; border: 1px solid #e8edf5; border-radius: 14px; padding: 20px 22px; }
+.od-total-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; font-size: 0.88rem; color: #374151; }
+.od-total-row.divider { border-top: 1px solid #f1f5f9; margin-top: 8px; padding-top: 12px; }
+.od-total-row.grand-total { font-size: 1rem; font-weight: 700; color: #1a202c; }
+.od-total-row.discount { color: #dc2626; }
+
+/* ── Action buttons ── */
+.od-actions-card { background: #fff; border: 1px solid #e8edf5; border-radius: 14px; padding: 18px 22px; }
+.od-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; flex-wrap: wrap; }
+.btn-cancel-order {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 22px; font-size: 0.85rem; font-weight: 600;
+    border: 1.5px solid #ef4444; color: #ef4444; background: #fff;
+    border-radius: 9px; cursor: pointer; transition: all .15s;
+    text-decoration: none;
+}
+.btn-cancel-order:hover { background: #fef2f2; color: #ef4444; }
+.btn-serve-order {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 24px; font-size: 0.85rem; font-weight: 600;
+    background: #5E72E4; color: #fff; border: none; border-radius: 9px;
+    cursor: pointer; transition: background .15s;
+    text-decoration: none;
+}
+.btn-serve-order:hover { background: #4C63D2; }
+.od-status-done {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 18px; font-size: 0.85rem; font-weight: 600;
+    border-radius: 9px;
+}
+.od-status-done.served   { background: #ecfdf5; color: #059669; border: 1.5px solid #a7f3d0; }
+.od-status-done.cancelled { background: #fef2f2; color: #dc2626; border: 1.5px solid #fecaca; }
+
+@media (max-width: 640px) {
+    .od-total-grid { grid-template-columns: 1fr; }
+    .od-info-grid { grid-template-columns: 1fr 1fr; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="od-page">
+
+    <!-- ── Page top bar ── -->
+    <div class="od-top">
+        <div class="d-flex align-items-center gap-3">
+            <a href="{% url 'restaurant_admin:order_list' restaurant_slug=rslug %}" class="od-back-btn">
+                <i class="bi bi-arrow-left"></i> Orders
+            </a>
+            <h2 class="od-page-title">Order Details</h2>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+            <a href="{% url 'restaurant_admin:order_edit_manual' restaurant_slug=rslug pk=order.id %}" class="btn btn-sm btn-primary fw-semibold">
+                <i class="bi bi-pencil-square me-1"></i> Edit / Add Items
+            </a>
+            <!-- Combined Bill option commented out for separate billing compliance
+            <a href="{% url 'restaurant_admin:order_invoice' restaurant_slug=rslug pk=order.id %}?type=combined" target="_blank" class="od-invoice-btn">
+                <i class="bi bi-receipt"></i> Combined Bill
+            </a>
+            -->
+            <a href="{% url 'restaurant_admin:order_invoice' restaurant_slug=rslug pk=order.id %}?type=food" target="_blank" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-egg-fried"></i> Food GST Bill
+            </a>
+            <a href="{% url 'restaurant_admin:order_invoice' restaurant_slug=rslug pk=order.id %}?type=liquor" target="_blank" class="btn btn-sm btn-outline-warning">
+                <i class="bi bi-cup-straw"></i> Liquor VAT Bill
+            </a>
+        </div>
+    </div>
+
+    <!-- ── Order identity ── -->
+    <div class="od-identity">
+        <div>
+            <span class="od-number">{{ order.order_number }}</span>
+            <span class="od-status-badge {% if order.status == 'P' %}osb-pending{% elif order.status == 'S' %}osb-served{% elif order.status == 'C' %}osb-cancelled{% endif %}">
+                {{ order.get_status_display }}
+            </span>
+        </div>
+        <div class="od-datetime">
+            <i class="bi bi-calendar3"></i>
+            {{ order.order_time|date:"F d, Y h:i A" }}
+        </div>
+    </div>
+
+    <!-- ── Preparation timer ── -->
+    <div class="od-card prep-card">
+        <div class="prep-top">
+            <span class="prep-label"><i class="bi bi-hourglass-split me-1"></i>Preparation Timer</span>
+            <span class="prep-status" id="prep-status-text">
+                {% if order.prep_minutes %}STATUS: {{ order.prep_minutes }} MIN{% else %}STATUS: NOT SET{% endif %}
+            </span>
+        </div>
+        <div class="prep-bar-wrap">
+            <div class="prep-bar" id="prep-progress" style="width: 0%;"></div>
+        </div>
+        <div class="prep-times">
+            <span>Start{% if order.prep_start %}: {{ order.prep_start|date:"h:i A" }}{% endif %}</span>
+            <span id="remaining-text">{% if order.ready_at %}ETA: {{ order.ready_at|date:"h:i A" }}{% else %}Estimated Completion{% endif %}</span>
+        </div>
+        <div class="prep-actions">
+            <form id="prep-form" method="post" action="{% url 'restaurant_admin:order_set_prep_time' restaurant_slug=rslug pk=order.id %}">
+                {% csrf_token %}
+                <div class="prep-duration-wrap">
+                    <select class="prep-select" name="minutes" id="prep-select">
+                        <option value="">Set Duration</option>
+                        {% for m in minutes_choices %}
+                        <option value="{{ m }}">{{ m }} min</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn-apply">
+                        <i class="bi bi-play-fill"></i> Apply
+                    </button>
+                </div>
+            </form>
+            <form method="post" action="{% url 'restaurant_admin:order_mark_ready' restaurant_slug=rslug pk=order.id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn-ready">
+                    <i class="bi bi-check-circle"></i> Ready Now
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ── Customer info cards ── -->
+    <div class="od-info-grid">
+        <div class="od-info-card">
+            <div class="od-info-label"><i class="bi bi-person"></i> Customer</div>
+            <div class="od-info-value">{{ order.customer_name|default:"Guest" }}</div>
+        </div>
+        {% if order.phone %}
+        <div class="od-info-card">
+            <div class="od-info-label"><i class="bi bi-telephone"></i> Contact</div>
+            <div class="od-info-value">{{ order.phone }}</div>
+        </div>
+        {% endif %}
+        <div class="od-info-card">
+            <div class="od-info-label"><i class="bi bi-grid-3x3-gap"></i> Dining Area</div>
+            <div class="od-info-value">
+                {% if order.table_number %}Table #{{ order.table_number }}{% else %}Pickup / Takeaway{% endif %}
+            </div>
+        </div>
+        {% if order.advance_amount_paid > 0 %}
+        <div class="od-info-card border-start border-4 border-success">
+            <div class="od-info-label text-success"><i class="bi bi-bookmark-star"></i> Advance Deducted</div>
+            <div class="od-info-value text-success">₹{{ order.advance_amount_paid|floatformat:2 }} {% if order.advance_receipt %}({{ order.advance_receipt.receipt_no }}){% endif %}</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ── Kitchen instructions ── -->
+    {% if order.notes %}
+    <div class="od-kitchen">
+        <div class="od-kitchen-label"><i class="bi bi-file-text"></i> Kitchen Instructions</div>
+        <div class="od-kitchen-text">"{{ order.notes }}"</div>
+    </div>
+    {% endif %}
+
+    <!-- ── Items breakdown ── -->
+    <div class="od-items-card">
+        <div class="od-items-header">
+            <h5 class="od-items-title">Items Breakdown ({{ order.items.count }})</h5>
+        </div>
+        {% for item in order.items.all %}
+        <div class="od-item-row">
+            {% if item.menu_item.image %}
+            <img src="{{ item.menu_item.image.url }}" alt="{{ item.menu_item.name }}" class="od-item-img">
+            {% else %}
+            <div class="od-item-img-placeholder"><i class="bi bi-cup-straw"></i></div>
+            {% endif %}
+            <div class="od-item-info">
+                <div class="od-item-name">{{ item.menu_item.name }}</div>
+                <div class="od-item-qty">Quantity: {{ item.quantity }} &times; &#8377;{{ item.unit_price|floatformat:2 }}</div>
+            </div>
+            <div class="od-item-price">&#8377;{{ item.subtotal|floatformat:2 }}</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- ── Order total + actions side by side ── -->
+    <div class="od-total-grid">
+        <!-- Order Total -->
+        <div class="od-total-card">
+            <h6 style="font-weight:700; color:#1a202c; margin-bottom:14px;">Order Total</h6>
+            <div class="od-total-row">
+                <span>Subtotal</span>
+                <span>&#8377;{{ subtotal|floatformat:2 }}</span>
+            </div>
+            {% if cgst_percentage > 0 %}
+            <div class="od-total-row">
+                <span>CGST ({{ cgst_percentage|floatformat:1 }}%)</span>
+                <span>&#8377;{{ cgst_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            {% if sgst_percentage > 0 %}
+            <div class="od-total-row">
+                <span>SGST ({{ sgst_percentage|floatformat:1 }}%)</span>
+                <span>&#8377;{{ sgst_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            {% if cgst_percentage == 0 and sgst_percentage == 0 %}
+            <div class="od-total-row" style="color:#94a3b8;">
+                <span>Taxes (CGST/SGST 0%)</span>
+                <span>&#8377;0.00</span>
+            </div>
+            {% endif %}
+            {% if service_percentage > 0 %}
+            <div class="od-total-row">
+                <span>Service Charge ({{ service_percentage|floatformat:0 }}%)</span>
+                <span>&#8377;{{ service_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            {% if discount_amount > 0 %}
+            <div class="od-total-row discount">
+                <span>Discount</span>
+                <span>-&#8377;{{ discount_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            {% if round_off_amount and round_off_amount != 0 %}
+            <div class="od-total-row">
+                <span>Round Off</span>
+                <span>{% if round_off_amount > 0 %}+&#8377;{{ round_off_amount|floatformat:2 }}{% else %}-&#8377;{{ round_off_amount|floatformat:2|slice:"1:" }}{% endif %}</span>
+            </div>
+            {% endif %}
+            <div class="od-total-row divider grand-total">
+                <span>Total</span>
+                <span>&#8377;{{ total|floatformat:2 }}</span>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="od-total-card" style="display:flex; flex-direction:column; justify-content:space-between;">
+            <h6 style="font-weight:700; color:#1a202c; margin-bottom:14px;">Order Actions</h6>
+            
+            <div class="mb-3">
+                {% if order.payment_status == 'paid' or order.payment_status == 'P' %}
+                <div class="badge bg-success-subtle text-success border border-success px-3 py-2 fw-bold w-100 text-center fs-6 rounded-3">
+                    <i class="bi bi-check-circle-fill me-1"></i> Paid ({{ order.get_payment_method_display }})
+                </div>
+                {% elif order.payment_method == 'O' %}
+                <div class="badge bg-info-subtle text-info border border-info px-3 py-2 fw-bold w-100 text-center fs-6 rounded-3">
+                    <i class="bi bi-shield-check me-1"></i> Online Prepaid Order
+                </div>
+                {% else %}
+                <button type="button" class="btn btn-success fw-bold w-100 py-2 shadow-sm d-flex align-items-center justify-content-center gap-2" data-bs-toggle="modal" data-bs-target="#detailSettleModal">
+                    <i class="bi bi-credit-card-fill"></i> 💳 Settle & Mark Paid
+                </button>
+                {% endif %}
+            </div>
+
+            <div class="od-actions" style="justify-content: flex-start; gap:10px; flex-direction: column;">
+                {% if order.status == 'P' %}
+                <form method="post" action="{% url 'restaurant_admin:order_update_status' restaurant_slug=rslug pk=order.id %}" style="width:100%">
+                    {% csrf_token %}
+                    <input type="hidden" name="status" value="S">
+                    <button type="submit" class="btn-serve-order" style="width:100%; justify-content:center;">
+                        <i class="bi bi-check-circle"></i> Mark as Served
+                    </button>
+                </form>
+                <form method="post" action="{% url 'restaurant_admin:order_update_status' restaurant_slug=rslug pk=order.id %}" style="width:100%">
+                    {% csrf_token %}
+                    <input type="hidden" name="status" value="C">
+                    <button type="submit" class="btn-cancel-order" style="width:100%; justify-content:center;">
+                        <i class="bi bi-x-circle"></i> Cancel Order
+                    </button>
+                </form>
+                {% elif order.status == 'S' %}
+                <div class="od-status-done served" style="width:100%; justify-content:center;">
+                    <i class="bi bi-check-circle-fill"></i> Order Served
+                </div>
+                {% elif order.status == 'C' %}
+                <div class="od-status-done cancelled" style="width:100%; justify-content:center;">
+                    <i class="bi bi-x-circle-fill"></i> Order Cancelled
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Full Settlement Modal on Detail Page -->
+    <div class="modal fade" id="detailSettleModal" tabindex="-1" aria-labelledby="detailSettleModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg overflow-hidden">
+          <div class="modal-header bg-dark text-white py-3">
+            <h5 class="modal-title fw-bold text-white mb-0 d-flex align-items-center" id="detailSettleModalLabel">
+              <i class="bi bi-wallet2 text-warning me-2 fs-4"></i> Settle & Checkout Order
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+
+          <div class="modal-body p-4">
+            <input type="hidden" id="det-settle-order-id" value="{{ order.id }}">
+            <input type="hidden" id="det-settle-grand-total" value="{{ total|floatformat:2 }}">
+
+            <!-- Top Order Info Summary Box -->
+            <div class="p-3 bg-light rounded-3 mb-4 border d-flex justify-content-between align-items-center">
+              <div>
+                <h6 class="fw-bold text-dark mb-1">{% if order.order_number %}{{ order.order_number }}{% else %}Order #{{ order.branch_order_number|default:order.id }}{% endif %}</h6>
+                <div class="text-muted small">{% if order.table %}{{ order.table.name }}{% else %}Counter / Takeaway{% endif %} | Billed To: {{ order.customer_name|default:"Guest" }}</div>
+              </div>
+              <div class="text-end">
+                <span class="d-block text-muted uppercase extra-small fw-bold" style="font-size: 0.75rem;">Amount Payable</span>
+                <span class="fs-3 fw-bold text-success">₹{% if order.advance_amount_paid > 0 %}{{ order.net_payable|floatformat:2 }}{% else %}{{ total|floatformat:2 }}{% endif %}</span>
+              </div>
+            </div>
+
+            {% if order.advance_amount_paid and order.advance_amount_paid > 0 %}
+            <!-- Advance Deposit Settlement Breakdown Card -->
+            <div id="det-modal-advance-deduction-card" class="card border-primary border-opacity-20 bg-primary bg-opacity-10 rounded-3 mb-4 p-3 shadow-sm">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="fw-bold text-dark"><i class="bi bi-bookmark-star-fill text-warning me-1"></i> Advance Deposit Attached ({% if order.advance_receipt %}{{ order.advance_receipt.receipt_no }}{% else %}Deposit Attached{% endif %})</span>
+                <span class="badge bg-primary text-white">Deposit Settlement</span>
+              </div>
+              <div class="row text-center g-2 pt-2 border-top border-primary border-opacity-20">
+                <div class="col-4">
+                  <span class="d-block text-muted small text-uppercase font-weight-bold" style="font-size:0.7rem;">Grand Total</span>
+                  <span class="fw-bold text-dark fs-6">₹{{ total|floatformat:2 }}</span>
+                </div>
+                <div class="col-4 border-start border-end border-primary border-opacity-20">
+                  <span class="d-block text-success small text-uppercase font-weight-bold" style="font-size:0.7rem;">Less Advance Paid</span>
+                  <span class="fw-bold text-success fs-6">-₹{{ order.advance_amount_paid|floatformat:2 }}</span>
+                </div>
+                <div class="col-4">
+                  <span class="d-block text-primary small text-uppercase font-weight-bold" style="font-size:0.7rem;">Net Payable</span>
+                  <span class="fw-bold text-primary fs-5">₹{{ order.net_payable|floatformat:2 }}</span>
+                </div>
+              </div>
+            </div>
+            {% endif %}
+
+            <!-- 1. Select Invoice Mode -->
+            <div class="mb-4">
+              <label class="form-label fw-bold text-dark mb-2">
+                <i class="bi bi-receipt me-1 text-primary"></i> 1. Select Invoice Mode
+              </label>
+              <div class="btn-group w-100 pos-invoice-mode-group" role="group">
+                <input type="radio" class="btn-check" name="det_settle_invoice_mode" id="det_mode_food" value="food" {% if not order.check_item_types.1 %}checked{% endif %}>
+                <label class="btn btn-outline-primary py-2 fw-semibold" for="det_mode_food">
+                  <i class="bi bi-egg-fried me-1"></i> Food GST Invoice
+                </label>
+
+                <input type="radio" class="btn-check" name="det_settle_invoice_mode" id="det_mode_bar" value="liquor" {% if order.check_item_types.1 and not order.check_item_types.0 %}checked{% endif %}>
+                <label class="btn btn-outline-warning text-dark py-2 fw-semibold" for="det_mode_bar">
+                  <i class="bi bi-cup-straw me-1"></i> Bar Excise Bill
+                </label>
+
+                <input type="radio" class="btn-check" name="det_settle_invoice_mode" id="det_mode_split" value="split" {% if order.check_item_types.0 and order.check_item_types.1 %}checked{% endif %}>
+                <label class="btn btn-outline-success py-2 fw-semibold" for="det_mode_split">
+                  <i class="bi bi-layers me-1"></i> Auto-Split Invoices
+                </label>
+              </div>
+            </div>
+
+            <!-- 2. Invoice Serial Number Fields -->
+            <div class="row g-3 mb-4" id="det-row-settlement-serial-numbers">
+              <div class="col-md-6" id="det-wrapper-gstin">
+                <label class="form-label fw-semibold text-dark small mb-1">
+                  <i class="bi bi-card-heading me-1 text-primary"></i>Tax Invoice No. (GST)
+                </label>
+                <input type="text" id="det-gstin-no" class="form-control" value="{{ order.gstin_no|default:'' }}" placeholder="e.g. INV-2026-0042">
+              </div>
+              <div class="col-md-6" id="det-wrapper-excise">
+                <label class="form-label fw-semibold text-dark small mb-1">
+                  <i class="bi bi-file-earmark-medical me-1 text-warning"></i>Retail Excise Bill No. (VAT)
+                </label>
+                <input type="text" id="det-excise-bill-no" class="form-control" value="{{ order.excise_bill_no|default:'' }}" placeholder="e.g. EXC-2026-0042">
+              </div>
+            </div>
+
+            <!-- 3. Split Payment & Multi-Method Engine -->
+            <div class="mb-4 p-3 bg-light rounded-3 border">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <label class="form-label fw-bold text-dark mb-0">
+                  <i class="bi bi-credit-card me-1 text-info"></i> 3. Payment Method & Split Received
+                </label>
+                <button type="button" id="btn-det-add-payment-split" class="btn btn-sm btn-outline-primary fw-semibold">
+                  <i class="bi bi-plus-circle me-1"></i> Add Payment Split
+                </button>
+              </div>
+
+              <div id="det-payment-split-rows-container">
+                <!-- Dynamic split rows -->
+              </div>
+
+              <!-- Live Balance Summary Cards -->
+              <div class="row g-2 mt-2 pt-2 border-top">
+                <div class="col-4">
+                  <div class="p-2 bg-white rounded border text-center">
+                    <span class="d-block text-muted uppercase small fw-bold" style="font-size: 0.7rem;">TOTAL PAID</span>
+                    <span class="fw-bold text-success fs-6" id="det-split-summary-paid">₹0.00</span>
+                  </div>
+                </div>
+                <div class="col-4">
+                  <div class="p-2 bg-white rounded border text-center">
+                    <span class="d-block text-muted uppercase small fw-bold" style="font-size: 0.7rem;">REMAINING DUE</span>
+                    <span class="fw-bold text-danger fs-6" id="det-split-summary-due">₹0.00</span>
+                  </div>
+                </div>
+                <div class="col-4">
+                  <div class="p-2 bg-white rounded border text-center">
+                    <span class="d-block text-muted uppercase small fw-bold" style="font-size: 0.7rem;">STATUS</span>
+                    <span class="badge bg-success mt-1" id="det-split-summary-status">Paid</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer bg-light py-3">
+            <button type="button" class="btn btn-outline-secondary fw-semibold px-3" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" id="btn-submit-detail-save-only" class="btn btn-primary fw-bold px-3 py-2">
+              <i class="bi bi-check-circle me-1"></i> Save Order
+            </button>
+            <button type="button" id="btn-submit-detail-settle" class="btn btn-success fw-bold px-3 py-2">
+              <i class="bi bi-printer me-1"></i> Save & Print Bill
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+</div><!-- /.od-page -->
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // ── Prep countdown ──────────────────────────────────────────────
+    function startCountdown(readyISO, startISO) {
+        if (!readyISO) return;
+        const progressEl = document.getElementById('prep-progress');
+        const remainingEl = document.getElementById('remaining-text');
+        const statusEl = document.getElementById('prep-status-text');
+        const readyAt = new Date(readyISO);
+        const startAt = startISO ? new Date(startISO) : new Date();
+        const total = readyAt - startAt;
+
+        function tick() {
+            const now = new Date();
+            const remain = Math.max(0, readyAt - now);
+            const m = Math.floor(remain / 60000);
+            const s = Math.floor((remain % 60000) / 1000).toString().padStart(2, '0');
+            if (remainingEl) remainingEl.textContent = remain > 0 ? `${m}:${s} remaining` : 'Ready!';
+            if (progressEl && total > 0) {
+                const pct = Math.min(100, Math.max(0, Math.round(((now - startAt) / total) * 100)));
+                progressEl.style.width = pct + '%';
+            }
+            if (remain <= 0) {
+                if (statusEl) statusEl.textContent = 'STATUS: READY';
+                clearInterval(timer);
+            }
+        }
+        tick();
+        const timer = setInterval(tick, 1000);
+    }
+
+    const _readyAt   = "{{ order.ready_at|date:'c'|default:'' }}";
+    const _prepStart = "{{ order.prep_start|date:'c'|default:'' }}";
+    if (_readyAt) startCountdown(_readyAt, _prepStart);
+
+    // ── Prep form AJAX ──────────────────────────────────────────────
+    function getCsrf() {
+        const m = document.cookie.match(/csrftoken=([^;]+)/);
+        return m ? decodeURIComponent(m[1]) : '';
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const grandTotal = parseFloat("{{ total }}") || 0;
+        const advancePaid = parseFloat("{{ order.advance_amount_paid|default:0 }}") || 0;
+        const netPayableTarget = Math.max(0, grandTotal - advancePaid);
+        const dueInitial = parseFloat("{{ order.due_amount|default:0 }}") || netPayableTarget;
+        const hasAlcohol = {% if order.check_item_types.1 %}true{% else %}false{% endif %};
+
+        let detState = {
+            grandTotal: grandTotal,
+            advancePaid: advancePaid,
+            netPayable: netPayableTarget,
+            hasAlcohol: hasAlcohol,
+            calculatedPayments: [],
+            calculatedPaidAmount: 0,
+            calculatedDueAmount: 0,
+            calculatedPaymentStatus: 'paid'
+        };
+
+        function detCreatePaymentSplitRowHtml(method = 'cash', amount = '') {
+          return `
+            <div class="det-payment-split-row row g-2 align-items-center mb-2">
+              <div class="col-6">
+                <select class="form-select form-select-sm det-payment-split-method fw-semibold">
+                  <option value="cash" ${method === 'cash' ? 'selected' : ''}>Cash</option>
+                  <option value="upi" ${method === 'upi' ? 'selected' : ''}>UPI / QR Code</option>
+                  <option value="card" ${method === 'card' ? 'selected' : ''}>Credit / Debit Card</option>
+                  <option value="bank_transfer" ${method === 'bank_transfer' ? 'selected' : ''}>Bank Transfer</option>
+                  <option value="credit" ${method === 'credit' ? 'selected' : ''}>Credit / Pending</option>
+                </select>
+              </div>
+              <div class="col-5">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text">₹</span>
+                  <input type="number" step="0.01" min="0" class="form-control det-payment-split-amount fw-bold text-success" value="${amount}" placeholder="Amount">
+                </div>
+              </div>
+              <div class="col-1 text-end">
+                <button type="button" class="btn btn-sm btn-outline-danger btn-det-delete-payment-row p-1" title="Delete Split">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </div>
+          `;
+        }
+
+        function detInitPaymentSplitRows() {
+          const container = document.getElementById('det-payment-split-rows-container');
+          if (!container) return;
+          container.innerHTML = detCreatePaymentSplitRowHtml('cash', detState.netPayable.toFixed(2));
+          detAttachPaymentSplitEventListeners();
+          detRecalculatePaymentSplits();
+        }
+
+        function detAttachPaymentSplitEventListeners() {
+          const container = document.getElementById('det-payment-split-rows-container');
+          if (!container) return;
+
+          container.querySelectorAll('.det-payment-split-amount').forEach(inp => {
+            inp.removeEventListener('input', detRecalculatePaymentSplits);
+            inp.addEventListener('input', detRecalculatePaymentSplits);
+          });
+
+          container.querySelectorAll('.det-payment-split-method').forEach(sel => {
+            sel.removeEventListener('change', detRecalculatePaymentSplits);
+            sel.addEventListener('change', detRecalculatePaymentSplits);
+          });
+
+          container.querySelectorAll('.btn-det-delete-payment-row').forEach(btn => {
+            btn.onclick = function() {
+              const rows = container.querySelectorAll('.det-payment-split-row');
+              if (rows.length > 1) {
+                this.closest('.det-payment-split-row').remove();
+                detRecalculatePaymentSplits();
+              }
+            };
+          });
+        }
+
+        document.getElementById('btn-det-add-payment-split')?.addEventListener('click', () => {
+          const container = document.getElementById('det-payment-split-rows-container');
+          if (!container) return;
+
+          const currentTotalPaid = Array.from(container.querySelectorAll('.det-payment-split-amount'))
+            .reduce((sum, inp) => sum + (parseFloat(inp.value) || 0), 0);
+          const remaining = Math.max(0, detState.netPayable - currentTotalPaid);
+
+          const div = document.createElement('div');
+          div.innerHTML = detCreatePaymentSplitRowHtml('upi', remaining > 0 ? remaining.toFixed(2) : '0.00');
+          container.appendChild(div.firstElementChild);
+
+          detAttachPaymentSplitEventListeners();
+          detRecalculatePaymentSplits();
+        });
+
+        function detRecalculatePaymentSplits() {
+          const container = document.getElementById('det-payment-split-rows-container');
+          if (!container) return;
+
+          const rows = container.querySelectorAll('.det-payment-split-row');
+          const deleteBtns = container.querySelectorAll('.btn-det-delete-payment-row');
+          deleteBtns.forEach(b => b.disabled = (rows.length <= 1));
+
+          let totalPaid = 0;
+          const payments = [];
+
+          rows.forEach(r => {
+            const method = r.querySelector('.det-payment-split-method')?.value || 'cash';
+            const amt = parseFloat(r.querySelector('.det-payment-split-amount')?.value) || 0;
+            if (amt > 0) {
+              totalPaid += amt;
+              payments.push({ method, amount: amt });
+            }
+          });
+
+          const dueAmount = Math.max(0, detState.netPayable - totalPaid);
+
+          const paidEl = document.getElementById('det-split-summary-paid');
+          const dueEl = document.getElementById('det-split-summary-due');
+          const statusBadge = document.getElementById('det-split-summary-status');
+
+          if (paidEl) paidEl.textContent = `₹${totalPaid.toFixed(2)}`;
+          if (dueEl) dueEl.textContent = `₹${dueAmount.toFixed(2)}`;
+
+          let calcStatus = 'paid';
+          if (dueAmount <= 0.01) {
+            calcStatus = 'paid';
+            if (statusBadge) {
+              statusBadge.className = 'badge bg-success mt-1';
+              statusBadge.textContent = 'Paid';
+            }
+          } else if ((totalPaid + detState.advancePaid) > 0) {
+            calcStatus = 'partially_paid';
+            if (statusBadge) {
+              statusBadge.className = 'badge bg-warning text-dark mt-1';
+              statusBadge.textContent = 'Partially Paid';
+            }
+          } else {
+            calcStatus = 'unpaid';
+            if (statusBadge) {
+              statusBadge.className = 'badge bg-danger mt-1';
+              statusBadge.textContent = 'Unpaid / Credit';
+            }
+          }
+
+          detState.calculatedPayments = payments;
+          detState.calculatedPaidAmount = totalPaid;
+          detState.calculatedDueAmount = dueAmount;
+          detState.calculatedPaymentStatus = calcStatus;
+        }
+
+        function detSyncSettlementFieldsVisibility() {
+          const mode = document.querySelector('input[name="det_settle_invoice_mode"]:checked')?.value || 'food';
+          const wrapperGstin = document.getElementById('det-wrapper-gstin');
+          const wrapperExcise = document.getElementById('det-wrapper-excise');
+          const gstinInput = document.getElementById('det-gstin-no');
+          const exciseInput = document.getElementById('det-excise-bill-no');
+
+          if (!wrapperGstin || !wrapperExcise) return;
+
+          let showGstin = (mode === 'food' || mode === 'split');
+          let showExcise = (mode === 'liquor' || (mode === 'split' && detState.hasAlcohol));
+
+          const currentYear = new Date().getFullYear();
+          const randNum = Math.floor(1000 + Math.random() * 9000);
+
+          if (showGstin) {
+            wrapperGstin.style.display = 'block';
+            wrapperGstin.className = showExcise ? 'col-md-6' : 'col-md-12';
+            if (gstinInput && !gstinInput.value) gstinInput.value = `INV-${currentYear}-${randNum}`;
+          } else {
+            wrapperGstin.style.display = 'none';
+            if (gstinInput) gstinInput.value = '';
+          }
+
+          if (showExcise) {
+            wrapperExcise.style.display = 'block';
+            wrapperExcise.className = showGstin ? 'col-md-6' : 'col-md-12';
+            if (exciseInput && !exciseInput.value) exciseInput.value = `EXC-${currentYear}-${randNum}`;
+          } else {
+            wrapperExcise.style.display = 'none';
+            if (exciseInput) exciseInput.value = '';
+          }
+        }
+
+        document.querySelectorAll('input[name="det_settle_invoice_mode"]').forEach(r => {
+          r.addEventListener('change', detSyncSettlementFieldsVisibility);
+        });
+
+        const modalEl = document.getElementById('detailSettleModal');
+        if (modalEl) {
+          modalEl.addEventListener('show.bs.modal', function() {
+            detSyncSettlementFieldsVisibility();
+            detInitPaymentSplitRows();
+          });
+        }
+
+        function detSubmitSettlement(printBill = true, clickedBtn) {
+            detRecalculatePaymentSplits();
+
+            const invoiceMode = document.querySelector('input[name="det_settle_invoice_mode"]:checked')?.value || 'food';
+            const wrapperGstin = document.getElementById('det-wrapper-gstin');
+            const wrapperExcise = document.getElementById('det-wrapper-excise');
+
+            const gstinNo = (wrapperGstin && wrapperGstin.style.display !== 'none') ? (document.getElementById('det-gstin-no')?.value || '') : '';
+            const exciseBillNo = (wrapperExcise && wrapperExcise.style.display !== 'none') ? (document.getElementById('det-excise-bill-no')?.value || '') : '';
+
+            if (clickedBtn) {
+              clickedBtn.disabled = true;
+              clickedBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Settling...';
+            }
+
+            const payload = {
+                invoice_mode: invoiceMode,
+                payment_method: detState.calculatedPayments[0]?.method || 'cash',
+                payment_status: detState.calculatedPaymentStatus,
+                payments: detState.calculatedPayments,
+                paid_amount: detState.calculatedPaidAmount.toFixed(2),
+                due_amount: detState.calculatedDueAmount.toFixed(2),
+                gstin_no: gstinNo,
+                excise_bill_no: exciseBillNo
+            };
+
+            fetch("{% url 'restaurant_admin:order_settle_api' restaurant_slug=rslug pk=order.id %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrf(),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success) {
+                    if (printBill) {
+                      window.open("{% url 'restaurant_admin:order_invoice' restaurant_slug=rslug pk=order.id %}", '_blank');
+                    }
+                    window.location.reload();
+                } else {
+                    alert(d.error || 'Failed to settle payment.');
+                    if (clickedBtn) {
+                        clickedBtn.disabled = false;
+                        clickedBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Mark Paid & Complete';
+                    }
+                }
+            })
+            .catch(() => {
+                alert('Network error while settling payment.');
+                if (clickedBtn) {
+                    clickedBtn.disabled = false;
+                    clickedBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Mark Paid & Complete';
+                }
+            });
+        });
+
+    });
+</script>
+{% endblock %}

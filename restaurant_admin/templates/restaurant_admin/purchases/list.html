@@ -1,0 +1,120 @@
+{% extends 'restaurant_admin/base.html' %}
+{% block title %}Purchase Orders & Goods Inward History{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h3 class="fw-bold mb-1"><i class="bi bi-journal-text me-2 text-primary"></i>Purchase Orders & Goods Inward</h3>
+      <p class="text-muted mb-0">Record of vendor purchases, inward stock receipts, tax invoices, and payment statuses</p>
+    </div>
+    <a href="{% url 'restaurant_admin:purchase_create' restaurant_slug=restaurant.slug %}" class="btn btn-primary shadow-sm fw-semibold">
+      <i class="bi bi-plus-lg me-1"></i> New Goods Inward Purchase
+    </a>
+  </div>
+
+  <!-- Purchases Table Card -->
+  <div class="card shadow-sm border-0">
+    <div class="card-header bg-white py-3">
+      <h5 class="card-title fw-bold mb-0 text-dark"><i class="bi bi-receipt me-2 text-primary"></i>Purchase History</h5>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>PO #</th>
+              <th>Date</th>
+              <th>Supplier Name</th>
+              <th>Supplier GSTIN</th>
+              <th>Invoice / Ref No.</th>
+              <th>Items Received</th>
+              <th class="text-end">Grand Total</th>
+              <th>Payment Method</th>
+              <th>Payment Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for po in purchases %}
+            <tr>
+              <td class="fw-bold text-primary">#{{ po.id }}</td>
+              <td class="text-muted">{{ po.purchase_date|date:"Y-m-d" }}</td>
+              <td class="fw-semibold text-dark">{{ po.supplier_name }}</td>
+              <td>
+                {% if po.supplier_gstin %}
+                <span class="badge bg-light text-dark border">{{ po.supplier_gstin }}</span>
+                {% else %}
+                <span class="text-muted">-</span>
+                {% endif %}
+              </td>
+              <td><span class="fw-semibold">{{ po.invoice_number }}</span></td>
+              <td>
+                <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">
+                  {{ po.items.all|length }} items
+                </span>
+                <span class="small text-muted d-block text-truncate" style="max-width: 200px;">
+                  {% for item in po.items.all %}
+                    {{ item.quantity }}x {{ item.inventory_item.name }}{% if not forloop.last %}, {% endif %}
+                  {% endfor %}
+                </span>
+              </td>
+              <td class="text-end fw-bold text-dark">₹ {{ po.grand_total }}</td>
+              <td>
+                <span class="badge bg-secondary-subtle text-secondary-emphasis">
+                  {{ po.get_payment_method_display }}
+                </span>
+              </td>
+              <td>
+                {% if po.payment_status == 'paid' %}
+                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i> Paid</span>
+                {% elif po.payment_status == 'unpaid' %}
+                <span class="badge bg-danger"><i class="bi bi-exclamation-circle me-1"></i> Unpaid</span>
+                {% else %}
+                <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i> Partial</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="9" class="text-center py-5 text-muted">
+                <i class="bi bi-inbox fs-1 d-block mb-2 text-secondary opacity-50"></i>
+                No purchase entries found yet. 
+                <a href="{% url 'restaurant_admin:purchase_create' restaurant_slug=restaurant.slug %}" class="fw-bold">Create the first Goods Inward purchase</a>.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if purchases.has_other_pages %}
+    <div class="card-footer bg-white py-3">
+      <nav aria-label="Purchase pagination">
+        <ul class="pagination pagination-sm justify-content-end mb-0">
+          {% if purchases.has_previous %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ purchases.previous_page_number }}">Previous</a>
+          </li>
+          {% endif %}
+
+          {% for num in purchases.paginator.page_range %}
+          <li class="page-item {% if purchases.number == num %}active{% endif %}">
+            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+          </li>
+          {% endfor %}
+
+          {% if purchases.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ purchases.next_page_number }}">Next</a>
+          </li>
+          {% endif %}
+        </ul>
+      </nav>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

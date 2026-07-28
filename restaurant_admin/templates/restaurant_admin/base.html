@@ -1,0 +1,887 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Restaurant Admin{% endblock %}</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{% static 'restaurant_admin/css/admin.css' %}">
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        if (localStorage.getItem('sidebar_collapsed') === 'true') {
+            document.documentElement.classList.add('sidebar-collapsed');
+        }
+    </script>
+    {% block extra_css %}{% endblock %}
+    <style>
+        :root {
+            --primary: #5E72E4;
+            --secondary: #2DCE89;
+            --info: #11CDEF;
+            --warning: #FB6340;
+            --dark: #32325D;
+            --light: #F8F9FE;
+            --sidebar-width: 260px;
+            --sidebar-collapsed-width: 75px;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #F0F2F5;
+            color: #525F7F;
+        }
+
+        .sidebar {
+            height: 100vh;
+            height: 100dvh;
+            width: var(--sidebar-width);
+            background: white;
+            box-shadow: 0 0 2rem 0 rgba(136, 152, 170, .15);
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body.sidebar-collapsed .sidebar,
+        html.sidebar-collapsed .sidebar {
+            width: var(--sidebar-collapsed-width);
+        }
+
+        body.sidebar-collapsed .sidebar .sidebar-brand span,
+        html.sidebar-collapsed .sidebar .sidebar-brand span,
+        body.sidebar-collapsed .sidebar .nav-link span,
+        html.sidebar-collapsed .sidebar .nav-link span,
+        body.sidebar-collapsed .sidebar-footer span,
+        html.sidebar-collapsed .sidebar-footer span {
+            display: none !important;
+        }
+
+        body.sidebar-collapsed .sidebar .sidebar-header,
+        html.sidebar-collapsed .sidebar .sidebar-header {
+            padding: 1.25rem 0.5rem;
+            justify-content: center !important;
+        }
+
+        body.sidebar-collapsed .sidebar .sidebar-brand i,
+        html.sidebar-collapsed .sidebar .sidebar-brand i {
+            margin-right: 0 !important;
+        }
+
+        body.sidebar-collapsed .sidebar .nav-link,
+        html.sidebar-collapsed .sidebar .nav-link {
+            padding: 0.8rem 0;
+            margin: 0.25rem 0.5rem;
+            text-align: center;
+            justify-content: center;
+        }
+
+        body.sidebar-collapsed .sidebar .nav-link i,
+        html.sidebar-collapsed .sidebar .nav-link i {
+            margin-right: 0 !important;
+            font-size: 1.25rem;
+        }
+
+        body.sidebar-collapsed .sidebar-footer,
+        html.sidebar-collapsed .sidebar-footer {
+            padding: 0.75rem 0.5rem;
+        }
+
+        body.sidebar-collapsed .sidebar-footer .d-flex,
+        html.sidebar-collapsed .sidebar-footer .d-flex {
+            justify-content: center !important;
+            gap: 0.5rem;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #E9ECEF;
+            flex-shrink: 0;
+        }
+
+        .sidebar-menu {
+            flex: 1;
+            overflow-y: auto;
+            padding-top: 0.5rem;
+            padding-bottom: 1rem;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .sidebar-footer {
+            flex-shrink: 0;
+            padding: 1rem 1.5rem;
+            border-top: 1px solid #E9ECEF;
+            background: white;
+        }
+
+        .sidebar-brand {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--dark);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+        }
+
+        .sidebar-brand i {
+            color: var(--primary);
+            margin-right: 0.5rem;
+            font-size: 1.5rem;
+        }
+
+        .nav-link {
+            color: #525F7F;
+            padding: 0.8rem 1.5rem;
+            font-weight: 500;
+            border-left: 3px solid transparent;
+            transition: all 0.3s ease;
+            margin: 0.25rem 1rem;
+            border-radius: 0.375rem;
+        }
+
+        .nav-link:hover,
+        .nav-link.active {
+            background-color: rgba(94, 114, 228, 0.1);
+            color: var(--primary);
+            border-left-color: var(--primary);
+        }
+
+        .nav-link i {
+            width: 24px;
+            text-align: center;
+            margin-right: 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        /* Collapsible Accordion Navigation Styling */
+        .sidebar-group {
+            margin-bottom: 0.2rem;
+        }
+
+        .sidebar-group-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.65rem 1rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #525f7f;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            cursor: pointer;
+            border-radius: 0.375rem;
+            margin: 0.15rem 0.75rem;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .sidebar-group-header:hover {
+            background-color: #f8f9fe;
+            color: var(--primary);
+        }
+
+        .sidebar-group-header.active-group {
+            color: var(--primary);
+            background-color: rgba(94, 114, 228, 0.08);
+        }
+
+        .sidebar-group-header .group-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .sidebar-group-header .group-title i {
+            width: 20px;
+            text-align: center;
+            font-size: 1rem;
+            color: #8898aa;
+            transition: color 0.2s ease;
+        }
+
+        .sidebar-group-header:hover .group-title i,
+        .sidebar-group-header.active-group .group-title i {
+            color: var(--primary);
+        }
+
+        .sidebar-group-header .group-chevron {
+            font-size: 0.75rem;
+            transition: transform 0.25s ease;
+            color: #adb5bd;
+        }
+
+        .sidebar-group-header.open .group-chevron {
+            transform: rotate(180deg);
+            color: var(--primary);
+        }
+
+        .sidebar-group-content {
+            display: none;
+            transition: all 0.25s ease-in-out;
+        }
+
+        .sidebar-group-content.show {
+            display: block;
+        }
+
+        .sidebar-group-content .nav-link {
+            padding: 0.5rem 1rem 0.5rem 2rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin: 0.1rem 0.75rem;
+            border-radius: 0.375rem;
+            border-left: 3px solid transparent;
+            color: #6b7280;
+        }
+
+        .sidebar-group-content .nav-link:hover {
+            background-color: rgba(94, 114, 228, 0.08);
+            color: var(--primary);
+        }
+
+        .sidebar-group-content .nav-link.active {
+            background-color: rgba(94, 114, 228, 0.12);
+            color: var(--primary);
+            font-weight: 600;
+            border-left-color: var(--primary);
+        }
+
+        /* Call to Action: New Local Order Link */
+        .sidebar-cta-link {
+            background: linear-gradient(135deg, var(--primary) 0%, #825ee4 100%) !important;
+            color: #ffffff !important;
+            font-weight: 600 !important;
+            border-left: none !important;
+            box-shadow: 0 4px 10px rgba(94, 114, 228, 0.3);
+            margin-top: 0.25rem !important;
+            margin-bottom: 0.35rem !important;
+        }
+
+        .sidebar-cta-link:hover {
+            background: linear-gradient(135deg, #485ec8 0%, #6d47d9 100%) !important;
+            color: #ffffff !important;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 14px rgba(94, 114, 228, 0.4);
+        }
+
+        .sidebar-cta-link i {
+            color: #ffffff !important;
+        }
+
+        /* Collapsed Sidebar Adjustments */
+        body.sidebar-collapsed .sidebar-group-header .group-chevron,
+        html.sidebar-collapsed .sidebar-group-header .group-chevron {
+            display: none !important;
+        }
+
+        body.sidebar-collapsed .sidebar-group-header span,
+        html.sidebar-collapsed .sidebar-group-header span {
+            display: none !important;
+        }
+
+        body.sidebar-collapsed .sidebar-group-header,
+        html.sidebar-collapsed .sidebar-group-header {
+            justify-content: center !important;
+            padding: 0.75rem 0;
+            margin: 0.25rem 0.5rem;
+        }
+
+        body.sidebar-collapsed .sidebar-group-content .nav-link,
+        html.sidebar-collapsed .sidebar-group-content .nav-link {
+            padding: 0.6rem 0;
+            margin: 0.15rem 0.5rem;
+            justify-content: center;
+        }
+
+        .main-content {
+            margin-left: var(--sidebar-width);
+            padding: 2rem;
+            width: calc(100% - var(--sidebar-width));
+            min-height: 100vh;
+            background-color: #F0F2F5;
+            transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body.sidebar-collapsed .main-content,
+        html.sidebar-collapsed .main-content {
+            margin-left: var(--sidebar-collapsed-width);
+            width: calc(100% - var(--sidebar-collapsed-width));
+        }
+
+        .card {
+            border: none;
+            border-radius: 0.5rem;
+            box-shadow: 0 0 2rem 0 rgba(136, 152, 170, 0.1);
+            margin-bottom: 1.5rem;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 0 2rem 0 rgba(136, 152, 170, 0.2);
+        }
+
+        .card-header {
+            background: white;
+            border-bottom: 1px solid #E9ECEF;
+            padding: 1.25rem 1.5rem;
+            border-top-left-radius: 0.5rem !important;
+            border-top-right-radius: 0.5rem !important;
+        }
+
+        .card-title {
+            font-weight: 600;
+            color: var(--dark);
+            margin-bottom: 0;
+        }
+
+        .bg-primary {
+            background-color: var(--primary) !important;
+        }
+
+        .bg-success {
+            background-color: #2DCE89 !important;
+        }
+
+        .bg-warning {
+            background-color: #FB6340 !important;
+        }
+
+        .bg-danger {
+            background-color: #F5365C !important;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .btn-outline-light {
+            color: #8898AA;
+            border-color: #E9ECEF;
+        }
+
+        .btn-outline-light:hover {
+            background-color: #F8F9FE;
+            color: var(--primary);
+            border-color: #E9ECEF;
+        }
+
+        .alert {
+            border: none;
+            border-radius: 0.5rem;
+            box-shadow: 0 0 2rem 0 rgba(136, 152, 170, 0.1);
+        }
+
+        @media (max-width: 991.98px) {
+            .sidebar {
+                left: -260px;
+                top: 0;
+                bottom: 0;
+                height: 100vh;
+                overflow-y: auto;
+                transition: transform 0.3s ease-in-out;
+                box-shadow: 0 0 1.5rem rgba(0, 0, 0, 0.25);
+            }
+
+            .sidebar.show {
+                transform: translateX(260px);
+            }
+
+            .sidebar-backdrop {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(15, 23, 42, 0.5);
+                backdrop-filter: blur(2px);
+                z-index: 999;
+                display: none;
+            }
+
+            .sidebar-backdrop.show {
+                display: block;
+            }
+
+            .main-content {
+                margin-left: 0 !important;
+                width: 100% !important;
+                padding: 1rem !important;
+                padding-top: 4.5rem !important;
+            }
+
+            .mobile-navbar {
+                display: flex !important;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0.75rem 1rem;
+                background: #ffffff;
+                border-bottom: 1px solid #E9ECEF;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                z-index: 998;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+            }
+
+            .table-responsive {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+        }
+
+        @media (min-width: 992px) {
+
+            .mobile-navbar,
+            .sidebar-backdrop {
+                display: none !important;
+            }
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body>
+    {% with rslug=restaurant.slug|default:request.user.restaurant_profile.restaurant.slug %}
+    {% if user.is_authenticated and user.is_staff %}
+    <!-- Mobile Navigation Topbar -->
+    <div class="mobile-navbar">
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-sm btn-outline-primary" id="sidebarToggleBtn" type="button"
+                aria-label="Toggle Sidebar Menu">
+                <i class="fas fa-bars fs-5"></i>
+            </button>
+            <span class="fw-bold text-dark text-truncate" style="max-width: 180px;">{{
+                current_restaurant.name|default:"Admin Panel" }}</span>
+        </div>
+        {% if current_branch %}
+        <span class="badge bg-primary text-wrap" style="font-size: 0.72rem;">{{ current_branch.name }}</span>
+        {% endif %}
+    </div>
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+    <div class="d-flex" style="min-height: 100vh;">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header d-flex justify-content-between align-items-center">
+                <a href="{% url 'restaurant_admin:dashboard' restaurant_slug=rslug %}"
+                    class="sidebar-brand text-truncate">
+                    <i class="fas fa-utensils"></i>
+                    <span>Admin Panel</span>
+                </a>
+                <button
+                    class="btn btn-sm btn-light border-0 text-secondary d-none d-lg-flex align-items-center justify-content-center p-1"
+                    id="desktopSidebarCollapseBtn" type="button" title="Collapse Sidebar"
+                    style="width:28px; height:28px; border-radius:6px;">
+                    <i class="fas fa-chevron-left" id="collapseChevronIcon"></i>
+                </button>
+            </div>
+            <div class="sidebar-menu">
+                <!-- Group 1: Overview -->
+                <div class="sidebar-group">
+                    <div class="sidebar-group-header {% if active_menu == 'dashboard' or active_menu == 'analytics' %}open active-group{% endif %}" data-group-target="#group-overview">
+                        <div class="group-title">
+                            <i class="fas fa-chart-pie"></i>
+                            <span>Overview</span>
+                        </div>
+                        <i class="fas fa-chevron-down group-chevron"></i>
+                    </div>
+                    <div class="sidebar-group-content {% if active_menu == 'dashboard' or active_menu == 'analytics' %}show{% endif %}" id="group-overview">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'dashboard' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:dashboard' restaurant_slug=rslug %}" title="Dashboard">
+                                    <i class="fas fa-tachometer-alt"></i>
+                                    <span>Dashboard</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'analytics' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:sales_analytics' restaurant_slug=rslug %}"
+                                    title="Analytics & Sales">
+                                    <i class="fas fa-chart-line"></i>
+                                    <span>Analytics & Sales</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Group 2: Point of Sale -->
+                <div class="sidebar-group">
+                    <div class="sidebar-group-header {% if active_menu == 'order_records' or active_menu == 'order_list' or active_menu == 'receipts' or active_menu == 'order_create_manual' %}open active-group{% endif %}" data-group-target="#group-pos">
+                        <div class="group-title">
+                            <i class="fas fa-cash-register"></i>
+                            <span>Point of Sale</span>
+                        </div>
+                        <i class="fas fa-chevron-down group-chevron"></i>
+                    </div>
+                    <div class="sidebar-group-content {% if active_menu == 'order_records' or active_menu == 'order_list' or active_menu == 'receipts' or active_menu == 'order_create_manual' %}show{% endif %}" id="group-pos">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link sidebar-cta-link {% if active_menu == 'transactions_create' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:transaction_desk_create' restaurant_slug=rslug %}"
+                                    title="Unified Transaction Desk">
+                                    <i class="bi bi-ui-checks-grid me-1"></i>
+                                    <span>Transaction Desk</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'order_create_manual' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:order_create_manual' restaurant_slug=rslug %}"
+                                    title="New Local Order">
+                                    <i class="bi bi-plus-lg"></i>
+                                    <span>New Local Order</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'order_records' or active_menu == 'order_list' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:order_records' restaurant_slug=rslug %}" title="Orders">
+                                    <i class="fas fa-shopping-cart"></i>
+                                    <span>Orders</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'receipts' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:receipt_list' restaurant_slug=rslug %}"
+                                    title="Advance Receipts">
+                                    <i class="bi bi-receipt-cutoff"></i>
+                                    <span>Advance Receipts</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Group 3: Dine-In Operations -->
+                <div class="sidebar-group">
+                    <div class="sidebar-group-header {% if active_menu == 'floor_plan' or active_menu == 'tables' or active_menu == 'reservations' %}open active-group{% endif %}" data-group-target="#group-dinein">
+                        <div class="group-title">
+                            <i class="fas fa-chair"></i>
+                            <span>Dine-In Operations</span>
+                        </div>
+                        <i class="fas fa-chevron-down group-chevron"></i>
+                    </div>
+                    <div class="sidebar-group-content {% if active_menu == 'floor_plan' or active_menu == 'tables' or active_menu == 'reservations' %}show{% endif %}" id="group-dinein">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'floor_plan' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:floor_plan_dashboard' restaurant_slug=rslug %}"
+                                    title="Floor Plan">
+                                    <i class="fas fa-th-large"></i>
+                                    <span>Floor Plan</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'tables' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:table_list' restaurant_slug=rslug %}" title="Tables">
+                                    <i class="fas fa-chair"></i>
+                                    <span>Tables</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'reservations' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:reservation_list' restaurant_slug=rslug %}"
+                                    title="Reservations">
+                                    <i class="bi bi-calendar-check"></i>
+                                    <span>Reservations</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Group 4: Menu & Marketing -->
+                <div class="sidebar-group">
+                    <div class="sidebar-group-header {% if active_menu == 'category_list' or active_menu == 'categories' or active_menu == 'menu_list' or active_menu == 'menu' or active_menu == 'coupons' or active_menu == 'qr_generator' %}open active-group{% endif %}" data-group-target="#group-menu">
+                        <div class="group-title">
+                            <i class="fas fa-utensils"></i>
+                            <span>Menu & Marketing</span>
+                        </div>
+                        <i class="fas fa-chevron-down group-chevron"></i>
+                    </div>
+                    <div class="sidebar-group-content {% if active_menu == 'category_list' or active_menu == 'categories' or active_menu == 'menu_list' or active_menu == 'menu' or active_menu == 'coupons' or active_menu == 'qr_generator' %}show{% endif %}" id="group-menu">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'category_list' or active_menu == 'categories' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:category_list' restaurant_slug=rslug %}" title="Categories">
+                                    <i class="fas fa-list"></i>
+                                    <span>Categories</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'menu_list' or active_menu == 'menu' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:menu_list' restaurant_slug=rslug %}" title="Menu Items">
+                                    <i class="fas fa-utensils"></i>
+                                    <span>Menu Items</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'coupons' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:coupon_list' restaurant_slug=rslug %}" title="Coupons">
+                                    <i class="bi bi-ticket-perforated"></i>
+                                    <span>Coupons</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'qr_generator' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:qr_code_generator' restaurant_slug=rslug %}"
+                                    title="QR Codes">
+                                    <i class="fas fa-qrcode"></i>
+                                    <span>QR Codes</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Group 5: Stock & Supply Chain -->
+                <div class="sidebar-group">
+                    <div class="sidebar-group-header {% if active_menu == 'inventory' or active_menu == 'purchases' or active_menu == 'challans' or active_menu == 'inventory_logs' %}open active-group{% endif %}" data-group-target="#group-stock">
+                        <div class="group-title">
+                            <i class="fas fa-boxes"></i>
+                            <span>Stock & Supply Chain</span>
+                        </div>
+                        <i class="fas fa-chevron-down group-chevron"></i>
+                    </div>
+                    <div class="sidebar-group-content {% if active_menu == 'inventory' or active_menu == 'purchases' or active_menu == 'challans' or active_menu == 'inventory_logs' %}show{% endif %}" id="group-stock">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'inventory' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:inventory_list' restaurant_slug=rslug %}" title="Inventory">
+                                    <i class="fas fa-boxes"></i>
+                                    <span>Inventory</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'purchases' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:purchase_list' restaurant_slug=rslug %}"
+                                    title="Goods Inward">
+                                    <i class="bi bi-box-arrow-in-down"></i>
+                                    <span>Purchase Register</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'challans' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:challan_list' restaurant_slug=rslug %}"
+                                    title="Delivery Challans">
+                                    <i class="bi bi-truck"></i>
+                                    <span>Delivery Challans</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'inventory_logs' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:inventory_logs' restaurant_slug=rslug %}"
+                                    title="Inventory Logs">
+                                    <i class="fas fa-history"></i>
+                                    <span>Inventory Logs</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Group 6: Admin & Setup -->
+                <div class="sidebar-group">
+                    <div class="sidebar-group-header {% if active_menu == 'parties' or active_menu == 'branches' or active_tab == 'branches' or active_menu == 'settings' %}open active-group{% endif %}" data-group-target="#group-admin">
+                        <div class="group-title">
+                            <i class="fas fa-sliders-h"></i>
+                            <span>Admin & Setup</span>
+                        </div>
+                        <i class="fas fa-chevron-down group-chevron"></i>
+                    </div>
+                    <div class="sidebar-group-content {% if active_menu == 'parties' or active_menu == 'branches' or active_tab == 'branches' or active_menu == 'settings' %}show{% endif %}" id="group-admin">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'parties' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:party_list' restaurant_slug=rslug %}" title="Parties">
+                                    <i class="bi bi-people-fill"></i>
+                                    <span>Parties</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'branches' or active_tab == 'branches' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:branch_list' restaurant_slug=rslug %}"
+                                    title="Internal Branches">
+                                    <i class="bi bi-diagram-3-fill"></i>
+                                    <span>Internal Branches</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'settings' and active_tab != 'branches' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:settings' restaurant_slug=rslug %}" title="Settings">
+                                    <i class="fas fa-sliders-h"></i>
+                                    <span>Settings</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="sidebar-footer">
+                <div class="d-flex justify-content-between align-items-center">
+                    <a href="{% url 'admin:index' %}" class="btn btn-sm btn-outline-light me-2" data-bs-toggle="tooltip"
+                        title="Admin Site">
+                        <i class="fas fa-cog"></i>
+                    </a>
+                    <a href="{% url 'logout' %}" class="btn btn-sm btn-outline-light" data-bs-toggle="tooltip"
+                        title="Logout">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Main Content -->
+        <div class="main-content">
+            {% if messages %}
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+            {% endif %}
+
+            {% block content %}
+            <!-- Page content will be inserted here -->
+            {% endblock %}
+        </div>
+
+        <!-- Bootstrap JS Bundle with Popper -->
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+        <!-- Chart.js -->
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <!-- Custom JS -->
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                    return new bootstrap.Tooltip(tooltipTriggerEl);
+                });
+
+                var sidebar = document.querySelector('.sidebar');
+                var backdrop = document.getElementById('sidebarBackdrop');
+                var toggleBtn = document.getElementById('sidebarToggleBtn');
+                var desktopCollapseBtn = document.getElementById('desktopSidebarCollapseBtn');
+                var collapseChevronIcon = document.getElementById('collapseChevronIcon');
+
+                function setSidebarCollapsed(collapsed) {
+                    if (collapsed) {
+                        document.body.classList.add('sidebar-collapsed');
+                        document.documentElement.classList.add('sidebar-collapsed');
+                        localStorage.setItem('sidebar_collapsed', 'true');
+                        if (collapseChevronIcon) collapseChevronIcon.className = 'fas fa-chevron-right';
+                        if (desktopCollapseBtn) desktopCollapseBtn.title = 'Expand Sidebar';
+                    } else {
+                        document.body.classList.remove('sidebar-collapsed');
+                        document.documentElement.classList.remove('sidebar-collapsed');
+                        localStorage.setItem('sidebar_collapsed', 'false');
+                        if (collapseChevronIcon) collapseChevronIcon.className = 'fas fa-chevron-left';
+                        if (desktopCollapseBtn) desktopCollapseBtn.title = 'Collapse Sidebar';
+                    }
+                }
+
+                if (desktopCollapseBtn) {
+                    desktopCollapseBtn.addEventListener('click', function () {
+                        var isCollapsed = document.body.classList.contains('sidebar-collapsed') || document.documentElement.classList.contains('sidebar-collapsed');
+                        setSidebarCollapsed(!isCollapsed);
+                    });
+                }
+
+                // Initial state sync
+                if (localStorage.getItem('sidebar_collapsed') === 'true') {
+                    setSidebarCollapsed(true);
+                }
+
+                function openSidebar() {
+                    if (sidebar) sidebar.classList.add('show');
+                    if (backdrop) backdrop.classList.add('show');
+                }
+                function closeSidebar() {
+                    if (sidebar) sidebar.classList.remove('show');
+                    if (backdrop) backdrop.classList.remove('show');
+                }
+
+                if (toggleBtn) {
+                    toggleBtn.addEventListener('click', openSidebar);
+                }
+                if (backdrop) {
+                    backdrop.addEventListener('click', closeSidebar);
+                }
+
+                var navLinks = document.querySelectorAll('.sidebar .nav-link');
+                navLinks.forEach(function (link) {
+                    link.addEventListener('click', function () {
+                        if (window.innerWidth < 992) {
+                            closeSidebar();
+                        }
+                    });
+                });
+
+                // Accordion behavior for sidebar feature groups
+                var groupHeaders = document.querySelectorAll('.sidebar-group-header');
+                groupHeaders.forEach(function (header) {
+                    header.addEventListener('click', function (e) {
+                        var targetId = this.getAttribute('data-group-target');
+                        var content = document.querySelector(targetId);
+                        var isOpen = this.classList.contains('open');
+
+                        // Auto-close all other categories to preserve vertical space
+                        groupHeaders.forEach(function (h) {
+                            if (h !== header) {
+                                h.classList.remove('open', 'active-group');
+                                var c = document.querySelector(h.getAttribute('data-group-target'));
+                                if (c) c.classList.remove('show');
+                            }
+                        });
+
+                        // Toggle clicked category
+                        if (isOpen) {
+                            this.classList.remove('open', 'active-group');
+                            if (content) content.classList.remove('show');
+                        } else {
+                            this.classList.add('open', 'active-group');
+                            if (content) content.classList.add('show');
+                        }
+                    });
+                });
+
+                // Auto-expand parent group of currently active route on page load
+                var activeLink = document.querySelector('.sidebar .sidebar-group-content .nav-link.active');
+                if (activeLink) {
+                    var parentContent = activeLink.closest('.sidebar-group-content');
+                    if (parentContent) {
+                        parentContent.classList.add('show');
+                        var parentHeader = document.querySelector('[data-group-target="#' + parentContent.id + '"]');
+                        if (parentHeader) {
+                            parentHeader.classList.add('open', 'active-group');
+                        }
+                    }
+                }
+            });
+        </script>
+        {% block extra_js %}{% endblock %}
+        {% endwith %}
+</body>
+
+</html>

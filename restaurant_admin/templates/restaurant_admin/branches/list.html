@@ -1,0 +1,255 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block title %}Internal Branch Management - {{ restaurant.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h3 class="fw-bold mb-1">
+        <i class="bi bi-diagram-3-fill me-2 text-primary"></i>Internal Branch Settings
+      </h3>
+      <p class="text-muted mb-0">Define internal kitchens, stores, and outlets for inter-branch stock transfers</p>
+    </div>
+    <button type="button" class="btn btn-primary shadow-sm fw-semibold px-3 py-2" onclick="openBranchModal()">
+      <i class="bi bi-plus-lg me-1"></i> Add Internal Branch
+    </button>
+  </div>
+
+  <!-- Messages -->
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <!-- Branch List Card -->
+  <div class="card shadow-sm border-0">
+    <div class="card-header bg-white py-3 border-0">
+      <h5 class="card-title fw-bold mb-0">
+        <i class="bi bi-geo-alt me-2 text-primary"></i>Configured Branches ({{ branches|length }})
+      </h5>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-4" style="width: 60px;">#</th>
+            <th>Branch Name</th>
+            <th>Branch Code</th>
+            <th>Address</th>
+            <th>GSTIN</th>
+            <th style="width: 120px;">Status</th>
+            <th class="pe-4 text-end" style="width: 150px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for branch in branches %}
+            <tr>
+              <td class="ps-4 text-muted font-monospace">{{ forloop.counter }}</td>
+              <td class="fw-bold text-dark">
+                <i class="bi bi-building me-2 text-secondary"></i>{{ branch.branch_name }}
+              </td>
+              <td>
+                {% if branch.branch_code %}
+                  <span class="badge bg-light text-dark border font-monospace px-2 py-1">{{ branch.branch_code }}</span>
+                {% else %}
+                  <span class="text-muted font-monospace">&mdash;</span>
+                {% endif %}
+              </td>
+              <td>{{ branch.full_address|default:"&mdash;" }}</td>
+              <td class="font-monospace">{{ branch.gstin|default:"&mdash;" }}</td>
+              <td>
+                {% if branch.is_active %}
+                  <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                    <i class="bi bi-check-circle-fill me-1"></i>Active
+                  </span>
+                {% else %}
+                  <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1">
+                    Inactive
+                  </span>
+                {% endif %}
+              </td>
+              <td class="pe-4 text-end">
+                <button type="button" class="btn btn-sm btn-outline-primary me-1" 
+                        onclick="editBranch('{{ branch.id }}', '{{ branch.branch_name|escapejs }}', '{{ branch.branch_code|default:""|escapejs }}', '{{ branch.address_line_1|default:""|escapejs }}', '{{ branch.address_line_2|default:""|escapejs }}', '{{ branch.city|default:""|escapejs }}', '{{ branch.state|default:""|escapejs }}', '{{ branch.pincode|default:""|escapejs }}', '{{ branch.gstin|default:""|escapejs }}', {{ branch.is_active|yesno:"true,false" }})">
+                  <i class="bi bi-pencil"></i>
+                </button>
+                <form action="{% url 'restaurant_admin:branch_delete' restaurant_slug=restaurant.slug pk=branch.id %}" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete branch \'{{ branch.branch_name|escapejs }}\'?');">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7" class="text-center py-5 text-muted">
+                <i class="bi bi-diagram-3 fs-1 d-block mb-2 text-secondary"></i>
+                No internal branches added yet. Click <strong>+ Add Internal Branch</strong> to define locations (e.g., Main Kitchen, Outlets).
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add / Edit Branch (Organized Multi-Column Form) -->
+<div class="modal fade" id="branchModal" tabindex="-1" aria-labelledby="branchModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg">
+      <form action="{% url 'restaurant_admin:branch_save' restaurant_slug=restaurant.slug %}" method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="pk" id="branch_pk">
+        
+        <div class="modal-header bg-light border-0 py-3">
+          <h5 class="modal-title fw-bold" id="branchModalLabel">
+            <i class="bi bi-building me-2 text-primary"></i>Add Internal Branch
+          </h5>
+          <button type="button" class="btn-close" onclick="closeModal()" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body p-4">
+          <!-- Section 1: Basic Information -->
+          <div class="mb-4">
+            <h6 class="fw-bold text-primary mb-3">
+              <i class="bi bi-info-circle me-1"></i> 1. Basic Information
+            </h6>
+            <div class="row g-3">
+              <div class="col-md-7">
+                <label class="form-label fw-semibold">Branch Name <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="branch_name" id="branch_name" placeholder="e.g. Main Kitchen, City Center Outlet" required>
+              </div>
+              <div class="col-md-5">
+                <label class="form-label fw-semibold">Branch Code</label>
+                <input type="text" class="form-control font-monospace text-uppercase" name="branch_code" id="branch_code" placeholder="e.g. MK-01, CC-02">
+                <div class="form-text">Short identifier for challans.</div>
+              </div>
+            </div>
+          </div>
+
+          <hr class="text-muted opacity-25">
+
+          <!-- Section 2: Divided Address Details -->
+          <div class="mb-4">
+            <h6 class="fw-bold text-primary mb-3">
+              <i class="bi bi-geo-alt me-1"></i> 2. Address Details
+            </h6>
+            
+            <div class="row g-3 mb-3">
+              <div class="col-md-12">
+                <label class="form-label fw-semibold">Address Line 1</label>
+                <input type="text" class="form-control" name="address_line_1" id="address_line_1" placeholder="Plot No., Building Name, Street / Area">
+              </div>
+              <div class="col-md-12">
+                <label class="form-label fw-semibold">Address Line 2 (Optional)</label>
+                <input type="text" class="form-control" name="address_line_2" id="address_line_2" placeholder="Landmark, Floor, Suite">
+              </div>
+            </div>
+
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">City</label>
+                <input type="text" class="form-control" name="city" id="city" placeholder="e.g. Jaipur">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">State</label>
+                <input type="text" class="form-control" name="state" id="state" placeholder="e.g. Rajasthan">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold">Pincode</label>
+                <input type="text" class="form-control font-monospace" name="pincode" id="pincode" placeholder="e.g. 302012" maxlength="10">
+              </div>
+            </div>
+          </div>
+
+          <hr class="text-muted opacity-25">
+
+          <!-- Section 3: Tax & Status -->
+          <div>
+            <h6 class="fw-bold text-primary mb-3">
+              <i class="bi bi-shield-check me-1"></i> 3. Tax & Status Settings
+            </h6>
+            <div class="row g-3 align-items-center">
+              <div class="col-md-7">
+                <label class="form-label fw-semibold">GSTIN (Optional)</label>
+                <input type="text" class="form-control font-monospace text-uppercase" name="gstin" id="branch_gstin" placeholder="e.g. 08AAAAA0000A1Z5" maxlength="15">
+              </div>
+              <div class="col-md-5 pt-3">
+                <div class="form-check form-switch card p-3 bg-light border-0 mb-0">
+                  <div class="d-flex align-items-center">
+                    <input class="form-check-input me-2 ms-0" type="checkbox" name="is_active" id="branch_is_active" checked>
+                    <label class="form-check-label fw-semibold mb-0" for="branch_is_active">Branch Active</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer bg-light border-0 py-3">
+          <button type="button" class="btn btn-outline-secondary px-4" onclick="closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary fw-semibold px-4" id="saveBtn">Save Branch</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  let modalInstance = null;
+
+  function getModal() {
+    if (!modalInstance) {
+      modalInstance = new bootstrap.Modal(document.getElementById('branchModal'));
+    }
+    return modalInstance;
+  }
+
+  function openBranchModal() {
+    document.getElementById('branch_pk').value = '';
+    document.getElementById('branch_name').value = '';
+    document.getElementById('branch_code').value = '';
+    document.getElementById('address_line_1').value = '';
+    document.getElementById('address_line_2').value = '';
+    document.getElementById('city').value = '';
+    document.getElementById('state').value = '';
+    document.getElementById('pincode').value = '';
+    document.getElementById('branch_gstin').value = '';
+    document.getElementById('branch_is_active').checked = true;
+    document.getElementById('branchModalLabel').innerHTML = '<i class="bi bi-building me-2 text-primary"></i>Add Internal Branch';
+    document.getElementById('saveBtn').textContent = 'Save Branch';
+    getModal().show();
+  }
+
+  function editBranch(pk, name, code, addr1, addr2, city, state, pincode, gstin, isActive) {
+    document.getElementById('branch_pk').value = pk;
+    document.getElementById('branch_name').value = name;
+    document.getElementById('branch_code').value = code;
+    document.getElementById('address_line_1').value = addr1;
+    document.getElementById('address_line_2').value = addr2;
+    document.getElementById('city').value = city;
+    document.getElementById('state').value = state;
+    document.getElementById('pincode').value = pincode;
+    document.getElementById('branch_gstin').value = gstin;
+    document.getElementById('branch_is_active').checked = isActive;
+    document.getElementById('branchModalLabel').innerHTML = '<i class="bi bi-pencil-square me-2 text-primary"></i>Edit Internal Branch';
+    document.getElementById('saveBtn').textContent = 'Update Branch';
+    getModal().show();
+  }
+
+  function closeModal() {
+    if (modalInstance) {
+      modalInstance.hide();
+    }
+  }
+</script>
+{% endblock %}

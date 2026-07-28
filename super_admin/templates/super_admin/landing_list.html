@@ -1,0 +1,67 @@
+{% extends 'super_admin/base.html' %}
+
+{% block title %}Landing Pages | Delicious Bites{% endblock %}
+
+{% block header_title %}Landing Pages{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="hd">
+    <div>
+      <i class="fa-solid fa-window-restore" style="color: var(--primary); margin-right: 8px;"></i>
+      Manage Restaurant Landing Pages
+    </div>
+    <span class="badge neutral">Active Locations</span>
+  </div>
+  <div class="bd">
+    {% if restaurants %}
+      <div class="table-container">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Restaurant Name</th>
+              <th>Phone Number</th>
+              <th>Status</th>
+              <th style="width: 240px; text-align: right; padding-right: 24px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in restaurants %}
+            <tr>
+              <td style="font-weight: 600; color: var(--text);">{{ r.name }}</td>
+              <td class="muted">{{ r.phone|default:'Not Provided' }}</td>
+              <td>
+                {% if r.is_active %}
+                  <span class="badge ok">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <span>Active</span>
+                  </span>
+                {% else %}
+                  <span class="badge neutral">
+                    <i class="fa-solid fa-circle-minus"></i>
+                    <span>Inactive</span>
+                  </span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="action-row" style="justify-content: flex-end; padding-right: 8px;">
+                  <a class="btn small" href="{% url 'super_admin:landing_edit' r.id %}">
+                    <i class="fa-solid fa-window-restore"></i>
+                    <span>Customize Landing</span>
+                  </a>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty">
+        <i class="fa-solid fa-store-slash" style="font-size: 2rem; color: var(--muted); margin-bottom: 8px; display: block;"></i>
+        <span>No restaurants onboarded yet. Onboard a restaurant to manage its landing page content.</span>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

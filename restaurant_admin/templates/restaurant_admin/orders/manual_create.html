@@ -1,0 +1,2263 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block content %}
+<style>
+  .pos-container {
+    font-family: inherit;
+  }
+
+  .pos-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    background: #ffffff;
+    transition: all 0.2s ease-in-out;
+  }
+
+  .pos-card:hover {
+    border-color: #3b82f6;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.12);
+  }
+
+  .category-pill {
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-weight: 500;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    background-color: #f3f4f6;
+    color: #374151;
+    border: 1px solid #d1d5db;
+  }
+
+  .category-pill:hover {
+    background-color: #e5e7eb;
+    color: #111827;
+  }
+
+  .category-pill.active {
+    background-color: #2563eb !important;
+    color: #ffffff !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+  }
+
+  .category-pill.top-selling-pill.active {
+    background-color: #dc2626 !important;
+    color: #ffffff !important;
+    border-color: #dc2626 !important;
+    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3);
+  }
+
+  .fulfillment-btn,
+  .pos-mode-btn {
+    border-radius: 8px;
+    font-weight: 600;
+    padding: 6px 12px;
+    transition: all 0.15s ease;
+  }
+
+  .fulfillment-btn.active,
+  .pos-mode-btn.active {
+    background-color: #2563eb !important;
+    color: #ffffff !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+  }
+
+  .pos-mode-btn.btn-outline-warning.active {
+    background-color: #d97706 !important;
+    color: #ffffff !important;
+    border-color: #d97706 !important;
+  }
+
+  .cart-item-row {
+    border-bottom: 1px solid #f3f4f6;
+    padding: 8px 0;
+  }
+
+  .cart-item-row:last-child {
+    border-bottom: none;
+  }
+
+  .qty-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    line-height: 1;
+  }
+
+  .cart-section-card {
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+
+  .cart-section-header {
+    padding: 6px 12px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .cart-section-header.food-header {
+    background-color: #eff6ff;
+    color: #1e40af;
+    border-bottom: 1px solid #dbeafe;
+  }
+
+  .cart-section-header.liquor-header {
+    background-color: #fff7ed;
+    color: #c2410c;
+    border-bottom: 1px solid #ffedd5;
+  }
+
+  .bill-summary-box {
+    background-color: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 14px;
+  }
+
+  .grand-total-banner {
+    background: linear-gradient(135deg, #1e293b, #0f172a);
+    color: #ffffff;
+    border-radius: 10px;
+    padding: 14px;
+  }
+</style>
+
+<div class="container-fluid px-0 pos-container">
+  <!-- Header Bar -->
+  <div class="row mb-3 align-items-center">
+    <div class="col-6">
+      <h3 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+        {% if is_edit_mode %}
+        <i class="bi bi-pencil-square text-primary"></i> Edit Order <span class="badge bg-primary fs-6 ms-1">#{{ order.order_number|default:order.id }}</span>
+        {% else %}
+        <i class="bi bi-shop text-primary"></i> Create Local Order (POS)
+        {% endif %}
+      </h3>
+    </div>
+    <div class="col-6 text-end">
+      <a href="{% url 'restaurant_admin:order_list' restaurant_slug=restaurant.slug %}"
+        class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i> Back to Orders
+      </a>
+    </div>
+  </div>
+
+  <!-- Dedicated POS View Mode Switcher -->
+  <div class="card border-0 shadow-sm rounded-3 mb-2">
+    <div class="card-body p-2">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+          <span class="fw-bold text-dark small ms-1"><i class="bi bi-sliders text-primary me-1"></i> POS Dedicated View
+            Mode:</span>
+          <span class="badge bg-primary text-white border" id="view-mode-badge">🍔 Food POS View (GST)</span>
+        </div>
+        <div class="btn-group" role="group" id="pos-mode-switcher">
+          <!-- Combined Split POS mode commented out for separate billing compliance
+          <button type="button" class="btn btn-sm btn-outline-primary pos-mode-btn" data-mode="combined">
+            <i class="bi bi-layers-half me-1"></i> Combined Split POS
+          </button>
+          -->
+          <button type="button" class="btn btn-sm btn-outline-primary pos-mode-btn active" data-mode="food">
+            <i class="bi bi-egg-fried me-1"></i> 🍔 Food POS View (GST)
+          </button>
+          <button type="button" class="btn btn-sm btn-outline-warning pos-mode-btn" data-mode="bar">
+            <i class="bi bi-cup-straw me-1"></i> 🍷 Bar / Alcohol POS View (Excise)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Active In-Kitchen Orders & Table Bar -->
+  <div class="card border-0 shadow-sm rounded-3 mb-3 bg-light border-start border-4 border-danger">
+    <div class="card-body p-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <span class="fw-bold text-dark small"><i class="bi bi-fire text-danger me-1"></i> In-Kitchen Active
+          Orders:</span>
+        <span class="badge bg-danger rounded-pill" id="active-orders-count">0</span>
+      </div>
+      <div class="d-flex gap-2 overflow-auto py-1" id="active-orders-chips" style="max-width: 75vw;">
+        <span class="text-muted small italic">No active orders in kitchen.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <!-- LEFT SIDE: Customer Info, Fulfillment, Category Filter & Menu Grid -->
+    <div class="col-lg-7 col-xl-8">
+      <!-- Customer Info & Fulfillment Bar -->
+      <div class="card border-0 shadow-sm rounded-3 mb-3">
+        <div class="card-body p-3">
+          <div class="row g-2 mb-3">
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold text-muted mb-1"><i class="bi bi-person me-1"></i>Customer
+                Name</label>
+              <input type="text" id="cust-name" class="form-control form-control-sm" list="customerOptions"
+                placeholder="e.g. John Doe" oninput="onCustomerInput(this)">
+              <datalist id="customerOptions">
+                {% for party in customer_parties %}
+                <option value="{{ party.name }}" data-phone="{{ party.phone|default:'' }}">{{ party.name }}{% if party.phone %} ({{ party.phone }}){% endif %}</option>
+                {% endfor %}
+              </datalist>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold text-muted mb-1"><i class="bi bi-telephone me-1"></i>Phone Number</label>
+              <input type="text" id="cust-phone" class="form-control form-control-sm" placeholder="e.g. 9876543210">
+            </div>
+            <div class="col-md-3" id="table-select-col">
+              <label class="form-label small fw-semibold text-muted mb-1"><i class="bi bi-grid-3x3-gap me-1"></i>Table No. *</label>
+              <select id="table-id" class="form-select form-select-sm">
+                <option value="">Select Table</option>
+                {% for t in tables %}
+                <option value="{{ t.id }}" {% if order.table and order.table.id == t.id %}selected{% endif %}>Table {{ t.table_number }} {% if t.zone %}({{ t.zone.name }}){% endif %}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-semibold text-muted mb-1"><i class="bi bi-card-text me-1"></i>Notes /
+                Kitchen Request</label>
+              <input type="text" id="order-notes" class="form-control form-control-sm" placeholder="e.g. Less spicy">
+            </div>
+          </div>
+
+          <!-- Fulfillment Type Selector -->
+          <div class="d-flex align-items-center gap-2">
+            <span class="small fw-semibold text-muted me-1"><i class="bi bi-geo-alt me-1"></i>Type:</span>
+            <div class="btn-group w-100" role="group" id="fulfillment-selector">
+              <button type="button" class="btn btn-outline-primary fulfillment-btn active" data-type="dine_in">
+                <i class="bi bi-cup-hot me-1"></i> Dine-In
+              </button>
+              <button type="button" class="btn btn-outline-primary fulfillment-btn" data-type="takeaway">
+                <i class="bi bi-bag-check me-1"></i> Takeaway
+              </button>
+              <button type="button" class="btn btn-outline-primary fulfillment-btn" data-type="delivery">
+                <i class="bi bi-truck me-1"></i> Delivery
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Menu Quick Selection: Categories & Search -->
+      <div class="card border-0 shadow-sm rounded-3">
+        <div class="card-body p-3">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+            <div class="d-flex gap-2 flex-wrap" id="category-tabs">
+              <span class="category-pill active" data-cat="all">All Items</span>
+              <span class="category-pill top-selling-pill text-danger fw-semibold border-danger-subtle"
+                data-cat="top_selling">🔥 Top Selling</span>
+              {% for cat in categories %}
+              <span class="category-pill" data-cat="{{ cat.id }}">{{ cat.name }}</span>
+              {% endfor %}
+            </div>
+
+            <div class="d-flex gap-2 align-items-center ms-auto">
+              <div class="input-group input-group-sm" style="max-width: 210px;">
+                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" id="menu-search" class="form-control border-start-0" placeholder="Search menu...">
+              </div>
+              <button type="button" class="btn btn-sm btn-primary fw-bold d-flex align-items-center gap-1 text-nowrap"
+                data-bs-toggle="modal" data-bs-target="#quickAddItemModal" style="font-size:0.8rem; padding: 5px 12px;">
+                <i class="bi bi-plus-circle-fill"></i> Add Item
+              </button>
+            </div>
+          </div>
+
+          <!-- Visual Menu Item Grid -->
+          <div class="row row-cols-2 row-cols-md-3 row-cols-xl-4 g-2" id="menu-grid"
+            style="max-height: 480px; overflow-y: auto;">
+            <!-- Items injected by JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT SIDE: Current Order Cart & Payment Summary -->
+    <div class="col-lg-5 col-xl-4">
+      <div class="card border-0 shadow-sm rounded-3">
+        <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+          <h5 class="mb-0 fw-bold d-flex align-items-center gap-2">
+            <i class="bi bi-cart3 text-primary"></i> Current Order
+          </h5>
+          <span class="badge bg-primary rounded-pill fs-7" id="cart-item-count">0 items</span>
+        </div>
+
+        <div class="card-body p-3">
+          <!-- Dynamic Cart Items Container with Category Separation -->
+          <div id="cart-container" style="min-height: 180px; max-height: 310px; overflow-y: auto;" class="mb-3">
+            <div class="text-center text-muted py-5" id="cart-empty-msg">
+              <i class="bi bi-cart-x fs-1 opacity-50 d-block mb-2"></i>
+              <span>No items added yet. Click menu items to add to cart.</span>
+            </div>
+            <div id="cart-items-list"></div>
+          </div>
+
+          <!-- Tax & Billing Breakdown Box -->
+          <div class="bill-summary-box mb-3" id="tax-breakdown-box">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="fw-semibold text-dark small">Billing Breakdown</span>
+              <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 fw-semibold"
+                id="btn-toggle-tax-edit" style="font-size:0.75rem;">
+                <i class="bi bi-pencil-square me-1"></i> Edit Rates
+              </button>
+            </div>
+
+            <!-- Collapsible Tax Rate Override Customizer Panel -->
+            <div id="tax-customizer-panel" class="bg-white border rounded p-2 mb-2 shadow-sm" style="display: none;">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="fw-bold text-primary" style="font-size:0.75rem;"><i class="bi bi-sliders me-1"></i>
+                  Override Tax Rates</span>
+                <button type="button" class="btn btn-xs btn-link text-danger p-0 text-decoration-none"
+                  id="btn-reset-tax-rates" style="font-size:0.7rem;">
+                  <i class="bi bi-arrow-counterclockwise me-1"></i>Reset Defaults
+                </button>
+              </div>
+              <div class="row g-1">
+                <div class="col-6">
+                  <label class="form-label text-muted mb-0" style="font-size:0.68rem;">CGST (%)</label>
+                  <input type="number" step="0.1" min="0" max="100"
+                    class="form-control form-control-sm tax-rate-input p-1 text-center" id="input-cgst-rate"
+                    style="font-size:0.75rem; height:26px;">
+                </div>
+                <div class="col-6">
+                  <label class="form-label text-muted mb-0" style="font-size:0.68rem;">SGST (%)</label>
+                  <input type="number" step="0.1" min="0" max="100"
+                    class="form-control form-control-sm tax-rate-input p-1 text-center" id="input-sgst-rate"
+                    style="font-size:0.75rem; height:26px;">
+                </div>
+                <div class="col-6">
+                  <label class="form-label text-muted mb-0" style="font-size:0.68rem;">Beer VAT (%)</label>
+                  <input type="number" step="0.5" min="0" max="100"
+                    class="form-control form-control-sm tax-rate-input p-1 text-center" id="input-vat-beer-rate"
+                    style="font-size:0.75rem; height:26px;">
+                </div>
+                <div class="col-6">
+                  <label class="form-label text-muted mb-0" style="font-size:0.68rem;">IMFL VAT (%)</label>
+                  <input type="number" step="0.5" min="0" max="100"
+                    class="form-control form-control-sm tax-rate-input p-1 text-center" id="input-vat-imfl-rate"
+                    style="font-size:0.75rem; height:26px;">
+                </div>
+                <div class="col-6">
+                  <label class="form-label text-muted mb-0" style="font-size:0.68rem;">Wine VAT (%)</label>
+                  <input type="number" step="0.5" min="0" max="100"
+                    class="form-control form-control-sm tax-rate-input p-1 text-center" id="input-vat-wine-rate"
+                    style="font-size:0.75rem; height:26px;">
+                </div>
+                <div class="col-6">
+                  <label class="form-label text-muted mb-0" style="font-size:0.68rem;">Liquor VAT (%)</label>
+                  <input type="number" step="0.5" min="0" max="100"
+                    class="form-control form-control-sm tax-rate-input p-1 text-center" id="input-vat-gen-rate"
+                    style="font-size:0.75rem; height:26px;">
+                </div>
+              </div>
+            </div>
+
+            <!-- Subtotal Breakdown Section -->
+            <div id="subtotal-breakdown-container" class="mb-2">
+              <div class="d-flex justify-content-between align-items-center mb-1 text-muted small" id="food-subtotal-row" style="display: none;">
+                <span><i class="bi bi-egg-fried text-primary me-1"></i> Food Subtotal (GST Base)</span>
+                <span class="fw-semibold text-dark" id="bill-food-subtotal">₹0.00</span>
+              </div>
+              <div id="liquor-subtotal-section" style="display: none;">
+                <div class="d-flex justify-content-between align-items-center mb-1 text-muted small" id="liquor-subtotal-row">
+                  <span><i class="bi bi-cup-straw text-warning text-dark me-1"></i> Liquor Subtotal (Excise Base)</span>
+                  <span class="fw-semibold text-dark" id="bill-liquor-subtotal">₹0.00</span>
+                </div>
+                <!-- Liquor Tax Base Sub-Breakdown -->
+                <div id="liquor-tax-subtotal-breakdown" class="ps-3 border-start border-warning border-opacity-50 ms-2 mb-1" style="font-size:0.75rem;">
+                  <div class="d-flex justify-content-between text-muted mb-1" id="beer-subtotal-row" style="display: none;">
+                    <span>🍺 Beer Base</span>
+                    <span class="fw-medium text-dark" id="bill-beer-subtotal">₹0.00</span>
+                  </div>
+                  <div class="d-flex justify-content-between text-muted mb-1" id="imfl-subtotal-row" style="display: none;">
+                    <span>🥃 IMFL / Spirits Base</span>
+                    <span class="fw-medium text-dark" id="bill-imfl-subtotal">₹0.00</span>
+                  </div>
+                  <div class="d-flex justify-content-between text-muted mb-1" id="wine-subtotal-row" style="display: none;">
+                    <span>🍷 Wine Base</span>
+                    <span class="fw-medium text-dark" id="bill-wine-subtotal">₹0.00</span>
+                  </div>
+                  <div class="d-flex justify-content-between text-muted mb-1" id="gen-liquor-subtotal-row" style="display: none;">
+                    <span>🍾 Gen. Liquor Base</span>
+                    <span class="fw-medium text-dark" id="bill-gen-liquor-subtotal">₹0.00</span>
+                  </div>
+                </div>
+              </div>
+              <div class="d-flex justify-content-between align-items-center mb-1 fw-bold small text-dark">
+                <span>Total Subtotal</span>
+                <span id="bill-subtotal">₹0.00</span>
+              </div>
+            </div>
+
+            <!-- Custom Charges Container -->
+            <div id="custom-charges-container" class="my-2 p-2 bg-light rounded border" style="display: none;">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="fw-bold text-dark" style="font-size:0.75rem;"><i
+                    class="bi bi-tag-fill text-primary me-1"></i>Additional Charges</span>
+                <span class="fw-bold text-primary" style="font-size:0.75rem;" id="custom-charges-total">₹0.00</span>
+              </div>
+              <div id="custom-charges-rows" class="small"></div>
+            </div>
+
+            <!-- Dynamic Active Tax Rows Container -->
+            <div id="dynamic-tax-rows"></div>
+
+            <hr class="my-2 border-dashed">
+            <div class="d-flex justify-content-between fw-bold text-dark mb-1">
+              <span>Tax Amount</span>
+              <span id="bill-tax-total">₹0.00</span>
+            </div>
+            <div class="d-flex justify-content-between text-muted small mb-1" id="bill-round-off-row" style="display: none;">
+              <span>Round Off</span>
+              <span id="bill-round-off">₹0.00</span>
+            </div>
+          </div>
+
+          <!-- Attached Advance Receipt Badge (Hidden by default using d-none) -->
+          <div id="attached-receipt-banner" class="alert alert-success d-none justify-content-between align-items-center py-2 px-3 mb-3 rounded-3 shadow-sm border border-success border-opacity-20">
+            <div>
+              <div class="fw-bold text-dark small"><i class="bi bi-bookmark-star-fill text-warning me-1"></i>Advance Attached: <span id="banner-receipt-no">REC-XXXX</span></div>
+              <div class="text-success fw-bold small">Deposit Deducted: -₹<span id="banner-advance-amount">0.00</span></div>
+            </div>
+            <button type="button" class="btn-close btn-sm" onclick="detachAdvanceReceipt()" title="Detach Advance Receipt"></button>
+          </div>
+
+          <!-- Grand Total Banner -->
+          <div class="grand-total-banner d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <span class="text-white-50 small d-block uppercase fw-semibold">Grand Total</span>
+              <span class="fs-4 fw-bold text-white" id="bill-grand-total">₹0.00</span>
+            </div>
+            <i class="bi bi-currency-rupee fs-2 text-warning opacity-75"></i>
+          </div>
+
+          <!-- Action Buttons for KOT & Settlement -->
+          <div class="d-grid gap-2 mt-3">
+            <button type="button" id="btn-fire-kot" class="btn btn-danger fw-bold py-2 shadow-sm fs-6">
+              <i class="bi bi-fire me-1"></i> Fire & Send KOT
+            </button>
+            <button type="button" id="btn-open-settle-modal" class="btn btn-success fw-bold py-2 shadow-sm fs-6">
+              <i class="bi bi-receipt-cutoff me-1"></i> Settle & Generate Bill
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal for Quick Add Menu Item -->
+<div class="modal fade" id="quickAddItemModal" tabindex="-1" aria-labelledby="quickAddItemModalLabel"
+  aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content rounded-3 shadow">
+      <div class="modal-header bg-light py-2 px-3">
+        <h6 class="modal-title fw-bold text-dark d-flex align-items-center gap-2" id="quickAddItemModalLabel">
+          <i class="bi bi-plus-circle-fill text-primary fs-5"></i> Add New Menu Item
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="quick-add-item-form">
+        <div class="modal-body p-3">
+          <div class="mb-2">
+            <label class="form-label small fw-semibold text-muted mb-1">Item Name *</label>
+            <input type="text" name="name" class="form-control form-control-sm" placeholder="e.g. Chicken Biryani"
+              required>
+          </div>
+          <div class="row g-2 mb-2">
+            <div class="col-6">
+              <label class="form-label small fw-semibold text-muted mb-1">Category *</label>
+              <select name="category" class="form-select form-select-sm" required>
+                <option value="">Select Category</option>
+                {% for cat in categories %}
+                <option value="{{ cat.id }}">{{ cat.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label small fw-semibold text-muted mb-1">Price (₹) *</label>
+              <input type="number" step="0.01" min="0" name="price" class="form-control form-control-sm"
+                placeholder="0.00" required>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold text-muted mb-1">Tax Type / Rate *</label>
+            <select name="tax_type" class="form-select form-select-sm" required>
+              <option value="GST_FOOD" selected>GST Food (Meals / Soft Drinks)</option>
+              <option value="VAT_BEER">Beer VAT (State Rate)</option>
+              <option value="VAT_IMFL">IMFL / Spirits VAT</option>
+              <option value="VAT_WINE">Wine VAT</option>
+              <option value="VAT_LIQUOR">General Liquor VAT</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-semibold text-muted mb-1">Description (optional)</label>
+            <textarea name="description" class="form-control form-control-sm" rows="2"
+              placeholder="Item description or ingredients..."></textarea>
+          </div>
+          <div class="form-check form-switch mb-1">
+            <input class="form-check-input" type="checkbox" name="availability" id="quick-item-available" checked>
+            <label class="form-check-label small fw-semibold text-muted" for="quick-item-available">Available for
+              ordering</label>
+          </div>
+        </div>
+        <div class="modal-footer bg-light py-2 px-3 d-flex justify-content-between">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-sm btn-primary fw-bold" id="btn-save-quick-item">
+            <i class="bi bi-check-lg me-1"></i> Save & Add to Cart
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Settlement & Checkout Modal -->
+<div class="modal fade" id="settlementModal" tabindex="-1" aria-labelledby="settlementModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow-lg rounded-3">
+      <div class="modal-header bg-dark text-white py-3">
+        <h5 class="modal-title fw-bold" id="settlementModalLabel">
+          <i class="bi bi-cash-coin me-2 text-warning"></i>Settle & Checkout Order
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4">
+
+        <!-- Order Summary Card -->
+        <div
+          class="alert alert-secondary d-flex justify-content-between align-items-center rounded-3 mb-4 p-3 border-0 bg-light shadow-sm">
+          <div>
+            <div class="fw-bold text-dark fs-5" id="settle-order-title">Order #---</div>
+            <div class="small text-muted" id="settle-order-meta">Table: -- | Billed To: Walk-in Guest</div>
+          </div>
+          <div class="text-end">
+            <span class="small text-muted d-block uppercase fw-semibold">Amount Payable</span>
+            <span class="fs-3 fw-bold text-success" id="settle-order-amount">₹0.00</span>
+          </div>
+        </div>
+
+        <!-- Advance Deposit Settlement Breakdown Card -->
+        <div id="modal-advance-deduction-card" class="card border-primary border-opacity-20 bg-primary bg-opacity-10 rounded-3 mb-4 p-3 shadow-sm" style="display: none;">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="fw-bold text-dark"><i class="bi bi-bookmark-star-fill text-warning me-1"></i> Advance Deposit Attached (<span id="modal-receipt-no">REC-XXXX</span>)</span>
+            <span class="badge bg-primary text-white" id="modal-receipt-ref">Deposit Settlement</span>
+          </div>
+          <div class="row text-center g-2 pt-2 border-top border-primary border-opacity-20">
+            <div class="col-4">
+              <span class="d-block text-muted small text-uppercase font-weight-bold" style="font-size:0.7rem;">Grand Total</span>
+              <span class="fw-bold text-dark fs-6" id="modal-grand-total-val">₹0.00</span>
+            </div>
+            <div class="col-4 border-start border-end border-primary border-opacity-20">
+              <span class="d-block text-success small text-uppercase font-weight-bold" style="font-size:0.7rem;">Less Advance Paid</span>
+              <span class="fw-bold text-success fs-6" id="modal-advance-paid-val">-₹0.00</span>
+            </div>
+            <div class="col-4">
+              <span class="d-block text-primary small text-uppercase font-weight-bold" style="font-size:0.7rem;">Net Payable</span>
+              <span class="fw-bold text-primary fs-5" id="modal-net-payable-val">₹0.00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 1. Invoice Mode Toggle -->
+        <div class="mb-4">
+          <label class="form-label fw-bold text-dark mb-2">
+            <i class="bi bi-journal-text me-1 text-primary"></i> 1. Select Invoice Mode
+          </label>
+          <div class="btn-group w-100" role="group" id="settlement-invoice-mode">
+            <input type="radio" class="btn-check" name="settle_invoice_mode" id="mode_food" value="food" checked>
+            <label class="btn btn-outline-primary fw-semibold py-2" for="mode_food">
+              <i class="bi bi-egg-fried me-1"></i> Food GST Invoice
+            </label>
+
+            <input type="radio" class="btn-check" name="settle_invoice_mode" id="mode_bar" value="liquor">
+            <label class="btn btn-outline-warning text-dark fw-semibold py-2" for="mode_bar">
+              <i class="bi bi-cup-straw me-1"></i> Bar Excise Bill
+            </label>
+
+            <input type="radio" class="btn-check" name="settle_invoice_mode" id="mode_split" value="split">
+            <label class="btn btn-outline-success fw-semibold py-2" for="mode_split">
+              <i class="bi bi-layers-half me-1"></i> Auto-Split Invoices
+            </label>
+          </div>
+        </div>
+
+        <!-- 2. Invoice Serial Number Fields -->
+        <div class="row g-3 mb-4" id="row-settlement-serial-numbers">
+          <div class="col-md-6" id="wrapper-modal-gstin">
+            <label class="form-label fw-semibold text-dark small mb-1">
+              <i class="bi bi-card-heading me-1 text-primary"></i>Tax Invoice No. (GST)
+            </label>
+            <input type="text" id="modal-gstin-no" class="form-control" placeholder="e.g. INV-2026-0042">
+          </div>
+          <div class="col-md-6" id="wrapper-modal-excise">
+            <label class="form-label fw-semibold text-dark small mb-1">
+              <i class="bi bi-file-earmark-medical me-1 text-warning"></i>Retail Excise Bill No. (VAT)
+            </label>
+            <input type="text" id="modal-excise-bill-no" class="form-control" placeholder="e.g. EXC-2026-0042">
+          </div>
+        </div>
+
+        <!-- 3. Split Payment & Multi-Method Engine -->
+        <div class="mb-4 p-3 bg-light rounded-3 border">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <label class="form-label fw-bold text-dark mb-0">
+              <i class="bi bi-credit-card me-1 text-info"></i> 3. Payment Method & Split Received
+            </label>
+            <button type="button" id="btn-add-payment-split" class="btn btn-sm btn-outline-primary fw-semibold">
+              <i class="bi bi-plus-circle me-1"></i> Add Payment Split
+            </button>
+          </div>
+
+          <div id="payment-split-rows-container">
+            <!-- Dynamic split rows will be rendered here -->
+          </div>
+
+          <!-- Live Balance Summary Cards -->
+          <div class="row g-2 mt-2 pt-2 border-top">
+            <div class="col-4">
+              <div class="p-2 bg-white rounded border text-center">
+                <span class="d-block text-muted uppercase small fw-bold" style="font-size: 0.7rem;">TOTAL PAID</span>
+                <span class="fw-bold text-success fs-6" id="split-summary-paid">₹0.00</span>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="p-2 bg-white rounded border text-center">
+                <span class="d-block text-muted uppercase small fw-bold" style="font-size: 0.7rem;">REMAINING DUE</span>
+                <span class="fw-bold text-danger fs-6" id="split-summary-due">₹0.00</span>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="p-2 bg-white rounded border text-center">
+                <span class="d-block text-muted uppercase small fw-bold" style="font-size: 0.7rem;">STATUS</span>
+                <span class="badge bg-success mt-1" id="split-summary-status">Paid</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Customer party requirement warning alert -->
+          <div class="alert alert-warning py-2 px-3 small mt-2 mb-0 d-none" id="credit-party-warning">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+            <strong>Customer Name Recommended:</strong> Unpaid / Credit balance (₹<span id="credit-warning-amount">0.00</span>) will be recorded on customer account ledger.
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer bg-light py-3">
+        <button type="button" class="btn btn-outline-secondary fw-semibold px-3" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="btn-modal-save-only" class="btn btn-primary fw-bold px-3 py-2">
+          <i class="bi bi-check-circle me-1"></i> Save Order
+        </button>
+        <button type="button" id="btn-modal-print-close" class="btn btn-success fw-bold px-3 py-2">
+          <i class="bi bi-printer me-1"></i> Save & Print Bill
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Item Level Discount Modal -->
+<div class="modal fade" id="itemDiscountModal" tabindex="-1" aria-labelledby="itemDiscountModalLabel"
+  aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-light">
+        <h6 class="modal-title fw-bold" id="itemDiscountModalLabel">
+          <i class="bi bi-tag-fill text-primary me-2"></i>Apply Item Discount
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4">
+        <div class="mb-3">
+          <h6 class="fw-bold text-dark mb-1" id="disc-item-name">Item Name</h6>
+          <div class="text-muted small" id="disc-item-price-info">Base Price: ₹0.00</div>
+        </div>
+
+        <!-- Discount Type Switcher -->
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-secondary small">Discount Type</label>
+          <div class="btn-group w-100" role="group">
+            <input type="radio" class="btn-check" name="disc_type_radio" id="disc_type_pct" value="percentage" checked
+              onchange="onDiscTypeChange()">
+            <label class="btn btn-outline-primary fw-semibold" for="disc_type_pct">Percentage (%)</label>
+
+            <input type="radio" class="btn-check" name="disc_type_radio" id="disc_type_flat" value="flat"
+              onchange="onDiscTypeChange()">
+            <label class="btn btn-outline-primary fw-semibold" for="disc_type_flat">Flat Amount (₹)</label>
+          </div>
+        </div>
+
+        <!-- Quick Preset Toggles -->
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-secondary small">Preset Discounts</label>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary px-3"
+              onclick="applyPresetDiscount('percentage', 10)">10%</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary px-3"
+              onclick="applyPresetDiscount('percentage', 20)">20%</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary px-3"
+              onclick="applyPresetDiscount('percentage', 50)">50%</button>
+            <button type="button" class="btn btn-sm btn-outline-danger fw-bold px-3"
+              onclick="applyPresetDiscount('percentage', 100)">100% (Comp)</button>
+          </div>
+        </div>
+
+        <!-- Input Field -->
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-secondary small" id="disc-value-label">Discount Value (%)</label>
+          <div class="input-group">
+            <span class="input-group-text" id="disc-addon">%</span>
+            <input type="number" step="0.01" min="0" class="form-control" id="disc-value-input" value="0">
+          </div>
+        </div>
+
+        <!-- Required Audit Reason Selector -->
+        <div class="mb-3">
+          <label class="form-label fw-semibold text-secondary small">Audit Reason <span
+              class="text-danger">*</span></label>
+          <select class="form-select" id="disc-reason-select" required>
+            <option value="Management Courtesy" selected>Management Courtesy</option>
+            <option value="Happy Hour">Happy Hour</option>
+            <option value="Customer Complaint">Customer Complaint</option>
+            <option value="Staff Meal">Staff Meal</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer bg-light">
+        <button type="button" class="btn btn-outline-danger me-auto btn-sm" onclick="removeCurrentItemDiscount()">Remove
+          Discount</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary fw-semibold px-4" onclick="saveCurrentItemDiscount()">Apply
+          Discount</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Raw Data from Backend -->
+<script type="application/json"
+  id="active-orders-data">{% if active_orders_json %}{{ active_orders_json|safe }}{% else %}[]{% endif %}</script>
+<script type="application/json" id="menu-items-data">{{ menu_items_json|safe }}</script>
+<script type="application/json"
+  id="top-selling-data">{% if top_selling_json %}{{ top_selling_json|safe }}{% else %}[]{% endif %}</script>
+<script type="application/json" id="tax-settings-data">{{ tax_settings_json|safe }}</script>
+<script type="application/json"
+  id="existing-order-data">{% if existing_order_json %}{{ existing_order_json|safe }}{% else %}null{% endif %}</script>
+<script type="application/json"
+  id="custom-charges-data">{% if custom_charges_json %}{{ custom_charges_json|safe }}{% else %}[]{% endif %}</script>
+<script type="application/json"
+  id="attached-receipt-data">{% if attached_receipt_json %}{{ attached_receipt_json|safe }}{% else %}null{% endif %}</script>
+
+<script>
+  const customerPartiesMap = {
+    {% for party in customer_parties %}
+  "{{ party.name|escapejs }}": { phone: "{{ party.phone|default:''|escapejs }}" },
+  {% endfor %}
+  };
+
+  function onCustomerInput(input) {
+    const val = input.value.trim();
+    if (customerPartiesMap[val] && customerPartiesMap[val].phone) {
+      document.getElementById('cust-phone').value = customerPartiesMap[val].phone;
+    }
+  }
+
+  (function () {
+    let menuItems = [];
+    let topSellingIds = [];
+    let defaultTaxSettings = { "cgst_pct": 2.5, "sgst_pct": 2.5, "vat_beer_pct": 60, "vat_imfl_pct": 65, "vat_wine_pct": 60, "vat_gen_pct": 20 };
+    let activeTaxSettings = { ...defaultTaxSettings };
+    let existingOrder = null;
+    let activeOrders = [];
+
+    let customChargesList = [];
+    try {
+      menuItems = JSON.parse(document.getElementById('menu-items-data')?.textContent || '[]');
+      topSellingIds = JSON.parse(document.getElementById('top-selling-data')?.textContent || '[]');
+      defaultTaxSettings = JSON.parse(document.getElementById('tax-settings-data')?.textContent || '{"cgst_pct":2.5,"sgst_pct":2.5,"vat_beer_pct":60,"vat_imfl_pct":65,"vat_wine_pct":60,"vat_gen_pct":20}');
+      activeTaxSettings = { ...defaultTaxSettings };
+      existingOrder = JSON.parse(document.getElementById('existing-order-data')?.textContent || 'null');
+      activeOrders = JSON.parse(document.getElementById('active-orders-data')?.textContent || '[]');
+      customChargesList = JSON.parse(document.getElementById('custom-charges-data')?.textContent || '[]');
+    } catch (e) {
+      console.error('Error parsing POS JSON data:', e);
+    }
+
+    const selectedCustomChargeIds = new Set();
+
+    function updateAutoAppliedCharges() {
+      selectedCustomChargeIds.clear();
+      const currentOt = (typeof state !== 'undefined' && state) ? (state.orderType || 'dine_in') : 'dine_in';
+      customChargesList.forEach(cc => {
+        const types = cc.applied_order_types || ['dine_in', 'takeaway', 'delivery'];
+        if (cc.is_auto_applied && types.includes(currentOt)) {
+          selectedCustomChargeIds.add(cc.id);
+        }
+      });
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    const state = {
+      viewMode: 'food',
+      customerName: '',
+      phone: '',
+      notes: '',
+      tableId: '',
+      orderType: 'dine_in',
+      paymentMethod: 'cash',
+      paymentStatus: 'paid',
+      billingMode: 'split',
+      exciseBillNo: '',
+      gstinNo: '',
+      selectedCategory: 'all',
+      searchQuery: '',
+      activeOrderId: null,
+      activeOrderNumber: null,
+      receiptNo: '',
+      advanceAmountPaid: 0,
+      cart: []
+    };
+
+    window.detachAdvanceReceipt = function() {
+      state.receiptNo = '';
+      state.advanceAmountPaid = 0;
+      const receiptBannerEl = document.getElementById('attached-receipt-banner');
+      if (receiptBannerEl) {
+        receiptBannerEl.classList.remove('d-flex');
+        receiptBannerEl.classList.add('d-none');
+      }
+      if (typeof renderCart === 'function') renderCart();
+    };
+
+    let attachedReceipt = null;
+    try {
+      attachedReceipt = JSON.parse(document.getElementById('attached-receipt-data')?.textContent || 'null');
+      if (attachedReceipt) {
+        state.receiptNo = attachedReceipt.receipt_no || '';
+        state.advanceAmountPaid = parseFloat(attachedReceipt.advance_amount) || 0;
+        if (attachedReceipt.customer_name) {
+          state.customerName = attachedReceipt.customer_name;
+          const nameInput = document.getElementById('cust-name');
+          if (nameInput) nameInput.value = attachedReceipt.customer_name;
+        }
+        if (attachedReceipt.phone) {
+          state.phone = attachedReceipt.phone;
+          const phoneInput = document.getElementById('cust-phone');
+          if (phoneInput) phoneInput.value = attachedReceipt.phone;
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing attached receipt JSON:', e);
+    }
+
+    // DOM Elements for Tax Rates Inputs
+    const inputCgst = document.getElementById('input-cgst-rate');
+    const inputSgst = document.getElementById('input-sgst-rate');
+    const inputBeerVat = document.getElementById('input-vat-beer-rate');
+    const inputImflVat = document.getElementById('input-vat-imfl-rate');
+    const inputWineVat = document.getElementById('input-vat-wine-rate');
+    const inputGenVat = document.getElementById('input-vat-gen-rate');
+
+    function syncTaxInputs() {
+      if (inputCgst) inputCgst.value = activeTaxSettings.cgst_pct;
+      if (inputSgst) inputSgst.value = activeTaxSettings.sgst_pct;
+      if (inputBeerVat) inputBeerVat.value = activeTaxSettings.vat_beer_pct;
+      if (inputImflVat) inputImflVat.value = activeTaxSettings.vat_imfl_pct;
+      if (inputWineVat) inputWineVat.value = activeTaxSettings.vat_wine_pct;
+      if (inputGenVat) inputGenVat.value = activeTaxSettings.vat_gen_pct;
+    }
+    syncTaxInputs();
+
+    function syncCategoryPills() {
+      const pills = document.querySelectorAll('#category-tabs .category-pill');
+      pills.forEach(pill => {
+        const catId = pill.dataset.cat;
+        if (catId === 'all' || catId === 'top_selling') {
+          pill.style.display = 'inline-block';
+          return;
+        }
+        const cname = pill.textContent.trim();
+        const isLiquorCat = ['beer', 'wine', 'liquor', 'bar', 'spirit', 'whiskey', 'vodka', 'rum', 'cocktail'].some(k => cname.toLowerCase().includes(k));
+
+        if (state.viewMode === 'food') {
+          pill.style.display = isLiquorCat ? 'none' : 'inline-block';
+        } else if (state.viewMode === 'bar') {
+          pill.style.display = isLiquorCat ? 'inline-block' : 'none';
+        }
+      });
+    }
+
+    // Mode Switcher Handler
+    const viewModeBadge = document.getElementById('view-mode-badge');
+    const posModeSwitcher = document.getElementById('pos-mode-switcher');
+    if (posModeSwitcher) {
+      posModeSwitcher.addEventListener('click', (e) => {
+        const btn = e.target.closest('.pos-mode-btn');
+        if (!btn) return;
+        document.querySelectorAll('.pos-mode-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.viewMode = btn.dataset.mode;
+
+        if (viewModeBadge) {
+          if (state.viewMode === 'food') {
+            viewModeBadge.className = 'badge bg-primary text-white border';
+            viewModeBadge.textContent = '🍔 Food POS View (GST)';
+          } else if (state.viewMode === 'bar') {
+            viewModeBadge.className = 'badge bg-warning text-dark border';
+            viewModeBadge.textContent = '🍷 Bar / Alcohol POS View (Excise)';
+          }
+        }
+        state.selectedCategory = 'all';
+        document.querySelectorAll('#category-tabs .category-pill').forEach(p => p.classList.remove('active'));
+        document.querySelector('#category-tabs .category-pill[data-cat="all"]')?.classList.add('active');
+        syncCategoryPills();
+        renderMenu();
+        renderCart();
+      });
+    }
+
+    // Toggle Edit Rates Panel
+    const btnToggleTaxEdit = document.getElementById('btn-toggle-tax-edit');
+    const taxCustomizerPanel = document.getElementById('tax-customizer-panel');
+    if (btnToggleTaxEdit && taxCustomizerPanel) {
+      btnToggleTaxEdit.addEventListener('click', () => {
+        const isHidden = taxCustomizerPanel.style.display === 'none';
+        taxCustomizerPanel.style.display = isHidden ? 'block' : 'none';
+        btnToggleTaxEdit.classList.toggle('active', isHidden);
+      });
+    }
+
+    // Reset to Defaults
+    const btnResetTaxRates = document.getElementById('btn-reset-tax-rates');
+    if (btnResetTaxRates) {
+      btnResetTaxRates.addEventListener('click', () => {
+        Object.assign(activeTaxSettings, defaultTaxSettings);
+        syncTaxInputs();
+        renderCart();
+      });
+    }
+
+    // Listen for changes on tax rate inputs
+    document.querySelectorAll('.tax-rate-input').forEach(input => {
+      input.addEventListener('input', () => {
+        activeTaxSettings.cgst_pct = parseFloat(inputCgst.value) || 0;
+        activeTaxSettings.sgst_pct = parseFloat(inputSgst.value) || 0;
+        activeTaxSettings.vat_beer_pct = parseFloat(inputBeerVat.value) || 0;
+        activeTaxSettings.vat_imfl_pct = parseFloat(inputImflVat.value) || 0;
+        activeTaxSettings.vat_wine_pct = parseFloat(inputWineVat.value) || 0;
+        activeTaxSettings.vat_gen_pct = parseFloat(inputGenVat.value) || 0;
+        renderCart();
+      });
+    });
+
+    // Coupled Payment Method & Payment Status Logic
+    const paymentMethodSelect = document.getElementById('payment-method');
+    const paymentStatusSelect = document.getElementById('payment-status');
+    const creditLockedBadge = document.getElementById('credit-locked-badge');
+
+    function syncPaymentLogic() {
+      if (!paymentMethodSelect || !paymentStatusSelect) return;
+      if (paymentMethodSelect.value === 'credit') {
+        paymentStatusSelect.value = 'unpaid';
+        paymentStatusSelect.disabled = true;
+        if (creditLockedBadge) creditLockedBadge.style.display = 'inline-block';
+        state.paymentMethod = 'credit';
+        state.paymentStatus = 'unpaid';
+      } else {
+        paymentStatusSelect.disabled = false;
+        if (creditLockedBadge) creditLockedBadge.style.display = 'none';
+        state.paymentMethod = paymentMethodSelect.value;
+        state.paymentStatus = paymentStatusSelect.value;
+      }
+    }
+
+    if (paymentMethodSelect && paymentStatusSelect) {
+      paymentMethodSelect.addEventListener('change', syncPaymentLogic);
+      paymentStatusSelect.addEventListener('change', syncPaymentLogic);
+    }
+
+    if (existingOrder) {
+      state.activeOrderId = existingOrder.id || null;
+      state.activeOrderNumber = existingOrder.order_number || null;
+      state.customerName = existingOrder.customer_name || '';
+      state.phone = existingOrder.phone || '';
+      state.notes = existingOrder.notes || '';
+      state.tableId = existingOrder.table_id || '';
+      state.orderType = existingOrder.order_type || 'dine_in';
+      state.paymentMethod = existingOrder.payment_method || 'cash';
+      state.paymentStatus = existingOrder.payment_status || 'paid';
+      state.cart = existingOrder.items || [];
+
+      const custNameEl = document.getElementById('cust-name');
+      const custPhoneEl = document.getElementById('cust-phone');
+      const orderNotesEl = document.getElementById('order-notes');
+      const tableSelectEl = document.getElementById('table-id');
+      if (custNameEl) custNameEl.value = state.customerName;
+      if (custPhoneEl) custPhoneEl.value = state.phone;
+      if (orderNotesEl) orderNotesEl.value = state.notes;
+      if (tableSelectEl && state.tableId) tableSelectEl.value = state.tableId;
+      if (paymentMethodSelect) paymentMethodSelect.value = state.paymentMethod;
+      if (paymentStatusSelect) paymentStatusSelect.value = state.paymentStatus;
+
+      syncPaymentLogic();
+
+      document.querySelectorAll('.fulfillment-btn').forEach(b => {
+        const isActive = b.dataset.type === state.orderType;
+        b.classList.toggle('active', isActive);
+        if (isActive) {
+          b.classList.add('btn-primary', 'text-white');
+          b.classList.remove('btn-outline-primary');
+        } else {
+          b.classList.remove('btn-primary', 'text-white');
+          b.classList.add('btn-outline-primary');
+        }
+      });
+    }
+
+    // DOM Elements
+    const menuGrid = document.getElementById('menu-grid');
+    const cartContainer = document.getElementById('cart-items-list');
+    const cartEmptyMsg = document.getElementById('cart-empty-msg');
+    const cartCountEl = document.getElementById('cart-item-count');
+
+    const subtotalEl = document.getElementById('bill-subtotal');
+    const dynamicTaxContainer = document.getElementById('dynamic-tax-rows');
+    const taxTotalEl = document.getElementById('bill-tax-total');
+    const grandTotalEl = document.getElementById('bill-grand-total');
+
+    // Quick Add Item Form AJAX
+    const quickAddForm = document.getElementById('quick-add-item-form');
+    if (quickAddForm) {
+      quickAddForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const formData = new FormData(quickAddForm);
+        const csrfToken = getCookie('csrftoken') || '{{ csrf_token }}';
+        const btnSave = document.getElementById('btn-save-quick-item');
+        btnSave.disabled = true;
+
+        fetch('{% url "restaurant_admin:menu_quick_add_api" restaurant_slug=restaurant.slug %}', {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: formData
+        })
+          .then(res => res.json())
+          .then(data => {
+            btnSave.disabled = false;
+            if (data.success && data.item) {
+              const newItem = data.item;
+              menuItems.push(newItem);
+              renderMenu();
+              addToCart(newItem);
+
+              const modalEl = document.getElementById('quickAddItemModal');
+              const bsModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+              bsModal.hide();
+              quickAddForm.reset();
+            } else {
+              alert(data.error || 'Failed to add menu item.');
+            }
+          })
+          .catch(err => {
+            console.error(err);
+            btnSave.disabled = false;
+            alert('Error adding menu item. Please check inputs.');
+          });
+      });
+    }
+
+    // Helper to identify food vs liquor items
+    function isLiquorTaxType(tt, cname) {
+      if (['VAT_BEER', 'VAT_IMFL', 'VAT_WINE', 'VAT_LIQUOR'].includes(tt)) return true;
+      if (cname) {
+        const lower = cname.toLowerCase();
+        if (['beer', 'wine', 'liquor', 'bar', 'spirit', 'whiskey', 'vodka', 'rum', 'cocktail'].some(k => lower.includes(k))) return true;
+      }
+      return false;
+    }
+
+    // Render Menu Grid according to Mode Switcher & Category
+    function renderMenu() {
+      if (!menuGrid) return;
+      menuGrid.innerHTML = '';
+
+      const filtered = menuItems.filter(item => {
+        const isLiquor = isLiquorTaxType(item.tax_type, item.category_name);
+
+        // When "All Items" is selected, respect the POS viewMode (Food vs Bar)
+        if (state.selectedCategory === 'all') {
+          if (state.viewMode === 'food' && isLiquor) return false;
+          if (state.viewMode === 'bar' && !isLiquor) return false;
+        }
+
+        let matchCat = false;
+        if (state.selectedCategory === 'all') {
+          matchCat = true;
+        } else if (state.selectedCategory === 'top_selling') {
+          matchCat = topSellingIds.includes(item.id);
+        } else {
+          matchCat = String(item.category_id) === String(state.selectedCategory);
+        }
+        const matchSearch = !state.searchQuery || item.name.toLowerCase().includes(state.searchQuery.toLowerCase());
+        return matchCat && matchSearch;
+      });
+
+      if (filtered.length === 0) {
+        menuGrid.innerHTML = `<div class="col-12 text-center text-muted py-4"><i class="bi bi-search me-1"></i> No matching menu items found.</div>`;
+        return;
+      }
+
+      filtered.forEach(item => {
+        const isTopSeller = topSellingIds.includes(item.id);
+        const col = document.createElement('div');
+        col.className = 'col';
+        col.innerHTML = `
+        <div class="pos-card p-2 h-100 d-flex flex-column justify-content-between cursor-pointer" data-id="${item.id}" style="cursor: pointer;">
+          <div>
+            <div class="d-flex justify-content-between align-items-start mb-1 flex-wrap gap-1">
+              <div>
+                <span class="badge bg-light text-secondary border small" style="font-size:0.7rem;">${escapeHtml(item.category_name)}</span>
+                ${isTopSeller ? '<span class="badge bg-warning text-dark border small ms-1" style="font-size:0.65rem;"><i class="bi bi-fire text-danger me-1"></i>Top</span>' : ''}
+              </div>
+              <span class="fw-bold text-success small">₹${item.price.toFixed(2)}</span>
+            </div>
+            <h6 class="fw-semibold text-dark mb-1 text-truncate small" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</h6>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-primary w-100 py-1 mt-2 add-to-cart-btn" style="font-size:0.75rem;">
+            <i class="bi bi-plus-lg me-1"></i> Add
+          </button>
+        </div>
+      `;
+
+        col.querySelector('.pos-card').addEventListener('click', () => addToCart(item));
+        menuGrid.appendChild(col);
+      });
+    }
+
+    function escapeHtml(str) {
+      return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // Cart operations
+    function addToCart(item) {
+      const existing = state.cart.find(c => c.id === item.id);
+      if (existing) {
+        existing.quantity += 1;
+      } else {
+        state.cart.push({
+          id: item.id,
+          name: item.name,
+          unit_price: item.price,
+          quantity: 1,
+          tax_type: item.tax_type,
+          category_name: item.category_name
+        });
+      }
+      renderCart();
+    }
+
+    function updateQty(id, delta) {
+      const item = state.cart.find(c => c.id === id);
+      if (!item) return;
+      item.quantity += delta;
+      if (item.quantity <= 0) {
+        state.cart = state.cart.filter(c => c.id !== id);
+      }
+      renderCart();
+    }
+
+    function setQty(id, qty) {
+      const item = state.cart.find(c => c.id === id);
+      if (!item) return;
+      item.quantity = Math.max(0, parseInt(qty) || 0);
+      if (item.quantity === 0) {
+        state.cart = state.cart.filter(c => c.id !== id);
+      }
+      renderCart();
+    }
+
+    function removeFromCart(id) {
+      state.cart = state.cart.filter(c => c.id !== id);
+      renderCart();
+    }
+
+    // Calculation & Render Cart with Combined Food & Liquor Handling
+    function renderCart() {
+      const cartList = document.getElementById('cart-items-list');
+      const cartEmptyMsg = document.getElementById('cart-empty-msg');
+
+      const foodCartItems = state.cart.filter(item => !isLiquorTaxType(item.tax_type, item.category_name));
+      const liquorCartItems = state.cart.filter(item => isLiquorTaxType(item.tax_type, item.category_name));
+
+      const totalCount = state.cart.reduce((sum, i) => sum + i.quantity, 0);
+
+      if (cartCountEl) cartCountEl.textContent = `${totalCount} item${totalCount !== 1 ? 's' : ''}`;
+
+      if (cartEmptyMsg) {
+        cartEmptyMsg.style.display = state.cart.length === 0 ? 'block' : 'none';
+      }
+
+      if (cartList) {
+        cartList.innerHTML = '';
+        if (state.cart.length > 0) {
+          if (foodCartItems.length > 0) {
+            const foodSub = foodCartItems.reduce((sum, i) => sum + (i.unit_price * i.quantity), 0);
+            const foodSec = document.createElement('div');
+            foodSec.className = 'cart-section-card mb-2';
+            foodSec.innerHTML = `
+              <div class="cart-section-header food-header">
+                <span><i class="bi bi-egg-fried me-1"></i> Food & Soft Drinks (GST)</span>
+                <span class="badge bg-white text-primary border">₹${foodSub.toFixed(2)}</span>
+              </div>
+              <div class="px-2 py-1" id="food-cart-rows"></div>
+            `;
+            const foodRows = foodSec.querySelector('#food-cart-rows');
+            foodCartItems.forEach(item => renderCartItemRow(foodRows, item, item.unit_price * item.quantity));
+            cartList.appendChild(foodSec);
+          }
+
+          if (liquorCartItems.length > 0) {
+            const liquorSub = liquorCartItems.reduce((sum, i) => sum + (i.unit_price * i.quantity), 0);
+            const liquorSec = document.createElement('div');
+            liquorSec.className = 'cart-section-card mb-2';
+            liquorSec.innerHTML = `
+              <div class="cart-section-header liquor-header">
+                <span><i class="bi bi-cup-straw me-1"></i> Liquor & Spirits (Excise VAT)</span>
+                <span class="badge bg-white text-warning text-dark border">₹${liquorSub.toFixed(2)}</span>
+              </div>
+              <div class="px-2 py-1" id="liquor-cart-rows"></div>
+            `;
+            const liquorRows = liquorSec.querySelector('#liquor-cart-rows');
+            liquorCartItems.forEach(item => renderCartItemRow(liquorRows, item, item.unit_price * item.quantity));
+            cartList.appendChild(liquorSec);
+          }
+        }
+      }
+
+      let foodSubtotal = 0;
+      let beerSubtotal = 0;
+      let imflSubtotal = 0;
+      let wineSubtotal = 0;
+      let genLiquorSubtotal = 0;
+
+      state.cart.forEach(item => {
+        const grossLineTotal = item.unit_price * item.quantity;
+        const discVal = parseFloat(item.discount_value || 0);
+        let itemDiscount = 0;
+
+        if (item.discount_type === 'percentage' && discVal > 0) {
+          itemDiscount = grossLineTotal * (discVal / 100);
+        } else if (discVal > 0) {
+          itemDiscount = Math.min(grossLineTotal, discVal);
+        }
+
+        item.discount_amount = itemDiscount;
+        const netLineTotal = Math.max(0, grossLineTotal - itemDiscount);
+
+        let tt = item.tax_type || 'GST_FOOD';
+        if (tt === 'GST_FOOD' && item.category_name) {
+          const cname = item.category_name.toLowerCase();
+          if (cname.includes('beer')) tt = 'VAT_BEER';
+          else if (cname.includes('wine')) tt = 'VAT_WINE';
+          else if (['liquor', 'bar', 'spirit', 'whiskey', 'vodka', 'rum', 'cocktail'].some(k => cname.includes(k))) tt = 'VAT_IMFL';
+        }
+
+        if (tt === 'VAT_BEER') beerSubtotal += netLineTotal;
+        else if (tt === 'VAT_IMFL') imflSubtotal += netLineTotal;
+        else if (tt === 'VAT_WINE') wineSubtotal += netLineTotal;
+        else if (tt === 'VAT_LIQUOR') genLiquorSubtotal += netLineTotal;
+        else foodSubtotal += netLineTotal;
+      });
+
+      const liquorSubtotal = beerSubtotal + imflSubtotal + wineSubtotal + genLiquorSubtotal;
+      const combinedSubtotal = foodSubtotal + liquorSubtotal;
+      const subtotal = combinedSubtotal;
+
+      // Custom Charges Calculation
+      let customChargesTotal = 0;
+      let taxableCustomChargesBase = 0;
+      const activeOrderType = state.orderType || 'dine_in';
+
+      customChargesList.forEach(cc => {
+        if (selectedCustomChargeIds.has(cc.id)) {
+          const amt = cc.type === 'flat' ? parseFloat(cc.value) : (subtotal * (parseFloat(cc.value) / 100));
+          customChargesTotal += amt;
+          if (cc.is_taxable) {
+            taxableCustomChargesBase += amt;
+          }
+        }
+      });
+
+      const gstFoodBase = foodSubtotal + taxableCustomChargesBase;
+      const cgst = gstFoodBase * ((activeTaxSettings.cgst_pct || 0) / 100);
+      const sgst = gstFoodBase * ((activeTaxSettings.sgst_pct || 0) / 100);
+      const beerVat = beerSubtotal * ((activeTaxSettings.vat_beer_pct || 0) / 100);
+      const imflVat = imflSubtotal * ((activeTaxSettings.vat_imfl_pct || 0) / 100);
+      const wineVat = wineSubtotal * ((activeTaxSettings.vat_wine_pct || 0) / 100);
+      const genVat = genLiquorSubtotal * ((activeTaxSettings.vat_gen_pct || 0) / 100);
+
+      const totalGst = cgst + sgst;
+      const totalVat = beerVat + imflVat + wineVat + genVat;
+      const taxTotal = totalGst + totalVat;
+      const rawTotal = subtotal + customChargesTotal + taxTotal;
+      const grandTotal = Math.round(rawTotal);
+      const roundOffAmount = parseFloat((grandTotal - rawTotal).toFixed(2));
+
+      // Render Subtotal Breakdown Rows
+      const foodSubRow = document.getElementById('food-subtotal-row');
+      const liquorSubSection = document.getElementById('liquor-subtotal-section');
+      const liquorSubRow = document.getElementById('liquor-subtotal-row');
+      const foodSubEl = document.getElementById('bill-food-subtotal');
+      const liquorSubEl = document.getElementById('bill-liquor-subtotal');
+      const subtotalEl = document.getElementById('bill-subtotal');
+
+      const beerSubRow = document.getElementById('beer-subtotal-row');
+      const imflSubRow = document.getElementById('imfl-subtotal-row');
+      const wineSubRow = document.getElementById('wine-subtotal-row');
+      const genLiquorSubRow = document.getElementById('gen-liquor-subtotal-row');
+
+      const beerSubEl = document.getElementById('bill-beer-subtotal');
+      const imflSubEl = document.getElementById('bill-imfl-subtotal');
+      const wineSubEl = document.getElementById('bill-wine-subtotal');
+      const genLiquorSubEl = document.getElementById('bill-gen-liquor-subtotal');
+
+      if (foodSubRow) foodSubRow.style.display = foodSubtotal > 0 ? 'flex' : 'none';
+      if (foodSubEl) foodSubEl.textContent = `₹${foodSubtotal.toFixed(2)}`;
+
+      if (liquorSubSection) liquorSubSection.style.display = liquorSubtotal > 0 ? 'block' : 'none';
+      if (liquorSubRow) liquorSubRow.style.display = liquorSubtotal > 0 ? 'flex' : 'none';
+      if (liquorSubEl) liquorSubEl.textContent = `₹${liquorSubtotal.toFixed(2)}`;
+
+      if (beerSubRow) beerSubRow.style.display = beerSubtotal > 0 ? 'flex' : 'none';
+      if (beerSubEl) beerSubEl.textContent = `₹${beerSubtotal.toFixed(2)}`;
+
+      if (imflSubRow) imflSubRow.style.display = imflSubtotal > 0 ? 'flex' : 'none';
+      if (imflSubEl) imflSubEl.textContent = `₹${imflSubtotal.toFixed(2)}`;
+
+      if (wineSubRow) wineSubRow.style.display = wineSubtotal > 0 ? 'flex' : 'none';
+      if (wineSubEl) wineSubEl.textContent = `₹${wineSubtotal.toFixed(2)}`;
+
+      if (genLiquorSubRow) genLiquorSubRow.style.display = genLiquorSubtotal > 0 ? 'flex' : 'none';
+      if (genLiquorSubEl) genLiquorSubEl.textContent = `₹${genLiquorSubtotal.toFixed(2)}`;
+
+      if (subtotalEl) subtotalEl.textContent = `₹${combinedSubtotal.toFixed(2)}`;
+
+      // Render Custom Charges Breakdown Box
+      const customChargesContainer = document.getElementById('custom-charges-container');
+      const customChargesRows = document.getElementById('custom-charges-rows');
+      const customChargesTotalEl = document.getElementById('custom-charges-total');
+
+      if (customChargesContainer && customChargesRows) {
+        const applicableCharges = customChargesList.filter(cc => {
+          const types = cc.applied_order_types || ['dine_in', 'takeaway', 'delivery'];
+          return types.includes(activeOrderType);
+        });
+
+        if (state.cart.length > 0 && applicableCharges.length > 0) {
+          customChargesContainer.style.display = 'block';
+          if (customChargesTotalEl) customChargesTotalEl.textContent = `₹${customChargesTotal.toFixed(2)}`;
+
+          let rowsHtml = '';
+          applicableCharges.forEach(cc => {
+            const isChecked = selectedCustomChargeIds.has(cc.id);
+            const valLabel = cc.type === 'flat' ? `₹${parseFloat(cc.value).toFixed(2)}` : `${cc.value}%`;
+            const chargeTitle = cc.name || cc.charge_name || 'Charge';
+            rowsHtml += `
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <div class="form-check">
+                <input class="form-check-input charge-checkbox" type="checkbox" data-charge-id="${cc.id}" id="cc-${cc.id}" ${isChecked ? 'checked' : ''}>
+                <label class="form-check-label small text-muted cursor-pointer" for="cc-${cc.id}">
+                  ${escapeHtml(chargeTitle)} <span class="badge bg-light text-dark border fs-8">${valLabel}</span>
+                  ${cc.is_taxable ? '<span class="text-primary fs-8">(Taxable)</span>' : ''}
+                </label>
+              </div>
+            </div>
+            `;
+          });
+          customChargesRows.innerHTML = rowsHtml;
+
+          customChargesRows.querySelectorAll('.charge-checkbox').forEach(cb => {
+            cb.addEventListener('change', (e) => {
+              const cid = parseInt(e.target.dataset.chargeId);
+              if (e.target.checked) {
+                selectedCustomChargeIds.add(cid);
+              } else {
+                selectedCustomChargeIds.delete(cid);
+              }
+              renderCart();
+            });
+          });
+        } else {
+          customChargesContainer.style.display = 'none';
+        }
+      }
+
+      // Render Dynamic Tax Breakdown Box
+      if (dynamicTaxContainer) {
+        dynamicTaxContainer.innerHTML = '';
+        if (state.cart.length > 0) {
+          if (cgst > 0) appendTaxRow(dynamicTaxContainer, `CGST (${(activeTaxSettings.cgst_pct || 2.5)}%)`, cgst);
+          if (sgst > 0) appendTaxRow(dynamicTaxContainer, `SGST (${(activeTaxSettings.sgst_pct || 2.5)}%)`, sgst);
+          if (beerVat > 0) appendTaxRow(dynamicTaxContainer, `Beer VAT (${(activeTaxSettings.vat_beer_pct || 60)}%)`, beerVat);
+          if (imflVat > 0) appendTaxRow(dynamicTaxContainer, `IMFL VAT (${(activeTaxSettings.vat_imfl_pct || 65)}%)`, imflVat);
+          if (wineVat > 0) appendTaxRow(dynamicTaxContainer, `Wine VAT (${(activeTaxSettings.vat_wine_pct || 60)}%)`, wineVat);
+          if (genVat > 0) appendTaxRow(dynamicTaxContainer, `Liquor VAT (${(activeTaxSettings.vat_gen_pct || 20)}%)`, genVat);
+        }
+      }
+      if (taxTotalEl) taxTotalEl.textContent = `₹${taxTotal.toFixed(2)}`;
+
+      const roundOffRowEl = document.getElementById('bill-round-off-row');
+      const roundOffEl = document.getElementById('bill-round-off');
+      if (roundOffRowEl && roundOffEl) {
+        if (state.cart.length > 0 && Math.abs(roundOffAmount) >= 0.005) {
+          roundOffRowEl.style.display = 'flex';
+          const sign = roundOffAmount > 0 ? '+' : '-';
+          const absVal = Math.abs(roundOffAmount).toFixed(2);
+          roundOffEl.textContent = `${sign} ₹${absVal}`;
+        } else {
+          roundOffRowEl.style.display = 'none';
+        }
+      }
+
+      if (grandTotalEl) grandTotalEl.textContent = `₹${grandTotal.toFixed(2)}`;
+
+      state.subtotal = subtotal;
+      state.taxAmount = taxTotal;
+      state.rawTotal = rawTotal;
+      state.roundOffAmount = roundOffAmount;
+      state.grandTotal = grandTotal;
+
+      // Render Attached Advance Receipt Banner
+      const receiptBannerEl = document.getElementById('attached-receipt-banner');
+      if (receiptBannerEl) {
+        if (state.receiptNo && state.receiptNo.trim() !== '' && state.receiptNo !== 'REC-XXXX' && state.advanceAmountPaid > 0) {
+          receiptBannerEl.classList.remove('d-none');
+          receiptBannerEl.classList.add('d-flex');
+          const noEl = document.getElementById('banner-receipt-no');
+          const amtEl = document.getElementById('banner-advance-amount');
+          if (noEl) noEl.textContent = state.receiptNo;
+          if (amtEl) amtEl.textContent = state.advanceAmountPaid.toFixed(2);
+        } else {
+          receiptBannerEl.classList.remove('d-flex');
+          receiptBannerEl.classList.add('d-none');
+        }
+      }
+    }
+
+    function appendTaxRow(container, label, amount) {
+      const row = document.createElement('div');
+      row.className = 'd-flex justify-content-between text-muted small mb-1';
+      row.innerHTML = `<span>${label}</span><span>₹${amount.toFixed(2)}</span>`;
+      container.appendChild(row);
+    }
+
+    function renderCartItemRow(parentContainer, item, lineTotal) {
+      const grossTotal = item.unit_price * item.quantity;
+      const discVal = parseFloat(item.discount_value || 0);
+      let discAmt = 0;
+
+      if (item.discount_type === 'percentage' && discVal > 0) {
+        discAmt = grossTotal * (discVal / 100);
+      } else if (discVal > 0) {
+        discAmt = Math.min(grossTotal, discVal);
+      }
+      item.discount_amount = discAmt;
+      const netTotal = Math.max(0, grossTotal - discAmt);
+
+      const row = document.createElement('div');
+      row.className = 'd-flex align-items-center justify-content-between py-2 border-bottom';
+      row.innerHTML = `
+        <div class="me-2 text-truncate" style="max-width: 130px;">
+          <div class="fw-semibold text-dark small text-truncate" title="${item.name}">${item.name}</div>
+          <div class="text-muted" style="font-size:0.7rem;">₹${item.unit_price.toFixed(2)} each</div>
+          ${discAmt > 0 ? `<div class="badge bg-success-subtle text-success border border-success-subtle mt-1" style="font-size: 0.68rem;">-${item.discount_type === 'percentage' ? discVal + '%' : '₹' + discVal.toFixed(2)} (${item.discount_reason || 'Disc'})</div>` : ''}
+        </div>
+        <div class="d-flex align-items-center gap-1">
+          <button type="button" class="btn btn-sm btn-light border qty-btn qty-minus"><i class="bi bi-dash"></i></button>
+          <input type="number" min="1" value="${item.quantity}" class="form-control form-control-sm text-center qty-input p-0" style="width: 34px; height: 26px; font-size: 0.8rem;">
+          <button type="button" class="btn btn-sm btn-light border qty-btn qty-plus"><i class="bi bi-plus"></i></button>
+        </div>
+        <div class="d-flex align-items-center gap-1 ms-1">
+          <button type="button" class="btn btn-sm ${discAmt > 0 ? 'btn-success text-white' : 'btn-outline-primary'} py-0 px-2 item-disc-btn" style="font-size: 0.72rem;" title="Item Discount">
+            <i class="bi bi-percent me-1"></i>${discAmt > 0 ? 'Disc' : 'Disc'}
+          </button>
+          <div class="text-end" style="min-width: 55px;">
+            ${discAmt > 0 ? `<div class="text-muted text-decoration-line-through fs-8">₹${grossTotal.toFixed(2)}</div><div class="fw-bold text-success small">₹${netTotal.toFixed(2)}</div>` : `<div class="fw-bold text-dark small">₹${grossTotal.toFixed(2)}</div>`}
+          </div>
+          <button type="button" class="btn btn-sm text-danger remove-item p-0 border-0 ms-1" title="Remove"><i class="bi bi-trash"></i></button>
+        </div>
+      `;
+
+      row.querySelector('.qty-minus').addEventListener('click', () => updateQty(item.id, -1));
+      row.querySelector('.qty-plus').addEventListener('click', () => updateQty(item.id, 1));
+      row.querySelector('.qty-input').addEventListener('change', (e) => setQty(item.id, e.target.value));
+      row.querySelector('.item-disc-btn').addEventListener('click', () => openItemDiscountModal(item.id));
+      row.querySelector('.remove-item').addEventListener('click', () => removeFromCart(item.id));
+      parentContainer.appendChild(row);
+    }
+
+    // Input bindings
+    document.getElementById('fulfillment-selector')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.fulfillment-btn');
+      if (!btn) return;
+      document.querySelectorAll('.fulfillment-btn').forEach(b => {
+        b.classList.remove('active', 'btn-primary', 'text-white');
+        b.classList.add('btn-outline-primary');
+      });
+      btn.classList.add('active', 'btn-primary', 'text-white');
+      btn.classList.remove('btn-outline-primary');
+      state.orderType = btn.dataset.type;
+      const tableCol = document.getElementById('table-select-col');
+      if (tableCol) tableCol.style.display = (state.orderType === 'dine_in') ? 'block' : 'none';
+      updateAutoAppliedCharges();
+      renderCart();
+    });
+
+    document.getElementById('category-tabs')?.addEventListener('click', (e) => {
+      const pill = e.target.closest('.category-pill');
+      if (!pill) return;
+      document.querySelectorAll('.category-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      state.selectedCategory = pill.dataset.cat;
+
+      // Auto-switch viewMode if category is Bar/Beer/Liquor/Wine
+      const catText = (pill.textContent || '').toLowerCase();
+      if (['bar', 'beer', 'liquor', 'wine', 'spirit'].some(k => catText.includes(k))) {
+        state.viewMode = 'bar';
+        const badge = document.getElementById('view-mode-badge');
+        if (badge) {
+          badge.className = 'badge bg-warning text-dark border';
+          badge.textContent = '🍷 Bar / Alcohol POS View (Excise)';
+        }
+        document.querySelectorAll('.pos-mode-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.mode === 'bar');
+        });
+      }
+      renderMenu();
+    });
+
+    document.getElementById('menu-search')?.addEventListener('input', (e) => {
+      state.searchQuery = e.target.value;
+      renderMenu();
+    });
+
+    document.getElementById('cust-name')?.addEventListener('input', (e) => state.customerName = e.target.value);
+    document.getElementById('cust-phone')?.addEventListener('input', (e) => state.phone = e.target.value);
+    document.getElementById('order-notes')?.addEventListener('input', (e) => state.notes = e.target.value);
+    document.getElementById('table-id')?.addEventListener('change', (e) => state.tableId = e.target.value);
+
+    // KOT Fire & Send Event Listener
+    document.getElementById('btn-fire-kot')?.addEventListener('click', () => {
+      if (state.cart.length === 0) {
+        alert('Please add at least one item to the cart before sending KOT.');
+        return;
+      }
+      if (state.orderType === 'dine_in' && !document.getElementById('table-id')?.value) {
+        if (!confirm('No Table Number selected for Dine-In. Proceed anyway?')) return;
+      }
+      submitOrder('fire_kot');
+    });
+
+    // Open Settlement Modal Event Listener
+    document.getElementById('btn-open-settle-modal')?.addEventListener('click', () => {
+      if (state.cart.length === 0 && !state.activeOrderId) {
+        alert('Please add items to cart or select an active order to settle.');
+        return;
+      }
+      openSettlementModal();
+    });
+
+    function syncSettlementFieldsVisibility() {
+      const mode = document.querySelector('input[name="settle_invoice_mode"]:checked')?.value || 'food';
+      const wrapperGstin = document.getElementById('wrapper-modal-gstin');
+      const wrapperExcise = document.getElementById('wrapper-modal-excise');
+      const gstinInput = document.getElementById('modal-gstin-no');
+      const exciseInput = document.getElementById('modal-excise-bill-no');
+
+      if (!wrapperGstin || !wrapperExcise) return;
+
+      const hasFood = state.cart.length === 0 ? true : state.cart.some(item => !isLiquorTaxType(item.tax_type, item.category_name));
+      const hasAlcohol = state.cart.length === 0 ? false : state.cart.some(item => isLiquorTaxType(item.tax_type, item.category_name));
+
+      let showGstin = false;
+      let showExcise = false;
+
+      if (mode === 'food') {
+        showGstin = true;
+        showExcise = false;
+      } else if (mode === 'liquor') {
+        showGstin = false;
+        showExcise = true;
+      } else if (mode === 'split') {
+        if (hasFood && hasAlcohol) {
+          showGstin = true;
+          showExcise = true;
+        } else if (hasAlcohol && !hasFood) {
+          showGstin = false;
+          showExcise = true;
+        } else {
+          showGstin = true;
+          showExcise = false;
+        }
+      }
+
+      const currentYear = new Date().getFullYear();
+      const randNum = Math.floor(1000 + Math.random() * 9000);
+
+      // Handle GST Tax Invoice No.
+      if (showGstin) {
+        wrapperGstin.style.display = 'block';
+        wrapperGstin.className = showExcise ? 'col-md-6' : 'col-md-12';
+        if (gstinInput && !gstinInput.value) {
+          gstinInput.value = `INV-${currentYear}-${randNum}`;
+        }
+      } else {
+        wrapperGstin.style.display = 'none';
+        if (gstinInput) gstinInput.value = '';
+      }
+
+      // Handle Retail Excise Bill No.
+      if (showExcise) {
+        wrapperExcise.style.display = 'block';
+        wrapperExcise.className = showGstin ? 'col-md-6' : 'col-md-12';
+        if (exciseInput && !exciseInput.value) {
+          exciseInput.value = `EXC-${currentYear}-${randNum}`;
+        }
+      } else {
+        wrapperExcise.style.display = 'none';
+        if (exciseInput) exciseInput.value = '';
+      }
+    }
+
+    // Attach change listener to mode radio buttons
+    document.querySelectorAll('input[name="settle_invoice_mode"]').forEach(radio => {
+      radio.addEventListener('change', syncSettlementFieldsVisibility);
+    });
+
+    function createPaymentSplitRowHtml(method = 'cash', amount = '') {
+      return `
+        <div class="payment-split-row row g-2 align-items-center mb-2">
+          <div class="col-6">
+            <select class="form-select form-select-sm payment-split-method fw-semibold">
+              <option value="cash" ${method === 'cash' ? 'selected' : ''}>Cash</option>
+              <option value="upi" ${method === 'upi' ? 'selected' : ''}>UPI / QR Code</option>
+              <option value="card" ${method === 'card' ? 'selected' : ''}>Credit / Debit Card</option>
+              <option value="bank_transfer" ${method === 'bank_transfer' ? 'selected' : ''}>Bank Transfer</option>
+              <option value="credit" ${method === 'credit' ? 'selected' : ''}>Credit / Pending</option>
+            </select>
+          </div>
+          <div class="col-5">
+            <div class="input-group input-group-sm">
+              <span class="input-group-text">₹</span>
+              <input type="number" step="0.01" min="0" class="form-control payment-split-amount fw-bold text-success" value="${amount}" placeholder="Amount">
+            </div>
+          </div>
+          <div class="col-1 text-end">
+            <button type="button" class="btn btn-sm btn-outline-danger btn-delete-payment-row p-1" title="Delete Split">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function initPaymentSplitRows() {
+      const container = document.getElementById('payment-split-rows-container');
+      if (!container) return;
+
+      const netPayableTarget = Math.max(0, state.grandTotal - (state.advanceAmountPaid || 0));
+      container.innerHTML = createPaymentSplitRowHtml(state.paymentMethod || 'cash', netPayableTarget.toFixed(2));
+      attachPaymentSplitEventListeners();
+      recalculatePaymentSplits();
+    }
+
+    function attachPaymentSplitEventListeners() {
+      const container = document.getElementById('payment-split-rows-container');
+      if (!container) return;
+
+      container.querySelectorAll('.payment-split-amount').forEach(inp => {
+        inp.removeEventListener('input', recalculatePaymentSplits);
+        inp.addEventListener('input', recalculatePaymentSplits);
+      });
+
+      container.querySelectorAll('.payment-split-method').forEach(sel => {
+        sel.removeEventListener('change', recalculatePaymentSplits);
+        sel.addEventListener('change', recalculatePaymentSplits);
+      });
+
+      container.querySelectorAll('.btn-delete-payment-row').forEach(btn => {
+        btn.onclick = function() {
+          const rows = container.querySelectorAll('.payment-split-row');
+          if (rows.length > 1) {
+            this.closest('.payment-split-row').remove();
+            recalculatePaymentSplits();
+          }
+        };
+      });
+    }
+
+    document.getElementById('btn-add-payment-split')?.addEventListener('click', () => {
+      const container = document.getElementById('payment-split-rows-container');
+      if (!container) return;
+
+      const currentTotalPaid = Array.from(container.querySelectorAll('.payment-split-amount'))
+        .reduce((sum, inp) => sum + (parseFloat(inp.value) || 0), 0);
+      const remaining = Math.max(0, state.grandTotal - currentTotalPaid);
+
+      const div = document.createElement('div');
+      div.innerHTML = createPaymentSplitRowHtml('upi', remaining > 0 ? remaining.toFixed(2) : '0.00');
+      container.appendChild(div.firstElementChild);
+
+      attachPaymentSplitEventListeners();
+      recalculatePaymentSplits();
+    });
+
+    function recalculatePaymentSplits() {
+      const container = document.getElementById('payment-split-rows-container');
+      if (!container) return;
+
+      const rows = container.querySelectorAll('.payment-split-row');
+      const deleteBtns = container.querySelectorAll('.btn-delete-payment-row');
+      deleteBtns.forEach(b => b.disabled = (rows.length <= 1));
+
+      let totalPaid = 0;
+      const payments = [];
+
+      rows.forEach(r => {
+        const method = r.querySelector('.payment-split-method')?.value || 'cash';
+        const amt = parseFloat(r.querySelector('.payment-split-amount')?.value) || 0;
+        if (amt > 0) {
+          totalPaid += amt;
+          payments.push({ method, amount: amt });
+        }
+      });
+
+      const netPayableTarget = Math.max(0, state.grandTotal - (state.advanceAmountPaid || 0));
+      const dueAmount = Math.max(0, netPayableTarget - totalPaid);
+
+      const paidEl = document.getElementById('split-summary-paid');
+      const dueEl = document.getElementById('split-summary-due');
+      const statusBadge = document.getElementById('split-summary-status');
+      const partyWarning = document.getElementById('credit-party-warning');
+      const warningAmtEl = document.getElementById('credit-warning-amount');
+
+      if (paidEl) paidEl.textContent = `₹${totalPaid.toFixed(2)}`;
+      if (dueEl) dueEl.textContent = `₹${dueAmount.toFixed(2)}`;
+
+      let calcStatus = 'paid';
+      if (dueAmount <= 0.01) {
+        calcStatus = 'paid';
+        if (statusBadge) {
+          statusBadge.className = 'badge bg-success mt-1';
+          statusBadge.textContent = 'Paid';
+        }
+        if (partyWarning) partyWarning.classList.add('d-none');
+      } else if (totalPaid > 0) {
+        calcStatus = 'partially_paid';
+        if (statusBadge) {
+          statusBadge.className = 'badge bg-warning text-dark mt-1';
+          statusBadge.textContent = 'Partially Paid';
+        }
+        if (partyWarning) {
+          partyWarning.classList.remove('d-none');
+          if (warningAmtEl) warningAmtEl.textContent = dueAmount.toFixed(2);
+        }
+      } else {
+        calcStatus = 'unpaid';
+        if (statusBadge) {
+          statusBadge.className = 'badge bg-danger mt-1';
+          statusBadge.textContent = 'Unpaid / Credit';
+        }
+        if (partyWarning) {
+          partyWarning.classList.remove('d-none');
+          if (warningAmtEl) warningAmtEl.textContent = dueAmount.toFixed(2);
+        }
+      }
+
+      state.calculatedPayments = payments;
+      state.calculatedPaidAmount = totalPaid;
+      state.calculatedDueAmount = dueAmount;
+      state.calculatedPaymentStatus = calcStatus;
+    }
+
+    function openSettlementModal() {
+      const titleEl = document.getElementById('settle-order-title');
+      const metaEl = document.getElementById('settle-order-meta');
+      const amountEl = document.getElementById('settle-order-amount');
+
+      const tableName = state.tableId ? `Table ${state.tableId}` : 'Pickup/Delivery';
+      const custName = state.customerName || 'Walk-in Guest';
+
+      if (titleEl) titleEl.textContent = state.activeOrderId ? `Order ${state.activeOrderNumber}` : 'New Order';
+      if (metaEl) metaEl.textContent = `${tableName} | Billed To: ${custName}`;
+
+      const netPayableTarget = Math.max(0, state.grandTotal - (state.advanceAmountPaid || 0));
+      const advanceDeductionCard = document.getElementById('modal-advance-deduction-card');
+
+      if (state.receiptNo && state.advanceAmountPaid > 0) {
+        if (advanceDeductionCard) {
+          advanceDeductionCard.style.display = 'block';
+          const recNoEl = document.getElementById('modal-receipt-no');
+          const gtEl = document.getElementById('modal-grand-total-val');
+          const advEl = document.getElementById('modal-advance-paid-val');
+          const netEl = document.getElementById('modal-net-payable-val');
+          if (recNoEl) recNoEl.textContent = state.receiptNo;
+          if (gtEl) gtEl.textContent = `₹${state.grandTotal.toFixed(2)}`;
+          if (advEl) advEl.textContent = `-₹${state.advanceAmountPaid.toFixed(2)}`;
+          if (netEl) netEl.textContent = `₹${netPayableTarget.toFixed(2)}`;
+        }
+        if (amountEl) amountEl.textContent = `₹${netPayableTarget.toFixed(2)}`;
+      } else {
+        if (advanceDeductionCard) advanceDeductionCard.style.display = 'none';
+        if (amountEl) amountEl.textContent = `₹${state.grandTotal.toFixed(2)}`;
+      }
+
+      // Auto-pick invoice mode radio based on cart contents
+      const hasFood = state.cart.some(item => !isLiquorTaxType(item.tax_type, item.category_name));
+      const hasAlcohol = state.cart.some(item => isLiquorTaxType(item.tax_type, item.category_name));
+
+      let targetModeId = 'mode_food';
+      if (hasAlcohol && !hasFood) {
+        targetModeId = 'mode_bar';
+      } else if (hasAlcohol && hasFood) {
+        targetModeId = 'mode_split';
+      }
+      const radioBtn = document.getElementById(targetModeId);
+      if (radioBtn) radioBtn.checked = true;
+
+      syncSettlementFieldsVisibility();
+      initPaymentSplitRows();
+
+      const modalEl = document.getElementById('settlementModal');
+      if (modalEl && window.bootstrap) {
+        const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modal.show();
+      }
+    }
+
+    function handleSettlementSubmit(printBill = true) {
+      const invoiceMode = document.querySelector('input[name="settle_invoice_mode"]:checked')?.value || 'food';
+
+      recalculatePaymentSplits();
+
+      if (state.calculatedDueAmount > 0) {
+        const custName = (state.customerName || '').trim().toLowerCase();
+        if (!custName || custName === 'guest' || custName === 'walk-in guest') {
+          if (!confirm(`An unpaid balance of ₹${state.calculatedDueAmount.toFixed(2)} remains. Proceed billing to "Guest", or enter customer name? Click Cancel to enter Customer Name.`)) {
+            return;
+          }
+        }
+      }
+
+      const wrapperGstin = document.getElementById('wrapper-modal-gstin');
+      const wrapperExcise = document.getElementById('wrapper-modal-excise');
+
+      const gstinNo = (wrapperGstin && wrapperGstin.style.display !== 'none') ? (document.getElementById('modal-gstin-no')?.value || '') : '';
+      const exciseBillNo = (wrapperExcise && wrapperExcise.style.display !== 'none') ? (document.getElementById('modal-excise-bill-no')?.value || '') : '';
+
+      submitOrder('settle_order', {
+        invoice_mode: invoiceMode,
+        payment_method: state.calculatedPayments[0]?.method || 'cash',
+        payment_status: state.calculatedPaymentStatus,
+        payments: state.calculatedPayments,
+        paid_amount: state.calculatedPaidAmount.toFixed(2),
+        due_amount: state.calculatedDueAmount.toFixed(2),
+        gstin_no: gstinNo,
+        excise_bill_no: exciseBillNo,
+        print_bill: printBill
+      });
+    }
+
+    document.getElementById('btn-modal-save-only')?.addEventListener('click', () => handleSettlementSubmit(false));
+    document.getElementById('btn-modal-print-close')?.addEventListener('click', () => handleSettlementSubmit(true));
+
+    // Core Submit Logic
+    function submitOrder(action, extraData = {}) {
+      const payload = {
+        order_id: state.activeOrderId,
+        customer_name: state.customerName || 'Guest',
+        phone_number: state.phone,
+        notes: state.notes,
+        table_id: document.getElementById('table-id')?.value || state.tableId || '',
+        order_type: state.orderType,
+        payment_method: extraData.payment_method || state.paymentMethod,
+        payment_status: extraData.payment_status || (action === 'fire_kot' ? 'unpaid' : 'paid'),
+        payments: extraData.payments || [],
+        paid_amount: extraData.paid_amount || (action === 'fire_kot' ? '0.00' : state.grandTotal.toFixed(2)),
+        due_amount: extraData.due_amount || (action === 'fire_kot' ? state.grandTotal.toFixed(2) : '0.00'),
+        billing_mode: state.billingMode,
+        excise_bill_no: extraData.excise_bill_no || state.exciseBillNo,
+        gstin_no: extraData.gstin_no || state.gstinNo,
+        invoice_mode: extraData.invoice_mode || 'food',
+        receipt_no: state.receiptNo || '',
+        advance_amount_paid: state.advanceAmountPaid || 0,
+        items: state.cart.map(i => ({
+          menu_item_id: i.id,
+          quantity: i.quantity,
+          unit_price: i.unit_price,
+          discount_type: i.discount_type || 'flat',
+          discount_value: i.discount_value || 0,
+          discount_amount: i.discount_amount || 0,
+          discount_reason: i.discount_reason || '',
+          line_total: (i.unit_price * i.quantity) - (i.discount_amount || 0)
+        })),
+        subtotal: state.subtotal.toFixed(2),
+        tax_amount: state.taxAmount.toFixed(2),
+        round_off_amount: (state.roundOffAmount || 0).toFixed(2),
+        grand_total: state.grandTotal.toFixed(2),
+        action: action
+      };
+
+      const csrfToken = getCookie('csrftoken') || '{{ csrf_token }}';
+
+      fetch(window.location.href, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(payload)
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            // Close Modal if open
+            const modalEl = document.getElementById('settlementModal');
+            if (modalEl && window.bootstrap) {
+              const modal = bootstrap.Modal.getInstance(modalEl);
+              if (modal) modal.hide();
+            }
+
+            if (data.active_orders) {
+              activeOrders = data.active_orders;
+              renderActiveOrders();
+            }
+
+            if (action === 'fire_kot') {
+              if (data.kot_url) window.open(data.kot_url, '_blank');
+              alert(`🔥 KOT ${data.order_number || ''} sent to kitchen successfully!`);
+              resetPOS();
+            } else if (action === 'settle_order' || action === 'print_close') {
+              const shouldPrint = extraData.print_bill !== false;
+              if (shouldPrint) {
+                const mode = extraData.invoice_mode || 'food';
+                if (mode === 'split') {
+                  if (data.food_invoice_url) window.open(data.food_invoice_url, '_blank');
+                  if (data.liquor_invoice_url) window.open(data.liquor_invoice_url, '_blank');
+                } else if (mode === 'liquor' && data.liquor_invoice_url) {
+                  window.open(data.liquor_invoice_url, '_blank');
+                } else if (data.food_invoice_url) {
+                  window.open(data.food_invoice_url, '_blank');
+                }
+              }
+              alert(`✅ Order ${data.order_number || ''} saved & settled!`);
+              resetPOS();
+            } else if (data.redirect_url) {
+              window.location.href = data.redirect_url;
+            } else {
+              window.location.reload();
+            }
+          } else {
+            alert(data.error || 'Failed to process request. Please try again.');
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          alert('An error occurred while communicating with the server.');
+        });
+    }
+
+    function resetPOS() {
+      state.cart = [];
+      state.activeOrderId = null;
+      state.activeOrderNumber = null;
+      state.customerName = '';
+      state.phone = '';
+      state.notes = '';
+      state.tableId = '';
+
+      const custNameInput = document.getElementById('cust-name');
+      const custPhoneInput = document.getElementById('cust-phone');
+      const notesInput = document.getElementById('order-notes');
+      const tableSelect = document.getElementById('table-id');
+      if (custNameInput) custNameInput.value = '';
+      if (custPhoneInput) custPhoneInput.value = '';
+      if (notesInput) notesInput.value = '';
+      if (tableSelect) tableSelect.value = '';
+
+      renderCart();
+      renderMenu();
+      renderActiveOrders();
+    }
+
+    function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i].trim();
+          if (cookie.substring(0, name.length + 1) === (name + '=')) {
+            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+            break;
+          }
+        }
+      }
+      return cookieValue;
+    }
+
+    let activeDiscItemId = null;
+    let itemDiscountModalInstance = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const el = document.getElementById('itemDiscountModal');
+      if (el && window.bootstrap) itemDiscountModalInstance = new bootstrap.Modal(el);
+    });
+
+    function openItemDiscountModal(itemId) {
+      const item = state.cart.find(i => i.id === itemId);
+      if (!item) return;
+
+      activeDiscItemId = itemId;
+      const nameEl = document.getElementById('disc-item-name');
+      const priceEl = document.getElementById('disc-item-price-info');
+
+      if (nameEl) nameEl.textContent = item.name;
+      if (priceEl) priceEl.textContent = `Base Unit Rate: ₹${item.unit_price.toFixed(2)} | Qty: ${item.quantity} | Total: ₹${(item.unit_price * item.quantity).toFixed(2)}`;
+
+      const currentType = item.discount_type || 'flat';
+      const currentVal = item.discount_value || 0;
+      const currentReason = item.discount_reason || 'Management Courtesy';
+
+      if (currentType === 'percentage') {
+        const rad = document.getElementById('disc_type_pct');
+        if (rad) rad.checked = true;
+      } else {
+        const rad = document.getElementById('disc_type_flat');
+        if (rad) rad.checked = true;
+      }
+
+      const valInput = document.getElementById('disc-value-input');
+      const reasonSelect = document.getElementById('disc-reason-select');
+
+      if (valInput) valInput.value = currentVal;
+      if (reasonSelect) reasonSelect.value = currentReason;
+      onDiscTypeChange();
+
+      const modalEl = document.getElementById('itemDiscountModal');
+      if (modalEl) {
+        if (window.bootstrap) {
+          let modal = bootstrap.Modal.getInstance(modalEl);
+          if (!modal) modal = new bootstrap.Modal(modalEl);
+          modal.show();
+        } else {
+          modalEl.style.display = 'block';
+          modalEl.classList.add('show');
+        }
+      }
+    }
+    window.openItemDiscountModal = openItemDiscountModal;
+
+    function onDiscTypeChange() {
+      const isPct = document.getElementById('disc_type_pct')?.checked;
+      const lbl = document.getElementById('disc-value-label');
+      const add = document.getElementById('disc-addon');
+      if (lbl) lbl.textContent = isPct ? 'Discount Value (%)' : 'Discount Value (₹)';
+      if (add) add.textContent = isPct ? '%' : '₹';
+    }
+    window.onDiscTypeChange = onDiscTypeChange;
+
+    function applyPresetDiscount(type, val) {
+      if (type === 'percentage') {
+        const rad = document.getElementById('disc_type_pct');
+        if (rad) rad.checked = true;
+      } else {
+        const rad = document.getElementById('disc_type_flat');
+        if (rad) rad.checked = true;
+      }
+      onDiscTypeChange();
+      const valInput = document.getElementById('disc-value-input');
+      if (valInput) valInput.value = val;
+      if (val === 100) {
+        const reasonSelect = document.getElementById('disc-reason-select');
+        if (reasonSelect) reasonSelect.value = 'Management Courtesy';
+      }
+    }
+    window.applyPresetDiscount = applyPresetDiscount;
+
+    function saveCurrentItemDiscount() {
+      const item = state.cart.find(i => i.id === activeDiscItemId);
+      if (!item) return;
+
+      const isPct = document.getElementById('disc_type_pct')?.checked;
+      const valInput = document.getElementById('disc-value-input');
+      const reasonSelect = document.getElementById('disc-reason-select');
+
+      const val = parseFloat(valInput ? valInput.value : 0) || 0;
+      const reason = reasonSelect ? reasonSelect.value : 'Management Courtesy';
+
+      if (val < 0) {
+        alert('Discount value cannot be negative.');
+        return;
+      }
+
+      if (isPct && val > 100) {
+        alert('Percentage discount cannot exceed 100%.');
+        return;
+      }
+
+      item.discount_type = isPct ? 'percentage' : 'flat';
+      item.discount_value = val;
+      item.discount_reason = reason;
+
+      const modalEl = document.getElementById('itemDiscountModal');
+      if (modalEl) {
+        if (window.bootstrap) {
+          const modal = bootstrap.Modal.getInstance(modalEl);
+          if (modal) modal.hide();
+        } else {
+          modalEl.style.display = 'none';
+          modalEl.classList.remove('show');
+        }
+      }
+      renderCart();
+    }
+    window.saveCurrentItemDiscount = saveCurrentItemDiscount;
+
+    function removeCurrentItemDiscount() {
+      const item = state.cart.find(i => i.id === activeDiscItemId);
+      if (item) {
+        item.discount_type = 'flat';
+        item.discount_value = 0;
+        item.discount_amount = 0;
+        item.discount_reason = '';
+      }
+      const modalEl = document.getElementById('itemDiscountModal');
+      if (modalEl) {
+        if (window.bootstrap) {
+          const modal = bootstrap.Modal.getInstance(modalEl);
+          if (modal) modal.hide();
+        } else {
+          modalEl.style.display = 'none';
+          modalEl.classList.remove('show');
+        }
+      }
+      renderCart();
+    }
+    window.removeCurrentItemDiscount = removeCurrentItemDiscount;
+
+    function renderActiveOrders() {
+      const countBadge = document.getElementById('active-orders-count');
+      const chipsContainer = document.getElementById('active-orders-chips');
+      if (!countBadge || !chipsContainer) return;
+
+      countBadge.textContent = activeOrders.length;
+
+      if (!activeOrders || activeOrders.length === 0) {
+        chipsContainer.innerHTML = `<span class="text-muted small italic">No active orders in kitchen.</span>`;
+        return;
+      }
+
+      chipsContainer.innerHTML = '';
+      activeOrders.forEach(ord => {
+        const chip = document.createElement('div');
+        const isSelected = state.activeOrderId === ord.id;
+        chip.className = `btn btn-xs d-inline-flex align-items-center gap-1 text-nowrap rounded-pill px-2 py-1 cursor-pointer ${isSelected ? 'btn-danger text-white fw-bold shadow-sm' : 'btn-outline-danger'}`;
+        chip.style.fontSize = '0.75rem';
+        const tableTxt = ord.table_number ? `T-${ord.table_number}` : (ord.order_type === 'takeaway' ? 'Takeaway' : 'Delivery');
+        chip.innerHTML = `
+          <i class="bi bi-fire me-1"></i>
+          <strong>#${ord.order_number || ord.id}</strong> (${tableTxt}) - ₹${ord.total_amount.toFixed(2)}
+        `;
+        chip.addEventListener('click', () => {
+          loadActiveOrder(ord);
+        });
+        chipsContainer.appendChild(chip);
+      });
+    }
+
+    function loadActiveOrder(ord) {
+      state.activeOrderId = ord.id;
+      state.activeOrderNumber = ord.order_number;
+      state.customerName = ord.customer_name || '';
+      state.phone = ord.phone || '';
+      state.notes = ord.notes || '';
+      state.tableId = ord.table_id || '';
+      state.orderType = ord.order_type || 'dine_in';
+      state.cart = ord.items.map(i => ({
+        id: i.id,
+        name: i.name,
+        unit_price: i.unit_price,
+        price: i.unit_price,
+        quantity: i.quantity,
+        discount_type: 'flat',
+        discount_value: 0,
+        discount_amount: 0,
+        tax_type: i.tax_type || 'GST_FOOD'
+      }));
+
+      const custNameEl = document.getElementById('cust-name');
+      const custPhoneEl = document.getElementById('cust-phone');
+      const orderNotesEl = document.getElementById('order-notes');
+      const tableSelectEl = document.getElementById('table-id');
+      if (custNameEl) custNameEl.value = state.customerName;
+      if (custPhoneEl) custPhoneEl.value = state.phone;
+      if (orderNotesEl) orderNotesEl.value = state.notes;
+      if (tableSelectEl && state.tableId) tableSelectEl.value = state.tableId;
+
+      document.querySelectorAll('.fulfillment-btn').forEach(b => {
+        const isActive = b.dataset.type === state.orderType;
+        b.classList.toggle('active', isActive);
+        if (isActive) {
+          b.classList.add('btn-primary', 'text-white');
+          b.classList.remove('btn-outline-primary');
+        } else {
+          b.classList.remove('btn-primary', 'text-white');
+          b.classList.add('btn-outline-primary');
+        }
+      });
+
+      renderActiveOrders();
+      renderCart();
+    }
+
+    // Initial setup
+    try {
+      updateAutoAppliedCharges();
+      renderMenu();
+      renderCart();
+      renderActiveOrders();
+    } catch (err) {
+      console.error('POS Initial Setup Error:', err);
+    }
+  })();
+</script>
+{% endblock %}

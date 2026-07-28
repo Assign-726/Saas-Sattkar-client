@@ -1,0 +1,1360 @@
+{% extends 'super_admin/base.html' %}
+
+{% block title %}Shop Management - {{ restaurant.name }} | Delicious Bites{% endblock %}
+
+{% block content %}
+<!-- Custom Design Block matching the Shop Management Layout -->
+<style>
+  /* Tab Pane visibility rules */
+  .tab-pane {
+    display: none;
+  }
+
+  .tab-pane.active {
+    display: block;
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Tabs Navigation Bar */
+  .shop-tabs-nav {
+    display: flex;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    padding: 8px;
+    gap: 4px;
+    margin-bottom: 32px;
+    overflow-x: auto;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.03);
+  }
+
+  .shop-tab-btn {
+    flex: 1;
+    min-width: 120px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px 12px;
+    background: transparent;
+    border: none;
+    border-radius: 14px;
+    color: #64748b;
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: 'Outfit', sans-serif;
+  }
+
+  .shop-tab-btn i {
+    font-size: 20px;
+    color: #94a3b8;
+    transition: all 0.2s ease;
+  }
+
+  .shop-tab-btn:hover {
+    color: var(--primary);
+    background: #f8fafc;
+  }
+
+  .shop-tab-btn:hover i {
+    color: var(--primary);
+  }
+
+  .shop-tab-btn.active {
+    color: #0f172a;
+    background: #f8fafc;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.03);
+    position: relative;
+  }
+
+  .shop-tab-btn.active i {
+    color: var(--primary);
+  }
+
+  .shop-tab-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 20%;
+    right: 20%;
+    height: 3px;
+    background: var(--primary);
+    border-radius: 99px;
+  }
+
+  /* Nested Section Panels */
+  .shop-panel {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 24px;
+    padding: 32px;
+    margin-bottom: 28px;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.02);
+    position: relative;
+  }
+
+  .shop-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .shop-panel-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    color: var(--primary);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
+  }
+
+  .shop-panel-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.3px;
+  }
+
+  .shop-panel-subtitle {
+    font-size: 13px;
+    color: #64748b;
+    margin-top: 2px;
+    font-weight: 500;
+  }
+
+  /* Input Forms Custom Styling */
+  .shop-form-group {
+    margin-bottom: 24px;
+  }
+
+  .shop-form-group label {
+    display: block;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #64748b;
+    margin-bottom: 8px;
+  }
+
+  .shop-input {
+    width: 100%;
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 14px;
+    color: #0f172a;
+    font-family: inherit;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .shop-input:focus {
+    outline: none;
+    background: #ffffff;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(242, 108, 13, 0.12);
+  }
+
+  .shop-input[type="file"] {
+    padding: 6px 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    background: #f8fafc;
+  }
+
+  .shop-input[type="file"]::file-selector-button {
+    background: #0f172a;
+    color: #ffffff;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 11px;
+    margin-right: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .shop-input[type="file"]::file-selector-button:hover {
+    background: var(--primary);
+  }
+
+  textarea.shop-input {
+    min-height: 120px;
+    resize: vertical;
+  }
+</style>
+
+<div class="grid">
+  <!-- Top Shop Management Header -->
+  <div class="col-12" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+    <h1 style="font-weight: 800; font-size: 28px; color: #0f172a; letter-spacing: -0.5px; margin: 0;">
+      Shop Management
+    </h1>
+    <div style="display: flex; gap: 12px;">
+      <a class="btn ghost" href="{% url 'restaurant_menu' restaurant_slug=restaurant.slug %}" target="_blank">
+        <i class="fa-solid fa-desktop"></i>
+        <span>View Live Website</span>
+      </a>
+      <a class="btn secondary" href="{% url 'super_admin:landing_index' %}">
+        <i class="fa-solid fa-arrow-left"></i>
+        <span>Back</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Custom Shop Tabs Menu -->
+  <div class="col-12">
+    <div class="shop-tabs-nav">
+      <button class="shop-tab-btn active" onclick="switchTab(event, 'appearance')">
+        <i class="fa-solid fa-palette"></i>
+        <span>Appearance</span>
+      </button>
+      <button class="shop-tab-btn" onclick="switchTab(event, 'hero')">
+        <i class="fa-solid fa-desktop"></i>
+        <span>Hero Section</span>
+      </button>
+      <button class="shop-tab-btn" onclick="switchTab(event, 'about')">
+        <i class="fa-solid fa-address-card"></i>
+        <span>About Us</span>
+      </button>
+      <button class="shop-tab-btn" onclick="switchTab(event, 'whyus')">
+        <i class="fa-solid fa-circle-question"></i>
+        <span>Why Choose Us</span>
+      </button>
+      <button class="shop-tab-btn" onclick="switchTab(event, 'gallery')">
+        <i class="fa-solid fa-images"></i>
+        <span>Gallery</span>
+      </button>
+      <button class="shop-tab-btn" onclick="switchTab(event, 'events')">
+        <i class="fa-solid fa-calendar-days"></i>
+        <span>Events</span>
+      </button>
+      <button class="shop-tab-btn" onclick="switchTab(event, 'contact')">
+        <i class="fa-solid fa-circle-nodes"></i>
+        <span>Contact & Social</span>
+      </button>
+      <button class="shop-tab-btn" onclick="switchTab(event, 'sections')">
+        <i class="fa-solid fa-table-cells-large"></i>
+        <span>Team & Reviews</span>
+      </button>
+      <button class="shop-tab-btn" onclick="switchTab(event, 'seo')">
+        <i class="fa-solid fa-globe"></i>
+        <span>SEO & Metadata</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Content Forms Panel -->
+  <div class="col-12">
+    <form method="post" enctype="multipart/form-data" class="form">
+      {% csrf_token %}
+      <input type="hidden" name="save_landing" value="1" />
+
+      <!-- PANE 1: APPEARANCE -->
+      <div id="pane-appearance" class="tab-pane active">
+        <div class="shop-panel">
+          <div class="shop-panel-header">
+            <div class="shop-panel-icon">
+              <i class="fa-solid fa-copyright"></i>
+            </div>
+            <div>
+              <div class="shop-panel-title">Brand Identity</div>
+              <div class="shop-panel-subtitle">Manage logo asset and brand display labels</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-6">
+              <div class="shop-form-group">
+                <label for="id_logo">Upload Brand Logo</label>
+                <input type="file" name="logo" id="id_logo" class="shop-input" accept="image/*" />
+                <div class="hint" style="margin-top: 8px;">Recommended: Transparent background PNG formats.</div>
+              </div>
+            </div>
+            <div class="col-6">
+              {% if form.instance.logo %}
+              <div class="shop-form-group">
+                <label>Current Logo Preview</label>
+                <div
+                  style="background: #f8fafc; border: 1.5px dashed var(--border); border-radius: 12px; padding: 12px; display: inline-block;">
+                  <img src="{{ form.instance.logo.url }}" alt="Logo preview"
+                    style="max-height: 80px; max-width: 100%; display: block; border-radius: 6px; margin-bottom: 8px;" />
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" name="clear_logo" id="clear_logo"
+                      style="width: 16px; height: 16px; cursor: pointer;" />
+                    <label for="clear_logo"
+                      style="margin-bottom: 0; font-size: 11px; font-weight: 700; text-transform: none; color: #ef4444; letter-spacing: normal;">Delete
+                      Logo</label>
+                  </div>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="shop-panel">
+          <div class="shop-panel-header">
+            <div class="shop-panel-icon">
+              <i class="fa-solid fa-eye"></i>
+            </div>
+            <div>
+              <div class="shop-panel-title">Page Section Visibility</div>
+              <div class="shop-panel-subtitle">Enable or disable specific landing page sections dynamically</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-4" style="margin-bottom: 16px;">
+              <div class="shop-form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 0;">
+                <input type="checkbox" name="show_hero" id="id_show_hero" {% if form.instance.show_hero %}checked{% endif %} style="width: 20px; height: 20px; cursor: pointer;" />
+                <label for="id_show_hero"
+                  style="margin-bottom: 0; font-size: 13px; font-weight: 700; text-transform: none; letter-spacing: normal;">Show
+                  Hero Section</label>
+              </div>
+            </div>
+            <div class="col-4" style="margin-bottom: 16px;">
+              <div class="shop-form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 0;">
+                <input type="checkbox" name="show_about" id="id_show_about" {% if form.instance.show_about %}checked{% endif %} style="width: 20px; height: 20px; cursor: pointer;" />
+                <label for="id_show_about"
+                  style="margin-bottom: 0; font-size: 13px; font-weight: 700; text-transform: none; letter-spacing: normal;">Show
+                  About Us Section</label>
+              </div>
+            </div>
+            <div class="col-4" style="margin-bottom: 16px;">
+              <div class="shop-form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 0;">
+                <input type="checkbox" name="show_why_us" id="id_show_why_us" {% if form.instance.show_why_us %}checked{% endif %} style="width: 20px; height: 20px; cursor: pointer;" />
+                <label for="id_show_why_us"
+                  style="margin-bottom: 0; font-size: 13px; font-weight: 700; text-transform: none; letter-spacing: normal;">Show
+                  Why Choose Us Section</label>
+              </div>
+            </div>
+            <div class="col-4" style="margin-bottom: 16px;">
+              <div class="shop-form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 0;">
+                <input type="checkbox" name="show_specials" id="id_show_specials" {% if form.instance.show_specials %}checked{% endif %} style="width: 20px; height: 20px; cursor: pointer;" />
+                <label for="id_show_specials"
+                  style="margin-bottom: 0; font-size: 13px; font-weight: 700; text-transform: none; letter-spacing: normal;">Show
+                  Specials Section</label>
+              </div>
+            </div>
+            <div class="col-4" style="margin-bottom: 16px;">
+              <div class="shop-form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 0;">
+                <input type="checkbox" name="show_events" id="id_show_events" {% if form.instance.show_events %}checked{% endif %} style="width: 20px; height: 20px; cursor: pointer;" />
+                <label for="id_show_events"
+                  style="margin-bottom: 0; font-size: 13px; font-weight: 400; text-transform: none; letter-spacing: normal;">Show
+                  Events Section</label>
+              </div>
+            </div>
+            <div class="col-4" style="margin-bottom: 16px;">
+              <div class="shop-form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 0;">
+                <input type="checkbox" name="show_gallery" id="id_show_gallery" {% if form.instance.show_gallery %}checked{% endif %} style="width: 20px; height: 20px; cursor: pointer;" />
+                <label for="id_show_gallery"
+                  style="margin-bottom: 0; font-size: 13px; font-weight: 700; text-transform: none; letter-spacing: normal;">Show
+                  Gallery Section</label>
+              </div>
+            </div>
+            <div class="col-4" style="margin-bottom: 16px;">
+              <div class="shop-form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 0;">
+                <input type="checkbox" name="show_team" id="id_show_team" {% if form.instance.show_team %}checked{% endif %} style="width: 20px; height: 20px; cursor: pointer;" />
+                <label for="id_show_team"
+                  style="margin-bottom: 0; font-size: 13px; font-weight: 700; text-transform: none; letter-spacing: normal;">Show
+                  Chefs Section</label>
+              </div>
+            </div>
+            <div class="col-4" style="margin-bottom: 16px;">
+              <div class="shop-form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 0;">
+                <input type="checkbox" name="show_reviews" id="id_show_reviews" {% if form.instance.show_reviews %}checked{% endif %} style="width: 20px; height: 20px; cursor: pointer;" />
+                <label for="id_show_reviews"
+                  style="margin-bottom: 0; font-size: 13px; font-weight: 700; text-transform: none; letter-spacing: normal;">Show
+                  Testimonials Section</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions" style="margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border);">
+          <button type="submit" class="btn">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>Save Appearance Settings</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- PANE 2: HERO -->
+      <div id="pane-hero" class="tab-pane">
+        <div class="shop-panel">
+          <div class="shop-panel-header">
+            <div class="shop-panel-icon">
+              <i class="fa-solid fa-desktop"></i>
+            </div>
+            <div>
+              <div class="shop-panel-title">Hero Section</div>
+              <div class="shop-panel-subtitle">Hero area text titles and background media</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-6">
+              <div class="shop-form-group">
+                <label for="id_hero_title">Hero Title</label>
+                <input type="text" name="hero_title" id="id_hero_title" class="shop-input"
+                  value="{{ form.hero_title.value|default:'' }}" placeholder="Enter main heading">
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="shop-form-group">
+                <label for="id_hero_subtitle">Hero Subtitle</label>
+                <input type="text" name="hero_subtitle" id="id_hero_subtitle" class="shop-input"
+                  value="{{ form.hero_subtitle.value|default:'' }}" placeholder="Enter sub heading description">
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="shop-form-group">
+                <label for="id_hero_image">Hero Background Image</label>
+                <input type="file" name="hero_image" id="id_hero_image" class="shop-input" accept="image/*" />
+                <div class="hint" style="margin-top: 8px;">Landscape dimensions provide the best results.</div>
+              </div>
+            </div>
+            <div class="col-6">
+              {% if form.instance.hero_image %}
+              <div class="shop-form-group">
+                <label>Current Background Preview</label>
+                <div
+                  style="background: #f8fafc; border: 1.5px dashed var(--border); border-radius: 12px; padding: 8px;">
+                  <img src="{{ form.instance.hero_image.url }}" alt="Hero banner preview"
+                    style="max-height: 100px; width: 100%; object-fit: cover; display: block; border-radius: 8px; margin-bottom: 8px;" />
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" name="clear_hero_image" id="clear_hero_image"
+                      style="width: 16px; height: 16px; cursor: pointer;" />
+                    <label for="clear_hero_image"
+                      style="margin-bottom: 0; font-size: 11px; font-weight: 700; text-transform: none; color: #ef4444; letter-spacing: normal;">Delete
+                      Image</label>
+                  </div>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+            <div class="col-6">
+              <div class="shop-form-group">
+                <label for="id_hero_video">Hero Background Video</label>
+                <input type="file" name="hero_video" id="id_hero_video" class="shop-input"
+                  accept="video/mp4,video/webm" />
+                <div class="hint" style="margin-top: 8px;">Recommended: MP4 format. Used as a video background if
+                  uploaded.</div>
+              </div>
+            </div>
+            <div class="col-6">
+              {% if form.instance.hero_video %}
+              <div class="shop-form-group">
+                <label>Current Video Preview</label>
+                <div
+                  style="background: #f8fafc; border: 1.5px dashed var(--border); border-radius: 12px; padding: 8px;">
+                  <video src="{{ form.instance.hero_video.url }}" controls
+                    style="max-height: 100px; width: 100%; object-fit: cover; display: block; border-radius: 8px; margin-bottom: 8px;"></video>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" name="clear_hero_video" id="clear_hero_video"
+                      style="width: 16px; height: 16px; cursor: pointer;" />
+                    <label for="clear_hero_video"
+                      style="margin-bottom: 0; font-size: 11px; font-weight: 700; text-transform: none; color: #ef4444; letter-spacing: normal;">Delete
+                      Video</label>
+                  </div>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="shop-panel">
+          <div class="shop-panel-header">
+            <div class="shop-panel-icon">
+              <i class="fa-solid fa-arrow-pointer"></i>
+            </div>
+            <div>
+              <div class="shop-panel-title">Call To Action (CTA)</div>
+              <div class="shop-panel-subtitle">Manage hero button actions and link mappings</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-6">
+              <div class="shop-form-group">
+                <label for="id_cta_text">Button Action Label</label>
+                <input type="text" name="cta_text" id="id_cta_text" class="shop-input"
+                  value="{{ form.cta_text.value|default:'' }}" placeholder="e.g. Order Online">
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="shop-form-group">
+                <label for="id_cta_link">Button Redirect Link</label>
+                <input type="text" name="cta_link" id="id_cta_link" class="shop-input"
+                  value="{{ form.cta_link.value|default:'' }}" placeholder="e.g. /menu/ or outer URL">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions" style="margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border);">
+          <button type="submit" class="btn">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>Save Hero & CTA Details</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- PANE 3: ABOUT US -->
+      <div id="pane-about" class="tab-pane">
+        <div class="shop-panel">
+          <div class="shop-panel-header">
+            <div class="shop-panel-icon">
+              <i class="fa-solid fa-house-chimney"></i>
+            </div>
+            <div>
+              <div class="shop-panel-title">Main Content</div>
+              <div class="shop-panel-subtitle">Define your story and mission description</div>
+            </div>
+          </div>
+
+          <div class="shop-form-group">
+            <label for="id_about_heading">Section Title</label>
+            <input type="text" name="about_heading" id="id_about_heading" class="shop-input"
+              value="{{ form.about_heading.value|default:'' }}" placeholder="Enter main heading story title">
+          </div>
+
+          <div class="shop-form-group">
+            <label for="id_about_italic">Italic Subtitle</label>
+            <textarea name="about_italic" id="id_about_italic" class="shop-input"
+              placeholder="Enter italicized description paragraph..."
+              style="min-height: 80px;">{{ form.about_italic.value|default:'' }}</textarea>
+          </div>
+
+          <div class="row">
+            <div class="col-4">
+              <div class="shop-form-group">
+                <label for="id_about_bullet_1">Bullet Point 1</label>
+                <input type="text" name="about_bullet_1" id="id_about_bullet_1" class="shop-input"
+                  value="{{ form.about_bullet_1.value|default:'' }}" placeholder="Enter bullet point 1">
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="shop-form-group">
+                <label for="id_about_bullet_2">Bullet Point 2</label>
+                <input type="text" name="about_bullet_2" id="id_about_bullet_2" class="shop-input"
+                  value="{{ form.about_bullet_2.value|default:'' }}" placeholder="Enter bullet point 2">
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="shop-form-group">
+                <label for="id_about_bullet_3">Bullet Point 3</label>
+                <input type="text" name="about_bullet_3" id="id_about_bullet_3" class="shop-input"
+                  value="{{ form.about_bullet_3.value|default:'' }}" placeholder="Enter bullet point 3">
+              </div>
+            </div>
+          </div>
+
+          <div class="shop-form-group">
+            <label for="id_about_body">Story / Description (Main Body)</label>
+            <textarea name="about_body" id="id_about_body" class="shop-input"
+              placeholder="Write description or history about your brand here...">{{ form.about_body.value|default:'' }}</textarea>
+          </div>
+        </div>
+
+        <div class="shop-panel">
+          <div class="shop-panel-header">
+            <div class="shop-panel-icon">
+              <i class="fa-solid fa-image"></i>
+            </div>
+            <div>
+              <div class="shop-panel-title">Story Media Representation</div>
+              <div class="shop-panel-subtitle">Add a story illustration or dining room graphic</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-6">
+              <div class="shop-form-group">
+                <label for="id_about_image">About Banner Image</label>
+                <input type="file" name="about_image" id="id_about_image" class="shop-input" accept="image/*" />
+                <div class="hint" style="margin-top: 8px;">Upload a welcoming view of your interior space.</div>
+              </div>
+            </div>
+            <div class="col-6">
+              {% if form.instance.about_image %}
+              <div class="shop-form-group">
+                <label>Current Media Preview</label>
+                <div
+                  style="background: #f8fafc; border: 1.5px dashed var(--border); border-radius: 12px; padding: 8px;">
+                  <img src="{{ form.instance.about_image.url }}" alt="About story illustration"
+                    style="max-height: 100px; width: 100%; object-fit: cover; display: block; border-radius: 8px; margin-bottom: 8px;" />
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" name="clear_about_image" id="clear_about_image"
+                      style="width: 16px; height: 16px; cursor: pointer;" />
+                    <label for="clear_about_image"
+                      style="margin-bottom: 0; font-size: 11px; font-weight: 700; text-transform: none; color: #ef4444; letter-spacing: normal;">Delete
+                      Image</label>
+                  </div>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="actions" style="margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border);">
+          <button type="submit" class="btn">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>Save About Story Details</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- PANE: WHY CHOOSE US -->
+      <div id="pane-whyus" class="tab-pane">
+        <div class="shop-panel">
+          <div class="shop-panel-header">
+            <div class="shop-panel-icon">
+              <i class="fa-solid fa-circle-question"></i>
+            </div>
+            <div>
+              <div class="shop-panel-title">Why Choose Us Section</div>
+              <div class="shop-panel-subtitle">Configure the three "Why Choose Us" feature blocks</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <!-- Card 1 -->
+            <div class="col-4">
+              <h3
+                style="font-size: 14px; font-weight: 800; color: #0f172a; margin-bottom: 16px; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 8px;">
+                Feature Block 1</h3>
+              <div class="shop-form-group">
+                <label for="id_why_us_title_1">Block 1 Title</label>
+                <input type="text" name="why_us_title_1" id="id_why_us_title_1" class="shop-input"
+                  value="{{ form.why_us_title_1.value|default:'' }}" placeholder="Enter title">
+              </div>
+              <div class="shop-form-group">
+                <label for="id_why_us_description_1">Block 1 Description</label>
+                <textarea name="why_us_description_1" id="id_why_us_description_1" class="shop-input"
+                  placeholder="Enter description">{{ form.why_us_description_1.value|default:'' }}</textarea>
+              </div>
+            </div>
+
+            <!-- Card 2 -->
+            <div class="col-4">
+              <h3
+                style="font-size: 14px; font-weight: 800; color: #0f172a; margin-bottom: 16px; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 8px;">
+                Feature Block 2</h3>
+              <div class="shop-form-group">
+                <label for="id_why_us_title_2">Block 2 Title</label>
+                <input type="text" name="why_us_title_2" id="id_why_us_title_2" class="shop-input"
+                  value="{{ form.why_us_title_2.value|default:'' }}" placeholder="Enter title">
+              </div>
+              <div class="shop-form-group">
+                <label for="id_why_us_description_2">Block 2 Description</label>
+                <textarea name="why_us_description_2" id="id_why_us_description_2" class="shop-input"
+                  placeholder="Enter description">{{ form.why_us_description_2.value|default:'' }}</textarea>
+              </div>
+            </div>
+
+            <!-- Card 3 -->
+            <div class="col-4">
+              <h3
+                style="font-size: 14px; font-weight: 800; color: #0f172a; margin-bottom: 16px; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 8px;">
+                Feature Block 3</h3>
+              <div class="shop-form-group">
+                <label for="id_why_us_title_3">Block 3 Title</label>
+                <input type="text" name="why_us_title_3" id="id_why_us_title_3" class="shop-input"
+                  value="{{ form.why_us_title_3.value|default:'' }}" placeholder="Enter title">
+              </div>
+              <div class="shop-form-group">
+                <label for="id_why_us_description_3">Block 3 Description</label>
+                <textarea name="why_us_description_3" id="id_why_us_description_3" class="shop-input"
+                  placeholder="Enter description">{{ form.why_us_description_3.value|default:'' }}</textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="shop-panel">
+          <div class="shop-panel-header">
+            <div class="shop-panel-icon">
+              <i class="fa-solid fa-map-location-dot"></i>
+            </div>
+            <div>
+              <div class="shop-panel-title">Google Maps Embed</div>
+              <div class="shop-panel-subtitle">Configure your dynamic store location iframe link</div>
+            </div>
+          </div>
+
+          <div class="shop-form-group">
+            <label for="id_map_iframe_url">Google Maps Iframe Embed URL</label>
+            <input type="text" name="map_iframe_url" id="id_map_iframe_url" class="shop-input"
+              value="{{ form.map_iframe_url.value|default:'' }}" placeholder="https://www.google.com/maps/embed?...">
+            <div class="hint" style="margin-top: 8px;">Go to Google Maps -> Share -> Embed a map, and copy only the
+              `src` attribute URL.</div>
+          </div>
+        </div>
+
+        <div class="actions" style="margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border);">
+          <button type="submit" class="btn">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>Save Why Choose Us & Map Settings</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- PANE 5: CONTACT & SOCIAL -->
+      <div id="pane-contact" class="tab-pane">
+        <div class="shop-panel">
+          <div class="shop-panel-header">
+            <div class="shop-panel-icon">
+              <i class="fa-solid fa-map-location-dot"></i>
+            </div>
+            <div>
+              <div class="shop-panel-title">Address & Coordinates</div>
+              <div class="shop-panel-subtitle">Specify your physical storefront coordinates</div>
+            </div>
+          </div>
+
+          <div class="shop-form-group">
+            <label for="id_address">Street Address</label>
+            <textarea name="address" id="id_address" class="shop-input"
+              placeholder="Enter physical street address">{{ form.address.value|default:'' }}</textarea>
+          </div>
+        </div>
+
+        <div class="shop-panel">
+          <div class="shop-panel-header">
+            <div class="shop-panel-icon">
+              <i class="fa-solid fa-circle-nodes"></i>
+            </div>
+            <div>
+              <div class="shop-panel-title">Storefront Details</div>
+              <div class="shop-panel-subtitle">Manage phone, email and business hours</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-4">
+              <div class="shop-form-group">
+                <label for="id_phone">Branch Phone Coordinate</label>
+                <input type="text" name="phone" id="id_phone" class="shop-input"
+                  value="{{ form.phone.value|default:'' }}" placeholder="Enter phone number">
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="shop-form-group">
+                <label for="id_email">Contact Email</label>
+                <input type="email" name="email" id="id_email" class="shop-input"
+                  value="{{ form.email.value|default:'' }}" placeholder="Enter contact email">
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="shop-form-group">
+                <label for="id_opening_hours">Opening Business Hours</label>
+                <input type="text" name="opening_hours" id="id_opening_hours" class="shop-input"
+                  value="{{ form.opening_hours.value|default:'' }}" placeholder="e.g. Mon - Fri, 9 AM - 9 PM">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions" style="margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border);">
+          <button type="submit" class="btn">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>Save Contact Coordinates</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- PANE 7: SEO -->
+      <div id="pane-seo" class="tab-pane">
+        <div class="shop-panel">
+          <div class="shop-panel-header">
+            <div class="shop-panel-icon">
+              <i class="fa-solid fa-globe"></i>
+            </div>
+            <div>
+              <div class="shop-panel-title">SEO & Metadata</div>
+              <div class="shop-panel-subtitle">Configure search indices and page titles</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-6">
+              <div class="shop-form-group">
+                <label for="id_seo_title">Search Engine Page Title</label>
+                <input type="text" name="seo_title" id="id_seo_title" class="shop-input"
+                  value="{{ form.seo_title.value|default:'' }}" placeholder="Enter title tag">
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="shop-form-group">
+                <label for="id_seo_description">SEO Search Description</label>
+                <textarea name="seo_description" id="id_seo_description" class="shop-input"
+                  placeholder="Enter page search snippet description">{{ form.seo_description.value|default:'' }}</textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions" style="margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border);">
+          <button type="submit" class="btn">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>Save SEO Configurations</span>
+          </button>
+        </div>
+      </div>
+    </form>
+
+    <!-- PANE 4: GALLERY (Separate submission form) -->
+    <div id="pane-gallery" class="tab-pane">
+      <div class="shop-panel">
+        <div class="shop-panel-header">
+          <div class="shop-panel-icon">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+          </div>
+          <div>
+            <div class="shop-panel-title">Add Background / Image</div>
+            <div class="shop-panel-subtitle">Upload graphics to your restaurant image gallery</div>
+          </div>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" action="{% url 'super_admin:gallery_add' restaurant.id %}"
+          class="form">
+          {% csrf_token %}
+          <div class="row" style="align-items: flex-end;">
+            <div class="col-4">
+              <div class="shop-form-group" style="margin-bottom: 0;">
+                <label for="id_image">Choose Image File *</label>
+                <input type="file" name="image" id="id_image" class="shop-input" accept="image/*" required />
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="shop-form-group" style="margin-bottom: 0;">
+                <label for="id_caption">Caption Text</label>
+                <input type="text" name="caption" id="id_caption" class="shop-input"
+                  placeholder="Enter caption illustration title">
+              </div>
+            </div>
+            <div class="col-2">
+              <div class="shop-form-group" style="margin-bottom: 0;">
+                <label for="id_display_order">Display Sort Value</label>
+                <input type="number" name="display_order" id="id_display_order" class="shop-input" value="0" />
+              </div>
+            </div>
+            <div class="col-2" style="display: flex; justify-content: flex-end;">
+              <button type="submit" class="btn"
+                style="width: 100%; padding: 10px 18px; line-height: 1.2; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <i class="fa-solid fa-plus"></i> Add Image
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="shop-panel">
+        <div class="shop-panel-header">
+          <div class="shop-panel-icon">
+            <i class="fa-solid fa-images"></i>
+          </div>
+          <div>
+            <div class="shop-panel-title">Uploaded Gallery</div>
+            <div class="shop-panel-subtitle">Total Images Slider ({{ images|length }} elements)</div>
+          </div>
+        </div>
+
+        {% if images %}
+        <div class="table-container">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width: 120px;">Preview</th>
+                <th>Caption Tag</th>
+                <th style="width: 120px;">Sort Order</th>
+                <th style="width: 80px; text-align: right; padding-right: 24px;">Delete</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for img in images %}
+              <tr>
+                <td>
+                  <img src="{{ img.image.url }}" alt="Gallery Asset"
+                    style="width: 80px; height: 60px; object-fit: cover; border-radius: 12px; border: 1.5px solid var(--border);" />
+                </td>
+                <td class="muted">{{ img.caption|default:'No Description' }}</td>
+                <td>{{ img.display_order }}</td>
+                <td style="text-align: right; padding-right: 24px;">
+                  <form method="post" action="{% url 'super_admin:gallery_delete' img.id %}"
+                    style="display: inline-block;">
+                    {% csrf_token %}
+                    <button type="submit" class="action-btn delete" title="Delete Image">
+                      <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty" style="padding: 40px 0;">
+          <i class="fa-solid fa-images"
+            style="font-size: 2.5rem; color: var(--muted); margin-bottom: 8px; display: block;"></i>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- PANE: EVENTS (Separate submission form) -->
+    <div id="pane-events" class="tab-pane">
+      <div class="shop-panel">
+        <div class="shop-panel-header">
+          <div class="shop-panel-icon">
+            <i class="fa-solid fa-calendar-plus"></i>
+          </div>
+          <div>
+            <div class="shop-panel-title">Add Restaurant Event</div>
+            <div class="shop-panel-subtitle">Create a new special event card shown in the slider</div>
+          </div>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" action="{% url 'super_admin:event_add' restaurant.id %}"
+          class="form">
+          {% csrf_token %}
+          <div class="row">
+            <div class="col-6">
+              <div class="shop-form-group">
+                <label for="id_event_title">Event Title *</label>
+                <input type="text" name="title" id="id_event_title" class="shop-input" required
+                  placeholder="e.g. Birthday Parties" />
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="shop-form-group">
+                <label for="id_event_price">Price Tag *</label>
+                <input type="text" name="price" id="id_event_price" class="shop-input" required
+                  placeholder="e.g. $189 or Custom Price" />
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="shop-form-group">
+                <label for="id_event_image">Event Graphic/Image *</label>
+                <input type="file" name="image" id="id_event_image" class="shop-input" accept="image/*" required />
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="shop-form-group">
+                <label for="id_event_display_order">Display Sort Value</label>
+                <input type="number" name="display_order" id="id_event_display_order" class="shop-input" value="0" />
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="shop-form-group">
+                <label for="id_event_description">Event Details/Description *</label>
+                <textarea name="description" id="id_event_description" class="shop-input" required
+                  placeholder="Enter event overview details"></textarea>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="shop-form-group">
+                <label for="id_event_bullet_1">Bullet Feature 1</label>
+                <input type="text" name="bullet_1" id="id_event_bullet_1" class="shop-input"
+                  placeholder="e.g. Ullamco laboris nisi ut aliquip" />
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="shop-form-group">
+                <label for="id_event_bullet_2">Bullet Feature 2</label>
+                <input type="text" name="bullet_2" id="id_event_bullet_2" class="shop-input"
+                  placeholder="e.g. Duis aute irure dolor in reprehenderit" />
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="shop-form-group">
+                <label for="id_event_bullet_3">Bullet Feature 3</label>
+                <input type="text" name="bullet_3" id="id_event_bullet_3" class="shop-input"
+                  placeholder="e.g. Ullamco laboris nisi ut aliquip ex ea" />
+              </div>
+            </div>
+            <div class="col-12" style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" name="active" id="id_event_active" checked
+                style="width: 20px; height: 20px; cursor: pointer;" />
+              <label for="id_event_active"
+                style="margin-bottom: 0; font-size: 13px; font-weight: 700; text-transform: none; letter-spacing: normal;">Active
+                & Visible</label>
+            </div>
+          </div>
+          <div class="actions" style="margin-top: 24px;">
+            <button type="submit" class="btn small">
+              <i class="fa-solid fa-plus"></i> Add Event Card
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div class="shop-panel">
+        <div class="shop-panel-header">
+          <div class="shop-panel-icon">
+            <i class="fa-solid fa-calendar-days"></i>
+          </div>
+          <div>
+            <div class="shop-panel-title">Active Events List</div>
+            <div class="shop-panel-subtitle">Total Event Slides ({{ events|length }} elements)</div>
+          </div>
+        </div>
+
+        {% if events %}
+        <div class="table-container">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width: 120px;">Image</th>
+                <th>Title</th>
+                <th>Price</th>
+                <th>Bullets</th>
+                <th style="width: 120px;">Sort Order</th>
+                <th style="width: 100px;">Status</th>
+                <th style="width: 80px; text-align: right; padding-right: 24px;">Delete</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for ev in events %}
+              <tr>
+                <td>
+                  {% if ev.image %}
+                  <img src="{{ ev.image.url }}" alt=""
+                    style="width: 80px; height: 60px; object-fit: cover; border-radius: 12px; border: 1.5px solid var(--border);" />
+                  {% else %}
+                  <div
+                    style="width: 80px; height: 60px; border-radius: 12px; background: var(--panel-hover); border: 1.5px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--muted);">
+                    <i class="fa-solid fa-image"></i>
+                  </div>
+                  {% endif %}
+                </td>
+                <td style="font-weight: 600;">{{ ev.title }}</td>
+                <td class="muted">{{ ev.price }}</td>
+                <td>
+                  <ul style="margin: 0; padding-left: 16px; font-size: 12px; color: var(--text-muted);">
+                    {% if ev.bullet_1 %}<li>{{ ev.bullet_1 }}</li>{% endif %}
+                    {% if ev.bullet_2 %}<li>{{ ev.bullet_2 }}</li>{% endif %}
+                    {% if ev.bullet_3 %}<li>{{ ev.bullet_3 }}</li>{% endif %}
+                  </ul>
+                </td>
+                <td>{{ ev.display_order }}</td>
+                <td>
+                  {% if ev.active %}
+                  <span class="badge ok">Visible</span>
+                  {% else %}
+                  <span class="badge neutral">Hidden</span>
+                  {% endif %}
+                </td>
+                <td style="text-align: right; padding-right: 24px;">
+                  <form method="post" action="{% url 'super_admin:event_delete' ev.id %}"
+                    style="display: inline-block;">
+                    {% csrf_token %}
+                    <button type="submit" class="action-btn delete" title="Delete Event">
+                      <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty" style="padding: 40px 0;">
+          <i class="fa-solid fa-calendar-days"
+            style="font-size: 2.5rem; color: var(--muted); margin-bottom: 8px; display: block;"></i>
+          <span>No events configured for this restaurant.</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- PANE 6: PAGE SECTIONS (Separate Team & Reviews forms) -->
+    <div id="pane-sections" class="tab-pane">
+      <!-- OUR TEAM MANAGER -->
+      <div class="shop-panel">
+        <div class="shop-panel-header">
+          <div class="shop-panel-icon">
+            <i class="fa-solid fa-users-gear"></i>
+          </div>
+          <div>
+            <div class="shop-panel-title">Our Team Members</div>
+            <div class="shop-panel-subtitle">Add and configure employee profiles and positions</div>
+          </div>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" action="{% url 'super_admin:team_add' restaurant.id %}"
+          class="form">
+          {% csrf_token %}
+          <div class="row" style="align-items: flex-end;">
+            <div class="col-3">
+              <div class="shop-form-group" style="margin-bottom: 0;">
+                <label for="id_photo">Member Photograph</label>
+                <input type="file" name="photo" id="id_photo" class="shop-input" accept="image/*" />
+              </div>
+            </div>
+            <div class="col-3">
+              <div class="shop-form-group" style="margin-bottom: 0;">
+                <label for="id_name">Name *</label>
+                <input type="text" name="name" id="id_name" class="shop-input" required placeholder="Enter full name" />
+              </div>
+            </div>
+            <div class="col-3">
+              <div class="shop-form-group" style="margin-bottom: 0;">
+                <label for="id_position">Position Title</label>
+                <input type="text" name="position" id="id_position" class="shop-input" placeholder="e.g. Head Chef" />
+              </div>
+            </div>
+            <div class="col-2">
+              <div class="shop-form-group" style="margin-bottom: 0;">
+                <label for="id_display_order">Display Order</label>
+                <input type="number" name="display_order" id="id_display_order" class="shop-input" value="0" />
+              </div>
+            </div>
+            <div class="col-1"
+              style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding-bottom: 10px;">
+              <label for="id_active"
+                style="margin-bottom: 0; font-size: 10px; font-weight: 800; text-transform: uppercase; color: #64748b; letter-spacing: 1px;">Show</label>
+              <input type="checkbox" name="active" id="id_active" checked
+                style="width: 20px; height: 20px; cursor: pointer;" />
+            </div>
+          </div>
+          <div class="actions" style="margin-top: 20px;">
+            <button type="submit" class="btn small">
+              <i class="fa-solid fa-plus"></i> Add Team Member
+            </button>
+          </div>
+        </form>
+
+        {% if members %}
+        <div class="table-container" style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 20px;">
+          <table class="table">
+            <thead>
+              <tr>
+                <th style="width: 100px;">Photo</th>
+                <th>Name</th>
+                <th>Position</th>
+                <th style="width: 100px;">Sort Order</th>
+                <th style="width: 100px;">Status</th>
+                <th style="width: 80px; text-align: right; padding-right: 24px;">Delete</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in members %}
+              <tr>
+                <td>
+                  {% if m.photo %}
+                  <img src="{{ m.photo.url }}" alt=""
+                    style="width: 54px; height: 54px; object-fit: cover; border-radius: 999px; border: 1.5px solid var(--border);" />
+                  {% else %}
+                  <div
+                    style="width: 54px; height: 54px; border-radius: 999px; background: var(--panel-hover); border: 1.5px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--muted);">
+                    <i class="fa-solid fa-user"></i>
+                  </div>
+                  {% endif %}
+                </td>
+                <td style="font-weight: 600;">{{ m.name }}</td>
+                <td class="muted">{{ m.position|default:'-' }}</td>
+                <td>{{ m.display_order }}</td>
+                <td>
+                  {% if m.active %}
+                  <span class="badge ok">Visible</span>
+                  {% else %}
+                  <span class="badge neutral">Hidden</span>
+                  {% endif %}
+                </td>
+                <td style="text-align: right; padding-right: 24px;">
+                  <form method="post" action="{% url 'super_admin:team_delete' m.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="action-btn delete" title="Remove Member">
+                      <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- CUSTOMER REVIEWS MANAGER -->
+      <div class="shop-panel" style="margin-top: 32px;">
+        <div class="shop-panel-header">
+          <div class="shop-panel-icon">
+            <i class="fa-solid fa-comments"></i>
+          </div>
+          <div>
+            <div class="shop-panel-title">Customer Reviews & Testimonials</div>
+            <div class="shop-panel-subtitle">Add and configure customer review posts</div>
+          </div>
+        </div>
+
+        <form method="post" action="{% url 'super_admin:review_add' restaurant.id %}" class="form">
+          {% csrf_token %}
+          <div class="row" style="align-items: flex-end;">
+            <div class="col-3">
+              <div class="shop-form-group" style="margin-bottom: 0;">
+                <label for="id_review_name">Reviewer Name *</label>
+                <input type="text" name="name" id="id_review_name" class="shop-input" required
+                  placeholder="e.g. John Doe" />
+              </div>
+            </div>
+            <div class="col-2">
+              <div class="shop-form-group" style="margin-bottom: 0;">
+                <label for="id_stars">Stars (1 to 5) *</label>
+                <input type="number" name="stars" id="id_stars" class="shop-input" min="1" max="5" value="5" />
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="shop-form-group" style="margin-bottom: 0;">
+                <label for="id_description">Review Comment Description *</label>
+                <input type="text" name="description" id="id_description" class="shop-input" required
+                  placeholder="Enter review description comments" />
+              </div>
+            </div>
+            <div class="col-2">
+              <div class="shop-form-group" style="margin-bottom: 0;">
+                <label for="id_review_display_order">Display Order</label>
+                <input type="number" name="display_order" id="id_review_display_order" class="shop-input" value="0" />
+              </div>
+            </div>
+            <div class="col-1"
+              style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding-bottom: 10px;">
+              <label for="id_review_active"
+                style="margin-bottom: 0; font-size: 10px; font-weight: 800; text-transform: uppercase; color: #64748b; letter-spacing: 1px;">Show</label>
+              <input type="checkbox" name="active" id="id_review_active" checked
+                style="width: 20px; height: 20px; cursor: pointer;" />
+            </div>
+          </div>
+          <div class="actions" style="margin-top: 20px;">
+            <button type="submit" class="btn small">
+              <i class="fa-solid fa-plus"></i> Add Testimonial
+            </button>
+          </div>
+        </form>
+
+        {% if reviews %}
+        <div class="table-container" style="margin-top: 24px; border-top: 1px solid var(--border); padding-top: 20px;">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Reviewer Name</th>
+                <th style="width: 140px;">Rating Stars</th>
+                <th>Comments</th>
+                <th style="width: 100px;">Sort Order</th>
+                <th style="width: 100px;">Status</th>
+                <th style="width: 80px; text-align: right; padding-right: 24px;">Delete</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in reviews %}
+              <tr>
+                <td style="font-weight: 600;">{{ r.name }}</td>
+                <td style="color: #f59e0b; font-size: 13px;">
+                  {% for i in "12345"|make_list %}
+                  {% if forloop.counter <= r.stars %} <i class="fa-solid fa-star"></i>
+                    {% else %}
+                    <i class="fa-regular fa-star" style="color: var(--muted);"></i>
+                    {% endif %}
+                    {% endfor %}
+                </td>
+                <td class="muted"
+                  style="max-width: 280px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{{
+                  r.description }}</td>
+                <td>{{ r.display_order }}</td>
+                <td>
+                  {% if r.active %}
+                  <span class="badge ok">Visible</span>
+                  {% else %}
+                  <span class="badge neutral">Hidden</span>
+                  {% endif %}
+                </td>
+                <td style="text-align: right; padding-right: 24px;">
+                  <form method="post" action="{% url 'super_admin:review_delete' r.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="action-btn delete" title="Remove Review">
+                      <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Dynamic Javascript Tab Switcher with Persistence -->
+<script>
+  function switchTab(evt, tabId) {
+    // Hide all tab panes
+    const panes = document.querySelectorAll('.tab-pane');
+    panes.forEach(pane => pane.classList.remove('active'));
+
+    // Remove active class from all buttons
+    const buttons = document.querySelectorAll('.shop-tab-btn');
+    buttons.forEach(btn => btn.classList.remove('active'));
+
+    // Show current tab pane
+    document.getElementById('pane-' + tabId).classList.add('active');
+
+    // Add active class to clicked button
+    evt.currentTarget.classList.add('active');
+
+    // Save active tab in local storage
+    localStorage.setItem('activeLandingTab', tabId);
+  }
+
+  // Restore active tab on load
+  document.addEventListener('DOMContentLoaded', function () {
+    const activeTab = localStorage.getItem('activeLandingTab');
+    if (activeTab) {
+      const btn = Array.from(document.querySelectorAll('.shop-tab-btn')).find(b => b.getAttribute('onclick').includes(activeTab));
+      if (btn) {
+        btn.click();
+      }
+    }
+  });
+</script>
+{% endblock %}

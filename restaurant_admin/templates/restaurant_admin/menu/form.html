@@ -1,0 +1,139 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">{{ title }}</h3>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" id="menuItemForm">
+                    {% csrf_token %}
+                    {% for field in form %}
+                        {% if field.name != 'subcategory' %}
+                        <div class="mb-3">
+                            <label for="{{ field.id_for_label }}" class="form-label">
+                                {{ field.label }}
+                                {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            {{ field }}
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                            {% for error in field.errors %}
+                                <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    <!-- Subcategory Field (will be populated by JavaScript) -->
+                    <div class="mb-3" id="subcategory-field">
+                        {{ form.subcategory.label_tag }}
+                        {{ form.subcategory }}
+                        {% if form.subcategory.help_text %}
+                            <div class="form-text">{{ form.subcategory.help_text }}</div>
+                        {% endif %}
+                        {% for error in form.subcategory.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{% url 'restaurant_admin:menu_list' restaurant_slug=rslug %}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Back to List
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Save
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    $(document).ready(function() {
+        // Add Bootstrap classes to form elements
+        $('input:not([type="checkbox"]), select, textarea').addClass('form-control');
+        $('input[type="checkbox"]').addClass('form-check-input');
+        $('input[type="checkbox"]').parent().addClass('form-check form-switch');
+        $('input[type="checkbox"]').next('label').addClass('form-check-label');
+        
+        // Image preview
+        const imageInput = $('input[type="file"]');
+        if (imageInput.length) {
+            const imagePreview = $('<img>', {
+                id: 'image-preview',
+                css: {
+                    'max-width': '200px',
+                    'margin-top': '10px',
+                    'display': 'none'
+                }
+            });
+            imageInput.after(imagePreview);
+            
+            imageInput.on('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        imagePreview.attr('src', e.target.result).show();
+                    }
+                    reader.readAsDataURL(file);
+                } else {
+                    imagePreview.hide();
+                }
+            });
+        }
+        
+        // Handle category change to load subcategories
+        $('#id_category').on('change', function() {
+            const categoryId = $(this).val();
+            const subcategoryField = $('#id_subcategory');
+            
+            if (categoryId) {
+                // Show loading state
+                subcategoryField.html('<option value="">Loading subcategories...</option>');
+                
+                // Fetch subcategories via AJAX
+                $.ajax({
+                    url: '{% url "restaurant_admin:get_subcategories" restaurant_slug=rslug %}',
+                    data: {
+                        'category_id': categoryId
+                    },
+                    dataType: 'json',
+                    success: function(data) {
+                        let options = '<option value="">---------</option>';
+                        $.each(data, function(index, subcategory) {
+                            options += '<option value="' + subcategory.id + '">' + subcategory.name + '</option>';
+                        });
+                        subcategoryField.html(options);
+                        
+                        // Set the previously selected subcategory if editing
+                        {% if form.instance.subcategory_id %}
+                            subcategoryField.val('{{ form.instance.subcategory_id }}');
+                        {% endif %}
+                    },
+                    error: function() {
+                        subcategoryField.html('<option value="">Error loading subcategories</option>');
+                    }
+                });
+            } else {
+                subcategoryField.html('<option value="">---------</option>');
+            }
+        });
+        
+        // Trigger change event to load subcategories if category is already selected
+        if ($('#id_category').val()) {
+            $('#id_category').trigger('change');
+        }
+    });
+</script>
+{% endblock %}

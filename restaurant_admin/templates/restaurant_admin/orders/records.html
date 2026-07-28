@@ -1,0 +1,987 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block title %}Order Records | {{ restaurant.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .rec-container {
+        padding: 4px;
+    }
+    .rec-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+    .rec-title {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: #111827;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .rec-title i {
+        color: #4F46E5;
+    }
+    .rec-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    /* KPI Summary Cards */
+    .rec-kpis {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .kpi-card {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 20px;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .kpi-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .kpi-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.4rem;
+        flex-shrink: 0;
+    }
+    .kpi-info h4 {
+        margin: 0 0 4px 0;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .kpi-info p {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #111827;
+    }
+
+    /* Filter Card */
+    .rec-filter-card {
+        background: #ffffff;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+        padding: 20px;
+        margin-bottom: 24px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .filter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+        align-items: end;
+    }
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .filter-group label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #374151;
+        margin: 0;
+    }
+    .filter-control {
+        width: 100%;
+        padding: 8px 12px;
+        font-size: 0.875rem;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        background-color: #fff;
+        color: #1f2937;
+        transition: border-color 0.15s ease;
+    }
+    .filter-control:focus {
+        border-color: #4F46E5;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+    .period-btns {
+        display: flex;
+        gap: 4px;
+        background: #f3f4f6;
+        padding: 4px;
+        border-radius: 8px;
+    }
+    .period-btn {
+        flex: 1;
+        text-align: center;
+        padding: 6px 10px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #4b5563;
+        border-radius: 6px;
+        text-decoration: none;
+        transition: all 0.15s ease;
+    }
+    .period-btn.active, .period-btn:hover {
+        background: #ffffff;
+        color: #4F46E5;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+
+    /* Table */
+    .table-card {
+        background: #ffffff;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .rec-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+    }
+    .rec-table th {
+        background: #f9fafb;
+        color: #374151;
+        font-weight: 600;
+        text-align: left;
+        padding: 14px 16px;
+        border-bottom: 1px solid #e5e7eb;
+        white-space: nowrap;
+    }
+    .rec-table td {
+        padding: 14px 16px;
+        border-bottom: 1px solid #f3f4f6;
+        color: #1f2937;
+        vertical-align: middle;
+    }
+    .rec-table tr:hover td {
+        background: #f8fafc;
+    }
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .pill-pending { background: #FEF3C7; color: #92400E; }
+    .pill-preparing { background: #DBEAFE; color: #1E40AF; }
+    .pill-served { background: #D1FAE5; color: #065F46; }
+    .pill-cancelled { background: #FEE2E2; color: #991B1B; }
+    .pill-paid { background: #DCFCE7; color: #166534; }
+    .pill-unpaid { background: #FEF3C7; color: #92400E; }
+
+    .items-badge {
+        font-size: 0.8rem;
+        color: #4b5563;
+        background: #f3f4f6;
+        padding: 4px 8px;
+        border-radius: 6px;
+        display: inline-block;
+        max-width: 250px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .btn-export {
+        background-color: #059669;
+        color: #ffffff;
+        font-weight: 600;
+        padding: 9px 18px;
+        border-radius: 8px;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        text-decoration: none;
+        transition: background-color 0.15s ease;
+    }
+    .btn-export:hover {
+        background-color: #047857;
+        color: #ffffff;
+    }
+
+    .pagination-wrap {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        background: #ffffff;
+        border-top: 1px solid #e5e7eb;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rec-container">
+    <!-- Header -->
+    <div class="rec-header">
+        <h1 class="rec-title">
+            <i class="fas fa-file-invoice-dollar"></i> Order Records & Analytics
+        </h1>
+        <div class="rec-actions">
+            <a href="{% url 'restaurant_admin:order_records_export' restaurant_slug=rslug %}?{{ url_params }}" class="btn-export">
+                <i class="fas fa-file-excel"></i> Export to Excel
+            </a>
+        </div>
+    </div>
+
+    <!-- KPI Summary Cards -->
+    <div class="rec-kpis">
+        <div class="kpi-card">
+            <div class="kpi-icon" style="background: #EEF2FF; color: #4F46E5;">
+                <i class="fas fa-shopping-bag"></i>
+            </div>
+            <div class="kpi-info">
+                <h4>Total Orders</h4>
+                <p>{{ total_orders }}</p>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="background: #ECFDF5; color: #059669;">
+                <i class="fas fa-indian-rupee-sign"></i>
+            </div>
+            <div class="kpi-info">
+                <h4>Total Revenue</h4>
+                <p>₹{{ total_revenue|floatformat:2 }}</p>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="background: #F0FDF4; color: #166534;">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="kpi-info">
+                <h4>Paid Revenue</h4>
+                <p>₹{{ paid_revenue|floatformat:2 }}</p>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon" style="background: #FFFBEB; color: #D97706;">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <div class="kpi-info">
+                <h4>Avg Order Value</h4>
+                <p>₹{{ avg_order_value|floatformat:2 }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Card -->
+    <div class="rec-filter-card">
+        <form method="get" action="{% url 'restaurant_admin:order_records' restaurant_slug=rslug %}">
+            <div class="filter-grid">
+                <!-- Search Query -->
+                <div class="filter-group">
+                    <label for="q">Search</label>
+                    <input type="text" name="q" id="q" class="filter-control" placeholder="Order ID, Customer, Phone..." value="{{ search_query }}">
+                </div>
+
+                <!-- Date Period Presets -->
+                <div class="filter-group">
+                    <label>Quick Period</label>
+                    <div class="period-btns">
+                        <a href="?period=today{% if search_query %}&q={{ search_query }}{% endif %}" class="period-btn {% if period == 'today' %}active{% endif %}">Today</a>
+                        <a href="?period=week{% if search_query %}&q={{ search_query }}{% endif %}" class="period-btn {% if period == 'week' %}active{% endif %}">7 Days</a>
+                        <a href="?period=month{% if search_query %}&q={{ search_query }}{% endif %}" class="period-btn {% if period == 'month' %}active{% endif %}">30 Days</a>
+                        <a href="?period=year{% if search_query %}&q={{ search_query }}{% endif %}" class="period-btn {% if period == 'year' %}active{% endif %}">This Year</a>
+                    </div>
+                </div>
+
+                <!-- Custom Start Date -->
+                <div class="filter-group">
+                    <label for="start_date">Start Date</label>
+                    <input type="date" name="start_date" id="start_date" class="filter-control" value="{{ start_date }}">
+                </div>
+
+                <!-- Custom End Date -->
+                <div class="filter-group">
+                    <label for="end_date">End Date</label>
+                    <input type="date" name="end_date" id="end_date" class="filter-control" value="{{ end_date }}">
+                </div>
+
+                <!-- Order Status -->
+                <div class="filter-group">
+                    <label for="status">Order Status</label>
+                    <select name="status" id="status" class="filter-control">
+                        <option value="">All Statuses</option>
+                        {% for val, label in order_statuses %}
+                            <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Payment Status -->
+                <div class="filter-group">
+                    <label for="payment_status">Payment Status</label>
+                    <select name="payment_status" id="payment_status" class="filter-control">
+                        <option value="">All Payment Statuses</option>
+                        {% for val, label in payment_statuses %}
+                            <option value="{{ val }}" {% if payment_status_filter == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="filter-group" style="display: flex; gap: 8px;">
+                    <button type="submit" class="btn btn-primary" style="flex: 1; padding: 9px;">
+                        <i class="fas fa-filter"></i> Apply
+                    </button>
+                    <a href="{% url 'restaurant_admin:order_records' restaurant_slug=rslug %}" class="btn btn-outline-secondary" style="padding: 9px 12px;" title="Reset Filters">
+                        <i class="fas fa-undo"></i>
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Data Table -->
+    <div class="table-card">
+        <table class="rec-table">
+            <thead>
+                <tr>
+                    <th>Order & Bill Nos.</th>
+                    <th>Date & Time</th>
+                    <th>Customer</th>
+                    <th>Table / Zone</th>
+                    <th>Items Purchased</th>
+                    <th style="text-align: right;">Total (₹)</th>
+                    <th>Payment Method</th>
+                    <th>Payment Status</th>
+                    <th>Status</th>
+                    <th style="text-align: center;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for o in orders %}
+                <tr>
+                    <td>
+                        <a href="{% url 'restaurant_admin:order_detail' restaurant_slug=rslug pk=o.pk %}" style="text-decoration: none;" title="View Order Details">
+                            <strong style="color: #4F46E5; font-weight: 700;">{{ o.order_number }}</strong>
+                        </a>
+                        {% if o.food_invoice_number %}
+                            <div style="font-size: 0.75rem; color: #059669; font-weight: 600;">GST: {{ o.food_invoice_number }}</div>
+                        {% endif %}
+                        {% if o.liquor_bill_number %}
+                            <div style="font-size: 0.75rem; color: #d97706; font-weight: 600;">VAT: {{ o.liquor_bill_number }}</div>
+                        {% endif %}
+                    </td>
+                    <td style="white-space: nowrap; color: #6b7280; font-size: 0.8rem;">
+                        {{ o.order_time|date:"Y-m-d H:i" }}
+                    </td>
+                    <td>
+                        <div style="font-weight: 600; color: #111827;">{{ o.customer_name|default:"Guest" }}</div>
+                        {% if o.phone %}
+                            <div style="font-size: 0.78rem; color: #6b7280;">{{ o.phone }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if o.table %}
+                            <span style="font-weight: 500;">Table {{ o.table.table_number }}</span>
+                            {% if o.table.zone %}
+                                <span style="font-size: 0.78rem; color: #6b7280;">({{ o.table.zone.name }})</span>
+                            {% endif %}
+                        {% else %}
+                            <span style="color: #9ca3af;">Counter / Takeaway</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="items-badge" title="{% for item in o.items.all %}{{ item.quantity }}x {{ item.menu_item.name }}{% if not forloop.last %}, {% endif %}{% endfor %}">
+                            {% for item in o.items.all %}
+                                {{ item.quantity }}x {{ item.menu_item.name }}{% if not forloop.last %}, {% endif %}
+                            {% empty %}
+                                No items
+                            {% endfor %}
+                        </div>
+                    </td>
+                    <td style="text-align: right; font-weight: 700; color: #111827;">
+                        ₹{{ o.total_amount|floatformat:2 }}
+                    </td>
+                    <td>
+                        <span style="font-size: 0.8rem; color: #4b5563; font-weight: 500;">
+                            {{ o.get_payment_method_display }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if o.payment_status == 'paid' or o.payment_status == 'P' %}
+                            <span class="status-pill pill-paid"><i class="fas fa-check-circle"></i> Paid</span>
+                        {% elif o.payment_status == 'partially_paid' %}
+                            <span class="status-pill" style="background:#fffbe6; color:#d48806; border:1px solid #ffe58f;"><i class="fas fa-hourglass-half"></i> Partial (₹{{ o.paid_amount|floatformat:0 }}/₹{{ o.total_amount|floatformat:0 }})</span>
+                        {% elif o.payment_status == 'F' %}
+                            <span class="status-pill pill-cancelled"><i class="fas fa-times-circle"></i> Failed</span>
+                        {% else %}
+                            <span class="status-pill pill-unpaid"><i class="fas fa-clock"></i> {{ o.get_payment_status_display }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if o.status == 'DRAFT' %}
+                            <span class="status-pill" style="background:#e0e7ff; color:#3730a3; border:1px solid #c7d2fe;"><i class="fas fa-bookmark me-1"></i>Draft / Scheduled</span>
+                        {% elif o.status == 'P' %}
+                            <span class="status-pill pill-pending">Pending</span>
+                        {% elif o.status == 'PR' %}
+                            <span class="status-pill pill-preparing">Preparing</span>
+                        {% elif o.status == 'S' %}
+                            <span class="status-pill pill-served">Served</span>
+                        {% else %}
+                            <span class="status-pill pill-cancelled">Cancelled</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: center; white-space: nowrap;">
+                        {% if o.status == 'DRAFT' %}
+                        <a href="{% url 'restaurant_admin:order_create_manual' restaurant_slug=rslug %}?order_id={{ o.pk }}" class="btn btn-sm btn-primary me-1" title="Open Draft Order in POS">
+                            <i class="fas fa-cart-plus me-1"></i> Open in POS
+                        </a>
+                        {% elif o.payment_status != 'paid' and o.payment_status != 'P' %}
+                        <button type="button" class="btn btn-sm btn-success me-1 btn-records-quick-settle" 
+                            data-order-id="{{ o.pk }}" 
+                            data-order-num="{% if o.order_number %}{{ o.order_number }}{% else %}#{{ o.branch_order_number|default:o.pk }}{% endif %}" 
+                            data-customer="{{ o.customer_name|default:'Guest' }}"
+                            data-table="{% if o.table %}{{ o.table.name }}{% else %}Counter / Takeaway{% endif %}"
+                            data-amount="{{ o.total_amount|floatformat:2 }}" 
+                            data-due="{% if o.due_amount %}{{ o.due_amount|floatformat:2 }}{% else %}{{ o.total_amount|floatformat:2 }}{% endif %}"
+                            data-advance-paid="{{ o.advance_amount_paid|floatformat:2 }}"
+                            data-receipt-no="{% if o.advance_receipt %}{{ o.advance_receipt.receipt_no }}{% endif %}"
+                            data-gstin="{{ o.gstin_no|default:'' }}"
+                            data-excise="{{ o.excise_bill_no|default:'' }}"
+                            data-has-alcohol="{% if o.check_item_types.1 %}true{% else %}false{% endif %}"
+                            title="Settle & Checkout Order">
+                            <i class="fas fa-credit-card me-1"></i> Settle & Checkout
+                        </button>
+                        {% endif %}
+                        <a href="{% url 'restaurant_admin:order_detail' pk=o.pk restaurant_slug=rslug %}" class="btn btn-sm btn-outline-info me-1" title="View Details">
+                            <i class="fas fa-eye"></i>
+                        </a>
+                        <a href="{% url 'restaurant_admin:order_invoice' pk=o.pk restaurant_slug=rslug %}" class="btn btn-sm btn-outline-primary me-1" title="View Invoice" target="_blank">
+                            <i class="fas fa-receipt"></i>
+                        </a>
+                        <a href="{% url 'restaurant_admin:order_kot' pk=o.pk restaurant_slug=rslug %}" class="btn btn-sm btn-outline-secondary" title="View KOT" target="_blank">
+                            <i class="fas fa-print"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="10" style="text-align: center; padding: 40px; color: #6b7280;">
+                        <i class="fas fa-folder-open" style="font-size: 2.5rem; color: #d1d5db; margin-bottom: 12px; display: block;"></i>
+                        No order records found for the selected filters.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Pagination -->
+        {% if orders.has_other_pages %}
+        <div class="pagination-wrap">
+            <div style="font-size: 0.85rem; color: #6b7280;">
+                Showing page {{ orders.number }} of {{ orders.paginator.num_pages }}
+            </div>
+            <ul class="pagination pagination-sm m-0">
+                {% if orders.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ orders.previous_page_number }}&{{ url_params }}">Previous</a>
+                    </li>
+                {% endif %}
+
+                {% for p in orders.paginator.page_range %}
+                    {% if p == orders.number %}
+                        <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+                    {% elif p > orders.number|add:"-3" and p < orders.number|add:"3" %}
+                        <li class="page-item"><a class="page-link" href="?page={{ p }}&{{ url_params }}">{{ p }}</a></li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if orders.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ orders.next_page_number }}&{{ url_params }}">Next</a>
+                    </li>
+                {% endif %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+    </div>
+</div>
+
+<!-- Full Settle & Checkout Order Modal for Records Page -->
+<div class="modal fade" id="recordsSettleModal" tabindex="-1" aria-labelledby="recordsSettleModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow-lg overflow-hidden">
+      <div class="modal-header bg-dark text-white py-3">
+        <h5 class="modal-title fw-bold text-white mb-0 d-flex align-items-center" id="recordsSettleModalLabel">
+          <i class="bi bi-wallet2 text-warning me-2 fs-4"></i> Settle & Checkout Order
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body p-4">
+        <input type="hidden" id="rec-settle-order-id">
+        <input type="hidden" id="rec-settle-grand-total" value="0">
+
+        <!-- Top Order Info Summary Box -->
+        <div class="p-3 bg-light rounded-3 mb-4 border d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="fw-bold text-dark mb-1" id="rec-settle-order-title">Order #---</h6>
+            <div class="text-muted small" id="rec-settle-order-meta">Table --- | Billed To: Guest</div>
+          </div>
+          <div class="text-end">
+            <span class="d-block text-muted uppercase extra-small fw-bold" style="font-size: 0.75rem;">Amount Payable</span>
+            <span class="fs-3 fw-bold text-success" id="rec-settle-amount-payable">₹0.00</span>
+          </div>
+        </div>
+
+        <!-- Advance Deposit Settlement Breakdown Card -->
+        <div id="rec-modal-advance-deduction-card" class="card border-primary border-opacity-20 bg-primary bg-opacity-10 rounded-3 mb-4 p-3 shadow-sm" style="display: none;">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="fw-bold text-dark"><i class="bi bi-bookmark-star-fill text-warning me-1"></i> Advance Deposit Attached (<span id="rec-modal-receipt-no">REC-XXXX</span>)</span>
+            <span class="badge bg-primary text-white">Deposit Settlement</span>
+          </div>
+          <div class="row text-center g-2 pt-2 border-top border-primary border-opacity-20">
+            <div class="col-4">
+              <span class="d-block text-muted small text-uppercase font-weight-bold" style="font-size:0.7rem;">Grand Total</span>
+              <span class="fw-bold text-dark fs-6" id="rec-modal-grand-total-val">₹0.00</span>
+            </div>
+            <div class="col-4 border-start border-end border-primary border-opacity-20">
+              <span class="d-block text-success small text-uppercase font-weight-bold" style="font-size:0.7rem;">Less Advance Paid</span>
+              <span class="fw-bold text-success fs-6" id="rec-modal-advance-paid-val">-₹0.00</span>
+            </div>
+            <div class="col-4">
+              <span class="d-block text-primary small text-uppercase font-weight-bold" style="font-size:0.7rem;">Net Payable</span>
+              <span class="fw-bold text-primary fs-5" id="rec-modal-net-payable-val">₹0.00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 1. Select Invoice Mode -->
+        <div class="mb-4">
+          <label class="form-label fw-bold text-dark mb-2">
+            <i class="bi bi-receipt me-1 text-primary"></i> 1. Select Invoice Mode
+          </label>
+          <div class="btn-group w-100 pos-invoice-mode-group" role="group">
+            <input type="radio" class="btn-check" name="rec_settle_invoice_mode" id="rec_mode_food" value="food" checked>
+            <label class="btn btn-outline-primary py-2 fw-semibold" for="rec_mode_food">
+              <i class="bi bi-egg-fried me-1"></i> Food GST Invoice
+            </label>
+
+            <input type="radio" class="btn-check" name="rec_settle_invoice_mode" id="rec_mode_bar" value="liquor">
+            <label class="btn btn-outline-warning text-dark py-2 fw-semibold" for="rec_mode_bar">
+              <i class="bi bi-cup-straw me-1"></i> Bar Excise Bill
+            </label>
+
+            <input type="radio" class="btn-check" name="rec_settle_invoice_mode" id="rec_mode_split" value="split">
+            <label class="btn btn-outline-success py-2 fw-semibold" for="rec_mode_split">
+              <i class="bi bi-layers me-1"></i> Auto-Split Invoices
+            </label>
+          </div>
+        </div>
+
+        <!-- 2. Invoice Serial Number Fields -->
+        <div class="row g-3 mb-4" id="rec-row-settlement-serial-numbers">
+          <div class="col-md-6" id="rec-wrapper-gstin">
+            <label class="form-label fw-semibold text-dark small mb-1">
+              <i class="bi bi-card-heading me-1 text-primary"></i>Tax Invoice No. (GST)
+            </label>
+            <input type="text" id="rec-gstin-no" class="form-control" placeholder="e.g. INV-2026-0042">
+          </div>
+          <div class="col-md-6" id="rec-wrapper-excise">
+            <label class="form-label fw-semibold text-dark small mb-1">
+              <i class="bi bi-file-earmark-medical me-1 text-warning"></i>Retail Excise Bill No. (VAT)
+            </label>
+            <input type="text" id="rec-excise-bill-no" class="form-control" placeholder="e.g. EXC-2026-0042">
+          </div>
+        </div>
+
+        <!-- 3. Split Payment & Multi-Method Engine -->
+        <div class="mb-4 p-3 bg-light rounded-3 border">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <label class="form-label fw-bold text-dark mb-0">
+              <i class="bi bi-credit-card me-1 text-info"></i> 3. Payment Method & Split Received
+            </label>
+            <button type="button" id="btn-rec-add-payment-split" class="btn btn-sm btn-outline-primary fw-semibold">
+              <i class="bi bi-plus-circle me-1"></i> Add Payment Split
+            </button>
+          </div>
+
+          <div id="rec-payment-split-rows-container">
+            <!-- Dynamic split rows -->
+          </div>
+
+          <!-- Live Balance Summary Cards -->
+          <div class="row g-2 mt-2 pt-2 border-top">
+            <div class="col-4">
+              <div class="p-2 bg-white rounded border text-center">
+                <span class="d-block text-muted uppercase small fw-bold" style="font-size: 0.7rem;">TOTAL PAID</span>
+                <span class="fw-bold text-success fs-6" id="rec-split-summary-paid">₹0.00</span>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="p-2 bg-white rounded border text-center">
+                <span class="d-block text-muted uppercase small fw-bold" style="font-size: 0.7rem;">REMAINING DUE</span>
+                <span class="fw-bold text-danger fs-6" id="rec-split-summary-due">₹0.00</span>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="p-2 bg-white rounded border text-center">
+                <span class="d-block text-muted uppercase small fw-bold" style="font-size: 0.7rem;">STATUS</span>
+                <span class="badge bg-success mt-1" id="rec-split-summary-status">Paid</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer bg-light py-3">
+        <button type="button" class="btn btn-outline-secondary fw-semibold px-3" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="btn-submit-records-save-only" class="btn btn-primary fw-bold px-3 py-2">
+          <i class="bi bi-check-circle me-1"></i> Save Order
+        </button>
+        <button type="button" id="btn-submit-records-settle" class="btn btn-success fw-bold px-3 py-2">
+          <i class="bi bi-printer me-1"></i> Save & Print Bill
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function getCsrfToken() {
+        const m = document.cookie.match(/csrftoken=([^;]+)/);
+        return m ? decodeURIComponent(m[1]) : '';
+    }
+
+    let recState = {
+        grandTotal: 0,
+        advancePaid: 0,
+        netPayable: 0,
+        receiptNo: '',
+        hasAlcohol: false,
+        calculatedPayments: [],
+        calculatedPaidAmount: 0,
+        calculatedDueAmount: 0,
+        calculatedPaymentStatus: 'paid'
+    };
+
+    function recCreatePaymentSplitRowHtml(method = 'cash', amount = '') {
+      return `
+        <div class="rec-payment-split-row row g-2 align-items-center mb-2">
+          <div class="col-6">
+            <select class="form-select form-select-sm rec-payment-split-method fw-semibold">
+              <option value="cash" ${method === 'cash' ? 'selected' : ''}>Cash</option>
+              <option value="upi" ${method === 'upi' ? 'selected' : ''}>UPI / QR Code</option>
+              <option value="card" ${method === 'card' ? 'selected' : ''}>Credit / Debit Card</option>
+              <option value="bank_transfer" ${method === 'bank_transfer' ? 'selected' : ''}>Bank Transfer</option>
+              <option value="credit" ${method === 'credit' ? 'selected' : ''}>Credit / Pending</option>
+            </select>
+          </div>
+          <div class="col-5">
+            <div class="input-group input-group-sm">
+              <span class="input-group-text">₹</span>
+              <input type="number" step="0.01" min="0" class="form-control rec-payment-split-amount fw-bold text-success" value="${amount}" placeholder="Amount">
+            </div>
+          </div>
+          <div class="col-1 text-end">
+            <button type="button" class="btn btn-sm btn-outline-danger btn-rec-delete-payment-row p-1" title="Delete Split">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function recInitPaymentSplitRows(initialDue) {
+      const container = document.getElementById('rec-payment-split-rows-container');
+      if (!container) return;
+      container.innerHTML = recCreatePaymentSplitRowHtml('cash', initialDue.toFixed(2));
+      recAttachPaymentSplitEventListeners();
+      recRecalculatePaymentSplits();
+    }
+
+    function recAttachPaymentSplitEventListeners() {
+      const container = document.getElementById('rec-payment-split-rows-container');
+      if (!container) return;
+
+      container.querySelectorAll('.rec-payment-split-amount').forEach(inp => {
+        inp.removeEventListener('input', recRecalculatePaymentSplits);
+        inp.addEventListener('input', recRecalculatePaymentSplits);
+      });
+
+      container.querySelectorAll('.rec-payment-split-method').forEach(sel => {
+        sel.removeEventListener('change', recRecalculatePaymentSplits);
+        sel.addEventListener('change', recRecalculatePaymentSplits);
+      });
+
+      container.querySelectorAll('.btn-rec-delete-payment-row').forEach(btn => {
+        btn.onclick = function() {
+          const rows = container.querySelectorAll('.rec-payment-split-row');
+          if (rows.length > 1) {
+            this.closest('.rec-payment-split-row').remove();
+            recRecalculatePaymentSplits();
+          }
+        };
+      });
+    }
+
+    document.getElementById('btn-rec-add-payment-split')?.addEventListener('click', () => {
+      const container = document.getElementById('rec-payment-split-rows-container');
+      if (!container) return;
+
+      const currentTotalPaid = Array.from(container.querySelectorAll('.rec-payment-split-amount'))
+        .reduce((sum, inp) => sum + (parseFloat(inp.value) || 0), 0);
+      const remaining = Math.max(0, recState.netPayable - currentTotalPaid);
+
+      const div = document.createElement('div');
+      div.innerHTML = recCreatePaymentSplitRowHtml('upi', remaining > 0 ? remaining.toFixed(2) : '0.00');
+      container.appendChild(div.firstElementChild);
+
+      recAttachPaymentSplitEventListeners();
+      recRecalculatePaymentSplits();
+    });
+
+    function recRecalculatePaymentSplits() {
+      const container = document.getElementById('rec-payment-split-rows-container');
+      if (!container) return;
+
+      const rows = container.querySelectorAll('.rec-payment-split-row');
+      const deleteBtns = container.querySelectorAll('.btn-rec-delete-payment-row');
+      deleteBtns.forEach(b => b.disabled = (rows.length <= 1));
+
+      let totalPaid = 0;
+      const payments = [];
+
+      rows.forEach(r => {
+        const method = r.querySelector('.rec-payment-split-method')?.value || 'cash';
+        const amt = parseFloat(r.querySelector('.rec-payment-split-amount')?.value) || 0;
+        if (amt > 0) {
+          totalPaid += amt;
+          payments.push({ method, amount: amt });
+        }
+      });
+
+      const dueAmount = Math.max(0, recState.netPayable - totalPaid);
+
+      const paidEl = document.getElementById('rec-split-summary-paid');
+      const dueEl = document.getElementById('rec-split-summary-due');
+      const statusBadge = document.getElementById('rec-split-summary-status');
+
+      if (paidEl) paidEl.textContent = `₹${totalPaid.toFixed(2)}`;
+      if (dueEl) dueEl.textContent = `₹${dueAmount.toFixed(2)}`;
+
+      let calcStatus = 'paid';
+      if (dueAmount <= 0.01) {
+        calcStatus = 'paid';
+        if (statusBadge) {
+          statusBadge.className = 'badge bg-success mt-1';
+          statusBadge.textContent = 'Paid';
+        }
+      } else if ((totalPaid + recState.advancePaid) > 0) {
+        calcStatus = 'partially_paid';
+        if (statusBadge) {
+          statusBadge.className = 'badge bg-warning text-dark mt-1';
+          statusBadge.textContent = 'Partially Paid';
+        }
+      } else {
+        calcStatus = 'unpaid';
+        if (statusBadge) {
+          statusBadge.className = 'badge bg-danger mt-1';
+          statusBadge.textContent = 'Unpaid / Credit';
+        }
+      }
+
+      recState.calculatedPayments = payments;
+      recState.calculatedPaidAmount = totalPaid;
+      recState.calculatedDueAmount = dueAmount;
+      recState.calculatedPaymentStatus = calcStatus;
+    }
+
+    function recSyncSettlementFieldsVisibility() {
+      const mode = document.querySelector('input[name="rec_settle_invoice_mode"]:checked')?.value || 'food';
+      const wrapperGstin = document.getElementById('rec-wrapper-gstin');
+      const wrapperExcise = document.getElementById('rec-wrapper-excise');
+      const gstinInput = document.getElementById('rec-gstin-no');
+      const exciseInput = document.getElementById('rec-excise-bill-no');
+
+      if (!wrapperGstin || !wrapperExcise) return;
+
+      let showGstin = (mode === 'food' || mode === 'split');
+      let showExcise = (mode === 'liquor' || (mode === 'split' && recState.hasAlcohol));
+
+      const currentYear = new Date().getFullYear();
+      const randNum = Math.floor(1000 + Math.random() * 9000);
+
+      if (showGstin) {
+        wrapperGstin.style.display = 'block';
+        wrapperGstin.className = showExcise ? 'col-md-6' : 'col-md-12';
+        if (gstinInput && !gstinInput.value) gstinInput.value = `INV-${currentYear}-${randNum}`;
+      } else {
+        wrapperGstin.style.display = 'none';
+        if (gstinInput) gstinInput.value = '';
+      }
+
+      if (showExcise) {
+        wrapperExcise.style.display = 'block';
+        wrapperExcise.className = showGstin ? 'col-md-6' : 'col-md-12';
+        if (exciseInput && !exciseInput.value) exciseInput.value = `EXC-${currentYear}-${randNum}`;
+      } else {
+        wrapperExcise.style.display = 'none';
+        if (exciseInput) exciseInput.value = '';
+      }
+    }
+
+    document.querySelectorAll('input[name="rec_settle_invoice_mode"]').forEach(r => {
+      r.addEventListener('change', recSyncSettlementFieldsVisibility);
+    });
+
+    document.querySelectorAll('.btn-records-quick-settle').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const orderId = this.dataset.orderId;
+            const orderNum = this.dataset.orderNum || `Order #${orderId}`;
+            const customer = this.dataset.customer || 'Guest';
+            const table = this.dataset.table || 'Counter / Takeaway';
+            const amount = parseFloat(this.dataset.amount) || 0;
+            const advancePaid = parseFloat(this.dataset.advancePaid) || 0;
+            const receiptNo = this.dataset.receiptNo || '';
+            const netPayableTarget = Math.max(0, amount - advancePaid);
+            const due = parseFloat(this.dataset.due) || netPayableTarget;
+            const gstin = this.dataset.gstin || '';
+            const excise = this.dataset.excise || '';
+            const hasAlcohol = (this.dataset.hasAlcohol === 'true');
+
+            recState.grandTotal = amount;
+            recState.advancePaid = advancePaid;
+            recState.netPayable = netPayableTarget;
+            recState.receiptNo = receiptNo;
+            recState.hasAlcohol = hasAlcohol;
+
+            document.getElementById('rec-settle-order-id').value = orderId;
+            document.getElementById('rec-settle-grand-total').value = amount;
+            document.getElementById('rec-settle-order-title').textContent = orderNum;
+            document.getElementById('rec-settle-order-meta').textContent = `${table} | Billed To: ${customer}`;
+            document.getElementById('rec-settle-amount-payable').textContent = `₹${netPayableTarget.toFixed(2)}`;
+
+            const advanceCard = document.getElementById('rec-modal-advance-deduction-card');
+            if (advancePaid > 0) {
+              if (advanceCard) {
+                advanceCard.style.display = 'block';
+                const recNoEl = document.getElementById('rec-modal-receipt-no');
+                const gtEl = document.getElementById('rec-modal-grand-total-val');
+                const advEl = document.getElementById('rec-modal-advance-paid-val');
+                const netEl = document.getElementById('rec-modal-net-payable-val');
+                if (recNoEl) recNoEl.textContent = receiptNo || 'Deposit Attached';
+                if (gtEl) gtEl.textContent = `₹${amount.toFixed(2)}`;
+                if (advEl) advEl.textContent = `-₹${advancePaid.toFixed(2)}`;
+                if (netEl) netEl.textContent = `₹${netPayableTarget.toFixed(2)}`;
+              }
+            } else if (advanceCard) {
+              advanceCard.style.display = 'none';
+            }
+
+            document.getElementById('rec-gstin-no').value = gstin;
+            document.getElementById('rec-excise-bill-no').value = excise;
+
+            const targetModeId = hasAlcohol ? 'rec_mode_split' : 'rec_mode_food';
+            const radioBtn = document.getElementById(targetModeId);
+            if (radioBtn) radioBtn.checked = true;
+
+            recSyncSettlementFieldsVisibility();
+            recInitPaymentSplitRows(netPayableTarget);
+
+            const modalEl = document.getElementById('recordsSettleModal');
+            if (modalEl && window.bootstrap) {
+                const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+                modal.show();
+            }
+        });
+    });
+
+    function recSubmitSettlement(printBill = true, clickedBtn) {
+        const orderId = document.getElementById('rec-settle-order-id').value;
+        if (!orderId) return;
+
+        recRecalculatePaymentSplits();
+
+        const invoiceMode = document.querySelector('input[name="rec_settle_invoice_mode"]:checked')?.value || 'food';
+        const wrapperGstin = document.getElementById('rec-wrapper-gstin');
+        const wrapperExcise = document.getElementById('rec-wrapper-excise');
+
+        const gstinNo = (wrapperGstin && wrapperGstin.style.display !== 'none') ? (document.getElementById('rec-gstin-no')?.value || '') : '';
+        const exciseBillNo = (wrapperExcise && wrapperExcise.style.display !== 'none') ? (document.getElementById('rec-excise-bill-no')?.value || '') : '';
+
+        if (clickedBtn) {
+          clickedBtn.disabled = true;
+          clickedBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Processing...';
+        }
+
+        const url = `/dashboard/{{ rslug }}/orders/${orderId}/settle/`;
+        const payload = {
+            invoice_mode: invoiceMode,
+            payment_method: recState.calculatedPayments[0]?.method || 'cash',
+            payment_status: recState.calculatedPaymentStatus,
+            payments: recState.calculatedPayments,
+            paid_amount: recState.calculatedPaidAmount.toFixed(2),
+            due_amount: recState.calculatedDueAmount.toFixed(2),
+            gstin_no: gstinNo,
+            excise_bill_no: exciseBillNo
+        };
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken(),
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                if (printBill) {
+                  const mode = invoiceMode;
+                  const invoiceUrl = `/dashboard/{{ rslug }}/orders/${orderId}/invoice/`;
+                  window.open(invoiceUrl, '_blank');
+                }
+                window.location.reload();
+            } else {
+                alert(data.error || 'Failed to settle order.');
+                if (clickedBtn) clickedBtn.disabled = false;
+            }
+        })
+        .catch(() => {
+            alert('Network error during settlement.');
+            if (clickedBtn) clickedBtn.disabled = false;
+        });
+    }
+
+    document.getElementById('btn-submit-records-save-only')?.addEventListener('click', function() {
+        recSubmitSettlement(false, this);
+    });
+
+    document.getElementById('btn-submit-records-settle')?.addEventListener('click', function() {
+        recSubmitSettlement(true, this);
+    });
+});
+</script>
+{% endblock %}

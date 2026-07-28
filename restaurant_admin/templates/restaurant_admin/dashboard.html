@@ -1,0 +1,665 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block title %}Dashboard - Restaurant Admin{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stat-card {
+        display: flex;
+        align-items: center;
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        color: white;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        border: none;
+        height: 100%;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+    
+    .stat-card i {
+        font-size: 2.5rem;
+        margin-right: 1rem;
+        opacity: 0.8;
+        transition: all 0.3s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+    }
+    
+    .stat-card h3 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+        line-height: 1.2;
+    }
+    
+    .stat-card p {
+        opacity: 0.9;
+        margin-bottom: 0;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 500;
+    }
+    
+    .avatar {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+    }
+    
+    .avatar-sm {
+        width: 32px;
+        height: 32px;
+        font-size: 0.875rem;
+    }
+    
+    .avatar-title {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        color: var(--bs-body-color);
+    }
+    
+    .bg-primary-soft {
+        background-color: rgba(94, 114, 228, 0.1) !important;
+        color: var(--primary) !important;
+    }
+    
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        transition: all 0.3s ease;
+    }
+    
+    .card:hover {
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+    }
+    
+    .card-header {
+        background-color: #fff;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        padding: 1rem 1.5rem;
+    }
+    
+    .table th {
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+        padding: 1rem 1.5rem;
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .table td {
+        padding: 1rem 1.5rem;
+        vertical-align: middle;
+        border-bottom: 1px solid #e9ecef;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">Dashboard</h2>
+        <div class="d-flex align-items-center gap-3">
+            <span class="text-muted small">
+                <i class="bi bi-person-circle me-1"></i>
+                {{ user.username }}
+            </span>
+            <span class="text-muted small">
+                <i class="bi bi-shop me-1"></i>
+                {{ restaurant.name }}
+            </span>
+            <span class="text-muted">{{ today|date:"l, F j, Y" }}</span>
+        </div>
+    </div>
+    
+    <!-- Stats Cards -->
+    <div class="row g-4 mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card bg-primary">
+                <i class="bi bi-cart3"></i>
+                <div>
+                    <h3>{{ total_orders }}</h3>
+                    <p>Total Orders</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card bg-success">
+                <i class="bi bi-bag-check"></i>
+                <div>
+                    <h3>{{ today_orders }}</h3>
+                    <p>Today's Orders</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card bg-info">
+                <i class="bi bi-egg-fried"></i>
+                <div>
+                    <h3>{{ total_menu_items }}</h3>
+                    <p>Menu Items</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card bg-warning">
+                <i class="bi bi-currency-rupee"></i>
+                <div>
+                    <h3>₹{{ total_revenue|floatformat:2 }}</h3>
+                    <p>Total Revenue</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Recent Orders -->
+        <div class="col-xl-8">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Recent Orders</h5>
+                    <a href="{% url 'restaurant_admin:order_list' restaurant_slug=restaurant.slug %}" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th class="ps-4">ORDER</th>
+                                    <th>CUSTOMER</th>
+                                    <th>TABLE</th>
+                                    <th>AMOUNT</th>
+                                    <th>STATUS</th>
+                                    <th class="text-end pe-4">ACTIONS</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for order in recent_orders %}
+                                <tr>
+                                    <td class="ps-4 fw-bold">#{{ order.branch_order_number|default:order.id }}</td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="avatar avatar-sm me-2">
+                                                <span class="avatar-title rounded-circle bg-light text-dark">
+                                                    {{ order.customer_name|slice:":1"|upper }}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold">{{ order.customer_name|default:"Walk-in Customer" }}</div>
+                                                <small class="text-muted">{{ order.order_time|timesince }} ago</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">
+                                            <i class="bi bi-table me-1"></i> {{ order.table_number|default:"N/A" }}
+                                        </span>
+                                    </td>
+                                    <td class="fw-bold">₹{{ order.total_amount|floatformat:2 }}</td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if order.status == 'completed' or order.status == 'C' %}bg-success
+                                            {% elif order.status == 'cancelled' or order.status == 'X' %}bg-danger
+                                            {% else %}bg-warning{% endif %}">
+                                            {% if order.get_status_display %}
+                                                {{ order.get_status_display }}
+                                            {% else %}
+                                                {{ order.status|title }}
+                                            {% endif %}
+                                        </span>
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        <a href="{% url 'restaurant_admin:order_list' restaurant_slug=restaurant.slug %}?order_id={{ order.id }}" 
+                                           class="btn btn-sm btn-outline-primary"
+                                           data-bs-toggle="tooltip" 
+                                           title="View Details">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-4">
+                                        <div class="text-muted">No recent orders found.</div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar -->
+        <div class="col-xl-4">
+            <!-- Top Selling Items -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Top Selling Items</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for item in top_items %}
+                        <div class="list-group-item border-0 p-3">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center">
+                                    <div class="avatar avatar-sm bg-light text-primary rounded-circle me-3">
+                                        <i class="bi bi-trophy"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-0">
+                                            {% if item.menu_item__name %}
+                                                {{ item.menu_item__name }}
+                                            {% elif item.name %}
+                                                {{ item.name }}
+                                            {% else %}
+                                                Item {{ forloop.counter }}
+                                            {% endif %}
+                                        </h6>
+                                        <small class="text-muted">
+                                            {% if item.total_ordered %}
+                                                {{ item.total_ordered }}
+                                            {% elif item.quantity %}
+                                                {{ item.quantity }}
+                                            {% else %}
+                                                0
+                                            {% endif %} orders
+                                        </small>
+                                    </div>
+                                </div>
+                                <span class="badge bg-primary-soft rounded-pill">{{ forloop.counter }}</span>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="text-center py-4">
+                            <div class="text-muted">No items sold yet.</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'restaurant_admin:menu_add' restaurant_slug=restaurant.slug %}" class="btn btn-primary">
+                            <i class="bi bi-plus-circle me-2"></i> Add New Menu Item
+                        </a>
+                        <a href="{% url 'restaurant_admin:order_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-list-ul me-2"></i> View All Orders
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- QR Code Section -->
+            <div class="card mt-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Menu QR Code</h5>
+                    <a href="{% url 'restaurant_admin:qr_code_generator' restaurant_slug=restaurant.slug %}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-qr-code-scan me-1"></i> Advanced QR Generator
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="text-center">
+                        <div class="qr-code-container mb-3">
+                            <img id="dashboardQrCode" 
+                                 src="{% url 'restaurant_admin:generate_qr_code' restaurant_slug=restaurant.slug %}" 
+                                 alt="Menu QR Code" 
+                                 class="img-fluid"
+                                 style="max-width: 200px;">
+                        </div>
+                        <p class="text-muted small mb-3">Scan this code to view the menu on any device</p>
+                        
+                        <div class="d-grid gap-2">
+                            <a href="{% url 'restaurant_admin:generate_qr_code' restaurant_slug=restaurant.slug %}?download=1" 
+                               class="btn btn-primary"
+                               id="downloadQrBtn">
+                                <i class="bi bi-download me-1"></i> Download QR Code
+                            </a>
+                            <button type="button" 
+                                    class="btn btn-outline-secondary" 
+                                    onclick="copyQrLink()"
+                                    id="copyLinkBtn">
+                                <i class="bi bi-link-45deg me-1"></i> Copy Menu Link
+                            </button>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <a href="{% url 'restaurant_admin:qr_code_generator' restaurant_slug=restaurant.slug %}" class="text-decoration-none small">
+                                <i class="bi bi-arrow-right-circle me-1"></i> Generate custom QR codes for tables & categories
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <script>
+            function copyQrLink() {
+                const url = '{{ request.scheme }}://{{ request.get_host }}{% url "restaurant_admin:generate_qr_code" restaurant_slug=restaurant.slug %}';
+                navigator.clipboard.writeText(url).then(() => {
+                    const btn = document.getElementById('copyLinkBtn');
+                    const originalHtml = btn.innerHTML;
+                    btn.innerHTML = '<i class="bi bi-check me-1"></i> Link Copied!';
+                    btn.classList.remove('btn-outline-secondary');
+                    btn.classList.add('btn-success');
+                    
+                    setTimeout(() => {
+                        btn.innerHTML = originalHtml;
+                        btn.classList.remove('btn-success');
+                        btn.classList.add('btn-outline-secondary');
+                    }, 2000);
+                });
+            }
+            
+            // Add click handler for download button to show feedback
+            document.getElementById('downloadQrBtn').addEventListener('click', function(e) {
+                const btn = this;
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Downloading...';
+                
+                // Reset button after download starts
+                setTimeout(() => {
+                    btn.innerHTML = originalHtml;
+                }, 2000);
+            });
+            </script>
+        </div>
+    </div>
+</div>
+
+<style>
+.qr-code-container {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.qr-code-container img {
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 10px;
+    background: white;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script id="dashboard-js" data-baseline-orders="{{ baseline_total_orders|default:0 }}">
+// Bootstrap tooltips init
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    tooltipTriggerList.map(function (el) { return new bootstrap.Tooltip(el) });
+});
+
+// Sound notification system
+const notifUrl = "{{ notification_sound_abs_url|default:'' }}";
+let audioCtx = null;
+let audioBuffer = null;
+let audioSource = null;
+
+// Initialize audio context on user interaction
+function initAudio() {
+    if (audioCtx === null) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Load notification sound if available
+        if (notifUrl) {
+            fetch(notifUrl)
+                .then(response => response.arrayBuffer())
+                .then(arrayBuffer => audioCtx.decodeAudioData(arrayBuffer))
+                .then(decodedAudio => {
+                    audioBuffer = decodedAudio;
+                })
+                .catch(e => console.error('Error loading audio:', e));
+        }
+    }
+    return audioCtx.state === 'running';
+}
+
+// Play bell sound
+async function playBell() {
+    try {
+        // Try to resume audio context if it's suspended
+        if (audioCtx && audioCtx.state === 'suspended') {
+            await audioCtx.resume();
+        }
+
+        // Play custom sound if loaded
+        if (audioBuffer) {
+            if (audioSource) {
+                audioSource.stop();
+            }
+            audioSource = audioCtx.createBufferSource();
+            audioSource.buffer = audioBuffer;
+            audioSource.connect(audioCtx.destination);
+            audioSource.start(0);
+            return;
+        }
+
+        // Fallback to Web Audio API if no custom sound
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        
+        const now = audioCtx.currentTime;
+        const o1 = audioCtx.createOscillator();
+        const g1 = audioCtx.createGain();
+        o1.type = 'sine';
+        o1.frequency.setValueAtTime(880, now);
+        g1.gain.setValueAtTime(0.0001, now);
+        g1.gain.exponentialRampToValueAtTime(0.22, now + 0.01);
+        g1.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+        o1.connect(g1).connect(audioCtx.destination);
+        o1.start(now);
+        o1.stop(now + 0.6);
+        
+        const o2 = audioCtx.createOscillator();
+        const g2 = audioCtx.createGain();
+        o2.type = 'sine';
+        o2.frequency.setValueAtTime(1320, now + 0.08);
+        g2.gain.setValueAtTime(0.0001, now + 0.08);
+        g2.gain.exponentialRampToValueAtTime(0.14, now + 0.11);
+        g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+        o2.connect(g2).connect(audioCtx.destination);
+        o2.start(now + 0.08);
+        o2.stop(now + 0.6);
+    } catch (e) {
+        console.error('Error playing sound:', e);
+    }
+}
+
+// Toast helper
+function showInfoToast(msg) {
+    const toast = document.createElement('div');
+    toast.className = 'position-fixed bottom-0 end-0 m-3 alert alert-info alert-dismissible fade show';
+    toast.role = 'alert';
+    toast.innerHTML = `${msg}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
+    document.body.appendChild(toast);
+    setTimeout(() => { try { (new bootstrap.Alert(toast)).close(); } catch(e){} }, 3000);
+}
+
+function showWarningToast(msg) {
+    const toast = document.createElement('div');
+    toast.className = 'position-fixed bottom-0 end-0 m-3 alert alert-warning alert-dismissible fade show';
+    toast.role = 'alert';
+    toast.style.zIndex = '1090';
+    toast.innerHTML = `<i class="fas fa-exclamation-triangle me-2 text-warning"></i> <strong>Low Stock Alert:</strong> ${msg}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
+    document.body.appendChild(toast);
+    setTimeout(() => { try { (new bootstrap.Alert(toast)).close(); } catch(e){} }, 6000);
+}
+
+// SSE for new orders
+document.addEventListener('DOMContentLoaded', function() {
+    // Enable sound UX to unlock autoplay
+    const enableBtn = document.createElement('button');
+    enableBtn.textContent = '🔔 Enable Notifications';
+    enableBtn.className = 'btn btn-sm btn-primary position-fixed top-0 end-0 m-3';
+    enableBtn.style.zIndex = '1080';
+    enableBtn.style.display = 'none'; // Hide by default, show if needed
+    
+    function hideEnable() { 
+        if (enableBtn.parentNode) {
+            enableBtn.parentNode.removeChild(enableBtn);
+        }
+    }
+    
+    async function enableSound() {
+        try {
+            // Initialize audio context and play a silent sound to unlock audio
+            if (initAudio()) {
+                // Play a silent sound to unlock audio
+                const source = audioCtx.createBufferSource();
+                const buffer = audioCtx.createBuffer(1, 1, 22050);
+                source.buffer = buffer;
+                source.connect(audioCtx.destination);
+                source.start(0);
+                source.stop(0.1);
+                
+                // Mark as enabled in localStorage
+                localStorage.setItem('notifSoundEnabled', '1');
+                hideEnable();
+                
+                // Show confirmation
+                showInfoToast('Notifications enabled! You will now hear sounds for new orders.');
+            }
+        } catch (e) {
+            console.error('Error enabling sound:', e);
+            showInfoToast('Error enabling notifications. Please try again.');
+        }
+    }
+    
+    // Show enable button if sound isn't already enabled
+    if (localStorage.getItem('notifSoundEnabled') !== '1') {
+        // Check if we need to show the enable button
+        document.addEventListener('click', function initSoundOnInteraction() {
+            // Remove this event listener after first interaction
+            document.removeEventListener('click', initSoundOnInteraction);
+            
+            // Show the enable button
+            document.body.appendChild(enableBtn);
+            enableBtn.style.display = 'block';
+            
+            // Set up the click handler
+            enableBtn.addEventListener('click', enableSound);
+        }, { once: true });
+    } else {
+        // Sound is already enabled, initialize audio context
+        document.addEventListener('click', function initOnInteraction() {
+            document.removeEventListener('click', initOnInteraction);
+            initAudio();
+        }, { once: true });
+    }
+
+    // ── Lightweight poll for new orders (replaces SSE to prevent thread exhaustion) ──
+    let _dashLastCount = parseInt(document.getElementById('dashboard-js').dataset.baselineOrders || '0', 10);
+    function dashPoll() {
+        fetch("{% url 'restaurant_admin:order_list' restaurant_slug=restaurant.slug %}?poll=1", {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+            if (!data) return;
+            if (data.total_orders > _dashLastCount) {
+                _dashLastCount = data.total_orders;
+                if (localStorage.getItem('notifSoundEnabled') === '1') playBell().catch(()=>{});
+                showInfoToast('New order received!');
+            }
+        })
+        .catch(() => {});
+    }
+    const _dashTimer = setInterval(dashPoll, 30000);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) clearInterval(_dashTimer); });
+
+});
+</script>
+{% endblock %}
+        height: 36px;
+    }
+    
+    .avatar-sm {
+        width: 32px;
+        height: 32px;
+        font-size: 0.875rem;
+    }
+    
+    .avatar-title {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        color: var(--bs-body-color);
+    }
+    
+    .bg-primary-soft {
+        background-color: rgba(94, 114, 228, 0.1) !important;
+        color: var(--primary) !important;
+    }
+    
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        transition: all 0.3s ease;
+    }
+    
+    .card:hover {
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+    }
+    
+    .card-header {
+        background-color: #fff;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        padding: 1rem 1.5rem;
+    }
+    
+    .card-title {
+        font-weight: 600;
+        margin-bottom: 0;
+    }
+    
+    .table {
+        margin-bottom: 0;
+    }
+    
+    .table th {
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+        padding: 1rem 1.5rem;
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .table td {
+        padding: 1rem 1.5rem;
+        vertical-align: middle;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .badge {
+        font-weight: 500;
+        padding: 0.35em 0.65em;
+    }
+</style>

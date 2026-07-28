@@ -1,0 +1,62 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">{{ title }}</h3>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    {% for field in form %}
+                        <div class="mb-3">
+                            <label for="{{ field.id_for_label }}" class="form-label">
+                                {{ field.label }}
+                                {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            {{ field }}
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                            {% for error in field.errors %}
+                                <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        {% if category %}
+                            <a href="{% url 'restaurant_admin:category_detail' restaurant_slug=rslug pk=category.pk %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Back to Category
+                            </a>
+                        {% else %}
+                            <a href="{% url 'restaurant_admin:subcategory_list' restaurant_slug=rslug %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Back to List
+                            </a>
+                        {% endif %}
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Save
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // Add Bootstrap classes to form elements
+        $('input:not([type="checkbox"]), select, textarea').addClass('form-control');
+        $('input[type="checkbox"]').addClass('form-check-input');
+        $('input[type="checkbox"]').parent().addClass('form-check form-switch');
+        $('input[type="checkbox"]').next('label').addClass('form-check-label');
+    });
+</script>
+{% endblock %}

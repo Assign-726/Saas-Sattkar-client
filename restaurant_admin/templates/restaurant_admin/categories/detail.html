@@ -1,0 +1,102 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title">{{ category.name }}</h3>
+                <div>
+                    <a href="{% url 'restaurant_admin:category_edit' restaurant_slug=rslug pk=category.pk %}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-pencil"></i> Edit Category
+                    </a>
+                    <a href="{% url 'restaurant_admin:subcategory_add' restaurant_slug=rslug category_id=category.pk %}" class="btn btn-success btn-sm">
+                        <i class="bi bi-plus-circle"></i> Add Subcategory
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if category.description %}
+                    <p class="card-text">{{ category.description }}</p>
+                {% endif %}
+                
+                {% if category.image %}
+                    <div class="mb-3">
+                        <img src="{{ category.image.url }}" alt="{{ category.name }}" class="img-fluid" style="max-height: 200px;">
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">Subcategories</h4>
+            </div>
+            <div class="card-body">
+                {% if subcategories %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Menu Items</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for subcategory in subcategories %}
+                                    <tr>
+                                        <td>{{ subcategory.name }}</td>
+                                        <td>{{ subcategory.menu_items.count }}</td>
+                                        <td>
+                                            <a href="{% url 'restaurant_admin:subcategory_edit' restaurant_slug=rslug pk=subcategory.pk %}" class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-pencil"></i> Edit
+                                            </a>
+                                            <a href="{% url 'restaurant_admin:subcategory_delete' restaurant_slug=rslug pk=subcategory.pk %}" class="btn btn-sm btn-outline-danger">
+                                                <i class="bi bi-trash"></i> Delete
+                                            </a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info">
+                        No subcategories found for this category. 
+                        <a href="{% url 'restaurant_admin:subcategory_add' restaurant_slug=rslug category_id=category.pk %}" class="alert-link">Add a subcategory</a>.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-3">
+    <a href="{% url 'restaurant_admin:category_list' restaurant_slug=rslug %}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Back to Categories
+    </a>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // Initialize tooltips
+        $('[data-bs-toggle="tooltip"]').tooltip();
+        
+        // Initialize DataTable if needed
+        if ($.fn.DataTable) {
+            $('.table').DataTable({
+                responsive: true,
+                pageLength: 10,
+                language: {
+                    search: "_INPUT_",
+                    searchPlaceholder: "Search subcategories..."
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

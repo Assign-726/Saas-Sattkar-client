@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Orders</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+  <style>
+    body { background:#f6f7f9; }
+    .card-shadow { box-shadow: 0 6px 20px rgba(0,0,0,.08); border:0; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-light bg-white border-bottom">
+    <div class="container">
+      <a class="navbar-brand" href="{% if restaurant %}/r/{{ restaurant.slug }}{% else %}/{% endif %}"><i class="bi bi-egg-fried me-2"></i>Delicious Bites</a>
+      <div>
+        <a class="btn btn-outline-secondary me-2" href="{% if restaurant %}/r/{{ restaurant.slug }}/orders/{% else %}/orders/{% endif %}"><i class="bi bi-clock-history me-1"></i>My Orders</a>
+        <a class="btn btn-primary" href="{% if restaurant %}/r/{{ restaurant.slug }}/cart/{% else %}/cart/{% endif %}"><i class="bi bi-cart3"></i></a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container my-4">
+    <h3 class="mb-3">Your Orders</h3>
+    <div id="orders-container" class="card card-shadow">
+      <div class="card-body" id="orders-body">
+        <div class="text-muted">Loading orders...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function fetchOrders(){
+      try {
+        const res = await fetch('/api/orders/{% if restaurant %}?restaurant_slug={{ restaurant.slug }}{% endif %}');
+        if(!res.ok){
+          const text = await res.text();
+          document.getElementById('orders-body').innerHTML = `<div class="text-danger">Failed to load orders: ${res.status} ${text}</div>`;
+          return;
+        }
+        const raw = await res.json();
+        // Support both array and paginated DRF response shapes
+        const data = Array.isArray(raw) ? raw : (Array.isArray(raw.results) ? raw.results : []);
+
+        if(!data || data.length===0){
+          document.getElementById('orders-body').innerHTML = '<div class="text-muted py-4">No orders yet.</div>';
+          return;
+        }
+        document.getElementById('orders-body').innerHTML = data.map(o => `
+          <div class="d-flex align-items-center py-3 border-bottom">
+            <div class="flex-grow-1">
+              <div class="fw-semibold">Order #${o.branch_order_number || o.id} · ${(o.items||[]).length} items · ₹${(+o.total_amount||0).toFixed(2)}</div>
+              <div class="text-muted small">Table ${o.table_number} · ${o.order_time ? new Date(o.order_time).toLocaleString() : ''}</div>
+            </div>
+            <div>
+              <a href="/orders/${o.id}/" class="btn btn-outline-secondary me-2">View</a>
+              <button class="btn btn-warning" onclick="reorder(${o.id})">Reorder</button>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        document.getElementById('orders-body').innerHTML = `<div class="text-danger">Error: ${e?.message||e}</div>`;
+      }
+    }
+
+    async function reorder(orderId){
+      try {
+        const res = await fetch(`/api/orders/${orderId}/`);
+        if(!res.ok){ alert('Failed to fetch order'); return; }
+        const o = await res.json();
+        const cart = (o.items||[]).map(it => ({ id: it.menu_item, name: it.menu_item_name, price: parseFloat(it.unit_price||0), quantity: it.quantity, image: 'https://via.placeholder.com/64', availability: true }));
+        const cartKey = 'restaurant_cart{% if restaurant %}_{{ restaurant.slug }}{% endif %}';
+        localStorage.setItem(cartKey, JSON.stringify(cart));
+        window.location.href = '{% if restaurant %}/r/{{ restaurant.slug }}{% else %}/{% endif %}cart/';
+      } catch(e){
+        alert('Error: '+(e?.message||e));
+      }
+    }
+
+    fetchOrders();
+  </script>
+</body>
+</html>

@@ -1,0 +1,74 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block title %}{{ title|default:'Coupon' }} - Restaurant Admin{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 720px;">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">{{ title|default:'Coupon' }}</h3>
+    <a href="{% url 'restaurant_admin:coupon_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i> Back to Coupons
+    </a>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Code</label>
+            {{ form.code }}
+            {% if form.code.errors %}<div class="text-danger small">{{ form.code.errors|striptags }}</div>{% endif %}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Discount Type</label>
+            {{ form.discount_type }}
+            {% if form.discount_type.errors %}<div class="text-danger small">{{ form.discount_type.errors|striptags }}</div>{% endif %}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Value</label>
+            {{ form.value }}
+            <div class="form-text">If Percent, 0-100. If Fixed, currency amount.</div>
+            {% if form.value.errors %}<div class="text-danger small">{{ form.value.errors|striptags }}</div>{% endif %}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Min Spend</label>
+            {{ form.min_spend }}
+          </div>
+          <div class="col-12">
+            <label class="form-label">Description</label>
+            {{ form.description }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Start At</label>
+            {{ form.start_at }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">End At</label>
+            {{ form.end_at }}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Max Uses</label>
+            {{ form.max_uses }}
+            <div class="form-text">Leave blank for unlimited.</div>
+          </div>
+          <div class="col-md-6 d-flex align-items-center">
+            <div class="form-check mt-3">
+              {{ form.active }}
+              <label class="form-check-label">Active</label>
+            </div>
+          </div>
+        </div>
+        <div class="mt-4 d-flex gap-2">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-save me-1"></i> Save Coupon
+          </button>
+          <a href="{% url 'restaurant_admin:coupon_list' restaurant_slug=restaurant.slug %}" class="btn btn-light">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

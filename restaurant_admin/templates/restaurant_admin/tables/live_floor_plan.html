@@ -1,0 +1,358 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block title %}Live Floor Plan - Admin Panel{% endblock %}
+
+{% block extra_css %}
+<style>
+    .floor-plan-bar {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 14px 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        margin-bottom: 24px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+    }
+
+    .btn-action-red {
+        background-color: #B91C1C;
+        color: #ffffff !important;
+        font-weight: 600;
+        font-size: 13px;
+        border-radius: 20px;
+        padding: 8px 18px;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s;
+        text-decoration: none;
+    }
+    .btn-action-red:hover {
+        background-color: #991B1B;
+        color: #ffffff !important;
+        transform: translateY(-1px);
+    }
+
+    .btn-action-gray {
+        background-color: #E5E7EB;
+        color: #374151 !important;
+        font-weight: 600;
+        font-size: 13px;
+        border-radius: 20px;
+        padding: 8px 18px;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s;
+        text-decoration: none;
+    }
+    .btn-action-gray:hover {
+        background-color: #D1D5DB;
+        color: #111827 !important;
+    }
+
+    .legend-container {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 16px;
+        font-size: 13px;
+        font-weight: 500;
+        color: #4B5563;
+    }
+
+    .legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .legend-badge {
+        width: 14px;
+        height: 14px;
+        border-radius: 4px;
+        display: inline-block;
+    }
+    .legend-badge.circle {
+        border-radius: 50%;
+        background-color: #CBD5E1;
+    }
+    .legend-badge.running { background-color: #B8E2FB; border: 1px solid #93C5FD; }
+    .legend-badge.printed { background-color: #C6F8BB; border: 1px solid #86EFAC; }
+    .legend-badge.paid { background-color: #FCECD3; border: 1px solid #FDBA74; }
+    .legend-badge.kot { background-color: #FEF08A; border: 1px solid #FDE047; }
+
+    .zone-section {
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 24px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    }
+
+    .zone-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        border-bottom: 1px solid #F3F4F6;
+        padding-bottom: 10px;
+    }
+
+    .zone-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #1F2937;
+        margin: 0;
+    }
+
+    .tables-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(125px, 1fr));
+        gap: 16px;
+    }
+
+    .table-card {
+        aspect-ratio: 1.1 / 1;
+        border-radius: 16px;
+        padding: 12px 10px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        transition: all 0.2s ease-in-out;
+        cursor: pointer;
+        user-select: none;
+    }
+    .table-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+    }
+
+    /* Dynamic Status colors directly aligned with Reference Image */
+    .table-card.BLANK {
+        background-color: #FAFAFA;
+        border: 2px dashed #E5E7EB;
+        color: #374151;
+    }
+
+    .table-card.RUNNING {
+        background-color: #B8E2FB;
+        border: 1px solid #93C5FD;
+        color: #1E3A8A;
+    }
+
+    .table-card.PRINTED {
+        background-color: #C6F8BB;
+        border: 1px solid #86EFAC;
+        color: #14532D;
+    }
+
+    .table-card.PAID {
+        background-color: #FCECD3;
+        border: 1px solid #FDBA74;
+        color: #7C2D12;
+    }
+
+    .table-card.RUNNING_KOT {
+        background-color: #FEF08A;
+        border: 1px solid #FDE047;
+        color: #713F12;
+    }
+
+    .table-name {
+        font-size: 15px;
+        font-weight: 700;
+        margin-bottom: 2px;
+        text-align: center;
+    }
+
+    .table-capacity {
+        font-size: 11px;
+        font-weight: 500;
+        opacity: 0.75;
+    }
+
+    .table-actions-pill {
+        position: absolute;
+        bottom: 8px;
+        background: #ffffff;
+        border-radius: 20px;
+        padding: 3px 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+    }
+
+    .table-action-btn {
+        color: #4B5563;
+        font-size: 12px;
+        border: none;
+        background: transparent;
+        padding: 0;
+        cursor: pointer;
+        transition: color 0.15s;
+    }
+    .table-action-btn:hover {
+        color: #111827;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <!-- Top Action & Legend Bar -->
+    <div class="floor-plan-bar">
+        <div class="legend-container">
+            <div class="legend-item">
+                <span class="legend-badge circle"></span> Blank Table
+            </div>
+            <div class="legend-item">
+                <span class="legend-badge running"></span> Running Table
+            </div>
+            <div class="legend-item">
+                <span class="legend-badge printed"></span> Printed Table
+            </div>
+            <div class="legend-item">
+                <span class="legend-badge paid"></span> Paid Table
+            </div>
+            <div class="legend-item">
+                <span class="legend-badge kot"></span> Running KOT Table
+            </div>
+        </div>
+    </div>
+
+    <!-- Zones Container -->
+    <div id="floor-plan-container">
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('floor-plan-container');
+    const restaurantSlug = '{{ restaurant_slug }}';
+
+    const statusClasses = {
+        'BLANK': 'BLANK',
+        'RUNNING_KOT': 'RUNNING_KOT',
+        'RUNNING': 'RUNNING',
+        'PRINTED': 'PRINTED',
+        'PAID': 'PAID'
+    };
+
+    function fetchFloorPlanData() {
+        fetch("{% url 'restaurant_admin:floor_plan_api' restaurant_slug=restaurant_slug %}")
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    container.innerHTML = `<div class="zone-section text-center text-danger py-4">${data.error}</div>`;
+                    return;
+                }
+                renderFloorPlan(data);
+            })
+            .catch(err => {
+                container.innerHTML = `<div class="zone-section text-center text-danger py-4">Failed to load floor plan data.</div>`;
+                console.error(err);
+            });
+    }
+
+    function renderFloorPlan(data) {
+        if (!data.zones || data.zones.length === 0) {
+            container.innerHTML = `
+                <div class="zone-section text-center py-5">
+                    <i class="fas fa-layer-group fs-1 text-muted mb-3"></i>
+                    <h5 class="text-muted">No zones or tables configured yet.</h5>
+                    <p class="text-secondary text-sm mb-0">Go to the Tables page to configure your zones and tables.</p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+        data.zones.forEach(zone => {
+            html += `
+                <div class="zone-section">
+                    <div class="zone-header">
+                        <h2 class="zone-title">${zone.name}</h2>
+                    </div>
+                    <div class="tables-grid">
+            `;
+            
+            zone.tables.forEach(table => {
+                const statusClass = statusClasses[table.status] || 'BLANK';
+                const hasOrder = !!table.active_order;
+                const printUrl = hasOrder ? `/dashboard/${restaurantSlug}/orders/${table.active_order.id}/kot/` : '#';
+                const viewUrl = hasOrder ? `/dashboard/${restaurantSlug}/orders/${table.active_order.id}/` : '#';
+
+                let orderBadge = '';
+                if (hasOrder) {
+                    orderBadge = `<div style="font-size:10px; font-weight:700; background:rgba(0,0,0,0.1); padding:2px 6px; border-radius:10px; margin-top:2px; white-space:nowrap;">${table.active_order.order_number} | &#8377;${parseFloat(table.active_order.total_amount).toFixed(2)}</div>`;
+                }
+
+                html += `
+                    <div id="table-${table.id}" class="table-card ${statusClass}" title="${table.name} (Capacity: ${table.capacity})${hasOrder ? ' - Order: ' + table.active_order.order_number : ''}">
+                        <div class="table-name">${table.name}</div>
+                        <div class="table-capacity">Cap: ${table.capacity}</div>
+                        ${orderBadge}
+                        <div class="table-actions-pill">
+                            ${hasOrder ? `
+                                <a href="${printUrl}" target="_blank" class="table-action-btn" title="Print KOT Recipe for ${table.active_order.order_number}">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                                <a href="${viewUrl}" class="table-action-btn" title="View Order Details">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            ` : `
+                                <button class="table-action-btn" title="No active order on this table" onclick="alert('No active order on this table.')">
+                                    <i class="fas fa-print" style="opacity:0.35;"></i>
+                                </button>
+                                <button class="table-action-btn" title="No active order on this table" onclick="alert('No active order on this table.')">
+                                    <i class="fas fa-eye" style="opacity:0.35;"></i>
+                                </button>
+                            `}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += `</div></div>`;
+        });
+        
+        container.innerHTML = html;
+    }
+
+    // Initial load fetch
+    fetchFloorPlanData();
+
+    // Real-time EventSource SSE sync
+    if (restaurantSlug && restaurantSlug !== 'default') {
+        const evtSource = new EventSource(`/api/sse/stream/${restaurantSlug}/`);
+        
+        evtSource.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'table_status_update' || data.type === 'new_order') {
+                    fetchFloorPlanData();
+                }
+            } catch (e) {
+                console.error("Error processing SSE status update:", e);
+            }
+        };
+    }
+});
+</script>
+{% endblock %}

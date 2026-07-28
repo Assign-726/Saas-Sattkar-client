@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Detail</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+  <style>
+    body { background:#f6f7f9; }
+    .card-shadow { box-shadow: 0 8px 28px rgba(0,0,0,.08); border:0; border-radius: 14px; }
+    .status-badge { font-size: .85rem; }
+    .chip { display:inline-flex; align-items:center; gap:6px; padding:.25rem .6rem; border-radius:999px; background:#f2f4f7; color:#475467; font-size:.8rem; }
+    .line { height:1px; background: #eef0f3; }
+    .item-line { display:flex; justify-content:space-between; align-items:center; padding:.65rem 0; border-bottom:1px dashed #edf0f3; }
+    .qty { display:inline-flex; width:26px; height:26px; align-items:center; justify-content:center; border-radius:6px; background:#f1f5ff; color:#1d4ed8; font-weight:600; font-size:.9rem; }
+    .summary-card .row + .row { margin-top:.35rem; }
+    .summary-card .label { color:#667085; }
+    .summary-card .value { font-weight:600; }
+    .totals { font-size:1.1rem; }
+    .steps{display:flex;gap:16px;align-items:center}
+    .step{display:flex;align-items:center;gap:8px;color:#94a3b8}
+    .step .dot{width:10px;height:10px;border-radius:50%;background:#cbd5e1}
+    .step.active{color:#1e293b}
+    .step.active .dot{background:#3b82f6}
+    .step.done{color:#16a34a}
+    .step.done .dot{background:#16a34a}
+    .step .label{font-size:.85rem;font-weight:600}
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-light bg-white border-bottom">
+    <div class="container">
+      <a class="navbar-brand" href="/"><i class="bi bi-egg-fried me-2"></i>Delicious Bites</a>
+      <div>
+        <a class="btn btn-outline-secondary me-2" href="/orders/"><i class="bi bi-clock-history me-1"></i>My Orders</a>
+        <a class="btn btn-primary" href="/cart/"><i class="bi bi-cart3"></i></a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container my-4">
+    <div id="content" class="row g-4">
+      <!-- Main: Order and items -->
+      <div class="col-lg-8">
+        <div class="card card-shadow h-100">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+              <div>
+                <h4 class="mb-1">Order <span id="order-number">#</span></h4>
+                <div class="text-muted small" id="order-meta"></div>
+                <div class="mt-2 d-flex gap-2 flex-wrap">
+                  <span class="chip"><i class="bi bi-clock-history"></i> Live status</span>
+                  <span class="chip"><i class="bi bi-receipt"></i> Digital receipt</span>
+                  <span class="chip d-none" id="payment-method-chip"></span>
+                  <span class="chip d-none" id="payment-status-chip"></span>
+                </div>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <div id="status" class="status-badge badge bg-secondary">Pending</div>
+                {% comment %} <button class="btn btn-outline-secondary btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Print</button> {% endcomment %}
+              </div>
+            </div>
+            <div class="steps my-3" id="steps">
+              <div class="step" data-key="placed"><span class="dot"></span><span class="label"><i class="bi bi-bag"></i> Placed</span></div>
+              <div class="step" data-key="preparing"><span class="dot"></span><span class="label"><i class="bi bi-egg-fried"></i> Preparing</span></div>
+              <div class="step" data-key="ready"><span class="dot"></span><span class="label"><i class="bi bi-check2-circle"></i> Ready</span></div>
+              <div class="step" data-key="served"><span class="dot"></span><span class="label"><i class="bi bi-emoji-smile"></i> Served</span></div>
+            </div>
+            <div id="prep-wrap" class="mt-3" style="display:none">
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                  <div class="small text-muted">Estimated ready by</div>
+                  <div class="fw-semibold" id="eta"></div>
+                </div>
+                <div style="min-width:280px; flex:1">
+                  <div class="progress" style="height:8px">
+                    <div id="prep-progress" class="progress-bar" style="width:0%"></div>
+                  </div>
+                  <div class="small text-muted d-flex justify-content-between mt-1">
+                    <span id="prep-start"></span>
+                    <span id="remaining"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="line my-3"></div>
+            <div id="items"></div>
+          </div>
+        </div>
+      </div>
+      <!-- Sidebar: Summary -->
+      <div class="col-lg-4">
+        <div class="card card-shadow summary-card">
+          <div class="card-body">
+            <h6 class="mb-3">Bill Summary</h6>
+            <div class="row"><div class="col-7 label">Subtotal</div><div class="col-5 text-end value" id="subtotal">₹0.00</div></div>
+            <div class="row"><div class="col-7 label">CGST (<span id="cgst-p">{{ cgst_percentage|default:0 }}</span>%)</div><div class="col-5 text-end value" id="cgst">₹0.00</div></div>
+            <div class="row"><div class="col-7 label">SGST (<span id="sgst-p">{{ sgst_percentage|default:0 }}</span>%)</div><div class="col-5 text-end value" id="sgst">₹0.00</div></div>
+            <div class="row"><div class="col-7 label">Service Charge (<span id="svc-p">{{ service_percentage|default:0 }}</span>%)</div><div class="col-5 text-end value" id="svc">₹0.00</div></div>
+            <div id="discount-row" class="row d-none"><div class="col-7 label text-danger">Discount</div><div class="col-5 text-end value text-danger" id="discount">-₹0.00</div></div>
+            <div class="line my-3"></div>
+            <div class="d-flex justify-content-between align-items-center totals">
+              <div class="fw-semibold">Total</div>
+              <div class="fw-bold" id="total">₹0.00</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function getId(){ const m = location.pathname.match(/\/orders\/(\d+)\/?/); return m?parseInt(m[1],10):null; }
+    function money(n){ return `₹${(parseFloat(n)||0).toFixed(2)}`; }
+    function statusClass(code){ if(code==='S') return 'bg-success'; if(code==='C') return 'bg-danger'; return 'bg-secondary'; }
+    function setSteps(status, remainingSeconds, hasTimer){
+      const map = {placed:0, preparing:1, ready:2, served:3};
+      let idx = 0;
+      if (status==='P'){
+        if (hasTimer) {
+          if (remainingSeconds != null && remainingSeconds > 0) idx = 1; // preparing
+          else if (remainingSeconds != null && remainingSeconds <= 0) idx = 2; // ready
+          else idx = 1; // timer set but unknown -> preparing
+        } else {
+          idx = 0; // no timer -> placed
+        }
+      }
+      if (status==='S'){ idx = 4; } // mark all steps as done when served
+      if (status==='C'){ idx = 0; }
+      const steps = document.querySelectorAll('#steps .step');
+      steps.forEach((el,i)=>{
+        el.classList.remove('active','done');
+        if (i<idx) el.classList.add('done');
+        if (i===idx && idx < steps.length) el.classList.add('active');
+      });
+    }
+
+    async function load(){
+      const id = getId(); if(!id){ document.getElementById('content').innerHTML = '<div class="p-4">Invalid order id</div>'; return; }
+      const res = await fetch(`/api/orders/${id}/`);
+      if(!res.ok){ document.getElementById('content').innerHTML = '<div class="p-4 text-danger">Failed to load order.</div>'; return; }
+      const o = await res.json();
+      document.getElementById('order-number').textContent = `#${o.branch_order_number || o.id}`;
+      document.getElementById('order-meta').textContent = `Table ${o.table_number} · ${new Date(o.order_time).toLocaleString()}`;
+      const st = document.getElementById('status');
+      const hasTimer = Boolean(o.ready_at || o.prep_minutes);
+      if (o.status === 'P' && hasTimer && o.remaining_seconds != null && o.remaining_seconds <= 0) {
+        st.textContent = 'Ready';
+        st.className = 'status-badge badge bg-info';
+      } else {
+        st.textContent = o.status_display || 'Pending';
+        st.className = 'status-badge badge ' + statusClass(o.status);
+      }
+
+      // Populate Payment Chips
+      const methodChip = document.getElementById('payment-method-chip');
+      const statusChip = document.getElementById('payment-status-chip');
+      if (o.payment_method_display) {
+        methodChip.classList.remove('d-none');
+        methodChip.innerHTML = `<i class="bi bi-wallet2"></i> ${o.payment_method_display}`;
+      }
+      if (o.payment_status_display) {
+        statusChip.classList.remove('d-none');
+        let statusColorClass = 'text-secondary';
+        let statusIconClass = 'bi-patch-question';
+        if (o.payment_status === 'P') {
+          statusColorClass = 'text-success fw-bold';
+          statusIconClass = 'bi-check-circle-fill';
+        } else if (o.payment_status === 'U') {
+          statusColorClass = 'text-warning fw-bold';
+          statusIconClass = 'bi-exclamation-circle-fill';
+        } else if (o.payment_status === 'F') {
+          statusColorClass = 'text-danger fw-bold';
+          statusIconClass = 'bi-x-circle-fill';
+        } else if (o.payment_status === 'C') {
+          statusColorClass = 'text-success';
+          statusIconClass = 'bi-cash';
+        }
+        statusChip.className = `chip ${statusColorClass}`;
+        statusChip.innerHTML = `<i class="bi ${statusIconClass}"></i> ${o.payment_status_display}`;
+      }
+      const items = (o.items||[]).map(it => `
+        <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+          <div>${it.quantity} × ${it.menu_item_name}</div>
+          <div>${money(it.subtotal)}</div>
+        </div>
+      `).join('');
+      document.getElementById('items').innerHTML = items || '<div class="text-muted">No items</div>';
+      const subtotal = (o.items||[]).reduce((s,i)=> s + parseFloat(i.subtotal||0), 0);
+      const cgstP = parseFloat(document.getElementById('cgst-p').textContent)||0;
+      const sgstP = parseFloat(document.getElementById('sgst-p').textContent)||0;
+      const svcP  = parseFloat(document.getElementById('svc-p').textContent)||0;
+      const cgst  = subtotal * (cgstP/100);
+      const sgst  = subtotal * (sgstP/100);
+      const svc   = subtotal * (svcP/100);
+      const discount = parseFloat(o.discount_amount || 0) || 0;
+      document.getElementById('subtotal').textContent = money(subtotal);
+      document.getElementById('cgst').textContent = money(cgst);
+      document.getElementById('sgst').textContent = money(sgst);
+      document.getElementById('svc').textContent  = money(svc);
+      if (discount>0){
+        const row = document.getElementById('discount-row');
+        row.classList.remove('d-none');
+        document.getElementById('discount').textContent = '-' + money(discount);
+      }
+      document.getElementById('total').textContent = money(Math.max(0, subtotal + cgst + sgst + svc - discount));
+
+      // Prep/ETA UI only for Pending orders
+      if (o.status === 'P' && (o.ready_at || o.prep_minutes)) {
+        const wrap = document.getElementById('prep-wrap');
+        wrap.style.display = '';
+        const start = o.prep_start ? new Date(o.prep_start) : (o.order_time ? new Date(o.order_time) : new Date());
+        const end = o.ready_at ? new Date(o.ready_at) : new Date(start.getTime() + (o.prep_minutes||0)*60000);
+        document.getElementById('eta').textContent = end.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        document.getElementById('prep-start').textContent = 'Start: ' + start.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        const progressEl = document.getElementById('prep-progress');
+        const remainingEl = document.getElementById('remaining');
+        const total = Math.max(1, end - start);
+        function tick(){
+          const now = new Date();
+          const remain = Math.max(0, end - now);
+          const m = Math.floor(remain/60000);
+          const s = Math.floor((remain%60000)/1000).toString().padStart(2,'0');
+          remainingEl.textContent = remain>0 ? `Remaining: ${m}:${s}` : 'Ready';
+          const pct = Math.min(100, Math.max(0, Math.round(((now - start)/total)*100)));
+          progressEl.style.width = pct + '%';
+          if (remain <= 0) {
+            // auto-hide once finished
+            wrap.style.display = 'none';
+            // Show Ready state in badge for Pending orders
+            st.textContent = 'Ready';
+            st.className = 'status-badge badge bg-info';
+            clearInterval(timer);
+          }
+        }
+        tick();
+        var timer = setInterval(tick, 1000);
+      } else {
+        const wrap = document.getElementById('prep-wrap');
+        if (wrap) wrap.style.display = 'none';
+      }
+
+      // Steps setup
+      setSteps(o.status, o.remaining_seconds, hasTimer);
+    }
+
+    load();
+  </script>
+</body>
+</html>

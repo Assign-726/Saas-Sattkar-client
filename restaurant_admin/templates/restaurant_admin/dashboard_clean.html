@@ -1,0 +1,329 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block title %}Dashboard - Restaurant Admin{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Stats Cards */
+    .stat-card {
+        display: flex;
+        align-items: center;
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        color: white;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        border: none;
+        height: 100%;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+    
+    .stat-card i {
+        font-size: 2.5rem;
+        margin-right: 1rem;
+        opacity: 0.8;
+        transition: all 0.3s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+    }
+    
+    .stat-card h3 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+        line-height: 1.2;
+    }
+    
+    .stat-card p {
+        opacity: 0.9;
+        margin-bottom: 0;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 500;
+    }
+    
+    /* Avatar */
+    .avatar {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+    }
+    
+    .avatar-sm {
+        width: 32px;
+        height: 32px;
+        font-size: 0.875rem;
+    }
+    
+    .avatar-title {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        color: var(--bs-body-color);
+    }
+    
+    /* Utility Classes */
+    .bg-primary-soft {
+        background-color: rgba(94, 114, 228, 0.1) !important;
+        color: var(--primary) !important;
+    }
+    
+    /* Cards */
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        transition: all 0.3s ease;
+    }
+    
+    .card:hover {
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+    }
+    
+    .card-header {
+        background-color: #fff;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        padding: 1rem 1.5rem;
+    }
+    
+    /* Tables */
+    .table th {
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+        padding: 1rem 1.5rem;
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .table td {
+        padding: 1rem 1.5rem;
+        vertical-align: middle;
+        border-bottom: 1px solid #e9ecef;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">Dashboard</h2>
+        <div class="d-flex">
+            <span class="text-muted">{{ today|date:"l, F j, Y" }}</span>
+        </div>
+    </div>
+    
+    <!-- Stats Cards -->
+    <div class="row g-4 mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card bg-primary">
+                <i class="bi bi-cart3"></i>
+                <div>
+                    <h3>{{ total_orders }}</h3>
+                    <p>Total Orders</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card bg-success">
+                <i class="bi bi-bag-check"></i>
+                <div>
+                    <h3>{{ today_orders }}</h3>
+                    <p>Today's Orders</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card bg-info">
+                <i class="bi bi-egg-fried"></i>
+                <div>
+                    <h3>{{ total_menu_items }}</h3>
+                    <p>Menu Items</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card bg-warning">
+                <i class="bi bi-currency-rupee"></i>
+                <div>
+                    <h3>₹{{ total_revenue|floatformat:2 }}</h3>
+                    <p>Total Revenue</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Recent Orders -->
+        <div class="col-xl-8">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Recent Orders</h5>
+                    <a href="{% url 'restaurant_admin:order_list' %}" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th class="ps-4">ORDER</th>
+                                    <th>CUSTOMER</th>
+                                    <th>TABLE</th>
+                                    <th>AMOUNT</th>
+                                    <th>STATUS</th>
+                                    <th class="text-end pe-4">ACTIONS</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for order in recent_orders %}
+                                <tr>
+                                    <td class="ps-4 fw-bold">#{{ order.branch_order_number|default:order.id }}</td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="avatar avatar-sm me-2">
+                                                <span class="avatar-title rounded-circle bg-light text-dark">
+                                                    {{ order.customer_name|slice:":1"|default:"?"|upper }}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold">{{ order.customer_name|default:"Walk-in Customer" }}</div>
+                                                <small class="text-muted">{{ order.order_time|timesince }} ago</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">
+                                            <i class="bi bi-table me-1"></i> {{ order.table_number|default:"N/A" }}
+                                        </span>
+                                    </td>
+                                    <td class="fw-bold">₹{{ order.total_amount|floatformat:2 }}</td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if order.status == 'completed' or order.status == 'C' %}bg-success
+                                            {% elif order.status == 'cancelled' or order.status == 'X' %}bg-danger
+                                            {% else %}bg-warning{% endif %}">
+                                            {% if order.get_status_display %}
+                                                {{ order.get_status_display }}
+                                            {% else %}
+                                                {{ order.status|title }}
+                                            {% endif %}
+                                        </span>
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        <a href="{% url 'restaurant_admin:order_detail' pk=order.id %}" 
+                                           class="btn btn-sm btn-outline-primary"
+                                           data-bs-toggle="tooltip" 
+                                           title="View Details">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-4">
+                                        <div class="text-muted">No recent orders found.</div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar -->
+        <div class="col-xl-4">
+            <!-- Top Selling Items -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Top Selling Items</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for item in top_items %}
+                        <div class="list-group-item border-0 p-3">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center">
+                                    <div class="avatar avatar-sm bg-light text-primary rounded-circle me-3">
+                                        <i class="bi bi-trophy"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-0">
+                                            {% if item.menu_item__name %}
+                                                {{ item.menu_item__name }}
+                                            {% elif item.name %}
+                                                {{ item.name }}
+                                            {% else %}
+                                                Item {{ forloop.counter }}
+                                            {% endif %}
+                                        </h6>
+                                        <small class="text-muted">
+                                            {% if item.total_ordered %}
+                                                {{ item.total_ordered }}
+                                            {% elif item.quantity %}
+                                                {{ item.quantity }}
+                                            {% else %}
+                                                0
+                                            {% endif %} orders
+                                        </small>
+                                    </div>
+                                </div>
+                                <span class="badge bg-primary-soft rounded-pill">{{ forloop.counter }}</span>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="text-center py-4">
+                            <div class="text-muted">No items sold yet.</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'restaurant_admin:menu_add' %}" class="btn btn-primary">
+                            <i class="bi bi-plus-circle me-2"></i> Add New Menu Item
+                        </a>
+                        <a href="{% url 'restaurant_admin:order_list' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-list-ul me-2"></i> View All Orders
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Initialize tooltips
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize Bootstrap tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+        
+        console.log('Dashboard initialized');
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,120 @@
+{% extends 'restaurant_admin/base.html' %}
+{% block title %}Recipe: {{ menu_item.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h3 class="mb-1">Recipe Ingredients</h3>
+      <p class="text-muted mb-0">Manage raw ingredients consumed when <strong>{{ menu_item.name }}</strong> is ordered
+      </p>
+    </div>
+    <a href="{% url 'restaurant_admin:menu_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary">
+      <i class="fas fa-arrow-left me-1"></i> Back to Menu
+    </a>
+  </div>
+
+  <div class="row">
+    <!-- Ingredient List -->
+    <div class="col-lg-8 col-md-12">
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0"><i class="fas fa-receipt me-2 text-primary"></i>Ingredients Required</h5>
+          <span class="badge bg-primary">{{ ingredients|length }} items</span>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>Ingredient</th>
+                  <th>SKU</th>
+                  <th class="text-end">Qty Needed</th>
+                  <th>Unit</th>
+                  <th class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for ing in ingredients %}
+                <tr>
+                  <td class="fw-semibold">{{ ing.inventory_item.name }}</td>
+                  <td>{{ ing.inventory_item.sku|default:"-" }}</td>
+                  <td class="text-end fw-bold text-dark">{{ ing.quantity_needed }}</td>
+                  <td><span class="badge bg-light text-dark border">{{ ing.inventory_item.unit|default:"-" }}</span>
+                  </td>
+                  <td class="text-end">
+                    <form method="post"
+                      action="{% url 'restaurant_admin:menu_recipe_delete' restaurant_slug=restaurant.slug pk=ing.id %}"
+                      onsubmit="return confirm('Remove {{ ing.inventory_item.name }} from this recipe?');"
+                      style="display: inline-block;">
+                      {% csrf_token %}
+                      <button class="btn btn-sm btn-outline-danger" title="Remove Ingredient">
+                        <i class="fas fa-trash"></i>
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="5" class="text-center py-4 text-muted">
+                    <i class="fas fa-info-circle me-1"></i> No ingredients mapped to this recipe yet.
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Ingredient Sidebar Form -->
+    <div class="col-lg-4 col-md-12">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title mb-0"><i class="fas fa-plus me-2 text-success"></i>Add Ingredient</h5>
+        </div>
+        <div class="card-body">
+          {% if all_inventory %}
+          <form method="post"
+            action="{% url 'restaurant_admin:menu_recipe' restaurant_slug=restaurant.slug pk=menu_item.id %}">
+            {% csrf_token %}
+            <div class="mb-3">
+              <label for="inventory_item" class="form-label">Select Inventory Item</label>
+              <select name="inventory_item" id="inventory_item" class="form-select form-control" required>
+                <option value="">-- Choose Item --</option>
+                {% for item in all_inventory %}
+                <option value="{{ item.id }}">{{ item.name }} {% if item.sku %}({{ item.sku }}){% endif %} - (Unit: {{
+                  item.unit|default:"-" }})</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="mb-3">
+              <label for="quantity_needed" class="form-label">Quantity Required</label>
+              <div class="input-group">
+                <input type="number" step="0.001" min="0.001" name="quantity_needed" id="quantity_needed"
+                  class="form-control" placeholder="0.00" required>
+              </div>
+              <div class="form-text">Deducted automatically per order unit.</div>
+            </div>
+            <button type="submit" class="btn btn-success w-100">
+              <i class="fas fa-save me-1"></i> Add to Recipe
+            </button>
+          </form>
+          {% else %}
+          <div class="text-center py-3 text-muted">
+            <p class="mb-2"><i class="fas fa-box-open fa-2x"></i></p>
+            <p class="small mb-0">No active inventory items found. Add items to your inventory first.</p>
+            <a href="{% url 'restaurant_admin:inventory_list' restaurant_slug=restaurant.slug %}"
+              class="btn btn-sm btn-primary mt-2">
+              Go to Inventory
+            </a>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

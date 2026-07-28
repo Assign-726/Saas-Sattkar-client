@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Confirmed</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+  <style>
+    body { background:#f6f7f9; }
+    .card-shadow { box-shadow: 0 6px 20px rgba(0,0,0,.08); border:0; }
+    .step { flex:1; text-align:center; font-size:.9rem; }
+    .step .bar { height:4px; background:#e9ecef; border-radius:2px; margin:8px 0; }
+    .step.active .bar { background:#ff8a3d; }
+  </style>
+</head>
+<body>
+  <div class="container py-5" style="max-width:680px;">
+    <div class="text-center mb-3">
+      <div class="display-6 text-warning"><i class="bi bi-egg-fried"></i></div>
+      <div class="h4 mt-2">Delicious Bites</div>
+    </div>
+    <div class="card card-shadow">
+      <div class="card-body p-4">
+        <div class="text-center">
+          <div class="text-success" style="font-size:2.5rem"><i class="bi bi-check-circle-fill"></i></div>
+          <h3 class="mt-2">Thank you for your order!</h3>
+          <p class="text-muted mb-3">Your order has been confirmed.</p>
+          <div class="p-3 bg-light rounded mb-3">
+            <div>Order Number</div>
+            <div class="h3 mb-0" id="order-number">#</div>
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center mt-3">
+          <div class="step" id="step-1"><div class="bar"></div><div>Order Placed</div></div>
+          <div class="step" id="step-2"><div class="bar"></div><div>In Preparation</div></div>
+          <div class="step" id="step-3"><div class="bar"></div><div>Out for Delivery</div></div>
+          <div class="step" id="step-4"><div class="bar"></div><div>Delivered</div></div>
+        </div>
+
+        <div class="d-flex gap-2 mt-4">
+          <a id="track-btn" class="btn btn-warning flex-fill">Track Order</a>
+          <a href="/" class="btn btn-outline-secondary flex-fill">Continue Browsing</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function getId(){ const m = location.pathname.match(/\/orders\/(\d+)\/confirm\/?/); return m?parseInt(m[1],10):null; }
+
+    function setProgress(code){
+      const activeTill = code==='S'?4 : code==='C'?1 : 2; // P->2, S->4, C->1 minimal
+      for(let i=1;i<=4;i++){
+        document.getElementById('step-'+i).classList.toggle('active', i<=activeTill);
+      }
+    }
+
+    async function poll(){
+      const id = getId(); if(!id) return;
+      const res = await fetch(`/api/orders/${id}/`);
+      if(!res.ok) return;
+      const o = await res.json();
+      document.getElementById('order-number').textContent = `#${o.branch_order_number || o.id}`;
+      setProgress(o.status);
+    }
+
+    const id = getId();
+    document.getElementById('track-btn').href = id ? `/orders/${id}/` : '/orders/';
+
+    poll();
+    setInterval(poll, 20000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,267 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block title %}QR Code Generator - Restaurant Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">QR Code Generator</h2>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item"><a href="{% url 'restaurant_admin:dashboard' restaurant_slug=rslug %}">Dashboard</a></li>
+                <li class="breadcrumb-item active" aria-current="page">QR Code Generator</li>
+            </ol>
+        </nav>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row">
+                        <!-- QR Code Preview -->
+                        <div class="col-md-6">
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">QR Code Preview</h5>
+                                </div>
+                                <div class="card-body text-center">
+                                    <div id="qrCodeContainer" class="mb-3">
+                                        <img id="qrCodeImage" 
+                                             src="{% url 'restaurant_admin:generate_qr_code' restaurant_slug=rslug %}" 
+                                             alt="QR Code" 
+                                             class="img-fluid"
+                                             style="max-width: 300px;">
+                                    </div>
+                                    <div class="btn-group" role="group">
+                                        <button id="downloadQrBtn" class="btn btn-primary">
+                                            <i class="bi bi-download me-1"></i> Download QR Code
+                                        </button>
+                                        <button id="copyLinkBtn" class="btn btn-outline-secondary">
+                                            <i class="bi bi-clipboard me-1"></i> Copy Link
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- QR Code Options -->
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">QR Code Options</h5>
+                                </div>
+                                <div class="card-body">
+                                    <form id="qrCodeForm">
+                                        <div class="mb-3">
+                                            <label for="qrType" class="form-label">QR Code Type</label>
+                                            <select class="form-select" id="qrType">
+                                                <option value="menu">Entire Menu</option>
+                                                <option value="category">Category</option>
+                                                <option value="item">Specific Menu Item</option>
+                                                <option value="table">Table Number</option>
+                                            </select>
+                                        </div>
+
+                                        <div id="categoryField" class="mb-3 d-none">
+                                            <label for="categorySelect" class="form-label">Select Category</label>
+                                            <select class="form-select" id="categorySelect">
+                                                {% for category in categories %}
+                                                <option value="{{ category.id }}">{{ category.name }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+
+                                        <div id="menuItemField" class="mb-3 d-none">
+                                            <label for="menuItemSelect" class="form-label">Select Menu Item</label>
+                                            <select class="form-select" id="menuItemSelect">
+                                                {% for item in menu_items %}
+                                                <option value="{{ item.id }}">{{ item.name }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+
+                                        <div id="tableNumberField" class="mb-3 d-none">
+                                            <label for="tableNumber" class="form-label">Table Number</label>
+                                            <input type="text" class="form-control" id="tableNumber" 
+                                                   placeholder="e.g., 1, 2, 3" required>
+                                            <div class="form-text">Enter table number to include in the QR code</div>
+                                        </div>
+
+                                        <div id="tableExtraOpts" class="mb-3 d-none">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="openCartDirect">
+                                                <label class="form-check-label" for="openCartDirect">
+                                                    Open Cart page directly
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label for="qrSize" class="form-label">QR Code Size</label>
+                                            <input type="range" class="form-range" id="qrSize" min="100" max="500" value="300">
+                                            <div class="text-muted text-center" id="sizeValue">300px</div>
+                                        </div>
+
+                                        <button type="submit" class="btn btn-primary w-100">
+                                            <i class="bi bi-qr-code-scan me-1"></i> Generate QR Code
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Instructions -->
+                    <div class="card mt-4">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">How to Use</h5>
+                        </div>
+                        <div class="card-body">
+                            <ol>
+                                <li>Select the type of QR code you want to generate from the dropdown menu</li>
+                                <li>Configure the options for your selected QR code type</li>
+                                <li>Click "Generate QR Code" to update the preview</li>
+                                <li>Download the QR code or copy the link as needed</li>
+                            </ol>
+                            <p class="mb-0">Tip: You can print the downloaded QR code and place it on tables or menus for customers to scan.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .qr-code-container {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 0 auto;
+        display: inline-block;
+    }
+    #qrCodeImage {
+        transition: all 0.3s ease;
+    }
+    .card {
+        height: 100%;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const qrType = document.getElementById('qrType');
+    const categoryField = document.getElementById('categoryField');
+    const menuItemField = document.getElementById('menuItemField');
+    const tableNumberField = document.getElementById('tableNumberField');
+    const qrCodeImage = document.getElementById('qrCodeImage');
+    const qrSize = document.getElementById('qrSize');
+    const sizeValue = document.getElementById('sizeValue');
+    const qrCodeForm = document.getElementById('qrCodeForm');
+    const downloadQrBtn = document.getElementById('downloadQrBtn');
+    const copyLinkBtn = document.getElementById('copyLinkBtn');
+
+    // Update form fields based on QR type
+    function updateFormFields() {
+        const qrType = document.getElementById('qrType').value;
+        
+        // Hide all fields first
+        document.getElementById('categoryField').classList.add('d-none');
+        document.getElementById('menuItemField').classList.add('d-none');
+        document.getElementById('tableNumberField').classList.add('d-none');
+        document.getElementById('tableExtraOpts').classList.add('d-none');
+        
+        // Show relevant fields based on selection
+        if (qrType === 'category') {
+            document.getElementById('categoryField').classList.remove('d-none');
+        } else if (qrType === 'item') {
+            document.getElementById('menuItemField').classList.remove('d-none');
+        } else if (qrType === 'table') {
+            document.getElementById('tableNumberField').classList.remove('d-none');
+            document.getElementById('tableExtraOpts').classList.remove('d-none');
+        }
+    }
+    
+    // Add event listener for QR type change
+    document.getElementById('qrType').addEventListener('change', updateFormFields);
+    
+    // Update QR code size display
+    qrSize.addEventListener('input', function() {
+        sizeValue.textContent = this.value + 'px';
+        qrCodeImage.style.width = this.value + 'px';
+    });
+
+    // Handle form submission
+    document.getElementById('qrCodeForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const qrType = document.getElementById('qrType').value;
+        
+        // Get the base URL for the QR code generation endpoint
+        const baseUrl = window.location.origin;
+        let url = baseUrl + '{% url "restaurant_admin:generate_qr_code" restaurant_slug=rslug %}';
+        
+        // Add parameters based on the selected type
+        const params = new URLSearchParams();
+        if (qrType === 'category') {
+            const categoryId = document.getElementById('categorySelect').value;
+            params.set('category', categoryId);
+        } else if (qrType === 'item') {
+            const itemId = document.getElementById('menuItemSelect').value;
+            params.set('item', itemId);
+        } else if (qrType === 'table') {
+            const tableNumber = document.getElementById('tableNumber').value.trim();
+            if (tableNumber) {
+                params.set('table', tableNumber);
+            }
+            const openCart = document.getElementById('openCartDirect').checked;
+            if (openCart) {
+                params.set('dest', 'cart');
+            }
+        }
+        
+        // Add timestamp to prevent caching
+        params.set('t', new Date().getTime());
+        
+        // Build the final URL
+        const finalUrl = `${url}?${params.toString()}`;
+        document.getElementById('qrCodeImage').src = finalUrl;
+    });
+    
+    // Handle download button click
+    downloadQrBtn.addEventListener('click', function() {
+        const url = new URL(qrCodeImage.src);
+        url.searchParams.delete('t');
+        url.searchParams.set('download', '1');
+        const link = document.createElement('a');
+        link.href = url.toString();
+        link.download = '';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    });
+
+    // Handle copy link button click
+    copyLinkBtn.addEventListener('click', function() {
+        const url = new URL(qrCodeImage.src);
+        url.searchParams.delete('t');
+        navigator.clipboard.writeText(url.toString()).then(() => {
+            const originalText = copyLinkBtn.innerHTML;
+            copyLinkBtn.innerHTML = '<i class="bi bi-check me-1"></i> Copied!';
+            setTimeout(() => {
+                copyLinkBtn.innerHTML = originalText;
+            }, 2000);
+        });
+    });
+
+    // Initialize form fields
+    updateFormFields();
+    qrType.addEventListener('change', updateFormFields);
+});
+</script>
+{% endblock %}

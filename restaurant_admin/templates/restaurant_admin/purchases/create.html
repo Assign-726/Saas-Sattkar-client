@@ -1,0 +1,917 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block title %}Goods Inward / Purchase Entry{% endblock %}
+
+{% block content %}
+<style>
+  .pos-container {
+    font-family: inherit;
+  }
+
+  .pos-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    background: #ffffff;
+    transition: all 0.2s ease-in-out;
+  }
+
+  .pos-card:hover {
+    border-color: #3b82f6;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.12);
+  }
+
+  .category-pill {
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-weight: 500;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    background-color: #f3f4f6;
+    color: #374151;
+    border: 1px solid #d1d5db;
+  }
+
+  .category-pill:hover {
+    background-color: #e5e7eb;
+    color: #111827;
+  }
+
+  .category-pill.active {
+    background-color: #2563eb !important;
+    color: #ffffff !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+  }
+
+  .cart-item-row {
+    border-bottom: 1px solid #f3f4f6;
+    padding: 10px 0;
+  }
+
+  .cart-item-row:last-child {
+    border-bottom: none;
+  }
+
+  .qty-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    line-height: 1;
+  }
+
+  .bill-summary-box {
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 16px;
+  }
+
+  .grand-total-banner {
+    background: linear-gradient(135deg, #1e293b, #0f172a);
+    color: #ffffff;
+    border-radius: 10px;
+    padding: 16px;
+  }
+
+  .item-card-cost {
+    font-weight: 700;
+    color: #059669;
+  }
+
+  .badge-stock {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    border-radius: 6px;
+  }
+</style>
+
+<div class="container-fluid px-0 pos-container">
+  <!-- Header Bar -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h3 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+        <i class="bi bi-box-arrow-in-down text-primary fs-3"></i> Goods Inward / Purchase Entry
+      </h3>
+      <p class="text-muted small mb-0">Record inward stock purchases from vendors and automatically sync inventory
+        levels</p>
+    </div>
+    <div>
+      <a href="{% url 'restaurant_admin:purchase_list' restaurant_slug=restaurant.slug %}"
+        class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+        <i class="bi bi-journal-text me-1"></i> Purchase History
+      </a>
+      <a href="{% url 'restaurant_admin:inventory_list' restaurant_slug=restaurant.slug %}"
+        class="btn btn-outline-primary btn-sm rounded-pill px-3 ms-1">
+        <i class="bi bi-boxes me-1"></i> Stock List
+      </a>
+    </div>
+  </div>
+
+  <form id="purchaseForm" onsubmit="handlePurchaseSubmit(event)">
+    {% csrf_token %}
+
+    <!-- Top Meta Card: Entry No & Purchase Date -->
+    <div class="card border-0 shadow-sm rounded-3 mb-3 overflow-hidden">
+      <div class="card-header bg-dark text-white py-3 px-4 d-flex justify-content-between align-items-center">
+        <span class="fw-bold text-uppercase small" style="letter-spacing: 0.5px;">Purchase Entry Metadata</span>
+        <span class="badge bg-primary text-white font-monospace">Auto Inventory Sync</span>
+      </div>
+      <div class="card-body p-4 bg-light">
+        <div class="row g-3">
+          <!-- Top Left: Internal Entry No. -->
+          <div class="col-md-6">
+            <label for="entryNumberInput" class="form-label fw-bold text-dark small mb-1">
+              Internal Entry No.
+            </label>
+            <div class="input-group">
+              <span class="input-group-text bg-white fw-bold text-primary"><i class="bi bi-hash"></i></span>
+              <input type="text" id="entryNumberInput" class="form-control fw-bold font-monospace text-primary fs-6" 
+                     value="{{ entry_no|default:'PO-1001' }}" readonly>
+            </div>
+            <div class="form-text extra-small text-muted">Auto-generated sequence</div>
+          </div>
+
+          <!-- Top Right: Purchase Date -->
+          <div class="col-md-6">
+            <label for="purchaseDateInput" class="form-label fw-bold text-dark small mb-1">
+              Purchase Date <span class="text-danger">*</span>
+            </label>
+            <div class="input-group">
+              <span class="input-group-text bg-white text-muted"><i class="bi bi-calendar3"></i></span>
+              <input type="date" class="form-control fw-semibold" id="purchaseDateInput" name="purchase_date" 
+                     value="{{ today_date }}" required onchange="updateLivePreview()">
+            </div>
+            <div class="form-text extra-small text-muted">Date of vendor invoice</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1. Vendor Details Card -->
+    <div class="card shadow-sm border-0 mb-3">
+      <div class="card-header bg-white py-3 border-bottom">
+        <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-truck me-2 text-primary"></i>1. Vendor Details</h5>
+      </div>
+      <div class="card-body p-4">
+        <!-- Row 1 (Full Width): Supplier Name Combobox -->
+        <div class="row g-3 mb-3">
+          <div class="col-12">
+            <label for="supplierNameInput" class="form-label fw-bold text-dark small mb-1">
+              Supplier Name <span class="text-danger">*</span>
+            </label>
+            <div class="input-group input-group-lg">
+              <span class="input-group-text bg-white text-muted"><i class="bi bi-search"></i></span>
+              <input type="text" class="form-control fw-semibold" id="supplierNameInput" name="supplier_name" list="supplierOptions"
+                     placeholder="Select or type new vendor..." required oninput="onSupplierInput(this); updateLivePreview();">
+              <datalist id="supplierOptions">
+                {% for party in vendor_parties %}
+                <option value="{{ party.name }}" data-gstin="{{ party.gstin|default:'' }}">{{ party.name }}{% if party.gstin %} ({{ party.gstin }}){% endif %}</option>
+                {% endfor %}
+                {% for supp in suppliers %}
+                <option value="{{ supp.name }}" data-gstin="{{ supp.gstin|default:'' }}">{{ supp.name }}{% if supp.gstin %} ({{ supp.gstin }}){% endif %}</option>
+                {% endfor %}
+              </datalist>
+            </div>
+            <div class="form-text extra-small text-muted">Search existing vendor from Party Ledger or type a new supplier name.</div>
+          </div>
+        </div>
+
+        <!-- Row 2 (Split Columns): Supplier Bill / Invoice No. & Supplier GSTIN -->
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label for="invoiceNumberInput" class="form-label fw-bold text-dark small mb-1">
+              Supplier Bill / Invoice No. <span class="text-danger">*</span>
+            </label>
+            <div class="input-group">
+              <span class="input-group-text bg-white text-muted"><i class="bi bi-receipt"></i></span>
+              <input type="text" class="form-control fw-semibold" id="invoiceNumberInput" name="invoice_number"
+                     placeholder="Vendor invoice ref no." required oninput="updateLivePreview()">
+            </div>
+            <div class="form-text extra-small text-muted">Supplier invoice / bill reference number</div>
+          </div>
+
+          <div class="col-md-6">
+            <label for="supplierGstinInput" class="form-label fw-bold text-dark small mb-1">
+              Supplier GSTIN
+            </label>
+            <div class="input-group">
+              <span class="input-group-text bg-white text-muted"><i class="bi bi-card-heading"></i></span>
+              <input type="text" class="form-control font-monospace fw-semibold" id="supplierGstinInput" name="supplier_gstin"
+                     placeholder="e.g. 29ABCDE1234F1Z5" oninput="updateLivePreview()">
+            </div>
+            <div class="form-text extra-small text-muted">Vendor GST registration number</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Layout (2 Columns) -->
+    <div class="row g-3">
+      <!-- 2. Inventory Item Selector (Left Column) -->
+      <div class="col-lg-7">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-box-seam me-2 text-primary"></i>2. Inventory Items</h5>
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge bg-light text-dark border">{{ inventory_items|length }} Items Available</span>
+              <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-semibold" onclick="openQuickAddModal()">
+                <i class="bi bi-plus-lg me-1"></i> Add Inventory Item
+              </button>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <!-- Search & Filters -->
+            <div class="mb-3">
+              <div class="input-group mb-2">
+                <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" id="itemSearchInput" class="form-control border-start-0"
+                  placeholder="Search by ingredient name or SKU..." onkeyup="filterItems()">
+              </div>
+
+              <!-- Category Filters -->
+              <div class="d-flex flex-wrap gap-2 mt-2" id="categoryPills">
+                <div class="category-pill active" onclick="setCategoryFilter('ALL', this)">
+                  All Categories
+                </div>
+                {% for cat in categories %}
+                <div class="category-pill" onclick="setCategoryFilter('{{ cat }}', this)">
+                  {{ cat }}
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+
+            <!-- Item Cards Grid -->
+            <div class="row g-2 overflow-auto" style="max-height: 520px;" id="itemsGrid">
+              {% for item in inventory_items %}
+              <div class="col-md-6 col-xl-4 item-card-wrapper" data-name="{{ item.name|lower }}"
+                data-sku="{{ item.sku|lower }}" data-category="{{ item.category|default:'Raw Ingredients' }}">
+                <div class="pos-card p-3 h-100 d-flex flex-column justify-content-between cursor-pointer"
+                  onclick="addToPurchaseCart({{ item.id }}, '{{ item.name|escapejs }}', '{{ item.unit|escapejs }}', {{ item.quantity }}, {{ item.price_per_unit|default:0 }})">
+                  <div>
+                    <div class="d-flex justify-content-between align-items-start mb-1">
+                      <h6 class="fw-bold text-dark mb-0 text-truncate" title="{{ item.name }}">{{ item.name }}</h6>
+                      <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1"
+                        style="font-size: 0.68rem;">
+                        {{ item.category|default:"Raw" }}
+                      </span>
+                    </div>
+                    {% if item.sku %}
+                    <div class="text-muted small mb-2">SKU: {{ item.sku }}</div>
+                    {% endif %}
+                  </div>
+
+                  <div class="mt-2 pt-2 border-top d-flex justify-content-between align-items-center">
+                    <div>
+                      <span class="text-muted fs-7">Current Stock:</span>
+                      <span class="fw-semibold text-dark fs-7">{{ item.quantity }} {{ item.unit|default:"" }}</span>
+                    </div>
+                    <div class="text-end">
+                      <div class="text-muted fs-7">Unit Cost</div>
+                      <div class="item-card-cost">₹ {{ item.price_per_unit|default:"0.00" }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {% empty %}
+              <div class="col-12 text-center py-5 text-muted">
+                <i class="bi bi-box-seam fs-1 d-block mb-2"></i>
+                No active inventory items found. Add items to inventory first.
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Purchase Breakdown & Cart (Right Column) -->
+      <div class="col-lg-5">
+        <div class="card shadow-sm border-0 mb-3">
+          <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+            <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-cart-check me-2 text-primary"></i>3. Purchase Breakdown
+            </h5>
+            <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2" onclick="clearCart()">
+              <i class="bi bi-trash me-1"></i> Clear Cart
+            </button>
+          </div>
+
+          <div class="card-body p-3">
+            <!-- Items Table -->
+            <div class="table-responsive mb-3 overflow-auto" style="max-height: 280px;">
+              <table class="table align-middle mb-0" id="cartTable">
+                <thead class="table-light fs-7">
+                  <tr>
+                    <th>Item</th>
+                    <th style="width: 100px;">Qty</th>
+                    <th style="width: 110px;">Unit Cost (₹)</th>
+                    <th class="text-end" style="width: 100px;">Total (₹)</th>
+                    <th style="width: 40px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="cartTableBody">
+                  <tr id="emptyCartRow">
+                    <td colspan="5" class="text-center py-4 text-muted">
+                      <i class="bi bi-basket fs-3 d-block mb-1 text-secondary opacity-50"></i>
+                      Click on item cards on the left to add to purchase inward list.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Billing Summary -->
+            <div class="bill-summary-box mb-3">
+              <div class="d-flex justify-content-between mb-2">
+                <span class="text-secondary fw-semibold">Subtotal:</span>
+                <span class="fw-bold text-dark" id="subtotalDisplay">₹ 0.00</span>
+              </div>
+
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="text-secondary fw-semibold">Input GST / Tax (₹):</span>
+                <input type="number" step="0.01" min="0" class="form-control form-control-sm text-end"
+                  id="taxAmountInput" style="width: 110px;" value="0.00" oninput="calculateTotals()">
+              </div>
+
+              <div class="grand-total-banner d-flex justify-content-between align-items-center mt-3">
+                <div>
+                  <div class="text-uppercase tracking-wider small opacity-75">Grand Total</div>
+                  <div class="fs-4 fw-bold" id="grandTotalDisplay">₹ 0.00</div>
+                </div>
+                <i class="bi bi-receipt fs-2 opacity-50"></i>
+              </div>
+            </div>
+
+            <!-- Payment Details Card -->
+            <div class="border rounded p-3 bg-light mb-3">
+              <h6 class="fw-bold text-dark mb-2"><i class="bi bi-credit-card me-1 text-primary"></i> Payment Details
+              </h6>
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="form-label small fw-semibold text-secondary mb-1">Payment Method</label>
+                  <select class="form-select form-select-sm" id="paymentMethodSelect" name="payment_method">
+                    <option value="bank_transfer" selected>Bank Transfer</option>
+                    <option value="upi">UPI</option>
+                    <option value="cash">Cash</option>
+                    <option value="credit">Credit / On Account</option>
+                  </select>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small fw-semibold text-secondary mb-1">Payment Status</label>
+                  <select class="form-select form-select-sm" id="paymentStatusSelect" name="payment_status">
+                    <option value="paid" selected>Paid</option>
+                    <option value="unpaid">Unpaid</option>
+                    <option value="partial">Partial</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Action Buttons Row -->
+            <div class="d-flex gap-2 mt-3">
+              <button type="button" id="btnTogglePreview" class="btn btn-outline-dark btn-lg py-3 px-3 fw-bold rounded-3 shadow-sm d-flex align-items-center justify-content-center gap-1" onclick="toggleInvoicePreview()" title="Toggle live purchase invoice summary">
+                <i class="bi bi-eye"></i> Toggle Preview
+              </button>
+              <button type="submit" id="submitBtn" class="btn btn-success btn-lg flex-grow-1 py-3 fw-bold rounded-3 shadow-sm d-flex align-items-center justify-content-center gap-2">
+                <i class="bi bi-check-circle-fill fs-5"></i> Save & Update Inventory Stock
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Purchase Invoice Preview Container (Hidden by Default) -->
+    <div id="livePurchasePreviewContainer" class="card border-0 shadow rounded-3 mt-4 mb-4 overflow-hidden" style="display: none;">
+      <div class="card-header bg-dark text-white py-3 px-4 d-flex justify-content-between align-items-center">
+        <h5 class="fw-bold mb-0 text-white d-flex align-items-center gap-2">
+          <i class="bi bi-eye-fill text-warning"></i> Live Purchase Invoice Summary Preview
+        </h5>
+        <span class="badge bg-secondary">Pre-Save Draft</span>
+      </div>
+      <div class="card-body p-4 bg-white">
+        <div class="d-flex justify-content-between align-items-center pb-3 mb-3 border-bottom">
+          <div>
+            <h4 class="fw-bold text-dark mb-0">{{ restaurant.name }}</h4>
+            <div class="text-muted small">Goods Inward Entry - <strong id="prevEntryNo">{{ entry_no|default:'PO-1001' }}</strong></div>
+          </div>
+          <div class="text-end">
+            <span class="d-block text-muted extra-small uppercase fw-bold">Purchase Date</span>
+            <span class="fw-bold text-dark" id="prevPurchaseDate">--</span>
+          </div>
+        </div>
+
+        <div class="row g-3 mb-4 p-3 bg-light rounded border">
+          <div class="col-md-6">
+            <div class="text-muted extra-small uppercase fw-bold">Supplier Details</div>
+            <div class="fw-bold text-dark fs-6" id="prevSupplierName">--</div>
+            <div class="small text-muted" id="prevSupplierGstin">GSTIN: --</div>
+          </div>
+          <div class="col-md-6 text-end">
+            <div class="text-muted extra-small uppercase fw-bold">Supplier Invoice Ref</div>
+            <div class="fw-bold text-primary fs-6" id="prevInvoiceNo">--</div>
+          </div>
+        </div>
+
+        <div class="table-responsive mb-3">
+          <table class="table table-bordered table-sm align-middle mb-0">
+            <thead class="table-dark text-uppercase extra-small">
+              <tr>
+                <th>Item Name</th>
+                <th class="text-center">Qty</th>
+                <th class="text-end">Unit Cost (₹)</th>
+                <th class="text-end">Line Total (₹)</th>
+              </tr>
+            </thead>
+            <tbody id="prevItemsTableBody">
+              <tr>
+                <td colspan="4" class="text-center text-muted py-3">No inventory items added yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="row justify-content-end">
+          <div class="col-md-5">
+            <div class="p-3 bg-light rounded border">
+              <div class="d-flex justify-content-between mb-1">
+                <span class="text-muted small">Subtotal:</span>
+                <span class="fw-bold text-dark" id="prevSubtotal">₹ 0.00</span>
+              </div>
+              <div class="d-flex justify-content-between mb-2">
+                <span class="text-muted small">Tax / Input GST:</span>
+                <span class="fw-bold text-dark" id="prevTax">₹ 0.00</span>
+              </div>
+              <div class="d-flex justify-content-between pt-2 border-top">
+                <span class="fw-bold text-dark">Grand Total:</span>
+                <span class="fw-bold text-success fs-5" id="prevGrandTotal">₹ 0.00</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+  // Global cart state
+  let purchaseCart = [];
+  let currentCategory = 'ALL';
+
+  // Available suppliers object mapping
+  const suppliersMap = {
+    {% for party in vendor_parties %}
+  "{{ party.name|escapejs }}": "{{ party.gstin|default:''|escapejs }}",
+    {% endfor %}
+  {% for supp in suppliers %}
+  "{{ supp.name|escapejs }}": "{{ supp.gstin|default:''|escapejs }}",
+    {% endfor %}
+  };
+
+  function onSupplierInput(input) {
+    const val = input.value.trim();
+    if (suppliersMap[val] !== undefined) {
+      document.getElementById('supplierGstinInput').value = suppliersMap[val];
+    }
+  }
+
+  function setCategoryFilter(category, element) {
+    currentCategory = category;
+    document.querySelectorAll('#categoryPills .category-pill').forEach(pill => pill.classList.remove('active'));
+    element.classList.add('active');
+    filterItems();
+  }
+
+  function filterItems() {
+    const searchVal = document.getElementById('itemSearchInput').value.toLowerCase().trim();
+    const itemCards = document.querySelectorAll('#itemsGrid .item-card-wrapper');
+
+    itemCards.forEach(card => {
+      const name = card.getAttribute('data-name') || '';
+      const sku = card.getAttribute('data-sku') || '';
+      const cat = card.getAttribute('data-category') || '';
+
+      const matchesSearch = !searchVal || name.includes(searchVal) || sku.includes(searchVal);
+      const matchesCategory = currentCategory === 'ALL' || cat === currentCategory;
+
+      if (matchesSearch && matchesCategory) {
+        card.style.display = 'block';
+      } else {
+        card.style.display = 'none';
+      }
+    });
+  }
+
+  function addToPurchaseCart(id, name, unit, currentStock, defaultCost) {
+    let existing = purchaseCart.find(item => item.id === id);
+    if (existing) {
+      existing.quantity += 1;
+    } else {
+      purchaseCart.push({
+        id: id,
+        name: name,
+        unit: unit,
+        currentStock: currentStock,
+        quantity: 1,
+        unitCost: parseFloat(defaultCost) || 0
+      });
+    }
+    renderCart();
+  }
+
+  function updateQuantity(id, newQty) {
+    let qty = parseFloat(newQty);
+    if (isNaN(qty) || qty <= 0) qty = 1;
+    let item = purchaseCart.find(i => i.id === id);
+    if (item) {
+      item.quantity = qty;
+      renderCart();
+    }
+  }
+
+  function updateUnitCost(id, newCost) {
+    let cost = parseFloat(newCost);
+    if (isNaN(cost) || cost < 0) cost = 0;
+    let item = purchaseCart.find(i => i.id === id);
+    if (item) {
+      item.unitCost = cost;
+      renderCart(false); // don't redraw focus
+    }
+  }
+
+  function removeFromCart(id) {
+    purchaseCart = purchaseCart.filter(i => i.id !== id);
+    renderCart();
+  }
+
+  function clearCart() {
+    purchaseCart = [];
+    renderCart();
+  }
+
+  let showPreview = false;
+
+  function toggleInvoicePreview() {
+    showPreview = !showPreview;
+    const previewEl = document.getElementById('livePurchasePreviewContainer');
+    const btnEl = document.getElementById('btnTogglePreview');
+    if (previewEl) {
+      previewEl.style.display = showPreview ? 'block' : 'none';
+      if (showPreview) {
+        updateLivePreview();
+        previewEl.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+    if (btnEl) {
+      btnEl.className = showPreview 
+        ? 'btn btn-dark btn-lg py-3 px-3 fw-bold rounded-3 shadow-sm d-flex align-items-center justify-content-center gap-1' 
+        : 'btn btn-outline-dark btn-lg py-3 px-3 fw-bold rounded-3 shadow-sm d-flex align-items-center justify-content-center gap-1';
+    }
+  }
+
+  function updateLivePreview() {
+    if (!showPreview) return;
+
+    const suppName = document.getElementById('supplierNameInput')?.value.trim() || '--';
+    const suppGstin = document.getElementById('supplierGstinInput')?.value.trim() || '--';
+    const invNo = document.getElementById('invoiceNumberInput')?.value.trim() || '--';
+    const pDate = document.getElementById('purchaseDateInput')?.value || '--';
+
+    const sNameEl = document.getElementById('prevSupplierName');
+    const sGstinEl = document.getElementById('prevSupplierGstin');
+    const invNoEl = document.getElementById('prevInvoiceNo');
+    const pDateEl = document.getElementById('prevPurchaseDate');
+
+    if (sNameEl) sNameEl.textContent = suppName;
+    if (sGstinEl) sGstinEl.textContent = 'GSTIN: ' + (suppGstin || '--');
+    if (invNoEl) invNoEl.textContent = invNo;
+    if (pDateEl) pDateEl.textContent = pDate;
+
+    const tbody = document.getElementById('prevItemsTableBody');
+    if (!tbody) return;
+
+    if (purchaseCart.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">No inventory items added yet.</td></tr>';
+    } else {
+      let html = '';
+      purchaseCart.forEach(item => {
+        const lineTotal = (item.quantity * item.unitCost).toFixed(2);
+        html += `
+          <tr>
+            <td class="fw-semibold">${item.name} <span class="text-muted small">(${item.unit || 'unit'})</span></td>
+            <td class="text-center fw-bold">${item.quantity}</td>
+            <td class="text-end">₹ ${item.unitCost.toFixed(2)}</td>
+            <td class="text-end fw-bold">₹ ${lineTotal}</td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    }
+
+    let subtotal = 0;
+    purchaseCart.forEach(item => {
+      subtotal += item.quantity * item.unitCost;
+    });
+    let tax = parseFloat(document.getElementById('taxAmountInput')?.value) || 0;
+    let grandTotal = subtotal + tax;
+
+    const subEl = document.getElementById('prevSubtotal');
+    const taxEl = document.getElementById('prevTax');
+    const gtEl = document.getElementById('prevGrandTotal');
+
+    if (subEl) subEl.textContent = '₹ ' + subtotal.toFixed(2);
+    if (taxEl) taxEl.textContent = '₹ ' + tax.toFixed(2);
+    if (gtEl) gtEl.textContent = '₹ ' + grandTotal.toFixed(2);
+  }
+
+  function calculateTotals() {
+    let subtotal = 0;
+    purchaseCart.forEach(item => {
+      subtotal += item.quantity * item.unitCost;
+    });
+
+    let tax = parseFloat(document.getElementById('taxAmountInput').value) || 0;
+    let grandTotal = subtotal + tax;
+
+    document.getElementById('subtotalDisplay').textContent = '₹ ' + subtotal.toFixed(2);
+    document.getElementById('grandTotalDisplay').textContent = '₹ ' + grandTotal.toFixed(2);
+    updateLivePreview();
+  }
+
+  function renderCart(fullRebuild = true) {
+    const tbody = document.getElementById('cartTableBody');
+    if (purchaseCart.length === 0) {
+      tbody.innerHTML = `
+        <tr id="emptyCartRow">
+          <td colspan="5" class="text-center py-4 text-muted">
+            <i class="bi bi-basket fs-3 d-block mb-1 text-secondary opacity-50"></i>
+            Click on item cards on the left to add to purchase inward list.
+          </td>
+        </tr>
+      `;
+      calculateTotals();
+      return;
+    }
+
+    if (fullRebuild) {
+      let html = '';
+      purchaseCart.forEach(item => {
+        const lineTotal = (item.quantity * item.unitCost).toFixed(2);
+        html += `
+          <tr class="cart-item-row">
+            <td>
+              <div class="fw-bold text-dark fs-7">${item.name}</div>
+              <div class="text-muted fs-8">${item.unit ? item.unit : 'unit'}</div>
+            </td>
+            <td>
+              <div class="input-group input-group-sm">
+                <button type="button" class="btn btn-outline-secondary qty-btn" onclick="updateQuantity(${item.id}, ${item.quantity - 1})">-</button>
+                <input type="number" class="form-control form-control-sm text-center px-1" value="${item.quantity}" min="1" step="1" onchange="updateQuantity(${item.id}, this.value)" style="max-width: 45px;">
+                <button type="button" class="btn btn-outline-secondary qty-btn" onclick="updateQuantity(${item.id}, ${item.quantity + 1})">+</button>
+              </div>
+            </td>
+            <td>
+              <input type="number" step="0.01" min="0" class="form-control form-control-sm text-end" value="${item.unitCost.toFixed(2)}" oninput="updateUnitCost(${item.id}, this.value)">
+            </td>
+            <td class="text-end fw-bold text-dark fs-7">
+              ₹ ${lineTotal}
+            </td>
+            <td class="text-end">
+              <button type="button" class="btn btn-link text-danger p-0 border-0" onclick="removeFromCart(${item.id})" title="Remove item">
+                <i class="bi bi-trash fs-6"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    }
+
+    calculateTotals();
+  }
+
+  async function handlePurchaseSubmit(e) {
+    e.preventDefault();
+    if (purchaseCart.length === 0) {
+      alert('Please add at least one item to the purchase list.');
+      return;
+    }
+
+    const supplierName = document.getElementById('supplierNameInput').value.trim();
+    const supplierGstin = document.getElementById('supplierGstinInput').value.trim();
+    const invoiceNumber = document.getElementById('invoiceNumberInput').value.trim();
+    const purchaseDate = document.getElementById('purchaseDateInput').value;
+    const paymentMethod = document.getElementById('paymentMethodSelect').value;
+    const paymentStatus = document.getElementById('paymentStatusSelect').value;
+    const taxAmount = parseFloat(document.getElementById('taxAmountInput').value) || 0;
+
+    if (!supplierName) {
+      alert('Please enter or select a Supplier Name.');
+      document.getElementById('supplierNameInput').focus();
+      return;
+    }
+
+    if (!invoiceNumber) {
+      alert('Please enter the Supplier Bill / Invoice No.');
+      document.getElementById('invoiceNumberInput').focus();
+      return;
+    }
+
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Saving & Updating Stock...`;
+
+    const payload = {
+      supplier_name: supplierName,
+      supplier_gstin: supplierGstin,
+      invoice_number: invoiceNumber,
+      purchase_date: purchaseDate,
+      payment_method: paymentMethod,
+      payment_status: paymentStatus,
+      tax_amount: taxAmount,
+      items: purchaseCart.map(item => ({
+        item_id: item.id,
+        quantity: item.quantity,
+        unit_cost: item.unitCost
+      }))
+    };
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    try {
+      const response = await fetch(window.location.href, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        window.location.href = data.redirect_url;
+      } else {
+        alert(data.error || 'Failed to save purchase entry. Please try again.');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<i class="bi bi-check-circle-fill fs-5"></i> Save & Update Inventory Stock`;
+      }
+    } catch (err) {
+      console.error('Error submitting purchase:', err);
+      alert('An error occurred while saving the purchase entry. Please check your connection.');
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = `<i class="bi bi-check-circle-fill fs-5"></i> Save & Update Inventory Stock`;
+    }
+  }
+
+  let quickAddModalInstance = null;
+  document.addEventListener('DOMContentLoaded', function() {
+    quickAddModalInstance = new bootstrap.Modal(document.getElementById('quickAddInventoryModal'));
+  });
+
+  function openQuickAddModal() {
+    document.getElementById('quickAddInventoryForm').reset();
+    quickAddModalInstance.show();
+  }
+
+  function handleQuickAddInventory(e) {
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const btnSave = document.getElementById('btnQuickAddSave');
+    btnSave.disabled = true;
+
+    fetch('{% url "restaurant_admin:inventory_quick_add_api" restaurant_slug=restaurant.slug %}', {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+      btnSave.disabled = false;
+      if (data.success && data.item) {
+        const item = data.item;
+        addToPurchaseCart(item.id, item.name, item.unit, item.quantity, item.cost_price);
+        quickAddModalInstance.hide();
+        form.reset();
+        window.location.reload();
+      } else {
+        alert(data.error || 'Failed to create inventory item.');
+      }
+    })
+    .catch(err => {
+      btnSave.disabled = false;
+      console.error(err);
+      alert('Error creating inventory item.');
+    });
+  }
+</script>
+
+<!-- Quick Add Master Inventory Item Modal -->
+<div class="modal fade" id="quickAddInventoryModal" tabindex="-1" aria-labelledby="quickAddInventoryModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow">
+      <form id="quickAddInventoryForm" onsubmit="handleQuickAddInventory(event)">
+        {% csrf_token %}
+        <div class="modal-header bg-light">
+          <h5 class="modal-title fw-bold" id="quickAddInventoryModalLabel"><i class="bi bi-box-seam text-primary me-2"></i>Quick Add Master Inventory Item</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold text-secondary small mb-1">Item Name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="name" required placeholder="e.g. Basmati Rice 25kg">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold text-secondary small mb-1">SKU Code</label>
+              <input type="text" class="form-control" name="sku" placeholder="e.g. RICE-01">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-semibold text-secondary small mb-1">Category <span class="text-danger">*</span></label>
+              <select class="form-select" name="category" required>
+                <option value="raw_ingredients">Raw Ingredients</option>
+                <option value="beverages">Beverages</option>
+                <option value="packaging">Packaging & Tissue</option>
+                <option value="bar_stock">Bar Stock</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold text-secondary small mb-1">Measurement Unit <span class="text-danger">*</span></label>
+              <select class="form-select" name="unit" required>
+                <option value="kg">Kilogram (kg)</option>
+                <option value="gm">Gram (gm)</option>
+                <option value="litre">Litre (L)</option>
+                <option value="ml">Millilitre (ml)</option>
+                <option value="piece">Piece</option>
+                <option value="pack">Pack</option>
+                <option value="box">Box</option>
+                <option value="crate">Crate</option>
+                <option value="bottle">Bottle</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold text-secondary small mb-1">Cost Price (Purchase Rate per Unit ₹) <span class="text-danger">*</span></label>
+              <input type="number" step="0.01" min="0" class="form-control" name="cost_price" value="0.00" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold text-secondary small mb-1">Reorder Level <span class="text-danger">*</span></label>
+              <input type="number" min="0" class="form-control" name="reorder_level" value="5" required>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold text-secondary small mb-1">Taxability Type <span class="text-danger">*</span></label>
+              <select class="form-select" name="taxability_type">
+                <option value="taxable">Taxable</option>
+                <option value="exempted">Exempted</option>
+                <option value="nil_rated">Nil Rated</option>
+                <option value="non_gst_excise">Non-GST / Excise</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold text-secondary small mb-1">HSN / SAC Code</label>
+              <input type="text" class="form-control" name="hsn_sac_code" placeholder="e.g. 1006">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold text-secondary small mb-1">GST Tax Rate (%)</label>
+              <select class="form-select" name="gst_rate">
+                <option value="0.00">0% GST</option>
+                <option value="5.00">5% GST</option>
+                <option value="12.00">12% GST</option>
+                <option value="18.00">18% GST</option>
+                <option value="28.00">28% GST</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer bg-light">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" id="btnQuickAddSave" class="btn btn-primary px-4 fw-semibold"><i class="bi bi-check-circle me-1"></i> Save & Add to Purchase</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

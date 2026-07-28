@@ -1,0 +1,267 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mt-4">Menu Management</h1>
+        <div>
+            <a href="{% url 'restaurant_admin:menu_bulk_add' restaurant_slug=rslug %}" class="btn btn-outline-primary me-2">
+                <i class="bi bi-file-earmark-code me-1"></i>Bulk Import (JSON)
+            </a>
+            <a href="{% url 'restaurant_admin:menu_add' restaurant_slug=rslug %}" class="btn btn-primary">
+                <i class="fas fa-plus me-1"></i>Add New Item
+            </a>
+        </div>
+    </div>
+
+    <!-- Search and Filter Card -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" id="searchForm">
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                            <input type="text" 
+                                   class="form-control" 
+                                   name="q" 
+                                   id="searchInput" 
+                                   placeholder="Search menu items..." 
+                                   value="{{ request.GET.q|default:'' }}">
+                            <button class="btn btn-primary" type="submit">
+                                <i class="fas fa-search me-1"></i> Search
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <select class="form-select" name="category" id="categoryFilter" onchange="this.form.submit()">
+                            <option value="" {% if not request.GET.category %}selected{% endif %}>All Categories</option>
+                            {% for category in categories %}
+                            <option value="{{ category.id }}" 
+                                    {% if request.GET.category|stringformat:'s' == category.id|stringformat:'s' %}selected{% endif %}>
+                                {{ category.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                {% if request.GET.q or request.GET.category %}
+                <div class="mt-3">
+                    <a href="{% url 'restaurant_admin:menu_list' restaurant_slug=rslug %}" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-times me-1"></i> Clear filters
+                    </a>
+                </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <!-- Menu Items Grid -->
+    <div class="row">
+        {% for item in menu_items %}
+        <div class="col-xl-3 col-md-4 col-sm-6 mb-4">
+            <div class="card h-100">
+                <div class="position-relative">
+                    {% if item.image %}
+                    <img src="{{ item.image.url }}" class="card-img-top" alt="{{ item.name }}" style="height: 180px; object-fit: cover;">
+                    {% else %}
+                    <div class="bg-light d-flex align-items-center justify-content-center" style="height: 180px;">
+                        <i class="fas fa-utensils fa-3x text-muted"></i>
+                    </div>
+                    {% endif %}
+                    
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h5 class="card-title mb-0">{{ item.name }}</h5>
+                        <span class="badge bg-primary">{{ item.subcategory.category.name }}</span>
+                    </div>
+                    <p class="card-text text-muted small flex-grow-1">
+                        {{ item.description|truncatechars:80 }}
+                    </p>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <h5 class="mb-0 text-primary">${{ item.price }}</h5>
+                        <div class="btn-group">
+                            <a href="{% url 'restaurant_admin:menu_recipe' restaurant_slug=rslug pk=item.id %}" class="btn btn-sm btn-outline-warning" title="Recipe/Ingredients">
+                                <i class="fas fa-egg"></i>
+                            </a>
+                            <a href="{% url 'restaurant_admin:menu_edit' restaurant_slug=rslug pk=item.id %}" class="btn btn-sm btn-outline-primary" title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ item.id }}" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Delete Confirmation Modal -->
+        <div class="modal fade" id="deleteModal{{ item.id }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Confirm Delete</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        Are you sure you want to delete "{{ item.name }}"? This action cannot be undone.
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <form action="{% url 'restaurant_admin:menu_delete' restaurant_slug=rslug pk=item.id %}" method="post" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger">Delete</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="text-center py-5">
+                <i class="fas fa-utensils fa-4x text-muted mb-3"></i>
+                <h4>No menu items found</h4>
+                <p class="text-muted">Get started by adding your first menu item</p>
+                <a href="{% url 'restaurant_admin:menu_add' restaurant_slug=rslug %}" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i>Add Menu Item
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if menu_items.has_other_pages %}
+    <nav aria-label="Menu items pagination" class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% with params=request.GET.urlencode %}
+                {% if menu_items.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{% if params %}{{ params|cut:'&page=' }}&{% endif %}page=1" aria-label="First">
+                            <span aria-hidden="true">&laquo;&laquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?{% if params %}{{ params|cut:'&page=' }}&{% endif %}page={{ menu_items.previous_page_number }}" aria-label="Previous">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">&laquo;&laquo;</span>
+                    </li>
+                    <li class="page-item disabled">
+                        <span class="page-link">&laquo;</span>
+                    </li>
+                {% endif %}
+                
+                {% for num in menu_items.paginator.page_range %}
+                    {% if menu_items.number == num %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                    {% elif num > menu_items.number|add:'-3' and num < menu_items.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{% if params %}{{ params|cut:'&page=' }}&{% endif %}page={{ num }}">{{ num }}</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if menu_items.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{% if params %}{{ params|cut:'&page=' }}&{% endif %}page={{ menu_items.next_page_number }}" aria-label="Next">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?{% if params %}{{ params|cut:'&page=' }}&{% endif %}page={{ menu_items.paginator.num_pages }}" aria-label="Last">
+                            <span aria-hidden="true">&raquo;&raquo;</span>
+                        </a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">&raquo;</span>
+                    </li>
+                    <li class="page-item disabled">
+                        <span class="page-link">&raquo;&raquo;</span>
+                    </li>
+                {% endif %}
+            {% endwith %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<!-- Add Font Awesome for icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+<style>
+    .card {
+        transition: transform 0.2s, box-shadow 0.2s;
+        border: none;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+    }
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 0.5rem 1.5rem 0 rgba(58, 59, 69, 0.2);
+    }
+    .card-img-top {
+        border-top-left-radius: 10px;
+        border-top-right-radius: 10px;
+    }
+    .badge {
+        font-weight: 500;
+        padding: 0.4em 0.8em;
+    }
+    .btn-sm {
+        padding: 0.25rem 0.5rem;
+    }
+    .page-link {
+        color: #4e73df;
+    }
+    .page-item.active .page-link {
+        background-color: #4e73df;
+        border-color: #4e73df;
+    }
+</style>
+
+<script>
+    // Search functionality
+    document.getElementById('searchInput').addEventListener('keyup', function() {
+        const searchTerm = this.value.toLowerCase();
+        const items = document.querySelectorAll('.card');
+        
+        items.forEach(item => {
+            const name = item.querySelector('.card-title').textContent.toLowerCase();
+            const description = item.querySelector('.card-text').textContent.toLowerCase();
+            
+            if (name.includes(searchTerm) || description.includes(searchTerm)) {
+                item.closest('.col-xl-3').style.display = 'block';
+            } else {
+                item.closest('.col-xl-3').style.display = 'none';
+            }
+        });
+    });
+    
+    // Category filter
+    document.getElementById('categoryFilter').addEventListener('change', function() {
+        const categoryId = this.value;
+        const items = document.querySelectorAll('.card');
+        
+        items.forEach(item => {
+            const itemCategory = item.querySelector('.badge.bg-primary').textContent.trim();
+            
+            if (categoryId === 'All Categories' || itemCategory === categoryId) {
+                item.closest('.col-xl-3').style.display = 'block';
+            } else {
+                item.closest('.col-xl-3').style.display = 'none';
+            }
+        });
+    });
+</script>
+{% endblock %}

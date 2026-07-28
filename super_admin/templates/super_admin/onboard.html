@@ -1,0 +1,1299 @@
+{% extends 'super_admin/base.html' %}
+
+{% block title %}Onboard Restaurant | Super Admin{% endblock %}
+
+{% block content %}
+<style>
+  :root {
+    --brand-primary: #0f5132;
+    --brand-primary-hover: #0b3d26;
+    --brand-accent-bg: #e6f4ea;
+    --brand-accent-text: #137333;
+    --border-color: #e2e8f0;
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+    --bg-light: #f8fafc;
+    --danger-red: #dc2626;
+    --dashed-border: #f87171;
+    --dashed-bg: #fff5f5;
+  }
+
+  .onboard-container {
+    max-width: 1140px;
+    margin: 20px auto;
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 32px;
+    align-items: start;
+    font-family: inherit;
+  }
+
+  @media (max-width: 991.98px) {
+    .onboard-container {
+      grid-template-columns: 1fr !important;
+      gap: 16px !important;
+      margin: 10px auto !important;
+    }
+    .steps-nav {
+      flex-direction: row !important;
+      justify-content: space-around;
+      background: #ffffff !important;
+      border: 1px solid var(--border-color) !important;
+      border-radius: 12px !important;
+      padding: 10px !important;
+      position: sticky;
+      top: 60px;
+      z-index: 5;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .step-item {
+      padding: 6px 10px !important;
+      font-size: 13px !important;
+    }
+    .form-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+
+  /* Left Steps Navigation */
+  .steps-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: transparent;
+    padding-top: 10px;
+  }
+
+  .step-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 24px;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+  }
+
+  .step-item .step-num {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    color: #475569;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .step-item.active {
+    background-color: var(--brand-accent-bg);
+    color: var(--brand-accent-text);
+  }
+
+  .step-item.active .step-num {
+    background-color: #22c55e;
+    color: #ffffff;
+  }
+
+  .step-item.completed .step-num {
+    background-color: var(--brand-accent-text);
+    color: #ffffff;
+  }
+
+  /* Main Card Panel */
+  .onboard-card {
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 36px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  }
+
+  .step-header {
+    margin-bottom: 28px;
+  }
+
+  .step-header h2 {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text-main);
+    margin: 0 0 6px 0;
+  }
+
+  .step-header p {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin: 0;
+  }
+
+  /* Form Layout */
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px 24px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .form-group.full-width {
+    grid-column: span 2;
+  }
+
+  .form-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #334155;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .form-label .req {
+    color: #e11d48;
+  }
+
+  .form-input, .form-select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #1e293b;
+    background-color: #ffffff;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
+  }
+
+  .form-input:focus, .form-select:focus {
+    outline: none;
+    border-color: #059669;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+  }
+
+  .form-input::placeholder {
+    color: #94a3b8;
+  }
+
+  .form-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  .form-error {
+    font-size: 12px;
+    color: var(--danger-red);
+    margin-top: 2px;
+    font-weight: 500;
+  }
+
+  /* Segmented Toggle Buttons */
+  .toggle-group {
+    display: flex;
+    gap: 0;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    overflow: hidden;
+    width: fit-content;
+    background: #f1f5f9;
+  }
+
+  .toggle-btn {
+    padding: 8px 22px;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .toggle-btn.active {
+    background-color: #0f5132;
+    color: #ffffff;
+  }
+
+  /* Branch Cards (Step 2) */
+  .branch-card {
+    border: 1px solid #cbd5e1;
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 24px;
+    background: #ffffff;
+    position: relative;
+  }
+
+  .branch-header-tags {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+
+  .badge-tag {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .badge-tag.branch {
+    background: #e6f4ea;
+    color: #137333;
+  }
+
+  .badge-tag.state {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  .use-address-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #059669;
+    cursor: pointer;
+    user-select: none;
+    margin: 8px 0 16px 0;
+  }
+
+  .use-address-checkbox input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #059669;
+    cursor: pointer;
+  }
+
+  /* Nested GST Box */
+  .gst-branch-box {
+    border: 1.5px dashed var(--dashed-border);
+    background-color: #fffafb;
+    border-radius: 12px;
+    padding: 20px;
+    margin-top: 20px;
+  }
+
+  .gst-branch-box h4 {
+    margin: 0 0 16px 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: #1e293b;
+  }
+
+  .btn-add-branch {
+    width: 100%;
+    padding: 12px;
+    border: 1.5px dashed #059669;
+    border-radius: 10px;
+    background: transparent;
+    color: #059669;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .btn-add-branch:hover {
+    background: #f0fdf4;
+  }
+
+  /* Form Bottom Actions */
+  .step-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 36px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+  }
+
+  .btn-next, .btn-submit-final {
+    background-color: var(--brand-primary);
+    color: #ffffff;
+    border: none;
+    padding: 10px 28px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.15s ease;
+  }
+
+  .btn-next:hover, .btn-submit-final:hover {
+    background-color: var(--brand-primary-hover);
+  }
+
+  .btn-back {
+    background: transparent;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn-back:hover {
+    background: #f1f5f9;
+  }
+
+  .summary-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 24px;
+  }
+
+  .summary-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+
+  .summary-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .summary-label {
+    color: #64748b;
+    font-weight: 500;
+  }
+
+  .summary-val {
+    color: #0f172a;
+    font-weight: 600;
+  }
+
+  .hidden {
+    display: none !important;
+  }
+</style>
+
+<div class="onboard-container">
+  <!-- Left Step Navigation Sidebar -->
+  <div class="steps-nav">
+    <div class="step-item active" id="nav-step-1" onclick="goToStep(1)">
+      <span class="step-num" id="num-step-1">1</span>
+      <span>Business</span>
+    </div>
+    <div class="step-item" id="nav-step-2" onclick="goToStep(2)">
+      <span class="step-num" id="num-step-2">2</span>
+      <span>Branches</span>
+    </div>
+    <div class="step-item" id="nav-step-3" onclick="goToStep(3)">
+      <span class="step-num" id="num-step-3">3</span>
+      <span>Review</span>
+    </div>
+  </div>
+
+  <!-- Main Content Card -->
+  <div class="onboard-card">
+    <form method="post" id="onboard-form" action="{% url 'super_admin:onboard' %}">
+      {% csrf_token %}
+      <input type="hidden" name="branches_json" id="branches_json" value="[]">
+
+      <!-- ==================== STEP 1: BUSINESS DETAILS ==================== -->
+      <div id="step-1-content" class="step-pane">
+        <div class="step-header">
+          <h2>Business details</h2>
+          <p>These details should match your PAN records.</p>
+        </div>
+
+        <div class="form-grid">
+          <!-- Legal Name -->
+          <div class="form-group">
+            <label class="form-label">Legal Name <span class="req">*</span></label>
+            <input type="text" class="form-input" name="legal_name" id="id_legal_name" placeholder="Sharma Hospitality Pvt Ltd" value="{{ form.legal_name.value|default:'' }}">
+            <span class="form-hint">As per PAN</span>
+            {% if form.legal_name.errors %}
+              <span class="form-error">{{ form.legal_name.errors.0 }}</span>
+            {% endif %}
+          </div>
+
+          <!-- Trade / Brand Name -->
+          <div class="form-group">
+            <label class="form-label">Trade / Brand Name <span class="req">*</span></label>
+            <input type="text" class="form-input" name="trade_name" id="id_trade_name" placeholder="Spice Villa" value="{{ form.trade_name.value|default:'' }}">
+            <span class="form-hint">The name on your signboard</span>
+            {% if form.trade_name.errors %}
+              <span class="form-error">{{ form.trade_name.errors.0 }}</span>
+            {% endif %}
+          </div>
+
+          <!-- Business Type -->
+          <div class="form-group">
+            <label class="form-label">Business Type <span class="req">*</span></label>
+            <select class="form-select" name="business_type" id="id_business_type" onchange="updateBusinessTypeRules()">
+              {% for val, label in form.fields.business_type.choices %}
+                <option value="{{ val }}" {% if form.business_type.value == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            {% if form.business_type.errors %}
+              <span class="form-error">{{ form.business_type.errors.0 }}</span>
+            {% endif %}
+          </div>
+
+          <!-- PAN -->
+          <div class="form-group">
+            <label class="form-label">PAN <span class="req">*</span></label>
+            <input type="text" class="form-input" name="pan" id="id_pan" maxlength="10" placeholder="AAACS1234F" style="text-transform: uppercase;" value="{{ form.pan.value|default:'' }}" oninput="updatePanRules()">
+            <span class="form-hint" id="id_pan_hint">As per PAN</span>
+            {% if form.pan.errors %}
+              <span class="form-error" id="id_pan_error">{{ form.pan.errors.0 }}</span>
+            {% else %}
+              <span class="form-error hidden" id="id_pan_error"></span>
+            {% endif %}
+          </div>
+
+          <!-- CIN / LLPIN (Conditional field based on Business Type) -->
+          <div class="form-group hidden" id="cin_container">
+            <label class="form-label" id="cin_label">CIN <span class="req">*</span></label>
+            <input type="text" class="form-input" name="cin_llpin" id="id_cin_llpin" placeholder="U15400RJ2020PTC000000" style="text-transform: uppercase;" value="{{ form.cin_llpin.value|default:'' }}">
+            <span class="form-hint" id="cin_hint">Corporate Identification Number (required)</span>
+            {% if form.cin_llpin.errors %}
+              <span class="form-error" id="id_cin_error">{{ form.cin_llpin.errors.0 }}</span>
+            {% else %}
+              <span class="form-error hidden" id="id_cin_error"></span>
+            {% endif %}
+          </div>
+
+
+          <!-- Address Line 1 -->
+          <div class="form-group">
+            <label class="form-label">Address Line 1 <span class="req">*</span></label>
+            <input type="text" class="form-input" name="restaurant_address_line_1" id="id_restaurant_address_line_1" placeholder="12, MI Road" value="{{ form.restaurant_address_line_1.value|default:'' }}">
+            <span class="form-hint">Building / shop no., street</span>
+            {% if form.restaurant_address_line_1.errors %}
+              <span class="form-error">{{ form.restaurant_address_line_1.errors.0 }}</span>
+            {% endif %}
+          </div>
+
+          <!-- Address Line 2 -->
+          <div class="form-group">
+            <label class="form-label">Address Line 2</label>
+            <input type="text" class="form-input" name="restaurant_address_line_2" id="id_restaurant_address_line_2" placeholder="Near Panch Batti" value="{{ form.restaurant_address_line_2.value|default:'' }}">
+            <span class="form-hint">Area / landmark (optional)</span>
+            {% if form.restaurant_address_line_2.errors %}
+              <span class="form-error">{{ form.restaurant_address_line_2.errors.0 }}</span>
+            {% endif %}
+          </div>
+
+          <!-- City -->
+          <div class="form-group">
+            <label class="form-label">City <span class="req">*</span></label>
+            <input type="text" class="form-input" name="restaurant_city" id="id_restaurant_city" placeholder="Jaipur" value="{{ form.restaurant_city.value|default:'' }}">
+            {% if form.restaurant_city.errors %}
+              <span class="form-error">{{ form.restaurant_city.errors.0 }}</span>
+            {% endif %}
+          </div>
+
+          <!-- State -->
+          <div class="form-group">
+            <label class="form-label">State <span class="req">*</span></label>
+            <select class="form-select" name="restaurant_state" id="id_restaurant_state">
+              {% for val, label in form.fields.restaurant_state.choices %}
+                <option value="{{ val }}" {% if form.restaurant_state.value == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+            {% if form.restaurant_state.errors %}
+              <span class="form-error">{{ form.restaurant_state.errors.0 }}</span>
+            {% endif %}
+          </div>
+
+          <!-- Pincode -->
+          <div class="form-group">
+            <label class="form-label">Pincode <span class="req">*</span></label>
+            <input type="text" class="form-input" name="restaurant_pincode" id="id_restaurant_pincode" placeholder="302001" value="{{ form.restaurant_pincode.value|default:'' }}">
+            {% if form.restaurant_pincode.errors %}
+              <span class="form-error">{{ form.restaurant_pincode.errors.0 }}</span>
+            {% endif %}
+          </div>
+
+          <!-- Email -->
+          <div class="form-group">
+            <label class="form-label">Email <span class="req">*</span></label>
+            <input type="email" class="form-input" name="restaurant_email" id="id_restaurant_email" placeholder="owner@spicevilla.in" value="{{ form.restaurant_email.value|default:'' }}">
+            {% if form.restaurant_email.errors %}
+              <span class="form-error">{{ form.restaurant_email.errors.0 }}</span>
+            {% endif %}
+          </div>
+
+          <!-- Phone -->
+          <div class="form-group">
+            <label class="form-label">Phone <span class="req">*</span></label>
+            <input type="text" class="form-input" name="restaurant_phone" id="id_restaurant_phone" placeholder="9876543210" value="{{ form.restaurant_phone.value|default:'' }}">
+            {% if form.restaurant_phone.errors %}
+              <span class="form-error">{{ form.restaurant_phone.errors.0 }}</span>
+            {% endif %}
+          </div>
+
+          <!-- GST Toggle -->
+          <div class="form-group">
+            <label class="form-label">Is your business GST registered?</label>
+            <input type="hidden" name="is_gst_registered" id="id_is_gst_registered" value="on">
+            <div class="toggle-group" id="gst-main-toggle">
+              <button type="button" class="toggle-btn active" onclick="setMainGst(true)">Yes</button>
+              <button type="button" class="toggle-btn" onclick="setMainGst(false)">No</button>
+            </div>
+            <span class="form-hint">You'll add the GSTIN while creating a branch</span>
+          </div>
+        </div>
+
+        <div class="step-actions">
+          <a href="{% url 'super_admin:dashboard' %}" class="btn-back">Cancel</a>
+          <button type="button" class="btn-next" onclick="validateAndGoToStep(2)">Next <i class="fa-solid fa-arrow-right"></i></button>
+        </div>
+      </div>
+
+
+      <!-- ==================== STEP 2: BRANCHES (ADD OUTLETS) ==================== -->
+      <div id="step-2-content" class="step-pane hidden">
+        <div class="step-header">
+          <h2>Add your outlets</h2>
+          <p>Just the basics — numbering and other settings are available later in the branch panel.</p>
+        </div>
+
+        <div id="branches-container">
+          <!-- Dynamic Branch cards injected via Javascript -->
+        </div>
+
+        <button type="button" class="btn-add-branch" onclick="addNewBranchCard()">
+          <i class="fa-solid fa-plus"></i> Add Branch
+        </button>
+
+        <div class="step-actions">
+          <button type="button" class="btn-back" onclick="goToStep(1)"><i class="fa-solid fa-arrow-left"></i> Back</button>
+          <button type="button" class="btn-next" onclick="validateAndGoToStep(3)">Next <i class="fa-solid fa-arrow-right"></i></button>
+        </div>
+      </div>
+
+
+      <!-- ==================== STEP 3: REVIEW & ADMIN ACCOUNT ==================== -->
+      <div id="step-3-content" class="step-pane hidden">
+        <div class="step-header">
+          <h2>Review & Complete Onboarding</h2>
+          <p>Review business & branch details and set up administrator login credentials.</p>
+        </div>
+
+        <div class="summary-box">
+          <h4 style="margin: 0 0 12px 0; color: var(--brand-primary); font-size: 16px;">
+            <i class="fa-solid fa-building" style="margin-right: 6px;"></i> Business Overview
+          </h4>
+          <div class="summary-row">
+            <span class="summary-label">Legal Name:</span>
+            <span class="summary-val" id="sum-legal-name">-</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Trade Name:</span>
+            <span class="summary-val" id="sum-trade-name">-</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Business Type:</span>
+            <span class="summary-val" id="sum-business-type">-</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">PAN:</span>
+            <span class="summary-val" id="sum-pan">-</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Contact Email & Phone:</span>
+            <span class="summary-val" id="sum-contact">-</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Address:</span>
+            <span class="summary-val" id="sum-address">-</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Total Outlets Configured:</span>
+            <span class="summary-val" id="sum-outlets-count">0</span>
+          </div>
+        </div>
+
+        <!-- Sample Bill Preview Box -->
+        <div style="background: #ffffff; border: 1px dashed #059669; border-radius: 12px; padding: 20px; margin-bottom: 24px; font-family: 'Courier New', Courier, monospace;">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #cbd5e1; padding-bottom: 10px; margin-bottom: 12px;">
+            <span style="font-size: 13px; font-weight: 700; color: #059669; font-family: sans-serif;"><i class="fa-solid fa-receipt"></i> Sample Bill Preview (BR-17 Compliant)</span>
+            <span style="background: #e6f4ea; color: #137333; font-size: 11px; padding: 2px 8px; border-radius: 10px; font-family: sans-serif; font-weight: 600;">Production Document Series Preview</span>
+          </div>
+          <div style="text-align: center; margin-bottom: 12px;">
+            <div id="preview-trade-name" style="font-size: 18px; font-weight: bold; text-transform: uppercase;">SPICE VILLA</div>
+            <div id="preview-legal-name" style="font-size: 12px; color: #475569;">(Sharma Hospitality Pvt Ltd)</div>
+            <div id="preview-address" style="font-size: 11px; color: #64748b; margin-top: 2px;">12, MI Road, Jaipur, Rajasthan - 302001</div>
+            <div style="font-size: 11px; margin-top: 4px;">
+              <span id="preview-gstin">GSTIN: 08CEXPJ7241H1Z5</span> | <span id="preview-fssai">FSSAI: 12224026000123</span>
+            </div>
+          </div>
+          <div style="border-top: 1px solid #1e293b; border-bottom: 1px solid #1e293b; padding: 6px 0; margin-bottom: 10px; display: flex; justify-content: space-between; font-size: 12px; font-weight: bold;">
+            <span id="preview-doc-title">TAX INVOICE</span>
+            <span id="preview-doc-number">No: RAJ-01/0001/26-27</span>
+          </div>
+          <table style="width: 100%; font-size: 11px; border-collapse: collapse; margin-bottom: 10px;">
+            <tr style="border-bottom: 1px dashed #cbd5e1; text-align: left;">
+              <th style="padding: 4px 0;">Item</th>
+              <th style="text-align: center;">Qty</th>
+              <th style="text-align: right;">Price</th>
+              <th style="text-align: right;">Amount</th>
+            </tr>
+            <tr>
+              <td style="padding: 4px 0;">Paneer Butter Masala (SAC 9963)</td>
+              <td style="text-align: center;">2</td>
+              <td style="text-align: right;">260.00</td>
+              <td style="text-align: right;">520.00</td>
+            </tr>
+            <tr>
+              <td style="padding: 4px 0;">Butter Naan</td>
+              <td style="text-align: center;">4</td>
+              <td style="text-align: right;">60.00</td>
+              <td style="text-align: right;">240.00</td>
+            </tr>
+          </table>
+          <div style="border-top: 1px dashed #cbd5e1; padding-top: 6px; font-size: 11px; text-align: right;">
+            <div>Items Subtotal: 760.00</div>
+            <div id="preview-cgst">CGST (2.5%): 19.00</div>
+            <div id="preview-sgst">SGST (2.5%): 19.00</div>
+            <div style="font-size: 14px; font-weight: bold; margin-top: 4px; border-top: 1px solid #1e293b; padding-top: 4px;">Grand Total: ₹798.00</div>
+          </div>
+          <div id="preview-declaration" style="font-size: 10px; color: #64748b; text-align: center; margin-top: 10px; font-style: italic;">
+            Thank you for dining with us!
+          </div>
+        </div>
+
+
+        <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-color);">
+          <h4 style="margin: 0 0 16px 0; color: var(--text-main); font-size: 16px; font-weight: 700;">
+            <i class="fa-solid fa-user-shield" style="margin-right: 6px; color: var(--brand-primary);"></i> Primary Administrator Account
+          </h4>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label">First Name</label>
+              <input type="text" class="form-input" name="admin_first_name" id="id_admin_first_name" placeholder="John" value="{{ form.admin_first_name.value|default:'' }}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Last Name</label>
+              <input type="text" class="form-input" name="admin_last_name" id="id_admin_last_name" placeholder="Doe" value="{{ form.admin_last_name.value|default:'' }}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Username <span class="req">*</span></label>
+              <input type="text" class="form-input" name="admin_username" id="id_admin_username" placeholder="spicevilla_admin" value="{{ form.admin_username.value|default:'' }}">
+              {% if form.admin_username.errors %}
+                <span class="form-error">{{ form.admin_username.errors.0 }}</span>
+              {% endif %}
+            </div>
+            <div class="form-group">
+              <label class="form-label">Admin Email</label>
+              <input type="email" class="form-input" name="admin_email" id="id_admin_email" placeholder="admin@spicevilla.in" value="{{ form.admin_email.value|default:'' }}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Password <span class="req">*</span></label>
+              <input type="password" class="form-input" name="admin_password" id="id_admin_password" placeholder="••••••••">
+              {% if form.admin_password.errors %}
+                <span class="form-error">{{ form.admin_password.errors.0 }}</span>
+              {% endif %}
+            </div>
+            <div class="form-group">
+              <label class="form-label">Confirm Password <span class="req">*</span></label>
+              <input type="password" class="form-input" name="admin_password_confirm" id="id_admin_password_confirm" placeholder="••••••••">
+              {% if form.admin_password_confirm.errors %}
+                <span class="form-error">{{ form.admin_password_confirm.errors.0 }}</span>
+              {% endif %}
+            </div>
+            <div class="form-group full-width" style="flex-direction: row; align-items: center; gap: 8px;">
+              <input type="checkbox" name="is_primary_admin" id="id_is_primary_admin" checked style="width: 16px; height: 16px; accent-color: var(--brand-primary);">
+              <label for="id_is_primary_admin" style="font-size: 14px; font-weight: 500; cursor: pointer; margin: 0;">Designate as Primary Restaurant Administrator</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-actions">
+          <button type="button" class="btn-back" onclick="goToStep(2)"><i class="fa-solid fa-arrow-left"></i> Back</button>
+          <button type="submit" class="btn-submit-final" onclick="prepareSubmit(event)">
+            <i class="fa-solid fa-circle-check"></i> {% if is_edit %}Save Changes{% else %}Complete & Create{% endif %}
+          </button>
+        </div>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+<script>
+  let currentStep = 1;
+  let branches = {{ initial_branches_json|safe|default:"[]" }};
+
+  const BUSINESS_RULES = {
+    "Sole Proprietorship": { panChar: "P", label: null },
+    "Partnership": { panChar: "F", label: null },
+    "LLP": { panChar: "F", label: "LLPIN", placeholder: "AAB-1234", hint: "LLP Identification Number (required)" },
+    "Private Limited": { panChar: "C", label: "CIN", placeholder: "U15400RJ2020PTC000000", hint: "Corporate Identification Number (required)" },
+    "Public Limited": { panChar: "C", label: "CIN", placeholder: "L15400RJ2020PLC000000", hint: "Corporate Identification Number (required)" },
+    "OPC": { panChar: "C", label: "CIN", placeholder: "U15400RJ2020OPC000000", hint: "Corporate Identification Number (required)" },
+    "Trust/Society": { panChar: "T or A", label: null },
+  };
+
+  // Initialize page and branch cards
+  document.addEventListener("DOMContentLoaded", function () {
+    if (branches.length === 0) {
+      addNewBranchCard(true);
+    } else {
+      renderBranchCards();
+    }
+    updateBusinessTypeRules();
+  });
+
+
+  function updateBusinessTypeRules() {
+    const bTypeElem = document.getElementById("id_business_type");
+    if (!bTypeElem) return;
+    const bType = bTypeElem.value;
+    const rule = BUSINESS_RULES[bType];
+    const panHint = document.getElementById("id_pan_hint");
+    const cinContainer = document.getElementById("cin_container");
+    const cinLabel = document.getElementById("cin_label");
+    const cinInput = document.getElementById("id_cin_llpin");
+    const cinHint = document.getElementById("cin_hint");
+
+    if (panHint) {
+      if (rule && rule.panChar) {
+        panHint.innerText = `As per PAN (4th character should be '${rule.panChar}')`;
+      } else {
+        panHint.innerText = "As per PAN";
+      }
+    }
+
+    if (rule && rule.label) {
+      if (cinContainer) cinContainer.classList.remove("hidden");
+      if (cinLabel) cinLabel.innerHTML = `${rule.label} <span class="req">*</span>`;
+      if (cinInput) cinInput.placeholder = rule.placeholder || "";
+      if (cinHint) cinHint.innerText = rule.hint || "";
+    } else {
+      if (cinContainer) cinContainer.classList.add("hidden");
+      if (cinInput) cinInput.value = "";
+    }
+    updatePanRules();
+  }
+
+  function updatePanRules() {
+    const panInput = document.getElementById("id_pan");
+    if (!panInput) return;
+    const panVal = panInput.value.toUpperCase().trim();
+    panInput.value = panVal;
+
+    const bType = document.getElementById("id_business_type") ? document.getElementById("id_business_type").value : "";
+    const rule = BUSINESS_RULES[bType];
+    const errorElem = document.getElementById("id_pan_error");
+
+    if (!errorElem) return;
+
+    if (!panVal) {
+      errorElem.classList.add("hidden");
+      errorElem.innerText = "";
+      return;
+    }
+
+    if (panVal.length === 10 && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(panVal)) {
+      errorElem.innerText = "Invalid PAN format (e.g. AAACS1234F)";
+      errorElem.classList.remove("hidden");
+      return;
+    }
+
+    if (panVal.length >= 4 && rule && rule.panChar) {
+      const char4 = panVal[3];
+      const expected = rule.panChar.split(" or ");
+      if (!expected.includes(char4)) {
+        errorElem.innerText = `PAN 4th character '${char4}' does not match Business Type '${bType}' (Expected '${rule.panChar}')`;
+        errorElem.classList.remove("hidden");
+        return;
+      }
+    }
+
+    errorElem.classList.add("hidden");
+    errorElem.innerText = "";
+  }
+
+  function setMainGst(val) {
+    const hidden = document.getElementById("id_is_gst_registered");
+    const btns = document.querySelectorAll("#gst-main-toggle .toggle-btn");
+    hidden.value = val ? "on" : "";
+    btns[0].classList.toggle("active", val);
+    btns[1].classList.toggle("active", !val);
+  }
+
+  function goToStep(step) {
+    if (step === currentStep) return;
+    
+    document.querySelectorAll(".step-pane").forEach(pane => pane.classList.add("hidden"));
+    document.querySelectorAll(".step-item").forEach(item => item.classList.remove("active"));
+
+    document.getElementById(`step-${step}-content`).classList.remove("hidden");
+    document.getElementById(`nav-step-${step}`).classList.add("active");
+    currentStep = step;
+
+    if (step === 3) {
+      updateSummary();
+    }
+  }
+
+  function validateAndGoToStep(targetStep) {
+    if (targetStep === 2) {
+      const legal = document.getElementById("id_legal_name").value.trim();
+      if (!legal) {
+        alert("Legal Name is required.");
+        document.getElementById("id_legal_name").focus();
+        return;
+      }
+
+      const trade = document.getElementById("id_trade_name").value.trim();
+      if (!trade) {
+        alert("Trade / Brand Name is required.");
+        document.getElementById("id_trade_name").focus();
+        return;
+      }
+
+      const btype = document.getElementById("id_business_type").value;
+      if (!btype) {
+        alert("Please select a Business Type.");
+        document.getElementById("id_business_type").focus();
+        return;
+      }
+
+      const pan = document.getElementById("id_pan").value.toUpperCase().trim();
+      if (!pan) {
+        alert("PAN is required.");
+        document.getElementById("id_pan").focus();
+        return;
+      }
+
+      if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+        alert("Invalid PAN format (e.g. AAACS1234F).");
+        document.getElementById("id_pan").focus();
+        return;
+      }
+
+      const rule = BUSINESS_RULES[btype];
+      if (rule && rule.panChar) {
+        const char4 = pan[3];
+        const expected = rule.panChar.split(" or ");
+        if (!expected.includes(char4)) {
+          alert(`PAN 4th character '${char4}' does not match Business Type '${btype}' (Expected '${rule.panChar}').`);
+          document.getElementById("id_pan").focus();
+          return;
+        }
+      }
+
+      if (rule && rule.label) {
+        const cin = document.getElementById("id_cin_llpin").value.trim();
+        if (!cin) {
+          alert(`${rule.label} is required for ${btype}.`);
+          document.getElementById("id_cin_llpin").focus();
+          return;
+        }
+      }
+
+      const addr1 = document.getElementById("id_restaurant_address_line_1").value.trim();
+      if (!addr1) {
+        alert("Address Line 1 is required.");
+        document.getElementById("id_restaurant_address_line_1").focus();
+        return;
+      }
+
+      const city = document.getElementById("id_restaurant_city").value.trim();
+      if (!city) {
+        alert("City is required.");
+        document.getElementById("id_restaurant_city").focus();
+        return;
+      }
+
+      const state = document.getElementById("id_restaurant_state").value;
+      if (!state) {
+        alert("Please select a State.");
+        document.getElementById("id_restaurant_state").focus();
+        return;
+      }
+
+      const pincode = document.getElementById("id_restaurant_pincode").value.trim();
+      if (!/^[1-9][0-9]{5}$/.test(pincode)) {
+        alert("Enter a valid 6-digit Pincode.");
+        document.getElementById("id_restaurant_pincode").focus();
+        return;
+      }
+
+      const email = document.getElementById("id_restaurant_email").value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        alert("Enter a valid Email address.");
+        document.getElementById("id_restaurant_email").focus();
+        return;
+      }
+
+      const phone = document.getElementById("id_restaurant_phone").value.trim();
+      if (!/^[6-9][0-9]{9}$/.test(phone)) {
+        alert("Enter a valid 10-digit mobile number.");
+        document.getElementById("id_restaurant_phone").focus();
+        return;
+      }
+    } else if (targetStep === 3) {
+      syncBranchesFromDOM();
+      if (branches.length === 0) {
+        alert("Please add at least one branch outlet.");
+        return;
+      }
+      for (let i = 0; i < branches.length; i++) {
+        if (!branches[i].name) {
+          alert(`Branch ${i + 1} requires a Branch Name.`);
+          const input = document.getElementById(`branch-name-${i}`);
+          if (input) input.focus();
+          return;
+        }
+      }
+    }
+    goToStep(targetStep);
+  }
+
+
+  function addNewBranchCard(isFirst = false) {
+    const idx = branches.length;
+    const defaultTradeName = document.getElementById("id_trade_name").value.trim() || "Spice Villa";
+    const defaultState = document.getElementById("id_restaurant_state").value || "Rajasthan";
+    const branchName = isFirst && defaultTradeName ? `${defaultTradeName} — Main Branch` : "";
+
+    const newBranch = {
+      id: idx,
+      name: branchName,
+      phone: "",
+      use_company_address: true,
+      address_line_1: "",
+      address_line_2: "",
+      city: "",
+      state: defaultState,
+      pincode: "",
+      fssai_license_no: "",
+      serves_alcohol: false,
+      gstin: "",
+      gst_registration_type: "R5",
+      is_hotel_tariff_7500_plus: false,
+      e_invoicing_enabled: false
+    };
+
+    branches.push(newBranch);
+    renderBranchCards();
+  }
+
+  function removeBranch(idx) {
+    if (branches.length <= 1) {
+      alert("At least one branch outlet is required.");
+      return;
+    }
+    syncBranchesFromDOM();
+    branches.splice(idx, 1);
+    renderBranchCards();
+  }
+
+  function renderBranchCards() {
+    const container = document.getElementById("branches-container");
+    container.innerHTML = "";
+
+    const companyAddr1 = document.getElementById("id_restaurant_address_line_1").value;
+    const companyAddr2 = document.getElementById("id_restaurant_address_line_2").value;
+    const companyCity = document.getElementById("id_restaurant_city").value;
+    const companyState = document.getElementById("id_restaurant_state").value;
+    const companyPincode = document.getElementById("id_restaurant_pincode").value;
+
+    branches.forEach((b, idx) => {
+      const card = document.createElement("div");
+      card.className = "branch-card";
+      card.id = `branch-card-${idx}`;
+
+      const addr1 = b.use_company_address ? companyAddr1 : b.address_line_1;
+      const addr2 = b.use_company_address ? companyAddr2 : b.address_line_2;
+      const city = b.use_company_address ? companyCity : b.city;
+      const state = b.use_company_address ? companyState : b.state;
+      const pincode = b.use_company_address ? companyPincode : b.pincode;
+
+      card.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <div class="branch-header-tags">
+            <span class="badge-tag branch">Branch ${idx + 1}</span>
+            <span class="badge-tag state">${state || 'State'}</span>
+          </div>
+          ${branches.length > 1 ? `<button type="button" onclick="removeBranch(${idx})" style="background:none; border:none; color:#ef4444; font-size:14px; cursor:pointer;" title="Remove Branch"><i class="fa-solid fa-trash"></i> Remove</button>` : ''}
+        </div>
+
+        <div class="form-grid">
+          <!-- Branch Name -->
+          <div class="form-group">
+            <label class="form-label">Branch Name <span class="req">*</span></label>
+            <input type="text" class="form-input" id="branch-name-${idx}" placeholder="Spice Villa — Malviya Nagar" value="${escapeHtml(b.name)}" oninput="branches[${idx}].name = this.value">
+          </div>
+
+          <!-- Branch Phone -->
+          <div class="form-group">
+            <label class="form-label">Branch Phone</label>
+            <input type="text" class="form-input" id="branch-phone-${idx}" placeholder="7742114641" value="${escapeHtml(b.phone)}" oninput="branches[${idx}].phone = this.value">
+            <span class="form-hint">Leave blank to use the company number</span>
+          </div>
+
+          <!-- Use Registered Company Address -->
+          <div class="form-group full-width">
+            <label class="use-address-checkbox">
+              <input type="checkbox" id="branch-use-addr-${idx}" ${b.use_company_address ? 'checked' : ''} onchange="toggleUseCompanyAddr(${idx}, this.checked)">
+              Use registered company address
+            </label>
+          </div>
+
+          <!-- Address Line 1 -->
+          <div class="form-group">
+            <label class="form-label">Address Line 1 <span class="req">*</span></label>
+            <input type="text" class="form-input" id="branch-addr1-${idx}" placeholder="F1, Agrasen Tower" value="${escapeHtml(addr1)}" ${b.use_company_address ? 'disabled' : ''} oninput="branches[${idx}].address_line_1 = this.value">
+          </div>
+
+          <!-- Address Line 2 -->
+          <div class="form-group">
+            <label class="form-label">Address Line 2</label>
+            <input type="text" class="form-input" id="branch-addr2-${idx}" placeholder="Central Spine, Vidhyadhar nagar" value="${escapeHtml(addr2)}" ${b.use_company_address ? 'disabled' : ''} oninput="branches[${idx}].address_line_2 = this.value">
+            <span class="form-hint">Optional</span>
+          </div>
+
+          <!-- City -->
+          <div class="form-group">
+            <label class="form-label">City <span class="req">*</span></label>
+            <input type="text" class="form-input" id="branch-city-${idx}" placeholder="Jaipur" value="${escapeHtml(city)}" ${b.use_company_address ? 'disabled' : ''} oninput="branches[${idx}].city = this.value">
+          </div>
+
+          <!-- State -->
+          <div class="form-group">
+            <label class="form-label">State <span class="req">*</span></label>
+            <input type="text" class="form-input" id="branch-state-${idx}" placeholder="Rajasthan" value="${escapeHtml(state)}" ${b.use_company_address ? 'disabled' : ''} oninput="branches[${idx}].state = this.value">
+          </div>
+
+          <!-- Pincode -->
+          <div class="form-group">
+            <label class="form-label">Pincode <span class="req">*</span></label>
+            <input type="text" class="form-input" id="branch-pincode-${idx}" placeholder="302013" value="${escapeHtml(pincode)}" ${b.use_company_address ? 'disabled' : ''} oninput="branches[${idx}].pincode = this.value">
+          </div>
+
+          <!-- FSSAI License No. -->
+          <div class="form-group">
+            <label class="form-label">FSSAI License No.</label>
+            <input type="text" class="form-input" id="branch-fssai-${idx}" placeholder="12224026000123" value="${escapeHtml(b.fssai_license_no)}" oninput="branches[${idx}].fssai_license_no = this.value">
+            <span class="form-hint">You can skip this for now — required before printing bills</span>
+          </div>
+
+          <!-- Alcohol Service Toggle -->
+          <div class="form-group full-width">
+            <label class="form-label">Does this outlet serve alcohol?</label>
+            <div class="toggle-group">
+              <button type="button" class="toggle-btn ${b.serves_alcohol ? 'active' : ''}" onclick="setBranchAlcohol(${idx}, true)">Yes</button>
+              <button type="button" class="toggle-btn ${!b.serves_alcohol ? 'active' : ''}" onclick="setBranchAlcohol(${idx}, false)">No</button>
+            </div>
+            <span class="form-hint">Liquor is billed under state VAT, outside GST</span>
+          </div>
+        </div>
+
+        <!-- Nested GST Box -->
+        <div class="gst-branch-box">
+          <h4>GST for this branch</h4>
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label class="form-label">GSTIN <span class="req">*</span></label>
+              <input type="text" class="form-input" id="branch-gstin-${idx}" placeholder="08CEXPJ7241H1Z5" style="text-transform: uppercase;" value="${escapeHtml(b.gstin)}" oninput="branches[${idx}].gstin = this.value">
+              <span class="form-hint">Saved at company level — other branches in this state will reuse it</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Registration Type <span class="req">*</span></label>
+              <select class="form-select" id="branch-gsttype-${idx}" onchange="branches[${idx}].gst_registration_type = this.value">
+                <option value="R5" ${b.gst_registration_type === 'R5' ? 'selected' : ''}>Regular (5% GST on bills)</option>
+                <option value="R18" ${b.gst_registration_type === 'R18' ? 'selected' : ''}>Regular (18% GST with ITC)</option>
+                <option value="C" ${b.gst_registration_type === 'C' ? 'selected' : ''}>Composition</option>
+                <option value="U" ${b.gst_registration_type === 'U' ? 'selected' : ''}>Unregistered</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Inside a hotel with room tariff ₹7,500+?</label>
+              <div class="toggle-group">
+                <button type="button" class="toggle-btn ${b.is_hotel_tariff_7500_plus ? 'active' : ''}" onclick="setBranchHotelTariff(${idx}, true)">Yes</button>
+                <button type="button" class="toggle-btn ${!b.is_hotel_tariff_7500_plus ? 'active' : ''}" onclick="setBranchHotelTariff(${idx}, false)">No</button>
+              </div>
+              <span class="form-hint">18% GST with ITC applies</span>
+            </div>
+
+            <div class="form-group full-width">
+              <label class="form-label">E-invoicing (turnover ₹5 Cr+)?</label>
+              <div class="toggle-group">
+                <button type="button" class="toggle-btn ${b.e_invoicing_enabled ? 'active' : ''}" onclick="setBranchEInvoicing(${idx}, true)">Yes</button>
+                <button type="button" class="toggle-btn ${!b.e_invoicing_enabled ? 'active' : ''}" onclick="setBranchEInvoicing(${idx}, false)">No</button>
+              </div>
+              <span class="form-hint">IRN + QR on B2B invoices</span>
+            </div>
+          </div>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  function toggleUseCompanyAddr(idx, isChecked) {
+    branches[idx].use_company_address = isChecked;
+    renderBranchCards();
+  }
+
+  function setBranchAlcohol(idx, val) {
+    branches[idx].serves_alcohol = val;
+    renderBranchCards();
+  }
+
+  function setBranchHotelTariff(idx, val) {
+    branches[idx].is_hotel_tariff_7500_plus = val;
+    renderBranchCards();
+  }
+
+  function setBranchEInvoicing(idx, val) {
+    branches[idx].e_invoicing_enabled = val;
+    renderBranchCards();
+  }
+
+  function syncBranchesFromDOM() {
+    branches.forEach((b, idx) => {
+      const nameElem = document.getElementById(`branch-name-${idx}`);
+      if (nameElem) b.name = nameElem.value;
+
+      const phoneElem = document.getElementById(`branch-phone-${idx}`);
+      if (phoneElem) b.phone = phoneElem.value;
+
+      const useAddrElem = document.getElementById(`branch-use-addr-${idx}`);
+      if (useAddrElem) b.use_company_address = useAddrElem.checked;
+
+      if (!b.use_company_address) {
+        const a1 = document.getElementById(`branch-addr1-${idx}`);
+        if (a1) b.address_line_1 = a1.value;
+        const a2 = document.getElementById(`branch-addr2-${idx}`);
+        if (a2) b.address_line_2 = a2.value;
+        const city = document.getElementById(`branch-city-${idx}`);
+        if (city) b.city = city.value;
+        const st = document.getElementById(`branch-state-${idx}`);
+        if (st) b.state = st.value;
+        const pin = document.getElementById(`branch-pincode-${idx}`);
+        if (pin) b.pincode = pin.value;
+      } else {
+        b.address_line_1 = document.getElementById("id_restaurant_address_line_1").value;
+        b.address_line_2 = document.getElementById("id_restaurant_address_line_2").value;
+        b.city = document.getElementById("id_restaurant_city").value;
+        b.state = document.getElementById("id_restaurant_state").value;
+        b.pincode = document.getElementById("id_restaurant_pincode").value;
+      }
+
+      const fssai = document.getElementById(`branch-fssai-${idx}`);
+      if (fssai) b.fssai_license_no = fssai.value;
+
+      const gstin = document.getElementById(`branch-gstin-${idx}`);
+      if (gstin) b.gstin = gstin.value;
+
+      const gsttype = document.getElementById(`branch-gsttype-${idx}`);
+      if (gsttype) b.gst_registration_type = gsttype.value;
+    });
+  }
+
+  function updateSummary() {
+    syncBranchesFromDOM();
+    const legalName = document.getElementById("id_legal_name").value || "-";
+    const tradeName = document.getElementById("id_trade_name").value || "-";
+    document.getElementById("sum-legal-name").innerText = legalName;
+    document.getElementById("sum-trade-name").innerText = tradeName;
+
+    const bTypeElem = document.getElementById("id_business_type");
+    document.getElementById("sum-business-type").innerText = bTypeElem.options[bTypeElem.selectedIndex]?.text || "-";
+
+    document.getElementById("sum-pan").innerText = document.getElementById("id_pan").value || "-";
+    document.getElementById("sum-contact").innerText = `${document.getElementById("id_restaurant_email").value || '-'} | ${document.getElementById("id_restaurant_phone").value || '-'}`;
+
+    const addrParts = [
+      document.getElementById("id_restaurant_address_line_1").value,
+      document.getElementById("id_restaurant_address_line_2").value,
+      document.getElementById("id_restaurant_city").value,
+      document.getElementById("id_restaurant_state").value,
+      document.getElementById("id_restaurant_pincode").value
+    ].filter(Boolean);
+    document.getElementById("sum-address").innerText = addrParts.join(", ") || "-";
+    document.getElementById("sum-outlets-count").innerText = branches.length;
+
+    // Update Live Sample Bill Preview
+    const mainBranch = branches[0] || {};
+    document.getElementById("preview-trade-name").innerText = tradeName || "TRADE NAME";
+    document.getElementById("preview-legal-name").innerText = `(${legalName})`;
+    document.getElementById("preview-address").innerText = addrParts.join(", ") || "Branch Address";
+
+    const isGstReg = document.getElementById("id_is_gst_registered").value === "on" || document.getElementById("id_is_gst_registered").checked;
+    const branchGstin = mainBranch.gstin || "NOT REGISTERED";
+    const branchFssai = mainBranch.fssai_license_no || "NOT SPECIFIED";
+    document.getElementById("preview-gstin").innerText = isGstReg ? `GSTIN: ${branchGstin}` : "GST: Unregistered";
+    document.getElementById("preview-fssai").innerText = `FSSAI: ${branchFssai}`;
+
+    const gstType = mainBranch.gst_registration_type || "R5";
+    const titleElem = document.getElementById("preview-doc-title");
+    const cgstElem = document.getElementById("preview-cgst");
+    const sgstElem = document.getElementById("preview-sgst");
+    const decElem = document.getElementById("preview-declaration");
+
+    if (!isGstReg || gstType === "U") {
+      titleElem.innerText = "BILL / RECEIPT";
+      cgstElem.style.display = "none";
+      sgstElem.style.display = "none";
+      decElem.innerText = "Plain Receipt — Non-GST Invoice";
+    } else if (gstType === "C") {
+      titleElem.innerText = "BILL OF SUPPLY";
+      cgstElem.style.display = "none";
+      sgstElem.style.display = "none";
+      decElem.innerText = "Composition taxable person, not eligible to collect tax on supplies";
+    } else if (gstType === "R18" || mainBranch.is_hotel_tariff_7500_plus) {
+      titleElem.innerText = "TAX INVOICE";
+      cgstElem.style.display = "block";
+      sgstElem.style.display = "block";
+      cgstElem.innerText = "CGST (9.0%): 68.40";
+      sgstElem.innerText = "SGST (9.0%): 68.40";
+      decElem.innerText = "18% GST Rate (Specified Premises / Hotel Tariff ₹7,500+)";
+    } else {
+      titleElem.innerText = "TAX INVOICE";
+      cgstElem.style.display = "block";
+      sgstElem.style.display = "block";
+      cgstElem.innerText = "CGST (2.5%): 19.00";
+      sgstElem.innerText = "SGST (2.5%): 19.00";
+      decElem.innerText = "Standard Restaurant GST (5% without ITC)";
+    }
+  }
+
+
+  function prepareSubmit(e) {
+    syncBranchesFromDOM();
+    document.getElementById("branches_json").value = JSON.stringify(branches);
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,176 @@
+{% extends 'super_admin/base.html' %}
+
+{% block title %}Super Admin Dashboard | Delicious Bites{% endblock %}
+
+{% block header_title %}Dashboard{% endblock %}
+
+{% block header_actions %}
+<a class="btn secondary" href="{% url 'super_admin:restaurant_admin_create' %}">
+  <i class="fa-solid fa-user-shield"></i>
+  <span>Add Admin</span>
+</a>
+{% endblock %}
+
+{% block content %}
+<!-- Overview Stats Grid -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div>
+      <div class="stat-label">Total Restaurants</div>
+      <div class="stat-value">{{ restaurants|length }}</div>
+    </div>
+    <div class="stat-icon primary">
+      <i class="fa-solid fa-hotel"></i>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div>
+      <div class="stat-label">Total Admins</div>
+      <div class="stat-value">{{ admins|length }}</div>
+    </div>
+    <div class="stat-icon info">
+      <i class="fa-solid fa-users-gear"></i>
+    </div>
+  </div>
+</div>
+
+<!-- Restaurants Management Table -->
+<div class="card">
+  <div class="hd">
+    <div>Restaurants</div>
+    <span class="badge neutral">Active Locations</span>
+  </div>
+  <div class="bd">
+    {% if restaurants %}
+    <div class="table-container">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Restaurant Name</th>
+            <th>Phone Number</th>
+            <th>Status</th>
+            <th style="width: 160px; text-align: right; padding-right: 24px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in restaurants %}
+          <tr>
+            <td style="font-weight: 600; color: var(--text);">{{ r.name }}</td>
+            <td class="muted">{{ r.phone|default:'Not Provided' }}</td>
+            <td>
+              {% if r.is_active %}
+              <span class="badge ok">
+                <i class="fa-solid fa-circle-check"></i>
+                <span>Active</span>
+              </span>
+              {% else %}
+              <span class="badge neutral">
+                <i class="fa-solid fa-circle-minus"></i>
+                <span>Inactive</span>
+              </span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="action-row" style="justify-content: flex-end; padding-right: 8px;">
+                <a class="action-btn edit" href="{% url 'super_admin:restaurant_edit' r.id %}" title="Edit Details">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </a>
+                <a class="action-btn delete" href="{% url 'super_admin:restaurant_delete' r.id %}"
+                  title="Delete Restaurant">
+                  <i class="fa-solid fa-trash-can"></i>
+                </a>
+                <a class="action-btn landing" href="{% url 'super_admin:landing_edit' r.id %}"
+                  title="Customize Landing Page">
+                  <i class="fa-solid fa-window-restore"></i>
+                </a>
+                <a class="action-btn dashboard" href="{% url 'restaurant_admin:dashboard' restaurant_slug=r.slug %}"
+                  title="Open Branch Dashboard" target="_blank">
+                  <i class="fa-solid fa-chart-line"></i>
+                </a>
+                <a class="action-btn menu" href="{% url 'restaurant_admin:menu_list' restaurant_slug=r.slug %}"
+                  title="Open Customer Menu" target="_blank">
+                  <i class="fa-solid fa-utensils"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty">
+      <i class="fa-solid fa-store-slash"
+        style="font-size: 2rem; color: var(--muted); margin-bottom: 8px; display: block;"></i>
+      <span>No restaurants onboarded yet. Click "Onboard" in the sidebar to get started.</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Restaurant Admins Table -->
+<div class="card" style="margin-top: 32px;">
+  <div class="hd">
+    <div>Restaurant Admins</div>
+    <span class="badge neutral">Linked User Accounts</span>
+  </div>
+  <div class="bd">
+    {% if admins %}
+    <div class="table-container">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Assigned Restaurant</th>
+            <th>Role Level</th>
+            <th style="width: 160px; text-align: right; padding-right: 24px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in admins %}
+          <tr>
+            <td style="font-weight: 600; color: var(--text);">
+              <i class="fa-solid fa-user" style="color: var(--muted); margin-right: 8px;"></i>
+              {{ a.user.username }}
+            </td>
+            <td class="muted">{{ a.restaurant.name }}</td>
+            <td>
+              {% if a.is_primary_admin %}
+              <span class="badge ok">
+                <i class="fa-solid fa-star"></i>
+                <span>Primary Admin</span>
+              </span>
+              {% else %}
+              <span class="badge neutral">
+                <i class="fa-solid fa-user-shield"></i>
+                <span>Admin</span>
+              </span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="action-row" style="justify-content: flex-end; padding-right: 8px;">
+                <a class="action-btn edit" href="{% url 'super_admin:restaurant_admin_edit' a.id %}" title="Edit User">
+                  <i class="fa-solid fa-user-pen"></i>
+                </a>
+                <a class="action-btn delete" href="{% url 'super_admin:restaurant_admin_delete' a.id %}"
+                  title="Delete User">
+                  <i class="fa-solid fa-user-minus"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty">
+      <i class="fa-solid fa-user-slash"
+        style="font-size: 2rem; color: var(--muted); margin-bottom: 8px; display: block;"></i>
+      <span>No restaurant administrators registered yet.</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

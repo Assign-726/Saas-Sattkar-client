@@ -1,0 +1,473 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-10 col-lg-8">
+
+    <!-- Onboarded Tax & Compliance Summary Card -->
+    {% if branch %}
+    <div class="card mb-4 border-0 shadow-sm">
+      <div class="card-header bg-light border-0 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0 text-dark">
+          <i class="bi bi-shield-check me-2 text-success"></i>Onboarded Compliance & Tax Overview
+        </h6>
+        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ branch.name }}</span>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6 col-lg-3">
+            <small class="text-muted d-block">GSTIN</small>
+            <span class="fw-bold text-dark">{{ branch.gst_registration.gstin|default:branch.gstin|default:'Unregistered' }}</span>
+          </div>
+          <div class="col-md-6 col-lg-3">
+            <small class="text-muted d-block">GST Scheme</small>
+            {% if branch.gst_registration_type == 'R18' or branch.is_hotel_tariff_7500_plus %}
+            <span class="badge bg-info text-dark">Regular (18% GST with ITC)</span>
+            {% elif branch.gst_registration_type == 'C' %}
+            <span class="badge bg-warning text-dark">Composition (0% GST)</span>
+            {% elif branch.gst_registration_type == 'U' %}
+            <span class="badge bg-secondary">Unregistered</span>
+            {% else %}
+            <span class="badge bg-success">Regular (5% GST)</span>
+            {% endif %}
+          </div>
+          <div class="col-md-6 col-lg-3">
+            <small class="text-muted d-block">FSSAI Status</small>
+            {% if branch.fssai_license_no %}
+            <span class="badge bg-success-subtle text-success border border-success-subtle">✓ {{ branch.fssai_license_no }}</span>
+            {% else %}
+            <span class="badge bg-danger-subtle text-danger border border-danger-subtle">⚠️ Missing FSSAI</span>
+            {% endif %}
+          </div>
+          <div class="col-md-6 col-lg-3">
+            <small class="text-muted d-block">Liquor Billing</small>
+            {% if branch.serves_alcohol %}
+            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Serves Alcohol (VAT Applies)</span>
+            {% else %}
+            <span class="badge bg-light text-muted border">No Alcohol</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0 fw-bold">Restaurant & Tax Settings</h5>
+      </div>
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data" novalidate>
+          {% csrf_token %}
+
+          <!-- GST & Service Charge Section -->
+          <h6 class="fw-bold mb-3 text-primary"><i class="bi bi-percent me-2"></i>GST & Charges</h6>
+          <div class="row g-3 mb-3">
+            <div class="col-md-4">
+              <label class="form-label fw-medium">CGST (%)</label>
+              {{ form.cgst_percentage }}
+              {% if form.cgst_percentage.errors %}
+              <div class="text-danger small">{{ form.cgst_percentage.errors|join:', ' }}</div>
+              {% endif %}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-medium">SGST (%)</label>
+              {{ form.sgst_percentage }}
+              {% if form.sgst_percentage.errors %}
+              <div class="text-danger small">{{ form.sgst_percentage.errors|join:', ' }}</div>
+              {% endif %}
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-medium">Service Charge (%)</label>
+              {{ form.service_charge_percentage }}
+              {% if form.service_charge_percentage.errors %}
+              <div class="text-danger small">{{ form.service_charge_percentage.errors|join:', ' }}</div>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- FSSAI License Number Field -->
+          {% if branch_form and branch_form.fssai_license_no %}
+          <div class="mb-3">
+            <label class="form-label fw-medium">FSSAI License No.</label>
+            {{ branch_form.fssai_license_no }}
+            <div class="form-text text-muted">Mandatory 14-digit FSSAI license number printed on bills (BR-18
+              requirement).</div>
+            {% if branch_form.fssai_license_no.errors %}
+            <div class="text-danger small">{{ branch_form.fssai_license_no.errors|join:', ' }}</div>
+            {% endif %}
+          </div>
+          {% endif %}
+
+          <div class="mb-3">
+            <label class="form-label fw-medium">Notification Sound (mp3/wav)</label>
+            {{ form.notification_sound }}
+            {% if form.notification_sound.errors %}
+            <div class="text-danger small">{{ form.notification_sound.errors|join:', ' }}</div>
+            {% endif %}
+            <div class="form-text">Upload a short audio file to play when a new order arrives.</div>
+          </div>
+
+          <!-- Custom Additional Charges Section -->
+          <hr class="my-4">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="fw-bold mb-0 text-primary">
+              <i class="bi bi-tag me-2"></i>Custom Additional Charges
+            </h6>
+            <button type="button" class="btn btn-sm btn-outline-primary fw-semibold" onclick="openAddChargeModal()">
+              <i class="bi bi-plus-lg me-1"></i> Add Custom Charge
+            </button>
+          </div>
+
+          <div class="card border-0 bg-light mb-3">
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                  <thead class="table-light small text-secondary">
+                    <tr>
+                      <th>Charge Name</th>
+                      <th>Type & Value</th>
+                      <th>Taxable (GST)</th>
+                      <th>Order Types</th>
+                      <th>Auto Applied</th>
+                      <th class="text-end">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for charge in custom_charges %}
+                    <tr>
+                      <td class="fw-bold text-dark">{{ charge.charge_name }}</td>
+                      <td>
+                        {% if charge.charge_type == 'flat' %}
+                        <span class="badge bg-success-subtle text-success border border-success-subtle">Flat ₹{{ charge.value }}</span>
+                        {% else %}
+                        <span class="badge bg-info-subtle text-info border border-info-subtle">{{ charge.value }}%</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% if charge.is_taxable %}
+                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Yes (Taxable)</span>
+                        {% else %}
+                        <span class="badge bg-light text-muted border">No</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% for ot in charge.applied_order_types %}
+                        <span class="badge bg-white text-dark border me-1">{{ ot|title }}</span>
+                        {% empty %}
+                        <span class="text-muted small">All Types</span>
+                        {% endfor %}
+                      </td>
+                      <td>
+                        {% if charge.is_auto_applied %}
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Yes (Auto)</span>
+                        {% else %}
+                        <span class="badge bg-light text-secondary border">Optional</span>
+                        {% endif %}
+                      </td>
+                      <td class="text-end">
+                        <button type="button" class="btn btn-link btn-sm text-primary p-0 me-2" 
+                          onclick="editCustomCharge({{ charge.id }}, '{{ charge.charge_name|escapejs }}', '{{ charge.charge_type }}', '{{ charge.value }}', {{ charge.is_taxable|yesno:'true,false' }}, {{ charge.is_auto_applied|yesno:'true,false' }}, '{{ charge.applied_order_types|join:',' }}')">
+                          <i class="bi bi-pencil"></i>
+                        </button>
+                        <form method="post" action="{% url 'restaurant_admin:custom_charge_delete' restaurant_slug=rslug pk=charge.id %}" style="display:inline;" onsubmit="return confirm('Delete charge {{ charge.charge_name|escapejs }}?');">
+                          {% csrf_token %}
+                          <button type="submit" class="btn btn-link btn-sm text-danger p-0">
+                            <i class="bi bi-trash"></i>
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                      <td colspan="6" class="text-center py-4 text-muted small">
+                        No custom charges configured yet. Click <strong>+ Add Custom Charge</strong> to configure packaging, dining, or delivery fees.
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Liquor & State VAT Compliance Section (if branch.serves_alcohol is True) -->
+          {% if branch and branch.serves_alcohol %}
+          <hr class="my-4">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="fw-bold mb-0 text-warning-emphasis">
+              <i class="bi bi-cup-straw me-2 text-warning"></i>Liquor & State VAT Details
+            </h6>
+            {% if branch.is_vat_config_complete %}
+            <span class="badge bg-success-subtle text-success border border-success-subtle">✓ Active VAT Pipeline</span>
+            {% else %}
+            <span class="badge bg-danger-subtle text-danger border border-danger-subtle">⚠️ Required before billing
+              alcohol</span>
+            {% endif %}
+          </div>
+
+          {% if branch_form %}
+          <div class="card bg-warning-subtle bg-opacity-10 border border-warning-subtle mb-3">
+            <div class="card-body">
+              <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                  <label class="form-label fw-medium">State VAT TIN <span class="text-danger">*</span></label>
+                  {{ branch_form.vat_tin }}
+                  {% if branch_form.vat_tin.errors %}
+                  <div class="text-danger small">{{ branch_form.vat_tin.errors|join:', ' }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-medium">Excise License No. <span class="text-danger">*</span></label>
+                  {{ branch_form.excise_license_no }}
+                  {% if branch_form.excise_license_no.errors %}
+                  <div class="text-danger small">{{ branch_form.excise_license_no.errors|join:', ' }}</div>
+                  {% endif %}
+                </div>
+              </div>
+
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label fw-medium">Beer VAT Rate (%)</label>
+                  {{ branch_form.vat_beer_rate }}
+                  {% if branch_form.vat_beer_rate.errors %}
+                  <div class="text-danger small">{{ branch_form.vat_beer_rate.errors|join:', ' }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-medium">IMFL VAT Rate (%)</label>
+                  {{ branch_form.vat_imfl_rate }}
+                  {% if branch_form.vat_imfl_rate.errors %}
+                  <div class="text-danger small">{{ branch_form.vat_imfl_rate.errors|join:', ' }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-medium">Wine VAT Rate (%)</label>
+                  {{ branch_form.vat_wine_rate }}
+                  {% if branch_form.vat_wine_rate.errors %}
+                  <div class="text-danger small">{{ branch_form.vat_wine_rate.errors|join:', ' }}</div>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="form-text text-muted mt-2">
+                Alcoholic beverages are billed separately under state VAT/excise regulations.
+              </div>
+            </div>
+          </div>
+          {% endif %}
+          {% endif %}
+
+          <hr class="my-4">
+          <h6 class="fw-bold mb-3"><i class="bi bi-cart-check me-2 text-primary"></i>Customer Ordering Settings</h6>
+
+          <div class="mb-3 form-check form-switch p-3 bg-light rounded border">
+            <div class="ms-4">
+              {{ form.enable_customer_ordering }}
+              <label class="form-check-label fw-bold" for="id_enable_customer_ordering">Enable Digital Ordering for
+                Customers</label>
+              <div class="form-text text-muted">When enabled, customers can add items to cart and place orders from the
+                digital menu page. When disabled, the menu page operates as a view-only catalog without order buttons or
+                cart capability.</div>
+              {% if form.enable_customer_ordering.errors %}
+              <div class="text-danger small mt-1">{{ form.enable_customer_ordering.errors|join:', ' }}</div>
+              {% endif %}
+            </div>
+          </div>
+
+          <hr class="my-4">
+          <h6 class="fw-bold mb-3"><i class="bi bi-wallet2 me-2 text-primary"></i>Payment Settings</h6>
+
+          <div class="mb-3 form-check">
+            {{ form.enable_pay_at_counter }}
+            <label class="form-check-label" for="id_enable_pay_at_counter">Enable Pay at Counter</label>
+            {% if form.enable_pay_at_counter.errors %}
+            <div class="text-danger small">{{ form.enable_pay_at_counter.errors|join:', ' }}</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3 form-check">
+            {{ form.enable_online_payment }}
+            <label class="form-check-label" for="id_enable_online_payment">Enable Online Payment (Razorpay)</label>
+            {% if form.enable_online_payment.errors %}
+            <div class="text-danger small">{{ form.enable_online_payment.errors|join:', ' }}</div>
+            {% endif %}
+          </div>
+
+          <div id="razorpay-credentials-section" style="display: none;">
+            <div class="card bg-light border-0 mb-3">
+              <div class="card-body">
+                <div class="mb-3">
+                  <label class="form-label">Razorpay Key ID</label>
+                  {{ form.razorpay_key_id }}
+                  {% if form.razorpay_key_id.errors %}
+                  <div class="text-danger small">{{ form.razorpay_key_id.errors|join:', ' }}</div>
+                  {% endif %}
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Razorpay Key Secret</label>
+                  {{ form.razorpay_key_secret }}
+                  {% if form.razorpay_key_secret.errors %}
+                  <div class="text-danger small">{{ form.razorpay_key_secret.errors|join:', ' }}</div>
+                  {% endif %}
+                </div>
+                <div class="form-text text-muted">
+                  Credentials will be validated upon saving. In test mode, use key starts with <code>rzp_test_</code>.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {% if form.non_field_errors %}
+          <div class="alert alert-danger">
+            {{ form.non_field_errors|join:', ' }}
+          </div>
+          {% endif %}
+
+          <div class="d-flex justify-content-end mt-4">
+            <a href="{% url 'restaurant_admin:dashboard' restaurant_slug=rslug %}"
+              class="btn btn-outline-secondary me-2">Cancel</a>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+          </div>
+
+          <script>
+            document.addEventListener('DOMContentLoaded', function () {
+              const onlineCheckbox = document.getElementById('id_enable_online_payment');
+              const credentialsSection = document.getElementById('razorpay-credentials-section');
+
+              function toggleCredentials() {
+                if (onlineCheckbox.checked) {
+                  credentialsSection.style.display = 'block';
+                } else {
+                  credentialsSection.style.display = 'none';
+                }
+              }
+
+              if (onlineCheckbox && credentialsSection) {
+                onlineCheckbox.addEventListener('change', toggleCredentials);
+                toggleCredentials();
+              }
+            });
+          </script>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Custom Charge Modal -->
+<div class="modal fade" id="customChargeModal" tabindex="-1" aria-labelledby="customChargeModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <form method="post" action="{% url 'restaurant_admin:custom_charge_save' restaurant_slug=rslug %}">
+        {% csrf_token %}
+        <input type="hidden" name="charge_id" id="modalChargeId">
+        
+        <div class="modal-header bg-light">
+          <h5 class="modal-title fw-bold" id="customChargeModalLabel">Add Custom Charge</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body p-4">
+          <div class="mb-3">
+            <label class="form-label fw-semibold text-secondary small">Charge Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="charge_name" id="modalChargeName" required placeholder="e.g. Packaging Charge, Private Dining Fee">
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold text-secondary small">Charge Type <span class="text-danger">*</span></label>
+              <select class="form-select" name="charge_type" id="modalChargeType" required>
+                <option value="flat">Flat Amount (₹)</option>
+                <option value="percentage">Percentage (%)</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold text-secondary small">Value <span class="text-danger">*</span></label>
+              <input type="number" step="0.01" min="0" class="form-control" name="value" id="modalChargeValue" required placeholder="e.g. 15.00 or 5.00">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold text-secondary small mb-1">Applied Order Types</label>
+            <div class="d-flex gap-3 bg-light p-2 rounded border">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="applied_order_types" value="dine_in" id="ot_dine_in" checked>
+                <label class="form-check-label small fw-medium" for="ot_dine_in">Dine-In</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="applied_order_types" value="takeaway" id="ot_takeaway" checked>
+                <label class="form-check-label small fw-medium" for="ot_takeaway">Takeaway</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="applied_order_types" value="delivery" id="ot_delivery" checked>
+                <label class="form-check-label small fw-medium" for="ot_delivery">Delivery</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3 form-check form-switch bg-light p-3 rounded border">
+            <div class="ms-4">
+              <input class="form-check-input" type="checkbox" name="is_taxable" id="modalIsTaxable">
+              <label class="form-check-label fw-semibold small" for="modalIsTaxable">Taxable (GST/VAT Applies on Charge)</label>
+              <div class="form-text fs-8 text-muted">When checked, GST/VAT is calculated on top of this charge amount.</div>
+            </div>
+          </div>
+
+          <div class="mb-3 form-check form-switch bg-light p-3 rounded border">
+            <div class="ms-4">
+              <input class="form-check-input" type="checkbox" name="is_auto_applied" id="modalIsAutoApplied" checked>
+              <label class="form-check-label fw-semibold small" for="modalIsAutoApplied">Auto-Apply to Cart</label>
+              <div class="form-text fs-8 text-muted">When checked, automatically adds to cart when matching order type is selected. Cashiers can still remove it.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer bg-light">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary px-4 fw-semibold">Save Custom Charge</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  let customChargeModalInstance = null;
+
+  document.addEventListener('DOMContentLoaded', function() {
+    customChargeModalInstance = new bootstrap.Modal(document.getElementById('customChargeModal'));
+  });
+
+  function openAddChargeModal() {
+    document.getElementById('modalChargeId').value = '';
+    document.getElementById('modalChargeName').value = '';
+    document.getElementById('modalChargeType').value = 'flat';
+    document.getElementById('modalChargeValue').value = '';
+    document.getElementById('modalIsTaxable').checked = false;
+    document.getElementById('modalIsAutoApplied').checked = true;
+    document.getElementById('ot_dine_in').checked = true;
+    document.getElementById('ot_takeaway').checked = true;
+    document.getElementById('ot_delivery').checked = true;
+    document.getElementById('customChargeModalLabel').textContent = 'Add Custom Charge';
+    customChargeModalInstance.show();
+  }
+
+  function editCustomCharge(id, name, type, value, isTaxable, isAutoApplied, appliedTypesStr) {
+    document.getElementById('modalChargeId').value = id;
+    document.getElementById('modalChargeName').value = name;
+    document.getElementById('modalChargeType').value = type;
+    document.getElementById('modalChargeValue').value = value;
+    document.getElementById('modalIsTaxable').checked = isTaxable;
+    document.getElementById('modalIsAutoApplied').checked = isAutoApplied;
+
+    const types = appliedTypesStr ? appliedTypesStr.split(',') : ['dine_in', 'takeaway', 'delivery'];
+    document.getElementById('ot_dine_in').checked = types.includes('dine_in');
+    document.getElementById('ot_takeaway').checked = types.includes('takeaway');
+    document.getElementById('ot_delivery').checked = types.includes('delivery');
+
+    document.getElementById('customChargeModalLabel').textContent = 'Edit Custom Charge';
+    customChargeModalInstance.show();
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,396 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block title %}Party Management (Buyers & Sellers){% endblock %}
+
+{% block content %}
+<style>
+  .nav-tabs .nav-link {
+    font-weight: 600;
+    color: #4b5563;
+    border-radius: 8px 8px 0 0;
+    padding: 10px 20px;
+  }
+  .nav-tabs .nav-link.active {
+    color: #2563eb;
+    border-bottom: 2px solid #2563eb;
+    background-color: #ffffff;
+  }
+  .party-type-badge {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-weight: 600;
+  }
+  .badge-vendor {
+    background-color: #dbeafe;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+  }
+  .badge-customer {
+    background-color: #dcfce7;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+  }
+  .badge-both {
+    background-color: #f3e8ff;
+    color: #6b21a8;
+    border: 1px solid #e9d5ff;
+  }
+</style>
+
+<div class="container-fluid">
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h3 class="fw-bold mb-1"><i class="bi bi-people-fill me-2 text-primary"></i>Party Management</h3>
+      <p class="text-muted mb-0">Manage suppliers (vendors), customers (buyers), opening balances, and account ledgers</p>
+    </div>
+    <button type="button" class="btn btn-primary shadow-sm fw-semibold" onclick="openAddPartyModal()">
+      <i class="bi bi-plus-lg me-1"></i> Add New Party
+    </button>
+  </div>
+
+  <!-- Filter & Search Bar -->
+  <div class="card shadow-sm border-0 mb-4">
+    <div class="card-body py-3">
+      <div class="row g-3 align-items-center justify-content-between">
+        <!-- Filter Tabs -->
+        <div class="col-md-6">
+          <ul class="nav nav-tabs border-bottom-0 mb-0">
+            <li class="nav-item">
+              <a class="nav-link {% if current_tab == 'all' %}active{% endif %}" href="?tab=all{% if search_query %}&q={{ search_query }}{% endif %}">
+                All Parties
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {% if current_tab == 'vendor' %}active{% endif %}" href="?tab=vendor{% if search_query %}&q={{ search_query }}{% endif %}">
+                <i class="bi bi-truck me-1"></i> Vendors (Sellers)
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link {% if current_tab == 'customer' %}active{% endif %}" href="?tab=customer{% if search_query %}&q={{ search_query }}{% endif %}">
+                <i class="bi bi-person me-1"></i> Customers (Buyers)
+              </a>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Search Input -->
+        <div class="col-md-4">
+          <form method="get" class="d-flex gap-2">
+            <input type="hidden" name="tab" value="{{ current_tab }}">
+            <div class="input-group">
+              <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+              <input type="text" name="q" class="form-control border-start-0" placeholder="Search by name, phone, or GSTIN..." value="{{ search_query }}">
+            </div>
+            {% if search_query %}
+            <a href="?tab={{ current_tab }}" class="btn btn-outline-secondary">Clear</a>
+            {% endif %}
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Party List Table -->
+  <div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Party Name</th>
+              <th>Type</th>
+              <th>Contact Details</th>
+              <th>GSTIN</th>
+              <th>Opening Balance</th>
+              <th class="text-end">Current Balance</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for party in parties %}
+            <tr>
+              <td>
+                <a href="{% url 'restaurant_admin:party_ledger_detail' restaurant_slug=restaurant.slug pk=party.id %}" class="fw-bold text-dark text-decoration-none">
+                  {{ party.name }}
+                </a>
+              </td>
+              <td>
+                {% if party.party_type == 'vendor' %}
+                <span class="party-type-badge badge-vendor"><i class="bi bi-truck me-1"></i> Vendor</span>
+                {% elif party.party_type == 'customer' %}
+                <span class="party-type-badge badge-customer"><i class="bi bi-person me-1"></i> Customer</span>
+                {% else %}
+                <span class="party-type-badge badge-both"><i class="bi bi-arrow-left-right me-1"></i> Vendor & Customer</span>
+                {% endif %}
+              </td>
+              <td>
+                <div>
+                  {% if party.phone %}
+                  <span class="d-block small"><i class="bi bi-telephone text-muted me-1"></i> {{ party.phone }}</span>
+                  {% endif %}
+                  {% if party.email %}
+                  <span class="d-block small text-muted"><i class="bi bi-envelope me-1"></i> {{ party.email }}</span>
+                  {% endif %}
+                  {% if not party.phone and not party.email %}<span class="text-muted small">-</span>{% endif %}
+                </div>
+              </td>
+              <td>
+                {% if party.gstin %}
+                <span class="badge bg-light text-dark border">{{ party.gstin }}</span>
+                {% else %}
+                <span class="text-muted small">-</span>
+                {% endif %}
+              </td>
+              <td class="small">
+                ₹ {{ party.opening_balance }}
+                <span class="text-muted">({{ party.get_balance_type_display }})</span>
+              </td>
+              <td class="text-end fw-bold">
+                {% with bal=party.current_balance %}
+                  {% if bal > 0 %}
+                    <span class="text-success">+ ₹ {{ bal }} <small class="fw-normal text-muted">(Receivable)</small></span>
+                  {% elif bal < 0 %}
+                    <span class="text-danger">- ₹ {{ bal|stringformat:".2f" }} <small class="fw-normal text-muted">(Payable)</small></span>
+                  {% else %}
+                    <span class="text-secondary">₹ 0.00</span>
+                  {% endif %}
+                {% endwith %}
+              </td>
+              <td class="text-end">
+                <a href="{% url 'restaurant_admin:party_ledger_detail' restaurant_slug=restaurant.slug pk=party.id %}" class="btn btn-outline-primary btn-sm rounded-pill px-3 me-1">
+                  <i class="bi bi-journal-text me-1"></i> Ledger
+                </a>
+                <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" onclick="editParty({{ party.id }})">
+                  <i class="bi bi-pencil"></i> Edit
+                </button>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="7" class="text-center py-5 text-muted">
+                <i class="bi bi-people fs-1 d-block mb-2 text-secondary opacity-50"></i>
+                No parties found. Click <strong>+ Add New Party</strong> to create vendors or customers.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Party Modal -->
+<div class="modal fade" id="partyModal" tabindex="-1" aria-labelledby="partyModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-content border-0 shadow-lg rounded-3 overflow-hidden">
+      <form method="post" action="{% url 'restaurant_admin:party_list' restaurant_slug=restaurant.slug %}">
+        {% csrf_token %}
+        <input type="hidden" name="party_id" id="modalPartyId">
+        
+        <div class="modal-header bg-dark text-white py-3 px-4">
+          <h5 class="modal-title fw-bold text-white d-flex align-items-center gap-2">
+            <i class="bi bi-person-lines-fill text-warning fs-4"></i> <span id="partyModalLabel">Add New Party</span>
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body p-4 bg-light">
+          
+          <!-- Card 1: Basic & Contact Information -->
+          <div class="card border-0 shadow-sm rounded-3 mb-3">
+            <div class="card-body p-4">
+              <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">
+                <i class="bi bi-person-badge text-primary me-2"></i>1. Basic & Contact Details
+              </h6>
+              
+              <div class="row g-3 mb-3">
+                <div class="col-md-8">
+                  <label for="modalPartyName" class="form-label fw-bold text-dark small mb-1">
+                    Party Name <span class="text-danger">*</span>
+                  </label>
+                  <div class="input-group">
+                    <span class="input-group-text bg-white text-muted"><i class="bi bi-building"></i></span>
+                    <input type="text" class="form-control fw-semibold" name="name" id="modalPartyName" required placeholder="e.g. Metro Food Supplies or John Doe">
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <label for="modalPartyType" class="form-label fw-bold text-dark small mb-1">
+                    Party Type <span class="text-danger">*</span>
+                  </label>
+                  <select class="form-select fw-semibold" name="party_type" id="modalPartyType" required>
+                    <option value="vendor">Vendor (Seller / Supplier)</option>
+                    <option value="customer">Customer (Buyer)</option>
+                    <option value="both">Both (Vendor & Customer)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label for="modalPartyPhone" class="form-label fw-semibold text-dark small mb-1">Phone Number</label>
+                  <div class="input-group">
+                    <span class="input-group-text bg-white text-muted"><i class="bi bi-telephone"></i></span>
+                    <input type="tel" class="form-control" name="phone" id="modalPartyPhone" placeholder="e.g. 9876543210">
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <label for="modalPartyEmail" class="form-label fw-semibold text-dark small mb-1">Email Address</label>
+                  <div class="input-group">
+                    <span class="input-group-text bg-white text-muted"><i class="bi bi-envelope"></i></span>
+                    <input type="email" class="form-control" name="email" id="modalPartyEmail" placeholder="e.g. vendor@example.com">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: Address Details -->
+          <div class="card border-0 shadow-sm rounded-3 mb-3">
+            <div class="card-body p-4">
+              <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">
+                <i class="bi bi-geo-alt-fill text-success me-2"></i>2. Address Details
+              </h6>
+              
+              <div class="row g-3 mb-3">
+                <div class="col-12">
+                  <label for="modalPartyAddressLine1" class="form-label fw-semibold text-dark small mb-1">Address Line 1</label>
+                  <div class="input-group">
+                    <span class="input-group-text bg-white text-muted"><i class="bi bi-geo-alt"></i></span>
+                    <input type="text" class="form-control" name="address_line1" id="modalPartyAddressLine1" placeholder="Building / Flat No, Street, Area, Landmark">
+                  </div>
+                </div>
+              </div>
+
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label for="modalPartyCity" class="form-label fw-semibold text-dark small mb-1">City</label>
+                  <div class="input-group">
+                    <span class="input-group-text bg-white text-muted"><i class="bi bi-buildings"></i></span>
+                    <input type="text" class="form-control" name="city" id="modalPartyCity" placeholder="e.g. Mumbai">
+                  </div>
+                </div>
+                <div class="col-md-5">
+                  <label for="modalPartyState" class="form-label fw-semibold text-dark small mb-1">State</label>
+                  <div class="input-group">
+                    <span class="input-group-text bg-white text-muted"><i class="bi bi-map"></i></span>
+                    <input type="text" class="form-control" name="state" id="modalPartyState" placeholder="e.g. Maharashtra">
+                  </div>
+                </div>
+                <div class="col-md-3">
+                  <label for="modalPartyPincode" class="form-label fw-semibold text-dark small mb-1">PIN Code</label>
+                  <div class="input-group">
+                    <span class="input-group-text bg-white text-muted"><i class="bi bi-pin-map"></i></span>
+                    <input type="text" class="form-control" name="pincode" id="modalPartyPincode" placeholder="e.g. 400001">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3: Statutory & GST Details -->
+          <div class="card border-0 shadow-sm rounded-3 mb-2">
+            <div class="card-body p-4">
+              <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">
+                <i class="bi bi-file-earmark-text text-warning me-2"></i>3. Statutory & GST Details (Optional)
+              </h6>
+              
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label for="modalPartyGstin" class="form-label fw-semibold text-dark small mb-1">GSTIN</label>
+                  <div class="input-group">
+                    <span class="input-group-text bg-white text-muted"><i class="bi bi-card-heading"></i></span>
+                    <input type="text" class="form-control font-monospace fw-semibold" name="gstin" id="modalPartyGstin" placeholder="e.g. 27ABCDE1234F1Z5">
+                  </div>
+                </div>
+
+                <div class="col-md-4">
+                  <label for="modalPartyGstRegistrationType" class="form-label fw-semibold text-dark small mb-1">GST Registration Type</label>
+                  <select class="form-select" name="gst_registration_type" id="modalPartyGstRegistrationType">
+                    <option value="unregistered" selected>Unregistered / Consumer</option>
+                    <option value="regular">GST Registered - Regular</option>
+                    <option value="composition">GST Registered - Composition</option>
+                    <option value="overseas">Overseas / Foreign Supplier</option>
+                  </select>
+                </div>
+
+                <div class="col-md-4">
+                  <label for="modalPartyPlaceOfSupply" class="form-label fw-semibold text-dark small mb-1">Place of Supply</label>
+                  <div class="input-group">
+                    <span class="input-group-text bg-white text-muted"><i class="bi bi-compass"></i></span>
+                    <input type="text" class="form-control" name="place_of_supply" id="modalPartyPlaceOfSupply" placeholder="e.g. 27-Maharashtra">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="modal-footer bg-light py-3 px-4">
+          <button type="button" class="btn btn-outline-secondary px-4 fw-semibold" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary px-4 py-2 fw-bold shadow-sm">
+            <i class="bi bi-check-circle me-1"></i> Save Party
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  let partyModalInstance = null;
+
+  document.addEventListener('DOMContentLoaded', function() {
+    partyModalInstance = new bootstrap.Modal(document.getElementById('partyModal'));
+  });
+
+  function openAddPartyModal() {
+    document.getElementById('modalPartyId').value = '';
+    document.getElementById('modalPartyName').value = '';
+    document.getElementById('modalPartyType').value = 'vendor';
+    document.getElementById('modalPartyPhone').value = '';
+    document.getElementById('modalPartyEmail').value = '';
+    document.getElementById('modalPartyAddressLine1').value = '';
+    document.getElementById('modalPartyCity').value = '';
+    document.getElementById('modalPartyState').value = '';
+    document.getElementById('modalPartyPincode').value = '';
+    document.getElementById('modalPartyGstin').value = '';
+    document.getElementById('modalPartyGstRegistrationType').value = 'unregistered';
+    document.getElementById('modalPartyPlaceOfSupply').value = '';
+
+    document.getElementById('partyModalLabel').textContent = 'Add New Party';
+    partyModalInstance.show();
+  }
+
+  async function editParty(partyId) {
+    try {
+      const url = `{% url "restaurant_admin:party_edit_api" restaurant_slug=restaurant.slug pk=0 %}`.replace('/0/', `/${partyId}/`);
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        document.getElementById('modalPartyId').value = data.id;
+        document.getElementById('modalPartyName').value = data.name;
+        document.getElementById('modalPartyType').value = data.party_type;
+        document.getElementById('modalPartyPhone').value = data.phone;
+        document.getElementById('modalPartyEmail').value = data.email;
+        document.getElementById('modalPartyAddressLine1').value = data.address_line1 || '';
+        document.getElementById('modalPartyCity').value = data.city || '';
+        document.getElementById('modalPartyState').value = data.state || '';
+        document.getElementById('modalPartyPincode').value = data.pincode || '';
+        document.getElementById('modalPartyGstin').value = data.gstin || '';
+        document.getElementById('modalPartyGstRegistrationType').value = data.gst_registration_type || 'unregistered';
+        document.getElementById('modalPartyPlaceOfSupply').value = data.place_of_supply || '';
+
+        document.getElementById('partyModalLabel').textContent = 'Edit Party Details';
+        partyModalInstance.show();
+      }
+    } catch (err) {
+      console.error('Error fetching party details:', err);
+    }
+  }
+</script>
+{% endblock %}

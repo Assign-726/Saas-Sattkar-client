@@ -1,0 +1,199 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Menu Items</h2>
+    <a href="{% url 'restaurant_admin:menu_add' restaurant_slug=rslug %}" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i> Add Menu Item
+    </a>
+</div>
+
+<!-- Search Form -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-8">
+                <div class="input-group">
+                    <input type="text" name="q" class="form-control" placeholder="Search by name, description, or category..." value="{{ search_query|default:'' }}">
+                    <button class="btn btn-outline-secondary" type="submit">
+                        <i class="bi bi-search"></i> Search
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-4">
+                {% if search_query %}
+                <a href="{% url 'restaurant_admin:menu_list' restaurant_slug=rslug %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-lg"></i> Clear Search
+                </a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Success/Error Messages -->
+{% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+{% endif %}
+
+<!-- Menu Items Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Image</th>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th>Price</th>
+                        <th>Category</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in menu_items %}
+                    <tr>
+                        <td>
+                            {% if item.image %}
+                                <img src="{{ item.image.url }}" alt="{{ item.name }}" class="img-thumbnail" style="width: 50px; height: 50px; object-fit: cover;">
+                            {% else %}
+                                <div class="bg-light d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                                    <i class="bi bi-image text-muted"></i>
+                                </div>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.name }}</td>
+                        <td>{{ item.description|truncatechars:50|default:"No description" }}</td>
+                        <td>₹{{ item.price|floatformat:2 }}</td>
+                        <td>
+                            {% if item.subcategory %}
+                                {{ item.subcategory.category.name }} / {{ item.subcategory.name }}
+                            {% else %}
+                                Uncategorized
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge {% if item.availability %}bg-success{% else %}bg-danger{% endif %}">
+                                {{ item.availability|yesno:"Available,Unavailable" }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{% url 'restaurant_admin:menu_recipe' restaurant_slug=rslug pk=item.id %}" class="btn btn-sm btn-outline-warning" title="Recipe/Ingredients">
+                                    <i class="bi bi-egg-fried"></i>
+                                </a>
+                                <a href="{% url 'restaurant_admin:menu_edit' restaurant_slug=rslug pk=item.id %}" class="btn btn-sm btn-outline-primary" title="Edit">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ item.id }}" title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                            
+                            <!-- Delete Confirmation Modal -->
+                            <div class="modal fade" id="deleteModal{{ item.id }}" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            Are you sure you want to delete "{{ item.name }}"? This action cannot be undone.
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                            <form action="{% url 'restaurant_admin:menu_delete' restaurant_slug=rslug pk=item.id %}" method="post" style="display: inline;">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-danger">Delete</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4">
+                            <div class="text-muted">
+                                <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                                <p class="mt-2 mb-0">No menu items found. <a href="{% url 'restaurant_admin:menu_add' restaurant_slug=rslug %}">Add your first menu item</a></p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if menu_items.paginator.num_pages > 1 %}
+<nav aria-label="Menu items pagination" class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if menu_items.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1{% if search_query %}&q={{ search_query }}{% endif %}" aria-label="First">
+                    <span aria-hidden="true">&laquo;&laquo;</span>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ menu_items.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}" aria-label="Previous">
+                    <span aria-hidden="true">&laquo;</span>
+                </a>
+            </li>
+        {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">&laquo;&laquo;</span>
+            </li>
+            <li class="page-item disabled">
+                <span class="page-link">&laquo;</span>
+            </li>
+        {% endif %}
+        
+        {% for num in menu_items.paginator.page_range %}
+            {% if menu_items.number == num %}
+                <li class="page-item active">
+                    <span class="page-link">{{ num }}</span>
+                </li>
+            {% elif num > menu_items.number|add:'-3' and num < menu_items.number|add:'3' %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ num }}{% if search_query %}&q={{ search_query }}{% endif %}">{{ num }}</a>
+                </li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if menu_items.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ menu_items.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}" aria-label="Next">
+                    <span aria-hidden="true">&raquo;</span>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ menu_items.paginator.num_pages }}{% if search_query %}&q={{ search_query }}{% endif %}" aria-label="Last">
+                    <span aria-hidden="true">&raquo;&raquo;</span>
+                </a>
+            </li>
+        {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">&raquo;</span>
+            </li>
+            <li class="page-item disabled">
+                <span class="page-link">&raquo;&raquo;</span>
+            </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% endblock %}

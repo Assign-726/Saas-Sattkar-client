@@ -1,0 +1,778 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block extra_css %}
+<style>
+    /* ── Page header ── */
+    .om-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .om-title {
+        font-size: 1.55rem;
+        font-weight: 700;
+        color: #1a202c;
+        margin: 0;
+    }
+
+    .om-header-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    /* ── Toolbar ── */
+    .om-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 22px;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .om-toolbar-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    /* Status dropdown */
+    .om-status-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 14px;
+        font-size: 0.82rem;
+        font-weight: 500;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #fff;
+        color: #374151;
+        cursor: pointer;
+        transition: border-color .15s, box-shadow .15s;
+        white-space: nowrap;
+    }
+
+    .om-status-btn:hover {
+        border-color: #5E72E4;
+        box-shadow: 0 0 0 3px rgba(94, 114, 228, .1);
+    }
+
+    .om-status-btn select {
+        border: none;
+        background: transparent;
+        font-size: 0.82rem;
+        font-weight: 500;
+        color: #374151;
+        outline: none;
+        cursor: pointer;
+        padding: 0;
+        margin: 0;
+    }
+
+    /* Date pills */
+    .om-date-group {
+        display: flex;
+        gap: 0;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid #e2e8f0;
+    }
+
+    .om-date-btn {
+        padding: 7px 16px;
+        font-size: 0.82rem;
+        font-weight: 500;
+        background: #fff;
+        color: #6b7280;
+        border: none;
+        cursor: pointer;
+        transition: background .15s, color .15s;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .om-date-btn:hover {
+        background: #f1f5f9;
+        color: #1a202c;
+    }
+
+    .om-date-btn.active {
+        background: #5E72E4;
+        color: #fff;
+    }
+
+    .om-date-btn+.om-date-btn {
+        border-left: 1px solid #e2e8f0;
+    }
+
+    /* New Order btn */
+    .om-new-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 18px;
+        font-size: 0.83rem;
+        font-weight: 600;
+        background: #5E72E4;
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background .15s, transform .1s;
+        text-decoration: none;
+    }
+
+    .om-new-btn:hover {
+        background: #4C63D2;
+        color: #fff;
+        transform: translateY(-1px);
+    }
+
+    /* ── Section header ── */
+    .om-section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 18px;
+    }
+
+    .om-section-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #1a202c;
+        margin: 0;
+    }
+
+    .om-active-badge {
+        margin-left: 10px;
+        background: #e8f0fe;
+        color: #3b5bdb;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: .5px;
+        padding: 2px 9px;
+        border-radius: 20px;
+        vertical-align: middle;
+        text-transform: uppercase;
+    }
+
+    .om-export-link {
+        font-size: 0.8rem;
+        color: #5E72E4;
+        font-weight: 500;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .om-export-link:hover {
+        text-decoration: underline;
+        color: #4C63D2;
+    }
+
+    /* ── Card grid ── */
+    .om-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 16px;
+    }
+
+    /* ── Order card ── */
+    .order-card {
+        background: #fff;
+        border: 1px solid #e8edf5;
+        border-radius: 14px;
+        padding: 18px 20px 16px;
+        text-decoration: none;
+        display: block;
+        transition: transform .18s, box-shadow .18s, border-color .18s;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .order-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 28px rgba(94, 114, 228, .12);
+        border-color: #c7d2fe;
+        text-decoration: none;
+    }
+
+    .order-card.card-pending {
+        border-left: 4px solid #f59e0b;
+    }
+
+    .order-card.card-served {
+        border-left: 4px solid #10b981;
+    }
+
+    .order-card.card-cancelled {
+        border-left: 4px solid #ef4444;
+    }
+
+    /* Top row */
+    .card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 6px;
+    }
+
+    .order-number {
+        font-family: 'Courier New', monospace;
+        font-size: 0.93rem;
+        font-weight: 700;
+        color: #5E72E4;
+        letter-spacing: .4px;
+    }
+
+    .order-time {
+        font-size: 0.73rem;
+        color: #94a3b8;
+        margin-top: 2px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .card-right {
+        text-align: right;
+    }
+
+    .order-amount {
+        font-size: 1.08rem;
+        font-weight: 700;
+        color: #1a202c;
+        display: block;
+    }
+
+    /* Status pills */
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: .3px;
+        padding: 3px 9px;
+        border-radius: 20px;
+        margin-top: 4px;
+    }
+
+    .status-pill::before {
+        content: 'b';
+        font-size: 0.55rem;
+    }
+
+    .sp-pending {
+        background: #fff8eb;
+        color: #b45309;
+        border: 1px solid #fde68a;
+    }
+
+    .sp-served {
+        background: #ecfdf5;
+        color: #059669;
+        border: 1px solid #a7f3d0;
+    }
+
+    .sp-cancelled {
+        background: #fef2f2;
+        color: #dc2626;
+        border: 1px solid #fecaca;
+    }
+
+    /* Items strip */
+    .card-items {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin: 12px 0 10px;
+        padding-top: 10px;
+        border-top: 1px solid #f1f5f9;
+    }
+
+    .item-tag {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        color: #475569;
+        font-size: 0.7rem;
+        font-weight: 500;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-family: 'Courier New', monospace;
+    }
+
+    /* Card footer */
+    .card-footer-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 10px;
+        border-top: 1px solid #f1f5f9;
+        font-size: 0.75rem;
+        color: #64748b;
+    }
+
+    .card-customer {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .card-customer i {
+        font-size: 0.85rem;
+    }
+
+    .card-table {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-weight: 600;
+        color: #5E72E4;
+    }
+
+    .card-table i {
+        font-size: 0.8rem;
+    }
+
+    .card-pickup {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        color: #64748b;
+    }
+
+    /* Empty state */
+    .om-empty {
+        grid-column: 1 / -1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 64px 20px;
+        text-align: center;
+    }
+
+    .om-empty-icon {
+        font-size: 3rem;
+        color: #cbd5e1;
+        margin-bottom: 12px;
+    }
+
+    .om-empty h5 {
+        color: #64748b;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .om-empty p {
+        color: #94a3b8;
+        font-size: 0.88rem;
+        margin: 0;
+    }
+
+    /* Search */
+    .om-search-wrap {
+        position: relative;
+    }
+
+    .om-search-wrap input {
+        padding-left: 34px;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+        font-size: 0.83rem;
+        height: 36px;
+        width: 210px;
+        transition: border-color .15s;
+    }
+
+    .om-search-wrap input:focus {
+        border-color: #5E72E4;
+        box-shadow: 0 0 0 3px rgba(94, 114, 228, .1);
+        outline: none;
+    }
+
+    .om-search-icon {
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #9ca3af;
+        font-size: 0.82rem;
+        pointer-events: none;
+    }
+
+    /* Pagination */
+    .om-pagination {
+        display: flex;
+        justify-content: center;
+        margin-top: 28px;
+        gap: 4px;
+    }
+
+    .om-pg-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.82rem;
+        font-weight: 500;
+        border: 1px solid #e2e8f0;
+        background: #fff;
+        color: #374151;
+        text-decoration: none;
+        transition: all .15s;
+    }
+
+    .om-pg-btn:hover {
+        border-color: #5E72E4;
+        color: #5E72E4;
+    }
+
+    .om-pg-btn.active {
+        background: #5E72E4;
+        color: #fff;
+        border-color: #5E72E4;
+    }
+
+    .om-pg-btn.disabled {
+        opacity: .4;
+        pointer-events: none;
+    }
+
+    /* Sound btn */
+    .om-sound-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 14px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        color: #374151;
+        cursor: pointer;
+        transition: all .15s;
+    }
+
+    .om-sound-btn:hover {
+        border-color: #5E72E4;
+        color: #5E72E4;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Page Header -->
+<div class="om-header">
+    <h2 class="om-title">Order Management</h2>
+    <div class="om-header-right">
+        <button id="enable-sound-btn" class="om-sound-btn" style="display:none;">
+            <i class="bi bi-volume-up"></i> Enable Sound
+        </button>
+    </div>
+</div>
+
+<!-- Toolbar -->
+<div class="om-toolbar">
+    <div class="om-toolbar-left">
+        <form method="get" id="filter-form" class="d-flex align-items-center gap-2 flex-wrap">
+            <!-- hidden period input so it survives status-dropdown auto-submit -->
+            <input type="hidden" name="period" id="period-hidden" value="{{ period }}">
+
+            <!-- Status dropdown -->
+            <div class="om-status-btn">
+                <i class="bi bi-funnel" style="color:#5E72E4;"></i>
+                <select name="status" id="status-select" onchange="submitWithPeriod()">
+                    <option value="">All Orders</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                <i class="bi bi-chevron-down" style="font-size:.7rem; color:#9ca3af;"></i>
+            </div>
+
+            <!-- Date period pills (type=button, JS handles submit) -->
+            <div class="om-date-group">
+                <button type="button" onclick="setPeriod('')"
+                    class="om-date-btn {% if not period %}active{% endif %}">All</button>
+                <button type="button" onclick="setPeriod('today')"
+                    class="om-date-btn {% if period == 'today' %}active{% endif %}">Today</button>
+                <button type="button" onclick="setPeriod('week')"
+                    class="om-date-btn {% if period == 'week'  %}active{% endif %}">Week</button>
+                <button type="button" onclick="setPeriod('month')"
+                    class="om-date-btn {% if period == 'month' %}active{% endif %}">Month</button>
+            </div>
+
+            <!-- Search -->
+            <div class="om-search-wrap">
+                <i class="bi bi-search om-search-icon"></i>
+                <input type="text" name="q" value="{{ search_query }}" placeholder="Search orders..." id="search-input">
+            </div>
+
+            {% if search_query or selected_status or period %}
+            <a href="?" class="btn btn-sm btn-outline-secondary" style="border-radius:8px; font-size:.8rem;">
+                <i class="bi bi-x me-1"></i>Clear
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+
+    <a href="{% url 'restaurant_admin:order_create_manual' restaurant_slug=rslug %}" class="om-new-btn">
+        <i class="bi bi-plus-lg"></i> New Order
+    </a>
+</div>
+
+<!-- Section heading -->
+<div class="om-section-head">
+    <div>
+        <span class="om-section-title">Recent Orders</span>
+        {% with cnt=orders.paginator.count %}
+            {% if cnt %}<span class="om-active-badge">{{ cnt }} Active</span>{% endif %}
+        {% endwith %}
+    </div>
+    <a href="?{% if url_params %}{{ url_params }}&{% endif %}export=csv" class="om-export-link">
+        <i class="bi bi-download"></i> Export CSV
+    </a>
+</div>
+
+<!-- Card Grid -->
+<div class="om-grid">
+    {% for order in orders %}
+    <a href="{% url 'restaurant_admin:order_detail' restaurant_slug=rslug pk=order.id %}"
+        class="order-card {% if order.status == 'P' %}card-pending{% elif order.status == 'S' %}card-served{% elif order.status == 'C' %}card-cancelled{% endif %}">
+
+        <!-- Top row -->
+        <div class="card-top">
+            <div>
+                <div class="order-number">{{ order.order_number }}</div>
+                <div class="order-time"><i class="bi bi-clock"></i>{{ order.order_time|timesince }} ago</div>
+            </div>
+            <div class="card-right">
+                <span class="order-amount">&#8377;{{ order.total_amount|floatformat:2 }}</span>
+                <span
+                    class="status-pill {% if order.status == 'P' %}sp-pending{% elif order.status == 'S' %}sp-served{% elif order.status == 'C' %}sp-cancelled{% endif %}">
+                    {{ order.get_status_display }}
+                </span>
+            </div>
+        </div>
+
+        <!-- Items strip -->
+        <div class="card-items">
+            {% for item in order.items.all|slice:":3" %}
+            <span class="item-tag">{{ item.quantity }}x {{ item.menu_item.name }}</span>
+            {% endfor %}
+            {% if order.items.count > 3 %}
+            <span class="item-tag" style="color:#94a3b8;">+{{ order.items.count|add:"-3" }} more</span>
+            {% endif %}
+        </div>
+
+        <!-- Footer -->
+        <div class="card-footer-row">
+            <span class="card-customer"><i class="bi bi-person"></i>{{ order.customer_name|truncatechars:22 }}</span>
+            {% if order.table_number %}
+            <span class="card-table"><i class="bi bi-grid-3x3-gap"></i>Table {{ order.table_number }}</span>
+            {% else %}
+            <span class="card-pickup"><i class="bi bi-bag"></i>Pickup</span>
+            {% endif %}
+        </div>
+    </a>
+    {% empty %}
+    <div class="om-empty">
+        <div class="om-empty-icon"><i class="bi bi-inbox"></i></div>
+        <h5>No orders found</h5>
+        <p>Try adjusting your filters or create a new order.</p>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Pagination -->
+{% if orders.has_other_pages %}
+<div class="om-pagination">
+    {% if orders.has_previous %}
+    <a class="om-pg-btn"
+        href="?page=1{% if selected_status %}&status={{ selected_status }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"><i
+            class="bi bi-chevron-double-left"></i></a>
+    <a class="om-pg-btn"
+        href="?page={{ orders.previous_page_number }}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"><i
+            class="bi bi-chevron-left"></i></a>
+    {% else %}
+    <span class="om-pg-btn disabled"><i class="bi bi-chevron-double-left"></i></span>
+    <span class="om-pg-btn disabled"><i class="bi bi-chevron-left"></i></span>
+    {% endif %}
+
+    {% for num in orders.paginator.page_range %}
+    {% if orders.number == num %}
+    <span class="om-pg-btn active">{{ num }}</span>
+    {% elif num > orders.number|add:"-3" and num < orders.number|add:"3" %} <a class="om-pg-btn"
+        href="?page={{ num }}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}">
+        {{ num }}</a>
+        {% endif %}
+        {% endfor %}
+
+        {% if orders.has_next %}
+        <a class="om-pg-btn"
+            href="?page={{ orders.next_page_number }}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"><i
+                class="bi bi-chevron-right"></i></a>
+        <a class="om-pg-btn"
+            href="?page={{ orders.paginator.num_pages }}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"><i
+                class="bi bi-chevron-double-right"></i></a>
+        {% else %}
+        <span class="om-pg-btn disabled"><i class="bi bi-chevron-right"></i></span>
+        <span class="om-pg-btn disabled"><i class="bi bi-chevron-double-right"></i></span>
+        {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script id="order-list-js" data-order-count="{{ orders.paginator.count|default:0 }}">
+    const notifUrl = "{{ notification_sound_abs_url|default:'' }}";
+    let audioCtx = null, audioBuffer = null, audioSource = null;
+
+    // ── Period/status filter helpers ─────────────────────────────────────────
+    function setPeriod(val) {
+        document.getElementById('period-hidden').value = val;
+        document.getElementById('filter-form').submit();
+    }
+    function submitWithPeriod() {
+        // Status dropdown changed: submit while preserving current period
+        document.getElementById('filter-form').submit();
+    }
+
+    function initAudio() {
+        if (audioCtx === null) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (notifUrl) {
+                fetch(notifUrl).then(r => r.arrayBuffer()).then(ab => audioCtx.decodeAudioData(ab))
+                    .then(d => { audioBuffer = d; }).catch(e => console.error(e));
+            }
+        }
+        return audioCtx.state === 'running';
+    }
+
+    async function playBell() {
+        try {
+            if (audioCtx && audioCtx.state === 'suspended') await audioCtx.resume();
+            if (audioBuffer) {
+                if (audioSource) { try { audioSource.stop(); } catch (_) { } }
+                audioSource = audioCtx.createBufferSource();
+                audioSource.buffer = audioBuffer;
+                audioSource.connect(audioCtx.destination); audioSource.start(0); return;
+            }
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const now = audioCtx.currentTime;
+            const o1 = audioCtx.createOscillator(), g1 = audioCtx.createGain();
+            o1.type = 'sine'; o1.frequency.setValueAtTime(880, now);
+            g1.gain.setValueAtTime(0.0001, now); g1.gain.exponentialRampToValueAtTime(0.22, now + 0.01); g1.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+            o1.connect(g1).connect(audioCtx.destination); o1.start(now); o1.stop(now + 0.6);
+            const o2 = audioCtx.createOscillator(), g2 = audioCtx.createGain();
+            o2.type = 'sine'; o2.frequency.setValueAtTime(1320, now + 0.08);
+            g2.gain.setValueAtTime(0.0001, now + 0.08); g2.gain.exponentialRampToValueAtTime(0.14, now + 0.11); g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+            o2.connect(g2).connect(audioCtx.destination); o2.start(now + 0.08); o2.stop(now + 0.6);
+        } catch (e) { console.error(e); }
+    }
+
+    function showToast(msg, type = 'info') {
+        const t = document.createElement('div');
+        t.className = `position-fixed bottom-0 end-0 m-3 alert alert-${type} alert-dismissible fade show`;
+        t.role = 'alert';
+        t.innerHTML = `${msg}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+        document.body.appendChild(t);
+        setTimeout(() => { try { (new bootstrap.Alert(t)).close(); } catch (_) { } }, 3000);
+    }
+
+    function showWarningToast(msg) {
+        const t = document.createElement('div');
+        t.className = 'position-fixed bottom-0 end-0 m-3 alert alert-warning alert-dismissible fade show';
+        t.role = 'alert'; t.style.zIndex = '1090';
+        t.innerHTML = `<i class="bi bi-exclamation-triangle me-2 text-warning"></i><strong>Low Stock:</strong> ${msg}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+        document.body.appendChild(t);
+        setTimeout(() => { try { (new bootstrap.Alert(t)).close(); } catch (_) { } }, 6000);
+    }
+
+    // ── Period filter helpers ──────────────────────────────────────────────────
+    function setPeriod(val) {
+        document.getElementById('period-hidden').value = val;
+        document.getElementById('filter-form').submit();
+    }
+    function submitWithPeriod() {
+        // Preserve the current period when status dropdown changes
+        const current = document.getElementById('period-hidden').value;
+        document.getElementById('filter-form').submit();
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const enableBtn = document.getElementById('enable-sound-btn');
+
+        async function enableSound() {
+            try {
+                if (initAudio()) {
+                    const src = audioCtx.createBufferSource(), buf = audioCtx.createBuffer(1, 1, 22050);
+                    src.buffer = buf; src.connect(audioCtx.destination); src.start(0); src.stop(0.1);
+                    localStorage.setItem('notifSoundEnabled', '1');
+                    if (enableBtn) enableBtn.style.display = 'none';
+                    showToast('Notifications enabled!', 'success');
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        if (enableBtn) {
+            if (localStorage.getItem('notifSoundEnabled') !== '1') {
+                document.addEventListener('click', function init() {
+                    document.removeEventListener('click', init);
+                    enableBtn.style.display = 'inline-flex';
+                    enableBtn.addEventListener('click', enableSound);
+                }, { once: true });
+            } else {
+                document.addEventListener('click', function init() {
+                    document.removeEventListener('click', init); initAudio();
+                }, { once: true });
+                enableBtn.style.display = 'none';
+            }
+        }
+
+        // ── Lightweight polling (replaces SSE to prevent thread exhaustion) ──
+        let _lastOrderCount = parseInt(document.getElementById('order-list-js').dataset.orderCount || '0', 10);
+        const _pollUrl = "{% url 'restaurant_admin:order_list' restaurant_slug=rslug %}?poll=1";
+
+        function pollForNewOrders() {
+            fetch(window.location.pathname + '?poll=1', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    if (!data) return;
+                    if (data.total_orders > _lastOrderCount) {
+                        _lastOrderCount = data.total_orders;
+                        if (localStorage.getItem('notifSoundEnabled') === '1') playBell().catch(() => { });
+                        showToast('New order received. Refreshing...');
+                        setTimeout(() => window.location.reload(), 1500);
+                    }
+                })
+                .catch(() => { }); // silent fail
+        }
+        // Poll every 30 seconds – lightweight, no held threads
+        const _pollTimer = setInterval(pollForNewOrders, 30000);
+        // Stop polling when the tab is hidden to save resources
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) clearInterval(_pollTimer);
+        });
+    });
+</script>
+{% endblock %}

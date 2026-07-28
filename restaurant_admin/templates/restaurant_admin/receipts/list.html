@@ -1,0 +1,269 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+
+  <!-- Page Header -->
+  <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
+    <div>
+      <h3 class="fw-bold text-dark mb-1 d-flex align-items-center gap-2">
+        <i class="bi bi-receipt-cutoff text-primary"></i> Advance Receipts & Deposits
+      </h3>
+      <p class="text-muted small mb-0">Manage advance event reservations, issue deposit receipts, and seamlessly deduct them at POS checkout.</p>
+    </div>
+    <a href="{% url 'restaurant_admin:receipt_create_page' restaurant_slug=rslug %}" class="btn btn-primary fw-bold px-3 py-2 shadow-sm d-flex align-items-center gap-2">
+      <i class="bi bi-plus-circle-fill"></i> Generate Advance Receipt
+    </a>
+  </div>
+
+  <!-- Summary Stats Row -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm rounded-3 bg-white h-100 p-3 border-start border-4 border-primary">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="text-muted uppercase small fw-semibold">Total Advance Collected</div>
+            <div class="fs-3 fw-bold text-dark mt-1">₹{{ total_advance_collected|floatformat:2 }}</div>
+          </div>
+          <div class="bg-primary bg-opacity-10 text-primary p-3 rounded-circle fs-4">
+            <i class="bi bi-currency-rupee"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm rounded-3 bg-white h-100 p-3 border-start border-4 border-success">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="text-muted uppercase small fw-semibold">Active Deposit Receipts</div>
+            <div class="fs-3 fw-bold text-success mt-1">{{ active_receipts_count }}</div>
+          </div>
+          <div class="bg-success bg-opacity-10 text-success p-3 rounded-circle fs-4">
+            <i class="bi bi-bookmark-check-fill"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm rounded-3 bg-white h-100 p-3 border-start border-4 border-info">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="text-muted uppercase small fw-semibold">Redeemed / Converted</div>
+            <div class="fs-3 fw-bold text-info mt-1">{{ redeemed_receipts_count }}</div>
+          </div>
+          <div class="bg-info bg-opacity-10 text-info p-3 rounded-circle fs-4">
+            <i class="bi bi-bag-check-fill"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search & Filter Controls -->
+  <div class="card border-0 shadow-sm rounded-3 mb-4">
+    <div class="card-body p-3">
+      <form method="get" class="row g-2 align-items-center">
+        <div class="col-md-6 col-lg-5">
+          <div class="input-group">
+            <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" name="q" class="form-control border-start-0 bg-light" placeholder="Search by Receipt No, Ref, Name or Phone..." value="{{ search_query }}">
+          </div>
+        </div>
+        <div class="col-md-4 col-lg-3">
+          <select name="status" class="form-select bg-light" onchange="this.form.submit()">
+            <option value="">All Statuses</option>
+            <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active Only</option>
+            <option value="redeemed" {% if status_filter == 'redeemed' %}selected{% endif %}>Redeemed Only</option>
+            <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>Cancelled Only</option>
+          </select>
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+          <button type="submit" class="btn btn-secondary w-100 fw-semibold">Filter</button>
+          {% if search_query or status_filter %}
+          <a href="{% url 'restaurant_admin:receipt_list' restaurant_slug=rslug %}" class="btn btn-outline-secondary" title="Clear Filters"><i class="bi bi-x-lg"></i></a>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Receipts Table Card -->
+  <div class="card border-0 shadow-sm rounded-3 overflow-hidden">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-dark text-uppercase small" style="font-size: 0.75rem; letter-spacing: 0.5px;">
+          <tr>
+            <th class="ps-4">Receipt Details</th>
+            <th>Customer Information</th>
+            <th>Event Schedule</th>
+            <th class="text-center">Guests</th>
+            <th class="text-end">Advance Paid</th>
+            <th class="text-center">Payment Mode</th>
+            <th class="text-center">Status</th>
+            <th class="text-end pe-4">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in receipts %}
+          <tr>
+            <!-- Receipt Details -->
+            <td class="ps-4">
+              <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-20 fw-bold fs-6 px-2 py-1 mb-1 d-inline-block">
+                {{ r.receipt_no }}
+              </span>
+              <div class="small text-muted">
+                Order Ref: <strong class="text-primary">{% if r.order %}{% if r.order.order_number %}{{ r.order.order_number }}{% else %}ORD-{{ r.order.id }}{% endif %}{% else %}{{ r.booking_ref }}{% endif %}</strong>
+              </div>
+              <div class="small text-muted" style="font-size: 0.75rem;">
+                Created: {{ r.created_at|date:"d M Y, h:i A" }}
+              </div>
+            </td>
+
+            <!-- Customer Details -->
+            <td>
+              <div class="fw-bold text-dark fs-6">{{ r.customer_name }}</div>
+              {% if r.phone %}
+              <div class="small text-muted"><i class="bi bi-telephone me-1"></i>{{ r.phone }}</div>
+              {% endif %}
+              {% if r.email %}
+              <div class="small text-muted"><i class="bi bi-envelope me-1"></i>{{ r.email }}</div>
+              {% endif %}
+            </td>
+
+            <!-- Event Schedule -->
+            <td>
+              <div class="fw-semibold text-dark"><i class="bi bi-calendar-event me-1 text-primary"></i>{{ r.event_date|date:"D, d M Y" }}</div>
+              {% if r.event_time %}
+              <div class="small text-muted"><i class="bi bi-clock me-1 text-muted"></i>{{ r.event_time|date:"h:i A" }}</div>
+              {% endif %}
+            </td>
+
+            <!-- Guests -->
+            <td class="text-center">
+              <span class="badge bg-secondary bg-opacity-10 text-dark border px-2 py-1 fw-bold fs-6">
+                {{ r.guest_count }}
+              </span>
+            </td>
+
+            <!-- Advance Paid -->
+            <td class="text-end fw-bold text-success fs-6">
+              ₹{{ r.advance_amount|floatformat:2 }}
+            </td>
+
+            <!-- Payment Mode -->
+            <td class="text-center">
+              <span class="badge bg-light text-dark border uppercase fw-semibold" style="font-size: 0.75rem;">
+                {{ r.get_payment_method_display }}
+              </span>
+            </td>
+
+            <!-- Status Badge -->
+            <td class="text-center">
+              {% if r.status == 'active' %}
+                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-20 px-3 py-1 fw-bold">Active</span>
+              {% elif r.status == 'redeemed' %}
+                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-20 px-3 py-1 fw-bold">Redeemed</span>
+                {% if r.order %}
+                <div class="small text-muted mt-1">Order #{{ r.order.order_number }}</div>
+                {% endif %}
+              {% else %}
+                <span class="badge bg-secondary bg-opacity-10 text-secondary border px-3 py-1 fw-bold">Cancelled</span>
+              {% endif %}
+            </td>
+
+            <!-- Actions -->
+            <td class="text-end pe-4">
+              <div class="d-inline-flex gap-1">
+                {% if r.status == 'active' %}
+                <a href="{% url 'restaurant_admin:order_create_manual' restaurant_slug=rslug %}{% if r.order %}?order_id={{ r.order.id }}{% else %}?receipt_no={{ r.receipt_no }}{% endif %}" 
+                   class="btn btn-sm btn-primary fw-bold d-inline-flex align-items-center gap-1"
+                   title="Start Order at POS & deduct advance">
+                  <i class="bi bi-cart-plus"></i> Start Order
+                </a>
+                {% endif %}
+                <a href="{% url 'restaurant_admin:receipt_print' restaurant_slug=rslug pk=r.id %}" target="_blank" 
+                   class="btn btn-sm btn-outline-dark fw-semibold" title="Print Advance Receipt">
+                  <i class="bi bi-printer"></i> Print
+                </a>
+                {% if r.status == 'active' %}
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="cancelReceipt({{ r.id }}, '{{ r.receipt_no }}')" title="Cancel Receipt">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="8" class="text-center py-5 text-muted">
+              <i class="bi bi-receipt display-4 d-block text-secondary mb-2"></i>
+              <div class="fs-5 fw-semibold text-dark mb-1">No Advance Receipts Found</div>
+              <p class="small text-muted mb-3">Generate an advance receipt for event bookings to collect deposits and attach them to POS orders.</p>
+              <a href="{% url 'restaurant_admin:receipt_create_page' restaurant_slug=rslug %}" class="btn btn-primary fw-bold btn-sm">
+                <i class="bi bi-plus-circle me-1"></i> Generate Advance Receipt Now
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if receipts.has_other_pages %}
+    <div class="card-footer bg-light py-3 d-flex justify-content-between align-items-center">
+      <div class="small text-muted">
+        Showing Page <strong>{{ receipts.number }}</strong> of <strong>{{ receipts.paginator.num_pages }}</strong>
+      </div>
+      <ul class="pagination pagination-sm mb-0">
+        {% if receipts.has_previous %}
+        <li class="page-item"><a class="page-link" href="?page={{ receipts.previous_page_number }}&q={{ search_query }}&status={{ status_filter }}">Previous</a></li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">Previous</span></li>
+        {% endif %}
+
+        {% for i in receipts.paginator.page_range %}
+        {% if receipts.number == i %}
+        <li class="page-item active"><span class="page-link">{{ i }}</span></li>
+        {% else %}
+        <li class="page-item"><a class="page-link" href="?page={{ i }}&q={{ search_query }}&status={{ status_filter }}">{{ i }}</a></li>
+        {% endif %}
+        {% endfor %}
+
+        {% if receipts.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ receipts.next_page_number }}&q={{ search_query }}&status={{ status_filter }}">Next</a></li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">Next</span></li>
+        {% endif %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+  async function cancelReceipt(id, receiptNo) {
+    if (!confirm(`Are you sure you want to cancel Advance Receipt ${receiptNo}?`)) return;
+
+    try {
+      const resp = await fetch(`/dashboard/{{ rslug }}/receipts/${id}/cancel/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': '{{ csrf_token }}',
+          'X-Requested-With': 'XMLHttpRequest',
+        }
+      });
+      const res = await resp.json();
+      if (res.success) {
+        window.location.reload();
+      } else {
+        alert(res.error || 'Failed to cancel receipt.');
+      }
+    } catch (err) {
+      alert('Error cancelling receipt.');
+    }
+  }
+</script>
+{% endblock %}

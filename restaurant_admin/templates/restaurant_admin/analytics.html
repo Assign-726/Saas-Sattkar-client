@@ -1,0 +1,426 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block title %}Sales & Tax Analytics - {{ restaurant.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .analytics-kpi-card {
+        border-radius: 12px;
+        padding: 20px;
+        color: #ffffff !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        height: 100%;
+        border: none;
+    }
+    .analytics-kpi-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+    }
+    .kpi-bg-primary { background: linear-gradient(135deg, #5e72e4, #825ee4) !important; }
+    .kpi-bg-success { background: linear-gradient(135deg, #2dce89, #2dcecc) !important; }
+    .kpi-bg-warning { background: linear-gradient(135deg, #fb6340, #fbb140) !important; }
+    .kpi-bg-info { background: linear-gradient(135deg, #11cdef, #1194ef) !important; }
+
+    .analytics-kpi-card .kpi-title {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.9) !important;
+    }
+    .analytics-kpi-card .kpi-value {
+        font-size: 26px;
+        font-weight: 800;
+        color: #ffffff !important;
+        margin: 6px 0 2px 0;
+    }
+    .analytics-kpi-card .kpi-sub {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.85) !important;
+        font-weight: 500;
+    }
+    .analytics-kpi-card .kpi-icon-box {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        color: #ffffff !important;
+    }
+
+    .tax-subcard {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 16px;
+        height: 100%;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+    }
+    .tax-subcard-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #1e293b;
+    }
+
+    .chart-container {
+        position: relative;
+        height: 340px;
+        width: 100%;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+    <!-- Header & Date Filter Bar -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <h2 class="fw-bold text-dark mb-1">
+                <i class="fas fa-chart-line text-primary me-2"></i>Sales & Tax Analytics
+            </h2>
+            <p class="text-muted mb-0 small">Comprehensive financial analysis of sales revenue, GST, State Excise VAT, and menu item performance.</p>
+        </div>
+
+        <!-- Date Range Filter Form -->
+        <div class="card border-0 shadow-sm p-2 bg-white rounded-3">
+            <form method="get" class="d-flex align-items-center flex-wrap gap-2 mb-0">
+                <div class="btn-group btn-group-sm" role="group">
+                    <a href="?range=today" class="btn {% if range_preset == 'today' %}btn-primary{% else %}btn-outline-secondary{% endif %}">Today</a>
+                    <a href="?range=yesterday" class="btn {% if range_preset == 'yesterday' %}btn-primary{% else %}btn-outline-secondary{% endif %}">Yesterday</a>
+                    <a href="?range=last_7_days" class="btn {% if range_preset == 'last_7_days' %}btn-primary{% else %}btn-outline-secondary{% endif %}">7 Days</a>
+                    <a href="?range=this_month" class="btn {% if range_preset == 'this_month' %}btn-primary{% else %}btn-outline-secondary{% endif %}">This Month</a>
+                    <a href="?range=all_time" class="btn {% if range_preset == 'all_time' %}btn-primary{% else %}btn-outline-secondary{% endif %}">All Time</a>
+                </div>
+
+                <div class="d-flex align-items-center gap-1 ms-2">
+                    <input type="hidden" name="range" value="custom">
+                    <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date|date:'Y-m-d' }}">
+                    <span class="text-muted small">to</span>
+                    <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date|date:'Y-m-d' }}">
+                    <button type="submit" class="btn btn-sm btn-dark">
+                        <i class="fas fa-filter me-1"></i>Filter
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ── High Impact Stat Cards ── -->
+    <div class="row g-3 mb-4">
+        <!-- Net Revenue -->
+        <div class="col-md-6 col-lg-3">
+            <div class="analytics-kpi-card kpi-bg-primary">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="kpi-title">Total Net Revenue</div>
+                        <div class="kpi-value">₹{{ total_revenue|floatformat:2 }}</div>
+                        <div class="kpi-sub">Includes Taxes & Fees</div>
+                    </div>
+                    <div class="kpi-icon-box">
+                        <i class="fas fa-wallet"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total Orders & AOV -->
+        <div class="col-md-6 col-lg-3">
+            <div class="analytics-kpi-card kpi-bg-success">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="kpi-title">Total Orders</div>
+                        <div class="kpi-value">{{ total_orders }}</div>
+                        <div class="kpi-sub">AOV: ₹{{ aov|floatformat:2 }}</div>
+                    </div>
+                    <div class="kpi-icon-box">
+                        <i class="fas fa-shopping-bag"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Food Subtotal -->
+        <div class="col-md-6 col-lg-3">
+            <div class="analytics-kpi-card kpi-bg-warning">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="kpi-title">Gross Food Subtotal</div>
+                        <div class="kpi-value">₹{{ total_food_subtotal|floatformat:2 }}</div>
+                        <div class="kpi-sub">Liquor: ₹{{ total_liquor_subtotal|floatformat:2 }}</div>
+                    </div>
+                    <div class="kpi-icon-box">
+                        <i class="fas fa-utensils"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total Tax Collected -->
+        <div class="col-md-6 col-lg-3">
+            <div class="analytics-kpi-card kpi-bg-info">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="kpi-title">Total Tax Collected</div>
+                        <div class="kpi-value">₹{{ total_gst|add:total_vat|floatformat:2 }}</div>
+                        <div class="kpi-sub">GST: ₹{{ total_gst|floatformat:2 }} | VAT: ₹{{ total_vat|floatformat:2 }}</div>
+                    </div>
+                    <div class="kpi-icon-box">
+                        <i class="fas fa-file-invoice-dollar"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Tax & Statutory Compliance Breakdown Card ── -->
+    <div class="card border-0 shadow-sm rounded-3 mb-4">
+        <div class="card-header bg-white py-3 border-bottom">
+            <h5 class="fw-bold text-dark mb-0"><i class="fas fa-shield-alt text-success me-2"></i>Tax & Statutory Compliance Breakdown</h5>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-3">
+                <!-- GST Liability -->
+                <div class="col-md-6 col-lg-3">
+                    <div class="tax-subcard">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="tax-subcard-title">GST (Food & Soft Drinks)</span>
+                            <span class="badge bg-primary">5% / 18%</span>
+                        </div>
+                        <div class="d-flex justify-content-between small text-muted my-1">
+                            <span>CGST</span>
+                            <span class="fw-semibold text-dark">₹{{ total_cgst|floatformat:2 }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between small text-muted my-1">
+                            <span>SGST</span>
+                            <span class="fw-semibold text-dark">₹{{ total_sgst|floatformat:2 }}</span>
+                        </div>
+                        <hr class="my-2">
+                        <div class="d-flex justify-content-between fw-bold text-primary">
+                            <span>Total GST</span>
+                            <span>₹{{ total_gst|floatformat:2 }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- State VAT Liability -->
+                <div class="col-md-6 col-lg-3">
+                    <div class="tax-subcard">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="tax-subcard-title">State Excise VAT</span>
+                            <span class="badge bg-warning text-dark">State Excise</span>
+                        </div>
+                        <div class="d-flex justify-content-between small text-muted my-1">
+                            <span>Beer VAT</span>
+                            <span class="fw-semibold text-dark">₹{{ total_beer_vat|floatformat:2 }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between small text-muted my-1">
+                            <span>Spirits VAT</span>
+                            <span class="fw-semibold text-dark">₹{{ total_imfl_vat|floatformat:2 }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between small text-muted my-1">
+                            <span>Wine VAT</span>
+                            <span class="fw-semibold text-dark">₹{{ total_wine_vat|floatformat:2 }}</span>
+                        </div>
+                        <hr class="my-2">
+                        <div class="d-flex justify-content-between fw-bold text-warning-emphasis">
+                            <span>Total State VAT</span>
+                            <span>₹{{ total_vat|floatformat:2 }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Service Charges -->
+                <div class="col-md-6 col-lg-3">
+                    <div class="tax-subcard">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="tax-subcard-title">Service Charges</span>
+                            <span class="badge bg-info text-dark">Fees</span>
+                        </div>
+                        <div class="mt-2">
+                            <span class="text-muted small d-block mb-1">Total Service Charge:</span>
+                            <h4 class="fw-bold text-info mb-0">₹{{ total_service_charges|floatformat:2 }}</h4>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Discounts Applied -->
+                <div class="col-md-6 col-lg-3">
+                    <div class="tax-subcard">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="tax-subcard-title">Discounts Given</span>
+                            <span class="badge bg-danger">Coupons</span>
+                        </div>
+                        <div class="mt-2">
+                            <span class="text-muted small d-block mb-1">Total Coupons Waived:</span>
+                            <h4 class="fw-bold text-danger mb-0">-₹{{ total_discounts|floatformat:2 }}</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Revenue & Tax Trend Chart ── -->
+    <div class="card border-0 shadow-sm rounded-3 mb-4">
+        <div class="card-header bg-white py-3 border-bottom">
+            <h5 class="fw-bold text-dark mb-0"><i class="fas fa-chart-area text-primary me-2"></i>Daily Sales & Tax Collection Trend</h5>
+        </div>
+        <div class="card-body">
+            <div class="chart-container">
+                <canvas id="salesChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Payment Methods & Top Selling Items ── -->
+    <div class="row g-4 mb-4">
+        <!-- Payment Method Distribution -->
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm rounded-3 h-100">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="fw-bold text-dark mb-0"><i class="fas fa-credit-card text-secondary me-2"></i>Payment Modes</h5>
+                </div>
+                <div class="card-body p-4">
+                    {% for pm in payment_methods %}
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="fw-semibold text-dark">{{ pm.name }}</span>
+                            <span class="fw-bold text-dark">₹{{ pm.total|floatformat:2 }} ({{ pm.count }} orders)</span>
+                        </div>
+                        <div class="progress" style="height: 10px; border-radius: 6px;">
+                            <div class="progress-bar bg-primary" role="progressbar" style="width: 100%;"></div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted text-center py-4">No payment data recorded for this period.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Selling Menu Items -->
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm rounded-3 h-100">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="fw-bold text-dark mb-0"><i class="fas fa-award text-warning me-2"></i>Top 10 Performing Menu Items</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Item Name</th>
+                                    <th>Tax Type</th>
+                                    <th class="text-center">Qty Sold</th>
+                                    <th class="text-end">Total Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in top_items %}
+                                <tr>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td class="fw-semibold text-dark">{{ item.menu_item__name }}</td>
+                                    <td>
+                                        {% if item.menu_item__tax_type == 'GST_FOOD' %}
+                                        <span class="badge bg-info-subtle text-info border border-info-subtle">GST Food</span>
+                                        {% else %}
+                                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">State VAT</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center fw-bold">{{ item.total_qty }}</td>
+                                    <td class="text-end fw-bold text-primary">₹{{ item.total_sales|floatformat:2 }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">No item sales recorded for this period.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const labels = {{ chart_labels_json|safe }};
+        const revenueData = {{ chart_revenue_json|safe }};
+        const gstData = {{ chart_gst_json|safe }};
+        const vatData = {{ chart_vat_json|safe }};
+
+        const ctx = document.getElementById('salesChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Net Revenue (₹)',
+                        data: revenueData,
+                        borderColor: '#5e72e4',
+                        backgroundColor: 'rgba(94, 114, 228, 0.15)',
+                        fill: true,
+                        tension: 0.35,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#5e72e4'
+                    },
+                    {
+                        label: 'GST Collected (₹)',
+                        data: gstData,
+                        borderColor: '#2dce89',
+                        borderDash: [4, 4],
+                        fill: false,
+                        tension: 0.35,
+                        pointRadius: 3
+                    },
+                    {
+                        label: 'State VAT Collected (₹)',
+                        data: vatData,
+                        borderColor: '#fb6340',
+                        borderDash: [4, 4],
+                        fill: false,
+                        tension: 0.35,
+                        pointRadius: 3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            font: { family: "'Segoe UI', 'Helvetica Neue', Arial, sans-serif", size: 12, weight: '600' },
+                            padding: 16
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) { return '₹' + value; }
+                        }
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

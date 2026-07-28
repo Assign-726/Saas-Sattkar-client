@@ -1,0 +1,98 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Categories</h2>
+    <div>
+        <a href="{% url 'restaurant_admin:category_add' restaurant_slug=rslug %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> Add Category
+        </a>
+    </div>
+</div>
+
+{% if messages %}
+<div class="mb-4">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="row">
+    {% for category in categories %}
+    <div class="col-md-4 mb-4">
+        <div class="card h-100">
+            {% if category.image %}
+            <img src="{{ category.image.url }}" class="card-img-top" alt="{{ category.name }}" style="height: 200px; object-fit: cover;">
+            {% else %}
+            <div class="bg-light d-flex align-items-center justify-content-center" style="height: 200px;">
+                <i class="bi bi-image text-muted" style="font-size: 3rem;"></i>
+            </div>
+            {% endif %}
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h5 class="card-title mb-1">{{ category.name }}</h5>
+                        <p class="text-muted mb-2">{{ category.menu_items_count }} items</p>
+                    </div>
+                    <div class="btn-group">
+                        <a href="{% url 'restaurant_admin:category_edit' restaurant_slug=rslug pk=category.id %}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <a href="{% url 'restaurant_admin:category_delete' restaurant_slug=rslug pk=category.id %}" class="btn btn-sm btn-outline-danger">
+                            <i class="bi bi-trash"></i>
+                        </a>
+                    </div>
+                </div>
+                {% if category.description %}
+                <p class="card-text text-muted small mt-2">{{ category.description|truncatewords:20 }}</p>
+                {% endif %}
+                
+                <div class="mt-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">Subcategories</h6>
+                        <a href="{% url 'restaurant_admin:subcategory_add' restaurant_slug=rslug category_id=category.id %}" class="btn btn-sm btn-outline-success">
+                            <i class="bi bi-plus"></i> Add Subcategory
+                        </a>
+                    </div>
+                    <ul class="list-group list-group-flush mb-3">
+                        {% for subcategory in category.subcategories.all %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div class="d-flex align-items-center">
+                                {% if subcategory.image %}
+                                <img src="{{ subcategory.image.url }}" alt="{{ subcategory.name }}" class="rounded me-2" style="width: 30px; height: 30px; object-fit: cover;">
+                                {% endif %}
+                                <span>{{ subcategory.name }}</span>
+                            </div>
+                            <div class="btn-group">
+                                <a href="{% url 'restaurant_admin:subcategory_edit' restaurant_slug=rslug pk=subcategory.id %}" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <a href="{% url 'restaurant_admin:subcategory_delete' restaurant_slug=rslug pk=subcategory.id %}" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            </div>
+                        </li>
+                        {% empty %}
+                        <li class="list-group-item text-muted">No subcategories</li>
+                        {% endfor %}
+                    </ul>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i> No categories found. 
+            <a href="{% url 'restaurant_admin:category_add' restaurant_slug=rslug %}" class="alert-link">Add your first category</a>.
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

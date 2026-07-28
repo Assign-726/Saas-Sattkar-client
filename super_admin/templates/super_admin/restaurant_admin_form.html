@@ -1,0 +1,78 @@
+{% extends 'super_admin/base.html' %}
+
+{% block title %}Create Restaurant Admin | Delicious Bites{% endblock %}
+
+{% block content %}
+<div class="grid">
+  <div class="card" style="max-width: 700px; margin: 0 auto; grid-column: span 12;">
+    <div class="hd">
+      <div>
+        <i class="fa-solid fa-user-shield" style="color: var(--primary); margin-right: 8px;"></i>
+        Create Restaurant Admin
+      </div>
+      <a class="btn secondary small" href="{% url 'super_admin:dashboard' %}">
+        <i class="fa-solid fa-arrow-left"></i> Back
+      </a>
+    </div>
+    
+    <div class="bd">
+      <form method="post" class="form">
+        {% csrf_token %}
+        <div class="row">
+          <div class="col-6">
+            <label for="id_username">Username *</label>
+            {{ form.username }}
+            {% if form.username.errors %}
+              <div class="hint" style="color: var(--danger);">{{ form.username.errors.as_text }}</div>
+            {% endif %}
+          </div>
+          <div class="col-6">
+            <label for="id_email">Email Address</label>
+            {{ form.email }}
+            {% if form.email.errors %}
+              <div class="hint" style="color: var(--danger);">{{ form.email.errors.as_text }}</div>
+            {% endif %}
+          </div>
+          <div class="col-6">
+            <label for="id_password">Password *</label>
+            {{ form.password }}
+            {% if form.password.errors %}
+              <div class="hint" style="color: var(--danger);">{{ form.password.errors.as_text }}</div>
+            {% endif %}
+          </div>
+          <div class="col-6">
+            <label for="id_restaurant">Assigned Business / Restaurant *</label>
+            {{ form.restaurant }}
+            {% if form.restaurant.errors %}
+              <div class="hint" style="color: var(--danger);">{{ form.restaurant.errors.as_text }}</div>
+            {% endif %}
+          </div>
+          <div class="col-6">
+            <label for="id_branch">Assigned Branch Outlet (Optional)</label>
+            {{ form.branch }}
+            {% if form.branch.errors %}
+              <div class="hint" style="color: var(--danger);">{{ form.branch.errors.as_text }}</div>
+            {% endif %}
+            <div class="hint" style="font-size: 0.8rem; color: var(--text-muted);">Leave blank for Business-wide Primary Admin</div>
+          </div>
+          <div class="col-12" style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+            {{ form.is_primary_admin }}
+            <label for="id_is_primary_admin" style="margin-bottom: 0; cursor: pointer;">Designate as Primary Admin</label>
+            {% if form.is_primary_admin.errors %}
+              <div class="hint" style="color: var(--danger);">{{ form.is_primary_admin.errors.as_text }}</div>
+            {% endif %}
+          </div>
+        </div>
+        
+        <div class="actions" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border);">
+          <a class="btn secondary" href="{% url 'super_admin:dashboard' %}">Cancel</a>
+          <button type="submit" class="btn">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>Create Admin</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

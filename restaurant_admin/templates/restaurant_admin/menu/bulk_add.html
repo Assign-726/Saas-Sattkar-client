@@ -1,0 +1,167 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card border-0 shadow-sm rounded-3">
+            <div class="card-header bg-white py-3 border-bottom-0 d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="fw-bold mb-0 text-dark">
+                        <i class="bi bi-file-earmark-code text-primary me-2"></i>Bulk Import Menu Items (JSON)
+                    </h4>
+                    <small class="text-muted">Import multiple menu items at once using JSON file or raw text paste.</small>
+                </div>
+                <a href="{% url 'restaurant_admin:menu_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>Back to Menu
+                </a>
+            </div>
+
+            <div class="card-body p-4">
+                <form method="post" enctype="multipart/form-data" id="bulkMenuForm">
+                    {% csrf_token %}
+                    
+                    <ul class="nav nav-pills mb-3" id="importTab" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active fw-semibold" id="paste-tab" data-bs-toggle="pill" data-bs-target="#paste-pane" type="button" role="tab">
+                                <i class="bi bi-body-text me-1"></i>Paste JSON Content
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-semibold" id="upload-tab" data-bs-toggle="pill" data-bs-target="#upload-pane" type="button" role="tab">
+                                <i class="bi bi-upload me-1"></i>Upload JSON File
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content border p-3 rounded bg-light" id="importTabContent">
+                        <!-- Paste Tab -->
+                        <div class="tab-pane fade show active" id="paste-pane" role="tabpanel">
+                            <label for="json_text" class="form-label fw-bold">JSON Array String</label>
+                            <textarea name="json_text" id="json_text" rows="12" class="form-control font-monospace style-code" placeholder="Paste your JSON array here...">{{ sample_json }}</textarea>
+                        </div>
+                        
+                        <!-- Upload Tab -->
+                        <div class="tab-pane fade" id="upload-pane" role="tabpanel">
+                            <label for="json_file" class="form-label fw-bold">Select .json File</label>
+                            <input type="file" name="json_file" id="json_file" accept=".json,application/json" class="form-control">
+                            <div class="form-text text-muted mt-2">Upload a valid UTF-8 encoded JSON file containing an array of menu item objects.</div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-4">
+                        <div>
+                            <button type="button" class="btn btn-outline-dark btn-sm me-2" onclick="copySampleJson()">
+                                <i class="bi bi-clipboard me-1"></i>Copy Sample JSON
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="downloadSampleJson()">
+                                <i class="bi bi-download me-1"></i>Download Sample JSON
+                            </button>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary px-4 fw-bold">
+                            <i class="bi bi-cloud-upload me-2"></i>Import Menu Items
+                        </button>
+                    </div>
+                </form>
+
+                <hr class="my-4">
+
+                <!-- Reference Guidelines -->
+                <div class="bg-white p-3 rounded border">
+                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-info-circle text-info me-2"></i>Supported JSON Fields Reference</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Field Name</th>
+                                    <th>Type</th>
+                                    <th>Required</th>
+                                    <th>Valid Values / Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>name</code></td>
+                                    <td>String</td>
+                                    <td><span class="badge bg-danger">Required</span></td>
+                                    <td>Name of the dish or beverage. Existing items with same name will be updated.</td>
+                                </tr>
+                                <tr>
+                                    <td><code>price</code></td>
+                                    <td>Number</td>
+                                    <td><span class="badge bg-danger">Required</span></td>
+                                    <td>Numeric price in ₹ (e.g. <code>250.00</code>).</td>
+                                </tr>
+                                <tr>
+                                    <td><code>tax_type</code></td>
+                                    <td>String</td>
+                                    <td>Optional</td>
+                                    <td>
+                                        <code>GST_FOOD</code> (Default) | 
+                                        <code>VAT_BEER</code> | 
+                                        <code>VAT_IMFL</code> | 
+                                        <code>VAT_WINE</code> | 
+                                        <code>VAT_LIQUOR</code>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><code>category</code></td>
+                                    <td>String</td>
+                                    <td>Optional</td>
+                                    <td>Category name (e.g. <code>Main Course</code>). Auto-created if it doesn't exist.</td>
+                                </tr>
+                                <tr>
+                                    <td><code>subcategory</code></td>
+                                    <td>String</td>
+                                    <td>Optional</td>
+                                    <td>Subcategory name (e.g. <code>North Indian</code>). Auto-created if it doesn't exist.</td>
+                                </tr>
+                                <tr>
+                                    <td><code>description</code></td>
+                                    <td>String</td>
+                                    <td>Optional</td>
+                                    <td>Short description of ingredients or preparation.</td>
+                                </tr>
+                                <tr>
+                                    <td><code>availability</code></td>
+                                    <td>Boolean</td>
+                                    <td>Optional</td>
+                                    <td><code>true</code> (Available, default) or <code>false</code> (Out of stock).</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const sampleJsonText = `{{ sample_json|escapejs }}`;
+
+    function copySampleJson() {
+        navigator.clipboard.writeText(sampleJsonText).then(() => {
+            alert('Sample JSON copied to clipboard!');
+        }).catch(err => {
+            alert('Failed to copy text: ' + err);
+        });
+    }
+
+    function downloadSampleJson() {
+        const blob = new Blob([sampleJsonText], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'menu_sample.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+</script>
+{% endblock %}

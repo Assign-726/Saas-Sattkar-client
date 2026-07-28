@@ -1,0 +1,312 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block title %}KOT / BOT Ticket - Order #{{ order.order_number }} - {{ restaurant.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  body {
+    background-color: #f1f5f9;
+  }
+  .kot-wrapper {
+    max-width: 400px;
+    margin: 24px auto;
+  }
+  .kot-ticket {
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    border: 1px solid #cbd5e1;
+    padding: 24px 20px;
+    font-family: 'Courier New', Courier, monospace;
+    color: #000000;
+    margin-bottom: 24px;
+  }
+  .kot-title {
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-align: center;
+    color: #000000;
+    margin: 0;
+  }
+  .bot-title {
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-align: center;
+    color: #b45309;
+    margin: 0;
+  }
+  .kot-restaurant {
+    font-size: 16px;
+    font-weight: 700;
+    text-align: center;
+    color: #000000;
+    margin-top: 4px;
+    margin-bottom: 12px;
+  }
+  .kot-table-box {
+    border: 3px solid #000000;
+    padding: 6px 16px;
+    margin: 8px auto 14px;
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-align: center;
+    display: table;
+    text-transform: uppercase;
+  }
+  .kot-solid-line {
+    border-top: 2px solid #000000;
+    margin: 12px 0 10px 0;
+  }
+  .kot-dashed-line {
+    border-top: 1px dashed #000000;
+    margin: 10px 0;
+  }
+  .kot-heavy-dashed {
+    border-top: 3px dashed #000000;
+    margin: 16px 0 12px 0;
+  }
+  .kot-meta {
+    font-size: 13px;
+    line-height: 1.5;
+    color: #000000;
+  }
+  .kot-meta-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 2px;
+  }
+  .kot-items-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+  }
+  .kot-items-table th {
+    font-size: 17px;
+    font-weight: 900;
+    text-transform: uppercase;
+    color: #000000;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #000000;
+    text-align: left;
+  }
+  .kot-items-table td {
+    padding: 8px 0;
+    vertical-align: top;
+    color: #000000;
+  }
+  .qty-col {
+    font-size: 18px;
+    font-weight: 900;
+    width: 45px;
+  }
+  .item-title {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .item-notes {
+    font-size: 13px;
+    font-style: italic;
+    color: #000000;
+    margin-top: 2px;
+  }
+  .kot-footer {
+    text-align: center;
+    color: #000000;
+  }
+  .total-count {
+    font-size: 17px;
+    font-weight: 900;
+    margin-bottom: 4px;
+  }
+  .kitchen-only-tag {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  .no-print-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  @media print {
+    body {
+      background: #ffffff !important;
+    }
+    nav, sidebar, .sidebar, .header, .no-print-actions, footer {
+      display: none !important;
+    }
+    .kot-wrapper {
+      max-width: 100% !important;
+      margin: 0 !important;
+    }
+    .kot-ticket {
+      box-shadow: none !important;
+      border: none !important;
+      padding: 0 !important;
+      margin-bottom: 0 !important;
+      page-break-after: always !important;
+      break-after: page !important;
+    }
+    .kot-ticket:last-child {
+      page-break-after: avoid !important;
+      break-after: avoid !important;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+  <div class="kot-wrapper">
+
+    <!-- 1. KITCHEN ORDER TICKET (KOT) -->
+    {% if has_food %}
+    <div class="kot-ticket">
+      <div class="kot-title">🍔 KITCHEN TICKET (KOT)</div>
+      <div class="kot-restaurant">{{ restaurant.name }}</div>
+
+      <div class="kot-table-box">
+        TABLE: {% if order.table_number %}T-{{ order.table_number|stringformat:"02d" }}{% elif table_obj %}T-{{ table_obj.name }}{% else %}TAKEAWAY{% endif %}
+      </div>
+
+      <div class="kot-solid-line"></div>
+
+      <div class="kot-meta">
+        <div class="kot-meta-row">
+          <span>KOT #: <strong>KOT-{{ order.branch_order_number|default:order.id|stringformat:"04d" }}</strong></span>
+          <span>Order #: <strong>{{ order.order_number }}</strong></span>
+        </div>
+        <div class="kot-meta-row">
+          <span>Type: <strong>{{ order.get_order_type_display|default:"Dine-In" }}</strong></span>
+          <span>Time: <strong>{{ order.order_time|date:"h:i A" }}</strong></span>
+        </div>
+        <div class="kot-meta-row">
+          <span>Steward: <strong>{{ order.created_by.get_full_name|default:order.customer_name|default:"Counter" }}</strong></span>
+          <span>Date: <strong>{{ order.order_time|date:"d/m/Y" }}</strong></span>
+        </div>
+      </div>
+
+      <div class="kot-dashed-line"></div>
+
+      <table class="kot-items-table">
+        <thead>
+          <tr>
+            <th class="qty-col">QTY</th>
+            <th>KITCHEN PARTICULARS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in food_items %}
+          <tr>
+            <td class="qty-col">{{ item.quantity }}x</td>
+            <td>
+              <div class="item-title">{{ item.menu_item.name }}</div>
+              {% if item.notes %}
+                <div class="item-notes">| * {{ item.notes }}</div>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      {% if order.notes %}
+      <div style="border-top:1px dashed #000; margin-top:10px; padding-top:8px; font-size:13px; font-style:italic;">
+        | * Special Note: {{ order.notes }}
+      </div>
+      {% endif %}
+
+      <div class="kot-heavy-dashed"></div>
+
+      <div class="kot-footer">
+        <div class="total-count">Total Kitchen Items: {{ total_food_qty }}</div>
+        <div class="kitchen-only-tag">*** FOR KITCHEN USE ONLY ***</div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- 2. BAR ORDER TICKET (BOT) -->
+    {% if has_bar %}
+    <div class="kot-ticket">
+      <div class="bot-title">🍷 BAR TICKET (BOT)</div>
+      <div class="kot-restaurant">{{ restaurant.name }}</div>
+
+      <div class="kot-table-box">
+        TABLE: {% if order.table_number %}T-{{ order.table_number|stringformat:"02d" }}{% elif table_obj %}T-{{ table_obj.name }}{% else %}TAKEAWAY{% endif %}
+      </div>
+
+      <div class="kot-solid-line"></div>
+
+      <div class="kot-meta">
+        <div class="kot-meta-row">
+          <span>BOT #: <strong>BOT-{{ order.branch_order_number|default:order.id|stringformat:"04d" }}</strong></span>
+          <span>Order #: <strong>{{ order.order_number }}</strong></span>
+        </div>
+        <div class="kot-meta-row">
+          <span>Type: <strong>{{ order.get_order_type_display|default:"Dine-In" }}</strong></span>
+          <span>Time: <strong>{{ order.order_time|date:"h:i A" }}</strong></span>
+        </div>
+        <div class="kot-meta-row">
+          <span>Steward: <strong>{{ order.created_by.get_full_name|default:order.customer_name|default:"Counter" }}</strong></span>
+          <span>Date: <strong>{{ order.order_time|date:"d/m/Y" }}</strong></span>
+        </div>
+      </div>
+
+      <div class="kot-dashed-line"></div>
+
+      <table class="kot-items-table">
+        <thead>
+          <tr>
+            <th class="qty-col">QTY</th>
+            <th>BAR / LIQUOR PARTICULARS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in bar_items %}
+          <tr>
+            <td class="qty-col">{{ item.quantity }}x</td>
+            <td>
+              <div class="item-title">{{ item.menu_item.name }}</div>
+              {% if item.notes %}
+                <div class="item-notes">| * {{ item.notes }}</div>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      {% if order.notes %}
+      <div style="border-top:1px dashed #000; margin-top:10px; padding-top:8px; font-size:13px; font-style:italic;">
+        | * Special Note: {{ order.notes }}
+      </div>
+      {% endif %}
+
+      <div class="kot-heavy-dashed"></div>
+
+      <div class="kot-footer">
+        <div class="total-count">Total Bar Items: {{ total_bar_qty }}</div>
+        <div class="kitchen-only-tag">*** FOR BAR USE ONLY ***</div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- No-Print Actions -->
+    <div class="no-print-actions no-print">
+      <button onclick="window.print()" class="btn btn-dark w-100 fw-bold">
+        <i class="bi bi-printer me-1"></i> Print Ticket(s)
+      </button>
+      <a href="{% url 'restaurant_admin:floor_plan_dashboard' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary w-100 fw-bold">
+        <i class="bi bi-arrow-left me-1"></i> Back
+      </a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

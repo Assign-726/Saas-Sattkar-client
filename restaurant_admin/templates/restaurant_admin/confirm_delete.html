@@ -1,0 +1,49 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h4 class="mb-0">Confirm Delete</h4>
+            </div>
+            <div class="card-body">
+                <p>Are you sure you want to delete <strong>{{ object }}</strong>?</p>
+                
+                {% if object.menu_items_count > 0 %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    This category contains {{ object.menu_items_count }} menu item{{ object.menu_items_count|pluralize }}. 
+                    Deleting it will also remove all associated menu items.
+                </div>
+                {% endif %}
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ request.META.HTTP_REFERER|default:'javascript:history.back()' }}" class="btn btn-secondary">
+                            <i class="bi bi-x-lg"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-trash"></i> Delete
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .card {
+        border: none;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+    .card-header {
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
+</style>
+{% endblock %}

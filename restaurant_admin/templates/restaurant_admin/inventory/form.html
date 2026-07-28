@@ -1,0 +1,127 @@
+{% extends 'restaurant_admin/base.html' %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h3 class="mb-1 text-dark fw-bold"><i class="bi bi-box-seam text-primary me-2"></i>{{ title }}</h3>
+      <p class="text-muted small mb-0">Configure master raw material, beverage, or packaging inventory item specifications and GST rates</p>
+    </div>
+    <a href="{% url 'restaurant_admin:inventory_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+      <i class="bi bi-arrow-left me-1"></i> Back to Stock List
+    </a>
+  </div>
+
+  <div class="card border-0 shadow-sm rounded-3">
+    <div class="card-body p-4">
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        <!-- Section 1: Item Basic Profile -->
+        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-info-circle me-1"></i> 1. Item Specifications</h6>
+        <div class="row g-3 mb-4">
+          <div class="col-md-5">
+            <label class="form-label fw-semibold text-secondary small">Item Name <span class="text-danger">*</span></label>
+            {{ form.name }}
+            {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-secondary small">SKU Code</label>
+            {{ form.sku }}
+            {% if form.sku.errors %}<div class="text-danger small mt-1">{{ form.sku.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold text-secondary small">Inventory Category <span class="text-danger">*</span></label>
+            {{ form.category }}
+            {% if form.category.errors %}<div class="text-danger small mt-1">{{ form.category.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-secondary small">Measurement Unit <span class="text-danger">*</span></label>
+            {{ form.unit }}
+            {% if form.unit.errors %}<div class="text-danger small mt-1">{{ form.unit.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-secondary small">Initial Stock Quantity</label>
+            {{ form.quantity }}
+            {% if form.quantity.errors %}<div class="text-danger small mt-1">{{ form.quantity.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-secondary small">Low Stock Reorder Alert Level <span class="text-danger">*</span></label>
+            {{ form.reorder_level }}
+            <div class="form-text fs-8 text-muted">Triggers low stock alert when stock drops below or equal to this value.</div>
+            {% if form.reorder_level.errors %}<div class="text-danger small mt-1">{{ form.reorder_level.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="col-md-3 d-flex align-items-center pt-3">
+            <div class="form-check form-switch bg-light p-3 rounded border w-100">
+              <div class="ms-4">
+                {{ form.is_active }}
+                <label class="form-check-label fw-semibold small" for="{{ form.is_active.id_for_label }}">Is Active Item</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Costing & Pricing -->
+        <hr class="my-4">
+        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-currency-rupee me-1"></i> 2. Costing & Pricing Rates</h6>
+        <div class="row g-3 mb-4">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold text-secondary small">Default Cost Price (Purchase Rate per Unit ₹) <span class="text-danger">*</span></label>
+            {{ form.cost_price }}
+            <div class="form-text fs-8 text-muted">Default purchase cost rate used during inward purchase entries.</div>
+            {% if form.cost_price.errors %}<div class="text-danger small mt-1">{{ form.cost_price.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold text-secondary small">Selling Price per Unit (Optional ₹)</label>
+            {{ form.selling_price }}
+            <div class="form-text fs-8 text-muted">Applicable if item is sold directly on POS (e.g. bottled beverages).</div>
+            {% if form.selling_price.errors %}<div class="text-danger small mt-1">{{ form.selling_price.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- Section 3: HSN/SAC & GST Tax Settings -->
+        <hr class="my-4">
+        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-file-earmark-text me-1"></i> 3. HSN/SAC Code & Input GST Tax Settings</h6>
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label class="form-label fw-semibold text-secondary small">Taxability Type <span class="text-danger">*</span></label>
+            {{ form.taxability_type }}
+            {% if form.taxability_type.errors %}<div class="text-danger small mt-1">{{ form.taxability_type.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold text-secondary small">HSN / SAC Code</label>
+            {{ form.hsn_sac_code }}
+            <div class="form-text fs-8 text-muted">4 to 8 digit HSN classification code for GST compliance.</div>
+            {% if form.hsn_sac_code.errors %}<div class="text-danger small mt-1">{{ form.hsn_sac_code.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold text-secondary small">GST Tax Rate (%)</label>
+            {{ form.gst_rate }}
+            <div class="form-text fs-8 text-muted">Select standard GST rate applicable for input tax credit calculation.</div>
+            {% if form.gst_rate.errors %}<div class="text-danger small mt-1">{{ form.gst_rate.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold text-secondary small">HSN Item Description / Notes</label>
+          {{ form.hsn_description }}
+          {% if form.hsn_description.errors %}<div class="text-danger small mt-1">{{ form.hsn_description.errors|join:", " }}</div>{% endif %}
+        </div>
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-danger mb-3">{{ form.non_field_errors|join:", " }}</div>
+        {% endif %}
+
+        <div class="d-flex justify-content-end gap-2 pt-3 border-top">
+          <a href="{% url 'restaurant_admin:inventory_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary px-4">Cancel</a>
+          <button type="submit" class="btn btn-primary px-4 fw-semibold"><i class="bi bi-check-circle me-1"></i> Save Inventory Item</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

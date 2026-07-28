@@ -1,0 +1,576 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>
+    {% if bill_type == 'food' %}Tax Invoice (Food){% elif bill_type == 'liquor' %}Retail Excise Bill (Liquor){% else %}Tax Invoice & Retail Bill{% endif %}
+    {{ order.order_number }} - {{ restaurant.name }}
+  </title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <style>
+    body {
+      background: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #1e293b;
+    }
+
+    .bill-type-nav {
+      max-width: 820px;
+      margin: 20px auto 0;
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .bill-type-nav .btn {
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 16px;
+    }
+
+    .invoice-card {
+      max-width: 820px;
+      margin: 16px auto 32px;
+      background: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    }
+
+    .invoice-header {
+      background: #0f172a;
+      color: #ffffff;
+      padding: 24px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .invoice-header h1 {
+      font-size: 24px;
+      font-weight: 800;
+      margin: 0;
+      letter-spacing: -0.5px;
+    }
+
+    .invoice-header .subtitle {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-top: 2px;
+    }
+
+    .tax-badge-box {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      padding: 8px 16px;
+      text-align: center;
+    }
+
+    .tax-badge-box .title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #38bdf8;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .tax-badge-box .sub {
+      font-size: 11px;
+      color: #cbd5e1;
+    }
+
+    .invoice-body {
+      padding: 24px 32px;
+    }
+
+    .details-bar {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 14px 20px;
+      margin-bottom: 24px;
+    }
+
+    .meta-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+    }
+
+    .meta-value-bold {
+      font-size: 14px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .meta-value-sub {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .items-table thead th {
+      background: #0f172a;
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 10px 14px;
+    }
+
+    .items-table tbody td {
+      padding: 12px 14px;
+      font-size: 13px;
+      border-bottom: 1px solid #f1f5f9;
+      color: #334155;
+    }
+
+    .items-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .statutory-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-left: 4px solid #0f172a;
+      border-radius: 6px;
+      padding: 16px;
+      height: 100%;
+    }
+
+    .statutory-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 8px;
+    }
+
+    .statutory-item {
+      font-size: 12px;
+      color: #334155;
+      margin-bottom: 4px;
+    }
+
+    .statutory-disclaimer {
+      font-size: 11px;
+      font-style: italic;
+      color: #64748b;
+      margin-top: 12px;
+      line-height: 1.4;
+    }
+
+    .summary-table {
+      width: 100%;
+      font-size: 13px;
+    }
+
+    .summary-table td {
+      padding: 4px 0;
+      color: #475467;
+    }
+
+    .summary-table td.amount {
+      text-align: right;
+      font-weight: 600;
+      color: #0f172a;
+    }
+
+    .grand-total-box {
+      background: #e2e8f0;
+      border-radius: 6px;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 12px;
+    }
+
+    .grand-total-label {
+      font-size: 16px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .grand-total-amount {
+      font-size: 20px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .invoice-footer {
+      border-top: 1px dashed #cbd5e1;
+      margin-top: 28px;
+      padding-top: 16px;
+      text-align: center;
+    }
+
+    .footer-thanks {
+      font-size: 14px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 4px;
+    }
+
+    .footer-address {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .footer-disclaimer {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+      }
+
+      .invoice-card {
+        box-shadow: none;
+        margin: 0;
+        max-width: 100%;
+        border-radius: 0;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- No-Print Bill Mode Switcher Tabs -->
+  <div class="no-print bill-type-nav">
+    <!-- Combined Bill option commented out for separate billing compliance
+    <a href="?type=combined" class="btn {% if bill_type == 'combined' %}btn-dark{% else %}btn-outline-secondary{% endif %}">
+      <i class="bi bi-file-earmark-spreadsheet me-1"></i>Combined Bill
+    </a>
+    -->
+    <a href="?type=food" class="btn {% if bill_type == 'food' %}btn-dark{% else %}btn-outline-secondary{% endif %}">
+      <i class="bi bi-egg-fried me-1"></i>Food Tax Invoice (GST)
+    </a>
+    <a href="?type=liquor" class="btn {% if bill_type == 'liquor' %}btn-dark{% else %}btn-outline-secondary{% endif %}">
+      <i class="bi bi-cup-straw me-1"></i>Liquor Retail Excise Bill (VAT)
+    </a>
+  </div>
+
+  <div class="invoice-card">
+    <!-- Header Banner -->
+    <div class="invoice-header">
+      <div>
+        <h1>{{ branch.name|default:restaurant.name }}</h1>
+        <div class="subtitle">
+          {% if restaurant.business_type %}{{ restaurant.business_type }} | {% endif %}
+          {% if branch.city %}{{ branch.city }}, {{ branch.state }}{% elif restaurant.city %}{{ restaurant.city }}, {{ restaurant.state }}{% else %}Fine Dining & Hospitality{% endif %}
+        </div>
+      </div>
+      <div class="tax-badge-box">
+        <div class="title">
+          {% if bill_type == 'food' %}
+            TAX INVOICE
+          {% elif bill_type == 'liquor' %}
+            RETAIL EXCISE BILL
+          {% else %}
+            TAX INVOICE & RETAIL EXCISE BILL
+          {% endif %}
+        </div>
+        <div class="sub">
+          {% if bill_type == 'food' %}
+            Original for Recipient (CGST & SGST)
+          {% elif bill_type == 'liquor' %}
+            Liquor VAT Invoice (State Excise)
+          {% else %}
+            Original for Recipient
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="invoice-body">
+      <!-- Order & Customer Details Bar -->
+      <div class="details-bar">
+        <div class="row">
+          <div class="col-4">
+            <div class="meta-label">Billed To</div>
+            <div class="meta-value-bold">{{ order.customer_name|default:"Walk-in Customer" }}</div>
+            {% if order.phone %}<div class="meta-value-sub">Ph: {{ order.phone }}</div>{% endif %}
+          </div>
+          <div class="col-4">
+            <div class="meta-label">Invoice & Order Details</div>
+            {% if bill_type == 'food' %}
+              <div class="meta-value-bold">Tax Invoice No: {{ order.food_invoice_number }}</div>
+            {% elif bill_type == 'liquor' %}
+              <div class="meta-value-bold">Bill of Supply No: {{ order.liquor_bill_number }}</div>
+            {% else %}
+              <div class="meta-value-bold">Invoice No: {{ order.food_invoice_number }}</div>
+            {% endif %}
+            <div class="meta-value-sub">
+              Order ID: <strong>{{ order.order_number }}</strong>
+              {% if order.table_number %} | Table: T-{{ order.table_number|stringformat:"02d" }}{% else %} | Pickup / Delivery{% endif %}
+              | Mode: {{ order.get_payment_method_display }}
+            </div>
+          </div>
+          <div class="col-4 text-end">
+            <div class="meta-label">Date & Time</div>
+            <div class="meta-value-bold">{{ order.order_time|date:"F d, Y" }}</div>
+            <div class="meta-value-sub">Time: {{ order.order_time|date:"h:i A" }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Itemized Table -->
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th style="width: 40px;">#</th>
+            <th>Item Description</th>
+            <th style="text-align: right; width: 110px;">Price</th>
+            <th style="text-align: center; width: 60px;">Qty</th>
+            <th style="text-align: right; width: 110px;">Amount (₹)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in order_items %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>
+              <span class="fw-semibold">{{ item.menu_item.name }}</span>
+              {% if item.calc_discount_amount > 0 %}
+                <div style="font-size: 0.75rem; color: #059669; font-weight: 500;">
+                  (-₹{{ item.calc_discount_amount|floatformat:2 }} Disc{% if item.discount_reason %} - {{ item.discount_reason }}{% endif %})
+                </div>
+              {% endif %}
+            </td>
+            <td style="text-align: right;">₹{{ item.unit_price|floatformat:2 }}</td>
+            <td style="text-align: center;">{{ item.quantity }}</td>
+            <td style="text-align: right; font-weight: 600;">
+              {% if item.calc_discount_amount > 0 %}
+                <div style="font-size: 0.75rem; text-decoration: line-through; color: #9ca3af;">₹{{ item.gross_subtotal|floatformat:2 }}</div>
+                <div style="color: #059669;">₹{{ item.net_subtotal|floatformat:2 }}</div>
+              {% else %}
+                ₹{{ item.subtotal|floatformat:2 }}
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="text-center text-muted py-3">No items found for this bill category.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <!-- Bottom Section (Statutory Info & Summary) -->
+      <div class="row g-4">
+        <!-- Left Column: Statutory Tax Registration -->
+        <div class="col-md-6">
+          <div class="statutory-box">
+            <div class="statutory-title">Statutory Tax Registration:</div>
+            
+            {% if bill_type != 'liquor' %}
+            <div class="statutory-item">
+              <strong>• GSTIN:</strong> {{ branch.gst_registration.gstin|default:branch.gstin|default:restaurant.pan|default:"Unregistered" }}
+            </div>
+            {% endif %}
+
+            {% if bill_type != 'food' and branch %}
+            <div class="statutory-item">
+              <strong>• State VAT / TIN:</strong> {{ branch.vat_tin|default:"N/A" }}
+            </div>
+            <div class="statutory-item">
+              <strong>• Excise License No:</strong> {{ branch.excise_license_no|default:"N/A" }}
+            </div>
+            {% endif %}
+
+            <div class="statutory-item">
+              <strong>• FSSAI Lic No:</strong> {{ branch.fssai_license_no|default:"N/A" }}
+            </div>
+
+            <div class="statutory-disclaimer">
+              {% if bill_type == 'food' %}
+                Note: Food & non-alcoholic beverages are taxed under CGST & SGST Acts.
+              {% elif bill_type == 'liquor' %}
+                Note: Alcoholic beverages for human consumption attract State VAT as per Excise laws.
+              {% else %}
+                Note: Food & soft beverages are taxed under GST. Alcoholic beverages for human consumption attract State VAT as per Excise laws.
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Bill Summary -->
+        <div class="col-md-6">
+          <table class="summary-table">
+            <tbody>
+              {% if bill_type == 'combined' %}
+              <tr>
+                <td>Food & Non-Alcoholic Subtotal</td>
+                <td class="amount">₹{{ food_subtotal|floatformat:2 }}</td>
+              </tr>
+              {% if liquor_subtotal and liquor_subtotal > 0 %}
+              <tr>
+                <td>Liquor Subtotal</td>
+                <td class="amount">₹{{ liquor_subtotal|floatformat:2 }}</td>
+              </tr>
+              {% endif %}
+              {% endif %}
+
+              {% if bill_type == 'liquor' %}
+              {% if beer_subtotal and beer_subtotal > 0 %}
+              <tr>
+                <td>Beer Subtotal</td>
+                <td class="amount">₹{{ beer_subtotal|floatformat:2 }}</td>
+              </tr>
+              {% endif %}
+              {% if imfl_subtotal and imfl_subtotal > 0 %}
+              <tr>
+                <td>Spirits Subtotal</td>
+                <td class="amount">₹{{ imfl_subtotal|floatformat:2 }}</td>
+              </tr>
+              {% endif %}
+              {% if wine_subtotal and wine_subtotal > 0 %}
+              <tr>
+                <td>Wine Subtotal</td>
+                <td class="amount">₹{{ wine_subtotal|floatformat:2 }}</td>
+              </tr>
+              {% endif %}
+              {% endif %}
+
+              <tr>
+                <td style="font-weight: 600; color: #334155;">Gross Subtotal</td>
+                <td class="amount">₹{{ subtotal|floatformat:2 }}</td>
+              </tr>
+
+              <tr {% if discount_amount and discount_amount > 0 %}style="color: #dc2626;"{% endif %}>
+                <td>Discount {% if order.coupon %}({{ order.coupon.code }}){% endif %}</td>
+                <td class="amount" {% if discount_amount and discount_amount > 0 %}style="color: #dc2626;"{% endif %}>
+                  {% if discount_amount and discount_amount > 0 %}-₹{{ discount_amount|floatformat:2 }}{% else %}₹0.00{% endif %}
+                </td>
+              </tr>
+
+              {% if service_percentage and service_percentage > 0 and bill_type != 'liquor' %}
+              <tr>
+                <td>Service Charge @ {{ service_percentage|floatformat:1 }}%</td>
+                <td class="amount">₹{{ service_amount|floatformat:2 }}</td>
+              </tr>
+              {% endif %}
+
+              {% if cgst_amount and cgst_amount > 0 and bill_type != 'liquor' %}
+              <tr>
+                <td>CGST @ {{ cgst_percentage|floatformat:1 }}% (on Food)</td>
+                <td class="amount">₹{{ cgst_amount|floatformat:2 }}</td>
+              </tr>
+              {% endif %}
+              {% if sgst_amount and sgst_amount > 0 and bill_type != 'liquor' %}
+              <tr>
+                <td>SGST @ {{ sgst_percentage|floatformat:1 }}% (on Food)</td>
+                <td class="amount">₹{{ sgst_amount|floatformat:2 }}</td>
+              </tr>
+              {% endif %}
+
+              {% if beer_vat and beer_vat > 0 and bill_type != 'food' %}
+              <tr>
+                <td>Beer State VAT @ {{ vat_beer_percentage|floatformat:2 }}%</td>
+                <td class="amount">₹{{ beer_vat|floatformat:2 }}</td>
+              </tr>
+              {% endif %}
+              {% if imfl_vat and imfl_vat > 0 and bill_type != 'food' %}
+              <tr>
+                <td>Spirits State VAT @ {{ vat_imfl_percentage|floatformat:2 }}%</td>
+                <td class="amount">₹{{ imfl_vat|floatformat:2 }}</td>
+              </tr>
+              {% endif %}
+              {% if wine_vat and wine_vat > 0 and bill_type != 'food' %}
+              <tr>
+                <td>Wine State VAT @ {{ vat_wine_percentage|floatformat:2 }}%</td>
+                <td class="amount">₹{{ wine_vat|floatformat:2 }}</td>
+              </tr>
+              {% endif %}
+              {% if gen_vat and gen_vat > 0 and bill_type != 'food' %}
+              <tr>
+                <td>State VAT @ {{ vat_percentage|floatformat:2 }}%</td>
+                <td class="amount">₹{{ gen_vat|floatformat:2 }}</td>
+              </tr>
+              {% endif %}
+
+              {% if round_off_amount and round_off_amount != 0 %}
+              <tr>
+                <td>Round Off</td>
+                <td class="amount">
+                  {% if round_off_amount > 0 %}+ ₹{{ round_off_amount|floatformat:2 }}{% else %}- ₹{{ round_off_amount|floatformat:2|slice:"1:" }}{% endif %}
+                </td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+
+          <div class="grand-total-box">
+            <div class="grand-total-label">Grand Total</div>
+            <div class="grand-total-amount">₹{{ total|floatformat:2 }}</div>
+          </div>
+
+          {% if order.advance_amount_paid and order.advance_amount_paid > 0 %}
+          <div class="mt-2 p-3 bg-light rounded border">
+            <div class="d-flex justify-content-between align-items-center mb-1 text-success">
+              <span class="fw-bold small">Less: Advance Deducted ({% if order.advance_receipt %}Ref: {{ order.advance_receipt.receipt_no }}{% else %}Advance Deposit{% endif %}):</span>
+              <span class="fw-bold">-₹{{ order.advance_amount_paid|floatformat:2 }}</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center pt-2 border-top">
+              <span class="fw-extrabold text-dark uppercase small">Net Balance Due / Paid:</span>
+              <span class="fw-extrabold text-primary fs-5">₹{{ order.net_payable|floatformat:2 }}</span>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Footer Section -->
+      <div class="invoice-footer">
+        <div class="footer-thanks">Thank you for dining with us!</div>
+        <div class="footer-address">
+          {% if branch.address %}{{ branch.address }}{% else %}{{ restaurant.address }}{% endif %}
+          | Phone: {% if branch.phone %}{{ branch.phone }}{% else %}{{ restaurant.phone }}{% endif %}
+        </div>
+        <div class="footer-disclaimer">
+          This is a computer-generated invoice and requires no physical signature.
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="no-print mt-4 d-flex justify-content-center gap-2">
+        <button class="btn btn-outline-secondary px-4" onclick="window.print()">
+          <i class="bi bi-printer me-1"></i> Print Invoice
+        </button>
+        <button class="btn btn-primary px-4" onclick="window.print()">
+          <i class="bi bi-download me-1"></i> Download PDF
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+</body>
+
+</html>

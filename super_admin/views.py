@@ -1,0 +1,392 @@
+from django.contrib.auth.decorators import user_passes_test
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+
+from django.urls import reverse
+from django.http import JsonResponse
+
+from super_admin.forms import (
+    RestaurantForm,
+    RestaurantAdminCreateForm,
+    OnboardRestaurantForm,
+    RestaurantAdminUpdateForm,
+    RestaurantLandingForm,
+    GalleryImageForm,
+    TeamMemberForm,
+    ReviewForm,
+    EventForm,
+)
+from super_admin.models import Restaurant, RestaurantUser, GstRegistration, RestaurantBranch, DocumentSeries
+from core.models import RestaurantLanding, GalleryImage, TeamMember, Review, Event
+
+
+
+def superuser_required(view):
+    return user_passes_test(lambda u: u.is_active and u.is_superuser)(view)
+
+
+@superuser_required
+def landing_index(request):
+    restaurants = Restaurant.objects.all().order_by('name')
+    return render(request, 'super_admin/landing_list.html', {
+        'restaurants': restaurants,
+    })
+
+
+@superuser_required
+def dashboard(request):
+    restaurants = Restaurant.objects.all().order_by('name')
+    admins = RestaurantUser.objects.select_related('user', 'restaurant').order_by('restaurant__name', 'user__username')
+    return render(request, 'super_admin/dashboard.html', {
+        'restaurants': restaurants,
+        'admins': admins,
+    })
+
+
+@superuser_required
+def restaurant_create(request):
+    if request.method == 'POST':
+        form = RestaurantForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Restaurant created successfully.')
+            return redirect('super_admin:dashboard')
+    else:
+        form = RestaurantForm()
+    return render(request, 'super_admin/restaurant_form.html', {'form': form})
+
+
+@superuser_required
+def restaurant_admin_create(request):
+    if request.method == 'POST':
+        form = RestaurantAdminCreateForm(request.POST)
+        if form.is_valid():
+            ru = form.save()
+            messages.success(request, f'Restaurant admin {ru.user.username} created for {ru.restaurant.name}.')
+            return redirect('super_admin:dashboard')
+    else:
+        form = RestaurantAdminCreateForm()
+    return render(request, 'super_admin/restaurant_admin_form.html', {'form': form})
+
+
+import json
+
+
+@superuser_required
+def onboard_restaurant(request):
+    if request.method == 'POST':
+        form = OnboardRestaurantForm(request.POST)
+        branches_json = request.POST.get('branches_json', '[]')
+        try:
+            branches_data = json.loads(branches_json)
+        except Exception:
+            branches_data = []
+
+        if form.is_valid():
+            restaurant, ru = form.save(branches_data=branches_data)
+            messages.success(
+                request,
+                f"Restaurant '{restaurant.name}' and admin '{ru.user.username}' created successfully with {restaurant.branches.count()} branch outlet(s)."
+            )
+            return redirect('super_admin:dashboard')
+    else:
+        form = OnboardRestaurantForm()
+    return render(request, 'super_admin/onboard.html', {'form': form})
+
+
+# --- Restaurant CRUD ---
+@superuser_required
+def restaurant_edit(request, pk):
+    restaurant = get_object_or_404(Restaurant, pk=pk)
+    primary_ru = RestaurantUser.objects.filter(restaurant=restaurant, is_primary_admin=True).first()
+    primary_user = primary_ru.user if primary_ru else None
+
+    if request.method == 'POST':
+        form = OnboardRestaurantForm(request.POST, instance=restaurant)
+        branches_json = request.POST.get('branches_json', '[]')
+        try:
+            branches_data = json.loads(branches_json)
+        except Exception:
+            branches_data = []
+
+        if form.is_valid():
+            restaurant, ru = form.save(instance=restaurant, branches_data=branches_data)
+            messages.success(request, f"Restaurant '{restaurant.name}' updated successfully.")
+            return redirect('super_admin:dashboard')
+    else:
+        initial = {
+            'legal_name': restaurant.legal_name,
+            'trade_name': restaurant.trade_name,
+            'business_type': restaurant.business_type,
+            'pan': restaurant.pan,
+            'cin_llpin': restaurant.cin_llpin,
+            'restaurant_address_line_1': restaurant.address_line_1,
+            'restaurant_address_line_2': restaurant.address_line_2,
+            'restaurant_city': restaurant.city,
+            'restaurant_state': restaurant.state,
+            'restaurant_pincode': restaurant.pincode,
+            'restaurant_email': restaurant.email,
+            'restaurant_phone': restaurant.phone,
+            'is_gst_registered': restaurant.is_gst_registered,
+            'restaurant_is_active': restaurant.is_active,
+        }
+        if primary_user:
+            initial.update({
+                'admin_first_name': primary_user.first_name,
+                'admin_last_name': primary_user.last_name,
+                'admin_username': primary_user.username,
+                'admin_email': primary_user.email,
+            })
+        form = OnboardRestaurantForm(initial=initial, instance=restaurant)
+
+    existing_branches = []
+    for b in restaurant.branches.all():
+        existing_branches.append({
+            'id': b.id,
+            'name': b.name,
+            'phone': b.phone,
+            'use_company_address': b.use_company_address,
+            'address_line_1': b.address_line_1,
+            'address_line_2': b.address_line_2,
+            'city': b.city,
+            'state': b.state or restaurant.state,
+            'pincode': b.pincode,
+            'fssai_license_no': b.fssai_license_no,
+            'serves_alcohol': b.serves_alcohol,
+            'gstin': b.gst_registration.gstin if b.gst_registration else b.gstin,
+            'gst_registration_type': b.gst_registration_type,
+            'is_hotel_tariff_7500_plus': b.is_hotel_tariff_7500_plus,
+            'e_invoicing_enabled': b.e_invoicing_enabled,
+        })
+
+    return render(request, 'super_admin/onboard.html', {
+        'form': form,
+        'is_edit': True,
+        'restaurant': restaurant,
+        'initial_branches_json': json.dumps(existing_branches),
+    })
+
+
+@superuser_required
+def restaurant_delete(request, pk):
+    restaurant = Restaurant.objects.get(pk=pk)
+    if request.method == 'POST':
+        restaurant.delete()
+        messages.success(request, 'Restaurant deleted.')
+        return redirect('super_admin:dashboard')
+    return render(request, 'super_admin/restaurant_confirm_delete.html', {'restaurant': restaurant})
+
+
+# --- Restaurant Admin CRUD ---
+@superuser_required
+def restaurant_admin_edit(request, pk):
+    ru = RestaurantUser.objects.select_related('user').get(pk=pk)
+    if request.method == 'POST':
+        form = RestaurantAdminUpdateForm(request.POST, instance=ru)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Restaurant admin updated successfully.')
+            return redirect('super_admin:dashboard')
+    else:
+        form = RestaurantAdminUpdateForm(instance=ru)
+    return render(request, 'super_admin/restaurant_admin_update_form.html', {'form': form})
+
+
+@superuser_required
+def restaurant_admin_delete(request, pk):
+    ru = RestaurantUser.objects.select_related('user', 'restaurant').get(pk=pk)
+    if request.method == 'POST':
+        # Decide whether to also delete the User. Here we delete both.
+        user = ru.user
+        ru.delete()
+        user.delete()
+        messages.success(request, 'Restaurant admin deleted.')
+        return redirect('super_admin:dashboard')
+    return render(request, 'super_admin/restaurant_admin_confirm_delete.html', {'ru': ru})
+
+
+# --- Landing page management ---
+@superuser_required
+def landing_edit(request, pk):
+    restaurant = Restaurant.objects.get(pk=pk)
+    landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
+
+    if request.method == 'POST' and 'save_landing' in request.POST:
+        with open('debug_post.log', 'w') as debug_file:
+            debug_file.write(f"POST keys: {list(request.POST.keys())}\n")
+            debug_file.write(f"FILES keys: {list(request.FILES.keys())}\n")
+        form = RestaurantLandingForm(request.POST, request.FILES, instance=landing)
+        if form.is_valid():
+            landing_obj = form.save(commit=False)
+            if 'clear_logo' in request.POST:
+                if landing_obj.logo:
+                    landing_obj.logo.delete(save=False)
+                landing_obj.logo = None
+            if 'clear_hero_image' in request.POST:
+                if landing_obj.hero_image:
+                    landing_obj.hero_image.delete(save=False)
+                landing_obj.hero_image = None
+            if 'clear_hero_video' in request.POST:
+                if landing_obj.hero_video:
+                    landing_obj.hero_video.delete(save=False)
+                landing_obj.hero_video = None
+            if 'clear_about_image' in request.POST:
+                if landing_obj.about_image:
+                    landing_obj.about_image.delete(save=False)
+                landing_obj.about_image = None
+            landing_obj.save()
+            messages.success(request, 'Landing page saved.')
+            return redirect('super_admin:landing_edit', pk=restaurant.pk)
+    else:
+        form = RestaurantLandingForm(instance=landing)
+
+    gallery_form = GalleryImageForm()
+    images = landing.gallery_images.all()
+    team_form = TeamMemberForm()
+    members = landing.team_members.all().order_by('display_order', 'id')
+    review_form = ReviewForm()
+    reviews = landing.reviews.all().order_by('display_order', 'id')
+    event_form = EventForm()
+    events = landing.events.all().order_by('display_order', 'id')
+    return render(request, 'super_admin/landing_edit.html', {
+        'restaurant': restaurant,
+        'form': form,
+        'gallery_form': gallery_form,
+        'images': images,
+        'team_form': team_form,
+        'members': members,
+        'review_form': review_form,
+        'reviews': reviews,
+        'event_form': event_form,
+        'events': events,
+    })
+
+
+@superuser_required
+def gallery_add(request, pk):
+    restaurant = Restaurant.objects.get(pk=pk)
+    landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
+    if request.method == 'POST':
+        form = GalleryImageForm(request.POST, request.FILES)
+        if form.is_valid():
+            gi: GalleryImage = form.save(commit=False)
+            gi.landing = landing
+            gi.save()
+            messages.success(request, 'Image added to gallery.')
+        else:
+            messages.error(request, 'Please correct errors in the image form.')
+    return redirect('super_admin:landing_edit', pk=restaurant.pk)
+
+
+@superuser_required
+def gallery_delete(request, gid):
+    img = GalleryImage.objects.select_related('landing__restaurant').get(pk=gid)
+    restaurant_id = img.landing.restaurant.pk
+    if request.method == 'POST':
+        img.delete()
+        messages.success(request, 'Image removed.')
+    return redirect('super_admin:landing_edit', pk=restaurant_id)
+
+
+@superuser_required
+def team_add(request, pk):
+    restaurant = Restaurant.objects.get(pk=pk)
+    landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
+    if request.method == 'POST':
+        form = TeamMemberForm(request.POST, request.FILES)
+        if form.is_valid():
+            tm: TeamMember = form.save(commit=False)
+            tm.landing = landing
+            tm.save()
+            messages.success(request, 'Team member added.')
+        else:
+            messages.error(request, 'Please correct errors in the team form.')
+    return redirect('super_admin:landing_edit', pk=restaurant.pk)
+
+
+@superuser_required
+def team_delete(request, mid):
+    m = TeamMember.objects.select_related('landing__restaurant').get(pk=mid)
+    restaurant_id = m.landing.restaurant.pk
+    if request.method == 'POST':
+        m.delete()
+        messages.success(request, 'Team member removed.')
+    return redirect('super_admin:landing_edit', pk=restaurant_id)
+
+
+@superuser_required
+def review_add(request, pk):
+    restaurant = Restaurant.objects.get(pk=pk)
+    landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
+    if request.method == 'POST':
+        form = ReviewForm(request.POST)
+        if form.is_valid():
+            rv: Review = form.save(commit=False)
+            rv.landing = landing
+            rv.save()
+            messages.success(request, 'Review added.')
+        else:
+            messages.error(request, 'Please correct errors in the review form.')
+    return redirect('super_admin:landing_edit', pk=restaurant.pk)
+
+
+@superuser_required
+def review_delete(request, rid):
+    rv = Review.objects.select_related('landing__restaurant').get(pk=rid)
+    restaurant_id = rv.landing.restaurant.pk
+    if request.method == 'POST':
+        rv.delete()
+        messages.success(request, 'Review removed.')
+    return redirect('super_admin:landing_edit', pk=restaurant_id)
+
+
+@superuser_required
+def event_add(request, pk):
+    restaurant = Restaurant.objects.get(pk=pk)
+    landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
+    if request.method == 'POST':
+        form = EventForm(request.POST, request.FILES)
+        if form.is_valid():
+            evt = form.save(commit=False)
+            evt.landing = landing
+            evt.save()
+            messages.success(request, 'Event added successfully.')
+        else:
+            messages.error(request, 'Please correct errors in the event form.')
+    return redirect('super_admin:landing_edit', pk=restaurant.pk)
+
+
+@superuser_required
+def event_delete(request, ev_id):
+    evt = Event.objects.select_related('landing__restaurant').get(pk=ev_id)
+    restaurant_id = evt.landing.restaurant.pk
+    if request.method == 'POST':
+        evt.delete()
+        messages.success(request, 'Event removed successfully.')
+    return redirect('super_admin:landing_edit', pk=restaurant_id)
+
+
+@superuser_required
+def api_gstins_by_state(request):
+    restaurant_id = request.GET.get('restaurant_id')
+    state_code = request.GET.get('state_code', '').strip().upper()
+
+    qs = GstRegistration.objects.all()
+    if restaurant_id:
+        qs = qs.filter(restaurant_id=restaurant_id)
+    if state_code:
+        qs = qs.filter(state_code=state_code)
+
+    gstins = [
+        {
+            'id': reg.id,
+            'gstin': reg.gstin,
+            'state_code': reg.state_code,
+            'reg_type': reg.reg_type,
+            'specified_premises': reg.specified_premises,
+            'einvoice_enabled': reg.einvoice_enabled,
+        }
+        for reg in qs
+    ]
+    return JsonResponse({'gstins': gstins})
+
