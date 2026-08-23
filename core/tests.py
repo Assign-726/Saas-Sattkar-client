@@ -208,3 +208,105 @@ class RazorpayPaymentTests(TestCase):
         # Admin can retrieve order without token
         response = client.get(f'/api/orders/{order1.id}/')
         self.assertEqual(response.status_code, 200)
+
+
+class DocumentSequenceSettingTests(TestCase):
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name="Hotel ECT", slug="hotel-ect")
+
+    def test_sequence_formatting_example(self):
+        from core.models import DocumentSequenceSetting
+        seq = DocumentSequenceSetting.objects.create(
+            restaurant=self.restaurant,
+            document_type='sales',
+            generation_mode='automatic',
+            prefix='ect/',
+            padding_digits=3,
+            suffix='/26-27',
+            current_counter=3
+        )
+        self.assertEqual(seq.format_number(), 'ect/003/26-27')
+
+    def test_sequence_incrementing(self):
+        from restaurant_admin.sequence_helpers import get_and_increment_document_number
+        from core.models import DocumentSequenceSetting
+
+        seq = DocumentSequenceSetting.get_sequence_setting(self.restaurant, 'receipt')
+        seq.prefix = 'REC/'
+        seq.padding_digits = 4
+        seq.suffix = ''
+        seq.current_counter = 10
+        seq.save()
+
+        num1 = get_and_increment_document_number(self.restaurant, 'receipt')
+        self.assertEqual(num1, 'REC/0010')
+
+        num2 = get_and_increment_document_number(self.restaurant, 'receipt')
+        self.assertEqual(num2, 'REC/0011')
+
+    def test_duplicate_prevention(self):
+        from restaurant_admin.sequence_helpers import validate_unique_document_number
+        from django.core.exceptions import ValidationError
+        from core.models import DeliveryChallan
+        from super_admin.models import RestaurantBranch
+
+        branch = RestaurantBranch.objects.create(restaurant=self.restaurant, branch_name="Main Branch", branch_code="MB")
+        DeliveryChallan.objects.create(
+            restaurant=self.restaurant,
+            challan_no="DC/001/26-27",
+            to_branch_id=branch.id,
+            dispatch_date="2026-04-01"
+        )
+
+        with self.assertRaises(ValidationError):
+            validate_unique_document_number(self.restaurant, 'challan', 'DC/001/26-27')
+
+    def test_manual_mode_sequence(self):
+        from restaurant_admin.sequence_helpers import get_and_increment_document_number
+        from core.models import DocumentSequenceSetting
+
+        seq = DocumentSequenceSetting.get_sequence_setting(self.restaurant, 'purchase')
+        seq.generation_mode = 'manual'
+        seq.save()
+
+        # Should accept manual user entry
+        num = get_and_increment_document_number(self.restaurant, 'purchase', user_input_no='PUR-CUSTOM-99')
+        self.assertEqual(num, 'PUR-CUSTOM-99')
+
+    def test_delivery_challan_item_with_menu_item(self):
+        from core.models import DeliveryChallan, DeliveryChallanItem, MenuItem, InventoryItem
+        from super_admin.models import RestaurantBranch
+
+        branch = RestaurantBranch.objects.create(restaurant=self.restaurant, branch_name="Branch A", branch_code="BA")
+        challan = DeliveryChallan.objects.create(
+            restaurant=self.restaurant,
+            challan_no="DC/999/26-27",
+            to_branch_id=branch.id,
+            dispatch_date="2026-08-05"
+        )
+
+        menu_item = MenuItem.objects.create(name="Paneer Butter Masala", price=250.00, restaurant=self.restaurant)
+        inv_item = InventoryItem.objects.create(name="Raw Rice", quantity=100, unit="kg", restaurant=self.restaurant)
+
+        item1 = DeliveryChallanItem.objects.create(
+            challan=challan,
+            menu_item=menu_item,
+            quantity=2,
+            unit="Pcs",
+            unit_value=250.00,
+            line_total=500.00
+        )
+        item2 = DeliveryChallanItem.objects.create(
+            challan=challan,
+            inventory_item=inv_item,
+            quantity=5,
+            unit="kg",
+            unit_value=50.00,
+            line_total=250.00
+        )
+
+        self.assertEqual(item1.item_name, "Paneer Butter Masala")
+        self.assertEqual(item2.item_name, "Raw Rice")
+        self.assertIn("Paneer Butter Masala", str(item1))
+        self.assertIn("Raw Rice", str(item2))
+

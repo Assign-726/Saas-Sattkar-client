@@ -331,29 +331,81 @@
     <div class="od-total-grid">
         <!-- Order Total -->
         <div class="od-total-card">
-            <h6 style="font-weight:700; color:#1a202c; margin-bottom:14px;">Order Total</h6>
+            <h6 style="font-weight:700; color:#1a202c; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between;">
+                <span><i class="bi bi-receipt text-primary me-1"></i> Order Total</span>
+            </h6>
+
+            {% if food_subtotal > 0 and liquor_subtotal > 0 %}
+            <div class="od-total-row">
+                <span class="text-muted"><i class="bi bi-egg-fried text-primary me-1"></i> Food Subtotal (GST Base)</span>
+                <span class="fw-semibold">&#8377;{{ food_subtotal|floatformat:2 }}</span>
+            </div>
+            <div class="od-total-row">
+                <span class="text-muted"><i class="bi bi-cup-straw text-warning me-1"></i> Liquor Subtotal (Excise Base)</span>
+                <span class="fw-semibold">&#8377;{{ liquor_subtotal|floatformat:2 }}</span>
+            </div>
+            <div class="od-total-row fw-semibold" style="border-top:1px dashed #e2e8f0; padding-top:6px; margin-top:2px;">
+                <span>Total Subtotal</span>
+                <span>&#8377;{{ subtotal|floatformat:2 }}</span>
+            </div>
+            {% else %}
             <div class="od-total-row">
                 <span>Subtotal</span>
                 <span>&#8377;{{ subtotal|floatformat:2 }}</span>
             </div>
-            {% if cgst_percentage > 0 %}
-            <div class="od-total-row">
+            {% endif %}
+
+            <!-- Additional / Custom Charges -->
+            {% if custom_charges_list %}
+            {% for cc in custom_charges_list %}
+            <div class="od-total-row text-muted" style="font-size:0.84rem;">
+                <span>
+                    <i class="bi bi-tag-fill text-primary me-1"></i> {{ cc.name }}
+                    {% if cc.is_taxable %}<span class="badge bg-light text-primary border ms-1" style="font-size:0.65rem;">Taxable</span>{% endif %}
+                </span>
+                <span>&#8377;{{ cc.amount|floatformat:2 }}</span>
+            </div>
+            {% endfor %}
+            {% endif %}
+
+            <!-- GST Taxes (Food) -->
+            {% if cgst_amount > 0 or sgst_amount > 0 %}
+            <div class="od-total-row" style="color: #1e40af;">
                 <span>CGST ({{ cgst_percentage|floatformat:1 }}%)</span>
                 <span>&#8377;{{ cgst_amount|floatformat:2 }}</span>
             </div>
-            {% endif %}
-            {% if sgst_percentage > 0 %}
-            <div class="od-total-row">
+            <div class="od-total-row" style="color: #1e40af;">
                 <span>SGST ({{ sgst_percentage|floatformat:1 }}%)</span>
                 <span>&#8377;{{ sgst_amount|floatformat:2 }}</span>
             </div>
             {% endif %}
-            {% if cgst_percentage == 0 and sgst_percentage == 0 %}
-            <div class="od-total-row" style="color:#94a3b8;">
-                <span>Taxes (CGST/SGST 0%)</span>
-                <span>&#8377;0.00</span>
+
+            <!-- State Excise VAT Taxes (Liquor) -->
+            {% if beer_vat > 0 %}
+            <div class="od-total-row" style="color: #c2410c;">
+                <span>🍺 Beer VAT ({{ vat_beer_percentage|floatformat:1 }}%)</span>
+                <span>&#8377;{{ beer_vat|floatformat:2 }}</span>
             </div>
             {% endif %}
+            {% if imfl_vat > 0 %}
+            <div class="od-total-row" style="color: #c2410c;">
+                <span>🥃 IMFL VAT ({{ vat_imfl_percentage|floatformat:1 }}%)</span>
+                <span>&#8377;{{ imfl_vat|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            {% if wine_vat > 0 %}
+            <div class="od-total-row" style="color: #c2410c;">
+                <span>🍷 Wine VAT ({{ vat_wine_percentage|floatformat:1 }}%)</span>
+                <span>&#8377;{{ wine_vat|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            {% if gen_vat > 0 %}
+            <div class="od-total-row" style="color: #c2410c;">
+                <span>🍾 Liquor VAT ({{ vat_percentage|floatformat:1 }}%)</span>
+                <span>&#8377;{{ gen_vat|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+
             {% if service_percentage > 0 %}
             <div class="od-total-row">
                 <span>Service Charge ({{ service_percentage|floatformat:0 }}%)</span>
@@ -372,6 +424,7 @@
                 <span>{% if round_off_amount > 0 %}+&#8377;{{ round_off_amount|floatformat:2 }}{% else %}-&#8377;{{ round_off_amount|floatformat:2|slice:"1:" }}{% endif %}</span>
             </div>
             {% endif %}
+
             <div class="od-total-row divider grand-total">
                 <span>Total</span>
                 <span>&#8377;{{ total|floatformat:2 }}</span>
@@ -607,18 +660,25 @@
     const _prepStart = "{{ order.prep_start|date:'c'|default:'' }}";
     if (_readyAt) startCountdown(_readyAt, _prepStart);
 
-    // ── Prep form AJAX ──────────────────────────────────────────────
     function getCsrf() {
         const m = document.cookie.match(/csrftoken=([^;]+)/);
         return m ? decodeURIComponent(m[1]) : '';
     }
 
+    function safeParseFloat(v) {
+
+        if (!v) return 0;
+        const cleaned = String(v).replace(/[^0-9.-]/g, '');
+        const n = parseFloat(cleaned);
+        return isNaN(n) ? 0 : n;
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
-        const grandTotal = parseFloat("{{ total }}") || 0;
-        const advancePaid = parseFloat("{{ order.advance_amount_paid|default:0 }}") || 0;
+        const grandTotal = safeParseFloat("{{ total }}");
+        const advancePaid = safeParseFloat("{{ order.advance_amount_paid|default:0 }}");
         const netPayableTarget = Math.max(0, grandTotal - advancePaid);
-        const dueInitial = parseFloat("{{ order.due_amount|default:0 }}") || netPayableTarget;
-        const hasAlcohol = {% if order.check_item_types.1 %}true{% else %}false{% endif %};
+        const dueInitial = safeParseFloat("{{ order.due_amount|default:0 }}") || netPayableTarget;
+        const hasAlcohol = "{{ order.check_item_types.1|yesno:'true,false' }}" === "true";
 
         let detState = {
             grandTotal: grandTotal,
@@ -696,7 +756,7 @@
           if (!container) return;
 
           const currentTotalPaid = Array.from(container.querySelectorAll('.det-payment-split-amount'))
-            .reduce((sum, inp) => sum + (parseFloat(inp.value) || 0), 0);
+            .reduce((sum, inp) => sum + (safeParseFloat(inp.value) || 0), 0);
           const remaining = Math.max(0, detState.netPayable - currentTotalPaid);
 
           const div = document.createElement('div');
@@ -720,7 +780,7 @@
 
           rows.forEach(r => {
             const method = r.querySelector('.det-payment-split-method')?.value || 'cash';
-            const amt = parseFloat(r.querySelector('.det-payment-split-amount')?.value) || 0;
+            const amt = safeParseFloat(r.querySelector('.det-payment-split-amount')?.value);
             if (amt > 0) {
               totalPaid += amt;
               payments.push({ method, amount: amt });
@@ -855,7 +915,7 @@
                     alert(d.error || 'Failed to settle payment.');
                     if (clickedBtn) {
                         clickedBtn.disabled = false;
-                        clickedBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Mark Paid & Complete';
+                        clickedBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Save & Print Bill';
                     }
                 }
             })
@@ -863,9 +923,17 @@
                 alert('Network error while settling payment.');
                 if (clickedBtn) {
                     clickedBtn.disabled = false;
-                    clickedBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Mark Paid & Complete';
+                    clickedBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Save & Print Bill';
                 }
             });
+        }
+
+        document.getElementById('btn-submit-detail-save-only')?.addEventListener('click', function() {
+            detSubmitSettlement(false, this);
+        });
+
+        document.getElementById('btn-submit-detail-settle')?.addEventListener('click', function() {
+            detSubmitSettlement(true, this);
         });
 
     });

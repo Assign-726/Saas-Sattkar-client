@@ -1,0 +1,506 @@
+{% extends 'super_admin/base.html' %}
+
+{% block title %}Edit Blog Post - {{ blog_post.title }} | Super Admin{% endblock %}
+
+{% block content %}
+<style>
+  /* Explicit Grid Rules to guarantee clean responsive columns in Super Admin */
+  .grid-row {
+    display: grid !important;
+    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+    gap: 20px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .col-12 { grid-column: span 12 !important; }
+  .col-11 { grid-column: span 11 !important; }
+  .col-10 { grid-column: span 10 !important; }
+  .col-9  { grid-column: span 9 !important; }
+  .col-8  { grid-column: span 8 !important; }
+  .col-7  { grid-column: span 7 !important; }
+  .col-6  { grid-column: span 6 !important; }
+  .col-5  { grid-column: span 5 !important; }
+  .col-4  { grid-column: span 4 !important; }
+  .col-3  { grid-column: span 3 !important; }
+  .col-2  { grid-column: span 2 !important; }
+  .col-1  { grid-column: span 1 !important; }
+
+  @media (max-width: 768px) {
+    .col-8, .col-6, .col-4, .col-3 {
+      grid-column: span 12 !important;
+    }
+  }
+
+  /* Custom Card Panel Styling */
+  .blog-card-panel {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 20px;
+    padding: 28px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+  }
+
+  .blog-card-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+    border-bottom: 1.5px solid #f1f5f9;
+    padding-bottom: 16px;
+  }
+
+  .blog-card-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: rgba(242, 108, 13, 0.08);
+    border: 1px solid rgba(242, 108, 13, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: var(--primary, #f26c0d);
+    flex-shrink: 0;
+  }
+
+  .blog-card-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.3px;
+  }
+
+  .blog-card-subtitle {
+    font-size: 13px;
+    color: #64748b;
+    margin-top: 2px;
+    font-weight: 500;
+  }
+
+  /* Form Control Group Styling */
+  .field-group {
+    margin-bottom: 20px;
+    width: 100%;
+  }
+
+  .field-group label {
+    display: block;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #334155;
+    margin-bottom: 8px;
+  }
+
+  .field-input {
+    width: 100% !important;
+    display: block !important;
+    background: #ffffff !important;
+    border: 1.5px solid #cbd5e1 !important;
+    border-radius: 10px !important;
+    padding: 12px 14px !important;
+    font-size: 15px !important;
+    color: #0f172a !important;
+    font-family: inherit !important;
+    font-weight: 500 !important;
+    box-sizing: border-box !important;
+    transition: all 0.2s ease !important;
+  }
+
+  .field-input:focus {
+    outline: none !important;
+    border-color: var(--primary, #f26c0d) !important;
+    box-shadow: 0 0 0 4px rgba(242, 108, 13, 0.12) !important;
+  }
+
+  select.field-input {
+    appearance: auto !important;
+    cursor: pointer;
+  }
+
+  textarea.field-input {
+    min-height: 100px;
+    line-height: 1.6;
+    resize: vertical;
+  }
+
+  /* File Upload & Image Preview Styling */
+  .file-upload-box {
+    background: #f8fafc;
+    border: 1.5px dashed #94a3b8;
+    border-radius: 14px;
+    padding: 16px;
+    text-align: center;
+    transition: all 0.2s ease;
+  }
+
+  .file-upload-box:hover {
+    border-color: var(--primary, #f26c0d);
+    background: #ffffff;
+  }
+
+  .img-preview-wrapper {
+    margin-top: 12px;
+    padding: 12px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    display: inline-block;
+    max-width: 100%;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+
+  .img-preview-wrapper img {
+    max-height: 140px;
+    max-width: 100%;
+    object-fit: cover;
+    border-radius: 8px;
+    display: block;
+    margin: 0 auto 8px auto;
+  }
+
+  .img-preview-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Top Navigation & Action Buttons */
+  .action-btn-primary {
+    background: var(--primary, #f26c0d);
+    color: #ffffff !important;
+    font-weight: 700;
+    padding: 12px 24px;
+    border-radius: 12px;
+    border: none;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none !important;
+    box-shadow: 0 4px 12px rgba(242, 108, 13, 0.2);
+  }
+
+  .action-btn-primary:hover {
+    background: var(--primary-hover, #d45d0a);
+    box-shadow: 0 6px 18px rgba(242, 108, 13, 0.3);
+  }
+
+  .action-btn-secondary {
+    background: #ffffff;
+    color: #334155 !important;
+    font-weight: 700;
+    padding: 12px 20px;
+    border-radius: 12px;
+    border: 1.5px solid #cbd5e1;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none !important;
+  }
+
+  .action-btn-secondary:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+    color: #0f172a !important;
+  }
+</style>
+
+<div style="max-width: 1100px; margin: 0 auto; padding-bottom: 80px;">
+  <!-- Header Bar -->
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 20px; padding: 24px 28px; box-shadow: 0 4px 20px -2px rgba(0,0,0,0.03);">
+    <div>
+      <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--primary, #f26c0d); letter-spacing: 1.2px; margin-bottom: 4px;">
+        BLOG POST EDITOR
+      </div>
+      <h1 style="font-size: 24px; font-weight: 800; color: #0f172a; margin: 0;">
+        Editing: {{ blog_post.title }}
+      </h1>
+      <div style="font-size: 13px; color: #64748b; margin-top: 4px;">
+        Restaurant: <strong>{{ restaurant.name }}</strong> &bull; Public Slug: <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #0f172a;">/blog/{{ blog_post.slug }}</code>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <a href="{% url 'super_admin:landing_edit' restaurant.pk %}" class="action-btn-secondary">
+        <i class="fa-solid fa-arrow-left"></i> Back to Landing CMS
+      </a>
+      <a href="/r/{{ restaurant.slug }}/blog/{{ blog_post.slug }}" target="_blank" class="action-btn-secondary" title="View live blog post on website">
+        <i class="fa-solid fa-arrow-up-right-from-square"></i> Preview Live
+      </a>
+    </div>
+  </div>
+
+  <!-- Form Start -->
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    <!-- CARD 1: GENERAL POST INFO -->
+    <div class="blog-card-panel">
+      <div class="blog-card-header">
+        <div class="blog-card-icon">
+          <i class="fa-solid fa-pen-to-square"></i>
+        </div>
+        <div>
+          <div class="blog-card-title">1. Post Header & Attributes</div>
+          <div class="blog-card-subtitle">Set title, custom URL slug, category label, author, and grid card shape</div>
+        </div>
+      </div>
+
+      <div class="grid-row">
+        <div class="col-8">
+          <div class="field-group">
+            <label for="id_title">Blog Post Title *</label>
+            <input type="text" name="title" id="id_title" class="field-input" value="{{ blog_post.title }}" required placeholder="e.g. Flavors Beyond Imagination" />
+          </div>
+        </div>
+
+        <div class="col-4">
+          <div class="field-group">
+            <label for="id_slug">URL Slug</label>
+            <input type="text" name="slug" id="id_slug" class="field-input" value="{{ blog_post.slug }}" placeholder="flavors-beyond-imagination" />
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-row">
+        <div class="col-4">
+          <div class="field-group">
+            <label for="id_category">Category Name</label>
+            <input type="text" name="category" id="id_category" class="field-input" value="{{ blog_post.category }}" placeholder="e.g. Desserts, Salads" />
+          </div>
+        </div>
+
+        <div class="col-4">
+          <div class="field-group">
+            <label for="id_author">Author Name</label>
+            <input type="text" name="author" id="id_author" class="field-input" value="{{ blog_post.author }}" placeholder="e.g. Paul Cook" />
+          </div>
+        </div>
+
+        <div class="col-4">
+          <div class="field-group">
+            <label for="id_shape_pattern">Card Shape Pattern</label>
+            <select name="shape_pattern" id="id_shape_pattern" class="field-input">
+              <option value="arch" {% if blog_post.shape_pattern == 'arch' %}selected{% endif %}>Arch Shape (Rounded Top)</option>
+              <option value="rectangle" {% if blog_post.shape_pattern == 'rectangle' %}selected{% endif %}>Rectangular Shape</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CARD 2: MEDIA & IMAGES -->
+    <div class="blog-card-panel">
+      <div class="blog-card-header">
+        <div class="blog-card-icon">
+          <i class="fa-solid fa-image"></i>
+        </div>
+        <div>
+          <div class="blog-card-title">2. Cover Photo & Gallery Photos</div>
+          <div class="blog-card-subtitle">Upload featured image for blog cards and optional detail article gallery photos</div>
+        </div>
+      </div>
+
+      <div class="grid-row">
+        <div class="col-6">
+          <div class="field-group">
+            <label for="id_cover_image">Main Cover Photo (Featured Image)</label>
+            <div class="file-upload-box">
+              <input type="file" name="cover_image" id="id_cover_image" style="width: 100%; cursor: pointer;" accept="image/*" />
+              <div style="font-size: 12px; color: #64748b; margin-top: 8px;">Upload JPG/PNG image (Recommended 1600x900px)</div>
+            </div>
+
+            {% if blog_post.cover_image %}
+            <div class="img-preview-wrapper" style="width: 100%; text-align: center; margin-top: 14px;">
+              <div class="img-preview-label">Active Cover Image</div>
+              <img src="{{ blog_post.cover_image.url }}" alt="Cover image preview" />
+              <div style="font-size: 11px; color: #10b981; font-weight: 700;">
+                <i class="fa-solid fa-circle-check"></i> Image Uploaded
+              </div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="col-3">
+          <div class="field-group">
+            <label for="id_gallery_image_1">Gallery Photo 1</label>
+            <div class="file-upload-box">
+              <input type="file" name="gallery_image_1" id="id_gallery_image_1" style="width: 100%; cursor: pointer;" accept="image/*" />
+            </div>
+
+            {% if blog_post.gallery_image_1 %}
+            <div class="img-preview-wrapper" style="width: 100%; text-align: center; margin-top: 14px;">
+              <div class="img-preview-label">Gallery 1</div>
+              <img src="{{ blog_post.gallery_image_1.url }}" alt="Gallery 1 preview" />
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="col-3">
+          <div class="field-group">
+            <label for="id_gallery_image_2">Gallery Photo 2</label>
+            <div class="file-upload-box">
+              <input type="file" name="gallery_image_2" id="id_gallery_image_2" style="width: 100%; cursor: pointer;" accept="image/*" />
+            </div>
+
+            {% if blog_post.gallery_image_2 %}
+            <div class="img-preview-wrapper" style="width: 100%; text-align: center; margin-top: 14px;">
+              <div class="img-preview-label">Gallery 2</div>
+              <img src="{{ blog_post.gallery_image_2.url }}" alt="Gallery 2 preview" />
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CARD 3: ARTICLE BODY CONTENT -->
+    <div class="blog-card-panel">
+      <div class="blog-card-header">
+        <div class="blog-card-icon">
+          <i class="fa-solid fa-align-left"></i>
+        </div>
+        <div>
+          <div class="blog-card-title">3. Article Text & Sections</div>
+          <div class="blog-card-subtitle">Write short excerpt summary, opening paragraph, sections, and pull-quote</div>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="id_excerpt">Short Excerpt / Card Subtitle</label>
+        <textarea name="excerpt" id="id_excerpt" class="field-input" rows="2" placeholder="Brief 1-2 sentence summary displayed on the blog card list">{{ blog_post.excerpt }}</textarea>
+      </div>
+
+      <div class="field-group">
+        <label for="id_intro_content">Introductory Content Paragraph</label>
+        <textarea name="intro_content" id="id_intro_content" class="field-input" rows="4" placeholder="Opening paragraph of the article...">{{ blog_post.intro_content }}</textarea>
+      </div>
+
+      <div class="grid-row">
+        <div class="col-6">
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 20px;">
+            <div style="font-size: 13px; font-weight: 800; color: #0f172a; margin-bottom: 12px;">Section 1 Content</div>
+            <div class="field-group">
+              <label for="id_section_1_title">Section 1 Heading</label>
+              <input type="text" name="section_1_title" id="id_section_1_title" class="field-input" value="{{ blog_post.section_1_title }}" placeholder="e.g. Culinary Artistry & Passion" />
+            </div>
+            <div class="field-group" style="margin-bottom: 0;">
+              <label for="id_section_1_text">Section 1 Body Text</label>
+              <textarea name="section_1_text" id="id_section_1_text" class="field-input" rows="6" placeholder="Body text for section 1...">{{ blog_post.section_1_text }}</textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-6">
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 20px;">
+            <div style="font-size: 13px; font-weight: 800; color: #0f172a; margin-bottom: 12px;">Section 2 Content</div>
+            <div class="field-group">
+              <label for="id_section_2_title">Section 2 Heading</label>
+              <input type="text" name="section_2_title" id="id_section_2_title" class="field-input" value="{{ blog_post.section_2_title }}" placeholder="e.g. Fresh Seasonal Ingredients" />
+            </div>
+            <div class="field-group" style="margin-bottom: 0;">
+              <label for="id_section_2_text">Section 2 Body Text</label>
+              <textarea name="section_2_text" id="id_section_2_text" class="field-input" rows="6" placeholder="Body text for section 2...">{{ blog_post.section_2_text }}</textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="field-group" style="margin-top: 20px; margin-bottom: 0;">
+        <label for="id_quote">Featured Quote / Highlight Pull-Quote</label>
+        <textarea name="quote" id="id_quote" class="field-input" rows="2" placeholder="e.g. Great food is created with love, precision, and the freshest ingredients of the season.">{{ blog_post.quote }}</textarea>
+      </div>
+    </div>
+
+    <!-- CARD 4: SEO & PUBLISHING STATE -->
+    <div class="blog-card-panel">
+      <div class="blog-card-header">
+        <div class="blog-card-icon">
+          <i class="fa-solid fa-globe"></i>
+        </div>
+        <div>
+          <div class="blog-card-title">4. SEO & Publishing Settings</div>
+          <div class="blog-card-subtitle">Manage tags, search engine titles, snippets, and visibility</div>
+        </div>
+      </div>
+
+      <div class="grid-row">
+        <div class="col-5">
+          <div class="field-group">
+            <label for="id_tags">Tags (Comma-separated)</label>
+            <input type="text" name="tags" id="id_tags" class="field-input" value="{{ blog_post.tags }}" placeholder="FOOD, ORGANIC, SALAD" />
+          </div>
+        </div>
+
+        <div class="col-5">
+          <div class="field-group">
+            <label for="id_seo_title">SEO Title (Search Engines)</label>
+            <input type="text" name="seo_title" id="id_seo_title" class="field-input" value="{{ blog_post.seo_title }}" placeholder="Page title override" />
+          </div>
+        </div>
+
+        <div class="col-2">
+          <div class="field-group">
+            <label for="id_display_order">Display Order</label>
+            <input type="number" name="display_order" id="id_display_order" class="field-input" value="{{ blog_post.display_order }}" />
+          </div>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="id_seo_description">SEO Description Snippet</label>
+        <textarea name="seo_description" id="id_seo_description" class="field-input" rows="2" placeholder="Meta description for search engine results">{{ blog_post.seo_description }}</textarea>
+      </div>
+
+      <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 14px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <input type="checkbox" name="is_published" id="id_is_published" {% if blog_post.is_published %}checked{% endif %} style="width: 22px; height: 22px; cursor: pointer; accent-color: var(--primary, #f26c0d);" />
+          <div>
+            <label for="id_is_published" style="margin: 0; font-size: 14px; font-weight: 800; color: #0f172a; text-transform: none; cursor: pointer;">
+              Published & Visible
+            </label>
+            <div style="font-size: 12px; color: #64748b;">Check this box to make the article publicly visible on the restaurant website.</div>
+          </div>
+        </div>
+
+        <div>
+          {% if blog_post.is_published %}
+          <span style="background: #dcfce7; color: #15803d; font-weight: 800; font-size: 11px; padding: 6px 14px; border-radius: 99px; text-transform: uppercase;">Published</span>
+          {% else %}
+          <span style="background: #f1f5f9; color: #64748b; font-weight: 800; font-size: 11px; padding: 6px 14px; border-radius: 99px; text-transform: uppercase;">Draft</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Sticky Bottom Bar -->
+    <div style="position: fixed; bottom: 20px; right: 40px; left: 300px; z-index: 1000; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(8px); padding: 16px 28px; border-radius: 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 10px 30px rgba(0,0,0,0.25);">
+      <div style="color: #ffffff; font-size: 14px; font-weight: 600;">
+        Editing: <strong>{{ blog_post.title }}</strong>
+      </div>
+
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <a href="{% url 'super_admin:landing_edit' restaurant.pk %}" class="action-btn-secondary" style="background: transparent; color: #cbd5e1 !important; border-color: rgba(255,255,255,0.2);">
+          Cancel
+        </a>
+        <button type="submit" class="action-btn-primary">
+          <i class="fa-solid fa-floppy-disk"></i> Save Blog Post Changes
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

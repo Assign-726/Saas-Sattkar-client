@@ -12,6 +12,7 @@ class Reservation(models.Model):
         NO_SHOW = 'N', _('No Show')
 
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='reservations')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='reservations')
     customer_name = models.CharField(max_length=150)
     phone = models.CharField(max_length=20)
     email = models.EmailField(blank=True)

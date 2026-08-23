@@ -1,8 +1,8 @@
 from rest_framework import serializers
 from django.utils import timezone
-from .models import Reservation
+from reservations.models import Reservation
 from super_admin.models import Restaurant
-from .models import ReservationSetting
+from reservations.models import ReservationSetting
 
 
 class ReservationSerializer(serializers.ModelSerializer):

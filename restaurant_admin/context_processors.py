@@ -21,12 +21,19 @@ def restaurant_context(request):
                 request.session[f'active_branch_{restaurant.id}'] = active_branch.id
         if not active_branch:
             active_branch = restaurant.branches.first()
+            if active_branch:
+                request.session[f'active_branch_{restaurant.id}'] = active_branch.id
+
+    if active_branch and not active_branch.slug:
+        active_branch.save()
 
     branches = restaurant.branches.all() if restaurant else []
+    rslug = active_branch.slug if (active_branch and active_branch.slug) else (restaurant.slug if restaurant else '')
     
     return {
         'current_restaurant': restaurant,
         'current_branch': active_branch,
         'available_branches': branches,
         'is_primary_admin': profile.is_primary_admin or (profile.branch is None),
+        'rslug': rslug,
     }

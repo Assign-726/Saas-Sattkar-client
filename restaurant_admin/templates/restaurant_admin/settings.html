@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="row">
-  <div class="col-md-10 col-lg-8">
+  <div class="col-12">
 
     <!-- Onboarded Tax & Compliance Summary Card -->
     {% if branch %}
@@ -100,14 +100,309 @@
           </div>
           {% endif %}
 
-          <div class="mb-3">
-            <label class="form-label fw-medium">Notification Sound (mp3/wav)</label>
-            {{ form.notification_sound }}
-            {% if form.notification_sound.errors %}
-            <div class="text-danger small">{{ form.notification_sound.errors|join:', ' }}</div>
-            {% endif %}
-            <div class="form-text">Upload a short audio file to play when a new order arrives.</div>
+          <!-- Document Numbering Configuration Section -->
+          <hr class="my-4">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <h6 class="fw-bold mb-1 text-primary"><i class="bi bi-hash me-2"></i>Document Numbering Configuration</h6>
+              <p class="text-muted small mb-0">Configure voucher sequence formats, validity dates, and auto-increment behavior per document type.</p>
+            </div>
           </div>
+
+          <div class="card border-0 shadow-sm mb-4 bg-light overflow-hidden">
+            <div class="card-header bg-white py-2 px-3 border-bottom">
+              <!-- Step 1: Select Document Type Nav Tabs -->
+              <div class="d-flex align-items-center gap-2 mb-2 mt-1">
+                <span class="badge bg-primary text-white font-monospace small">STEP 1</span>
+                <span class="fw-bold text-dark small">Select Document Type:</span>
+              </div>
+              <ul class="nav nav-pills card-header-pills fw-semibold gap-1" id="docSeqTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                  <button class="nav-link active py-1 px-3 small rounded-pill" id="tab-sales-tab" data-bs-toggle="tab" data-bs-target="#tab-sales" type="button" role="tab">
+                    <i class="bi bi-receipt me-1"></i> Sales / POS
+                  </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                  <button class="nav-link py-1 px-3 small rounded-pill" id="tab-purchase-tab" data-bs-toggle="tab" data-bs-target="#tab-purchase" type="button" role="tab">
+                    <i class="bi bi-box-arrow-in-down me-1"></i> Purchase
+                  </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                  <button class="nav-link py-1 px-3 small rounded-pill" id="tab-receipt-tab" data-bs-toggle="tab" data-bs-target="#tab-receipt" type="button" role="tab">
+                    <i class="bi bi-journal-check me-1"></i> Advance Receipt
+                  </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                  <button class="nav-link py-1 px-3 small rounded-pill" id="tab-challan-tab" data-bs-toggle="tab" data-bs-target="#tab-challan" type="button" role="tab">
+                    <i class="bi bi-truck me-1"></i> Delivery Challan
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            <div class="card-body p-4 bg-white">
+              <div class="tab-content" id="docSeqTabsContent">
+                
+                <!-- 1. SALES / POS VOUCHER CONFIG -->
+                {% with seq=doc_sequences.sales dt="sales" %}
+                <div class="tab-pane fade show active" id="tab-sales" role="tabpanel">
+                  <!-- Step 2: Generation Mode Selector -->
+                  <div class="mb-4 p-3 bg-light rounded border">
+                    <label for="seq_sales_mode" class="form-label fw-bold text-dark small mb-1">
+                      <span class="badge bg-secondary me-1">STEP 2</span> Generation Mode for Sales / POS Invoices
+                    </label>
+                    <select name="seq_sales_mode" id="seq_sales_mode" class="form-select fw-semibold border-primary" onchange="toggleSeqConfig('sales')">
+                      <option value="automatic" {% if seq.generation_mode == 'automatic' %}selected{% endif %}>Automatic (System Auto-generates & Locks Input Field)</option>
+                      <option value="manual_override" {% if seq.generation_mode == 'manual_override' %}selected{% endif %}>Manual Override (System Auto-generates, Editable by Cashier)</option>
+                      <option value="manual" {% if seq.generation_mode == 'manual' %}selected{% endif %}>Manual (Blank Input Field, Cashier Must Enter Number)</option>
+                    </select>
+                    <div class="form-text extra-small text-muted">Controls how invoice/bill numbers are pre-filled on POS & Sales desk.</div>
+                  </div>
+
+                  <!-- Step 3: Conditional Fields -->
+                  <div id="seq_sales_config" class="seq-config-block">
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                      <span class="badge bg-info text-dark font-monospace small">STEP 3</span>
+                      <span class="fw-bold text-dark small">Sequence Parameters & Format Rules</span>
+                    </div>
+                    <div class="row g-3 mb-3">
+                      <div class="col-md-3">
+                        <label for="seq_sales_prefix" class="form-label fw-medium small mb-1">Prefix</label>
+                        <input type="text" name="seq_sales_prefix" id="seq_sales_prefix" class="form-control font-monospace" value="{{ seq.prefix|default:'' }}" placeholder="e.g. ect/" oninput="updateSeqPreview('sales')">
+                      </div>
+                      <div class="col-md-3">
+                        <label for="seq_sales_padding" class="form-label fw-medium small mb-1">Number of Digits</label>
+                        <input type="number" name="seq_sales_padding" id="seq_sales_padding" class="form-control" value="{{ seq.padding_digits|default:3 }}" min="1" max="10" oninput="updateSeqPreview('sales')">
+                      </div>
+                      <div class="col-md-3">
+                        <label for="seq_sales_suffix" class="form-label fw-medium small mb-1">Suffix</label>
+                        <input type="text" name="seq_sales_suffix" id="seq_sales_suffix" class="form-control font-monospace" value="{{ seq.suffix|default:'' }}" placeholder="e.g. /26-27" oninput="updateSeqPreview('sales')">
+                      </div>
+                      <div class="col-md-3">
+                        <label for="seq_sales_counter" class="form-label fw-medium small mb-1">Next Counter</label>
+                        <input type="number" name="seq_sales_counter" id="seq_sales_counter" class="form-control font-monospace fw-bold text-primary" value="{{ seq.current_counter|default:1 }}" min="1" oninput="updateSeqPreview('sales')">
+                      </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                      <div class="col-md-6">
+                        <label for="seq_sales_valid_from" class="form-label fw-medium small mb-1">Valid From Date (Financial Year)</label>
+                        <input type="date" name="seq_sales_valid_from" id="seq_sales_valid_from" class="form-control" value="{{ seq.valid_from|date:'Y-m-d'|default:'' }}">
+                      </div>
+                      <div class="col-md-6">
+                        <label for="seq_sales_valid_to" class="form-label fw-medium small mb-1">Valid To Date (Financial Year)</label>
+                        <input type="date" name="seq_sales_valid_to" id="seq_sales_valid_to" class="form-control" value="{{ seq.valid_to|date:'Y-m-d'|default:'' }}">
+                      </div>
+                    </div>
+
+                    <div class="alert alert-primary py-2 px-3 d-flex align-items-center justify-content-between rounded-3 mb-0">
+                      <span class="small fw-bold"><i class="bi bi-eye me-1"></i> Formatted Voucher Preview:</span>
+                      <span class="badge bg-dark fs-6 font-monospace px-3 py-2" id="seq_sales_preview">---</span>
+                    </div>
+                  </div>
+
+                  <div id="seq_sales_manual_notice" class="seq-manual-notice" style="display: none;">
+                    <div class="alert alert-secondary py-3 mb-0">
+                      <i class="bi bi-info-circle me-2 text-primary"></i><strong>Manual Mode Active:</strong> No sequence formatting is required. The document input field will be left blank during sales creation and cashiers must enter a valid document number.
+                    </div>
+                  </div>
+                </div>
+                {% endwith %}
+
+                <!-- 2. PURCHASE VOUCHER CONFIG -->
+                {% with seq=doc_sequences.purchase dt="purchase" %}
+                <div class="tab-pane fade" id="tab-purchase" role="tabpanel">
+                  <div class="mb-4 p-3 bg-light rounded border">
+                    <label for="seq_purchase_mode" class="form-label fw-bold text-dark small mb-1">
+                      <span class="badge bg-secondary me-1">STEP 2</span> Generation Mode for Purchase Entries
+                    </label>
+                    <select name="seq_purchase_mode" id="seq_purchase_mode" class="form-select fw-semibold border-primary" onchange="toggleSeqConfig('purchase')">
+                      <option value="automatic" {% if seq.generation_mode == 'automatic' %}selected{% endif %}>Automatic (System Auto-generates & Locks Input Field)</option>
+                      <option value="manual_override" {% if seq.generation_mode == 'manual_override' %}selected{% endif %}>Manual Override (System Auto-generates, Editable by User)</option>
+                      <option value="manual" {% if seq.generation_mode == 'manual' %}selected{% endif %}>Manual (Blank Input Field, User Must Enter Number)</option>
+                    </select>
+                  </div>
+
+                  <div id="seq_purchase_config" class="seq-config-block">
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                      <span class="badge bg-info text-dark font-monospace small">STEP 3</span>
+                      <span class="fw-bold text-dark small">Sequence Parameters & Format Rules</span>
+                    </div>
+                    <div class="row g-3 mb-3">
+                      <div class="col-md-3">
+                        <label class="form-label fw-medium small mb-1">Prefix</label>
+                        <input type="text" name="seq_purchase_prefix" id="seq_purchase_prefix" class="form-control font-monospace" value="{{ seq.prefix|default:'' }}" placeholder="e.g. PO-" oninput="updateSeqPreview('purchase')">
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label fw-medium small mb-1">Number of Digits</label>
+                        <input type="number" name="seq_purchase_padding" id="seq_purchase_padding" class="form-control" value="{{ seq.padding_digits|default:3 }}" min="1" max="10" oninput="updateSeqPreview('purchase')">
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label fw-medium small mb-1">Suffix</label>
+                        <input type="text" name="seq_purchase_suffix" id="seq_purchase_suffix" class="form-control font-monospace" value="{{ seq.suffix|default:'' }}" placeholder="e.g. /26-27" oninput="updateSeqPreview('purchase')">
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label fw-medium small mb-1">Next Counter</label>
+                        <input type="number" name="seq_purchase_counter" id="seq_purchase_counter" class="form-control font-monospace fw-bold text-primary" value="{{ seq.current_counter|default:1 }}" min="1" oninput="updateSeqPreview('purchase')">
+                      </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                      <div class="col-md-6">
+                        <label class="form-label fw-medium small mb-1">Valid From Date</label>
+                        <input type="date" name="seq_purchase_valid_from" id="seq_purchase_valid_from" class="form-control" value="{{ seq.valid_from|date:'Y-m-d'|default:'' }}">
+                      </div>
+                      <div class="col-md-6">
+                        <label class="form-label fw-medium small mb-1">Valid To Date</label>
+                        <input type="date" name="seq_purchase_valid_to" id="seq_purchase_valid_to" class="form-control" value="{{ seq.valid_to|date:'Y-m-d'|default:'' }}">
+                      </div>
+                    </div>
+
+                    <div class="alert alert-primary py-2 px-3 d-flex align-items-center justify-content-between rounded-3 mb-0">
+                      <span class="small fw-bold"><i class="bi bi-eye me-1"></i> Formatted Voucher Preview:</span>
+                      <span class="badge bg-dark fs-6 font-monospace px-3 py-2" id="seq_purchase_preview">---</span>
+                    </div>
+                  </div>
+
+                  <div id="seq_purchase_manual_notice" class="seq-manual-notice" style="display: none;">
+                    <div class="alert alert-secondary py-3 mb-0">
+                      <i class="bi bi-info-circle me-2 text-primary"></i><strong>Manual Mode Active:</strong> No sequence formatting required for purchase entries.
+                    </div>
+                  </div>
+                </div>
+                {% endwith %}
+
+                <!-- 3. ADVANCE RECEIPT VOUCHER CONFIG -->
+                {% with seq=doc_sequences.receipt dt="receipt" %}
+                <div class="tab-pane fade" id="tab-receipt" role="tabpanel">
+                  <div class="mb-4 p-3 bg-light rounded border">
+                    <label for="seq_receipt_mode" class="form-label fw-bold text-dark small mb-1">
+                      <span class="badge bg-secondary me-1">STEP 2</span> Generation Mode for Advance Receipts
+                    </label>
+                    <select name="seq_receipt_mode" id="seq_receipt_mode" class="form-select fw-semibold border-primary" onchange="toggleSeqConfig('receipt')">
+                      <option value="automatic" {% if seq.generation_mode == 'automatic' %}selected{% endif %}>Automatic (System Auto-generates & Locks Input Field)</option>
+                      <option value="manual_override" {% if seq.generation_mode == 'manual_override' %}selected{% endif %}>Manual Override (System Auto-generates, Editable by User)</option>
+                      <option value="manual" {% if seq.generation_mode == 'manual' %}selected{% endif %}>Manual (Blank Input Field, User Must Enter Number)</option>
+                    </select>
+                  </div>
+
+                  <div id="seq_receipt_config" class="seq-config-block">
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                      <span class="badge bg-info text-dark font-monospace small">STEP 3</span>
+                      <span class="fw-bold text-dark small">Sequence Parameters & Format Rules</span>
+                    </div>
+                    <div class="row g-3 mb-3">
+                      <div class="col-md-3">
+                        <label class="form-label fw-medium small mb-1">Prefix</label>
+                        <input type="text" name="seq_receipt_prefix" id="seq_receipt_prefix" class="form-control font-monospace" value="{{ seq.prefix|default:'' }}" placeholder="e.g. REC-" oninput="updateSeqPreview('receipt')">
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label fw-medium small mb-1">Number of Digits</label>
+                        <input type="number" name="seq_receipt_padding" id="seq_receipt_padding" class="form-control" value="{{ seq.padding_digits|default:3 }}" min="1" max="10" oninput="updateSeqPreview('receipt')">
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label fw-medium small mb-1">Suffix</label>
+                        <input type="text" name="seq_receipt_suffix" id="seq_receipt_suffix" class="form-control font-monospace" value="{{ seq.suffix|default:'' }}" placeholder="e.g. /26-27" oninput="updateSeqPreview('receipt')">
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label fw-medium small mb-1">Next Counter</label>
+                        <input type="number" name="seq_receipt_counter" id="seq_receipt_counter" class="form-control font-monospace fw-bold text-primary" value="{{ seq.current_counter|default:1 }}" min="1" oninput="updateSeqPreview('receipt')">
+                      </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                      <div class="col-md-6">
+                        <label class="form-label fw-medium small mb-1">Valid From Date</label>
+                        <input type="date" name="seq_receipt_valid_from" id="seq_receipt_valid_from" class="form-control" value="{{ seq.valid_from|date:'Y-m-d'|default:'' }}">
+                      </div>
+                      <div class="col-md-6">
+                        <label class="form-label fw-medium small mb-1">Valid To Date</label>
+                        <input type="date" name="seq_receipt_valid_to" id="seq_receipt_valid_to" class="form-control" value="{{ seq.valid_to|date:'Y-m-d'|default:'' }}">
+                      </div>
+                    </div>
+
+                    <div class="alert alert-primary py-2 px-3 d-flex align-items-center justify-content-between rounded-3 mb-0">
+                      <span class="small fw-bold"><i class="bi bi-eye me-1"></i> Formatted Voucher Preview:</span>
+                      <span class="badge bg-dark fs-6 font-monospace px-3 py-2" id="seq_receipt_preview">---</span>
+                    </div>
+                  </div>
+
+                  <div id="seq_receipt_manual_notice" class="seq-manual-notice" style="display: none;">
+                    <div class="alert alert-secondary py-3 mb-0">
+                      <i class="bi bi-info-circle me-2 text-primary"></i><strong>Manual Mode Active:</strong> No sequence formatting required for receipts.
+                    </div>
+                  </div>
+                </div>
+                {% endwith %}
+
+                <!-- 4. DELIVERY CHALLAN VOUCHER CONFIG -->
+                {% with seq=doc_sequences.challan dt="challan" %}
+                <div class="tab-pane fade" id="tab-challan" role="tabpanel">
+                  <div class="mb-4 p-3 bg-light rounded border">
+                    <label for="seq_challan_mode" class="form-label fw-bold text-dark small mb-1">
+                      <span class="badge bg-secondary me-1">STEP 2</span> Generation Mode for Delivery Challans
+                    </label>
+                    <select name="seq_challan_mode" id="seq_challan_mode" class="form-select fw-semibold border-primary" onchange="toggleSeqConfig('challan')">
+                      <option value="automatic" {% if seq.generation_mode == 'automatic' %}selected{% endif %}>Automatic (System Auto-generates & Locks Input Field)</option>
+                      <option value="manual_override" {% if seq.generation_mode == 'manual_override' %}selected{% endif %}>Manual Override (System Auto-generates, Editable by User)</option>
+                      <option value="manual" {% if seq.generation_mode == 'manual' %}selected{% endif %}>Manual (Blank Input Field, User Must Enter Number)</option>
+                    </select>
+                  </div>
+
+                  <div id="seq_challan_config" class="seq-config-block">
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                      <span class="badge bg-info text-dark font-monospace small">STEP 3</span>
+                      <span class="fw-bold text-dark small">Sequence Parameters & Format Rules</span>
+                    </div>
+                    <div class="row g-3 mb-3">
+                      <div class="col-md-3">
+                        <label class="form-label fw-medium small mb-1">Prefix</label>
+                        <input type="text" name="seq_challan_prefix" id="seq_challan_prefix" class="form-control font-monospace" value="{{ seq.prefix|default:'' }}" placeholder="e.g. DC-" oninput="updateSeqPreview('challan')">
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label fw-medium small mb-1">Number of Digits</label>
+                        <input type="number" name="seq_challan_padding" id="seq_challan_padding" class="form-control" value="{{ seq.padding_digits|default:3 }}" min="1" max="10" oninput="updateSeqPreview('challan')">
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label fw-medium small mb-1">Suffix</label>
+                        <input type="text" name="seq_challan_suffix" id="seq_challan_suffix" class="form-control font-monospace" value="{{ seq.suffix|default:'' }}" placeholder="e.g. /26-27" oninput="updateSeqPreview('challan')">
+                      </div>
+                      <div class="col-md-3">
+                        <label class="form-label fw-medium small mb-1">Next Counter</label>
+                        <input type="number" name="seq_challan_counter" id="seq_challan_counter" class="form-control font-monospace fw-bold text-primary" value="{{ seq.current_counter|default:1 }}" min="1" oninput="updateSeqPreview('challan')">
+                      </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                      <div class="col-md-6">
+                        <label class="form-label fw-medium small mb-1">Valid From Date</label>
+                        <input type="date" name="seq_challan_valid_from" id="seq_challan_valid_from" class="form-control" value="{{ seq.valid_from|date:'Y-m-d'|default:'' }}">
+                      </div>
+                      <div class="col-md-6">
+                        <label class="form-label fw-medium small mb-1">Valid To Date</label>
+                        <input type="date" name="seq_challan_valid_to" id="seq_challan_valid_to" class="form-control" value="{{ seq.valid_to|date:'Y-m-d'|default:'' }}">
+                      </div>
+                    </div>
+
+                    <div class="alert alert-primary py-2 px-3 d-flex align-items-center justify-content-between rounded-3 mb-0">
+                      <span class="small fw-bold"><i class="bi bi-eye me-1"></i> Formatted Voucher Preview:</span>
+                      <span class="badge bg-dark fs-6 font-monospace px-3 py-2" id="seq_challan_preview">---</span>
+                    </div>
+                  </div>
+
+                  <div id="seq_challan_manual_notice" class="seq-manual-notice" style="display: none;">
+                    <div class="alert alert-secondary py-3 mb-0">
+                      <i class="bi bi-info-circle me-2 text-primary"></i><strong>Manual Mode Active:</strong> No sequence formatting required for delivery challans.
+                    </div>
+                  </div>
+                </div>
+                {% endwith %}
+
+              </div>
+            </div>
+          </div>
+
+
 
           <!-- Custom Additional Charges Section -->
           <hr class="my-4">
@@ -167,11 +462,20 @@
                         {% endif %}
                       </td>
                       <td class="text-end">
-                        <button type="button" class="btn btn-link btn-sm text-primary p-0 me-2" 
-                          onclick="editCustomCharge({{ charge.id }}, '{{ charge.charge_name|escapejs }}', '{{ charge.charge_type }}', '{{ charge.value }}', {{ charge.is_taxable|yesno:'true,false' }}, {{ charge.is_auto_applied|yesno:'true,false' }}, '{{ charge.applied_order_types|join:',' }}')">
+                        <button type="button" class="btn btn-link btn-sm text-primary p-0 me-2"
+                          data-charge-id="{{ charge.id }}"
+                          data-charge-name="{{ charge.charge_name|escapejs }}"
+                          data-charge-type="{{ charge.charge_type }}"
+                          data-charge-value="{{ charge.value }}"
+                          data-is-taxable="{{ charge.is_taxable|yesno:'true,false' }}"
+                          data-is-auto-applied="{{ charge.is_auto_applied|yesno:'true,false' }}"
+                          data-applied-types="{{ charge.applied_order_types|join:'|' }}"
+                          onclick="editCustomChargeFromBtn(this)">
                           <i class="bi bi-pencil"></i>
                         </button>
-                        <form method="post" action="{% url 'restaurant_admin:custom_charge_delete' restaurant_slug=rslug pk=charge.id %}" style="display:inline;" onsubmit="return confirm('Delete charge {{ charge.charge_name|escapejs }}?');">
+                        <form method="post" action="{% url 'restaurant_admin:custom_charge_delete' restaurant_slug=rslug pk=charge.id %}" style="display:inline;"
+                          data-charge-name="{{ charge.charge_name|escapejs }}"
+                          onsubmit="return confirm('Delete charge \'' + this.dataset.chargeName + '\'?');">
                           {% csrf_token %}
                           <button type="submit" class="btn btn-link btn-sm text-danger p-0">
                             <i class="bi bi-trash"></i>
@@ -324,6 +628,17 @@
           </div>
           {% endif %}
 
+          <!-- Notification Sound Section -->
+          <hr class="my-4">
+          <div class="mb-3">
+            <h6 class="fw-bold mb-3"><i class="bi bi-bell me-2 text-primary"></i>Notification Sound</h6>
+            {{ form.notification_sound }}
+            {% if form.notification_sound.errors %}
+            <div class="text-danger small">{{ form.notification_sound.errors|join:', ' }}</div>
+            {% endif %}
+            <div class="form-text text-muted">Upload a short audio file to play when a new order arrives.</div>
+          </div>
+
           <div class="d-flex justify-content-end mt-4">
             <a href="{% url 'restaurant_admin:dashboard' restaurant_slug=rslug %}"
               class="btn btn-outline-secondary me-2">Cancel</a>
@@ -437,7 +752,53 @@
 
   document.addEventListener('DOMContentLoaded', function() {
     customChargeModalInstance = new bootstrap.Modal(document.getElementById('customChargeModal'));
+
+    // Initialize document sequence conditional fields & previews
+    const docTypes = ['sales', 'purchase', 'receipt', 'challan'];
+    docTypes.forEach(dt => {
+      toggleSeqConfig(dt);
+      updateSeqPreview(dt);
+    });
   });
+
+  function toggleSeqConfig(dt) {
+    const modeSelect = document.getElementById(`seq_${dt}_mode`);
+    const configBlock = document.getElementById(`seq_${dt}_config`);
+    const noticeBlock = document.getElementById(`seq_${dt}_manual_notice`);
+
+    if (!modeSelect || !configBlock || !noticeBlock) return;
+
+    if (modeSelect.value === 'manual') {
+      configBlock.style.display = 'none';
+      noticeBlock.style.display = 'block';
+    } else {
+      configBlock.style.display = 'block';
+      noticeBlock.style.display = 'none';
+      updateSeqPreview(dt);
+    }
+  }
+
+  function updateSeqPreview(dt) {
+    const prefixInput = document.getElementById(`seq_${dt}_prefix`);
+    const suffixInput = document.getElementById(`seq_${dt}_suffix`);
+    const paddingInput = document.getElementById(`seq_${dt}_padding`);
+    const counterInput = document.getElementById(`seq_${dt}_counter`);
+    const previewBadge = document.getElementById(`seq_${dt}_preview`);
+
+    if (!previewBadge) return;
+
+    const prefix = prefixInput ? prefixInput.value : '';
+    const suffix = suffixInput ? suffixInput.value : '';
+    const padding = paddingInput ? parseInt(paddingInput.value || '3', 10) : 3;
+    const counter = counterInput ? parseInt(counterInput.value || '1', 10) : 1;
+
+    let numStr = counter.toString();
+    if (padding > 0) {
+      numStr = numStr.padStart(padding, '0');
+    }
+
+    previewBadge.textContent = `${prefix}${numStr}${suffix}`;
+  }
 
   function openAddChargeModal() {
     document.getElementById('modalChargeId').value = '';
@@ -453,6 +814,19 @@
     customChargeModalInstance.show();
   }
 
+  function editCustomChargeFromBtn(btn) {
+    const ds = btn.dataset;
+    editCustomCharge(
+      ds.chargeId,
+      ds.chargeName,
+      ds.chargeType,
+      ds.chargeValue,
+      ds.isTaxable === 'true',
+      ds.isAutoApplied === 'true',
+      ds.appliedTypes
+    );
+  }
+
   function editCustomCharge(id, name, type, value, isTaxable, isAutoApplied, appliedTypesStr) {
     document.getElementById('modalChargeId').value = id;
     document.getElementById('modalChargeName').value = name;
@@ -461,7 +835,7 @@
     document.getElementById('modalIsTaxable').checked = isTaxable;
     document.getElementById('modalIsAutoApplied').checked = isAutoApplied;
 
-    const types = appliedTypesStr ? appliedTypesStr.split(',') : ['dine_in', 'takeaway', 'delivery'];
+    const types = appliedTypesStr ? appliedTypesStr.split('|') : ['dine_in', 'takeaway', 'delivery'];
     document.getElementById('ot_dine_in').checked = types.includes('dine_in');
     document.getElementById('ot_takeaway').checked = types.includes('takeaway');
     document.getElementById('ot_delivery').checked = types.includes('delivery');

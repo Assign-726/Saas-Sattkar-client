@@ -1,19 +1,20 @@
 from django import forms
-from core.models import MenuItem, Category, Order, SubCategory, RestaurantSettings, InventoryItem, Coupon
+from core.models import MenuItem, Category, Order, SubCategory, RestaurantSettings, InventoryItem, InventoryCategory, Coupon
 from super_admin.models import RestaurantBranch
 
 
 class MenuItemForm(forms.ModelForm):
     category = forms.ModelChoiceField(
         queryset=Category.objects.all(),
-        required=True,
-        label='Category *',
-        help_text='Select a category (required)'
+        required=False,
+        label='Category (optional)',
+        help_text='Select a category (optional)',
+        empty_label='-- Select Category --'
     )
     
     class Meta:
         model = MenuItem
-        fields = ['name', 'description', 'price', 'tax_type', 'category', 'subcategory', 'image', 'availability']
+        fields = ['name', 'description', 'price', 'tax_type', 'is_tax_inclusive', 'category', 'subcategory', 'image', 'availability']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'description': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
@@ -26,11 +27,17 @@ class MenuItemForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         self.restaurant = kwargs.pop('restaurant', None)
+        self.branch = kwargs.pop('branch', None)
         super().__init__(*args, **kwargs)
-        # Limit categories to current restaurant
+        # Limit categories to current restaurant (and branch if set)
         if self.restaurant is not None:
-            self.fields['category'].queryset = Category.objects.filter(restaurant=self.restaurant).order_by('name')
-        # Category required (already enforced by field), subcategory optional
+            cat_qs = Category.objects.filter(restaurant=self.restaurant)
+            if self.branch:
+                cat_qs = cat_qs.filter(branch=self.branch)
+            self.fields['category'].queryset = cat_qs.order_by('name')
+        self.fields['category'].required = False
+        self.fields['category'].label = 'Category (optional)'
+        self.fields['category'].help_text = 'Select a category (optional)'
         self.fields['subcategory'].required = False
         self.fields['subcategory'].label = 'Subcategory (optional)'
         self.fields['tax_type'].label = 'Tax Type / Rate'
@@ -56,11 +63,15 @@ class MenuItemForm(forms.ModelForm):
         for field in self.fields:
             self.fields[field].widget.attrs.update({'class': 'form-control'})
         self.fields['availability'].widget.attrs.update({'class': 'form-check-input'})
+        self.fields['is_tax_inclusive'].widget.attrs.update({'class': 'form-check-input'})
 
     def save(self, commit=True):
         instance = super().save(commit=False)
         if self.restaurant is not None:
             instance.restaurant = self.restaurant
+        # Always stamp the active branch so newly created items are branch-scoped
+        if self.branch is not None:
+            instance.branch = self.branch
         if commit:
             instance.save()
         return instance
@@ -69,8 +80,6 @@ class MenuItemForm(forms.ModelForm):
         cleaned = super().clean()
         category = cleaned.get('category')
         subcategory = cleaned.get('subcategory')
-        if not category:
-            self.add_error('category', 'Category is required.')
         if subcategory and category and subcategory.category_id != category.id:
             self.add_error('subcategory', 'Selected subcategory does not belong to the chosen category.')
         return cleaned
@@ -91,6 +100,7 @@ class CouponForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         self.restaurant = kwargs.pop('restaurant', None)
+        self.branch = kwargs.pop('branch', None)
         super().__init__(*args, **kwargs)
         for f in self.fields:
             widget = self.fields[f].widget
@@ -105,32 +115,106 @@ class CouponForm(forms.ModelForm):
             qs = Coupon.objects.filter(code__iexact=code)
             if self.restaurant:
                 qs = qs.filter(restaurant=self.restaurant)
+                if self.branch:
+                    qs = qs.filter(branch=self.branch)
             else:
                 qs = qs.filter(restaurant__isnull=True)
             if self.instance and self.instance.pk:
                 qs = qs.exclude(pk=self.instance.pk)
             if qs.exists():
-                self.add_error('code', 'A coupon with this code already exists for this restaurant.')
+                self.add_error('code', 'A coupon with this code already exists for this branch.')
         return cleaned_data
 
     def save(self, commit=True):
         instance = super().save(commit=False)
         if self.restaurant is not None:
             instance.restaurant = self.restaurant
+        if self.branch is not None:
+            instance.branch = self.branch
+        if commit:
+            instance.save()
+        return instance
+
+
+class InventoryCategoryForm(forms.ModelForm):
+    class Meta:
+        model = InventoryCategory
+        fields = ['name', 'parent', 'tax_configuration', 'taxability_type', 'hsn_sac_code', 'gst_rate']
+        widgets = {
+            'name': forms.TextInput(attrs={'placeholder': 'e.g. Dairy, Beverages, Packaging'}),
+            'tax_configuration': forms.Select(attrs={'class': 'form-select'}),
+            'hsn_sac_code': forms.TextInput(attrs={'placeholder': 'e.g. 0401, 2202'}),
+            'gst_rate': forms.NumberInput(attrs={'step': '0.01', 'placeholder': '0.00'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.restaurant = kwargs.pop('restaurant', None)
+        self.branch = kwargs.pop('branch', None)
+        super().__init__(*args, **kwargs)
+
+        parents = InventoryCategory.objects.all()
+        if self.restaurant:
+            parents = parents.filter(restaurant=self.restaurant)
+        if self.branch:
+            parents = parents.filter(branch=self.branch)
+        if self.instance and self.instance.pk:
+            parents = parents.exclude(pk=self.instance.pk)
+
+        self.fields['parent'].queryset = parents
+        self.fields['parent'].empty_label = "-- None (Top-Level Category) --"
+        self.fields['parent'].required = False
+        self.fields['tax_configuration'].required = False
+        self.fields['tax_configuration'].initial = 'inherit'
+        self.fields['taxability_type'].required = False
+        self.fields['gst_rate'].required = False
+        self.fields['hsn_sac_code'].required = False
+
+        if not (self.instance and self.instance.pk and self.instance.tax_configuration == 'override'):
+            self.initial['gst_rate'] = None
+
+        for f, field in self.fields.items():
+            widget = field.widget
+            if isinstance(widget, forms.CheckboxInput):
+                widget.attrs['class'] = 'form-check-input'
+            elif isinstance(widget, forms.Select):
+                widget.attrs['class'] = 'form-select'
+            else:
+                css = widget.attrs.get('class', '')
+                widget.attrs['class'] = (css + ' form-control').strip()
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if not instance.tax_configuration:
+            instance.tax_configuration = 'inherit'
+        if instance.tax_configuration == 'inherit':
+            instance.gst_rate = None
+            instance.hsn_sac_code = None
+            instance.taxability_type = None
+            instance.default_gst_rate = None
+            instance.default_hsn_code = None
+            instance.taxability = None
+        else:
+            if instance.gst_rate is not None:
+                instance.default_gst_rate = instance.gst_rate
+            if instance.hsn_sac_code:
+                instance.default_hsn_code = instance.hsn_sac_code
+            if instance.taxability_type:
+                instance.taxability = instance.taxability_type
+
+        if self.restaurant is not None:
+            instance.restaurant = self.restaurant
+        if self.branch is not None:
+            instance.branch = self.branch
         if commit:
             instance.save()
         return instance
 
 
 class InventoryItemForm(forms.ModelForm):
-    category = forms.ChoiceField(
-        choices=[
-            ('raw_ingredients', 'Raw Ingredients'),
-            ('beverages', 'Beverages'),
-            ('packaging', 'Packaging & Tissue'),
-            ('bar_stock', 'Bar Stock'),
-        ],
-        required=True
+    category = forms.ModelChoiceField(
+        queryset=InventoryCategory.objects.none(),
+        required=False,
+        empty_label="-- Select Inventory Category (Optional) --"
     )
     unit = forms.ChoiceField(
         choices=[
@@ -148,6 +232,7 @@ class InventoryItemForm(forms.ModelForm):
     )
     gst_rate = forms.ChoiceField(
         choices=[
+            ('', '-- Select Rate or Inherit --'),
             ('0.00', '0% GST'),
             ('5.00', '5% GST'),
             ('12.00', '12% GST'),
@@ -162,12 +247,73 @@ class InventoryItemForm(forms.ModelForm):
         fields = [
             'name', 'sku', 'category', 'unit', 'reorder_level',
             'cost_price', 'price_per_unit', 'selling_price',
-            'taxability_type', 'hsn_sac_code', 'gst_rate', 'hsn_description',
+            'tax_configuration', 'taxability_type', 'hsn_sac_code', 'gst_rate', 'hsn_description',
             'is_active', 'quantity'
         ]
+        widgets = {
+            'tax_configuration': forms.Select(attrs={'class': 'form-select'}),
+        }
 
     def __init__(self, *args, **kwargs):
         self.restaurant = kwargs.pop('restaurant', None)
+        self.branch = kwargs.pop('branch', None)
+        super().__init__(*args, **kwargs)
+
+        cats = InventoryCategory.objects.all()
+        if self.restaurant:
+            cats = cats.filter(restaurant=self.restaurant)
+        if self.branch:
+            cats = cats.filter(branch=self.branch)
+        self.fields['category'].queryset = cats
+        self.fields['category'].required = False
+
+        self.fields['cost_price'].required = False
+        self.fields['price_per_unit'].required = False
+        self.fields['selling_price'].required = False
+        self.fields['tax_configuration'].required = False
+        self.fields['tax_configuration'].initial = 'inherit'
+        self.fields['taxability_type'].required = False
+        self.fields['hsn_sac_code'].required = False
+        self.fields['gst_rate'].required = False
+
+        for f, field in self.fields.items():
+            widget = field.widget
+            if isinstance(widget, forms.CheckboxInput):
+                widget.attrs['class'] = 'form-check-input'
+            elif isinstance(widget, forms.Select):
+                widget.attrs['class'] = 'form-select'
+            else:
+                css = widget.attrs.get('class', '')
+                widget.attrs['class'] = (css + ' form-control').strip()
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if not instance.tax_configuration:
+            instance.tax_configuration = 'inherit'
+        if self.restaurant is not None:
+            instance.restaurant = self.restaurant
+        if self.branch is not None:
+            instance.branch = self.branch
+        if instance.cost_price and not instance.price_per_unit:
+            instance.price_per_unit = instance.cost_price
+        elif instance.price_per_unit and not instance.cost_price:
+            instance.cost_price = instance.price_per_unit
+        if commit:
+            instance.save()
+        return instance
+
+class CategoryForm(forms.ModelForm):
+    class Meta:
+        model = Category
+        fields = ['name', 'description', 'image']
+        widgets = {
+            'name': forms.TextInput(attrs={'placeholder': 'e.g. Starters, Main Course, Beverages, Desserts'}),
+            'description': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Optional brief description of this category...'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.restaurant = kwargs.pop('restaurant', None)
+        self.branch = kwargs.pop('branch', None)
         super().__init__(*args, **kwargs)
         for f, field in self.fields.items():
             widget = field.widget
@@ -183,30 +329,8 @@ class InventoryItemForm(forms.ModelForm):
         instance = super().save(commit=False)
         if self.restaurant is not None:
             instance.restaurant = self.restaurant
-        if instance.cost_price and not instance.price_per_unit:
-            instance.price_per_unit = instance.cost_price
-        elif instance.price_per_unit and not instance.cost_price:
-            instance.cost_price = instance.price_per_unit
-        if commit:
-            instance.save()
-        return instance
-
-class CategoryForm(forms.ModelForm):
-    def __init__(self, *args, **kwargs):
-        self.restaurant = kwargs.pop('restaurant', None)
-        super().__init__(*args, **kwargs)
-
-    class Meta:
-        model = Category
-        fields = ['name', 'description', 'image']
-        widgets = {
-            'description': forms.Textarea(attrs={'rows': 3}),
-        }
-
-    def save(self, commit=True):
-        instance = super().save(commit=False)
-        if self.restaurant is not None:
-            instance.restaurant = self.restaurant
+        if self.branch is not None:
+            instance.branch = self.branch
         if commit:
             instance.save()
         return instance
@@ -321,12 +445,15 @@ class ZoneForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         self.restaurant = kwargs.pop('restaurant', None)
+        self.branch = kwargs.pop('branch', None)
         super().__init__(*args, **kwargs)
 
     def save(self, commit=True):
         instance = super().save(commit=False)
         if self.restaurant:
             instance.restaurant = self.restaurant
+        if self.branch is not None:
+            instance.branch = self.branch
         if commit:
             instance.save()
         return instance
@@ -345,14 +472,22 @@ class TableForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         self.restaurant = kwargs.pop('restaurant', None)
+        self.branch = kwargs.pop('branch', None)
         super().__init__(*args, **kwargs)
-        if self.restaurant:
-            self.fields['zone'].queryset = Zone.objects.filter(restaurant=self.restaurant).order_by('name')
+        # Scope zone choices to current restaurant / branch
+        if self.restaurant is not None:
+            from django.db.models import Q
+            zone_qs = Zone.objects.filter(restaurant=self.restaurant)
+            if self.branch:
+                zone_qs = zone_qs.filter(Q(branch=self.branch) | Q(branch__isnull=True))
+            self.fields['zone'].queryset = zone_qs.order_by('name')
 
     def save(self, commit=True):
         instance = super().save(commit=False)
-        if self.restaurant:
+        if self.restaurant is not None:
             instance.restaurant = self.restaurant
+        if self.branch is not None:
+            instance.branch = self.branch
         if commit:
             instance.save()
         return instance
@@ -378,4 +513,5 @@ class RestaurantBranchComplianceForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         for field in self.fields:
             self.fields[field].widget.attrs.update({'class': 'form-control'})
+            self.fields[field].required = False
 

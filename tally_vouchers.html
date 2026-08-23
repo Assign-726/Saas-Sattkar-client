@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tally Voucher Engine - Multi-Form Suite</title>
+    <link rel="stylesheet" href="tally-engine.css">
+    <style>
+        .app-bar {
+            background-color: #1a252f;
+            color: #fff;
+            padding: 12px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            margin-bottom: 25px;
+        }
+        .app-title {
+            font-size: 20px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .voucher-nav-tabs {
+            display: flex;
+            gap: 10px;
+        }
+        .nav-btn {
+            background-color: #34495e;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .nav-btn:hover { background-color: #2980b9; }
+        .nav-btn.active { background-color: #f39c12; color: #fff; }
+
+        .json-preview-container {
+            max-width: 900px;
+            margin: 20px auto;
+            background: #1e1e1e;
+            color: #4ec9b0;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+        .json-preview-title {
+            color: #ce9178;
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+        pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; }
+        .voucher-view { display: none; }
+        .voucher-view.active { display: block; }
+    </style>
+</head>
+<body>
+
+<div class="app-bar">
+    <div class="app-title">
+        <span>⚡ Tally Form Engine</span>
+        <span style="font-size: 12px; opacity: 0.8; font-weight: normal;">(Global Multi-Form Module)</span>
+    </div>
+    <div class="voucher-nav-tabs">
+        <button class="nav-btn active" onclick="switchVoucher('salesVoucher')">F8: Sales Voucher</button>
+        <button class="nav-btn" onclick="switchVoucher('purchaseRegister')">F9: Purchase Register</button>
+        <button class="nav-btn" onclick="switchVoucher('receiptVoucher')">F6: Receipt Voucher</button>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- 1. SALES VOUCHER FORM -->
+<!-- ========================================== -->
+<div id="salesVoucher" class="voucher-view active">
+    <div class="tally-voucher-box">
+        <div class="tally-header">
+            <span>Accounting Voucher Creation</span>
+            <span class="tally-header-badge">Sales (F8)</span>
+        </div>
+        <div class="tally-form-section">
+            <div class="tally-row">
+                <label>Party A/c Name:</label>
+                <input type="text" id="partyNameSales" data-autocomplete="partyData" class="tally-input tally-header-field" style="width: 300px;" autocomplete="off" placeholder="Type Party Name...">
+            </div>
+            <div class="tally-row">
+                <label>Sales Ledger:</label>
+                <input type="text" id="salesLedger" data-autocomplete="ledgerData" class="tally-input tally-header-field" style="width: 300px;" autocomplete="off" value="Sales Account">
+            </div>
+
+            <table class="tally-table">
+                <thead>
+                    <tr>
+                        <th width="40%">Name of Item</th>
+                        <th width="15%">Qty</th>
+                        <th width="20%">Rate</th>
+                        <th width="25%">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><input type="text" class="tally-input" data-key="itemName" data-autocomplete="itemData" autocomplete="off"></td>
+                        <td><input type="text" class="tally-input text-right qty-field" data-key="qty" inputmode="decimal"></td>
+                        <td><input type="text" class="tally-input text-right rate-field" data-key="rate" inputmode="decimal"></td>
+                        <td><input type="text" class="tally-input text-right readonly-field amount-field" data-key="amount" readonly tabindex="-1" placeholder="0.00"></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="tally-totals-container">
+                <div class="tally-total-row">
+                    <label>Sub Total:</label>
+                    <span id="salesSubTotal">0.00</span>
+                </div>
+                <div class="tally-total-row">
+                    <label>GST (18%):</label>
+                    <span id="salesTax">0.00</span>
+                </div>
+                <div class="tally-total-row" style="font-size: 18px; color: #2c3e50;">
+                    <label>Grand Total:</label>
+                    <span id="salesGrandTotal">0.00</span>
+                </div>
+            </div>
+
+            <div class="tally-row" style="margin-top: 20px;">
+                <label>Narration:</label>
+                <input type="text" class="tally-input tally-narration-field" style="width: 100%;" placeholder="Enter Narration details...">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- 2. PURCHASE REGISTER FORM -->
+<!-- ========================================== -->
+<div id="purchaseRegister" class="voucher-view">
+    <div class="tally-voucher-box">
+        <div class="tally-header" style="background-color: #27ae60;">
+            <span>Purchase Invoice Register</span>
+            <span class="tally-header-badge" style="background-color: #219150;">Purchase (F9)</span>
+        </div>
+        <div class="tally-form-section">
+            <div class="tally-row">
+                <label>Supplier Inv No:</label>
+                <input type="text" id="suppInvNo" class="tally-input tally-header-field" style="width: 200px;" autocomplete="off" placeholder="INV-2026-001">
+            </div>
+            <div class="tally-row">
+                <label>Party A/c Name:</label>
+                <input type="text" id="partyNamePurchase" data-autocomplete="supplierData" class="tally-input tally-header-field" style="width: 300px;" autocomplete="off" placeholder="Type Supplier Name...">
+            </div>
+
+            <table class="tally-table">
+                <thead>
+                    <tr>
+                        <th width="35%">Stock Item</th>
+                        <th width="15%">Batch / Lot</th>
+                        <th width="15%">Qty</th>
+                        <th width="15%">Rate</th>
+                        <th width="20%">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><input type="text" class="tally-input" data-key="itemName" data-autocomplete="itemData" autocomplete="off"></td>
+                        <td><input type="text" class="tally-input" data-key="batch" autocomplete="off" placeholder="B101"></td>
+                        <td><input type="text" class="tally-input text-right qty-field" data-key="qty" inputmode="decimal"></td>
+                        <td><input type="text" class="tally-input text-right rate-field" data-key="rate" inputmode="decimal"></td>
+                        <td><input type="text" class="tally-input text-right readonly-field amount-field" data-key="amount" readonly tabindex="-1" placeholder="0.00"></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="tally-totals-container">
+                <div class="tally-total-row" style="font-size: 18px; color: #27ae60;">
+                    <label>Total Invoice Amount:</label>
+                    <span id="purchaseGrandTotal">0.00</span>
+                </div>
+            </div>
+
+            <div class="tally-row" style="margin-top: 20px;">
+                <label>Narration:</label>
+                <input type="text" class="tally-input tally-narration-field" style="width: 100%;" placeholder="Being goods purchased vide Bill No...">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- 3. RECEIPT VOUCHER FORM -->
+<!-- ========================================== -->
+<div id="receiptVoucher" class="voucher-view">
+    <div class="tally-voucher-box">
+        <div class="tally-header" style="background-color: #8e44ad;">
+            <span>Receipt Voucher Creation</span>
+            <span class="tally-header-badge" style="background-color: #71368a;">Receipt (F6)</span>
+        </div>
+        <div class="tally-form-section">
+            <div class="tally-row">
+                <label>Account (Bank/Cash):</label>
+                <input type="text" id="receiptAccount" data-autocomplete="bankData" class="tally-input tally-header-field" style="width: 300px;" autocomplete="off" placeholder="Select Cash/Bank...">
+            </div>
+
+            <table class="tally-table">
+                <thead>
+                    <tr>
+                        <th width="10%">Cr/Dr</th>
+                        <th width="50%">Particulars (Ledger Name)</th>
+                        <th width="40%">Amount (₹)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><input type="text" class="tally-input text-center" data-key="type" value="Cr" style="font-weight: bold;"></td>
+                        <td><input type="text" class="tally-input" data-key="particulars" data-autocomplete="partyData" autocomplete="off"></td>
+                        <td><input type="text" class="tally-input text-right amount-field" data-key="amount" inputmode="decimal" placeholder="0.00"></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="tally-totals-container">
+                <div class="tally-total-row" style="font-size: 18px; color: #8e44ad;">
+                    <label>Total Received:</label>
+                    <span id="receiptGrandTotal">0.00</span>
+                </div>
+            </div>
+
+            <div class="tally-row" style="margin-top: 20px;">
+                <label>Narration:</label>
+                <input type="text" class="tally-input tally-narration-field" style="width: 100%;" placeholder="Cheque / NEFT / UTR reference details...">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- LIVE JSON PREVIEW -->
+<div class="json-preview-container">
+    <div class="json-preview-title">
+        <span>📋 Exported Form Data JSON (`engine.getFormData()`)</span>
+        <button onclick="copyJsonData()" style="background:#2980b9; color:#fff; border:none; padding:3px 10px; border-radius:3px; cursor:pointer;">Copy JSON</button>
+    </div>
+    <pre id="jsonOutput">{}</pre>
+</div>
+
+<script src="tally-engine.js"></script>
+<script>
+    // Master Datasets for Autocomplete
+    const globalAutocompleteData = {
+        partyData: ["Rahul Traders", "Ramesh & Co. Private Limited", "Rajesh Enterprises", "Ravi Stores", "Rakesh Agency", "Suresh Ltd", "Amit Brothers"],
+        supplierData: ["HP India Pvt Ltd", "Dell Logistics", "Samsung Electronics", "Logitech Tech", "Intel Distributors"],
+        itemData: ["Keyboard Mechanical", "Mouse Wireless", "Monitor 27 inch", "Motherboard B550", "RAM DDR4 8GB", "SSD NVMe 512GB"],
+        ledgerData: ["Sales Account", "GST Sales 18%", "Export Sales"],
+        bankData: ["HDFC Bank A/c 4512", "ICICI Bank A/c 8891", "Petty Cash", "Main Cash"]
+    };
+
+    let activeEngine = null;
+
+    // Switch between forms
+    function switchVoucher(voucherId) {
+        document.querySelectorAll('.voucher-view').forEach(v => v.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+
+        document.getElementById(voucherId).classList.add('active');
+
+        if (voucherId === 'salesVoucher') {
+            event.target.classList.add('active');
+            initSalesEngine();
+        } else if (voucherId === 'purchaseRegister') {
+            event.target.classList.add('active');
+            initPurchaseEngine();
+        } else if (voucherId === 'receiptVoucher') {
+            event.target.classList.add('active');
+            initReceiptEngine();
+        }
+    }
+
+    // 1. Initialize Sales Voucher Engine
+    function initSalesEngine() {
+        activeEngine = new TallyFormEngine({
+            container: '#salesVoucher',
+            autocompleteData: globalAutocompleteData,
+            onCalculate: function(container) {
+                let subtotal = 0;
+                container.querySelectorAll('tbody tr').forEach(tr => {
+                    let q = parseFloat(tr.querySelector('.qty-field')?.value) || 0;
+                    let r = parseFloat(tr.querySelector('.rate-field')?.value) || 0;
+                    let amtField = tr.querySelector('.amount-field');
+                    let amt = q * r;
+                    if (amtField) amtField.value = amt > 0 ? amt.toFixed(2) : '';
+                    subtotal += amt;
+                });
+
+                let tax = subtotal * 0.18;
+                let grand = subtotal + tax;
+
+                document.getElementById('salesSubTotal').innerText = subtotal.toFixed(2);
+                document.getElementById('salesTax').innerText = tax.toFixed(2);
+                document.getElementById('salesGrandTotal').innerText = grand.toFixed(2);
+
+                updateJsonOutput();
+            }
+        });
+
+        document.getElementById('partyNameSales').focus();
+        updateJsonOutput();
+    }
+
+    // 2. Initialize Purchase Register Engine
+    function initPurchaseEngine() {
+        activeEngine = new TallyFormEngine({
+            container: '#purchaseRegister',
+            autocompleteData: globalAutocompleteData,
+            onCalculate: function(container) {
+                let grand = 0;
+                container.querySelectorAll('tbody tr').forEach(tr => {
+                    let q = parseFloat(tr.querySelector('.qty-field')?.value) || 0;
+                    let r = parseFloat(tr.querySelector('.rate-field')?.value) || 0;
+                    let amtField = tr.querySelector('.amount-field');
+                    let amt = q * r;
+                    if (amtField) amtField.value = amt > 0 ? amt.toFixed(2) : '';
+                    grand += amt;
+                });
+
+                document.getElementById('purchaseGrandTotal').innerText = grand.toFixed(2);
+                updateJsonOutput();
+            }
+        });
+
+        document.getElementById('suppInvNo').focus();
+        updateJsonOutput();
+    }
+
+    // 3. Initialize Receipt Voucher Engine
+    function initReceiptEngine() {
+        activeEngine = new TallyFormEngine({
+            container: '#receiptVoucher',
+            autocompleteData: globalAutocompleteData,
+            onCalculate: function(container) {
+                let grand = 0;
+                container.querySelectorAll('tbody tr').forEach(tr => {
+                    let amt = parseFloat(tr.querySelector('.amount-field')?.value) || 0;
+                    grand += amt;
+                });
+
+                document.getElementById('receiptGrandTotal').innerText = grand.toFixed(2);
+                updateJsonOutput();
+            }
+        });
+
+        document.getElementById('receiptAccount').focus();
+        updateJsonOutput();
+    }
+
+    function updateJsonOutput() {
+        if (activeEngine) {
+            document.getElementById('jsonOutput').innerText = JSON.stringify(activeEngine.getFormData(), null, 2);
+        }
+    }
+
+    function copyJsonData() {
+        const text = document.getElementById('jsonOutput').innerText;
+        navigator.clipboard.writeText(text);
+        alert('Form JSON copied to clipboard!');
+    }
+
+    // Keydown Shortcuts for switching vouchers (F6, F8, F9)
+    window.addEventListener('keydown', function(e) {
+        if (e.key === 'F8') { e.preventDefault(); switchVoucher('salesVoucher'); }
+        if (e.key === 'F9') { e.preventDefault(); switchVoucher('purchaseRegister'); }
+        if (e.key === 'F6') { e.preventDefault(); switchVoucher('receiptVoucher'); }
+    });
+
+    window.onload = function() {
+        initSalesEngine();
+    };
+</script>
+
+</body>
+</html>

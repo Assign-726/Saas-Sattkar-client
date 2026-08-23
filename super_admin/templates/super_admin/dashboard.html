@@ -9,6 +9,10 @@
   <i class="fa-solid fa-user-shield"></i>
   <span>Add Admin</span>
 </a>
+<a class="btn" href="{% url 'super_admin:onboard' %}">
+  <i class="fa-solid fa-plus"></i>
+  <span>Onboard Business</span>
+</a>
 {% endblock %}
 
 {% block content %}
@@ -16,17 +20,27 @@
 <div class="stats-grid">
   <div class="stat-card">
     <div>
-      <div class="stat-label">Total Restaurants</div>
+      <div class="stat-label">Registered Businesses</div>
       <div class="stat-value">{{ restaurants|length }}</div>
     </div>
     <div class="stat-icon primary">
-      <i class="fa-solid fa-hotel"></i>
+      <i class="fa-solid fa-building"></i>
     </div>
   </div>
 
   <div class="stat-card">
     <div>
-      <div class="stat-label">Total Admins</div>
+      <div class="stat-label">Total Branch Outlets</div>
+      <div class="stat-value">{{ total_branches|default:0 }}</div>
+    </div>
+    <div class="stat-icon ok">
+      <i class="fa-solid fa-store"></i>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div>
+      <div class="stat-label">Total Admin Accounts</div>
       <div class="stat-value">{{ admins|length }}</div>
     </div>
     <div class="stat-icon info">
@@ -35,85 +49,176 @@
   </div>
 </div>
 
-<!-- Restaurants Management Table -->
-<div class="card">
-  <div class="hd">
-    <div>Restaurants</div>
-    <span class="badge neutral">Active Locations</span>
+<!-- Business & Branch Outlets Hierarchy Section -->
+<div style="margin-top: 24px;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+    <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-main); margin: 0;">
+      <i class="fa-solid fa-building" style="color: var(--brand-primary); margin-right: 8px;"></i> Registered Businesses & Outlets
+    </h3>
+    <span class="badge neutral">{{ restaurants|length }} Business(es) Registered</span>
   </div>
-  <div class="bd">
-    {% if restaurants %}
-    <div class="table-container">
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Restaurant Name</th>
-            <th>Phone Number</th>
-            <th>Status</th>
-            <th style="width: 160px; text-align: right; padding-right: 24px;">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in restaurants %}
-          <tr>
-            <td style="font-weight: 600; color: var(--text);">{{ r.name }}</td>
-            <td class="muted">{{ r.phone|default:'Not Provided' }}</td>
-            <td>
+
+  {% if restaurants %}
+    {% for r in restaurants %}
+    <div class="card" style="margin-bottom: 24px; border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; background: #ffffff;">
+      
+      <!-- Company / Business Header -->
+      <div style="padding: 20px 24px; background: #f8fafc; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px;">
+            <h2 style="font-size: 1.2rem; font-weight: 800; color: #0f172a; margin: 0;">{{ r.trade_name|default:r.name }}</h2>
+            {% if r.legal_name and r.legal_name != r.trade_name %}
+              <span style="font-size: 0.85rem; color: #64748b; font-weight: 500;">({{ r.legal_name }})</span>
+            {% endif %}
+
+            {% if r.business_type %}
+              <span class="badge neutral" style="font-size: 0.75rem; background: #e2e8f0; color: #334155;">{{ r.business_type }}</span>
+            {% endif %}
+
+            {% if r.pan %}
+              <span class="badge neutral" style="font-size: 0.75rem; font-family: monospace;">PAN: {{ r.pan }}</span>
+            {% endif %}
+
+            <form method="post" action="{% url 'super_admin:restaurant_toggle_active' r.id %}" style="display: inline;">
+              {% csrf_token %}
               {% if r.is_active %}
-              <span class="badge ok">
-                <i class="fa-solid fa-circle-check"></i>
-                <span>Active</span>
-              </span>
+                <button type="submit" class="badge ok" style="border: none; cursor: pointer; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px;" title="Click to Deactivate Business / Hide Website">
+                  <i class="fa-solid fa-circle-check"></i> Active
+                </button>
               {% else %}
-              <span class="badge neutral">
-                <i class="fa-solid fa-circle-minus"></i>
-                <span>Inactive</span>
-              </span>
+                <button type="submit" class="badge neutral" style="border: none; cursor: pointer; font-size: 0.75rem; background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px;" title="Click to Activate Business & Website">
+                  <i class="fa-solid fa-circle-xmark"></i> Inactive (Click to Activate)
+                </button>
               {% endif %}
-            </td>
-            <td>
-              <div class="action-row" style="justify-content: flex-end; padding-right: 8px;">
-                <a class="action-btn edit" href="{% url 'super_admin:restaurant_edit' r.id %}" title="Edit Details">
-                  <i class="fa-solid fa-pen-to-square"></i>
-                </a>
-                <a class="action-btn delete" href="{% url 'super_admin:restaurant_delete' r.id %}"
-                  title="Delete Restaurant">
-                  <i class="fa-solid fa-trash-can"></i>
-                </a>
-                <a class="action-btn landing" href="{% url 'super_admin:landing_edit' r.id %}"
-                  title="Customize Landing Page">
-                  <i class="fa-solid fa-window-restore"></i>
-                </a>
-                <a class="action-btn dashboard" href="{% url 'restaurant_admin:dashboard' restaurant_slug=r.slug %}"
-                  title="Open Branch Dashboard" target="_blank">
-                  <i class="fa-solid fa-chart-line"></i>
-                </a>
-                <a class="action-btn menu" href="{% url 'restaurant_admin:menu_list' restaurant_slug=r.slug %}"
-                  title="Open Customer Menu" target="_blank">
-                  <i class="fa-solid fa-utensils"></i>
-                </a>
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+            </form>
+          </div>
+
+          <div style="display: flex; gap: 16px; font-size: 0.85rem; color: #475569; flex-wrap: wrap;">
+            <span><i class="fa-solid fa-phone" style="color: var(--text-muted); margin-right: 4px;"></i> {{ r.phone|default:'No Phone' }}</span>
+            <span><i class="fa-solid fa-envelope" style="color: var(--text-muted); margin-right: 4px;"></i> {{ r.email|default:'No Email' }}</span>
+            <span><i class="fa-solid fa-location-dot" style="color: var(--text-muted); margin-right: 4px;"></i> {{ r.address|default:'Registered Address' }}</span>
+            {% if r.cin_llpin %}
+              <span><i class="fa-solid fa-id-card" style="color: var(--text-muted); margin-right: 4px;"></i> CIN/LLPIN: {{ r.cin_llpin }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <a href="{% url 'super_admin:restaurant_edit' r.id %}" class="btn secondary small" title="Edit Business & Outlets">
+            <i class="fa-solid fa-pen-to-square"></i> Edit Business
+          </a>
+          <a href="{% url 'super_admin:landing_edit' r.id %}" class="btn secondary small" title="Customize Landing Page">
+            <i class="fa-solid fa-window-restore"></i> CMS Landing
+          </a>
+          <a href="{% url 'super_admin:restaurant_delete' r.id %}" class="btn secondary small" style="color: var(--danger-red); border-color: #fecaca;" title="Delete Business">
+            <i class="fa-solid fa-trash-can"></i>
+          </a>
+        </div>
+      </div>
+
+      <!-- Branch Outlets Sub-Table -->
+      <div style="padding: 20px 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h4 style="font-size: 0.95rem; font-weight: 700; color: #334155; margin: 0; display: flex; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-store" style="color: var(--brand-primary);"></i>
+            <span>Branch Outlets ({{ r.branches.all|length }})</span>
+          </h4>
+          <a href="{% url 'super_admin:restaurant_edit' r.id %}?step=2" style="font-size: 0.8rem; font-weight: 600; color: #059669; text-decoration: none;">
+            <i class="fa-solid fa-plus"></i> Add / Edit Outlets
+          </a>
+        </div>
+
+        {% if r.branches.all %}
+        <div class="table-container" style="border: 1px solid #cbd5e1; border-radius: 8px;">
+          <table class="table" style="font-size: 0.85rem;">
+            <thead style="background: #f1f5f9;">
+              <tr>
+                <th style="padding: 10px 14px;">Branch Name & Phone</th>
+                <th style="padding: 10px 14px;">Location / Address</th>
+                <th style="padding: 10px 14px;">Tax & License Info</th>
+                <th style="padding: 10px 14px;">Alcohol & VAT Status</th>
+                <th style="padding: 10px 14px; text-align: right;">Outlet Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for b in r.branches.all %}
+              <tr style="border-bottom: 1px solid #e2e8f0;">
+                <td style="padding: 12px 14px; font-weight: 600;">
+                  <div style="color: #0f172a; font-size: 0.9rem;">{{ b.name }}</div>
+                  <div style="color: #64748b; font-size: 0.8rem; font-weight: normal; margin-top: 2px;">
+                    <i class="fa-solid fa-phone" style="font-size: 0.75rem;"></i> {{ b.phone|default:r.phone }}
+                  </div>
+                </td>
+                <td style="padding: 12px 14px; color: #475569;">
+                  <div>{{ b.city|default:r.city }}, {{ b.state|default:r.state }}</div>
+                  <div style="font-size: 0.75rem; color: #64748b;">{{ b.address_line_1|default:r.address_line_1 }}</div>
+                </td>
+                <td style="padding: 12px 14px;">
+                  {% if b.gstin or b.gst_registration %}
+                    <div style="font-weight: 600; color: #1e293b; font-family: monospace;">GSTIN: {{ b.gst_registration.gstin|default:b.gstin }}</div>
+                    <div style="font-size: 0.75rem; color: #64748b;">Reg: {{ b.get_gst_registration_type_display }}</div>
+                  {% else %}
+                    <span class="badge neutral" style="font-size: 0.75rem;">GST Unregistered</span>
+                  {% endif %}
+                  {% if b.fssai_license_no %}
+                    <div style="font-size: 0.75rem; color: #475569; margin-top: 2px;">FSSAI: {{ b.fssai_license_no }}</div>
+                  {% endif %}
+                </td>
+                <td style="padding: 12px 14px;">
+                  {% if b.serves_alcohol %}
+                    <span class="badge ok" style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a;">
+                      <i class="fa-solid fa-wine-glass"></i> Serves Alcohol (State VAT)
+                    </span>
+                    {% if b.excise_license_no %}
+                      <div style="font-size: 0.75rem; color: #78350f; margin-top: 4px;">Excise No: {{ b.excise_license_no }}</div>
+                    {% endif %}
+                  {% else %}
+                    <span class="badge neutral" style="background: #f1f5f9; color: #475569;">
+                      <i class="fa-solid fa-utensils"></i> Food Only (GST 5%)
+                    </span>
+                  {% endif %}
+                </td>
+                <td style="padding: 12px 14px; text-align: right;">
+                  <div style="display: flex; justify-content: flex-end; gap: 6px;">
+                    <a class="btn secondary small" href="{% url 'restaurant_admin:dashboard' restaurant_slug=b.slug|default:r.slug %}" title="Open Branch POS Dashboard" target="_blank">
+                      <i class="fa-solid fa-chart-line"></i> Dashboard
+                    </a>
+                    <a class="btn secondary small" href="{% url 'restaurant_admin:menu_list' restaurant_slug=b.slug|default:r.slug %}" title="View Branch Menu" target="_blank">
+                      <i class="fa-solid fa-utensils"></i> Menu
+                    </a>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div style="padding: 16px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; text-align: center; color: #64748b; font-size: 0.85rem;">
+          No outlets configured for this business yet. <a href="{% url 'super_admin:restaurant_edit' r.id %}" style="color: #059669; font-weight: 600;">Click to add outlet</a>
+        </div>
+        {% endif %}
+      </div>
+
     </div>
-    {% else %}
-    <div class="empty">
-      <i class="fa-solid fa-store-slash"
-        style="font-size: 2rem; color: var(--muted); margin-bottom: 8px; display: block;"></i>
-      <span>No restaurants onboarded yet. Click "Onboard" in the sidebar to get started.</span>
+    {% endfor %}
+  {% else %}
+    <div class="card" style="padding: 40px; text-align: center; color: var(--text-muted);">
+      <i class="fa-solid fa-store-slash" style="font-size: 2.5rem; color: #cbd5e1; margin-bottom: 12px; display: block;"></i>
+      <h3 style="font-size: 1.1rem; font-weight: 700; color: #334155; margin: 0 0 8px 0;">No Businesses Onboarded Yet</h3>
+      <p style="font-size: 0.9rem; margin: 0 0 16px 0;">Click "Onboard Business" to register your first company and set up branch outlets.</p>
+      <a class="btn" href="{% url 'super_admin:onboard' %}">
+        <i class="fa-solid fa-plus"></i> Onboard Business Now
+      </a>
     </div>
-    {% endif %}
-  </div>
+  {% endif %}
 </div>
 
 <!-- Restaurant Admins Table -->
-<div class="card" style="margin-top: 32px;">
+<div class="card" style="margin-top: 32px; border-radius: 12px;">
   <div class="hd">
-    <div>Restaurant Admins</div>
-    <span class="badge neutral">Linked User Accounts</span>
+    <div><i class="fa-solid fa-users-gear" style="color: var(--brand-primary); margin-right: 8px;"></i> System Administrators</div>
+    <span class="badge neutral">{{ admins|length }} User Account(s)</span>
   </div>
   <div class="bd">
     {% if admins %}
@@ -122,9 +227,10 @@
         <thead>
           <tr>
             <th>Username</th>
-            <th>Assigned Restaurant</th>
+            <th>Assigned Business (Company)</th>
+            <th>Assigned Branch Outlet</th>
             <th>Role Level</th>
-            <th style="width: 160px; text-align: right; padding-right: 24px;">Actions</th>
+            <th style="width: 140px; text-align: right; padding-right: 24px;">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -134,7 +240,20 @@
               <i class="fa-solid fa-user" style="color: var(--muted); margin-right: 8px;"></i>
               {{ a.user.username }}
             </td>
-            <td class="muted">{{ a.restaurant.name }}</td>
+            <td class="muted"><strong>{{ a.restaurant.name }}</strong></td>
+            <td>
+              {% if a.branch %}
+                <span class="badge ok">
+                  <i class="fa-solid fa-store"></i>
+                  <span>{{ a.branch.name }}</span>
+                </span>
+              {% else %}
+                <span class="badge neutral">
+                  <i class="fa-solid fa-building"></i>
+                  <span>All Outlets (Business Admin)</span>
+                </span>
+              {% endif %}
+            </td>
             <td>
               {% if a.is_primary_admin %}
               <span class="badge ok">
@@ -144,7 +263,7 @@
               {% else %}
               <span class="badge neutral">
                 <i class="fa-solid fa-user-shield"></i>
-                <span>Admin</span>
+                <span>Branch Admin</span>
               </span>
               {% endif %}
             </td>
@@ -168,7 +287,7 @@
     <div class="empty">
       <i class="fa-solid fa-user-slash"
         style="font-size: 2rem; color: var(--muted); margin-bottom: 8px; display: block;"></i>
-      <span>No restaurant administrators registered yet.</span>
+      <span>No restaurant administrators registered yet. Click "Add Admin" above to create user accounts.</span>
     </div>
     {% endif %}
   </div>

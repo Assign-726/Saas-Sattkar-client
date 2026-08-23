@@ -10,7 +10,7 @@ from super_admin.models import Restaurant
 from django.db.models import Prefetch
 
 # pyrefly: ignore [missing-import]
-from .models import Category, SubCategory, MenuItem, Order, RestaurantSettings, RestaurantLanding
+from .models import Category, SubCategory, MenuItem, Order, RestaurantSettings, RestaurantLanding, BlogPost, BlogComment
 # pyrefly: ignore [missing-import]
 from .serializers import (
     CategorySerializer, 
@@ -19,7 +19,9 @@ from .serializers import (
     OrderSerializer,
     RestaurantSerializer,
     RestaurantLandingSerializer,
-    RestaurantSettingsSerializer
+    RestaurantSettingsSerializer,
+    BlogPostSerializer,
+    BlogCommentSerializer
 )
 
 
@@ -289,13 +291,6 @@ class MenuItemViewSet(viewsets.ReadOnlyModelViewSet):
         # print("\n=== DEBUG: MenuItem Query ===")
         # print(f"Total available items: {queryset.count()}")
         
-        # Log some sample items for debugging
-        for item in queryset[:5]:  # Show first 5 items for debugging
-            print(f"- {item.name} (ID: {item.id})")
-            print(f"  Subcategory: {getattr(item.subcategory, 'name', 'None')}")
-            if item.subcategory and hasattr(item.subcategory, 'category'):
-                print(f"  Category: {item.subcategory.category.name}")
-        
         # Apply filtering if needed
         subcategory = self.request.query_params.get('subcategory')
         if subcategory:
@@ -314,7 +309,6 @@ class MenuItemViewSet(viewsets.ReadOnlyModelViewSet):
         context['request'] = self.request
         return context
 
-@method_decorator(csrf_exempt, name='dispatch')
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
@@ -535,6 +529,15 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post', 'patch'], url_path='settle', permission_classes=[AllowAny], authentication_classes=[])
     def settle(self, request, pk=None):
         order = self.get_object()
+
+        if not request.user.is_staff:
+            lookup_value = self.kwargs.get('pk')
+            if lookup_value != order.security_token:
+                token = request.query_params.get('token') or (request.data.get('token') if isinstance(request.data, dict) else None)
+                if not token or order.security_token != token:
+                    from rest_framework.exceptions import PermissionDenied
+                    raise PermissionDenied("You do not have permission to modify this order.")
+
         data = request.data if isinstance(request.data, dict) else {}
         payment_method = data.get('payment_method') or request.POST.get('payment_method') or 'cash'
 
@@ -545,15 +548,15 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         if not order.party and order.customer_name and order.customer_name.lower() not in ['guest', 'walk-in guest'] and order.restaurant:
             from core.models import Party
-            party, _ = Party.objects.get_or_create(
-                restaurant=order.restaurant,
-                name__iexact=order.customer_name,
-                defaults={
-                    'name': order.customer_name,
-                    'party_type': Party.PartyType.CUSTOMER,
-                    'phone': order.phone,
-                }
-            )
+            party_defaults = {
+                'name': order.customer_name,
+                'party_type': Party.PartyType.CUSTOMER,
+                'phone': order.phone,
+            }
+            party_lookup = {'restaurant': order.restaurant, 'name__iexact': order.customer_name}
+            if order.branch:
+                party_lookup['branch'] = order.branch
+            party, _ = Party.objects.get_or_create(**party_lookup, defaults=party_defaults)
             order.party = party
 
         order.save()
@@ -673,3 +676,40 @@ class RestaurantSettingsViewSet(viewsets.ReadOnlyModelViewSet):
         obj = RestaurantSettings.get_settings(restaurant)
         serializer = self.get_serializer(obj)
         return Response(serializer.data)
+
+
+class BlogPostViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = BlogPost.objects.filter(is_published=True)
+    serializer_class = BlogPostSerializer
+    permission_classes = [AllowAny]
+    lookup_field = 'slug'
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        restaurant_id = self.request.query_params.get('restaurant')
+        restaurant_slug = self.request.query_params.get('restaurant_slug')
+        if restaurant_id:
+            qs = qs.filter(restaurant_id=restaurant_id)
+        elif restaurant_slug:
+            qs = qs.filter(restaurant__slug=restaurant_slug)
+        return qs
+
+    @action(detail=True, methods=['post'], permission_classes=[AllowAny])
+    def add_comment(self, request, slug=None):
+        post = self.get_object()
+        author_name = request.data.get('author_name')
+        author_email = request.data.get('author_email', '')
+        content = request.data.get('content')
+
+        if not author_name or not content:
+            return Response({'error': 'Name and comment text are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        comment = BlogComment.objects.create(
+            post=post,
+            author_name=author_name,
+            author_email=author_email,
+            content=content,
+            is_approved=False
+        )
+        serializer = BlogCommentSerializer(comment)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)

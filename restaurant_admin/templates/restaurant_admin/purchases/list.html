@@ -33,6 +33,7 @@
               <th class="text-end">Grand Total</th>
               <th>Payment Method</th>
               <th>Payment Status</th>
+              <th class="text-end">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -48,7 +49,7 @@
                 <span class="text-muted">-</span>
                 {% endif %}
               </td>
-              <td><span class="fw-semibold">{{ po.invoice_number }}</span></td>
+              <td><span class="fw-semibold font-monospace text-primary">{{ po.invoice_number }}</span></td>
               <td>
                 <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">
                   {{ po.items.all|length }} items
@@ -74,10 +75,23 @@
                 <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i> Partial</span>
                 {% endif %}
               </td>
+              <td class="text-end">
+                <button type="button" class="btn btn-sm btn-outline-primary fw-semibold"
+                        data-id="{{ po.id }}"
+                        data-invoice="{{ po.invoice_number|escapejs }}"
+                        data-date="{{ po.purchase_date|date:'Y-m-d' }}"
+                        data-supplier-name="{{ po.supplier_name|escapejs }}"
+                        data-supplier-gstin="{{ po.supplier_gstin|default:''|escapejs }}"
+                        data-payment-method="{{ po.payment_method }}"
+                        data-payment-status="{{ po.payment_status }}"
+                        onclick="editPurchaseFromBtn(this)">
+                  <i class="bi bi-pencil me-1"></i> Edit
+                </button>
+              </td>
             </tr>
             {% empty %}
             <tr>
-              <td colspan="9" class="text-center py-5 text-muted">
+              <td colspan="10" class="text-center py-5 text-muted">
                 <i class="bi bi-inbox fs-1 d-block mb-2 text-secondary opacity-50"></i>
                 No purchase entries found yet. 
                 <a href="{% url 'restaurant_admin:purchase_create' restaurant_slug=restaurant.slug %}" class="fw-bold">Create the first Goods Inward purchase</a>.
@@ -90,31 +104,117 @@
     </div>
 
     <!-- Pagination -->
-    {% if purchases.has_other_pages %}
-    <div class="card-footer bg-white py-3">
-      <nav aria-label="Purchase pagination">
-        <ul class="pagination pagination-sm justify-content-end mb-0">
-          {% if purchases.has_previous %}
-          <li class="page-item">
-            <a class="page-link" href="?page={{ purchases.previous_page_number }}">Previous</a>
-          </li>
-          {% endif %}
+    {% include 'restaurant_admin/includes/pagination.html' with page_obj=purchases %}
 
-          {% for num in purchases.paginator.page_range %}
-          <li class="page-item {% if purchases.number == num %}active{% endif %}">
-            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
-          </li>
-          {% endfor %}
 
-          {% if purchases.has_next %}
-          <li class="page-item">
-            <a class="page-link" href="?page={{ purchases.next_page_number }}">Next</a>
-          </li>
-          {% endif %}
-        </ul>
-      </nav>
-    </div>
-    {% endif %}
   </div>
 </div>
+
+<!-- Edit Purchase Modal -->
+<div class="modal fade" id="editPurchaseModal" tabindex="-1" aria-labelledby="editPurchaseModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <form id="editPurchaseForm" method="post" action="">
+        {% csrf_token %}
+        <div class="modal-header bg-light py-3">
+          <h5 class="modal-title fw-bold" id="editPurchaseModalLabel">
+            <i class="bi bi-pencil-square me-2 text-primary"></i>Edit Purchase Entry Details
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body p-4">
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold text-secondary small">Invoice / Voucher Ref No. <span class="text-danger">*</span></label>
+              <input type="text" class="form-control font-monospace fw-bold text-primary" name="invoice_number" id="editInvoiceNumber" required placeholder="e.g. PO-001/26-27">
+              <div class="form-text extra-small text-muted">Bill / Document sequence number</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold text-secondary small">Purchase Date <span class="text-danger">*</span></label>
+              <input type="date" class="form-control fw-semibold" name="purchase_date" id="editPurchaseDate" required>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold text-secondary small">Supplier Name <span class="text-danger">*</span></label>
+              <input type="text" class="form-control fw-semibold" name="supplier_name" id="editSupplierName" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold text-secondary small">Supplier GSTIN</label>
+              <input type="text" class="form-control font-monospace fw-semibold" name="supplier_gstin" id="editSupplierGstin" placeholder="e.g. 29ABCDE1234F1Z5">
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold text-secondary small">Payment Method</label>
+              <select class="form-select fw-semibold" name="payment_method" id="editPaymentMethod">
+                <option value="bank_transfer">Bank Transfer</option>
+                <option value="upi">UPI</option>
+                <option value="cash">Cash</option>
+                <option value="credit">Credit / On Account</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold text-secondary small">Payment Status</label>
+              <select class="form-select fw-semibold" name="payment_status" id="editPaymentStatus">
+                <option value="paid">Paid</option>
+                <option value="unpaid">Unpaid</option>
+                <option value="partial">Partial</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer bg-light py-2 px-4">
+          <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4 fw-semibold">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  let editPurchaseModalInstance = null;
+
+  document.addEventListener('DOMContentLoaded', function() {
+    const modalEl = document.getElementById('editPurchaseModal');
+    if (modalEl) {
+      editPurchaseModalInstance = new bootstrap.Modal(modalEl);
+    }
+  });
+
+  function editPurchaseFromBtn(btn) {
+    if (!btn) return;
+    editPurchase(
+      btn.dataset.id,
+      btn.dataset.invoice || '',
+      btn.dataset.date || '',
+      btn.dataset.supplierName || '',
+      btn.dataset.supplierGstin || '',
+      btn.dataset.paymentMethod || '',
+      btn.dataset.paymentStatus || ''
+    );
+  }
+
+  function editPurchase(id, invoiceNo, date, supplierName, supplierGstin, paymentMethod, paymentStatus) {
+    const baseUrl = "{% url 'restaurant_admin:purchase_edit' restaurant_slug=restaurant.slug pk=0 %}";
+    const actionUrl = baseUrl.replace('/0/edit/', '/' + id + '/edit/');
+    
+    document.getElementById('editPurchaseForm').action = actionUrl;
+    document.getElementById('editInvoiceNumber').value = invoiceNo;
+    document.getElementById('editPurchaseDate').value = date;
+    document.getElementById('editSupplierName').value = supplierName;
+    document.getElementById('editSupplierGstin').value = supplierGstin;
+    document.getElementById('editPaymentMethod').value = paymentMethod;
+    document.getElementById('editPaymentStatus').value = paymentStatus;
+
+    if (editPurchaseModalInstance) {
+      editPurchaseModalInstance.show();
+    }
+  }
+</script>
 {% endblock %}

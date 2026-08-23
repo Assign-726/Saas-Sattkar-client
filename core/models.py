@@ -107,13 +107,13 @@ class Table(models.Model):
 class Category(models.Model):
     name = models.CharField(max_length=100)
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='categories', null=True, blank=True)
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, related_name='categories', null=True, blank=True)
     description = models.TextField(blank=True, null=True)
     image = models.ImageField(upload_to='category_images', blank=True, null=True)
 
     class Meta:
         verbose_name_plural = 'Categories'
         ordering = ['name']
-        unique_together = ['name', 'restaurant']
 
     def __str__(self):
         return self.name
@@ -126,7 +126,6 @@ class SubCategory(models.Model):
     class Meta:
         verbose_name_plural = 'Subcategories'
         ordering = ['name']
-        unique_together = ['name', 'category']
 
     def __str__(self):
         return f"{self.category.name} - {self.name}"
@@ -148,17 +147,18 @@ class MenuItem(models.Model):
         choices=TaxType.choices,
         default=TaxType.GST_FOOD
     )
+    is_tax_inclusive = models.BooleanField(default=False)
     image = models.ImageField(upload_to='menu_images', blank=True, null=True)
     availability = models.BooleanField(default=True)
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='menu_items', null=True, blank=True)
     subcategory = models.ForeignKey(SubCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='menu_items')
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='menu_items', null=True, blank=True)
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, related_name='menu_items', null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['name']
-        unique_together = ['name', 'restaurant']
 
     def __str__(self):
         return f"{self.name} (${self.price})"
@@ -256,7 +256,8 @@ class Order(models.Model):
     @property
     def net_payable(self):
         from decimal import Decimal
-        return max(Decimal('0.00'), self.total_amount - (self.advance_amount_paid or Decimal('0.00')))
+        tot = self.total_amount if (self.total_amount is not None and self.total_amount > Decimal('0.00')) else self.calculate_bill_breakdown()['final_total']
+        return max(Decimal('0.00'), tot - (self.advance_amount_paid or Decimal('0.00')))
 
     @property
     def order_number(self):
@@ -411,7 +412,10 @@ class Order(models.Model):
 
         # Auto-link Party object if missing but customer_name and restaurant are set
         if not self.party and self.customer_name and self.customer_name.lower() not in ['guest', 'walk-in guest'] and self.restaurant:
-            matched_party = Party.objects.filter(restaurant=self.restaurant, name__iexact=self.customer_name).first()
+            party_qs = Party.objects.filter(restaurant=self.restaurant, name__iexact=self.customer_name)
+            if self.branch:
+                party_qs = party_qs.filter(branch=self.branch)
+            matched_party = party_qs.first()
             if matched_party:
                 self.party = matched_party
 
@@ -465,6 +469,8 @@ class Order(models.Model):
                 else:
                     # Direct inventory item fallback match
                     direct_items = InventoryItem.objects.filter(restaurant=self.restaurant, name__iexact=order_item.menu_item.name)
+                    if self.branch:
+                        direct_items = direct_items.filter(branch=self.branch)
                     for direct_item in direct_items:
                         qty_deduct = int(order_item.quantity)
                         direct_item.adjust(-qty_deduct)
@@ -509,9 +515,39 @@ class Order(models.Model):
         wine_subtotal = Decimal('0.00')
         gen_liquor_subtotal = Decimal('0.00')
 
+        # Fetch tax rates BEFORE the loop so inclusive items can reverse-calculate
+        settings_obj = RestaurantSettings.get_settings(self.restaurant)
+        branch_obj = self.branch or (self.restaurant.branches.first() if self.restaurant else None)
+
+        cgst_pct = Decimal(str(settings_obj.cgst_percentage or 0)) if bill_type != 'liquor' else Decimal('0.00')
+        sgst_pct = Decimal(str(settings_obj.sgst_percentage or 0)) if bill_type != 'liquor' else Decimal('0.00')
+        service_pct = Decimal(str(settings_obj.service_charge_percentage or 0)) if bill_type != 'liquor' else Decimal('0.00')
+
+        vat_beer_pct = Decimal(str(branch_obj.vat_beer_rate if branch_obj else 60.00)) if bill_type != 'food' else Decimal('0.00')
+        vat_imfl_pct = Decimal(str(branch_obj.vat_imfl_rate if branch_obj else 65.00)) if bill_type != 'food' else Decimal('0.00')
+        vat_wine_pct = Decimal(str(branch_obj.vat_wine_rate if branch_obj else 60.00)) if bill_type != 'food' else Decimal('0.00')
+        vat_gen_pct = Decimal(str(getattr(settings_obj, 'vat_percentage', 20) or 20)) if bill_type != 'food' else Decimal('0.00')
+
         for item in self.items.all():
             line_total = item.subtotal
             ttype = item.menu_item.tax_type if item.menu_item else MenuItem.TaxType.GST_FOOD
+            is_inclusive = item.menu_item.is_tax_inclusive if item.menu_item else False
+
+            # For tax-inclusive items, reverse-calculate to extract the base taxable value
+            if is_inclusive:
+                if ttype == MenuItem.TaxType.VAT_BEER:
+                    rate = vat_beer_pct
+                elif ttype == MenuItem.TaxType.VAT_IMFL:
+                    rate = vat_imfl_pct
+                elif ttype == MenuItem.TaxType.VAT_WINE:
+                    rate = vat_wine_pct
+                elif ttype == MenuItem.TaxType.VAT_LIQUOR:
+                    rate = vat_gen_pct
+                else:
+                    rate = cgst_pct + sgst_pct
+                # Taxable Value = (Inclusive Amount × 100) / (100 + Tax Rate)
+                if rate > Decimal('0'):
+                    line_total = (line_total * Decimal('100')) / (Decimal('100') + rate)
 
             if bill_type == 'food':
                 if ttype == MenuItem.TaxType.GST_FOOD:
@@ -548,18 +584,6 @@ class Order(models.Model):
                 discount = Decimal('0.00')
         discount = max(Decimal('0.00'), min(discount, gross_subtotal))
 
-        settings_obj = RestaurantSettings.get_settings(self.restaurant)
-        branch_obj = self.branch or (self.restaurant.branches.first() if self.restaurant else None)
-
-        cgst_pct = Decimal(str(settings_obj.cgst_percentage or 0)) if bill_type != 'liquor' else Decimal('0.00')
-        sgst_pct = Decimal(str(settings_obj.sgst_percentage or 0)) if bill_type != 'liquor' else Decimal('0.00')
-        service_pct = Decimal(str(settings_obj.service_charge_percentage or 0)) if bill_type != 'liquor' else Decimal('0.00')
-
-        vat_beer_pct = Decimal(str(branch_obj.vat_beer_rate if branch_obj else 60.00)) if bill_type != 'food' else Decimal('0.00')
-        vat_imfl_pct = Decimal(str(branch_obj.vat_imfl_rate if branch_obj else 65.00)) if bill_type != 'food' else Decimal('0.00')
-        vat_wine_pct = Decimal(str(branch_obj.vat_wine_rate if branch_obj else 60.00)) if bill_type != 'food' else Decimal('0.00')
-        vat_gen_pct = Decimal(str(getattr(settings_obj, 'vat_percentage', 20) or 20)) if bill_type != 'food' else Decimal('0.00')
-
         sc_taxable = getattr(settings_obj, 'service_charge_taxable', True)
         coupon_before_tax = getattr(settings_obj, 'coupon_applies_before_tax', True)
 
@@ -590,12 +614,42 @@ class Order(models.Model):
 
         discounted_liquor_subtotal = discounted_beer + discounted_imfl + discounted_wine + discounted_gen_liquor
 
+        # Custom / Additional Charges Calculation
+        custom_charges_list = []
+        custom_charges_total = Decimal('0.00')
+        taxable_custom_charges_base = Decimal('0.00')
+
+        if self.restaurant:
+            from core.models import CustomCharge
+            charges_qs = CustomCharge.objects.filter(
+                restaurant=self.restaurant,
+                is_active=True,
+                is_auto_applied=True
+            )
+            if self.branch:
+                from django.db.models import Q
+                charges_qs = charges_qs.filter(Q(branch=self.branch) | Q(branch__isnull=True))
+            for cc in charges_qs:
+                types = cc.applied_order_types or ['dine_in', 'takeaway', 'delivery']
+                if self.order_type in types:
+                    amt = cc.calculate_amount(gross_subtotal)
+                    custom_charges_total += amt
+                    if cc.is_taxable:
+                        taxable_custom_charges_base += amt
+                    custom_charges_list.append({
+                        'name': cc.charge_name,
+                        'type': cc.charge_type,
+                        'value': float(cc.value),
+                        'amount': amt,
+                        'is_taxable': cc.is_taxable,
+                    })
+
         service_charge = (discounted_food_subtotal * service_pct) / Decimal('100') if bill_type != 'liquor' else Decimal('0.00')
 
         if sc_taxable and bill_type != 'liquor':
-            gst_base = discounted_food_subtotal + service_charge
+            gst_base = discounted_food_subtotal + service_charge + taxable_custom_charges_base
         else:
-            gst_base = discounted_food_subtotal
+            gst_base = discounted_food_subtotal + taxable_custom_charges_base
 
         cgst = (gst_base * cgst_pct) / Decimal('100')
         sgst = (gst_base * sgst_pct) / Decimal('100')
@@ -607,7 +661,7 @@ class Order(models.Model):
         vat_amount = beer_vat + imfl_vat + wine_vat + gen_vat
 
         from decimal import ROUND_HALF_UP
-        raw_total = discounted_food_subtotal + service_charge + cgst + sgst + discounted_liquor_subtotal + vat_amount
+        raw_total = discounted_food_subtotal + service_charge + custom_charges_total + cgst + sgst + discounted_liquor_subtotal + vat_amount
         rounded_total = raw_total.quantize(Decimal('1'), rounding=ROUND_HALF_UP)
         round_off_amount = (rounded_total - raw_total).quantize(Decimal('0.01'))
 
@@ -617,11 +671,14 @@ class Order(models.Model):
             'beer_subtotal': beer_subtotal.quantize(Decimal('0.01')),
             'imfl_subtotal': imfl_subtotal.quantize(Decimal('0.01')),
             'wine_subtotal': wine_subtotal.quantize(Decimal('0.01')),
+            'gen_liquor_subtotal': gen_liquor_subtotal.quantize(Decimal('0.01')),
             'liquor_subtotal': total_liquor_subtotal.quantize(Decimal('0.01')),
             'gross_subtotal': gross_subtotal.quantize(Decimal('0.01')),
             'discounted_food_subtotal': discounted_food_subtotal.quantize(Decimal('0.01')),
             'discounted_liquor_subtotal': discounted_liquor_subtotal.quantize(Decimal('0.01')),
             'discount_amount': discount.quantize(Decimal('0.01')),
+            'custom_charges_total': custom_charges_total.quantize(Decimal('0.01')),
+            'custom_charges_list': custom_charges_list,
             'service_charge': service_charge.quantize(Decimal('0.01')),
             'service_charge_percentage': service_pct,
             'gst_base': gst_base.quantize(Decimal('0.01')),
@@ -779,6 +836,76 @@ class RestaurantSettings(models.Model):
         return obj
 
 
+class DocumentSequenceSetting(models.Model):
+    class DocumentType(models.TextChoices):
+        SALES = 'sales', _('Sales / POS')
+        PURCHASE = 'purchase', _('Purchase')
+        RECEIPT = 'receipt', _('Advance Receipt')
+        CHALLAN = 'challan', _('Delivery Challan')
+
+    class GenerationMode(models.TextChoices):
+        AUTOMATIC = 'automatic', _('Automatic')
+        MANUAL_OVERRIDE = 'manual_override', _('Manual Override')
+        MANUAL = 'manual', _('Manual')
+
+    DEFAULT_PREFIXES = {
+        'sales': 'INV-',
+        'purchase': 'PO-',
+        'receipt': 'REC-',
+        'challan': 'DC-',
+    }
+
+    restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='document_sequence_settings')
+    document_type = models.CharField(max_length=20, choices=DocumentType.choices)
+    generation_mode = models.CharField(max_length=20, choices=GenerationMode.choices, default=GenerationMode.AUTOMATIC)
+    prefix = models.CharField(max_length=50, blank=True, null=True, default='')
+    suffix = models.CharField(max_length=50, blank=True, null=True, default='')
+    padding_digits = models.PositiveIntegerField(default=3)
+    valid_from = models.DateField(null=True, blank=True)
+    valid_to = models.DateField(null=True, blank=True)
+    current_counter = models.PositiveIntegerField(default=1)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'document_sequence_settings'
+        unique_together = ['restaurant', 'document_type']
+        verbose_name = 'Document Sequence Setting'
+        verbose_name_plural = 'Document Sequence Settings'
+
+    def __str__(self):
+        return f"{self.restaurant.name} - {self.get_document_type_display()} ({self.generation_mode}): {self.format_number()}"
+
+    def format_number(self, counter=None):
+        if counter is None:
+            counter = self.current_counter
+        pref = self.prefix if self.prefix is not None else ""
+        suff = self.suffix if self.suffix is not None else ""
+        digits = self.padding_digits if self.padding_digits is not None else 3
+        if digits > 0:
+            num_str = str(counter).zfill(digits)
+        else:
+            num_str = str(counter)
+        return f"{pref}{num_str}{suff}"
+
+    @classmethod
+    def get_sequence_setting(cls, restaurant, document_type):
+        default_pref = cls.DEFAULT_PREFIXES.get(document_type, '')
+        setting, _ = cls.objects.get_or_create(
+            restaurant=restaurant,
+            document_type=document_type,
+            defaults={
+                'generation_mode': cls.GenerationMode.AUTOMATIC,
+                'prefix': default_pref,
+                'suffix': '',
+                'padding_digits': 3,
+                'current_counter': 1,
+            }
+        )
+        return setting
+
+
 def default_applied_order_types():
     return ['dine_in', 'takeaway', 'delivery']
 
@@ -789,6 +916,7 @@ class CustomCharge(models.Model):
         PERCENTAGE = 'percentage', _('Percentage (%)')
 
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='custom_charges')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='custom_charges')
     charge_name = models.CharField(max_length=150, help_text="e.g. Packaging Charge, Private Dining Fee")
     charge_type = models.CharField(max_length=20, choices=ChargeType.choices, default=ChargeType.FLAT)
     value = models.DecimalField(max_digits=10, decimal_places=2, help_text="Flat currency amount or percentage value")
@@ -832,8 +960,9 @@ class Coupon(models.Model):
     active = models.BooleanField(default=True)
     max_uses = models.PositiveIntegerField(null=True, blank=True, help_text="Total number of times this coupon can be used. Leave blank for unlimited.")
     used_count = models.PositiveIntegerField(default=0)
-    # Scope to a restaurant (optional). If null, valid for all restaurants.
+    # Scope to a restaurant / branch (optional).
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, null=True, blank=True, related_name='coupons')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='coupons')
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -902,6 +1031,19 @@ class RestaurantLanding(models.Model):
     about_bullet_3 = models.CharField(max_length=255, blank=True, default="")
     about_body = models.TextField(blank=True)
     about_image = models.ImageField(upload_to='landing/about/', blank=True, null=True)
+    about_video_url = models.CharField(max_length=300, blank=True, default="https://www.youtube.com/embed/SXJqEnauNaY")
+    about_stat_num_1 = models.CharField(max_length=50, blank=True, default="600+")
+    about_stat_label_1 = models.CharField(max_length=100, blank=True, default="Monthly Visitors")
+    about_stat_desc_1 = models.TextField(blank=True, default="Welcoming thousands of gourmet lovers every month with unparalleled dining joy.")
+    about_stat_num_2 = models.CharField(max_length=50, blank=True, default="450+")
+    about_stat_label_2 = models.CharField(max_length=100, blank=True, default="Positive Reviews")
+    about_stat_desc_2 = models.TextField(blank=True, default="High-end customer satisfaction rated outstandingly on popular platforms.")
+    about_stat_num_3 = models.CharField(max_length=50, blank=True, default="135+")
+    about_stat_label_3 = models.CharField(max_length=100, blank=True, default="Secret Recipes")
+    about_stat_desc_3 = models.TextField(blank=True, default="Handcrafted dynamic configurations and ingredients passed through generations.")
+    about_stat_num_4 = models.CharField(max_length=50, blank=True, default="25+")
+    about_stat_label_4 = models.CharField(max_length=100, blank=True, default="Awards & Honours")
+    about_stat_desc_4 = models.TextField(blank=True, default="Acclaimed culinary achievements recognized by major hospitality leagues.")
     address = models.TextField(blank=True)
     phone = models.CharField(max_length=50, blank=True)
     email = models.EmailField(blank=True, default="")
@@ -1006,6 +1148,101 @@ class Review(models.Model):
         return f"{self.name} ({self.stars}★)"
 
 
+CONFIG_CHOICES = [('inherit', 'Inherit from Parent'), ('override', 'Override Parent')]
+
+
+class InventoryCategory(models.Model):
+    class TaxabilityType(models.TextChoices):
+        TAXABLE = 'taxable', _('Taxable')
+        EXEMPTED = 'exempted', _('Exempted')
+        NIL_RATED = 'nil_rated', _('Nil Rated')
+        NON_GST_EXCISE = 'non_gst_excise', _('Non-GST / Excise')
+
+    restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='inventory_categories', null=True, blank=True)
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='inventory_categories')
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subcategories')
+    name = models.CharField(max_length=150)
+    tax_configuration = models.CharField(max_length=20, choices=CONFIG_CHOICES, default='inherit')
+    default_gst_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    default_hsn_code = models.CharField(max_length=50, null=True, blank=True)
+    taxability = models.CharField(max_length=50, null=True, blank=True)
+
+    # Additional default fields (nullable)
+    default_unit = models.CharField(max_length=50, null=True, blank=True)
+    default_warehouse = models.CharField(max_length=100, null=True, blank=True)
+    valuation_method = models.CharField(max_length=50, null=True, blank=True)
+    expense_account = models.CharField(max_length=100, null=True, blank=True)
+    permission_group = models.CharField(max_length=100, null=True, blank=True)
+
+    taxability_type = models.CharField(
+        max_length=20,
+        choices=TaxabilityType.choices,
+        default=TaxabilityType.TAXABLE,
+        null=True, blank=True
+    )
+    hsn_sac_code = models.CharField(max_length=50, blank=True, null=True)
+    gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Inventory Category'
+        verbose_name_plural = 'Inventory Categories'
+        unique_together = ['restaurant', 'branch', 'name', 'parent']
+
+    def __str__(self):
+        if self.parent:
+            return f"{self.parent.name} > {self.name}"
+        return self.name
+
+    def resolve_category_value(self, field_name):
+        target_attrs = [field_name]
+        if field_name == 'default_gst_rate':
+            target_attrs.append('gst_rate')
+        elif field_name == 'default_hsn_code':
+            target_attrs.append('hsn_sac_code')
+        elif field_name == 'taxability':
+            target_attrs.append('taxability_type')
+
+        val = None
+        for attr in target_attrs:
+            curr_val = getattr(self, attr, None)
+            if curr_val is not None and curr_val != '':
+                val = curr_val
+                break
+
+        if self.tax_configuration == 'override' and val is not None:
+            return val
+
+        if self.parent:
+            parent_val = self.parent.resolve_category_value(field_name)
+            if parent_val is not None and parent_val != '':
+                return parent_val
+
+        if val is not None:
+            return val
+
+        if self.restaurant and hasattr(self.restaurant, 'get_company_default'):
+            comp_val = self.restaurant.get_company_default(field_name)
+            if comp_val is not None and comp_val != '':
+                return comp_val
+
+        return None
+
+    @property
+    def effective_hsn_code(self):
+        return self.resolve_category_value('default_hsn_code')
+
+    @property
+    def effective_gst_rate(self):
+        return self.resolve_category_value('default_gst_rate')
+
+    @property
+    def effective_taxability(self):
+        return self.resolve_category_value('taxability')
+
+
 class InventoryItem(models.Model):
     class CategoryChoices(models.TextChoices):
         RAW_INGREDIENTS = 'raw_ingredients', _('Raw Ingredients')
@@ -1032,24 +1269,22 @@ class InventoryItem(models.Model):
 
     name = models.CharField(max_length=150)
     sku = models.CharField(max_length=100, blank=True)
-    category = models.CharField(
-        max_length=50,
-        default=CategoryChoices.RAW_INGREDIENTS,
-        blank=True
-    )
+    category = models.ForeignKey('InventoryCategory', on_delete=models.SET_NULL, null=True, blank=True, related_name='items')
     unit = models.CharField(max_length=50, blank=True)
     quantity = models.IntegerField(default=0)
     reorder_level = models.IntegerField(default=5)
-    cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, null=True, blank=True)
     price_per_unit = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     selling_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    tax_configuration = models.CharField(max_length=20, choices=CONFIG_CHOICES, default='inherit')
     taxability_type = models.CharField(
         max_length=20,
         choices=TaxabilityType.choices,
-        default=TaxabilityType.TAXABLE
+        default=TaxabilityType.TAXABLE,
+        null=True, blank=True
     )
     hsn_sac_code = models.CharField(max_length=20, blank=True, null=True)
-    gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, null=True, blank=True)
     hsn_description = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='inventory_items', null=True, blank=True)
@@ -1060,7 +1295,7 @@ class InventoryItem(models.Model):
 
     class Meta:
         ordering = ['name']
-        unique_together = ['name', 'restaurant']
+        unique_together = ['restaurant', 'branch', 'name']
 
     def __str__(self):
         return self.name
@@ -1077,6 +1312,54 @@ class InventoryItem(models.Model):
     @property
     def is_low_stock(self):
         return (self.quantity or 0) <= (self.reorder_level or 0)
+
+    @property
+    def effective_hsn_code(self):
+        return self.get_effective_value('default_hsn_code')
+
+    @property
+    def effective_gst_rate(self):
+        return self.get_effective_value('default_gst_rate')
+
+    @property
+    def effective_taxability(self):
+        return self.get_effective_value('taxability')
+
+    def get_effective_value(self, field_name):
+        target_attrs = [field_name]
+        if field_name == 'default_gst_rate':
+            target_attrs.append('gst_rate')
+        elif field_name == 'default_hsn_code':
+            target_attrs.append('hsn_sac_code')
+        elif field_name == 'taxability':
+            target_attrs.append('taxability_type')
+
+        # 1. Check Item Override
+        if self.tax_configuration == 'override':
+            for attr in target_attrs:
+                val = getattr(self, attr, None)
+                if val is not None and val != '':
+                    return val
+
+        # 2. Traverse Category Tree
+        if self.category:
+            cat_val = self.category.resolve_category_value(field_name)
+            if cat_val is not None and cat_val != '':
+                return cat_val
+
+        # 3. Check Company Default
+        if self.restaurant and hasattr(self.restaurant, 'get_company_default'):
+            comp_val = self.restaurant.get_company_default(field_name)
+            if comp_val is not None:
+                return comp_val
+
+        # 4. Fallback to direct item value
+        for attr in target_attrs:
+            val = getattr(self, attr, None)
+            if val is not None and val != '':
+                return val
+
+        return None
 
 
 class MenuItemIngredient(models.Model):
@@ -1095,7 +1378,7 @@ class Party(models.Model):
     class PartyType(models.TextChoices):
         VENDOR = 'vendor', _('Vendor (Seller)')
         CUSTOMER = 'customer', _('Customer (Buyer)')
-        BOTH = 'both', _('Both (Vendor & Customer)')
+        # BOTH = 'both', _('Both (Vendor & Customer)')
 
     class BalanceType(models.TextChoices):
         PAYABLE = 'payable', _('Payable (To Pay)')
@@ -1108,6 +1391,7 @@ class Party(models.Model):
         OVERSEAS = 'overseas', _('Overseas / Foreign Supplier')
 
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='parties', null=True, blank=True)
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='parties')
     name = models.CharField(max_length=200)
     party_type = models.CharField(max_length=20, choices=PartyType.choices, default=PartyType.VENDOR)
     phone = models.CharField(max_length=50, blank=True, null=True)
@@ -1159,17 +1443,31 @@ class Party(models.Model):
     @property
     def total_paid(self):
         from decimal import Decimal
-        from django.db.models import Sum
+        from django.db.models import Sum, Q
+        from core.models import AdvanceReceipt
+
         po_paid = Decimal(str(self.purchase_orders.filter(payment_status__in=['paid', 'P']).aggregate(s=Sum('grand_total'))['s'] or 0))
-        sales_paid_explicit = Decimal(str(self.get_sales_queryset().exclude(status='C').aggregate(s=Sum('paid_amount'))['s'] or 0))
-        sales_paid_legacy = Decimal(str(self.get_sales_queryset().filter(paid_amount=0, payment_status__in=['paid', 'P']).exclude(status='C').aggregate(s=Sum('total_amount'))['s'] or 0))
-        sales_paid = sales_paid_explicit + sales_paid_legacy
+        sales_qs = self.get_sales_queryset().exclude(status='C')
+
+        sales_paid_direct = Decimal(str(sales_qs.aggregate(s=Sum('paid_amount'))['s'] or 0))
+        sales_paid_advance = Decimal(str(sales_qs.aggregate(s=Sum('advance_amount_paid'))['s'] or 0))
+        sales_paid_legacy = Decimal(str(sales_qs.filter(paid_amount=0, advance_amount_paid=0, payment_status__in=['paid', 'P']).aggregate(s=Sum('total_amount'))['s'] or 0))
+
+        arc_qs = AdvanceReceipt.objects.filter(restaurant=self.restaurant) if self.restaurant else AdvanceReceipt.objects.all()
+        cond = Q(party=self) | Q(customer_name__iexact=self.name)
+        if self.phone:
+            cond |= Q(phone=self.phone)
+        unlinked_advances = Decimal(str(arc_qs.filter(cond, status=AdvanceReceipt.ReceiptStatus.ACTIVE).aggregate(s=Sum('advance_amount'))['s'] or 0))
+
+        sales_paid = sales_paid_direct + sales_paid_advance + sales_paid_legacy + unlinked_advances
         return po_paid + sales_paid
 
     @property
     def current_balance(self):
         from decimal import Decimal
-        from django.db.models import Sum
+        from django.db.models import Sum, Q
+        from core.models import AdvanceReceipt
+
         base_bal = Decimal(str(self.opening_balance or 0))
         
         unpaid_po = Decimal(str(self.purchase_orders.exclude(payment_status__in=['paid', 'P']).aggregate(s=Sum('grand_total'))['s'] or 0))
@@ -1177,12 +1475,18 @@ class Party(models.Model):
         sales_due_legacy = Decimal(str(self.get_sales_queryset().filter(due_amount=0).exclude(payment_status__in=['paid', 'P']).exclude(status='C').aggregate(s=Sum('total_amount'))['s'] or 0))
         unpaid_sales = sales_due_explicit + sales_due_legacy
 
+        arc_qs = AdvanceReceipt.objects.filter(restaurant=self.restaurant) if self.restaurant else AdvanceReceipt.objects.all()
+        cond = Q(party=self) | Q(customer_name__iexact=self.name)
+        if self.phone:
+            cond |= Q(phone=self.phone)
+        unlinked_advances = Decimal(str(arc_qs.filter(cond, status=AdvanceReceipt.ReceiptStatus.ACTIVE).aggregate(s=Sum('advance_amount'))['s'] or 0))
+
         if self.party_type == Party.PartyType.CUSTOMER:
-            net = (base_bal if self.balance_type == Party.BalanceType.RECEIVABLE else -base_bal) + unpaid_sales
+            net = (base_bal if self.balance_type == Party.BalanceType.RECEIVABLE else -base_bal) + unpaid_sales - unlinked_advances
         elif self.party_type == Party.PartyType.VENDOR:
             net = (base_bal if self.balance_type == Party.BalanceType.PAYABLE else -base_bal) + unpaid_po
         else: # both
-            net_receivable = (base_bal if self.balance_type == Party.BalanceType.RECEIVABLE else Decimal('0')) + unpaid_sales
+            net_receivable = (base_bal if self.balance_type == Party.BalanceType.RECEIVABLE else Decimal('0')) + unpaid_sales - unlinked_advances
             net_payable = (base_bal if self.balance_type == Party.BalanceType.PAYABLE else Decimal('0')) + unpaid_po
             net = net_receivable - net_payable
 
@@ -1191,6 +1495,7 @@ class Party(models.Model):
 
 class Supplier(models.Model):
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='suppliers', null=True, blank=True)
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='suppliers')
     name = models.CharField(max_length=150)
     gstin = models.CharField(max_length=50, blank=True, null=True)
     phone = models.CharField(max_length=50, blank=True, null=True)
@@ -1219,6 +1524,7 @@ class PurchaseOrder(models.Model):
         PARTIAL = 'partial', _('Partial')
 
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='purchase_orders')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='purchase_orders')
     party = models.ForeignKey(Party, on_delete=models.SET_NULL, null=True, blank=True, related_name='purchase_orders')
     supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True, related_name='purchase_orders')
     supplier_name = models.CharField(max_length=150)
@@ -1246,6 +1552,8 @@ class PurchaseOrderItem(models.Model):
     inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, related_name='purchase_items')
     quantity = models.DecimalField(max_digits=10, decimal_places=2)
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2)
+    gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, null=True, blank=True)
+    hsn_code = models.CharField(max_length=50, null=True, blank=True)
     line_total = models.DecimalField(max_digits=12, decimal_places=2)
 
     class Meta:
@@ -1284,14 +1592,21 @@ class AdvanceReceipt(models.Model):
         REDEEMED = 'redeemed', _('Redeemed / Converted')
         CANCELLED = 'cancelled', _('Cancelled')
 
+    class ReceiptType(models.TextChoices):
+        ADVANCE = 'advance', _('Advance Booking')
+        ON_ACCOUNT = 'on_account', _('On-Account Payment')
+
     class PaymentMethod(models.TextChoices):
         UPI = 'upi', _('UPI')
         CASH = 'cash', _('Cash')
         CARD = 'card', _('Card')
 
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='advance_receipts')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='advance_receipts')
     receipt_no = models.CharField(max_length=50, db_index=True)
-    booking_ref = models.CharField(max_length=50, db_index=True)
+    receipt_type = models.CharField(max_length=20, choices=ReceiptType.choices, default=ReceiptType.ON_ACCOUNT)
+    reference_number = models.CharField(max_length=100, blank=True, default='', db_index=True)
+    booking_ref = models.CharField(max_length=50, db_index=True, blank=True, default='')
     party = models.ForeignKey('Party', on_delete=models.SET_NULL, null=True, blank=True, related_name='advance_receipts')
     customer_name = models.CharField(max_length=200)
     phone = models.CharField(max_length=50, blank=True)
@@ -1327,14 +1642,22 @@ class AdvanceReceipt(models.Model):
                     next_num += 1
                     self.receipt_no = f"REC-{next_num}"
 
-        if not self.booking_ref and self.restaurant:
-            with transaction.atomic():
-                last_receipt = AdvanceReceipt.objects.filter(restaurant=self.restaurant).order_by('-id').first()
-                next_num = (last_receipt.id + 1001) if last_receipt else 1001
-                self.booking_ref = f"BK-{next_num}"
-                while AdvanceReceipt.objects.filter(restaurant=self.restaurant, booking_ref=self.booking_ref).exists():
-                    next_num += 1
-                    self.booking_ref = f"BK-{next_num}"
+        if not self.reference_number and self.receipt_type == self.ReceiptType.ADVANCE:
+            if self.booking_ref:
+                self.reference_number = self.booking_ref
+            elif self.order and self.order.order_number:
+                self.reference_number = self.order.order_number
+            elif self.restaurant:
+                with transaction.atomic():
+                    last_receipt = AdvanceReceipt.objects.filter(restaurant=self.restaurant).order_by('-id').first()
+                    next_num = (last_receipt.id + 1001) if last_receipt else 1001
+                    self.reference_number = f"ORD-{next_num}"
+                    while AdvanceReceipt.objects.filter(restaurant=self.restaurant, reference_number=self.reference_number).exists():
+                        next_num += 1
+                        self.reference_number = f"ORD-{next_num}"
+
+        if not self.booking_ref and self.reference_number:
+            self.booking_ref = self.reference_number
 
         super().save(*args, **kwargs)
 
@@ -1412,11 +1735,31 @@ class DeliveryChallan(models.Model):
 
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='delivery_challans')
     challan_no = models.CharField(max_length=50, db_index=True)
-    from_branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='challans_dispatched', null=True, blank=True)
-    to_branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name='challans_received')
+    from_branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.SET_NULL, related_name='challans_dispatched', null=True, blank=True)
+    to_branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.SET_NULL, related_name='challans_received', null=True, blank=True)
+    
+    # Transport Details
+    reason_for_transport = models.CharField(max_length=100, default='Branch Transfer')
+    transport_mode = models.CharField(max_length=50, default='Road')
+    vehicle_no = models.CharField(max_length=50, blank=True, null=True)
+
+    # Receiver Details
+    receiver_party = models.ForeignKey('Party', on_delete=models.SET_NULL, null=True, blank=True, related_name='delivery_challans')
+    receiver_name = models.CharField(max_length=200, blank=True, null=True)
+    receiver_address = models.TextField(blank=True, null=True)
+    receiver_state = models.CharField(max_length=100, blank=True, null=True)
+    receiver_gstin = models.CharField(max_length=15, blank=True, null=True)
+
     dispatch_date = models.DateField()
     status = models.CharField(max_length=20, choices=StatusChoices.choices, default=StatusChoices.IN_TRANSIT)
+    
+    # Financial & Tax Summaries
     total_value = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    cgst_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    sgst_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    igst_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    total_tax = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
     notes = models.TextField(blank=True, null=True)
     created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1427,19 +1770,98 @@ class DeliveryChallan(models.Model):
         ordering = ['-dispatch_date', '-created_at']
 
     def __str__(self):
-        from_str = self.from_branch.branch_name if self.from_branch else "Main Store"
-        return f"DC #{self.challan_no} ({from_str} -> {self.to_branch.branch_name})"
+        dest = self.receiver_name or (self.to_branch.branch_name if self.to_branch else 'Destination')
+        return f"DC #{self.challan_no} -> {dest}"
 
 
 class DeliveryChallanItem(models.Model):
     challan = models.ForeignKey(DeliveryChallan, on_delete=models.CASCADE, related_name='items')
-    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, related_name='challan_items')
+    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, related_name='challan_items', null=True, blank=True)
+    menu_item = models.ForeignKey('MenuItem', on_delete=models.SET_NULL, null=True, blank=True, related_name='challan_items')
+    hsn_code = models.CharField(max_length=20, blank=True, null=True)
     quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    unit = models.CharField(max_length=20, blank=True, null=True)
     unit_value = models.DecimalField(max_digits=10, decimal_places=2)
     line_total = models.DecimalField(max_digits=12, decimal_places=2)
 
     class Meta:
         db_table = 'delivery_challan_items'
 
+    @property
+    def item_name(self):
+        if self.menu_item:
+            return self.menu_item.name
+        elif self.inventory_item:
+            return self.inventory_item.name
+        return "Unknown Item"
+
     def __str__(self):
-        return f"{self.quantity} x {self.inventory_item.name} @ ₹{self.unit_value}"
+        return f"{self.quantity} {self.unit or ''} x {self.item_name} @ ₹{self.unit_value}"
+
+
+class BlogPost(models.Model):
+    class ShapePattern(models.TextChoices):
+        ARCH = 'arch', _('Arch Shape')
+        RECTANGLE = 'rectangle', _('Rectangular Shape')
+
+    restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='blog_posts')
+    title = models.CharField(max_length=250)
+    slug = models.SlugField(max_length=250, blank=True)
+    category = models.CharField(max_length=150, default="Deserts, Salads", help_text="Comma-separated or main category")
+    author = models.CharField(max_length=100, default="Admin")
+    cover_image = models.ImageField(upload_to='blogs/covers/', blank=True, null=True)
+    shape_pattern = models.CharField(max_length=20, choices=ShapePattern.choices, default=ShapePattern.ARCH)
+    excerpt = models.TextField(blank=True, help_text="Short summary for blog card and SEO description")
+    intro_content = models.TextField(blank=True, help_text="Introductory paragraph")
+    section_1_title = models.CharField(max_length=250, blank=True)
+    section_1_text = models.TextField(blank=True)
+    quote = models.TextField(blank=True, help_text="Highlighted quote in blog post")
+    section_2_title = models.CharField(max_length=250, blank=True)
+    section_2_text = models.TextField(blank=True)
+    gallery_image_1 = models.ImageField(upload_to='blogs/gallery/', blank=True, null=True)
+    gallery_image_2 = models.ImageField(upload_to='blogs/gallery/', blank=True, null=True)
+    tags = models.CharField(max_length=250, blank=True, help_text="Comma-separated tags e.g. FOOD, ORGANIC, PUB")
+    seo_title = models.CharField(max_length=255, blank=True)
+    seo_description = models.TextField(blank=True)
+    is_published = models.BooleanField(default=True)
+    display_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['display_order', '-created_at']
+        verbose_name = 'Blog Post'
+        verbose_name_plural = 'Blog Posts'
+        unique_together = ['restaurant', 'slug']
+
+    def __str__(self):
+        return f"{self.title} ({self.restaurant.name})"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            from django.utils.text import slugify
+            base_slug = slugify(self.title)
+            slug = base_slug
+            count = 1
+            while BlogPost.objects.filter(restaurant=self.restaurant, slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{count}"
+                count += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
+
+
+class BlogComment(models.Model):
+    post = models.ForeignKey(BlogPost, on_delete=models.CASCADE, related_name='comments')
+    author_name = models.CharField(max_length=100)
+    author_email = models.EmailField(blank=True)
+    content = models.TextField()
+    is_approved = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Blog Comment'
+        verbose_name_plural = 'Blog Comments'
+
+    def __str__(self):
+        return f"Comment by {self.author_name} on {self.post.title}"

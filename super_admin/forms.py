@@ -3,7 +3,7 @@ from django.contrib.auth.models import User, Group
 import re
 from decimal import Decimal
 from super_admin.models import Restaurant, RestaurantUser, RestaurantBranch, GstRegistration, DocumentSeries
-from core.models import RestaurantLanding, GalleryImage, TeamMember, Review, Event, MenuItem, RestaurantSettings
+from core.models import RestaurantLanding, GalleryImage, TeamMember, Review, Event, MenuItem, RestaurantSettings, BlogPost
 
 
 STATE_CHOICES = [
@@ -155,22 +155,9 @@ class OnboardRestaurantForm(forms.Form):
     is_gst_registered = forms.BooleanField(required=False, initial=True, label="Is your business GST registered?")
     restaurant_is_active = forms.BooleanField(required=False, initial=True, label="Active")
 
-    # Admin fields
-    admin_first_name = forms.CharField(max_length=150, required=False, label="First name")
-    admin_last_name = forms.CharField(max_length=150, required=False, label="Last name")
-    admin_username = forms.CharField(max_length=150, label="Username*")
-    admin_email = forms.EmailField(required=False, label="Email")
-    admin_password = forms.CharField(widget=forms.PasswordInput, label="Password*")
-    admin_password_confirm = forms.CharField(widget=forms.PasswordInput, label="Confirm Password*")
-    is_primary_admin = forms.BooleanField(required=False, initial=True, label="Primary admin")
-
     def __init__(self, *args, instance=None, **kwargs):
         self.instance = instance
         super().__init__(*args, **kwargs)
-        if self.instance:
-            self.fields['admin_username'].required = False
-            self.fields['admin_password'].required = False
-            self.fields['admin_password_confirm'].required = False
 
     def clean_pan(self):
         pan = (self.cleaned_data.get("pan") or "").strip().upper()
@@ -197,26 +184,8 @@ class OnboardRestaurantForm(forms.Form):
             )
         return pan
 
-    def clean_admin_username(self):
-        username = self.cleaned_data.get("admin_username")
-        if not username and self.instance:
-            return ""
-        q = User.objects.filter(username=username)
-        if self.instance:
-            existing_ru = RestaurantUser.objects.filter(restaurant=self.instance, is_primary_admin=True).first()
-            if existing_ru and existing_ru.user:
-                q = q.exclude(pk=existing_ru.user.pk)
-        if q.exists():
-            raise forms.ValidationError("Username already exists")
-        return username
-
     def clean(self):
         cleaned = super().clean()
-        p1 = cleaned.get("admin_password")
-        p2 = cleaned.get("admin_password_confirm")
-        if (p1 or p2) and p1 != p2:
-            self.add_error("admin_password_confirm", "Passwords do not match")
-
         btype = cleaned.get("business_type")
         cin = (cleaned.get("cin_llpin") or "").strip()
         if btype in ["Private Limited", "Public Limited", "OPC"] and not cin:
@@ -228,13 +197,14 @@ class OnboardRestaurantForm(forms.Form):
     def save(self, instance=None, branches_data=None):
         trade_name = self.cleaned_data["trade_name"]
         legal_name = self.cleaned_data["legal_name"]
+        t_name = trade_name or legal_name
 
-        target_restaurant = instance or self.instance
+        target_restaurant = instance or self.instance or Restaurant.objects.filter(name__iexact=t_name).first()
         if target_restaurant:
             restaurant = target_restaurant
             restaurant.legal_name = legal_name
             restaurant.trade_name = trade_name
-            restaurant.name = trade_name or legal_name
+            restaurant.name = t_name
             restaurant.business_type = self.cleaned_data.get("business_type", "")
             restaurant.pan = self.cleaned_data.get("pan", "")
             restaurant.cin_llpin = self.cleaned_data.get("cin_llpin", "")
@@ -253,7 +223,7 @@ class OnboardRestaurantForm(forms.Form):
             restaurant = Restaurant.objects.create(
                 legal_name=legal_name,
                 trade_name=trade_name,
-                name=trade_name or legal_name,
+                name=t_name,
                 business_type=self.cleaned_data.get("business_type", ""),
                 pan=self.cleaned_data.get("pan", ""),
                 cin_llpin=self.cleaned_data.get("cin_llpin", ""),
@@ -374,67 +344,6 @@ class OnboardRestaurantForm(forms.Form):
             if target_restaurant and kept_branch_ids:
                 RestaurantBranch.objects.filter(restaurant=restaurant).exclude(id__in=kept_branch_ids).delete()
 
-        admin_uname = self.cleaned_data.get("admin_username")
-        admin_pass = self.cleaned_data.get("admin_password")
-        ru = None
-
-        if target_restaurant:
-            ru = RestaurantUser.objects.filter(restaurant=restaurant, is_primary_admin=True).first()
-            if ru and ru.user:
-                u = ru.user
-                if admin_uname:
-                    u.username = admin_uname
-                if self.cleaned_data.get("admin_email"):
-                    u.email = self.cleaned_data.get("admin_email")
-                if self.cleaned_data.get("admin_first_name"):
-                    u.first_name = self.cleaned_data.get("admin_first_name")
-                if self.cleaned_data.get("admin_last_name"):
-                    u.last_name = self.cleaned_data.get("admin_last_name")
-                if admin_pass:
-                    u.set_password(admin_pass)
-                u.save()
-            elif admin_uname:
-                user = User.objects.create_user(
-                    username=admin_uname,
-                    email=self.cleaned_data.get("admin_email") or self.cleaned_data.get("restaurant_email", ""),
-                    first_name=self.cleaned_data.get("admin_first_name", ""),
-                    last_name=self.cleaned_data.get("admin_last_name", ""),
-                )
-                user.is_staff = True
-                if admin_pass:
-                    user.set_password(admin_pass)
-                user.save()
-                try:
-                    group, _ = Group.objects.get_or_create(name="RestaurantAdmin")
-                    user.groups.add(group)
-                except Exception:
-                    pass
-                ru = RestaurantUser.objects.create(
-                    user=user,
-                    restaurant=restaurant,
-                    is_primary_admin=self.cleaned_data.get("is_primary_admin", True),
-                )
-        else:
-            user = User.objects.create_user(
-                username=admin_uname,
-                email=self.cleaned_data.get("admin_email") or self.cleaned_data.get("restaurant_email", ""),
-                first_name=self.cleaned_data.get("admin_first_name", ""),
-                last_name=self.cleaned_data.get("admin_last_name", ""),
-            )
-            user.is_staff = True
-            user.set_password(admin_pass)
-            user.save()
-            try:
-                group, _ = Group.objects.get_or_create(name="RestaurantAdmin")
-                user.groups.add(group)
-            except Exception:
-                pass
-            ru = RestaurantUser.objects.create(
-                user=user,
-                restaurant=restaurant,
-                is_primary_admin=self.cleaned_data.get("is_primary_admin", True),
-            )
-
         # Initialize RestaurantSettings with onboarded GST rates
         first_b = restaurant.branches.first()
         c_val = Decimal('2.50')
@@ -455,7 +364,7 @@ class OnboardRestaurantForm(forms.Form):
             }
         )
 
-        return restaurant, ru
+        return restaurant
 
 
 
@@ -510,6 +419,11 @@ class RestaurantLandingForm(forms.ModelForm):
             'logo', 'hero_title', 'hero_subtitle', 'hero_image', 'hero_video',
             'cta_text', 'cta_link',
             'about_heading', 'about_italic', 'about_bullet_1', 'about_bullet_2', 'about_bullet_3', 'about_body', 'about_image',
+            'about_video_url',
+            'about_stat_num_1', 'about_stat_label_1', 'about_stat_desc_1',
+            'about_stat_num_2', 'about_stat_label_2', 'about_stat_desc_2',
+            'about_stat_num_3', 'about_stat_label_3', 'about_stat_desc_3',
+            'about_stat_num_4', 'about_stat_label_4', 'about_stat_desc_4',
             'address', 'phone', 'email', 'opening_hours',
             'seo_title', 'seo_description',
             'show_hero', 'show_about', 'show_why_us', 'show_specials', 'show_events', 'show_gallery', 'show_team', 'show_reviews',
@@ -542,3 +456,15 @@ class EventForm(forms.ModelForm):
     class Meta:
         model = Event
         fields = ['title', 'price', 'image', 'description', 'bullet_1', 'bullet_2', 'bullet_3', 'display_order', 'active']
+
+
+class BlogPostForm(forms.ModelForm):
+    class Meta:
+        model = BlogPost
+        fields = [
+            'title', 'slug', 'category', 'author', 'cover_image', 'shape_pattern',
+            'excerpt', 'intro_content', 'section_1_title', 'section_1_text', 'quote',
+            'section_2_title', 'section_2_text', 'gallery_image_1', 'gallery_image_2',
+            'tags', 'seo_title', 'seo_description', 'is_published', 'display_order'
+        ]
+

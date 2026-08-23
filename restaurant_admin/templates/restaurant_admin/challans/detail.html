@@ -4,30 +4,30 @@
 {% block title %}Delivery Challan #{{ challan.challan_no }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid py-3">
   <!-- Action Bar -->
-  <div class="d-flex justify-content-between align-items-center mb-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3 no-print">
     <div>
-      <a href="{% url 'restaurant_admin:challan_list' restaurant_slug=restaurant.slug %}" class="text-decoration-none text-muted">
+      <a href="{% url 'restaurant_admin:challan_list' restaurant_slug=restaurant.slug %}" class="text-decoration-none text-muted small">
         <i class="bi bi-arrow-left me-1"></i> Back to Delivery Challans
       </a>
-      <h3 class="fw-bold mb-0 mt-1">Delivery Challan #{{ challan.challan_no }}</h3>
+      <h3 class="fw-bold mb-0 mt-1"><i class="bi bi-truck me-2 text-primary"></i>Delivery Challan #{{ challan.challan_no }}</h3>
     </div>
 
-    <div class="d-flex gap-2">
-      <button onclick="window.print()" class="btn btn-outline-secondary">
+    <div class="d-flex align-items-center gap-2">
+      <button onclick="window.print()" class="btn btn-primary shadow-sm fw-semibold">
         <i class="bi bi-printer me-1"></i> Print / Download PDF
       </button>
 
       {% if challan.status == 'in_transit' %}
-        <form action="{% url 'restaurant_admin:challan_mark_received' restaurant_slug=restaurant.slug pk=challan.id %}" method="POST" onsubmit="return confirm('Mark Delivery Challan #{{ challan.challan_no }} as RECEIVED and credit destination branch stock?');">
+        <form action="{% url 'restaurant_admin:challan_mark_received' restaurant_slug=restaurant.slug pk=challan.id %}" method="POST" onsubmit="return confirm('Mark Delivery Challan #{{ challan.challan_no }} as RECEIVED and credit destination stock?');" class="d-inline">
           {% csrf_token %}
-          <button type="submit" class="btn btn-success fw-semibold">
+          <button type="submit" class="btn btn-success fw-semibold shadow-sm">
             <i class="bi bi-check2-circle me-1"></i> Mark as Received
           </button>
         </form>
 
-        <form action="{% url 'restaurant_admin:challan_cancel' restaurant_slug=restaurant.slug pk=challan.id %}" method="POST" onsubmit="return confirm('Cancel Delivery Challan #{{ challan.challan_no }} and restore deducted inventory stock?');">
+        <form action="{% url 'restaurant_admin:challan_cancel' restaurant_slug=restaurant.slug pk=challan.id %}" method="POST" onsubmit="return confirm('Cancel Delivery Challan #{{ challan.challan_no }} and restore deducted inventory stock?');" class="d-inline">
           {% csrf_token %}
           <button type="submit" class="btn btn-outline-danger">
             <i class="bi bi-x-circle me-1"></i> Cancel Transfer
@@ -37,116 +37,163 @@
     </div>
   </div>
 
-  <!-- Challan Printable Document Sheet -->
-  <div class="card shadow border-0 p-4 p-md-5 bg-white" id="printableChallan">
-    <!-- Header info -->
-    <div class="row border-bottom pb-4 mb-4">
-      <div class="col-md-6">
-        <h4 class="fw-bold text-primary mb-1">{{ restaurant.name }}</h4>
-        <p class="text-muted mb-0 small">Inter-Branch Inventory Transfer Voucher</p>
-      </div>
+  <!-- Printable Delivery Challan Document Sheet (Matching Image 1) -->
+  <div class="card shadow border-0 bg-white mx-auto p-4 p-md-5" id="printableChallan" style="max-width: 900px; font-family: 'Courier New', Courier, monospace;">
+    
+    <!-- Title Banner -->
+    <div class="text-center py-2 mb-3 border-top border-bottom border-2 border-dark">
+      <h4 class="fw-bold mb-0 text-uppercase tracking-wide" style="letter-spacing: 2px;">DELIVERY CHALLAN (NOT AN INVOICE)</h4>
+    </div>
 
-      <div class="col-md-6 text-md-end">
-        <span class="fs-5 font-monospace fw-bold text-dark d-block">CHALLAN NO: {{ challan.challan_no }}</span>
-        <span class="text-muted small d-block">Dispatch Date: {{ challan.dispatch_date|date:"d F Y" }}</span>
-        <div class="mt-2">
-          {% if challan.status == 'in_transit' %}
-            <span class="badge bg-warning text-dark px-3 py-1">STATUS: IN TRANSIT</span>
-          {% elif challan.status == 'received' %}
-            <span class="badge bg-success px-3 py-1">STATUS: RECEIVED</span>
-          {% else %}
-            <span class="badge bg-danger px-3 py-1">STATUS: CANCELLED</span>
-          {% endif %}
+    <!-- Metadata Section -->
+    <div class="row g-2 mb-3 pb-2 border-bottom border-1 border-dark font-monospace fs-6">
+      <div class="col-7">
+        <div><strong>Challan No:</strong> <span class="fw-bold">{{ challan.challan_no }}</span></div>
+        <div><strong>Reason for Transport:</strong> {{ challan.reason_for_transport|default:"Branch Transfer" }}</div>
+      </div>
+      <div class="col-5 text-end">
+        <div><strong>Date:</strong> {{ challan.dispatch_date|date:"d-M-Y" }}</div>
+        <div><strong>Transport Mode:</strong> {{ challan.transport_mode|default:"Road" }} {% if challan.vehicle_no %}({{ challan.vehicle_no }}){% endif %}</div>
+      </div>
+    </div>
+
+    <!-- Sender vs Receiver Details Box -->
+    <div class="border border-dark p-3 mb-4 rounded-0 bg-light">
+      <div class="row font-monospace">
+        <!-- Sender -->
+        <div class="col-6 border-end border-dark pe-3">
+          <h6 class="fw-bold text-uppercase border-bottom border-secondary pb-1 mb-2">SENDER DETAILS</h6>
+          <div class="mb-1"><strong>Name:</strong> {{ sender_name|default:restaurant.name }}</div>
+          <div class="mb-1"><strong>Address:</strong> {{ sender_address|default:"Main Branch Premises" }}</div>
+          <div class="mb-1"><strong>State:</strong> {{ sender_state|default:"Rajasthan (08)" }}</div>
+          <div class="mb-1"><strong>GSTIN:</strong> {{ sender_gstin|default:"Unregistered" }}</div>
+        </div>
+
+        <!-- Receiver -->
+        <div class="col-6 ps-3">
+          <h6 class="fw-bold text-uppercase border-bottom border-secondary pb-1 mb-2">RECEIVER DETAILS</h6>
+          <div class="mb-1"><strong>Name:</strong> {{ receiver_name|default:challan.receiver_party.name|default:"Internal Branch / Godown" }}</div>
+          <div class="mb-1"><strong>Address:</strong> {{ receiver_address|default:"Main Storage Area" }}</div>
+          <div class="mb-1"><strong>State:</strong> {{ receiver_state|default:"Rajasthan (08)" }}</div>
+          <div class="mb-1"><strong>GSTIN:</strong> {{ receiver_gstin|default:sender_gstin|default:"Unregistered" }}</div>
         </div>
       </div>
     </div>
 
-    <!-- From & To Branches -->
-    <div class="row g-4 mb-4">
-      <div class="col-md-6">
-        <div class="p-3 bg-light rounded border">
-          <h6 class="fw-bold text-uppercase text-muted small mb-2"><i class="bi bi-geo-alt me-1"></i> Dispatching Branch (From)</h6>
-          <h5 class="fw-bold mb-1">
-            {% if challan.from_branch %}
-              {{ challan.from_branch.branch_name }}
-            {% else %}
-              Main Central Store / Kitchen
-            {% endif %}
-          </h5>
-          {% if challan.from_branch %}
-            <p class="mb-0 text-muted small">{{ challan.from_branch.address|default:"" }}</p>
-            {% if challan.from_branch.gstin %}<p class="mb-0 text-muted small font-monospace">GSTIN: {{ challan.from_branch.gstin }}</p>{% endif %}
-          {% endif %}
-        </div>
-      </div>
-
-      <div class="col-md-6">
-        <div class="p-3 bg-light rounded border">
-          <h6 class="fw-bold text-uppercase text-muted small mb-2"><i class="bi bi-building me-1"></i> Destination Branch (To)</h6>
-          <h5 class="fw-bold mb-1 text-primary">{{ challan.to_branch.branch_name }}</h5>
-          <p class="mb-0 text-muted small">{{ challan.to_branch.address|default:"" }}</p>
-          {% if challan.to_branch.gstin %}<p class="mb-0 text-muted small font-monospace">GSTIN: {{ challan.to_branch.gstin }}</p>{% endif %}
-        </div>
-      </div>
-    </div>
-
-    <!-- Items Table -->
-    <div class="table-responsive mb-4">
-      <table class="table table-bordered align-middle">
-        <thead class="table-light">
-          <tr>
-            <th style="width: 50px;">#</th>
-            <th>Inventory Item</th>
-            <th style="width: 120px;" class="text-center">Unit</th>
-            <th style="width: 120px;" class="text-end">Quantity</th>
-            <th style="width: 150px;" class="text-end">Unit Value (₹)</th>
-            <th style="width: 150px;" class="text-end">Total (₹)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for item in challan.items.all %}
+    <!-- Product Details Section -->
+    <div class="mb-4">
+      <h6 class="fw-bold text-uppercase mb-2 font-monospace">PRODUCT DETAILS:</h6>
+      <div class="table-responsive">
+        <table class="table table-bordered border-dark align-middle font-monospace mb-0">
+          <thead class="table-dark text-white">
             <tr>
-              <td>{{ forloop.counter }}</td>
-              <td class="fw-bold">{{ item.inventory_item.name }}</td>
-              <td class="text-center">{{ item.inventory_item.unit|default:"pcs" }}</td>
-              <td class="text-end font-monospace">{{ item.quantity }}</td>
-              <td class="text-end font-monospace">₹{{ item.unit_value|floatformat:2 }}</td>
-              <td class="text-end font-monospace fw-bold">₹{{ item.line_total|floatformat:2 }}</td>
+              <th style="width: 50px;" class="text-center">Sl.</th>
+              <th>Item Description</th>
+              <th style="width: 110px;" class="text-center">HSN Code</th>
+              <th style="width: 80px;" class="text-end">Qty</th>
+              <th style="width: 80px;" class="text-center">Unit</th>
+              <th style="width: 140px;" class="text-end">Declared Value</th>
             </tr>
-          {% endfor %}
-        </tbody>
-        <tfoot>
-          <tr class="table-light">
-            <td colspan="5" class="text-end fw-bold text-uppercase">Grand Total Transfer Value:</td>
-            <td class="text-end font-monospace fw-bold fs-5 text-success">₹{{ challan.total_value|floatformat:2 }}</td>
-          </tr>
-        </tfoot>
-      </table>
+          </thead>
+          <tbody>
+            {% for item in challan.items.all %}
+              <tr>
+                <td class="text-center">{{ forloop.counter }}</td>
+                <td class="fw-bold">{{ item.item_name }}</td>
+                <td class="text-center">{{ item.hsn_code|default:"2106" }}</td>
+                <td class="text-end fw-bold">{{ item.quantity|floatformat:0 }}</td>
+                <td class="text-center">{{ item.unit|default:item.inventory_item.unit|default:"Units" }}</td>
+                <td class="text-end font-monospace fw-bold">₹{{ item.line_total|floatformat:2 }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="6" class="text-center py-3 text-muted">No products listed.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
 
-    {% if challan.notes %}
-      <div class="mb-4 p-3 bg-light rounded">
-        <h6 class="fw-bold text-muted small text-uppercase mb-1">Transfer Notes / Remarks:</h6>
-        <p class="mb-0">{{ challan.notes }}</p>
+    <!-- Tax & Summary Breakdown -->
+    <div class="row font-monospace mb-4">
+      <div class="col-6">
+        {% if challan.notes %}
+          <div class="p-2 border border-dark small h-100">
+            <strong>Remarks / Instructions:</strong>
+            <p class="mb-0 text-muted">{{ challan.notes }}</p>
+          </div>
+        {% endif %}
       </div>
-    {% endif %}
 
-    <!-- Signatures -->
-    <div class="row pt-5 mt-5 border-top">
-      <div class="col-md-6 text-center">
-        <div class="border-top border-dark w-75 mx-auto pt-2">
-          <p class="fw-bold mb-0">Dispatched By Signature</p>
-          <small class="text-muted">Authorised Store Manager</small>
+      <div class="col-6">
+        <table class="table table-sm table-borderless text-end font-monospace mb-0 fs-6">
+          <tbody>
+            <tr>
+              <td><strong>Total Value:</strong></td>
+              <td style="width: 140px;" class="fw-bold">₹{{ challan.total_value|floatformat:2 }}</td>
+            </tr>
+            <tr>
+              <td class="text-muted">CGST (0%):</td>
+              <td class="text-muted">₹{{ challan.cgst_amount|default:"0.00"|floatformat:2 }}</td>
+            </tr>
+            <tr>
+              <td class="text-muted">SGST (0%):</td>
+              <td class="text-muted">₹{{ challan.sgst_amount|default:"0.00"|floatformat:2 }}</td>
+            </tr>
+            <tr class="border-top border-dark">
+              <td><strong>Total Tax:</strong></td>
+              <td><strong>₹{{ challan.total_tax|default:"0.00"|floatformat:2 }}</strong></td>
+            </tr>
+            <tr class="border-top border-bottom border-2 border-dark">
+              <td class="fs-5"><strong>Grand Total:</strong></td>
+              <td class="fs-5 fw-bold text-success">₹{{ challan.total_value|floatformat:2 }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Signatures & Disclaimer Footer -->
+    <div class="row pt-4 mt-4 border-top border-1 border-dark font-monospace text-center">
+      <div class="col-6">
+        <div class="pt-4 border-top border-dark w-75 mx-auto">
+          <strong class="d-block">Dispatched By</strong>
+          <small class="text-muted">(Authorized Signatory)</small>
         </div>
       </div>
 
-      <div class="col-md-6 text-center">
-        <div class="border-top border-dark w-75 mx-auto pt-2">
-          <p class="fw-bold mb-0">Received By Signature</p>
-          <small class="text-muted">Receiving Branch Manager</small>
+      <div class="col-6">
+        <div class="pt-4 border-top border-dark w-75 mx-auto">
+          <strong class="d-block">Receiver's Signature</strong>
+          <small class="text-muted">(Store / Branch Receiver)</small>
         </div>
       </div>
     </div>
+
   </div>
 </div>
+
+<style>
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printableChallan, #printableChallan * {
+    visibility: visible;
+  }
+  #printableChallan {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+</style>
 {% endblock %}

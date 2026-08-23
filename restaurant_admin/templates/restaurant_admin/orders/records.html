@@ -493,34 +493,7 @@
         </table>
 
         <!-- Pagination -->
-        {% if orders.has_other_pages %}
-        <div class="pagination-wrap">
-            <div style="font-size: 0.85rem; color: #6b7280;">
-                Showing page {{ orders.number }} of {{ orders.paginator.num_pages }}
-            </div>
-            <ul class="pagination pagination-sm m-0">
-                {% if orders.has_previous %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ orders.previous_page_number }}&{{ url_params }}">Previous</a>
-                    </li>
-                {% endif %}
-
-                {% for p in orders.paginator.page_range %}
-                    {% if p == orders.number %}
-                        <li class="page-item active"><span class="page-link">{{ p }}</span></li>
-                    {% elif p > orders.number|add:"-3" and p < orders.number|add:"3" %}
-                        <li class="page-item"><a class="page-link" href="?page={{ p }}&{{ url_params }}">{{ p }}</a></li>
-                    {% endif %}
-                {% endfor %}
-
-                {% if orders.has_next %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ orders.next_page_number }}&{{ url_params }}">Next</a>
-                    </li>
-                {% endif %}
-            </ul>
-        </div>
-        {% endif %}
+        {% include 'restaurant_admin/includes/pagination.html' with page_obj=orders %}
     </div>
     </div>
 </div>
@@ -585,6 +558,7 @@
               <i class="bi bi-egg-fried me-1"></i> Food GST Invoice
             </label>
 
+            {% if current_branch and current_branch.serves_alcohol %}
             <input type="radio" class="btn-check" name="rec_settle_invoice_mode" id="rec_mode_bar" value="liquor">
             <label class="btn btn-outline-warning text-dark py-2 fw-semibold" for="rec_mode_bar">
               <i class="bi bi-cup-straw me-1"></i> Bar Excise Bill
@@ -594,6 +568,7 @@
             <label class="btn btn-outline-success py-2 fw-semibold" for="rec_mode_split">
               <i class="bi bi-layers me-1"></i> Auto-Split Invoices
             </label>
+            {% endif %}
           </div>
         </div>
 
@@ -854,20 +829,28 @@ document.addEventListener('DOMContentLoaded', function() {
       r.addEventListener('change', recSyncSettlementFieldsVisibility);
     });
 
+    function safeParseFloat(v) {
+        if (!v) return 0;
+        const cleaned = String(v).replace(/[^0-9.-]/g, '');
+        const n = parseFloat(cleaned);
+        return isNaN(n) ? 0 : n;
+    }
+
     document.querySelectorAll('.btn-records-quick-settle').forEach(btn => {
         btn.addEventListener('click', function() {
             const orderId = this.dataset.orderId;
             const orderNum = this.dataset.orderNum || `Order #${orderId}`;
             const customer = this.dataset.customer || 'Guest';
             const table = this.dataset.table || 'Counter / Takeaway';
-            const amount = parseFloat(this.dataset.amount) || 0;
-            const advancePaid = parseFloat(this.dataset.advancePaid) || 0;
+            const amount = safeParseFloat(this.dataset.amount);
+            const advancePaid = safeParseFloat(this.dataset.advancePaid);
             const receiptNo = this.dataset.receiptNo || '';
             const netPayableTarget = Math.max(0, amount - advancePaid);
-            const due = parseFloat(this.dataset.due) || netPayableTarget;
+            const due = safeParseFloat(this.dataset.due) || netPayableTarget;
             const gstin = this.dataset.gstin || '';
             const excise = this.dataset.excise || '';
             const hasAlcohol = (this.dataset.hasAlcohol === 'true');
+
 
             recState.grandTotal = amount;
             recState.advancePaid = advancePaid;

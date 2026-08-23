@@ -111,18 +111,39 @@
 
 {% block content %}
 <div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
         <h2 class="mb-0">Dashboard</h2>
-        <div class="d-flex align-items-center gap-3">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
             <span class="text-muted small">
                 <i class="bi bi-person-circle me-1"></i>
                 {{ user.username }}
             </span>
-            <span class="text-muted small">
-                <i class="bi bi-shop me-1"></i>
-                {{ restaurant.name }}
-            </span>
-            <span class="text-muted">{{ today|date:"l, F j, Y" }}</span>
+            
+            {% if current_branch %}
+                <span class="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5" style="font-size: 0.85rem; font-weight: 600;">
+                    <i class="bi bi-shop me-1"></i> {{ current_branch.name }}
+                </span>
+            {% else %}
+                <span class="text-muted small">
+                    <i class="bi bi-building me-1"></i>
+                    {{ restaurant.name }}
+                </span>
+            {% endif %}
+
+            {% if available_branches|length > 1 and is_primary_admin %}
+                <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted small fw-semibold">Branch:</span>
+                    <select class="form-select form-select-sm border-primary" onchange="location.href='?branch_id=' + this.value" style="width: auto; font-size: 0.82rem; font-weight: 600; cursor: pointer;">
+                        {% for b in available_branches %}
+                            <option value="{{ b.id }}" {% if current_branch and current_branch.id == b.id %}selected{% endif %}>
+                                📍 {{ b.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            {% endif %}
+            
+            <span class="text-muted small"><i class="bi bi-calendar-event me-1"></i>{{ today|date:"l, F j, Y" }}</span>
         </div>
     </div>
     

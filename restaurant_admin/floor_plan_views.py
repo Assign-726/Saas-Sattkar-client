@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from core.models import Zone, Table
 from django.shortcuts import render
+from django.core.paginator import Paginator
 
 @login_required
 def floor_plan_api(request, restaurant_slug=None):
@@ -19,7 +20,20 @@ def floor_plan_api(request, restaurant_slug=None):
     if not restaurant:
         return JsonResponse({'error': 'No restaurant found for this user.'}, status=400)
 
-    zones = Zone.objects.filter(restaurant=restaurant).prefetch_related('tables')
+    profile = getattr(request.user, 'restaurant_profile', None)
+    active_branch = profile.branch if profile else None
+    if not active_branch and restaurant:
+        branch_id = request.GET.get('branch_id') or request.session.get(f'active_branch_{restaurant.id}')
+        if branch_id and str(branch_id).isdigit():
+            active_branch = restaurant.branches.filter(id=int(branch_id)).first()
+        if not active_branch:
+            active_branch = restaurant.branches.first()
+
+    from django.db.models import Q
+    zones = Zone.objects.filter(restaurant=restaurant)
+    if active_branch:
+        zones = zones.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    zones = zones.prefetch_related('tables')
     
     from core.models import Order
     data = []
@@ -31,11 +45,16 @@ def floor_plan_api(request, restaurant_slug=None):
         }
         for table in zone.tables.filter(is_active=True).order_by('table_number'):
             active_orders = table.orders.exclude(status='C').exclude(payment_status='F')
+            if active_branch:
+                active_orders = active_orders.filter(branch=active_branch)
+
             if not active_orders.exists() and table.restaurant and table.table_number:
                 active_orders = Order.objects.filter(
                     restaurant=table.restaurant,
                     table_number=table.table_number
                 ).exclude(status='C').exclude(payment_status='F')
+                if active_branch:
+                    active_orders = active_orders.filter(branch=active_branch)
 
             latest_order = active_orders.first()
             active_order_data = None
@@ -81,6 +100,17 @@ from super_admin.models import Restaurant
 from restaurant_admin.forms import ZoneForm, TableForm
 from core.models import Zone, Table
 
+def get_view_active_branch(request, restaurant):
+    profile = getattr(request.user, 'restaurant_profile', None)
+    active_branch = profile.branch if profile else None
+    if not active_branch and restaurant:
+        branch_id = request.GET.get('branch_id') or request.session.get(f'active_branch_{restaurant.id}')
+        if branch_id and str(branch_id).isdigit():
+            active_branch = restaurant.branches.filter(id=int(branch_id)).first()
+        if not active_branch:
+            active_branch = restaurant.branches.first()
+    return active_branch
+
 @login_required
 def zone_list(request, restaurant_slug=None):
     return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)
@@ -88,28 +118,30 @@ def zone_list(request, restaurant_slug=None):
 @login_required
 def zone_add(request, restaurant_slug=None):
     restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+    active_branch = get_view_active_branch(request, restaurant)
     if request.method == 'POST':
-        form = ZoneForm(request.POST, restaurant=restaurant)
+        form = ZoneForm(request.POST, restaurant=restaurant, branch=active_branch)
         if form.is_valid():
             form.save()
             messages.success(request, 'Zone added successfully.')
             return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)
     else:
-        form = ZoneForm(restaurant=restaurant)
+        form = ZoneForm(restaurant=restaurant, branch=active_branch)
     return render(request, 'restaurant_admin/tables/form.html', {'form': form, 'title': 'Add Zone', 'restaurant_slug': restaurant_slug})
 
 @login_required
 def zone_edit(request, restaurant_slug=None, pk=None):
     restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+    active_branch = get_view_active_branch(request, restaurant)
     zone = get_object_or_404(Zone, pk=pk, restaurant=restaurant)
     if request.method == 'POST':
-        form = ZoneForm(request.POST, instance=zone, restaurant=restaurant)
+        form = ZoneForm(request.POST, instance=zone, restaurant=restaurant, branch=active_branch)
         if form.is_valid():
             form.save()
             messages.success(request, 'Zone updated successfully.')
             return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)
     else:
-        form = ZoneForm(instance=zone, restaurant=restaurant)
+        form = ZoneForm(instance=zone, restaurant=restaurant, branch=active_branch)
     return render(request, 'restaurant_admin/tables/form.html', {'form': form, 'title': 'Edit Zone', 'restaurant_slug': restaurant_slug})
 
 @login_required
@@ -124,9 +156,25 @@ def zone_delete(request, restaurant_slug=None, pk=None):
 
 @login_required
 def table_list(request, restaurant_slug=None):
+    from django.db.models import Q
     restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
-    tables = Table.objects.filter(restaurant=restaurant).order_by('zone', 'table_number')
-    zones = Zone.objects.filter(restaurant=restaurant).order_by('name')
+    active_branch = get_view_active_branch(request, restaurant)
+    tables = Table.objects.filter(restaurant=restaurant)
+    zones = Zone.objects.filter(restaurant=restaurant)
+    if active_branch:
+        tables = tables.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+        zones = zones.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    tables_qs = tables.order_by('zone', 'table_number')
+    zones = zones.order_by('name')
+    
+    try:
+        per_page = int(request.GET.get('per_page', 20))
+    except ValueError:
+        per_page = 20
+    paginator = Paginator(tables_qs, per_page)
+    page_number = request.GET.get('page')
+    tables = paginator.get_page(page_number)
+    
     return render(request, 'restaurant_admin/tables/table_list.html', {
         'tables': tables,
         'zones': zones,
@@ -138,32 +186,34 @@ def table_list(request, restaurant_slug=None):
 @login_required
 def table_add(request, restaurant_slug=None):
     restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+    active_branch = get_view_active_branch(request, restaurant)
     initial_data = {}
     if 'zone' in request.GET:
         initial_data['zone'] = request.GET.get('zone')
 
     if request.method == 'POST':
-        form = TableForm(request.POST, restaurant=restaurant)
+        form = TableForm(request.POST, restaurant=restaurant, branch=active_branch)
         if form.is_valid():
             form.save()
             messages.success(request, 'Table added successfully.')
             return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)
     else:
-        form = TableForm(restaurant=restaurant, initial=initial_data)
+        form = TableForm(restaurant=restaurant, branch=active_branch, initial=initial_data)
     return render(request, 'restaurant_admin/tables/form.html', {'form': form, 'title': 'Add Table', 'restaurant_slug': restaurant_slug})
 
 @login_required
 def table_edit(request, restaurant_slug=None, pk=None):
     restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+    active_branch = get_view_active_branch(request, restaurant)
     table = get_object_or_404(Table, pk=pk, restaurant=restaurant)
     if request.method == 'POST':
-        form = TableForm(request.POST, instance=table, restaurant=restaurant)
+        form = TableForm(request.POST, instance=table, restaurant=restaurant, branch=active_branch)
         if form.is_valid():
             form.save()
             messages.success(request, 'Table updated successfully.')
             return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)
     else:
-        form = TableForm(instance=table, restaurant=restaurant)
+        form = TableForm(instance=table, restaurant=restaurant, branch=active_branch)
     return render(request, 'restaurant_admin/tables/form.html', {'form': form, 'title': 'Edit Table', 'restaurant_slug': restaurant_slug})
 
 @login_required

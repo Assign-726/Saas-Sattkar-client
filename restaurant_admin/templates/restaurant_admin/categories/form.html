@@ -1,91 +1,93 @@
 {% extends 'restaurant_admin/base.html' %}
 {% load static %}
 
+{% block title %}{{ title }}{% endblock %}
+
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">{{ title }}</h3>
-            </div>
-            <div class="card-body">
-                <form method="post" enctype="multipart/form-data">
-                    {% csrf_token %}
-                    {% for field in form %}
-                        <div class="mb-3">
-                            <label for="{{ field.id_for_label }}" class="form-label">
-                                {{ field.label }}
-                                {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
-                            </label>
-                            {{ field }}
-                            {% if field.help_text %}
-                                <div class="form-text">{{ field.help_text }}</div>
-                            {% endif %}
-                            {% for error in field.errors %}
-                                <div class="invalid-feedback d-block">{{ error }}</div>
-                            {% endfor %}
-                        </div>
-                    {% endfor %}
-                    <div class="d-flex justify-content-between">
-                        <a href="{% url 'restaurant_admin:category_list' restaurant_slug=rslug %}" class="btn btn-secondary">
-                            <i class="bi bi-arrow-left"></i> Back to List
-                        </a>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-save"></i> Save
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h3 class="mb-1 text-dark fw-bold"><i class="bi bi-tag-fill text-primary me-2"></i>{{ title }}</h3>
+      <p class="text-muted small mb-0">Configure menu category details and image for your restaurant menu</p>
     </div>
+    <a href="{% url 'restaurant_admin:category_list' restaurant_slug=rslug|default:restaurant.slug %}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+      <i class="bi bi-arrow-left me-1"></i> Back to Categories
+    </a>
+  </div>
+
+  <div class="card border-0 shadow-sm rounded-3">
+    <div class="card-body p-4">
+      <form method="post" enctype="multipart/form-data" novalidate>
+        {% csrf_token %}
+
+        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-folder2 me-1"></i> 1. Category Profile</h6>
+        <div class="row g-3 mb-4">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold text-secondary small">Category Name <span class="text-danger">*</span></label>
+            {{ form.name }}
+            <div class="form-text fs-8 text-muted">e.g., Starters, Main Course, Beverages, Soft Drinks, Desserts</div>
+            {% if form.name.errors %}
+              <div class="text-danger small mt-1">{{ form.name.errors|join:", " }}</div>
+            {% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-semibold text-secondary small">Category Image</label>
+            {{ form.image }}
+            <div class="form-text fs-8 text-muted">Upload an image representing this menu category (optional).</div>
+            {% if form.image.errors %}
+              <div class="text-danger small mt-1">{{ form.image.errors|join:", " }}</div>
+            {% endif %}
+            <div id="image-preview-container" class="mt-2 {% if not form.instance.image %}d-none{% endif %}">
+              <img id="image-preview" src="{% if form.instance.image %}{{ form.instance.image.url }}{% endif %}" alt="Category Image Preview" class="img-thumbnail" style="max-height: 120px;">
+            </div>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label fw-semibold text-secondary small">Description</label>
+            {{ form.description }}
+            <div class="form-text fs-8 text-muted">Provide a short description of the category.</div>
+            {% if form.description.errors %}
+              <div class="text-danger small mt-1">{{ form.description.errors|join:", " }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger mb-3">{{ form.non_field_errors|join:", " }}</div>
+        {% endif %}
+
+        <div class="d-flex justify-content-end gap-2 pt-3 border-top">
+          <a href="{% url 'restaurant_admin:category_list' restaurant_slug=rslug|default:restaurant.slug %}" class="btn btn-outline-secondary px-4">Cancel</a>
+          <button type="submit" class="btn btn-primary px-4 fw-semibold"><i class="bi bi-check-circle me-1"></i> Save Category</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Add Bootstrap classes to form elements
-        const formElements = document.querySelectorAll('input, textarea, select');
-        formElements.forEach(element => {
-            if (element.type !== 'file') {
-                element.classList.add('form-control');
-            }
-        });
+document.addEventListener('DOMContentLoaded', function() {
+  const imageInput = document.querySelector('input[type="file"]');
+  if (imageInput) {
+    const previewContainer = document.getElementById('image-preview-container');
+    const imagePreview = document.getElementById('image-preview');
 
-        // Add preview for image upload
-        const imageInput = document.querySelector('input[type="file"]');
-        if (imageInput) {
-            const imagePreview = document.createElement('img');
-            imagePreview.id = 'image-preview';
-            imagePreview.style.maxWidth = '200px';
-            imagePreview.style.marginTop = '10px';
-            imagePreview.style.display = 'none';
-            
-            // Check if there's an existing image
-            const existingImage = document.querySelector('.existing-image');
-            if (existingImage) {
-                imagePreview.src = existingImage.src;
-                imagePreview.style.display = 'block';
-                existingImage.parentNode.insertBefore(imagePreview, existingImage);
-                existingImage.remove();
-            } else {
-                imageInput.parentNode.appendChild(imagePreview);
-            }
-
-            imageInput.addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        imagePreview.src = e.target.result;
-                        imagePreview.style.display = 'block';
-                    }
-                    reader.readAsDataURL(file);
-                } else {
-                    imagePreview.style.display = 'none';
-                }
-            });
+    imageInput.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          imagePreview.src = e.target.result;
+          previewContainer.classList.remove('d-none');
+          previewContainer.style.display = 'block';
         }
+        reader.readAsDataURL(file);
+      }
     });
+  }
+});
 </script>
 {% endblock %}

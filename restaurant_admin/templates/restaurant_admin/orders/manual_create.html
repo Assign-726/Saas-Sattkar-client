@@ -2,6 +2,7 @@
 {% load static %}
 
 {% block content %}
+<link rel="stylesheet" href="{% static 'restaurant_admin/css/tally-engine.css' %}">
 <style>
   .pos-container {
     font-family: inherit;
@@ -137,6 +138,204 @@
     border-radius: 10px;
     padding: 14px;
   }
+
+  /* Separate billing section cards */
+  .billing-card {
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+
+  .billing-card-header {
+    padding: 8px 12px;
+    font-weight: 700;
+    font-size: 0.78rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .billing-card-header.gst-card-header {
+    background: linear-gradient(90deg, #eff6ff, #dbeafe);
+    color: #1e40af;
+    border-bottom: 1px solid #bfdbfe;
+  }
+
+  .billing-card-header.excise-card-header {
+    background: linear-gradient(90deg, #fff7ed, #ffedd5);
+    color: #c2410c;
+    border-bottom: 1px solid #fdba74;
+  }
+
+  .billing-card-body {
+    background: #fff;
+    padding: 10px 12px 6px;
+  }
+
+  .billing-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+    font-size: 0.82rem;
+    color: #374151;
+  }
+
+  .billing-row.tax-row {
+    color: #6b7280;
+    font-size: 0.78rem;
+    padding-left: 6px;
+    border-left: 2px solid #e5e7eb;
+    margin-left: 2px;
+  }
+
+  .billing-row.subtotal-row {
+    font-weight: 700;
+    color: #111827;
+    border-top: 1px dashed #e5e7eb;
+    padding-top: 5px;
+    margin-top: 3px;
+  }
+
+  .billing-row.grand-tax-row {
+    font-weight: 600;
+    color: #1d4ed8;
+    font-size: 0.83rem;
+  }
+
+  .invoice-number-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+
+  .invoice-badge-auto {
+    background: #dcfce7;
+    color: #166534;
+    border: 1px solid #86efac;
+  }
+
+  .invoice-badge-manual {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fcd34d;
+  }
+
+  .seq-number-display {
+    font-family: 'Courier New', monospace;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #1e293b;
+    letter-spacing: 0.5px;
+  }
+
+  /* Cart View Tabs Styling */
+  .cart-view-tabs .nav-link {
+    font-size: 0.72rem;
+    border-radius: 6px;
+    background-color: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+    transition: all 0.15s ease;
+    padding: 4px 6px;
+  }
+
+  .cart-view-tabs .nav-link:hover {
+    background-color: #e2e8f0;
+    color: #0f172a;
+  }
+
+  .cart-view-tabs .nav-link.active {
+    background-color: #2563eb !important;
+    color: #ffffff !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.25);
+  }
+
+  .cart-view-tabs .nav-link[data-cart-tab="bar"].active {
+    background-color: #d97706 !important;
+    border-color: #d97706 !important;
+    box-shadow: 0 2px 4px rgba(217, 119, 6, 0.25);
+  }
+
+  .cart-view-tabs .nav-link[data-cart-tab="billing"].active {
+    background-color: #0d9488 !important;
+    border-color: #0d9488 !important;
+    box-shadow: 0 2px 4px rgba(13, 148, 136, 0.25);
+  }
+
+  .pos-customer-card {
+    position: relative;
+    z-index: 1050 !important;
+  }
+
+  .pos-menu-card {
+    position: relative;
+    z-index: 1 !important;
+  }
+
+  .combobox-wrapper {
+    position: relative;
+    z-index: 1060;
+  }
+
+  .combobox-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 350px;
+    max-width: 460px;
+    z-index: 9999;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.75rem;
+    box-shadow: 0 16px 38px -5px rgba(0, 0, 0, 0.25), 0 6px 15px -4px rgba(0, 0, 0, 0.12);
+    display: none;
+    overflow: hidden;
+  }
+
+  .combobox-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f5f9;
+    transition: background-color 0.15s ease, border-left 0.15s ease;
+    border-left: 3px solid transparent;
+  }
+
+  .combobox-item:last-child {
+    border-bottom: none;
+  }
+
+  .combobox-item:hover, .combobox-item.active {
+    background-color: #f8fafc;
+    border-left-color: #0d6efd;
+  }
+
+  .cust-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background-color: #e0e7ff;
+    color: #4338ca;
+    font-weight: 700;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
 </style>
 
 <div class="container-fluid px-0 pos-container">
@@ -177,9 +376,11 @@
           <button type="button" class="btn btn-sm btn-outline-primary pos-mode-btn active" data-mode="food">
             <i class="bi bi-egg-fried me-1"></i> 🍔 Food POS View (GST)
           </button>
+          {% if current_branch and current_branch.serves_alcohol %}
           <button type="button" class="btn btn-sm btn-outline-warning pos-mode-btn" data-mode="bar">
             <i class="bi bi-cup-straw me-1"></i> 🍷 Bar / Alcohol POS View (Excise)
           </button>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -203,27 +404,31 @@
     <!-- LEFT SIDE: Customer Info, Fulfillment, Category Filter & Menu Grid -->
     <div class="col-lg-7 col-xl-8">
       <!-- Customer Info & Fulfillment Bar -->
-      <div class="card border-0 shadow-sm rounded-3 mb-3">
+      <div class="card border-0 shadow-sm rounded-3 mb-3 pos-customer-card" style="position: relative; z-index: 1050;">
         <div class="card-body p-3">
           <div class="row g-2 mb-3">
             <div class="col-md-3">
-              <label class="form-label small fw-semibold text-muted mb-1"><i class="bi bi-person me-1"></i>Customer
-                Name</label>
-              <input type="text" id="cust-name" class="form-control form-control-sm" list="customerOptions"
-                placeholder="e.g. John Doe" oninput="onCustomerInput(this)">
-              <datalist id="customerOptions">
-                {% for party in customer_parties %}
-                <option value="{{ party.name }}" data-phone="{{ party.phone|default:'' }}">{{ party.name }}{% if party.phone %} ({{ party.phone }}){% endif %}</option>
-                {% endfor %}
-              </datalist>
+              <label class="form-label small fw-semibold text-muted mb-1"><i class="bi bi-person me-1"></i>Customer Name</label>
+              <div class="combobox-wrapper">
+                <div class="input-group input-group-sm">
+                  <input type="text" id="cust-name" class="form-control form-control-sm tally-input" data-tally-custom="true"
+                    placeholder="e.g. John Doe" autocomplete="off"
+                    role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cust-combobox-suggestions">
+                  <button class="btn btn-outline-secondary dropdown-toggle btn-sm" type="button" id="btn-toggle-cust-list" aria-label="Toggle customer list" tabindex="-1"></button>
+                  <button class="btn btn-outline-primary btn-sm px-2" type="button" id="btn-open-cust-modal" title="Browse Customer Directory List" data-bs-toggle="tooltip" tabindex="-1">
+                    <i class="bi bi-people-fill"></i>
+                  </button>
+                </div>
+                <div id="cust-combobox-suggestions" class="combobox-dropdown" role="listbox"></div>
+              </div>
             </div>
             <div class="col-md-3">
               <label class="form-label small fw-semibold text-muted mb-1"><i class="bi bi-telephone me-1"></i>Phone Number</label>
-              <input type="text" id="cust-phone" class="form-control form-control-sm" placeholder="e.g. 9876543210">
+              <input type="text" id="cust-phone" class="form-control form-control-sm tally-input" placeholder="e.g. 9876543210">
             </div>
             <div class="col-md-3" id="table-select-col">
               <label class="form-label small fw-semibold text-muted mb-1"><i class="bi bi-grid-3x3-gap me-1"></i>Table No. *</label>
-              <select id="table-id" class="form-select form-select-sm">
+              <select id="table-id" class="form-select form-select-sm tally-input">
                 <option value="">Select Table</option>
                 {% for t in tables %}
                 <option value="{{ t.id }}" {% if order.table and order.table.id == t.id %}selected{% endif %}>Table {{ t.table_number }} {% if t.zone %}({{ t.zone.name }}){% endif %}</option>
@@ -233,7 +438,7 @@
             <div class="col-md-3">
               <label class="form-label small fw-semibold text-muted mb-1"><i class="bi bi-card-text me-1"></i>Notes /
                 Kitchen Request</label>
-              <input type="text" id="order-notes" class="form-control form-control-sm" placeholder="e.g. Less spicy">
+              <input type="text" id="order-notes" class="form-control form-control-sm tally-input" placeholder="e.g. Less spicy">
             </div>
           </div>
 
@@ -256,7 +461,7 @@
       </div>
 
       <!-- Menu Quick Selection: Categories & Search -->
-      <div class="card border-0 shadow-sm rounded-3">
+      <div class="card border-0 shadow-sm rounded-3 pos-menu-card" style="position: relative; z-index: 1;">
         <div class="card-body p-3">
           <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
             <div class="d-flex gap-2 flex-wrap" id="category-tabs">
@@ -269,9 +474,12 @@
             </div>
 
             <div class="d-flex gap-2 align-items-center ms-auto">
-              <div class="input-group input-group-sm" style="max-width: 210px;">
-                <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                <input type="text" id="menu-search" class="form-control border-start-0" placeholder="Search menu...">
+              <div class="combobox-wrapper position-relative flex-grow-1" style="max-width: 230px;">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                  <input type="text" id="menu-search" class="form-control border-start-0 tally-input" data-tally-custom="true" placeholder="Search menu..." onkeydown="handleMenuSearchKeyDown(event)" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="menu-search-suggestions">
+                </div>
+                <div id="menu-search-suggestions" class="combobox-dropdown shadow" role="listbox" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 1050; background: #fff; border: 1px solid #dee2e6; border-radius: 0.375rem; max-height: 280px; overflow-y: auto;"></div>
               </div>
               <button type="button" class="btn btn-sm btn-primary fw-bold d-flex align-items-center gap-1 text-nowrap"
                 data-bs-toggle="modal" data-bs-target="#quickAddItemModal" style="font-size:0.8rem; padding: 5px 12px;">
@@ -292,11 +500,39 @@
     <!-- RIGHT SIDE: Current Order Cart & Payment Summary -->
     <div class="col-lg-5 col-xl-4">
       <div class="card border-0 shadow-sm rounded-3">
-        <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
-          <h5 class="mb-0 fw-bold d-flex align-items-center gap-2">
-            <i class="bi bi-cart3 text-primary"></i> Current Order
-          </h5>
-          <span class="badge bg-primary rounded-pill fs-7" id="cart-item-count">0 items</span>
+        <div class="card-header bg-white py-2.5 px-3 border-bottom">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+              <i class="bi bi-cart3 text-primary"></i> Current Order
+            </h6>
+            <span class="badge bg-primary rounded-pill fs-7" id="cart-item-count">0 items</span>
+          </div>
+
+          <!-- Tabbed Navigation for Items & Billing View -->
+          <ul class="nav nav-pills nav-justified cart-view-tabs gap-1" id="cart-view-tabs">
+            <li class="nav-item">
+              <button type="button" class="nav-link active" data-cart-tab="food">
+                <i class="bi bi-egg-fried me-1"></i> Food (<span id="tab-count-food">0</span>)
+              </button>
+            </li>
+            {% if current_branch and current_branch.serves_alcohol %}
+            <li class="nav-item">
+              <button type="button" class="nav-link" data-cart-tab="bar">
+                <i class="bi bi-cup-straw me-1"></i> Bar (<span id="tab-count-bar">0</span>)
+              </button>
+            </li>
+            {% endif %}
+            <li class="nav-item">
+              <button type="button" class="nav-link" data-cart-tab="all">
+                <i class="bi bi-layers me-1"></i> All (<span id="tab-count-all">0</span>)
+              </button>
+            </li>
+            <li class="nav-item">
+              <button type="button" class="nav-link" data-cart-tab="billing">
+                <i class="bi bi-receipt me-1"></i> Bill
+              </button>
+            </li>
+          </ul>
         </div>
 
         <div class="card-body p-3">
@@ -309,13 +545,15 @@
             <div id="cart-items-list"></div>
           </div>
 
-          <!-- Tax & Billing Breakdown Box -->
-          <div class="bill-summary-box mb-3" id="tax-breakdown-box">
+          <!-- Tax & Billing Breakdown Box - NEW REDESIGNED CARD VIEW -->
+          <div class="mb-3" id="tax-breakdown-box">
+
+            <!-- Edit Rates Header -->
             <div class="d-flex justify-content-between align-items-center mb-2">
-              <span class="fw-semibold text-dark small">Billing Breakdown</span>
+              <span class="fw-bold text-dark small"><i class="bi bi-receipt text-primary me-1"></i> Billing Preview</span>
               <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 fw-semibold"
                 id="btn-toggle-tax-edit" style="font-size:0.75rem;">
-                <i class="bi bi-pencil-square me-1"></i> Edit Rates
+                <i class="bi bi-sliders me-1"></i> Edit Rates
               </button>
             </div>
 
@@ -369,44 +607,108 @@
               </div>
             </div>
 
-            <!-- Subtotal Breakdown Section -->
-            <div id="subtotal-breakdown-container" class="mb-2">
-              <div class="d-flex justify-content-between align-items-center mb-1 text-muted small" id="food-subtotal-row" style="display: none;">
-                <span><i class="bi bi-egg-fried text-primary me-1"></i> Food Subtotal (GST Base)</span>
-                <span class="fw-semibold text-dark" id="bill-food-subtotal">₹0.00</span>
+            <!-- === GST CARD (Food & Soft Drinks) === -->
+            <div class="billing-card" id="gst-billing-card" style="display:none;">
+              <div class="billing-card-header gst-card-header">
+                <span><i class="bi bi-egg-fried me-1"></i> Food GST Invoice</span>
+                <span class="badge bg-primary text-white border" style="font-size:0.68rem;" id="gst-card-total-badge">₹0.00</span>
               </div>
-              <div id="liquor-subtotal-section" style="display: none;">
-                <div class="d-flex justify-content-between align-items-center mb-1 text-muted small" id="liquor-subtotal-row">
-                  <span><i class="bi bi-cup-straw text-warning text-dark me-1"></i> Liquor Subtotal (Excise Base)</span>
-                  <span class="fw-semibold text-dark" id="bill-liquor-subtotal">₹0.00</span>
+              <div class="billing-card-body">
+                <!-- Food subtotal row -->
+                <div class="billing-row" id="gst-food-subtotal-row">
+                  <span class="text-muted">Food Subtotal</span>
+                  <span class="fw-semibold" id="bill-food-subtotal">₹0.00</span>
                 </div>
-                <!-- Liquor Tax Base Sub-Breakdown -->
-                <div id="liquor-tax-subtotal-breakdown" class="ps-3 border-start border-warning border-opacity-50 ms-2 mb-1" style="font-size:0.75rem;">
-                  <div class="d-flex justify-content-between text-muted mb-1" id="beer-subtotal-row" style="display: none;">
-                    <span>🍺 Beer Base</span>
-                    <span class="fw-medium text-dark" id="bill-beer-subtotal">₹0.00</span>
-                  </div>
-                  <div class="d-flex justify-content-between text-muted mb-1" id="imfl-subtotal-row" style="display: none;">
-                    <span>🥃 IMFL / Spirits Base</span>
-                    <span class="fw-medium text-dark" id="bill-imfl-subtotal">₹0.00</span>
-                  </div>
-                  <div class="d-flex justify-content-between text-muted mb-1" id="wine-subtotal-row" style="display: none;">
-                    <span>🍷 Wine Base</span>
-                    <span class="fw-medium text-dark" id="bill-wine-subtotal">₹0.00</span>
-                  </div>
-                  <div class="d-flex justify-content-between text-muted mb-1" id="gen-liquor-subtotal-row" style="display: none;">
-                    <span>🍾 Gen. Liquor Base</span>
-                    <span class="fw-medium text-dark" id="bill-gen-liquor-subtotal">₹0.00</span>
+                <!-- Custom Charges (taxable) -->
+                <div id="gst-custom-charges-display" style="display:none;">
+                  <div class="billing-row text-muted" style="font-size:0.78rem;">
+                    <span><i class="bi bi-tag-fill text-primary me-1"></i>Additional Charges</span>
+                    <span id="gst-custom-charges-amount">₹0.00</span>
                   </div>
                 </div>
-              </div>
-              <div class="d-flex justify-content-between align-items-center mb-1 fw-bold small text-dark">
-                <span>Total Subtotal</span>
-                <span id="bill-subtotal">₹0.00</span>
+                <hr style="margin: 5px 0; border-color:#dbeafe;">
+                <!-- CGST & SGST rows -->
+                <div class="billing-row tax-row" id="gst-cgst-row" style="display:none;">
+                  <span id="gst-cgst-label">CGST (2.5%)</span>
+                  <span id="gst-cgst-val">₹0.00</span>
+                </div>
+                <div class="billing-row tax-row" id="gst-sgst-row" style="display:none;">
+                  <span id="gst-sgst-label">SGST (2.5%)</span>
+                  <span id="gst-sgst-val">₹0.00</span>
+                </div>
+                <div class="billing-row grand-tax-row" id="gst-tax-total-row">
+                  <span><i class="bi bi-percent me-1 opacity-50"></i>GST Total</span>
+                  <span id="gst-tax-total-val">₹0.00</span>
+                </div>
+                <div class="billing-row subtotal-row">
+                  <span>GST Invoice Total</span>
+                  <span id="gst-invoice-total">₹0.00</span>
+                </div>
               </div>
             </div>
 
-            <!-- Custom Charges Container -->
+            <!-- === EXCISE CARD (Liquor & Spirits) === -->
+            <div class="billing-card" id="excise-billing-card" style="display:none;">
+              <div class="billing-card-header excise-card-header">
+                <span><i class="bi bi-cup-straw me-1"></i> Excise Bill (Liquor)</span>
+                <span class="badge bg-warning text-dark border" style="font-size:0.68rem;" id="excise-card-total-badge">₹0.00</span>
+              </div>
+              <div class="billing-card-body">
+                <!-- Beer base -->
+                <div class="billing-row" id="excise-beer-row" style="display:none;">
+                  <span class="text-muted">🍺 Beer Base</span>
+                  <span class="fw-semibold" id="bill-beer-subtotal">₹0.00</span>
+                </div>
+                <!-- IMFL base -->
+                <div class="billing-row" id="excise-imfl-row" style="display:none;">
+                  <span class="text-muted">🥃 IMFL / Spirits Base</span>
+                  <span class="fw-semibold" id="bill-imfl-subtotal">₹0.00</span>
+                </div>
+                <!-- Wine base -->
+                <div class="billing-row" id="excise-wine-row" style="display:none;">
+                  <span class="text-muted">🍷 Wine Base</span>
+                  <span class="fw-semibold" id="bill-wine-subtotal">₹0.00</span>
+                </div>
+                <!-- Gen Liquor base -->
+                <div class="billing-row" id="excise-gen-row" style="display:none;">
+                  <span class="text-muted">🍾 Gen. Liquor Base</span>
+                  <span class="fw-semibold" id="bill-gen-liquor-subtotal">₹0.00</span>
+                </div>
+                <!-- Liquor subtotal -->
+                <div class="billing-row" style="font-weight:600; font-size:0.8rem; color:#374151; border-top:1px dashed #fed7aa; padding-top:5px; margin-top:3px;">
+                  <span>Excise Base Total</span>
+                  <span id="bill-liquor-subtotal">₹0.00</span>
+                </div>
+                <hr style="margin: 5px 0; border-color:#fdba74;">
+                <!-- VAT rows -->
+                <div class="billing-row tax-row" id="excise-beer-vat-row" style="display:none; border-left-color:#f59e0b;">
+                  <span id="excise-beer-vat-label">Beer VAT (60%)</span>
+                  <span id="excise-beer-vat-val">₹0.00</span>
+                </div>
+                <div class="billing-row tax-row" id="excise-imfl-vat-row" style="display:none; border-left-color:#f59e0b;">
+                  <span id="excise-imfl-vat-label">IMFL VAT (65%)</span>
+                  <span id="excise-imfl-vat-val">₹0.00</span>
+                </div>
+                <div class="billing-row tax-row" id="excise-wine-vat-row" style="display:none; border-left-color:#f59e0b;">
+                  <span id="excise-wine-vat-label">Wine VAT (60%)</span>
+                  <span id="excise-wine-vat-val">₹0.00</span>
+                </div>
+                <div class="billing-row tax-row" id="excise-gen-vat-row" style="display:none; border-left-color:#f59e0b;">
+                  <span id="excise-gen-vat-label">Liquor VAT (20%)</span>
+                  <span id="excise-gen-vat-val">₹0.00</span>
+                </div>
+                <div class="billing-row" style="font-weight:600; font-size:0.83rem; color:#c2410c;">
+                  <span><i class="bi bi-percent me-1 opacity-50"></i>Excise VAT Total</span>
+                  <span id="excise-vat-total-val">₹0.00</span>
+                </div>
+                <div class="billing-row subtotal-row" style="border-top-color:#fdba74;">
+                  <span>Excise Bill Total</span>
+                  <span id="excise-bill-total">₹0.00</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Custom Charges Container (standalone if no specific section) -->
             <div id="custom-charges-container" class="my-2 p-2 bg-light rounded border" style="display: none;">
               <div class="d-flex justify-content-between align-items-center mb-1">
                 <span class="fw-bold text-dark" style="font-size:0.75rem;"><i
@@ -416,13 +718,22 @@
               <div id="custom-charges-rows" class="small"></div>
             </div>
 
-            <!-- Dynamic Active Tax Rows Container -->
-            <div id="dynamic-tax-rows"></div>
+            <!-- Dynamic Active Tax Rows Container (hidden - kept for compatibility) -->
+            <div id="dynamic-tax-rows" style="display:none;"></div>
+            <!-- Legacy subtotal IDs kept for compatibility -->
+            <span id="bill-subtotal" style="display:none;">₹0.00</span>
+            <span id="food-subtotal-row" style="display:none;"></span>
+            <span id="liquor-subtotal-section" style="display:none;"></span>
+            <span id="liquor-subtotal-row" style="display:none;"></span>
+            <span id="beer-subtotal-row" style="display:none;"></span>
+            <span id="imfl-subtotal-row" style="display:none;"></span>
+            <span id="wine-subtotal-row" style="display:none;"></span>
+            <span id="gen-liquor-subtotal-row" style="display:none;"></span>
 
-            <hr class="my-2 border-dashed">
-            <div class="d-flex justify-content-between fw-bold text-dark mb-1">
-              <span>Tax Amount</span>
-              <span id="bill-tax-total">₹0.00</span>
+            <!-- Combined Total Footer -->
+            <div class="d-flex justify-content-between fw-bold text-dark mb-1 px-1" id="combined-totals-section">
+              <span style="font-size:0.85rem;">Total Tax</span>
+              <span id="bill-tax-total" style="font-size:0.85rem;">₹0.00</span>
             </div>
             <div class="d-flex justify-content-between text-muted small mb-1" id="bill-round-off-row" style="display: none;">
               <span>Round Off</span>
@@ -587,6 +898,7 @@
               <i class="bi bi-egg-fried me-1"></i> Food GST Invoice
             </label>
 
+            {% if current_branch and current_branch.serves_alcohol %}
             <input type="radio" class="btn-check" name="settle_invoice_mode" id="mode_bar" value="liquor">
             <label class="btn btn-outline-warning text-dark fw-semibold py-2" for="mode_bar">
               <i class="bi bi-cup-straw me-1"></i> Bar Excise Bill
@@ -596,22 +908,53 @@
             <label class="btn btn-outline-success fw-semibold py-2" for="mode_split">
               <i class="bi bi-layers-half me-1"></i> Auto-Split Invoices
             </label>
+            {% endif %}
           </div>
         </div>
 
-        <!-- 2. Invoice Serial Number Fields -->
+        <!-- 2. Invoice Serial Number Fields - Redesigned with sequence info -->
         <div class="row g-3 mb-4" id="row-settlement-serial-numbers">
+          <!-- GST Invoice Number -->
           <div class="col-md-6" id="wrapper-modal-gstin">
-            <label class="form-label fw-semibold text-dark small mb-1">
-              <i class="bi bi-card-heading me-1 text-primary"></i>Tax Invoice No. (GST)
-            </label>
-            <input type="text" id="modal-gstin-no" class="form-control" placeholder="e.g. INV-2026-0042">
+            <div class="card border-0 shadow-sm rounded-3 h-100" style="background: linear-gradient(135deg, #eff6ff, #fff);">
+              <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold text-primary mb-0 small">
+                    <i class="bi bi-egg-fried me-1"></i> Food GST Invoice No.
+                  </label>
+                  <span id="gstin-seq-mode-badge" class="invoice-number-badge invoice-badge-auto">
+                    <i class="bi bi-magic"></i> Auto
+                  </span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                  <div class="seq-number-display flex-grow-1 text-truncate" id="gstin-preview-display" style="display:none;">--</div>
+                  <input type="text" id="modal-gstin-no" class="form-control form-control-sm fw-semibold"
+                    placeholder="e.g. INV-2026-0042" style="font-family: monospace;">
+                </div>
+                <div class="text-muted mt-1" style="font-size:0.68rem;" id="gstin-seq-hint">Auto-generated on save</div>
+              </div>
+            </div>
           </div>
+          <!-- Excise Bill Number -->
           <div class="col-md-6" id="wrapper-modal-excise">
-            <label class="form-label fw-semibold text-dark small mb-1">
-              <i class="bi bi-file-earmark-medical me-1 text-warning"></i>Retail Excise Bill No. (VAT)
-            </label>
-            <input type="text" id="modal-excise-bill-no" class="form-control" placeholder="e.g. EXC-2026-0042">
+            <div class="card border-0 shadow-sm rounded-3 h-100" style="background: linear-gradient(135deg, #fff7ed, #fff);">
+              <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <label class="form-label fw-bold text-warning mb-0 small">
+                    <i class="bi bi-cup-straw me-1"></i> Excise Bill No.
+                  </label>
+                  <span id="excise-seq-mode-badge" class="invoice-number-badge invoice-badge-auto">
+                    <i class="bi bi-magic"></i> Auto
+                  </span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                  <div class="seq-number-display flex-grow-1 text-truncate" id="excise-preview-display" style="display:none;">--</div>
+                  <input type="text" id="modal-excise-bill-no" class="form-control form-control-sm fw-semibold"
+                    placeholder="e.g. EXC-2026-0042" style="font-family: monospace;">
+                </div>
+                <div class="text-muted mt-1" style="font-size:0.68rem;" id="excise-seq-hint">Auto-generated on save</div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -764,20 +1107,224 @@
   id="custom-charges-data">{% if custom_charges_json %}{{ custom_charges_json|safe }}{% else %}[]{% endif %}</script>
 <script type="application/json"
   id="attached-receipt-data">{% if attached_receipt_json %}{{ attached_receipt_json|safe }}{% else %}null{% endif %}</script>
+<script type="application/json" id="gst-seq-info-data">{{ gst_seq_info_json|safe }}</script>
+<script type="application/json" id="excise-seq-info-data">{{ excise_seq_info_json|safe }}</script>
+<script type="application/json" id="customer-parties-data">{% if customer_parties_json %}{{ customer_parties_json|safe }}{% else %}[]{% endif %}</script>
+<script type="application/json" id="serves-alcohol-data">{% if current_branch and current_branch.serves_alcohol %}true{% else %}false{% endif %}</script>
+
+<!-- Same GSTIN Warning Modal -->
+<div class="modal fade" id="sameGstinWarningModal" tabindex="-1" aria-labelledby="sameGstinWarningModalLabel" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-warning-subtle text-warning-emphasis border-0 py-3">
+        <h5 class="modal-title fw-bold fs-6" id="sameGstinWarningModalLabel">
+          <i class="bi bi-exclamation-triangle-fill me-2 text-warning"></i>Same GSTIN Detected (Internal Transfer)
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4">
+        <p class="mb-3 fs-6">
+          The selected buyer party <strong id="gstinModalPartyName" class="text-primary"></strong> has the same GSTIN (<code id="gstinModalPartyGstin" class="fw-bold text-dark"></code>) as your current active branch (<code id="gstinModalBranchGstin" class="fw-bold text-dark"></code>).
+        </p>
+        <div class="alert alert-light border shadow-sm small mb-3 p-3">
+          <div class="fw-bold mb-1 text-dark"><i class="bi bi-info-circle-fill me-1 text-primary"></i> Internal Stock Transfer Recommendation</div>
+          <span class="text-muted">Sales Invoices are for commercial sales to external buyers. Transmitting inventory to entities under the same GSTIN should be recorded via a <strong>Delivery Challan</strong>.</span>
+        </div>
+        <p class="fw-bold mb-0 text-dark">Would you like to create a Delivery Challan for this internal transfer instead?</p>
+      </div>
+      <div class="modal-footer bg-light border-0 justify-content-between p-3">
+        <button type="button" class="btn btn-outline-secondary px-3 btn-sm fw-semibold" data-bs-dismiss="modal">
+          Continue with Sales Order
+        </button>
+        <a id="btnCreateChallanRedirect" href="#" class="btn btn-primary btn-sm fw-semibold px-4 shadow-sm">
+          <i class="bi bi-truck me-1"></i> Yes, Create Delivery Challan
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Customer Directory Modal -->
+<div class="modal fade" id="customerListModal" tabindex="-1" aria-labelledby="customerListModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow-lg rounded-3">
+      <div class="modal-header bg-light border-bottom py-3">
+        <h5 class="modal-title fw-bold fs-6 text-dark d-flex align-items-center gap-2" id="customerListModalLabel">
+          <i class="bi bi-people-fill text-primary"></i> Customer / Party Directory
+          <span class="badge bg-primary rounded-pill" id="modal-cust-count">0</span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-3">
+        <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+          <div class="input-group input-group-sm flex-grow-1">
+            <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+            <input type="text" id="cust-modal-search" class="form-control border-start-0" placeholder="Search customer by name, phone, email...">
+          </div>
+          <button type="button" class="btn btn-success btn-sm d-flex align-items-center gap-1 flex-shrink-0 fw-semibold" id="modal-btn-add-cust">
+            <i class="bi bi-person-plus-fill"></i> New Customer
+          </button>
+        </div>
+
+        <div class="table-responsive rounded border" style="max-height: 380px; overflow-y: auto;">
+          <table class="table table-hover align-middle mb-0" id="cust-modal-table">
+            <thead class="table-light sticky-top small text-muted">
+              <tr>
+                <th style="width: 50px;">#</th>
+                <th>Customer Name</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th class="text-end" style="width: 100px;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="cust-modal-tbody">
+              <!-- Populated via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer bg-light border-0 py-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Add Customer Modal -->
+<div class="modal fade" id="quickAddCustomerModal" tabindex="-1" aria-labelledby="quickAddCustomerModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg rounded-3">
+      <div class="modal-header bg-primary text-white border-0 py-3">
+        <h5 class="modal-title fw-bold fs-6" id="quickAddCustomerModalLabel">
+          <i class="bi bi-person-plus-fill me-2"></i>Add New Customer
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="quick-add-cust-form">
+        <div class="modal-body p-4">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold text-dark mb-1">Customer Name <span class="text-danger">*</span></label>
+            <input type="text" id="new-cust-name" class="form-control form-control-sm" placeholder="Enter customer name" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold text-dark mb-1">Phone Number</label>
+            <input type="tel" id="new-cust-phone" class="form-control form-control-sm" placeholder="e.g. 9876543210">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold text-dark mb-1">Email Address</label>
+            <input type="email" id="new-cust-email" class="form-control form-control-sm" placeholder="e.g. customer@example.com">
+          </div>
+        </div>
+        <div class="modal-footer bg-light border-0 py-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm px-4 fw-semibold">Save & Select</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 <script>
-  const customerPartiesMap = {
-    {% for party in customer_parties %}
-  "{{ party.name|escapejs }}": { phone: "{{ party.phone|default:''|escapejs }}" },
-  {% endfor %}
-  };
+  let activeBranchGstin = '';
+  try {
+    activeBranchGstin = JSON.parse(document.getElementById('active-branch-gstin-data')?.textContent || '""') || '';
+  } catch (e) {
+    console.error('Error parsing active branch GSTIN data:', e);
+  }
+
+  function cleanGstin(g) {
+    if (!g) return '';
+    return String(g).replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  }
+
+  let customerPartiesMap = {};
+  try {
+    const partiesArr = JSON.parse(document.getElementById('customer-parties-data')?.textContent || '[]');
+    partiesArr.forEach(p => {
+      if (p.name) customerPartiesMap[p.name] = p;
+    });
+  } catch (e) {
+    console.error('Error parsing customer parties data:', e);
+  }
+
+  function getPartyObjByName(nameStr) {
+    if (!nameStr) return null;
+    const cleanStr = nameStr.trim().toLowerCase();
+    for (let k in customerPartiesMap) {
+      if (k.trim().toLowerCase() === cleanStr) {
+        return customerPartiesMap[k];
+      }
+    }
+    return null;
+  }
+
+  function checkSameGstinForParty(partyName) {
+    if (!partyName || !activeBranchGstin) return null;
+    const pObj = getPartyObjByName(partyName);
+    if (!pObj || !pObj.gstin) return null;
+
+    const pGstin = cleanGstin(pObj.gstin);
+    const bGstin = cleanGstin(activeBranchGstin);
+
+    if (pGstin && bGstin && pGstin === bGstin) {
+      return pObj;
+    }
+    return null;
+  }
+
+  function promptSameGstinModal(partyObj) {
+    document.getElementById('gstinModalPartyName').textContent = partyObj.party_name || partyObj.name || '';
+    document.getElementById('gstinModalPartyGstin').textContent = partyObj.party_gstin || partyObj.gstin || '';
+    document.getElementById('gstinModalBranchGstin').textContent = activeBranchGstin;
+
+    const baseUrl = "{% url 'restaurant_admin:challan_create' restaurant_slug=restaurant.slug %}";
+    const pName = partyObj.party_name || partyObj.name || '';
+    const pGstin = partyObj.party_gstin || partyObj.gstin || '';
+    const pPhone = partyObj.party_phone || partyObj.phone || '';
+    const pAddr = partyObj.party_address || partyObj.full_address || partyObj.address || '';
+    const redirectUrl = `${baseUrl}?party_name=${encodeURIComponent(pName)}&party_gstin=${encodeURIComponent(pGstin)}&party_phone=${encodeURIComponent(pPhone)}&party_address=${encodeURIComponent(pAddr)}`;
+
+    document.getElementById('btnCreateChallanRedirect').setAttribute('href', redirectUrl);
+
+    const modalElem = document.getElementById('sameGstinWarningModal');
+    if (modalElem) {
+      const modal = new bootstrap.Modal(modalElem);
+      modal.show();
+    }
+  }
 
   function onCustomerInput(input) {
     const val = input.value.trim();
-    if (customerPartiesMap[val] && customerPartiesMap[val].phone) {
-      document.getElementById('cust-phone').value = customerPartiesMap[val].phone;
+    const pObj = getPartyObjByName(val);
+    if (pObj) {
+      if (pObj.phone) document.getElementById('cust-phone').value = pObj.phone;
+
+      if (checkSameGstinForParty(val)) {
+        promptSameGstinModal(pObj);
+      }
     }
   }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    const btnContinue = document.getElementById('btnContinueSalesOrder');
+    if (btnContinue) {
+      btnContinue.addEventListener('click', function() {
+        window._bypassedSameGstin = true;
+        const modalEl = document.getElementById('sameGstinWarningModal');
+        if (modalEl && window.bootstrap) {
+          const modal = bootstrap.Modal.getInstance(modalEl);
+          if (modal) modal.hide();
+        }
+        if (window._pendingSubmitAction) {
+          const { action, extraData } = window._pendingSubmitAction;
+          window._pendingSubmitAction = null;
+          if (typeof submitOrder === 'function') {
+            submitOrder(action, { ...extraData, bypass_same_gstin: 1 });
+          }
+        }
+      });
+    }
+  });
 
   (function () {
     let menuItems = [];
@@ -788,6 +1335,8 @@
     let activeOrders = [];
 
     let customChargesList = [];
+    let gstSeqInfo = { mode: 'automatic', next_number: '', readonly: true };
+    let exciseSeqInfo = { mode: 'automatic', next_number: '', readonly: true };
     try {
       menuItems = JSON.parse(document.getElementById('menu-items-data')?.textContent || '[]');
       topSellingIds = JSON.parse(document.getElementById('top-selling-data')?.textContent || '[]');
@@ -796,9 +1345,13 @@
       existingOrder = JSON.parse(document.getElementById('existing-order-data')?.textContent || 'null');
       activeOrders = JSON.parse(document.getElementById('active-orders-data')?.textContent || '[]');
       customChargesList = JSON.parse(document.getElementById('custom-charges-data')?.textContent || '[]');
+      gstSeqInfo = JSON.parse(document.getElementById('gst-seq-info-data')?.textContent || '{"mode":"automatic","next_number":"","readonly":true}');
+      exciseSeqInfo = JSON.parse(document.getElementById('excise-seq-info-data')?.textContent || '{"mode":"automatic","next_number":"","readonly":true}');
     } catch (e) {
       console.error('Error parsing POS JSON data:', e);
     }
+    window.getPosMenuItems = function() { return menuItems; };
+    window.posMenuItems = menuItems;
 
     const selectedCustomChargeIds = new Set();
 
@@ -822,9 +1375,410 @@
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
     }
+    window.escapeHtml = escapeHtml;
+
+    let posCustomerParties = [];
+    try {
+      const partiesArr = JSON.parse(document.getElementById('customer-parties-data')?.textContent || '[]');
+      if (partiesArr && partiesArr.length > 0) {
+        posCustomerParties = partiesArr.map(p => ({
+          id: p.id || '',
+          name: p.name || '',
+          phone: p.phone || '',
+          email: p.email || '',
+          gstin: p.gstin || '',
+          address: p.full_address || p.address || ''
+        }));
+      }
+    } catch (e) {
+      console.error('Error parsing customer parties JSON:', e);
+    }
+    if (!posCustomerParties.length) {
+      posCustomerParties = [
+        /* {% for party in customer_parties %} */
+        { id: "{{ party.id }}", name: "{{ party.name|escapejs }}", phone: "{{ party.phone|default:''|escapejs }}", email: "{{ party.email|default:''|escapejs }}" },
+        /* {% endfor %} */
+      ];
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      const custNameInput = document.getElementById('cust-name');
+      const custPhoneInput = document.getElementById('cust-phone');
+      const custDropdown = document.getElementById('cust-combobox-suggestions');
+      const custToggleBtn = document.getElementById('btn-toggle-cust-list');
+      const custModalBtn = document.getElementById('btn-open-cust-modal');
+
+      let activeCustIndex = -1;
+      let currentFilteredCusts = [];
+
+      function setCustActiveIndex(idx) {
+        if (!custDropdown) return;
+        const items = custDropdown.querySelectorAll('.combobox-item');
+        items.forEach(el => {
+          el.classList.remove('active');
+          el.setAttribute('aria-selected', 'false');
+        });
+
+        if (idx >= 0 && idx < items.length) {
+          activeCustIndex = idx;
+          const activeItem = items[activeCustIndex];
+          activeItem.classList.add('active');
+          activeItem.setAttribute('aria-selected', 'true');
+          if (custNameInput) custNameInput.setAttribute('aria-activedescendant', activeItem.id);
+          activeItem.scrollIntoView({ block: 'nearest' });
+        } else {
+          activeCustIndex = -1;
+          if (custNameInput) custNameInput.removeAttribute('aria-activedescendant');
+        }
+      }
+
+      function selectCustItem(p) {
+        if (!p) return;
+        if (custNameInput) {
+          custNameInput.value = p.name;
+          state.customerName = p.name;
+        }
+        if (custPhoneInput) {
+          custPhoneInput.value = p.phone || '';
+          state.phone = p.phone || '';
+        }
+        closeCustDropdown();
+        if (custPhoneInput) {
+          custPhoneInput.focus();
+        }
+      }
+
+      function closeCustDropdown() {
+        if (!custDropdown) return;
+        custDropdown.style.display = 'none';
+        if (custNameInput) {
+          custNameInput.setAttribute('aria-expanded', 'false');
+          custNameInput.removeAttribute('aria-activedescendant');
+        }
+        activeCustIndex = -1;
+        currentFilteredCusts = [];
+      }
+
+      let currentFilteredDropdownItems = [];
+
+      function renderCustDropdown(items, queryStr = '') {
+        currentFilteredCusts = items || [];
+        if (!custDropdown) return;
+
+        const createNewItem = {
+          isCreateNew: true,
+          name: queryStr ? `+ Create "${escapeHtml(queryStr)}"` : '+ Create New Customer / Party'
+        };
+
+        currentFilteredDropdownItems = [createNewItem, ...currentFilteredCusts];
+
+        let html = `
+          <div class="dropdown-header bg-light border-bottom px-3 py-2 d-flex align-items-center justify-content-between">
+            <span class="small fw-bold text-secondary" style="font-size: 0.75rem;"><i class="bi bi-people-fill text-primary me-1"></i> CUSTOMERS & PARTIES</span>
+            <button type="button" class="btn btn-link p-0 text-primary text-decoration-none fw-semibold small" id="btn-dropdown-view-all" style="font-size: 0.75rem;"><i class="bi bi-arrows-fullscreen me-1"></i> Full List</button>
+          </div>
+          <div class="cust-items-list" style="max-height: 250px; overflow-y: auto;">
+            <!-- Top Item 0: Create New Customer / Party -->
+            <div class="combobox-item d-flex align-items-center gap-2 bg-primary-subtle text-primary fw-bold" id="cust-item-0" role="option" aria-selected="false" data-index="0" style="border-left: 4px solid #0d6efd;">
+              <div class="cust-avatar bg-primary text-white"><i class="bi bi-person-plus-fill"></i></div>
+              <div class="flex-grow-1 min-w-0">
+                <div class="fw-bold text-primary text-truncate small">${createNewItem.name}</div>
+                <div class="text-muted small" style="font-size: 0.72rem;">Click or press Enter to register new party</div>
+              </div>
+              <span class="badge bg-primary text-white fs-8">NEW</span>
+            </div>
+        `;
+
+        if (currentFilteredCusts.length > 0) {
+          html += currentFilteredCusts.map((p, idx) => {
+            const itemIdx = idx + 1;
+            return `
+              <div class="combobox-item d-flex align-items-center gap-2" id="cust-item-${itemIdx}" role="option" aria-selected="false" data-index="${itemIdx}">
+                <div class="cust-avatar">${escapeHtml(p.name ? p.name.charAt(0).toUpperCase() : 'C')}</div>
+                <div class="flex-grow-1 min-w-0">
+                  <div class="fw-semibold text-dark text-truncate small">${escapeHtml(p.name)}</div>
+                  <div class="text-muted small text-truncate" style="font-size: 0.75rem;">
+                    ${p.phone ? '<span><i class="bi bi-telephone me-1"></i>' + escapeHtml(p.phone) + '</span>' : ''}
+                    ${p.email ? '<span class="ms-2"><i class="bi bi-envelope me-1"></i>' + escapeHtml(p.email) + '</span>' : ''}
+                  </div>
+                </div>
+                <i class="bi bi-chevron-right text-muted opacity-50 ms-auto"></i>
+              </div>
+            `;
+          }).join('');
+        }
+
+        html += `</div>`;
+
+        html += `
+          <div class="dropdown-footer bg-light border-top p-2 text-center">
+            <button type="button" class="btn btn-outline-primary btn-sm w-100 py-1 fw-semibold" id="btn-dropdown-quick-add" style="font-size: 0.8rem;">
+              <i class="bi bi-person-plus-fill me-1"></i> Add ${queryStr ? '"' + escapeHtml(queryStr) + '" as ' : ''}New Customer
+            </button>
+          </div>
+        `;
+
+        custDropdown.innerHTML = html;
+        custDropdown.style.display = 'block';
+        if (custNameInput) custNameInput.setAttribute('aria-expanded', 'true');
+
+        // Auto-select top item 0 (+ Create New Customer) by default!
+        setCustActiveIndex(0);
+
+        custDropdown.querySelectorAll('.combobox-item').forEach((el, idx) => {
+          el.addEventListener('mouseenter', function () {
+            setCustActiveIndex(idx);
+          });
+          el.addEventListener('click', function (e) {
+            e.preventDefault();
+            const itemObj = currentFilteredDropdownItems[idx];
+            if (itemObj && itemObj.isCreateNew) {
+              closeCustDropdown();
+              openQuickAddCustomerModal(queryStr);
+            } else if (itemObj) {
+              selectCustItem(itemObj);
+            }
+          });
+        });
+
+        const btnViewAll = custDropdown.querySelector('#btn-dropdown-view-all');
+        if (btnViewAll) {
+          btnViewAll.addEventListener('click', function (e) {
+            e.preventDefault();
+            closeCustDropdown();
+            openCustomerListModal();
+          });
+        }
+
+        const btnQuickAdd = custDropdown.querySelector('#btn-dropdown-quick-add');
+        if (btnQuickAdd) {
+          btnQuickAdd.addEventListener('click', function (e) {
+            e.preventDefault();
+            closeCustDropdown();
+            openQuickAddCustomerModal(queryStr);
+          });
+        }
+      }
+
+      function filterAndShowCusts() {
+        if (!custNameInput) return;
+        const q = custNameInput.value.trim().toLowerCase();
+        if (!q) {
+          renderCustDropdown(posCustomerParties.slice(0, 10), '');
+        } else {
+          const filtered = posCustomerParties.filter(p => p.name.toLowerCase().includes(q) || (p.phone && p.phone.includes(q)));
+          renderCustDropdown(filtered.slice(0, 10), q);
+        }
+      }
+
+      if (custNameInput) {
+        custNameInput.addEventListener('input', function () {
+          state.customerName = this.value;
+          filterAndShowCusts();
+        });
+
+        custNameInput.addEventListener('focus', function () {
+          filterAndShowCusts();
+        });
+
+        custNameInput.addEventListener('keydown', function (e) {
+          const isDropdownOpen = custDropdown && custDropdown.style.display !== 'none' && currentFilteredDropdownItems.length > 0;
+
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (!isDropdownOpen) {
+              filterAndShowCusts();
+            } else {
+              setCustActiveIndex(activeCustIndex + 1 >= currentFilteredDropdownItems.length ? 0 : activeCustIndex + 1);
+            }
+          } else if (e.key === 'ArrowUp') {
+            if (isDropdownOpen) {
+              e.preventDefault();
+              setCustActiveIndex(activeCustIndex - 1 < 0 ? currentFilteredDropdownItems.length - 1 : activeCustIndex - 1);
+            }
+          } else if (e.key === 'Enter') {
+            if (isDropdownOpen && activeCustIndex >= 0) {
+              e.preventDefault();
+              e.stopPropagation();
+              const selectedObj = currentFilteredDropdownItems[activeCustIndex];
+              if (selectedObj && selectedObj.isCreateNew) {
+                closeCustDropdown();
+                openQuickAddCustomerModal(custNameInput.value.trim());
+              } else if (selectedObj) {
+                selectCustItem(selectedObj);
+              }
+            }
+          } else if (e.key === 'Escape') {
+            if (isDropdownOpen) {
+              e.preventDefault();
+              closeCustDropdown();
+            }
+          }
+        });
+      }
+
+      if (custToggleBtn) {
+        custToggleBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          if (custDropdown && custDropdown.style.display === 'block') {
+            closeCustDropdown();
+          } else {
+            custNameInput.focus();
+            filterAndShowCusts();
+          }
+        });
+      }
+
+      if (custModalBtn) {
+        custModalBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          closeCustDropdown();
+          openCustomerListModal();
+        });
+      }
+
+      // Customer Directory Modal Logic
+      const custModalSearch = document.getElementById('cust-modal-search');
+      const custModalTbody = document.getElementById('cust-modal-tbody');
+      const modalCustCount = document.getElementById('modal-cust-count');
+      const modalBtnAddCust = document.getElementById('modal-btn-add-cust');
+
+      function renderCustModalList() {
+        if (!custModalTbody) return;
+        const q = (custModalSearch?.value || '').trim().toLowerCase();
+        const filtered = posCustomerParties.filter(p => !q || p.name.toLowerCase().includes(q) || (p.phone && p.phone.includes(q)) || (p.email && p.email.toLowerCase().includes(q)));
+
+        if (modalCustCount) modalCustCount.textContent = filtered.length;
+
+        if (filtered.length === 0) {
+          custModalTbody.innerHTML = `
+            <tr>
+              <td colspan="5" class="text-center py-4 text-muted">
+                <i class="bi bi-person-x fs-3 d-block mb-1 text-secondary"></i>
+                No customers found matching "${escapeHtml(q)}".
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        custModalTbody.innerHTML = filtered.map((p, idx) => `
+          <tr>
+            <td class="text-muted small">${idx + 1}</td>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <div class="cust-avatar">${escapeHtml(p.name ? p.name.charAt(0).toUpperCase() : 'C')}</div>
+                <span class="fw-semibold text-dark">${escapeHtml(p.name)}</span>
+              </div>
+            </td>
+            <td>${p.phone ? '<i class="bi bi-telephone text-muted me-1"></i>' + escapeHtml(p.phone) : '<span class="text-muted fs-7">-</span>'}</td>
+            <td>${p.email ? '<i class="bi bi-envelope text-muted me-1"></i>' + escapeHtml(p.email) : '<span class="text-muted fs-7">-</span>'}</td>
+            <td class="text-end">
+              <button type="button" class="btn btn-primary btn-sm px-3 select-modal-cust-btn" data-id="${escapeHtml(p.id)}" data-name="${escapeHtml(p.name)}" data-phone="${escapeHtml(p.phone || '')}">
+                <i class="bi bi-check-lg me-1"></i>Select
+              </button>
+            </td>
+          </tr>
+        `).join('');
+
+        custModalTbody.querySelectorAll('.select-modal-cust-btn').forEach(btn => {
+          btn.addEventListener('click', function () {
+            const name = this.getAttribute('data-name');
+            const phone = this.getAttribute('data-phone');
+            selectCustItem({ name: name, phone: phone });
+            const modalEl = document.getElementById('customerListModal');
+            if (modalEl && window.bootstrap) {
+              const modal = bootstrap.Modal.getInstance(modalEl);
+              if (modal) modal.hide();
+            }
+          });
+        });
+      }
+
+      function openCustomerListModal() {
+        renderCustModalList();
+        const modalEl = document.getElementById('customerListModal');
+        if (modalEl && window.bootstrap) {
+          const modal = new bootstrap.Modal(modalEl);
+          modal.show();
+        }
+      }
+
+      if (custModalSearch) {
+        custModalSearch.addEventListener('input', renderCustModalList);
+      }
+
+      if (modalBtnAddCust) {
+        modalBtnAddCust.addEventListener('click', function () {
+          const custModalEl = document.getElementById('customerListModal');
+          if (custModalEl && window.bootstrap) {
+            const modal = bootstrap.Modal.getInstance(custModalEl);
+            if (modal) modal.hide();
+          }
+          openQuickAddCustomerModal('');
+        });
+      }
+
+      // Quick Add Customer Form Logic
+      const quickAddForm = document.getElementById('quick-add-cust-form');
+      function openQuickAddCustomerModal(initialName = '') {
+        const newCustNameInput = document.getElementById('new-cust-name');
+        const newCustPhoneInput = document.getElementById('new-cust-phone');
+        const newCustEmailInput = document.getElementById('new-cust-email');
+
+        if (newCustNameInput) newCustNameInput.value = initialName || '';
+        if (newCustPhoneInput) newCustPhoneInput.value = '';
+        if (newCustEmailInput) newCustEmailInput.value = '';
+
+        const modalEl = document.getElementById('quickAddCustomerModal');
+        if (modalEl && window.bootstrap) {
+          const modal = new bootstrap.Modal(modalEl);
+          modal.show();
+        }
+      }
+
+      if (quickAddForm) {
+        quickAddForm.addEventListener('submit', function (e) {
+          e.preventDefault();
+          const nameVal = (document.getElementById('new-cust-name')?.value || '').trim();
+          const phoneVal = (document.getElementById('new-cust-phone')?.value || '').trim();
+          const emailVal = (document.getElementById('new-cust-email')?.value || '').trim();
+
+          if (!nameVal) return;
+
+          const newCust = {
+            id: 'temp_' + Date.now(),
+            name: nameVal,
+            phone: phoneVal,
+            email: emailVal
+          };
+
+          posCustomerParties.unshift(newCust);
+          if (typeof customerPartiesMap !== 'undefined') {
+            customerPartiesMap[nameVal] = newCust;
+          }
+
+          selectCustItem(newCust);
+
+          const modalEl = document.getElementById('quickAddCustomerModal');
+          if (modalEl && window.bootstrap) {
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+          }
+        });
+      }
+
+      document.addEventListener('click', function (e) {
+        if (custNameInput && custDropdown && custToggleBtn && !custNameInput.contains(e.target) && !custDropdown.contains(e.target) && !custToggleBtn.contains(e.target)) {
+          closeCustDropdown();
+        }
+      });
+    });
 
     const state = {
+      servesAlcohol: (document.getElementById('serves-alcohol-data')?.textContent || '').trim() === 'true',
       viewMode: 'food',
+      cartTab: 'food',
       customerName: '',
       phone: '',
       notes: '',
@@ -843,6 +1797,8 @@
       advanceAmountPaid: 0,
       cart: []
     };
+    window.posState = state;
+    window.posMenuItems = menuItems;
 
     window.detachAdvanceReceipt = function() {
       state.receiptNo = '';
@@ -859,14 +1815,17 @@
     try {
       attachedReceipt = JSON.parse(document.getElementById('attached-receipt-data')?.textContent || 'null');
       if (attachedReceipt) {
+        if (attachedReceipt.order_id && attachedReceipt.order_id > 0 && !state.activeOrderId) {
+          state.activeOrderId = attachedReceipt.order_id;
+        }
         state.receiptNo = attachedReceipt.receipt_no || '';
         state.advanceAmountPaid = parseFloat(attachedReceipt.advance_amount) || 0;
-        if (attachedReceipt.customer_name) {
+        if (attachedReceipt.customer_name && !state.customerName) {
           state.customerName = attachedReceipt.customer_name;
           const nameInput = document.getElementById('cust-name');
           if (nameInput) nameInput.value = attachedReceipt.customer_name;
         }
-        if (attachedReceipt.phone) {
+        if (attachedReceipt.phone && !state.phone) {
           state.phone = attachedReceipt.phone;
           const phoneInput = document.getElementById('cust-phone');
           if (phoneInput) phoneInput.value = attachedReceipt.phone;
@@ -923,6 +1882,7 @@
         document.querySelectorAll('.pos-mode-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         state.viewMode = btn.dataset.mode;
+        state.cartTab = state.viewMode === 'bar' ? 'bar' : 'food';
 
         if (viewModeBadge) {
           if (state.viewMode === 'food') {
@@ -938,6 +1898,17 @@
         document.querySelector('#category-tabs .category-pill[data-cat="all"]')?.classList.add('active');
         syncCategoryPills();
         renderMenu();
+        renderCart();
+      });
+    }
+
+    // Cart View Tabs Switcher Listener
+    const cartViewTabs = document.getElementById('cart-view-tabs');
+    if (cartViewTabs) {
+      cartViewTabs.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-cart-tab]');
+        if (!btn) return;
+        state.cartTab = btn.dataset.cartTab;
         renderCart();
       });
     }
@@ -1111,8 +2082,14 @@
 
       const filtered = menuItems.filter(item => {
         const isLiquor = isLiquorTaxType(item.tax_type, item.category_name);
+        const q = (state.searchQuery || '').trim().toLowerCase();
 
-        // When "All Items" is selected, respect the POS viewMode (Food vs Bar)
+        // 1. If user is actively searching in search bar: Search across ALL menu items (Food & Alcohol/Bar)!
+        if (q.length > 0) {
+          return item.name.toLowerCase().includes(q) || (item.category_name && item.category_name.toLowerCase().includes(q));
+        }
+
+        // 2. If user is NOT searching: Respect current category & viewMode (Food vs Bar) tabs
         if (state.selectedCategory === 'all') {
           if (state.viewMode === 'food' && isLiquor) return false;
           if (state.viewMode === 'bar' && !isLiquor) return false;
@@ -1126,12 +2103,25 @@
         } else {
           matchCat = String(item.category_id) === String(state.selectedCategory);
         }
-        const matchSearch = !state.searchQuery || item.name.toLowerCase().includes(state.searchQuery.toLowerCase());
-        return matchCat && matchSearch;
+        return matchCat;
       });
 
       if (filtered.length === 0) {
-        menuGrid.innerHTML = `<div class="col-12 text-center text-muted py-4"><i class="bi bi-search me-1"></i> No matching menu items found.</div>`;
+        const q = (state.searchQuery || '').trim();
+        menuGrid.innerHTML = `
+          <div class="col-12 text-center text-muted py-4">
+            <i class="bi bi-search fs-3 text-secondary d-block mb-2 opacity-50"></i>
+            <h6 class="fw-bold text-dark mb-1">No matching menu item found ${q ? `for "${escapeHtml(q)}"` : ''}</h6>
+            <p class="small text-muted mb-3">Item not in menu list? Create it instantly and add to cart.</p>
+            <button type="button" class="btn btn-primary btn-sm fw-bold px-3 py-2 shadow-sm" id="btn-grid-create-item">
+              <i class="bi bi-plus-circle-fill me-1"></i> Create ${q ? `"${escapeHtml(q)}"` : 'New Item'}
+            </button>
+          </div>
+        `;
+        const btnGridCreate = menuGrid.querySelector('#btn-grid-create-item');
+        if (btnGridCreate) {
+          btnGridCreate.addEventListener('click', () => openQuickAddItemModal(q));
+        }
         return;
       }
 
@@ -1178,11 +2168,28 @@
           unit_price: item.price,
           quantity: 1,
           tax_type: item.tax_type,
-          category_name: item.category_name
+          category_name: item.category_name,
+          is_tax_inclusive: item.is_tax_inclusive || false
         });
       }
+
+      // Ensure appropriate cart tab (food vs bar) is activated
+      const isLiquor = isLiquorTaxType(item.tax_type, item.category_name);
+      state.cartTab = isLiquor ? 'bar' : 'food';
+
       renderCart();
+
+      // Automatically jump focus to the Quantity input of the newly added item in cart breakdown!
+      setTimeout(() => {
+        const qtyInp = document.getElementById(`cart-qty-${item.id}`);
+        if (qtyInp) {
+          qtyInp.focus();
+          try { qtyInp.select(); } catch(e){}
+        }
+      }, 60);
     }
+
+    window.addToCartGlobal = addToCart;
 
     function updateQty(id, delta) {
       const item = state.cart.find(c => c.id === id);
@@ -1209,26 +2216,50 @@
       renderCart();
     }
 
-    // Calculation & Render Cart with Combined Food & Liquor Handling
+    // Calculation & Render Cart with Combined Food & Liquor Handling & Separate Tabbed Views
     function renderCart() {
+      const cartContainer = document.getElementById('cart-container');
       const cartList = document.getElementById('cart-items-list');
       const cartEmptyMsg = document.getElementById('cart-empty-msg');
 
       const foodCartItems = state.cart.filter(item => !isLiquorTaxType(item.tax_type, item.category_name));
       const liquorCartItems = state.cart.filter(item => isLiquorTaxType(item.tax_type, item.category_name));
 
-      const totalCount = state.cart.reduce((sum, i) => sum + i.quantity, 0);
+      const foodCount = foodCartItems.reduce((sum, i) => sum + i.quantity, 0);
+      const liquorCount = liquorCartItems.reduce((sum, i) => sum + i.quantity, 0);
+      const totalCount = foodCount + liquorCount;
 
       if (cartCountEl) cartCountEl.textContent = `${totalCount} item${totalCount !== 1 ? 's' : ''}`;
 
-      if (cartEmptyMsg) {
-        cartEmptyMsg.style.display = state.cart.length === 0 ? 'block' : 'none';
+      // Update Tab Badges
+      const countAll = document.getElementById('tab-count-all');
+      const countFood = document.getElementById('tab-count-food');
+      const countBar = document.getElementById('tab-count-bar');
+      if (countAll) countAll.textContent = totalCount;
+      if (countFood) countFood.textContent = foodCount;
+      if (countBar) countBar.textContent = liquorCount;
+
+      // Sync Active Tab styling
+      const activeTab = state.cartTab || 'food';
+      document.querySelectorAll('#cart-view-tabs .nav-link').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.cartTab === activeTab);
+      });
+
+      // Handle Cart Items Container visibility (Bill tab hides item list for clean preview)
+      if (cartContainer) {
+        cartContainer.style.display = activeTab === 'billing' ? 'none' : 'block';
       }
 
-      if (cartList) {
+      if (cartEmptyMsg) {
+        const currentTabCount = activeTab === 'food' ? foodCount : (activeTab === 'bar' ? liquorCount : totalCount);
+        cartEmptyMsg.style.display = (activeTab !== 'billing' && currentTabCount === 0) ? 'block' : 'none';
+      }
+
+      if (cartList && activeTab !== 'billing') {
         cartList.innerHTML = '';
         if (state.cart.length > 0) {
-          if (foodCartItems.length > 0) {
+          // Food Section (shown in 'food' or 'all' tab)
+          if ((activeTab === 'all' || activeTab === 'food') && foodCartItems.length > 0) {
             const foodSub = foodCartItems.reduce((sum, i) => sum + (i.unit_price * i.quantity), 0);
             const foodSec = document.createElement('div');
             foodSec.className = 'cart-section-card mb-2';
@@ -1244,7 +2275,8 @@
             cartList.appendChild(foodSec);
           }
 
-          if (liquorCartItems.length > 0) {
+          // Bar Section (shown in 'bar' or 'all' tab)
+          if ((activeTab === 'all' || activeTab === 'bar') && liquorCartItems.length > 0) {
             const liquorSub = liquorCartItems.reduce((sum, i) => sum + (i.unit_price * i.quantity), 0);
             const liquorSec = document.createElement('div');
             liquorSec.className = 'cart-section-card mb-2';
@@ -1290,11 +2322,26 @@
           else if (['liquor', 'bar', 'spirit', 'whiskey', 'vodka', 'rum', 'cocktail'].some(k => cname.includes(k))) tt = 'VAT_IMFL';
         }
 
-        if (tt === 'VAT_BEER') beerSubtotal += netLineTotal;
-        else if (tt === 'VAT_IMFL') imflSubtotal += netLineTotal;
-        else if (tt === 'VAT_WINE') wineSubtotal += netLineTotal;
-        else if (tt === 'VAT_LIQUOR') genLiquorSubtotal += netLineTotal;
-        else foodSubtotal += netLineTotal;
+        // For tax-inclusive items, reverse-calculate to extract the base taxable value
+        let baseLineTotal = netLineTotal;
+        if (item.is_tax_inclusive) {
+          let taxRate = 0;
+          if (tt === 'VAT_BEER') taxRate = activeTaxSettings.vat_beer_pct || 0;
+          else if (tt === 'VAT_IMFL') taxRate = activeTaxSettings.vat_imfl_pct || 0;
+          else if (tt === 'VAT_WINE') taxRate = activeTaxSettings.vat_wine_pct || 0;
+          else if (tt === 'VAT_LIQUOR') taxRate = activeTaxSettings.vat_gen_pct || 0;
+          else taxRate = (activeTaxSettings.cgst_pct || 0) + (activeTaxSettings.sgst_pct || 0);
+          // Taxable Value = (Inclusive Amount × 100) / (100 + Tax Rate)
+          if (taxRate > 0) {
+            baseLineTotal = (netLineTotal * 100) / (100 + taxRate);
+          }
+        }
+
+        if (tt === 'VAT_BEER') beerSubtotal += baseLineTotal;
+        else if (tt === 'VAT_IMFL') imflSubtotal += baseLineTotal;
+        else if (tt === 'VAT_WINE') wineSubtotal += baseLineTotal;
+        else if (tt === 'VAT_LIQUOR') genLiquorSubtotal += baseLineTotal;
+        else foodSubtotal += baseLineTotal;
       });
 
       const liquorSubtotal = beerSubtotal + imflSubtotal + wineSubtotal + genLiquorSubtotal;
@@ -1323,7 +2370,6 @@
       const imflVat = imflSubtotal * ((activeTaxSettings.vat_imfl_pct || 0) / 100);
       const wineVat = wineSubtotal * ((activeTaxSettings.vat_wine_pct || 0) / 100);
       const genVat = genLiquorSubtotal * ((activeTaxSettings.vat_gen_pct || 0) / 100);
-
       const totalGst = cgst + sgst;
       const totalVat = beerVat + imflVat + wineVat + genVat;
       const taxTotal = totalGst + totalVat;
@@ -1331,44 +2377,89 @@
       const grandTotal = Math.round(rawTotal);
       const roundOffAmount = parseFloat((grandTotal - rawTotal).toFixed(2));
 
-      // Render Subtotal Breakdown Rows
-      const foodSubRow = document.getElementById('food-subtotal-row');
-      const liquorSubSection = document.getElementById('liquor-subtotal-section');
-      const liquorSubRow = document.getElementById('liquor-subtotal-row');
-      const foodSubEl = document.getElementById('bill-food-subtotal');
-      const liquorSubEl = document.getElementById('bill-liquor-subtotal');
-      const subtotalEl = document.getElementById('bill-subtotal');
+      // ===== NEW CARD-BASED BILLING BREAKDOWN RENDERING =====
 
-      const beerSubRow = document.getElementById('beer-subtotal-row');
-      const imflSubRow = document.getElementById('imfl-subtotal-row');
-      const wineSubRow = document.getElementById('wine-subtotal-row');
-      const genLiquorSubRow = document.getElementById('gen-liquor-subtotal-row');
+      // GST Card (Food)
+      const gstCard = document.getElementById('gst-billing-card');
+      const exciseCard = document.getElementById('excise-billing-card');
 
-      const beerSubEl = document.getElementById('bill-beer-subtotal');
-      const imflSubEl = document.getElementById('bill-imfl-subtotal');
-      const wineSubEl = document.getElementById('bill-wine-subtotal');
-      const genLiquorSubEl = document.getElementById('bill-gen-liquor-subtotal');
+      const gstInvoiceTotal = foodSubtotal + customChargesTotal + totalGst;
+      const exciseBillTotal = liquorSubtotal + totalVat;
 
-      if (foodSubRow) foodSubRow.style.display = foodSubtotal > 0 ? 'flex' : 'none';
-      if (foodSubEl) foodSubEl.textContent = `₹${foodSubtotal.toFixed(2)}`;
+      const showGstCard = (activeTab === 'all' || activeTab === 'food' || activeTab === 'billing') && (foodSubtotal > 0 || customChargesTotal > 0);
+      const showExciseCard = (activeTab === 'all' || activeTab === 'bar' || activeTab === 'billing') && (liquorSubtotal > 0);
 
-      if (liquorSubSection) liquorSubSection.style.display = liquorSubtotal > 0 ? 'block' : 'none';
-      if (liquorSubRow) liquorSubRow.style.display = liquorSubtotal > 0 ? 'flex' : 'none';
-      if (liquorSubEl) liquorSubEl.textContent = `₹${liquorSubtotal.toFixed(2)}`;
+      // Show/hide GST card
+      if (gstCard) {
+        gstCard.style.display = showGstCard ? 'block' : 'none';
+        const foodSubEl = document.getElementById('bill-food-subtotal');
+        if (foodSubEl) foodSubEl.textContent = `₹${foodSubtotal.toFixed(2)}`;
 
-      if (beerSubRow) beerSubRow.style.display = beerSubtotal > 0 ? 'flex' : 'none';
-      if (beerSubEl) beerSubEl.textContent = `₹${beerSubtotal.toFixed(2)}`;
+        // Custom charges in GST card
+        const gstCustomDisp = document.getElementById('gst-custom-charges-display');
+        const gstCustomAmt = document.getElementById('gst-custom-charges-amount');
+        if (gstCustomDisp) gstCustomDisp.style.display = customChargesTotal > 0 ? 'block' : 'none';
+        if (gstCustomAmt) gstCustomAmt.textContent = `₹${customChargesTotal.toFixed(2)}`;
 
-      if (imflSubRow) imflSubRow.style.display = imflSubtotal > 0 ? 'flex' : 'none';
-      if (imflSubEl) imflSubEl.textContent = `₹${imflSubtotal.toFixed(2)}`;
+        const cgstRow = document.getElementById('gst-cgst-row');
+        const sgstRow = document.getElementById('gst-sgst-row');
+        if (cgstRow) { cgstRow.style.display = cgst > 0 ? 'flex' : 'none'; document.getElementById('gst-cgst-label').textContent = `CGST (${activeTaxSettings.cgst_pct}%)`; document.getElementById('gst-cgst-val').textContent = `₹${cgst.toFixed(2)}`; }
+        if (sgstRow) { sgstRow.style.display = sgst > 0 ? 'flex' : 'none'; document.getElementById('gst-sgst-label').textContent = `SGST (${activeTaxSettings.sgst_pct}%)`; document.getElementById('gst-sgst-val').textContent = `₹${sgst.toFixed(2)}`; }
 
-      if (wineSubRow) wineSubRow.style.display = wineSubtotal > 0 ? 'flex' : 'none';
-      if (wineSubEl) wineSubEl.textContent = `₹${wineSubtotal.toFixed(2)}`;
+        const gstTaxTotalEl = document.getElementById('gst-tax-total-val');
+        if (gstTaxTotalEl) gstTaxTotalEl.textContent = `₹${totalGst.toFixed(2)}`;
 
-      if (genLiquorSubRow) genLiquorSubRow.style.display = genLiquorSubtotal > 0 ? 'flex' : 'none';
-      if (genLiquorSubEl) genLiquorSubEl.textContent = `₹${genLiquorSubtotal.toFixed(2)}`;
+        const gstInvTotalEl = document.getElementById('gst-invoice-total');
+        if (gstInvTotalEl) gstInvTotalEl.textContent = `₹${gstInvoiceTotal.toFixed(2)}`;
 
-      if (subtotalEl) subtotalEl.textContent = `₹${combinedSubtotal.toFixed(2)}`;
+        const gstBadge = document.getElementById('gst-card-total-badge');
+        if (gstBadge) gstBadge.textContent = `₹${gstInvoiceTotal.toFixed(2)}`;
+      }
+
+      // Show/hide Excise Card
+      if (exciseCard) {
+        exciseCard.style.display = showExciseCard ? 'block' : 'none';
+
+        const beerSubEl = document.getElementById('bill-beer-subtotal');
+        const imflSubEl = document.getElementById('bill-imfl-subtotal');
+        const wineSubEl = document.getElementById('bill-wine-subtotal');
+        const genLiqSubEl = document.getElementById('bill-gen-liquor-subtotal');
+        const liquorSubEl = document.getElementById('bill-liquor-subtotal');
+
+        const beerRow = document.getElementById('excise-beer-row');
+        const imflRow = document.getElementById('excise-imfl-row');
+        const wineRow = document.getElementById('excise-wine-row');
+        const genRow = document.getElementById('excise-gen-row');
+
+        if (beerRow) beerRow.style.display = beerSubtotal > 0 ? 'flex' : 'none';
+        if (beerSubEl) beerSubEl.textContent = `₹${beerSubtotal.toFixed(2)}`;
+        if (imflRow) imflRow.style.display = imflSubtotal > 0 ? 'flex' : 'none';
+        if (imflSubEl) imflSubEl.textContent = `₹${imflSubtotal.toFixed(2)}`;
+        if (wineRow) wineRow.style.display = wineSubtotal > 0 ? 'flex' : 'none';
+        if (wineSubEl) wineSubEl.textContent = `₹${wineSubtotal.toFixed(2)}`;
+        if (genRow) genRow.style.display = genLiquorSubtotal > 0 ? 'flex' : 'none';
+        if (genLiqSubEl) genLiqSubEl.textContent = `₹${genLiquorSubtotal.toFixed(2)}`;
+        if (liquorSubEl) liquorSubEl.textContent = `₹${liquorSubtotal.toFixed(2)}`;
+
+        const beerVatRow = document.getElementById('excise-beer-vat-row');
+        const imflVatRow = document.getElementById('excise-imfl-vat-row');
+        const wineVatRow = document.getElementById('excise-wine-vat-row');
+        const genVatRow = document.getElementById('excise-gen-vat-row');
+
+        if (beerVatRow) { beerVatRow.style.display = beerVat > 0 ? 'flex' : 'none'; document.getElementById('excise-beer-vat-label').textContent = `Beer VAT (${activeTaxSettings.vat_beer_pct}%)`; document.getElementById('excise-beer-vat-val').textContent = `₹${beerVat.toFixed(2)}`; }
+        if (imflVatRow) { imflVatRow.style.display = imflVat > 0 ? 'flex' : 'none'; document.getElementById('excise-imfl-vat-label').textContent = `IMFL VAT (${activeTaxSettings.vat_imfl_pct}%)`; document.getElementById('excise-imfl-vat-val').textContent = `₹${imflVat.toFixed(2)}`; }
+        if (wineVatRow) { wineVatRow.style.display = wineVat > 0 ? 'flex' : 'none'; document.getElementById('excise-wine-vat-label').textContent = `Wine VAT (${activeTaxSettings.vat_wine_pct}%)`; document.getElementById('excise-wine-vat-val').textContent = `₹${wineVat.toFixed(2)}`; }
+        if (genVatRow) { genVatRow.style.display = genVat > 0 ? 'flex' : 'none'; document.getElementById('excise-gen-vat-label').textContent = `Liquor VAT (${activeTaxSettings.vat_gen_pct}%)`; document.getElementById('excise-gen-vat-val').textContent = `₹${genVat.toFixed(2)}`; }
+
+        const exciseVatTotalEl = document.getElementById('excise-vat-total-val');
+        if (exciseVatTotalEl) exciseVatTotalEl.textContent = `₹${totalVat.toFixed(2)}`;
+
+        const exciseBillTotalEl = document.getElementById('excise-bill-total');
+        if (exciseBillTotalEl) exciseBillTotalEl.textContent = `₹${exciseBillTotal.toFixed(2)}`;
+
+        const exciseBadge = document.getElementById('excise-card-total-badge');
+        if (exciseBadge) exciseBadge.textContent = `₹${exciseBillTotal.toFixed(2)}`;
+      }
 
       // Render Custom Charges Breakdown Box
       const customChargesContainer = document.getElementById('custom-charges-container');
@@ -1493,7 +2584,7 @@
       const netTotal = Math.max(0, grossTotal - discAmt);
 
       const row = document.createElement('div');
-      row.className = 'd-flex align-items-center justify-content-between py-2 border-bottom';
+      row.className = 'd-flex align-items-center justify-content-between py-2 border-bottom cart-item-row';
       row.innerHTML = `
         <div class="me-2 text-truncate" style="max-width: 130px;">
           <div class="fw-semibold text-dark small text-truncate" title="${item.name}">${item.name}</div>
@@ -1501,18 +2592,18 @@
           ${discAmt > 0 ? `<div class="badge bg-success-subtle text-success border border-success-subtle mt-1" style="font-size: 0.68rem;">-${item.discount_type === 'percentage' ? discVal + '%' : '₹' + discVal.toFixed(2)} (${item.discount_reason || 'Disc'})</div>` : ''}
         </div>
         <div class="d-flex align-items-center gap-1">
-          <button type="button" class="btn btn-sm btn-light border qty-btn qty-minus"><i class="bi bi-dash"></i></button>
-          <input type="number" min="1" value="${item.quantity}" class="form-control form-control-sm text-center qty-input p-0" style="width: 34px; height: 26px; font-size: 0.8rem;">
-          <button type="button" class="btn btn-sm btn-light border qty-btn qty-plus"><i class="bi bi-plus"></i></button>
+          <button type="button" class="btn btn-sm btn-light border qty-btn qty-minus" tabindex="-1"><i class="bi bi-dash"></i></button>
+          <input type="number" id="cart-qty-${item.id}" data-tally-custom="true" min="1" value="${item.quantity}" class="form-control form-control-sm text-center qty-input p-0 tally-input fw-bold" style="width: 38px; height: 26px; font-size: 0.8rem;" onkeydown="handleCartQtyNav(event, ${item.id})">
+          <button type="button" class="btn btn-sm btn-light border qty-btn qty-plus" tabindex="-1"><i class="bi bi-plus"></i></button>
         </div>
         <div class="d-flex align-items-center gap-1 ms-1">
-          <button type="button" class="btn btn-sm ${discAmt > 0 ? 'btn-success text-white' : 'btn-outline-primary'} py-0 px-2 item-disc-btn" style="font-size: 0.72rem;" title="Item Discount">
+          <button type="button" class="btn btn-sm ${discAmt > 0 ? 'btn-success text-white' : 'btn-outline-primary'} py-0 px-2 item-disc-btn" style="font-size: 0.72rem;" title="Item Discount" tabindex="-1">
             <i class="bi bi-percent me-1"></i>${discAmt > 0 ? 'Disc' : 'Disc'}
           </button>
           <div class="text-end" style="min-width: 55px;">
             ${discAmt > 0 ? `<div class="text-muted text-decoration-line-through fs-8">₹${grossTotal.toFixed(2)}</div><div class="fw-bold text-success small">₹${netTotal.toFixed(2)}</div>` : `<div class="fw-bold text-dark small">₹${grossTotal.toFixed(2)}</div>`}
           </div>
-          <button type="button" class="btn btn-sm text-danger remove-item p-0 border-0 ms-1" title="Remove"><i class="bi bi-trash"></i></button>
+          <button type="button" class="btn btn-sm text-danger remove-item p-0 border-0 ms-1" title="Remove" tabindex="-1"><i class="bi bi-trash"></i></button>
         </div>
       `;
 
@@ -1548,9 +2639,9 @@
       pill.classList.add('active');
       state.selectedCategory = pill.dataset.cat;
 
-      // Auto-switch viewMode if category is Bar/Beer/Liquor/Wine
+      // Auto-switch viewMode if category is Bar/Beer/Liquor/Wine (only if outlet serves alcohol)
       const catText = (pill.textContent || '').toLowerCase();
-      if (['bar', 'beer', 'liquor', 'wine', 'spirit'].some(k => catText.includes(k))) {
+      if (state.servesAlcohol && ['bar', 'beer', 'liquor', 'wine', 'spirit'].some(k => catText.includes(k))) {
         state.viewMode = 'bar';
         const badge = document.getElementById('view-mode-badge');
         if (badge) {
@@ -1565,8 +2656,24 @@
     });
 
     document.getElementById('menu-search')?.addEventListener('input', (e) => {
+      isMenuCardArrowHighlighted = false;
+      menuCardHighlightIndex = 0;
       state.searchQuery = e.target.value;
       renderMenu();
+      window.renderMenuSearchDropdown(e.target.value);
+    });
+
+    document.getElementById('menu-search')?.addEventListener('focus', (e) => {
+      if (e.target.value.trim().length > 0) {
+        window.renderMenuSearchDropdown(e.target.value);
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      const wrapper = e.target.closest('.combobox-wrapper');
+      if (!wrapper) {
+        window.closeMenuSearchDropdown();
+      }
     });
 
     document.getElementById('cust-name')?.addEventListener('input', (e) => state.customerName = e.target.value);
@@ -1629,16 +2736,55 @@
         }
       }
 
-      const currentYear = new Date().getFullYear();
-      const randNum = Math.floor(1000 + Math.random() * 9000);
+      // Helper: update a number field based on sequence info
+      function applySeqInfo(wrapper, input, seqInfo, previewId, badgeId, hintId) {
+        if (!wrapper || !input) return;
+        const isAuto = seqInfo.mode === 'automatic';
+        const isManualOverride = seqInfo.mode === 'manual_override';
+        const nextNum = seqInfo.next_number || '';
+
+        const badge = document.getElementById(badgeId);
+        const preview = document.getElementById(previewId);
+        const hint = document.getElementById(hintId);
+
+        if (isAuto) {
+          if (badge) {
+            badge.className = 'invoice-number-badge invoice-badge-auto';
+            badge.innerHTML = '<i class="bi bi-magic"></i> Auto';
+          }
+          if (preview) { preview.style.display = 'block'; preview.textContent = nextNum || 'Auto-assigned'; }
+          input.style.display = 'none';
+          input.value = nextNum;
+          if (hint) hint.textContent = 'Auto-generated by sequence settings';
+        } else if (isManualOverride) {
+          if (badge) {
+            badge.className = 'invoice-number-badge invoice-badge-manual';
+            badge.innerHTML = '<i class="bi bi-pencil-fill"></i> Override';
+          }
+          if (preview) preview.style.display = 'none';
+          input.style.display = 'block';
+          if (!input.value && nextNum) input.value = nextNum;
+          input.readOnly = false;
+          if (hint) hint.textContent = 'Suggested: ' + (nextNum || 'enter manually');
+        } else {
+          // Manual
+          if (badge) {
+            badge.className = 'invoice-number-badge invoice-badge-manual';
+            badge.innerHTML = '<i class="bi bi-pencil-fill"></i> Manual';
+          }
+          if (preview) preview.style.display = 'none';
+          input.style.display = 'block';
+          input.readOnly = false;
+          if (!input.value) input.value = '';
+          if (hint) hint.textContent = 'Enter manually (required)';
+        }
+      }
 
       // Handle GST Tax Invoice No.
       if (showGstin) {
         wrapperGstin.style.display = 'block';
         wrapperGstin.className = showExcise ? 'col-md-6' : 'col-md-12';
-        if (gstinInput && !gstinInput.value) {
-          gstinInput.value = `INV-${currentYear}-${randNum}`;
-        }
+        applySeqInfo(wrapperGstin, gstinInput, gstSeqInfo, 'gstin-preview-display', 'gstin-seq-mode-badge', 'gstin-seq-hint');
       } else {
         wrapperGstin.style.display = 'none';
         if (gstinInput) gstinInput.value = '';
@@ -1648,9 +2794,7 @@
       if (showExcise) {
         wrapperExcise.style.display = 'block';
         wrapperExcise.className = showGstin ? 'col-md-6' : 'col-md-12';
-        if (exciseInput && !exciseInput.value) {
-          exciseInput.value = `EXC-${currentYear}-${randNum}`;
-        }
+        applySeqInfo(wrapperExcise, exciseInput, exciseSeqInfo, 'excise-preview-display', 'excise-seq-mode-badge', 'excise-seq-hint');
       } else {
         wrapperExcise.style.display = 'none';
         if (exciseInput) exciseInput.value = '';
@@ -1853,8 +2997,15 @@
       const radioBtn = document.getElementById(targetModeId);
       if (radioBtn) radioBtn.checked = true;
 
+      // Clear previous invoice numbers so applySeqInfo can refill freshly
+      const gstinInput2 = document.getElementById('modal-gstin-no');
+      const exciseInput2 = document.getElementById('modal-excise-bill-no');
+      if (gstinInput2) gstinInput2.value = '';
+      if (exciseInput2) exciseInput2.value = '';
+
       syncSettlementFieldsVisibility();
       initPaymentSplitRows();
+
 
       const modalEl = document.getElementById('settlementModal');
       if (modalEl && window.bootstrap) {
@@ -1901,6 +3052,14 @@
 
     // Core Submit Logic
     function submitOrder(action, extraData = {}) {
+      const custNameInput = (document.getElementById('cust-name')?.value || state.customerName || '').trim();
+      const partyObj = checkSameGstinForParty(custNameInput);
+      if (partyObj && !window._bypassedSameGstin && !extraData.bypass_same_gstin) {
+        window._pendingSubmitAction = { action, extraData };
+        promptSameGstinModal(partyObj);
+        return;
+      }
+
       const payload = {
         order_id: state.activeOrderId,
         customer_name: state.customerName || 'Guest',
@@ -1919,6 +3078,7 @@
         invoice_mode: extraData.invoice_mode || 'food',
         receipt_no: state.receiptNo || '',
         advance_amount_paid: state.advanceAmountPaid || 0,
+        bypass_same_gstin: extraData.bypass_same_gstin || (window._bypassedSameGstin ? 1 : 0),
         items: state.cart.map(i => ({
           menu_item_id: i.id,
           quantity: i.quantity,
@@ -1949,6 +3109,11 @@
       })
         .then(res => res.json())
         .then(data => {
+          if (data.same_gstin_warning) {
+            window._pendingSubmitAction = { action, extraData };
+            promptSameGstinModal(data);
+            return;
+          }
           if (data.success) {
             // Close Modal if open
             const modalEl = document.getElementById('settlementModal');
@@ -1997,6 +3162,8 @@
     }
 
     function resetPOS() {
+      window._bypassedSameGstin = false;
+      window._pendingSubmitAction = null;
       state.cart = [];
       state.activeOrderId = null;
       state.activeOrderNumber = null;
@@ -2251,6 +3418,7 @@
 
     // Initial setup
     try {
+      window.posState = state;
       updateAutoAppliedCharges();
       renderMenu();
       renderCart();
@@ -2259,5 +3427,302 @@
       console.error('POS Initial Setup Error:', err);
     }
   })();
+
+  let posTallyEngine = null;
+  let menuCardHighlightIndex = 0;
+  let isMenuCardArrowHighlighted = false;
+
+  window.openQuickAddItemModal = function(prefillName = '') {
+    const modalEl = document.getElementById('quickAddItemModal');
+    if (!modalEl) return;
+
+    let cleanName = (prefillName || '').replace(/^create\s*/i, '').trim();
+
+    const nameInp = modalEl.querySelector('[name="name"]');
+    const priceInp = modalEl.querySelector('[name="price"]');
+    if (nameInp) nameInp.value = cleanName;
+
+    if (window.bootstrap && window.bootstrap.Modal) {
+      const bsModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+      bsModal.show();
+    } else {
+      modalEl.classList.add('show');
+      modalEl.style.display = 'block';
+      document.body.classList.add('modal-open');
+    }
+
+    setTimeout(() => {
+      if (cleanName && priceInp) {
+        priceInp.focus();
+        try { priceInp.select(); } catch(e){}
+      } else if (nameInp) {
+        nameInp.focus();
+      }
+    }, 300);
+  };
+
+  window.handleCartQtyNav = function(event, itemId) {
+    if (event.key === 'Enter' || event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const searchInput = document.getElementById('menu-search');
+      if (searchInput) {
+        searchInput.value = '';
+        if (window.posState) {
+          window.posState.searchQuery = '';
+        }
+        isMenuCardArrowHighlighted = false;
+        menuCardHighlightIndex = 0;
+
+        const searchEvt = new Event('input', { bubbles: true });
+        searchInput.dispatchEvent(searchEvt);
+
+        setTimeout(() => {
+          searchInput.focus();
+          try { searchInput.select(); } catch(e){}
+        }, 50);
+      }
+    }
+  };
+
+  let activeMenuSearchIndex = -1;
+  let currentMenuSearchResults = [];
+
+  window.closeMenuSearchDropdown = function() {
+    const suggestionsBox = document.getElementById('menu-search-suggestions');
+    const searchInput = document.getElementById('menu-search');
+    if (suggestionsBox) suggestionsBox.style.display = 'none';
+    if (searchInput) searchInput.setAttribute('aria-expanded', 'false');
+    activeMenuSearchIndex = -1;
+    currentMenuSearchResults = [];
+  };
+
+  window.setMenuSearchActiveIndex = function(idx) {
+    const suggestionsBox = document.getElementById('menu-search-suggestions');
+    if (!suggestionsBox) return;
+    const items = suggestionsBox.querySelectorAll('.combobox-item');
+    items.forEach((el) => {
+      el.classList.remove('active', 'bg-primary', 'text-white', 'shadow-sm');
+      el.style.backgroundColor = '';
+      el.style.color = '';
+      
+      const title = el.querySelector('.item-title');
+      if (title) title.style.color = '';
+      const cat = el.querySelector('.item-cat');
+      if (cat) { cat.style.color = ''; cat.style.backgroundColor = ''; cat.style.borderColor = ''; }
+      const price = el.querySelector('.item-price');
+      if (price) price.style.color = '';
+      const enterBadge = el.querySelector('.enter-badge');
+      if (enterBadge) enterBadge.style.display = 'none';
+      const avatar = el.querySelector('.cust-avatar');
+      if (avatar) { avatar.style.backgroundColor = ''; avatar.style.color = ''; }
+    });
+
+    if (idx >= 0 && idx < items.length) {
+      activeMenuSearchIndex = idx;
+      const activeItem = items[activeMenuSearchIndex];
+      activeItem.classList.add('active', 'bg-primary', 'text-white', 'shadow-sm');
+      activeItem.style.backgroundColor = '#0d6efd';
+      activeItem.style.color = '#ffffff';
+
+      const title = activeItem.querySelector('.item-title');
+      if (title) title.style.color = '#ffffff';
+      const cat = activeItem.querySelector('.item-cat');
+      if (cat) { cat.style.color = '#ffffff'; cat.style.backgroundColor = 'rgba(255,255,255,0.25)'; cat.style.borderColor = 'transparent'; }
+      const price = activeItem.querySelector('.item-price');
+      if (price) price.style.color = '#ffeb3b';
+      const enterBadge = activeItem.querySelector('.enter-badge');
+      if (enterBadge) enterBadge.style.display = 'inline-flex';
+      const avatar = activeItem.querySelector('.cust-avatar');
+      if (avatar) { avatar.style.backgroundColor = '#ffffff'; avatar.style.color = '#0d6efd'; }
+
+      activeItem.scrollIntoView({ block: 'nearest' });
+    } else {
+      activeMenuSearchIndex = -1;
+    }
+  };
+
+  window.selectMenuSearchItem = function(itemObj) {
+    window.closeMenuSearchDropdown();
+    const searchInput = document.getElementById('menu-search');
+
+    if (itemObj && itemObj.isCreateNew) {
+      const q = (searchInput?.value || '').trim();
+      if (searchInput) {
+        searchInput.value = '';
+        if (window.posState) window.posState.searchQuery = '';
+      }
+      openQuickAddItemModal(q);
+    } else if (itemObj) {
+      if (searchInput) {
+        searchInput.value = '';
+        if (window.posState) window.posState.searchQuery = '';
+      }
+      if (typeof window.addToCartGlobal === 'function') {
+        window.addToCartGlobal(itemObj);
+      }
+    }
+  };
+
+  window.renderMenuSearchDropdown = function(queryStr = '') {
+    const suggestionsBox = document.getElementById('menu-search-suggestions');
+    const searchInput = document.getElementById('menu-search');
+    if (!suggestionsBox) return;
+
+    const q = (queryStr || '').trim().toLowerCase();
+    if (!q) {
+      window.closeMenuSearchDropdown();
+      return;
+    }
+
+    const allItems = (typeof window.getPosMenuItems === 'function') ? window.getPosMenuItems() : ((window.posMenuItems && window.posMenuItems.length > 0) ? window.posMenuItems : []);
+    const matchingItems = allItems.filter(item => {
+      return item.name.toLowerCase().includes(q) || (item.category_name && item.category_name.toLowerCase().includes(q));
+    });
+
+    const createNewObj = {
+      isCreateNew: true,
+      name: `+ Create "${queryStr.trim()}"`
+    };
+
+    currentMenuSearchResults = [createNewObj, ...matchingItems];
+
+    let html = `
+      <div class="cust-items-list" style="max-height: 280px; overflow-y: auto; background: #ffffff; border: 1px solid #0d6efd; border-radius: 0.375rem; box-shadow: 0 10px 25px rgba(0,0,0,0.25);">
+        <!-- Item 0: Create New Menu Item -->
+        <div class="combobox-item d-flex align-items-center justify-content-between py-2 px-3 border-bottom cursor-pointer text-primary" id="menu-search-item-0" role="option" aria-selected="false" data-index="0" style="cursor: pointer; transition: all 0.15s ease;">
+          <div class="d-flex align-items-center gap-2 min-w-0">
+            <div class="cust-avatar bg-primary-subtle text-primary fw-bold" style="width:24px; height:24px; font-size:12px; display:flex; align-items:center; justify-content:center; border-radius:50%; flex-shrink:0;"><i class="bi bi-plus-lg"></i></div>
+            <div class="min-w-0">
+              <div class="fw-bold item-title text-truncate small">${escapeHtml(createNewObj.name)}</div>
+              <div class="text-muted small" style="font-size: 0.68rem;">Register new item in menu</div>
+            </div>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span class="enter-badge badge bg-warning text-dark font-monospace" style="display: none; font-size: 0.7rem; padding: 3px 6px;">ENTER ↵</span>
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle fs-8">NEW</span>
+          </div>
+        </div>
+    `;
+
+    if (matchingItems.length > 0) {
+      html += matchingItems.map((item, idx) => {
+        const itemIdx = idx + 1;
+        return `
+          <div class="combobox-item d-flex align-items-center justify-content-between py-2 px-3 border-bottom cursor-pointer" id="menu-search-item-${itemIdx}" role="option" aria-selected="false" data-index="${itemIdx}" style="cursor: pointer; transition: all 0.15s ease;">
+            <div class="min-w-0 me-2">
+              <div class="fw-semibold text-dark small text-truncate item-title">${escapeHtml(item.name)}</div>
+              <span class="badge bg-light text-secondary border extra-small item-cat" style="font-size: 0.68rem;">${escapeHtml(item.category_name || 'General')}</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <span class="enter-badge badge bg-warning text-dark font-monospace" style="display: none; font-size: 0.7rem; padding: 3px 6px;">ENTER ↵</span>
+              <div class="fw-bold text-success small text-nowrap item-price">₹${item.price.toFixed(2)}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } else {
+      html += `
+        <div class="p-3 text-center text-muted small">
+          <i class="bi bi-search fs-4 d-block text-secondary mb-1"></i>
+          No matching menu item found for "${escapeHtml(queryStr.trim())}"
+        </div>
+      `;
+    }
+
+    html += `</div>`;
+
+    suggestionsBox.innerHTML = html;
+    suggestionsBox.style.display = 'block';
+    if (searchInput) searchInput.setAttribute('aria-expanded', 'true');
+
+    activeMenuSearchIndex = matchingItems.length > 0 ? 1 : 0;
+    window.setMenuSearchActiveIndex(activeMenuSearchIndex);
+
+    suggestionsBox.querySelectorAll('.combobox-item').forEach((el, idx) => {
+      el.addEventListener('mouseenter', function () {
+        window.setMenuSearchActiveIndex(idx);
+      });
+      el.addEventListener('click', function (e) {
+        e.preventDefault();
+        window.selectMenuSearchItem(currentMenuSearchResults[idx]);
+      });
+    });
+  };
+
+  function handleMenuSearchKeyDown(event) {
+    const searchInput = document.getElementById('menu-search');
+    const suggestionsBox = document.getElementById('menu-search-suggestions');
+    const queryVal = (searchInput?.value || '').trim();
+    const isDropdownOpen = suggestionsBox && suggestionsBox.style.display !== 'none' && currentMenuSearchResults.length > 0;
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      if (isDropdownOpen) {
+        const nextIdx = (activeMenuSearchIndex + 1) >= currentMenuSearchResults.length ? 0 : activeMenuSearchIndex + 1;
+        window.setMenuSearchActiveIndex(nextIdx);
+      } else {
+        window.renderMenuSearchDropdown(queryVal);
+      }
+    } else if (event.key === 'ArrowUp') {
+      if (isDropdownOpen) {
+        event.preventDefault();
+        const prevIdx = (activeMenuSearchIndex - 1) < 0 ? currentMenuSearchResults.length - 1 : activeMenuSearchIndex - 1;
+        window.setMenuSearchActiveIndex(prevIdx);
+      }
+    } else if (event.key === 'Enter') {
+      if (isDropdownOpen) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (activeMenuSearchIndex >= 0 && currentMenuSearchResults[activeMenuSearchIndex]) {
+          window.selectMenuSearchItem(currentMenuSearchResults[activeMenuSearchIndex]);
+        } else if (queryVal.length > 0) {
+          const matches = currentMenuSearchResults.filter(i => !i.isCreateNew);
+          if (matches.length === 1) {
+            window.selectMenuSearchItem(matches[0]);
+          } else if (matches.length > 1) {
+            window.setMenuSearchActiveIndex(1);
+          } else {
+            window.selectMenuSearchItem(currentMenuSearchResults[0]);
+          }
+        }
+      }
+    } else if (event.key === 'Escape') {
+      if (isDropdownOpen) {
+        event.preventDefault();
+        window.closeMenuSearchDropdown();
+      }
+    }
+  }
+
+  function highlightPosMenuCard(cards) {
+    cards.forEach((c, idx) => {
+      if (idx === menuCardHighlightIndex) {
+        c.classList.add('border-primary', 'shadow');
+        c.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      } else {
+        c.classList.remove('border-primary', 'shadow');
+      }
+    });
+  }
+</script>
+<script src="{% static 'restaurant_admin/js/tally-engine.js' %}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    posTallyEngine = new TallyFormEngine({
+      container: '.pos-container'
+    });
+
+    // Zero-click initial auto-focus on page load
+    setTimeout(function() {
+      const custNameInput = document.getElementById('cust-name');
+      if (custNameInput && !custNameInput.readOnly && !custNameInput.disabled) {
+        custNameInput.focus();
+        try { custNameInput.select(); } catch(e){}
+      }
+    }, 150);
+  });
 </script>
 {% endblock %}

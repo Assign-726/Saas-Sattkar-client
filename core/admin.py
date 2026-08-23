@@ -3,7 +3,7 @@ from django.utils.html import format_html
 from django import forms
 from django.core.exceptions import ValidationError
 # pyrefly: ignore [missing-import]
-from .models import Category, SubCategory, MenuItem, Order, OrderItem, RestaurantSettings, RestaurantLanding, GalleryImage, TeamMember, Review, Coupon, InventoryItem, MenuItemIngredient, InventoryTransaction
+from .models import Category, SubCategory, MenuItem, Order, OrderItem, RestaurantSettings, RestaurantLanding, GalleryImage, TeamMember, Review, Coupon, InventoryItem, MenuItemIngredient, InventoryTransaction, BlogPost, BlogComment
 
 
 class SubCategoryInline(admin.TabularInline):
@@ -362,3 +362,19 @@ class InventoryTransactionAdmin(admin.ModelAdmin):
     list_filter = ('transaction_type', 'inventory_item__restaurant')
     search_fields = ('inventory_item__name', 'order__id')
     readonly_fields = ('created_at',)
+
+
+@admin.register(BlogPost)
+class BlogPostAdmin(admin.ModelAdmin):
+    list_display = ('title', 'restaurant', 'category', 'author', 'shape_pattern', 'is_published', 'created_at')
+    list_filter = ('restaurant', 'is_published', 'category', 'shape_pattern')
+    search_fields = ('title', 'excerpt', 'category', 'author', 'tags')
+    prepopulated_fields = {'slug': ('title',)}
+    list_per_page = 20
+
+
+@admin.register(BlogComment)
+class BlogCommentAdmin(admin.ModelAdmin):
+    list_display = ('author_name', 'post', 'is_approved', 'created_at')
+    list_filter = ('is_approved', 'created_at')
+    search_fields = ('author_name', 'author_email', 'content', 'post__title')

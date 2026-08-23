@@ -603,42 +603,7 @@
 </div>
 
 <!-- Pagination -->
-{% if orders.has_other_pages %}
-<div class="om-pagination">
-    {% if orders.has_previous %}
-    <a class="om-pg-btn"
-        href="?page=1{% if selected_status %}&status={{ selected_status }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"><i
-            class="bi bi-chevron-double-left"></i></a>
-    <a class="om-pg-btn"
-        href="?page={{ orders.previous_page_number }}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"><i
-            class="bi bi-chevron-left"></i></a>
-    {% else %}
-    <span class="om-pg-btn disabled"><i class="bi bi-chevron-double-left"></i></span>
-    <span class="om-pg-btn disabled"><i class="bi bi-chevron-left"></i></span>
-    {% endif %}
-
-    {% for num in orders.paginator.page_range %}
-    {% if orders.number == num %}
-    <span class="om-pg-btn active">{{ num }}</span>
-    {% elif num > orders.number|add:"-3" and num < orders.number|add:"3" %} <a class="om-pg-btn"
-        href="?page={{ num }}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}">
-        {{ num }}</a>
-        {% endif %}
-        {% endfor %}
-
-        {% if orders.has_next %}
-        <a class="om-pg-btn"
-            href="?page={{ orders.next_page_number }}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"><i
-                class="bi bi-chevron-right"></i></a>
-        <a class="om-pg-btn"
-            href="?page={{ orders.paginator.num_pages }}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}"><i
-                class="bi bi-chevron-double-right"></i></a>
-        {% else %}
-        <span class="om-pg-btn disabled"><i class="bi bi-chevron-right"></i></span>
-        <span class="om-pg-btn disabled"><i class="bi bi-chevron-double-right"></i></span>
-        {% endif %}
-</div>
-{% endif %}
+{% include 'restaurant_admin/includes/pagination.html' with page_obj=orders %}
 
 {% endblock %}
 

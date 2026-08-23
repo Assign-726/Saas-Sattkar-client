@@ -32,7 +32,7 @@
             {% if form.sku.errors %}<div class="text-danger small mt-1">{{ form.sku.errors|join:", " }}</div>{% endif %}
           </div>
           <div class="col-md-4">
-            <label class="form-label fw-semibold text-secondary small">Inventory Category <span class="text-danger">*</span></label>
+            <label class="form-label fw-semibold text-secondary small">Inventory Category</label>
             {{ form.category }}
             {% if form.category.errors %}<div class="text-danger small mt-1">{{ form.category.errors|join:", " }}</div>{% endif %}
           </div>
@@ -70,7 +70,7 @@
         <h6 class="fw-bold text-primary mb-3"><i class="bi bi-currency-rupee me-1"></i> 2. Costing & Pricing Rates</h6>
         <div class="row g-3 mb-4">
           <div class="col-md-6">
-            <label class="form-label fw-semibold text-secondary small">Default Cost Price (Purchase Rate per Unit ₹) <span class="text-danger">*</span></label>
+            <label class="form-label fw-semibold text-secondary small">Default Cost Price (Purchase Rate per Unit ₹)</label>
             {{ form.cost_price }}
             <div class="form-text fs-8 text-muted">Default purchase cost rate used during inward purchase entries.</div>
             {% if form.cost_price.errors %}<div class="text-danger small mt-1">{{ form.cost_price.errors|join:", " }}</div>{% endif %}
@@ -87,21 +87,27 @@
         <hr class="my-4">
         <h6 class="fw-bold text-primary mb-3"><i class="bi bi-file-earmark-text me-1"></i> 3. HSN/SAC Code & Input GST Tax Settings</h6>
         <div class="row g-3 mb-3">
-          <div class="col-md-4">
-            <label class="form-label fw-semibold text-secondary small">Taxability Type <span class="text-danger">*</span></label>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-dark small">Tax Configuration Mode <span class="text-danger">*</span></label>
+            {{ form.tax_configuration }}
+            <div class="form-text fs-8 text-muted">Inherit from Category or Override.</div>
+            {% if form.tax_configuration.errors %}<div class="text-danger small mt-1">{{ form.tax_configuration.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-secondary small">Taxability Type</label>
             {{ form.taxability_type }}
             {% if form.taxability_type.errors %}<div class="text-danger small mt-1">{{ form.taxability_type.errors|join:", " }}</div>{% endif %}
           </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label class="form-label fw-semibold text-secondary small">HSN / SAC Code</label>
             {{ form.hsn_sac_code }}
             <div class="form-text fs-8 text-muted">4 to 8 digit HSN classification code for GST compliance.</div>
             {% if form.hsn_sac_code.errors %}<div class="text-danger small mt-1">{{ form.hsn_sac_code.errors|join:", " }}</div>{% endif %}
           </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label class="form-label fw-semibold text-secondary small">GST Tax Rate (%)</label>
             {{ form.gst_rate }}
-            <div class="form-text fs-8 text-muted">Select standard GST rate applicable for input tax credit calculation.</div>
+            <div class="form-text fs-8 text-muted">Select standard GST rate applicable for input tax credit.</div>
             {% if form.gst_rate.errors %}<div class="text-danger small mt-1">{{ form.gst_rate.errors|join:", " }}</div>{% endif %}
           </div>
         </div>
@@ -124,4 +130,91 @@
     </div>
   </div>
 </div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const categorySelect = document.getElementById('{{ form.category.id_for_label }}');
+    const configSelect = document.getElementById('{{ form.tax_configuration.id_for_label }}');
+    const taxabilitySelect = document.getElementById('{{ form.taxability_type.id_for_label }}');
+    const hsnInput = document.getElementById('{{ form.hsn_sac_code.id_for_label }}');
+    const gstSelect = document.getElementById('{{ form.gst_rate.id_for_label }}');
+
+    let categoryTaxMap = {};
+
+    function updateItemTaxUI() {
+      const isInherit = configSelect.value === 'inherit';
+      const catId = categorySelect ? categorySelect.value : null;
+
+      if (isInherit) {
+        taxabilitySelect.disabled = true;
+        hsnInput.disabled = true;
+        gstSelect.disabled = true;
+
+        taxabilitySelect.classList.add('bg-light');
+        hsnInput.classList.add('bg-light');
+        gstSelect.classList.add('bg-light');
+
+        let resolvedGst = "0%";
+        let resolvedHsn = "None";
+        let resolvedTaxability = "Taxable";
+
+        if (catId && categoryTaxMap[catId]) {
+          const cat = categoryTaxMap[catId];
+          resolvedGst = cat.resolved_gst_rate !== undefined ? (cat.resolved_gst_rate + "%") : "0%";
+          resolvedHsn = cat.resolved_hsn_sac_code || "None";
+          resolvedTaxability = cat.resolved_taxability_type || "Taxable";
+        } else {
+          resolvedGst = "0% (Company Default)";
+          resolvedHsn = "Company Default";
+          resolvedTaxability = "Taxable (Company Default)";
+        }
+
+        hsnInput.placeholder = `Inherited: ${resolvedHsn}`;
+        if (gstSelect.options && gstSelect.options.length > 0) {
+          for (let option of gstSelect.options) {
+            if (option.value === '') {
+              option.text = `Inherited: ${resolvedGst}`;
+              gstSelect.value = '';
+              break;
+            }
+          }
+        }
+      } else {
+        taxabilitySelect.disabled = false;
+        hsnInput.disabled = false;
+        gstSelect.disabled = false;
+
+        taxabilitySelect.classList.remove('bg-light');
+        hsnInput.classList.remove('bg-light');
+        gstSelect.classList.remove('bg-light');
+
+        hsnInput.placeholder = '4 to 8 digit HSN tariff code';
+        if (gstSelect.options && gstSelect.options.length > 0) {
+          for (let option of gstSelect.options) {
+            if (option.value === '') {
+              option.text = '-- Select Rate --';
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    fetch("{% url 'restaurant_admin:inventory_category_api' restaurant_slug=restaurant.slug %}")
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.categories) {
+          data.categories.forEach(c => { categoryTaxMap[c.id] = c; });
+        }
+        updateItemTaxUI();
+      })
+      .catch(err => {
+        console.error("Error fetching category tax data:", err);
+        updateItemTaxUI();
+      });
+
+    if (configSelect) configSelect.addEventListener('change', updateItemTaxUI);
+    if (categorySelect) categorySelect.addEventListener('change', updateItemTaxUI);
+  });
+</script>
 {% endblock %}

@@ -56,6 +56,25 @@ class Restaurant(models.Model):
         else:
             return "Invoice"
 
+    def get_company_default(self, field_name):
+        from decimal import Decimal
+        defaults = {
+            'default_gst_rate': Decimal('0.00'),
+            'gst_rate': Decimal('0.00'),
+            'default_hsn_code': '',
+            'hsn_sac_code': '',
+            'hsn_code': '',
+            'taxability': 'taxable',
+            'taxability_type': 'taxable',
+            'default_unit': 'piece',
+            'unit': 'piece',
+            'default_warehouse': 'Main Store',
+            'valuation_method': 'FIFO',
+            'expense_account': 'Cost of Goods Sold',
+            'permission_group': 'All Staff',
+        }
+        return defaults.get(field_name, None)
+
     def save(self, *args, **kwargs):
         if self.trade_name and not self.name:
             self.name = self.trade_name
@@ -115,6 +134,7 @@ class RestaurantBranch(models.Model):
         related_name='branches'
     )
     name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=220, unique=True, blank=True, null=True)
     phone = models.CharField(max_length=20, blank=True)
     use_company_address = models.BooleanField(default=True)
     address_line_1 = models.CharField(max_length=255, blank=True)
@@ -152,6 +172,19 @@ class RestaurantBranch(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.restaurant.name})"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base_slug = slugify(self.name)
+            if not base_slug:
+                base_slug = f"branch-{self.pk or 'new'}"
+            candidate = base_slug
+            counter = 1
+            while RestaurantBranch.objects.filter(slug=candidate).exclude(pk=self.pk).exists() or Restaurant.objects.filter(slug=candidate).exists():
+                candidate = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = candidate
+        super().save(*args, **kwargs)
 
     @property
     def is_vat_config_complete(self):
