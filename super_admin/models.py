@@ -144,6 +144,13 @@ class RestaurantBranch(models.Model):
     pincode = models.CharField(max_length=20, blank=True)
     fssai_license_no = models.CharField(max_length=50, blank=True)
     serves_alcohol = models.BooleanField(default=False)
+    service_charge_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0.00,
+        verbose_name="Service Charge (%)",
+        help_text="Service charge percentage specific to this branch"
+    )
     
     # State VAT details (when serves_alcohol = True)
     vat_tin = models.CharField(max_length=50, blank=True, verbose_name="State VAT TIN")

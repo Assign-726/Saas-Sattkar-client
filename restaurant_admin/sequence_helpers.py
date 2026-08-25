@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 from core.models import DocumentSequenceSetting, Order, PurchaseOrder, AdvanceReceipt, DeliveryChallan
 
 
-def get_document_sequence_info(restaurant, document_type):
+def get_document_sequence_info(restaurant, document_type, branch=None):
     """
     Returns sequence configuration and next formatted voucher number for display in forms.
     """
@@ -23,7 +23,7 @@ def get_document_sequence_info(restaurant, document_type):
             'required': True,
         }
 
-    setting = DocumentSequenceSetting.get_sequence_setting(restaurant, document_type)
+    setting = DocumentSequenceSetting.get_sequence_setting(restaurant, document_type, branch=branch)
     today = timezone.now().date()
 
     # Check date validity
@@ -52,9 +52,9 @@ def get_document_sequence_info(restaurant, document_type):
     }
 
 
-def validate_unique_document_number(restaurant, document_type, number, exclude_pk=None):
+def validate_unique_document_number(restaurant, document_type, number, branch=None, exclude_pk=None):
     """
-    Enforces strict database-level validation to reject duplicate voucher numbers for the active outlet.
+    Enforces strict database-level validation to reject duplicate voucher numbers for the active outlet/branch.
     """
     if not restaurant or not number:
         return
@@ -66,37 +66,54 @@ def validate_unique_document_number(restaurant, document_type, number, exclude_p
     duplicate = False
 
     if document_type == 'sales':
-        qs = Order.objects.filter(restaurant=restaurant).filter(
-            Q(gstin_no__iexact=clean_number) | Q(excise_bill_no__iexact=clean_number)
-        )
+        qs = Order.objects.filter(restaurant=restaurant)
+        if branch:
+            qs = qs.filter(branch=branch)
+        qs = qs.filter(Q(gstin_no__iexact=clean_number) | Q(excise_bill_no__iexact=clean_number))
+        if exclude_pk:
+            qs = qs.exclude(pk=exclude_pk)
+        duplicate = qs.exists()
+
+    elif document_type == 'vat_bill':
+        qs = Order.objects.filter(restaurant=restaurant)
+        if branch:
+            qs = qs.filter(branch=branch)
+        qs = qs.filter(excise_bill_no__iexact=clean_number)
         if exclude_pk:
             qs = qs.exclude(pk=exclude_pk)
         duplicate = qs.exists()
 
     elif document_type == 'purchase':
         qs = PurchaseOrder.objects.filter(restaurant=restaurant, invoice_number__iexact=clean_number)
+        if branch:
+            qs = qs.filter(branch=branch)
         if exclude_pk:
             qs = qs.exclude(pk=exclude_pk)
         duplicate = qs.exists()
 
     elif document_type == 'receipt':
         qs = AdvanceReceipt.objects.filter(restaurant=restaurant, receipt_no__iexact=clean_number)
+        if branch:
+            qs = qs.filter(branch=branch)
         if exclude_pk:
             qs = qs.exclude(pk=exclude_pk)
         duplicate = qs.exists()
 
     elif document_type == 'challan':
         qs = DeliveryChallan.objects.filter(restaurant=restaurant, challan_no__iexact=clean_number)
+        if branch:
+            qs = qs.filter(from_branch=branch)
         if exclude_pk:
             qs = qs.exclude(pk=exclude_pk)
         duplicate = qs.exists()
 
     if duplicate:
         doc_label = dict(DocumentSequenceSetting.DocumentType.choices).get(document_type, document_type)
-        raise ValidationError(f"Duplicate voucher number error: '{clean_number}' already exists for {doc_label} in this outlet.")
+        branch_name = f" in {branch.name}" if branch else ""
+        raise ValidationError(f"Duplicate voucher number error: '{clean_number}' already exists for {doc_label}{branch_name}.")
 
 
-def get_and_increment_document_number(restaurant, document_type, user_input_no=None, exclude_pk=None):
+def get_and_increment_document_number(restaurant, document_type, branch=None, user_input_no=None, exclude_pk=None):
     """
     Safely retrieves the document number and increments current_counter using DB lock and F() expressions.
     """
@@ -107,9 +124,13 @@ def get_and_increment_document_number(restaurant, document_type, user_input_no=N
         return clean_input
 
     with db_transaction.atomic():
+        lookup_kwargs = {
+            'restaurant': restaurant,
+            'branch': branch,
+            'document_type': document_type,
+        }
         setting, _ = DocumentSequenceSetting.objects.select_for_update().get_or_create(
-            restaurant=restaurant,
-            document_type=document_type,
+            **lookup_kwargs,
             defaults={
                 'generation_mode': DocumentSequenceSetting.GenerationMode.AUTOMATIC,
                 'prefix': DocumentSequenceSetting.DEFAULT_PREFIXES.get(document_type, ''),
@@ -161,5 +182,5 @@ def get_and_increment_document_number(restaurant, document_type, user_input_no=N
                 setting.refresh_from_db()
 
         # Strict duplicate check before returning
-        validate_unique_document_number(restaurant, document_type, final_number, exclude_pk=exclude_pk)
+        validate_unique_document_number(restaurant, document_type, final_number, branch=branch, exclude_pk=exclude_pk)
         return final_number

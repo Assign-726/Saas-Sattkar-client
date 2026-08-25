@@ -460,6 +460,7 @@
                             data-customer="{{ o.customer_name|default:'Guest' }}"
                             data-table="{% if o.table %}{{ o.table.name }}{% else %}Counter / Takeaway{% endif %}"
                             data-amount="{{ o.total_amount|floatformat:2 }}" 
+                            data-paid="{{ o.paid_amount|floatformat:2 }}"
                             data-due="{% if o.due_amount %}{{ o.due_amount|floatformat:2 }}{% else %}{{ o.total_amount|floatformat:2 }}{% endif %}"
                             data-advance-paid="{{ o.advance_amount_paid|floatformat:2 }}"
                             data-receipt-no="{% if o.advance_receipt %}{{ o.advance_receipt.receipt_no }}{% endif %}"
@@ -498,148 +499,110 @@
     </div>
 </div>
 
-<!-- Full Settle & Checkout Order Modal for Records Page -->
-<div class="modal fade" id="recordsSettleModal" tabindex="-1" aria-labelledby="recordsSettleModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-lg">
-    <div class="modal-content border-0 shadow-lg overflow-hidden">
-      <div class="modal-header bg-dark text-white py-3">
-        <h5 class="modal-title fw-bold text-white mb-0 d-flex align-items-center" id="recordsSettleModalLabel">
-          <i class="bi bi-wallet2 text-warning me-2 fs-4"></i> Settle & Checkout Order
-        </h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+<!-- Unified Settle & Checkout Modal (Pixel-Perfect pos-terminal style) -->
+<div id="recSettleVeil" class="veil" style="display:none; position:fixed; inset:0; background:rgba(20,22,28,.6); z-index:9999; align-items:center; justify-content:center; padding:16px; animation:fade .14s ease-out;">
+  <div class="card wide" style="background:#FFF; border:1px solid #E3DFD7; border-radius:14px; max-width:540px; width:100%; max-height:92vh; display:flex; flex-direction:column; box-shadow:0 24px 60px rgba(0,0,0,.2); overflow:hidden; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+    
+    <!-- Header -->
+    <div class="ch" style="padding:18px 24px 14px; border-bottom:1px solid #E3DFD7; display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <h3 id="recSettleGrandTitle" style="font-family:'Bricolage Grotesque',sans-serif; font-size:20px; font-weight:800; margin:0; color:#1A1815;">Settle — ₹0.00</h3>
+        <p id="recSettleOrderMeta" style="font-size:12px; color:#6E675C; margin:3px 0 0 0; font-weight:500;">ORD-0001 · Table · Dine-in</p>
       </div>
-
-      <div class="modal-body p-4">
-        <input type="hidden" id="rec-settle-order-id">
-        <input type="hidden" id="rec-settle-grand-total" value="0">
-
-        <!-- Top Order Info Summary Box -->
-        <div class="p-3 bg-light rounded-3 mb-4 border d-flex justify-content-between align-items-center">
-          <div>
-            <h6 class="fw-bold text-dark mb-1" id="rec-settle-order-title">Order #---</h6>
-            <div class="text-muted small" id="rec-settle-order-meta">Table --- | Billed To: Guest</div>
-          </div>
-          <div class="text-end">
-            <span class="d-block text-muted uppercase extra-small fw-bold" style="font-size: 0.75rem;">Amount Payable</span>
-            <span class="fs-3 fw-bold text-success" id="rec-settle-amount-payable">₹0.00</span>
-          </div>
-        </div>
-
-        <!-- Advance Deposit Settlement Breakdown Card -->
-        <div id="rec-modal-advance-deduction-card" class="card border-primary border-opacity-20 bg-primary bg-opacity-10 rounded-3 mb-4 p-3 shadow-sm" style="display: none;">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="fw-bold text-dark"><i class="bi bi-bookmark-star-fill text-warning me-1"></i> Advance Deposit Attached (<span id="rec-modal-receipt-no">REC-XXXX</span>)</span>
-            <span class="badge bg-primary text-white">Deposit Settlement</span>
-          </div>
-          <div class="row text-center g-2 pt-2 border-top border-primary border-opacity-20">
-            <div class="col-4">
-              <span class="d-block text-muted small text-uppercase font-weight-bold" style="font-size:0.7rem;">Grand Total</span>
-              <span class="fw-bold text-dark fs-6" id="rec-modal-grand-total-val">₹0.00</span>
-            </div>
-            <div class="col-4 border-start border-end border-primary border-opacity-20">
-              <span class="d-block text-success small text-uppercase font-weight-bold" style="font-size:0.7rem;">Less Advance Paid</span>
-              <span class="fw-bold text-success fs-6" id="rec-modal-advance-paid-val">-₹0.00</span>
-            </div>
-            <div class="col-4">
-              <span class="d-block text-primary small text-uppercase font-weight-bold" style="font-size:0.7rem;">Net Payable</span>
-              <span class="fw-bold text-primary fs-5" id="rec-modal-net-payable-val">₹0.00</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 1. Select Invoice Mode -->
-        <div class="mb-4">
-          <label class="form-label fw-bold text-dark mb-2">
-            <i class="bi bi-receipt me-1 text-primary"></i> 1. Select Invoice Mode
-          </label>
-          <div class="btn-group w-100 pos-invoice-mode-group" role="group">
-            <input type="radio" class="btn-check" name="rec_settle_invoice_mode" id="rec_mode_food" value="food" checked>
-            <label class="btn btn-outline-primary py-2 fw-semibold" for="rec_mode_food">
-              <i class="bi bi-egg-fried me-1"></i> Food GST Invoice
-            </label>
-
-            {% if current_branch and current_branch.serves_alcohol %}
-            <input type="radio" class="btn-check" name="rec_settle_invoice_mode" id="rec_mode_bar" value="liquor">
-            <label class="btn btn-outline-warning text-dark py-2 fw-semibold" for="rec_mode_bar">
-              <i class="bi bi-cup-straw me-1"></i> Bar Excise Bill
-            </label>
-
-            <input type="radio" class="btn-check" name="rec_settle_invoice_mode" id="rec_mode_split" value="split">
-            <label class="btn btn-outline-success py-2 fw-semibold" for="rec_mode_split">
-              <i class="bi bi-layers me-1"></i> Auto-Split Invoices
-            </label>
-            {% endif %}
-          </div>
-        </div>
-
-        <!-- 2. Invoice Serial Number Fields -->
-        <div class="row g-3 mb-4" id="rec-row-settlement-serial-numbers">
-          <div class="col-md-6" id="rec-wrapper-gstin">
-            <label class="form-label fw-semibold text-dark small mb-1">
-              <i class="bi bi-card-heading me-1 text-primary"></i>Tax Invoice No. (GST)
-            </label>
-            <input type="text" id="rec-gstin-no" class="form-control" placeholder="e.g. INV-2026-0042">
-          </div>
-          <div class="col-md-6" id="rec-wrapper-excise">
-            <label class="form-label fw-semibold text-dark small mb-1">
-              <i class="bi bi-file-earmark-medical me-1 text-warning"></i>Retail Excise Bill No. (VAT)
-            </label>
-            <input type="text" id="rec-excise-bill-no" class="form-control" placeholder="e.g. EXC-2026-0042">
-          </div>
-        </div>
-
-        <!-- 3. Split Payment & Multi-Method Engine -->
-        <div class="mb-4 p-3 bg-light rounded-3 border">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <label class="form-label fw-bold text-dark mb-0">
-              <i class="bi bi-credit-card me-1 text-info"></i> 3. Payment Method & Split Received
-            </label>
-            <button type="button" id="btn-rec-add-payment-split" class="btn btn-sm btn-outline-primary fw-semibold">
-              <i class="bi bi-plus-circle me-1"></i> Add Payment Split
-            </button>
-          </div>
-
-          <div id="rec-payment-split-rows-container">
-            <!-- Dynamic split rows -->
-          </div>
-
-          <!-- Live Balance Summary Cards -->
-          <div class="row g-2 mt-2 pt-2 border-top">
-            <div class="col-4">
-              <div class="p-2 bg-white rounded border text-center">
-                <span class="d-block text-muted uppercase small fw-bold" style="font-size: 0.7rem;">TOTAL PAID</span>
-                <span class="fw-bold text-success fs-6" id="rec-split-summary-paid">₹0.00</span>
-              </div>
-            </div>
-            <div class="col-4">
-              <div class="p-2 bg-white rounded border text-center">
-                <span class="d-block text-muted uppercase small fw-bold" style="font-size: 0.7rem;">REMAINING DUE</span>
-                <span class="fw-bold text-danger fs-6" id="rec-split-summary-due">₹0.00</span>
-              </div>
-            </div>
-            <div class="col-4">
-              <div class="p-2 bg-white rounded border text-center">
-                <span class="d-block text-muted uppercase small fw-bold" style="font-size: 0.7rem;">STATUS</span>
-                <span class="badge bg-success mt-1" id="rec-split-summary-status">Paid</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-footer bg-light py-3">
-        <button type="button" class="btn btn-outline-secondary fw-semibold px-3" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" id="btn-submit-records-save-only" class="btn btn-primary fw-bold px-3 py-2">
-          <i class="bi bi-check-circle me-1"></i> Save Order
-        </button>
-        <button type="button" id="btn-submit-records-settle" class="btn btn-success fw-bold px-3 py-2">
-          <i class="bi bi-printer me-1"></i> Save & Print Bill
-        </button>
-      </div>
+      <button type="button" class="btn-close-settle" onclick="recCloseSettlementModal()" style="background:none; border:none; font-size:22px; color:#8C857B; cursor:pointer; padding:4px 8px; line-height:1;" title="Close (Esc)">&times;</button>
     </div>
-  </div>
-</div>
 
+    <!-- Body (scrollable) -->
+    <div class="cb" style="padding:18px 24px; overflow-y:auto; display:flex; flex-direction:column; gap:14px;">
+      
+      <!-- Invoice No Row -->
+      <div class="invRow" style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px dashed #E3DFD7;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="invLbl" style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#6E675C;">INVOICE NO.</span>
+          <span class="invVal" id="recSettleInvVal" style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; font-weight:700; font-size:14px; color:#1A1815;">INV-000001</span>
+        </div>
+        <button type="button" id="recBtnOverrideInv" onclick="recToggleInvOverride()" style="background:#FFF; border:1px solid #E3DFD7; border-radius:6px; padding:3px 9px; font-size:11px; font-weight:600; color:#57524A; cursor:pointer;">Override</button>
+      </div>
+      
+      <!-- Override Input Box (hidden by default) -->
+      <div id="recInvOverrideBox" style="display:none; background:#F7F6F3; padding:10px 12px; border-radius:8px; border:1px solid #E3DFD7;">
+        <label style="display:block; font-size:10px; font-weight:700; color:#6E675C; text-transform:uppercase; margin-bottom:4px;">Custom Invoice No.</label>
+        <input type="text" id="recCustomInvInput" class="form-control form-control-sm" style="font-family:monospace; font-weight:600;" placeholder="e.g. INV-2026-0042">
+      </div>
+
+      <!-- Prior Payment / Deposit Settlement Card -->
+      <div id="recSettleDeductionCard" style="display:none; background:#EFF6FF; border:1px solid #BFDBFE; border-radius:8px; padding:12px 14px; font-size:12px; color:#1E40AF;">
+        <div style="font-weight:700; display:flex; justify-content:space-between; align-items:center;">
+          <span id="recSettleDeductTitle"><i class="bi bi-info-circle-fill text-primary me-1"></i> Partial Payment Received</span>
+          <span class="badge bg-primary text-white" id="recSettleDeductBadge" style="font-size:10.5px;">Partial Paid</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-top:8px; padding-top:8px; border-top:1px solid #DBEAFE; font-size:12px;">
+          <div><span style="color:#64748B; font-size:11px; display:block;">Grand Total</span><strong style="color:#1E293B;">₹<span id="recDeductGrandTotal">0.00</span></strong></div>
+          <div style="text-align:center;"><span style="color:#16A34A; font-size:11px; display:block;" id="recDeductPaidLabel">Less Paid</span><strong style="color:#16A34A;">-₹<span id="recDeductPaidAmount">0.00</span></strong></div>
+          <div style="text-align:right;"><span style="color:#2563EB; font-size:11px; display:block;">Remaining Due</span><strong style="color:#2563EB;">₹<span id="recDeductNetDue">0.00</span></strong></div>
+        </div>
+      </div>
+
+      <!-- WHO IS THIS BILL FOR -->
+      <div>
+        <label class="lb" style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:6px;">WHO IS THIS BILL FOR</label>
+        <div class="seg" style="display:flex; border:1.5px solid #E3DFD7; border-radius:8px; overflow:hidden;">
+          <button type="button" id="recTabBillWalkin" onclick="recSetBillTarget('walkin')" style="flex:1; padding:9px 8px; border:none; background:#2F3E9E; color:#FFF; font-size:12px; font-weight:700; cursor:pointer; transition:.15s;">Walk-in guest</button>
+          <button type="button" id="recTabBillCompany" onclick="recSetBillTarget('company')" style="flex:1; padding:9px 8px; border:none; background:#FFF; color:#57524A; font-size:12px; font-weight:600; cursor:pointer; transition:.15s;">Company (has GSTIN)</button>
+        </div>
+      </div>
+
+      <!-- Walk-in Info Row -->
+      <div id="recSettleWalkinBox" style="background:#F7F6F3; border:1px solid #E3DFD7; border-radius:8px; padding:10px 14px; font-size:12px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <span style="color:#6E675C; font-size:11px;">Billed To:</span>
+          <strong id="recSettleWalkinName" style="color:#1A1815; margin-left:4px;">Walk-in</strong>
+          <span id="recSettleWalkinPhone" style="color:#6E675C; font-size:11px; margin-left:6px;"></span>
+        </div>
+      </div>
+
+      <!-- Company (GSTIN) Box (shown when Company selected) -->
+      <div id="recSettleCompanyBox" style="display:none; flex-direction:column; gap:10px;">
+        <div>
+          <label style="display:block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:4px;">CUSTOMER GSTIN</label>
+          <input type="text" id="recSettleGstinInput" maxlength="15" placeholder="08AAACS1234C1Z5" style="width:100%; padding:9px 12px; font-size:13px; font-family:monospace; border:1.5px solid #E3DFD7; border-radius:7px; outline:none; text-transform:uppercase; box-sizing:border-box;">
+        </div>
+        <div>
+          <label style="display:block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:4px;">REGISTERED NAME</label>
+          <input type="text" id="recSettleRegNameInput" placeholder="As per GST registration" style="width:100%; padding:9px 12px; font-size:13px; border:1.5px solid #E3DFD7; border-radius:7px; outline:none; box-sizing:border-box;">
+        </div>
+        <div class="note" style="border-left:3.5px solid #2F3E9E; background:#EEF2FF; padding:10px 12px; border-radius:6px; font-size:11.5px; color:#3730A3; line-height:1.4;">
+          <strong>The tax stays CGST + SGST</strong> even when the company is registered in another state. For a meal served here the place of supply is this restaurant, so IGST never applies.
+        </div>
+      </div>
+
+      <!-- PAYMENT METHOD -->
+      <div>
+        <label class="lb" style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:6px;">PAYMENT</label>
+        <div class="pillrow" id="recSettlePayPills" style="display:flex; flex-wrap:wrap; gap:8px;">
+          <button type="button" class="on" onclick="recSetSettlePay('Cash')" style="padding:8px 16px; border-radius:7px; border:1.5px solid #2F3E9E; background:#2F3E9E; color:#FFF; font-size:12.5px; font-weight:700; cursor:pointer;">Cash</button>
+          <button type="button" onclick="recSetSettlePay('Card')" style="padding:8px 16px; border-radius:7px; border:1.5px solid #E3DFD7; background:#FFF; color:#1A1815; font-size:12.5px; font-weight:600; cursor:pointer;">Card</button>
+          <button type="button" onclick="recSetSettlePay('UPI')" style="padding:8px 16px; border-radius:7px; border:1.5px solid #E3DFD7; background:#FFF; color:#1A1815; font-size:12.5px; font-weight:600; cursor:pointer;">UPI</button>
+          <button type="button" onclick="recSetSettlePay('Split')" style="padding:8px 16px; border-radius:7px; border:1.5px solid #E3DFD7; background:#FFF; color:#1A1815; font-size:12.5px; font-weight:600; cursor:pointer;">Split</button>
+          <button type="button" onclick="recSetSettlePay('Credit')" style="padding:8px 16px; border-radius:7px; border:1.5px solid #E3DFD7; background:#FFF; color:#B45309; font-size:12.5px; font-weight:600; cursor:pointer;">Credit / Pending</button>
+        </div>
+      </div>
+
+      <!-- Dynamic Pay Box -->
+      <div id="recSettlePayBox">
+        <!-- Rendered dynamically -->
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="cf" style="padding:14px 24px; border-top:1px solid #E3DFD7; display:flex; gap:10px; justify-content:flex-end; background:#F7F6F3;">
+      <button type="button" onclick="recCloseSettlementModal()" style="padding:9px 18px; border-radius:7px; border:1px solid #E3DFD7; background:#FFF; font-weight:600; font-size:12.5px; cursor:pointer; color:#57524A;">Back <kbd style="font-size:10px; background:#F2EFE9; padding:2px 5px; border-radius:4px; border:1px solid #D6D1C7; color:#57524A; margin-left:4px;">Esc</kbd></button>
+      <button type="button" id="btn-submit-records-save-only" onclick="recSubmitSettlement(false, this)" style="padding:9px 16px; border-radius:7px; border:1px solid #2F3E9E; background:#FFF; color:#2F3E9E; font-weight:700; font-size:12.5px; cursor:pointer;">Save Order</button>
+      <button type="button" id="btn-submit-records-settle" onclick="recSubmitSettlement(true, this)" style="padding:9px 22px; border-radius:7px; border:none; background:#2F3E9E; color:#FFF; font-weight:700; font-size:12.5px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 8px rgba(47,62,158,.25);">Save &amp; Print Bill <kbd style="font-size:10px; background:rgba(255,255,255,.25); padding:2px 5px; border-radius:4px; color:#FFF; margin-left:4px;">↵</kbd></button>
+    </div>
+
+  </div>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     function getCsrfToken() {
@@ -647,193 +610,188 @@ document.addEventListener('DOMContentLoaded', function() {
         return m ? decodeURIComponent(m[1]) : '';
     }
 
-    let recState = {
-        grandTotal: 0,
-        advancePaid: 0,
-        netPayable: 0,
-        receiptNo: '',
-        hasAlcohol: false,
-        calculatedPayments: [],
-        calculatedPaidAmount: 0,
-        calculatedDueAmount: 0,
-        calculatedPaymentStatus: 'paid'
-    };
-
-    function recCreatePaymentSplitRowHtml(method = 'cash', amount = '') {
-      return `
-        <div class="rec-payment-split-row row g-2 align-items-center mb-2">
-          <div class="col-6">
-            <select class="form-select form-select-sm rec-payment-split-method fw-semibold">
-              <option value="cash" ${method === 'cash' ? 'selected' : ''}>Cash</option>
-              <option value="upi" ${method === 'upi' ? 'selected' : ''}>UPI / QR Code</option>
-              <option value="card" ${method === 'card' ? 'selected' : ''}>Credit / Debit Card</option>
-              <option value="bank_transfer" ${method === 'bank_transfer' ? 'selected' : ''}>Bank Transfer</option>
-              <option value="credit" ${method === 'credit' ? 'selected' : ''}>Credit / Pending</option>
-            </select>
-          </div>
-          <div class="col-5">
-            <div class="input-group input-group-sm">
-              <span class="input-group-text">₹</span>
-              <input type="number" step="0.01" min="0" class="form-control rec-payment-split-amount fw-bold text-success" value="${amount}" placeholder="Amount">
-            </div>
-          </div>
-          <div class="col-1 text-end">
-            <button type="button" class="btn btn-sm btn-outline-danger btn-rec-delete-payment-row p-1" title="Delete Split">
-              <i class="bi bi-trash"></i>
-            </button>
-          </div>
-        </div>
-      `;
-    }
-
-    function recInitPaymentSplitRows(initialDue) {
-      const container = document.getElementById('rec-payment-split-rows-container');
-      if (!container) return;
-      container.innerHTML = recCreatePaymentSplitRowHtml('cash', initialDue.toFixed(2));
-      recAttachPaymentSplitEventListeners();
-      recRecalculatePaymentSplits();
-    }
-
-    function recAttachPaymentSplitEventListeners() {
-      const container = document.getElementById('rec-payment-split-rows-container');
-      if (!container) return;
-
-      container.querySelectorAll('.rec-payment-split-amount').forEach(inp => {
-        inp.removeEventListener('input', recRecalculatePaymentSplits);
-        inp.addEventListener('input', recRecalculatePaymentSplits);
-      });
-
-      container.querySelectorAll('.rec-payment-split-method').forEach(sel => {
-        sel.removeEventListener('change', recRecalculatePaymentSplits);
-        sel.addEventListener('change', recRecalculatePaymentSplits);
-      });
-
-      container.querySelectorAll('.btn-rec-delete-payment-row').forEach(btn => {
-        btn.onclick = function() {
-          const rows = container.querySelectorAll('.rec-payment-split-row');
-          if (rows.length > 1) {
-            this.closest('.rec-payment-split-row').remove();
-            recRecalculatePaymentSplits();
-          }
-        };
-      });
-    }
-
-    document.getElementById('btn-rec-add-payment-split')?.addEventListener('click', () => {
-      const container = document.getElementById('rec-payment-split-rows-container');
-      if (!container) return;
-
-      const currentTotalPaid = Array.from(container.querySelectorAll('.rec-payment-split-amount'))
-        .reduce((sum, inp) => sum + (parseFloat(inp.value) || 0), 0);
-      const remaining = Math.max(0, recState.netPayable - currentTotalPaid);
-
-      const div = document.createElement('div');
-      div.innerHTML = recCreatePaymentSplitRowHtml('upi', remaining > 0 ? remaining.toFixed(2) : '0.00');
-      container.appendChild(div.firstElementChild);
-
-      recAttachPaymentSplitEventListeners();
-      recRecalculatePaymentSplits();
-    });
-
-    function recRecalculatePaymentSplits() {
-      const container = document.getElementById('rec-payment-split-rows-container');
-      if (!container) return;
-
-      const rows = container.querySelectorAll('.rec-payment-split-row');
-      const deleteBtns = container.querySelectorAll('.btn-rec-delete-payment-row');
-      deleteBtns.forEach(b => b.disabled = (rows.length <= 1));
-
-      let totalPaid = 0;
-      const payments = [];
-
-      rows.forEach(r => {
-        const method = r.querySelector('.rec-payment-split-method')?.value || 'cash';
-        const amt = parseFloat(r.querySelector('.rec-payment-split-amount')?.value) || 0;
-        if (amt > 0) {
-          totalPaid += amt;
-          payments.push({ method, amount: amt });
-        }
-      });
-
-      const dueAmount = Math.max(0, recState.netPayable - totalPaid);
-
-      const paidEl = document.getElementById('rec-split-summary-paid');
-      const dueEl = document.getElementById('rec-split-summary-due');
-      const statusBadge = document.getElementById('rec-split-summary-status');
-
-      if (paidEl) paidEl.textContent = `₹${totalPaid.toFixed(2)}`;
-      if (dueEl) dueEl.textContent = `₹${dueAmount.toFixed(2)}`;
-
-      let calcStatus = 'paid';
-      if (dueAmount <= 0.01) {
-        calcStatus = 'paid';
-        if (statusBadge) {
-          statusBadge.className = 'badge bg-success mt-1';
-          statusBadge.textContent = 'Paid';
-        }
-      } else if ((totalPaid + recState.advancePaid) > 0) {
-        calcStatus = 'partially_paid';
-        if (statusBadge) {
-          statusBadge.className = 'badge bg-warning text-dark mt-1';
-          statusBadge.textContent = 'Partially Paid';
-        }
-      } else {
-        calcStatus = 'unpaid';
-        if (statusBadge) {
-          statusBadge.className = 'badge bg-danger mt-1';
-          statusBadge.textContent = 'Unpaid / Credit';
-        }
-      }
-
-      recState.calculatedPayments = payments;
-      recState.calculatedPaidAmount = totalPaid;
-      recState.calculatedDueAmount = dueAmount;
-      recState.calculatedPaymentStatus = calcStatus;
-    }
-
-    function recSyncSettlementFieldsVisibility() {
-      const mode = document.querySelector('input[name="rec_settle_invoice_mode"]:checked')?.value || 'food';
-      const wrapperGstin = document.getElementById('rec-wrapper-gstin');
-      const wrapperExcise = document.getElementById('rec-wrapper-excise');
-      const gstinInput = document.getElementById('rec-gstin-no');
-      const exciseInput = document.getElementById('rec-excise-bill-no');
-
-      if (!wrapperGstin || !wrapperExcise) return;
-
-      let showGstin = (mode === 'food' || mode === 'split');
-      let showExcise = (mode === 'liquor' || (mode === 'split' && recState.hasAlcohol));
-
-      const currentYear = new Date().getFullYear();
-      const randNum = Math.floor(1000 + Math.random() * 9000);
-
-      if (showGstin) {
-        wrapperGstin.style.display = 'block';
-        wrapperGstin.className = showExcise ? 'col-md-6' : 'col-md-12';
-        if (gstinInput && !gstinInput.value) gstinInput.value = `INV-${currentYear}-${randNum}`;
-      } else {
-        wrapperGstin.style.display = 'none';
-        if (gstinInput) gstinInput.value = '';
-      }
-
-      if (showExcise) {
-        wrapperExcise.style.display = 'block';
-        wrapperExcise.className = showGstin ? 'col-md-6' : 'col-md-12';
-        if (exciseInput && !exciseInput.value) exciseInput.value = `EXC-${currentYear}-${randNum}`;
-      } else {
-        wrapperExcise.style.display = 'none';
-        if (exciseInput) exciseInput.value = '';
-      }
-    }
-
-    document.querySelectorAll('input[name="rec_settle_invoice_mode"]').forEach(r => {
-      r.addEventListener('change', recSyncSettlementFieldsVisibility);
-    });
-
     function safeParseFloat(v) {
         if (!v) return 0;
         const cleaned = String(v).replace(/[^0-9.-]/g, '');
         const n = parseFloat(cleaned);
         return isNaN(n) ? 0 : n;
+    }
+
+    let recState = {
+        orderId: '',
+        grandTotal: 0,
+        advancePaid: 0,
+        alreadyPaid: 0,
+        netPayable: 0,
+        receiptNo: '',
+        customerName: 'Guest',
+        phone: '',
+        gstinNo: '',
+        hasAlcohol: false,
+        payMode: 'Cash',
+        billTarget: 'walkin'
+    };
+
+    window.recCloseSettlementModal = function() {
+        const veil = document.getElementById('recSettleVeil');
+        if (veil) veil.style.display = 'none';
+    };
+
+    window.recToggleInvOverride = function() {
+        const box = document.getElementById('recInvOverrideBox');
+        const inp = document.getElementById('recCustomInvInput');
+        if (box.style.display === 'none') {
+            box.style.display = 'block';
+            if (inp) inp.focus();
+        } else {
+            box.style.display = 'none';
+        }
+    };
+
+    window.recSetBillTarget = function(target) {
+        recState.billTarget = target;
+        const tabWalkin = document.getElementById('recTabBillWalkin');
+        const tabCompany = document.getElementById('recTabBillCompany');
+        const walkinBox = document.getElementById('recSettleWalkinBox');
+        const companyBox = document.getElementById('recSettleCompanyBox');
+
+        if (target === 'walkin') {
+            if (tabWalkin) { tabWalkin.style.background = '#2F3E9E'; tabWalkin.style.color = '#FFF'; tabWalkin.style.fontWeight = '700'; }
+            if (tabCompany) { tabCompany.style.background = '#FFF'; tabCompany.style.color = '#57524A'; tabCompany.style.fontWeight = '600'; }
+            if (walkinBox) walkinBox.style.display = 'flex';
+            if (companyBox) companyBox.style.display = 'none';
+        } else {
+            if (tabCompany) { tabCompany.style.background = '#2F3E9E'; tabCompany.style.color = '#FFF'; tabCompany.style.fontWeight = '700'; }
+            if (tabWalkin) { tabWalkin.style.background = '#FFF'; tabWalkin.style.color = '#57524A'; tabWalkin.style.fontWeight = '600'; }
+            if (walkinBox) walkinBox.style.display = 'none';
+            if (companyBox) companyBox.style.display = 'flex';
+            setTimeout(() => document.getElementById('recSettleGstinInput')?.focus(), 50);
+        }
+    };
+
+    window.recSetSettlePay = function(mode) {
+        recState.payMode = mode;
+        const pills = document.querySelectorAll('#recSettlePayPills button');
+        pills.forEach(b => {
+            const isMatch = b.textContent.trim().toLowerCase().startsWith(mode.toLowerCase());
+            if (isMatch) {
+                b.className = 'on';
+                b.style.background = mode === 'Credit' ? '#B45309' : '#2F3E9E';
+                b.style.color = '#FFF';
+                b.style.borderColor = mode === 'Credit' ? '#B45309' : '#2F3E9E';
+                b.style.fontWeight = '700';
+            } else {
+                b.className = '';
+                b.style.background = '#FFF';
+                b.style.color = b.textContent.includes('Credit') ? '#B45309' : '#1A1815';
+                b.style.borderColor = '#E3DFD7';
+                b.style.fontWeight = '600';
+            }
+        });
+        recDrawSettlePayBox();
+    };
+
+    function recDrawSettlePayBox() {
+        const el = document.getElementById('recSettlePayBox');
+        if (!el) return;
+        const netPayable = recState.netPayable;
+
+        if (recState.payMode === 'Cash') {
+            el.innerHTML = `
+                <div>
+                    <label style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:4px;">CASH RECEIVED</label>
+                    <input id="recCashRecv" type="number" step="0.01" min="0" value="${netPayable.toFixed(2)}" placeholder="${netPayable.toFixed(2)}" style="width:100%; padding:10px 14px; font-size:15px; font-family:monospace; font-weight:700; border:1.5px solid #E3DFD7; border-radius:8px; outline:none; background:#FFF; color:#1A1815; box-sizing:border-box;">
+                    <div id="recCashChangeDue" style="display:none; margin-top:6px; padding:8px 12px; border-radius:6px; font-size:12px; font-weight:600;"></div>
+                </div>
+            `;
+            const inp = document.getElementById('recCashRecv');
+            const d = document.getElementById('recCashChangeDue');
+            function calcCash() {
+                const v = parseFloat(inp.value);
+                if (isNaN(v) || v <= 0) { d.style.display = 'none'; return; }
+                const diff = Math.round((v - netPayable) * 100) / 100;
+                d.style.display = 'block';
+                if (diff >= 0) {
+                    d.style.background = '#F0FDF4';
+                    d.style.color = '#166534';
+                    d.style.border = '1px solid #BBF7D0';
+                    d.innerHTML = `<i class="bi bi-arrow-return-left me-1"></i> Change to return: <strong>₹${diff.toFixed(2)}</strong>`;
+                } else {
+                    d.style.background = '#FEF2F2';
+                    d.style.color = '#991B1B';
+                    d.style.border = '1px solid #FECACA';
+                    d.innerHTML = `<i class="bi bi-exclamation-circle me-1"></i> Short by: <strong>₹${(-diff).toFixed(2)}</strong> (Remaining will be logged as Credit/Due)`;
+                }
+            }
+            inp.addEventListener('input', calcCash);
+            setTimeout(() => { inp.focus(); try { inp.select(); } catch(e){} }, 50);
+        } else if (recState.payMode === 'Card') {
+            el.innerHTML = `
+                <div>
+                    <label style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:4px;">CARD RECEIVED</label>
+                    <input id="recCardRecv" type="number" step="0.01" min="0" value="${netPayable.toFixed(2)}" style="width:100%; padding:10px 14px; font-size:15px; font-family:monospace; font-weight:700; border:1.5px solid #E3DFD7; border-radius:8px; outline:none; background:#FFF; color:#1A1815; box-sizing:border-box;">
+                </div>
+            `;
+        } else if (recState.payMode === 'UPI') {
+            el.innerHTML = `
+                <div>
+                    <label style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:4px;">UPI / QR CODE RECEIVED</label>
+                    <input id="recUpiRecv" type="number" step="0.01" min="0" value="${netPayable.toFixed(2)}" style="width:100%; padding:10px 14px; font-size:15px; font-family:monospace; font-weight:700; border:1.5px solid #E3DFD7; border-radius:8px; outline:none; background:#FFF; color:#1A1815; box-sizing:border-box;">
+                </div>
+            `;
+        } else if (recState.payMode === 'Split') {
+            el.innerHTML = `
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    <div>
+                        <label style="font-size:10px; font-weight:700; color:#6E675C; text-transform:uppercase; display:block; margin-bottom:4px;">Cash Portion</label>
+                        <input id="recSplitCashInp" type="number" step="0.01" min="0" value="${(netPayable/2).toFixed(2)}" style="width:100%; padding:8px 12px; font-family:monospace; font-weight:700; font-size:14px; border:1.5px solid #E3DFD7; border-radius:7px; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="font-size:10px; font-weight:700; color:#6E675C; text-transform:uppercase; display:block; margin-bottom:4px;">Card / UPI Portion</label>
+                        <input id="recSplitOtherInp" type="number" step="0.01" min="0" value="${(netPayable/2).toFixed(2)}" style="width:100%; padding:8px 12px; font-family:monospace; font-weight:700; font-size:14px; border:1.5px solid #E3DFD7; border-radius:7px; box-sizing:border-box;">
+                    </div>
+                </div>
+                <div id="recSplitMsg" style="margin-top:8px; font-size:11.5px; font-weight:600; padding:7px 12px; border-radius:6px; background:#F0FDF4; color:#166534; border:1px solid #BBF7D0;">
+                    ✓ Splits match the total payable.
+                </div>
+            `;
+            const sc = document.getElementById('recSplitCashInp');
+            const so = document.getElementById('recSplitOtherInp');
+            const sm = document.getElementById('recSplitMsg');
+            function calcSplit() {
+                const a = parseFloat(sc.value) || 0;
+                const b = parseFloat(so.value) || 0;
+                const diff = Math.round((netPayable - a - b) * 100) / 100;
+                if (Math.abs(diff) < 0.01) {
+                    sm.style.background = '#F0FDF4';
+                    sm.style.color = '#166534';
+                    sm.style.border = '1px solid #BBF7D0';
+                    sm.textContent = '✓ Splits match the total payable.';
+                } else if (diff > 0) {
+                    sm.style.background = '#FFFBEB';
+                    sm.style.color = '#B45309';
+                    sm.style.border = '1px solid #FDE68A';
+                    sm.textContent = `₹${diff.toFixed(2)} still unaccounted (will be marked as Pending/Credit).`;
+                } else {
+                    sm.style.background = '#FEF2F2';
+                    sm.style.color = '#991B1B';
+                    sm.style.border = '1px solid #FECACA';
+                    sm.textContent = `₹${(-diff).toFixed(2)} over the total payable.`;
+                }
+            }
+            sc.addEventListener('input', calcSplit);
+            so.addEventListener('input', calcSplit);
+        } else if (recState.payMode === 'Credit') {
+            el.innerHTML = `
+                <div>
+                    <label style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#B45309; margin-bottom:4px;">CREDIT / PENDING DUE AMOUNT</label>
+                    <input id="recCreditRecv" type="number" step="0.01" min="0" value="${netPayable.toFixed(2)}" style="width:100%; padding:10px 14px; font-size:15px; font-family:monospace; font-weight:700; color:#B45309; border:1.5px solid #FCD34D; background:#FEFCE8; border-radius:8px; outline:none; box-sizing:border-box;">
+                    <div style="margin-top:6px; font-size:11.5px; color:#92400E; padding:8px 12px; background:#FEF3C7; border-radius:6px; border-left:3.5px solid #D97706; line-height:1.4;">
+                        <strong>Customer Account Ledger:</strong> This unpaid order balance of ₹${netPayable.toFixed(2)} will be attached to the customer's Khata account.
+                    </div>
+                </div>
+            `;
+        }
     }
 
     document.querySelectorAll('.btn-records-quick-settle').forEach(btn => {
@@ -844,89 +802,168 @@ document.addEventListener('DOMContentLoaded', function() {
             const table = this.dataset.table || 'Counter / Takeaway';
             const amount = safeParseFloat(this.dataset.amount);
             const advancePaid = safeParseFloat(this.dataset.advancePaid);
+            const alreadyPaid = safeParseFloat(this.dataset.paid);
             const receiptNo = this.dataset.receiptNo || '';
-            const netPayableTarget = Math.max(0, amount - advancePaid);
-            const due = safeParseFloat(this.dataset.due) || netPayableTarget;
+            const totalDeductions = advancePaid + alreadyPaid;
+            const netPayableTarget = Math.max(0, amount - totalDeductions);
             const gstin = this.dataset.gstin || '';
             const excise = this.dataset.excise || '';
             const hasAlcohol = (this.dataset.hasAlcohol === 'true');
 
-
+            recState.orderId = orderId;
             recState.grandTotal = amount;
             recState.advancePaid = advancePaid;
+            recState.alreadyPaid = alreadyPaid;
             recState.netPayable = netPayableTarget;
             recState.receiptNo = receiptNo;
+            recState.customerName = customer;
+            recState.gstinNo = gstin;
             recState.hasAlcohol = hasAlcohol;
 
-            document.getElementById('rec-settle-order-id').value = orderId;
-            document.getElementById('rec-settle-grand-total').value = amount;
-            document.getElementById('rec-settle-order-title').textContent = orderNum;
-            document.getElementById('rec-settle-order-meta').textContent = `${table} | Billed To: ${customer}`;
-            document.getElementById('rec-settle-amount-payable').textContent = `₹${netPayableTarget.toFixed(2)}`;
+            document.getElementById('recSettleGrandTitle').textContent = `Settle — ₹${netPayableTarget.toFixed(2)}`;
+            document.getElementById('recSettleOrderMeta').textContent = `${orderNum} · ${table} · Dine-in`;
 
-            const advanceCard = document.getElementById('rec-modal-advance-deduction-card');
-            if (advancePaid > 0) {
-              if (advanceCard) {
-                advanceCard.style.display = 'block';
-                const recNoEl = document.getElementById('rec-modal-receipt-no');
-                const gtEl = document.getElementById('rec-modal-grand-total-val');
-                const advEl = document.getElementById('rec-modal-advance-paid-val');
-                const netEl = document.getElementById('rec-modal-net-payable-val');
-                if (recNoEl) recNoEl.textContent = receiptNo || 'Deposit Attached';
-                if (gtEl) gtEl.textContent = `₹${amount.toFixed(2)}`;
-                if (advEl) advEl.textContent = `-₹${advancePaid.toFixed(2)}`;
-                if (netEl) netEl.textContent = `₹${netPayableTarget.toFixed(2)}`;
-              }
-            } else if (advanceCard) {
-              advanceCard.style.display = 'none';
+            // Suggested invoice
+            const suggestedInv = gstin || `INV-${new Date().getFullYear()}-${String(orderId).padStart(4, '0')}`;
+            document.getElementById('recSettleInvVal').textContent = suggestedInv;
+            document.getElementById('recCustomInvInput').value = suggestedInv;
+            document.getElementById('recInvOverrideBox').style.display = 'none';
+
+            // Deductions / Prior Paid card
+            const deductCard = document.getElementById('recSettleDeductionCard');
+            if (totalDeductions > 0) {
+                if (deductCard) {
+                    deductCard.style.display = 'block';
+                    const dTitle = document.getElementById('recSettleDeductTitle');
+                    const dBadge = document.getElementById('recSettleDeductBadge');
+                    const dLabel = document.getElementById('recDeductPaidLabel');
+                    const dGt = document.getElementById('recDeductGrandTotal');
+                    const dPaid = document.getElementById('recDeductPaidAmount');
+                    const dDue = document.getElementById('recDeductNetDue');
+
+                    if (alreadyPaid > 0 && advancePaid > 0) {
+                        if (dTitle) dTitle.innerHTML = `<i class="bi bi-bookmark-star-fill text-warning me-1"></i> Deposit (${receiptNo}) & Prior Paid ₹${alreadyPaid.toFixed(2)}`;
+                        if (dBadge) dBadge.textContent = 'Deposit + Paid';
+                        if (dLabel) dLabel.textContent = 'Less Deductions';
+                    } else if (alreadyPaid > 0) {
+                        if (dTitle) dTitle.innerHTML = `<i class="bi bi-wallet2 text-primary me-1"></i> Partial Payment Received`;
+                        if (dBadge) dBadge.textContent = 'Partial Paid';
+                        if (dLabel) dLabel.textContent = 'Less Paid Amount';
+                    } else {
+                        if (dTitle) dTitle.innerHTML = `<i class="bi bi-bookmark-star-fill text-warning me-1"></i> Advance Deposit Attached (${receiptNo || 'REC'})`;
+                        if (dBadge) dBadge.textContent = 'Deposit Settlement';
+                        if (dLabel) dLabel.textContent = 'Less Advance Paid';
+                    }
+
+                    if (dGt) dGt.textContent = amount.toFixed(2);
+                    if (dPaid) dPaid.textContent = totalDeductions.toFixed(2);
+                    if (dDue) dDue.textContent = netPayableTarget.toFixed(2);
+                }
+            } else if (deductCard) {
+                deductCard.style.display = 'none';
             }
 
-            document.getElementById('rec-gstin-no').value = gstin;
-            document.getElementById('rec-excise-bill-no').value = excise;
-
-            const targetModeId = hasAlcohol ? 'rec_mode_split' : 'rec_mode_food';
-            const radioBtn = document.getElementById(targetModeId);
-            if (radioBtn) radioBtn.checked = true;
-
-            recSyncSettlementFieldsVisibility();
-            recInitPaymentSplitRows(netPayableTarget);
-
-            const modalEl = document.getElementById('recordsSettleModal');
-            if (modalEl && window.bootstrap) {
-                const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-                modal.show();
+            // Customer / Target
+            const wName = document.getElementById('recSettleWalkinName');
+            if (wName) wName.textContent = customer || 'Walk-in';
+            if (gstin) {
+                recSetBillTarget('company');
+                const gInp = document.getElementById('recSettleGstinInput');
+                const nInp = document.getElementById('recSettleRegNameInput');
+                if (gInp) gInp.value = gstin;
+                if (nInp) nInp.value = customer || '';
+            } else {
+                recSetBillTarget('walkin');
             }
+
+            // Default Payment Method
+            recSetSettlePay('Cash');
+
+            const veil = document.getElementById('recSettleVeil');
+            if (veil) veil.style.display = 'flex';
         });
     });
 
-    function recSubmitSettlement(printBill = true, clickedBtn) {
-        const orderId = document.getElementById('rec-settle-order-id').value;
+    window.recSubmitSettlement = function(printBill = true, clickedBtn) {
+        const orderId = recState.orderId;
         if (!orderId) return;
 
-        recRecalculatePaymentSplits();
+        const netPayable = recState.netPayable;
+        let paidAmt = 0;
+        let dueAmt = 0;
+        let pStatus = 'paid';
+        let payments = [];
+        let payMethod = 'cash';
 
-        const invoiceMode = document.querySelector('input[name="rec_settle_invoice_mode"]:checked')?.value || 'food';
-        const wrapperGstin = document.getElementById('rec-wrapper-gstin');
-        const wrapperExcise = document.getElementById('rec-wrapper-excise');
+        // 1. Validate Company / GSTIN
+        if (recState.billTarget === 'company') {
+            const gstinVal = (document.getElementById('recSettleGstinInput')?.value || '').trim().toUpperCase();
+            const regNameVal = (document.getElementById('recSettleRegNameInput')?.value || '').trim();
+            if (gstinVal && gstinVal.length !== 15) {
+                alert('Please enter a valid 15-character GSTIN or switch to Walk-in guest.');
+                return;
+            }
+            if (gstinVal) recState.gstinNo = gstinVal;
+            if (regNameVal) recState.customerName = regNameVal;
+        }
 
-        const gstinNo = (wrapperGstin && wrapperGstin.style.display !== 'none') ? (document.getElementById('rec-gstin-no')?.value || '') : '';
-        const exciseBillNo = (wrapperExcise && wrapperExcise.style.display !== 'none') ? (document.getElementById('rec-excise-bill-no')?.value || '') : '';
+        // 2. Payment Parsing
+        if (recState.payMode === 'Cash') {
+            payMethod = 'cash';
+            const cashVal = parseFloat(document.getElementById('recCashRecv')?.value) || netPayable;
+            paidAmt = Math.min(cashVal, netPayable);
+            dueAmt = Math.max(0, netPayable - paidAmt);
+            payments = [{ method: 'cash', amount: paidAmt }];
+        } else if (recState.payMode === 'Card') {
+            payMethod = 'card';
+            const cardVal = parseFloat(document.getElementById('recCardRecv')?.value) || netPayable;
+            paidAmt = Math.min(cardVal, netPayable);
+            dueAmt = Math.max(0, netPayable - paidAmt);
+            payments = [{ method: 'card', amount: paidAmt }];
+        } else if (recState.payMode === 'UPI') {
+            payMethod = 'upi';
+            const upiVal = parseFloat(document.getElementById('recUpiRecv')?.value) || netPayable;
+            paidAmt = Math.min(upiVal, netPayable);
+            dueAmt = Math.max(0, netPayable - paidAmt);
+            payments = [{ method: 'upi', amount: paidAmt }];
+        } else if (recState.payMode === 'Split') {
+            payMethod = 'split';
+            const cVal = parseFloat(document.getElementById('recSplitCashInp')?.value) || 0;
+            const oVal = parseFloat(document.getElementById('recSplitOtherInp')?.value) || 0;
+            paidAmt = cVal + oVal;
+            dueAmt = Math.max(0, netPayable - paidAmt);
+            payments = [];
+            if (cVal > 0) payments.push({ method: 'cash', amount: cVal });
+            if (oVal > 0) payments.push({ method: 'card', amount: oVal });
+        } else if (recState.payMode === 'Credit') {
+            payMethod = 'credit';
+            paidAmt = 0;
+            dueAmt = netPayable;
+            payments = [{ method: 'credit', amount: netPayable }];
+        }
+
+        if (dueAmt <= 0.01) pStatus = 'paid';
+        else if (paidAmt > 0) pStatus = 'partially_paid';
+        else pStatus = 'unpaid';
+
+        // Check invoice override
+        const customInvInp = document.getElementById('recCustomInvInput');
+        const invNoOverride = (document.getElementById('recInvOverrideBox')?.style.display !== 'none' && customInvInp) ? customInvInp.value.trim() : '';
 
         if (clickedBtn) {
-          clickedBtn.disabled = true;
-          clickedBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Processing...';
+            clickedBtn.disabled = true;
+            clickedBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Processing...';
         }
 
         const url = `/dashboard/{{ rslug }}/orders/${orderId}/settle/`;
         const payload = {
-            invoice_mode: invoiceMode,
-            payment_method: recState.calculatedPayments[0]?.method || 'cash',
-            payment_status: recState.calculatedPaymentStatus,
-            payments: recState.calculatedPayments,
-            paid_amount: recState.calculatedPaidAmount.toFixed(2),
-            due_amount: recState.calculatedDueAmount.toFixed(2),
-            gstin_no: gstinNo,
-            excise_bill_no: exciseBillNo
+            invoice_mode: recState.hasAlcohol ? 'split' : 'food',
+            payment_method: payMethod,
+            payment_status: pStatus,
+            payments: payments,
+            paid_amount: paidAmt.toFixed(2),
+            due_amount: dueAmt.toFixed(2),
+            gstin_no: invNoOverride || recState.gstinNo || ''
         };
 
         fetch(url, {
@@ -942,9 +979,8 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (data.success) {
                 if (printBill) {
-                  const mode = invoiceMode;
-                  const invoiceUrl = `/dashboard/{{ rslug }}/orders/${orderId}/invoice/`;
-                  window.open(invoiceUrl, '_blank');
+                    const invoiceUrl = `/dashboard/{{ rslug }}/orders/${orderId}/invoice/`;
+                    window.open(invoiceUrl, '_blank');
                 }
                 window.location.reload();
             } else {
@@ -956,14 +992,20 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('Network error during settlement.');
             if (clickedBtn) clickedBtn.disabled = false;
         });
-    }
+    };
 
-    document.getElementById('btn-submit-records-save-only')?.addEventListener('click', function() {
-        recSubmitSettlement(false, this);
-    });
-
-    document.getElementById('btn-submit-records-settle')?.addEventListener('click', function() {
-        recSubmitSettlement(true, this);
+    // Keyboard Shortcuts for Settlement Modal
+    document.addEventListener('keydown', function(e) {
+        const veil = document.getElementById('recSettleVeil');
+        if (veil && veil.style.display !== 'none') {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                recCloseSettlementModal();
+            } else if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                e.preventDefault();
+                recSubmitSettlement(true);
+            }
+        }
     });
 });
 </script>

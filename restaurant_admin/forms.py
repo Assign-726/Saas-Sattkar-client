@@ -14,9 +14,10 @@ class MenuItemForm(forms.ModelForm):
     
     class Meta:
         model = MenuItem
-        fields = ['name', 'description', 'price', 'tax_type', 'is_tax_inclusive', 'category', 'subcategory', 'image', 'availability']
+        fields = ['name', 'short_code', 'description', 'price', 'tax_type', 'is_tax_inclusive', 'category', 'subcategory', 'image', 'availability']
         widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Butter Naan'}),
+            'short_code': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. 101, 301, NAAN (Fast POS shortcut code)'}),
             'description': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
             'price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'tax_type': forms.Select(attrs={'class': 'form-select'}),
@@ -29,6 +30,9 @@ class MenuItemForm(forms.ModelForm):
         self.restaurant = kwargs.pop('restaurant', None)
         self.branch = kwargs.pop('branch', None)
         super().__init__(*args, **kwargs)
+        self.fields['short_code'].label = 'Short Code (Fast POS Code)'
+        self.fields['short_code'].help_text = 'Optional fast item code for quick entry in POS (e.g. 101, 301, NAAN).'
+        self.fields['short_code'].required = False
         # Limit categories to current restaurant (and branch if set)
         if self.restaurant is not None:
             cat_qs = Category.objects.filter(restaurant=self.restaurant)
@@ -497,10 +501,12 @@ class RestaurantBranchComplianceForm(forms.ModelForm):
     class Meta:
         model = RestaurantBranch
         fields = [
+            'service_charge_percentage',
             'fssai_license_no', 'vat_tin', 'excise_license_no',
             'vat_beer_rate', 'vat_imfl_rate', 'vat_wine_rate'
         ]
         widgets = {
+            'service_charge_percentage': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'placeholder': '0.00'}),
             'fssai_license_no': forms.TextInput(attrs={'placeholder': '14-digit FSSAI License No.'}),
             'vat_tin': forms.TextInput(attrs={'placeholder': 'State VAT TIN'}),
             'excise_license_no': forms.TextInput(attrs={'placeholder': 'State Excise License No.'}),

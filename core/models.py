@@ -73,14 +73,8 @@ class Table(models.Model):
 
     @property
     def current_status(self):
-        # Calculate dynamic status based on active orders (not cancelled, not failed payment)
-        active_orders = self.orders.exclude(status='C').exclude(payment_status='F')
-        if not active_orders.exists() and self.restaurant and self.table_number:
-            active_orders = Order.objects.filter(
-                restaurant=self.restaurant,
-                table_number=self.table_number
-            ).exclude(status='C').exclude(payment_status='F')
-
+        # Active orders that are NOT cancelled, NOT failed, and NOT fully paid
+        active_orders = self.orders.exclude(status='C').exclude(payment_status__in=['F', 'paid', 'P'])
         if not active_orders.exists():
             return 'BLANK'
 
@@ -92,16 +86,10 @@ class Table(models.Model):
         if active_orders.filter(status='PR').exists():
             return 'RUNNING'
 
-        # Check if any active order is SERVED
-        served_orders = active_orders.filter(status='S')
-        if served_orders.exists():
-            if served_orders.filter(payment_status='P').exists():
-                return 'PAID'
+        # Check if any active order is SERVED (Billed / Waiting for payment)
+        if active_orders.filter(status='S').exists():
             return 'PRINTED'
 
-        latest = active_orders.first()
-        if latest and latest.payment_status == 'P':
-            return 'PAID'
         return 'RUNNING'
 
 class Category(models.Model):
@@ -140,6 +128,7 @@ class MenuItem(models.Model):
         VAT_LIQUOR = 'VAT_LIQUOR', _('VAT General Liquor (State VAT Rate)')
 
     name = models.CharField(max_length=200)
+    short_code = models.CharField(max_length=50, blank=True, null=True, db_index=True, help_text="Fast POS item code (e.g. 101, 301, NAAN)")
     description = models.TextField(blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     tax_type = models.CharField(
@@ -194,7 +183,7 @@ class Order(models.Model):
         COUNTER = 'C', _('Pay at Counter')
 
     customer_name = models.CharField(max_length=200)
-    phone = models.CharField(max_length=20)
+    phone = models.CharField(max_length=20, blank=True, default='')
     image = models.ImageField(upload_to='order_images', blank=True, null=True)
     table_number = models.PositiveIntegerField(null=True, blank=True, help_text="Deprecated: Use 'table' ForeignKey instead")
     table = models.ForeignKey(Table, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
@@ -404,11 +393,9 @@ class Order(models.Model):
                 max_num = Order.objects.filter(restaurant=self.restaurant).aggregate(Max('branch_order_number'))['branch_order_number__max'] or 0
                 self.branch_order_number = max_num + 1
 
-        # Auto-link Table object if missing but table_number and restaurant are set
-        if not self.table and self.table_number and self.restaurant:
-            matched_table = Table.objects.filter(restaurant=self.restaurant, table_number=self.table_number).first()
-            if matched_table:
-                self.table = matched_table
+        # Sync table_number from Table object if present
+        if self.table and not self.table_number:
+            self.table_number = self.table.table_number
 
         # Auto-link Party object if missing but customer_name and restaurant are set
         if not self.party and self.customer_name and self.customer_name.lower() not in ['guest', 'walk-in guest'] and self.restaurant:
@@ -521,7 +508,10 @@ class Order(models.Model):
 
         cgst_pct = Decimal(str(settings_obj.cgst_percentage or 0)) if bill_type != 'liquor' else Decimal('0.00')
         sgst_pct = Decimal(str(settings_obj.sgst_percentage or 0)) if bill_type != 'liquor' else Decimal('0.00')
-        service_pct = Decimal(str(settings_obj.service_charge_percentage or 0)) if bill_type != 'liquor' else Decimal('0.00')
+        if branch_obj and branch_obj.service_charge_percentage is not None:
+            service_pct = Decimal(str(branch_obj.service_charge_percentage)) if bill_type != 'liquor' else Decimal('0.00')
+        else:
+            service_pct = Decimal(str(settings_obj.service_charge_percentage or 0)) if bill_type != 'liquor' else Decimal('0.00')
 
         vat_beer_pct = Decimal(str(branch_obj.vat_beer_rate if branch_obj else 60.00)) if bill_type != 'food' else Decimal('0.00')
         vat_imfl_pct = Decimal(str(branch_obj.vat_imfl_rate if branch_obj else 65.00)) if bill_type != 'food' else Decimal('0.00')
@@ -629,9 +619,16 @@ class Order(models.Model):
             if self.branch:
                 from django.db.models import Q
                 charges_qs = charges_qs.filter(Q(branch=self.branch) | Q(branch__isnull=True))
+            def norm_ot(val):
+                return str(val or 'dine_in').lower().strip().replace(' ', '').replace('-', '_')
+
+            curr_ot = norm_ot(self.order_type)
             for cc in charges_qs:
-                types = cc.applied_order_types or ['dine_in', 'takeaway', 'delivery']
-                if self.order_type in types:
+                raw_types = cc.applied_order_types or ['dine_in', 'takeaway', 'delivery']
+                if not isinstance(raw_types, list):
+                    raw_types = [raw_types]
+                types = [norm_ot(t) for t in raw_types]
+                if curr_ot in types:
                     amt = cc.calculate_amount(gross_subtotal)
                     custom_charges_total += amt
                     if cc.is_taxable:
@@ -842,6 +839,7 @@ class DocumentSequenceSetting(models.Model):
         PURCHASE = 'purchase', _('Purchase')
         RECEIPT = 'receipt', _('Advance Receipt')
         CHALLAN = 'challan', _('Delivery Challan')
+        VAT_BILL = 'vat_bill', _('VAT Liquor Bill')
 
     class GenerationMode(models.TextChoices):
         AUTOMATIC = 'automatic', _('Automatic')
@@ -853,9 +851,11 @@ class DocumentSequenceSetting(models.Model):
         'purchase': 'PO-',
         'receipt': 'REC-',
         'challan': 'DC-',
+        'vat_bill': 'VAT-',
     }
 
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='document_sequence_settings')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='document_sequence_settings')
     document_type = models.CharField(max_length=20, choices=DocumentType.choices)
     generation_mode = models.CharField(max_length=20, choices=GenerationMode.choices, default=GenerationMode.AUTOMATIC)
     prefix = models.CharField(max_length=50, blank=True, null=True, default='')
@@ -870,12 +870,13 @@ class DocumentSequenceSetting(models.Model):
 
     class Meta:
         db_table = 'document_sequence_settings'
-        unique_together = ['restaurant', 'document_type']
+        unique_together = ['restaurant', 'branch', 'document_type']
         verbose_name = 'Document Sequence Setting'
         verbose_name_plural = 'Document Sequence Settings'
 
     def __str__(self):
-        return f"{self.restaurant.name} - {self.get_document_type_display()} ({self.generation_mode}): {self.format_number()}"
+        branch_str = f" [{self.branch.name}]" if self.branch else ""
+        return f"{self.restaurant.name}{branch_str} - {self.get_document_type_display()} ({self.generation_mode}): {self.format_number()}"
 
     def format_number(self, counter=None):
         if counter is None:
@@ -890,10 +891,26 @@ class DocumentSequenceSetting(models.Model):
         return f"{pref}{num_str}{suff}"
 
     @classmethod
-    def get_sequence_setting(cls, restaurant, document_type):
+    def get_sequence_setting(cls, restaurant, document_type, branch=None):
         default_pref = cls.DEFAULT_PREFIXES.get(document_type, '')
+        if branch:
+            setting, _ = cls.objects.get_or_create(
+                restaurant=restaurant,
+                branch=branch,
+                document_type=document_type,
+                defaults={
+                    'generation_mode': cls.GenerationMode.AUTOMATIC,
+                    'prefix': default_pref,
+                    'suffix': '',
+                    'padding_digits': 3,
+                    'current_counter': 1,
+                }
+            )
+            return setting
+
         setting, _ = cls.objects.get_or_create(
             restaurant=restaurant,
+            branch=None,
             document_type=document_type,
             defaults={
                 'generation_mode': cls.GenerationMode.AUTOMATIC,

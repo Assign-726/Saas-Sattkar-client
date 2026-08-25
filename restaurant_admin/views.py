@@ -555,7 +555,25 @@ def order_create_manual(request, restaurant_slug=None):
 
         phone = (data.get('phone_number') or data.get('phone') or '').strip()
         notes = (data.get('notes') or '').strip()
-        order_type = data.get('order_type') or Order.OrderType.DINE_IN
+        table_id_val = data.get('table_id') or data.get('table')
+
+        table_obj = None
+        if table_id_val:
+            table_val_str = str(table_id_val).strip()
+            if table_val_str.isdigit():
+                table_obj = Table.objects.filter(pk=int(table_val_str), restaurant=restaurant).first()
+                if not table_obj:
+                    table_obj = Table.objects.filter(table_number=int(table_val_str), restaurant=restaurant).first()
+            if not table_obj:
+                table_obj = Table.objects.filter(name__iexact=table_val_str, restaurant=restaurant).first()
+            if not table_obj:
+                clean_name = table_val_str.replace('Table', '').strip()
+                table_obj = Table.objects.filter(name__iexact=clean_name, restaurant=restaurant).first()
+
+        order_type = data.get('order_type') or (Order.OrderType.DINE_IN if table_obj else Order.OrderType.DINE_IN)
+        if table_obj:
+            order_type = Order.OrderType.DINE_IN
+
         payment_method = data.get('payment_method') or Order.PaymentMethod.CASH
         payment_status = data.get('payment_status') or Order.PaymentStatus.PAID
         action = data.get('action', 'save')
@@ -626,13 +644,13 @@ def order_create_manual(request, restaurant_slug=None):
         else:
             initial_status = Order.OrderStatus.PENDING
 
-        gstin_no = (data.get('gstin_no') or data.get('gstin') or '').strip()
-        excise_bill_no = (data.get('excise_bill_no') or data.get('excise') or '').strip()
+        active_branch = get_active_branch(request, restaurant)
+        sales_seq_info = get_document_sequence_info(restaurant, 'sales', branch=active_branch)
+        vat_seq_info = get_document_sequence_info(restaurant, 'vat_bill', branch=active_branch) if (active_branch and active_branch.serves_alcohol) else None
 
-        sales_seq_info = get_document_sequence_info(restaurant, 'sales')
         if sales_seq_info['mode'] in ['automatic', 'manual_override'] and not gstin_no:
             try:
-                gstin_no = get_and_increment_document_number(restaurant, 'sales', user_input_no=gstin_no, exclude_pk=order_id)
+                gstin_no = get_and_increment_document_number(restaurant, 'sales', branch=active_branch, user_input_no=gstin_no, exclude_pk=order_id)
             except ValidationError as ve:
                 if is_json:
                     return JsonResponse({'success': False, 'error': str(ve)}, status=400)
@@ -640,14 +658,41 @@ def order_create_manual(request, restaurant_slug=None):
                 return redirect(request.path)
         elif gstin_no:
             try:
-                validate_unique_document_number(restaurant, 'sales', gstin_no, exclude_pk=order_id)
+                validate_unique_document_number(restaurant, 'sales', gstin_no, branch=active_branch, exclude_pk=order_id)
             except ValidationError as ve:
                 if is_json:
                     return JsonResponse({'success': False, 'error': str(ve)}, status=400)
                 messages.error(request, str(ve))
                 return redirect(request.path)
 
-        active_branch = get_active_branch(request, restaurant)
+        if vat_seq_info and vat_seq_info['mode'] in ['automatic', 'manual_override'] and not excise_bill_no:
+            # Check if items contain liquor
+            items_data = data.get('items')
+            has_alcohol = False
+            if isinstance(items_data, list):
+                for it in items_data:
+                    m_id = it.get('menu_item_id') or it.get('id')
+                    if m_id:
+                        m_obj = MenuItem.objects.filter(id=m_id).first()
+                        if m_obj and m_obj.tax_type in [MenuItem.TaxType.VAT_BEER, MenuItem.TaxType.VAT_IMFL, MenuItem.TaxType.VAT_WINE, MenuItem.TaxType.VAT_LIQUOR]:
+                            has_alcohol = True
+                            break
+            if has_alcohol:
+                try:
+                    excise_bill_no = get_and_increment_document_number(restaurant, 'vat_bill', branch=active_branch, user_input_no=excise_bill_no, exclude_pk=order_id)
+                except ValidationError as ve:
+                    if is_json:
+                        return JsonResponse({'success': False, 'error': str(ve)}, status=400)
+                    messages.error(request, str(ve))
+                    return redirect(request.path)
+        elif excise_bill_no:
+            try:
+                validate_unique_document_number(restaurant, 'vat_bill', excise_bill_no, branch=active_branch, exclude_pk=order_id)
+            except ValidationError as ve:
+                if is_json:
+                    return JsonResponse({'success': False, 'error': str(ve)}, status=400)
+                messages.error(request, str(ve))
+                return redirect(request.path)
 
         if order_id:
             order = get_object_or_404(Order, pk=order_id, restaurant=restaurant)
@@ -656,7 +701,12 @@ def order_create_manual(request, restaurant_slug=None):
             order.customer_name = customer_name or order.customer_name
             order.phone = phone or order.phone
             order.notes = notes if notes is not None else order.notes
-            order.order_type = order_type or order.order_type
+            if table_obj:
+                order.table = table_obj
+                order.table_number = table_obj.table_number
+                order.order_type = Order.OrderType.DINE_IN
+            else:
+                order.order_type = order_type or order.order_type
             order.payment_method = payment_method or order.payment_method
             order.payment_status = initial_payment_status
             order.payments = valid_payments
@@ -682,16 +732,26 @@ def order_create_manual(request, restaurant_slug=None):
             else:
                 order.excise_bill_no = None
             order.save()
-            # Clear existing items if new items provided
+            # Clear existing items if items data is provided
             items_data = data.get('items')
-            if isinstance(items_data, list) and len(items_data) > 0:
+            if isinstance(items_data, list):
                 order.items.all().delete()
+
+            voided_item = data.get('voided_item_name')
+            void_reason = data.get('void_reason')
+            if voided_item and void_reason:
+                void_entry = f"[Voided {voided_item}: {void_reason}]"
+                if void_entry not in (order.notes or ''):
+                    order.notes = f"{order.notes}\n{void_entry}".strip() if order.notes else void_entry
+                    order.save(update_fields=['notes'])
         else:
             order = Order.objects.create(
                 customer_name=customer_name or 'Walk-in Guest',
                 phone=phone,
                 notes=notes,
                 order_type=order_type,
+                table=table_obj,
+                table_number=table_obj.table_number if table_obj else None,
                 payment_method=payment_method,
                 payment_status=initial_payment_status,
                 payments=valid_payments,
@@ -708,24 +768,42 @@ def order_create_manual(request, restaurant_slug=None):
                 excise_bill_no=excise_bill_no or None,
             )
 
-        if customer_name and customer_name.lower() not in ['guest', 'walk-in guest']:
-            party_lookup = {'restaurant': restaurant, 'name__iexact': customer_name}
+        if customer_name and customer_name.strip().lower() not in ['guest', 'walk-in', 'walk-in guest']:
+            party_lookup = {'restaurant': restaurant, 'name__iexact': customer_name.strip()}
             if active_branch:
                 party_lookup['branch'] = active_branch
-            party, _ = Party.objects.get_or_create(
-                **party_lookup,
-                defaults={
-                    'name': customer_name,
-                    'party_type': Party.PartyType.CUSTOMER,
-                    'phone': phone,
-                    'gstin': gstin_no
-                }
-            )
-            if phone and not party.phone:
-                party.phone = phone
-                party.save(update_fields=['phone'])
+            existing_party = Party.objects.filter(**party_lookup).first()
+            if not existing_party and phone and len(phone) >= 4:
+                # Also try looking up party by phone (exact or substring)
+                existing_party = Party.objects.filter(restaurant=restaurant, phone__icontains=phone).first()
+
+            if existing_party:
+                party = existing_party
+                # If order has incomplete or missing phone but party has full phone, auto-populate order.phone
+                if party.phone and (not order.phone or len(str(order.phone)) < len(str(party.phone))):
+                    order.phone = party.phone
+                    order.save(update_fields=['phone'])
+                if party.gstin and not order.gstin_no:
+                    order.gstin_no = party.gstin
+                    order.save(update_fields=['gstin_no'])
+                elif gstin_no and not party.gstin:
+                    party.gstin = gstin_no
+                    party.save(update_fields=['gstin'])
+            else:
+                party = Party.objects.create(
+                    restaurant=restaurant,
+                    branch=active_branch,
+                    name=customer_name.strip(),
+                    party_type=Party.PartyType.CUSTOMER,
+                    phone=phone or '',
+                    gstin=gstin_no or ''
+                )
             order.party = party
             order.save(update_fields=['party'])
+        else:
+            if order.party and (not customer_name or customer_name.strip().lower() in ['guest', 'walk-in', 'walk-in guest']):
+                order.party = None
+                order.save(update_fields=['party'])
 
         if receipt_no_input:
             arc = AdvanceReceipt.objects.filter(restaurant=restaurant, receipt_no=receipt_no_input).first()
@@ -796,8 +874,12 @@ def order_create_manual(request, restaurant_slug=None):
         table_id = data.get('table_id') or data.get('table')
         if table_id:
             try:
-                order.table_id = int(table_id)
-                order.save()
+                t_obj = Table.objects.filter(pk=int(table_id), restaurant=restaurant).first()
+                if t_obj:
+                    order.table = t_obj
+                    order.table_number = t_obj.table_number
+                    order.order_type = Order.OrderType.DINE_IN
+                    order.save(update_fields=['table', 'table_number', 'order_type'])
             except Exception:
                 pass
 
@@ -812,10 +894,18 @@ def order_create_manual(request, restaurant_slug=None):
 
         order.assign_invoice_numbers()
 
-        if order.payment_status == Order.PaymentStatus.PAID or order.status in [Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING, Order.OrderStatus.SERVED]:
-            order.deduct_inventory()
+        # Check if only new items are being fired in KOT
+        items_data = data.get('items')
+        new_item_ids = []
+        if isinstance(items_data, list) and len(items_data) > 0 and len(created_items) > 0:
+            for ci, item_data in zip(created_items, items_data):
+                if not item_data.get('sent'):
+                    new_item_ids.append(str(ci.id))
 
         kot_url = reverse('restaurant_admin:order_kot', kwargs={'restaurant_slug': restaurant.slug, 'pk': order.id})
+        if new_item_ids and len(new_item_ids) < len(created_items):
+            kot_url = kot_url + '?items=' + ','.join(new_item_ids)
+
         invoice_url = reverse('restaurant_admin:order_invoice', kwargs={'restaurant_slug': restaurant.slug, 'pk': order.id})
         food_invoice_url = invoice_url + '?type=food'
         liquor_invoice_url = invoice_url + '?type=liquor'
@@ -906,7 +996,6 @@ def order_create_manual(request, restaurant_slug=None):
         return redirect(order_list_url)
 
     # GET
-    from core.models import Table
     active_branch = get_active_branch(request, restaurant)
     tables_qs = Table.objects.filter(restaurant=restaurant)
     if active_branch:
@@ -950,6 +1039,7 @@ def order_create_manual(request, restaurant_slug=None):
         menu_items_list.append({
             'id': mi.id,
             'name': mi.name,
+            'short_code': mi.short_code or str(mi.id),
             'price': float(mi.price),
             'category_id': cat_id,
             'category_name': cat_name,
@@ -1126,8 +1216,8 @@ def order_create_manual(request, restaurant_slug=None):
         attached_receipt_json = 'null'
 
     # Sequence info for invoice numbers
-    gst_seq_info = get_document_sequence_info(restaurant, 'sales')
-    excise_seq_info = get_document_sequence_info(restaurant, 'excise') if hasattr(restaurant, 'excise') else gst_seq_info
+    gst_seq_info = get_document_sequence_info(restaurant, 'sales', branch=branch_obj)
+    excise_seq_info = get_document_sequence_info(restaurant, 'vat_bill', branch=branch_obj) if (branch_obj and branch_obj.serves_alcohol) else gst_seq_info
 
     cust_parties_qs = Party.objects.filter(restaurant=restaurant, party_type__in=['customer', 'both'])
     if branch_obj:
@@ -1146,6 +1236,8 @@ def order_create_manual(request, restaurant_slug=None):
     ]
     active_branch_gstin_manual = get_branch_gstin_str(branch_obj, restaurant)
 
+    service_charge_pct_val = float(branch_obj.service_charge_percentage if (branch_obj and branch_obj.service_charge_percentage is not None) else (settings_obj.service_charge_percentage or 0))
+
     return render(request, 'restaurant_admin/orders/manual_create.html', {
         'menu_items': menu_items_qs,
         'menu_items_json': json.dumps(menu_items_list),
@@ -1162,6 +1254,8 @@ def order_create_manual(request, restaurant_slug=None):
             'vat_imfl_pct': vat_imfl_pct,
             'vat_wine_pct': vat_wine_pct,
             'vat_gen_pct': vat_gen_pct,
+            'service_charge_pct': service_charge_pct_val,
+            'service_charge_taxable': getattr(settings_obj, 'service_charge_taxable', True),
         }),
         'customer_parties': cust_parties_qs,
         'customer_parties_json': json.dumps(cust_parties_list),
@@ -1400,6 +1494,7 @@ def order_edit_manual(request, pk, restaurant_slug=None):
         menu_items_list.append({
             'id': mi.id,
             'name': mi.name,
+            'short_code': mi.short_code or str(mi.id),
             'price': float(mi.price),
             'category_id': cat_id,
             'category_name': cat_name,
@@ -1458,12 +1553,32 @@ def order_edit_manual(request, pk, restaurant_slug=None):
         .order_by('-total_qty')[:12]
     )
     top_selling_ids = [item['menu_item_id'] for item in top_selling_qs if item['menu_item_id']]
-
-    from core.models import Table
     tables_qs = Table.objects.filter(restaurant=restaurant)
     if active_branch:
         tables_qs = tables_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
-    tables_qs = tables_qs.order_by('table_number')
+    custom_charges_qs = CustomCharge.objects.filter(restaurant=restaurant, is_active=True)
+    if active_branch:
+        custom_charges_qs = custom_charges_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    custom_charges_qs = custom_charges_qs.order_by('charge_name')
+    custom_charges_list = []
+    for cc in custom_charges_qs:
+        custom_charges_list.append({
+            'id': cc.id,
+            'name': cc.charge_name,
+            'charge_name': cc.charge_name,
+            'type': cc.charge_type,
+            'value': float(cc.value),
+            'is_taxable': cc.is_taxable,
+            'applied_order_types': cc.applied_order_types or ['dine_in', 'takeaway', 'delivery'],
+            'is_auto_applied': cc.is_auto_applied,
+        })
+
+    cust_parties_qs = Party.objects.filter(restaurant=restaurant).order_by('name')
+    if active_branch:
+        cust_parties_qs = cust_parties_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    cust_parties_list = [{'id': p.id, 'name': p.name, 'phone': p.phone, 'email': p.email, 'gstin': p.gstin or ''} for p in cust_parties_qs]
+
+    active_branch_gstin_manual = get_branch_gstin_str(active_branch, restaurant)
 
     import json
     return render(request, 'restaurant_admin/orders/manual_create.html', {
@@ -1480,7 +1595,14 @@ def order_edit_manual(request, pk, restaurant_slug=None):
             'vat_imfl_pct': vat_imfl_pct,
             'vat_wine_pct': vat_wine_pct,
             'vat_gen_pct': vat_gen_pct,
+            'service_charge_pct': float(settings_obj.service_charge_percentage or 0),
+            'service_charge_taxable': getattr(settings_obj, 'service_charge_taxable', True),
         }),
+        'customer_parties': cust_parties_qs,
+        'customer_parties_json': json.dumps(cust_parties_list),
+        'active_branch_gstin': active_branch_gstin_manual,
+        'active_branch_gstin_json': json.dumps(active_branch_gstin_manual),
+        'custom_charges_json': json.dumps(custom_charges_list),
         'existing_order_json': json.dumps(existing_order_dict),
         'is_edit_mode': True,
         'order': order,
@@ -1993,10 +2115,12 @@ def purchase_create(request, restaurant_slug=None):
             err = 'Supplier Name is required.'
             return JsonResponse({'success': False, 'error': err}, status=400) if is_json else (messages.error(request, err) or redirect(request.path))
 
+        active_branch = get_active_branch(request, restaurant)
         try:
             invoice_number = get_and_increment_document_number(
                 restaurant=restaurant,
                 document_type='purchase',
+                branch=active_branch,
                 user_input_no=(data.get('entry_no') or data.get('invoice_number') or '').strip()
             )
         except ValidationError as ve:
@@ -2204,7 +2328,7 @@ def purchase_create(request, restaurant_slug=None):
     categories = list(categories_qs.values_list('name', flat=True))
     today_date = timezone.now().strftime('%Y-%m-%d')
 
-    seq_info = get_document_sequence_info(restaurant, 'purchase')
+    seq_info = get_document_sequence_info(restaurant, 'purchase', branch=active_branch)
     entry_no = seq_info['next_number']
 
     return render(request, 'restaurant_admin/purchases/create.html', {
@@ -2996,8 +3120,7 @@ def order_records(request, restaurant_slug=None):
     total_orders = orders_qs.count()
     total_revenue = orders_qs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
 
-    paid_orders = orders_qs.filter(payment_status=Order.PaymentStatus.PAID)
-    paid_revenue = paid_orders.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    paid_revenue = orders_qs.aggregate(total=Sum('paid_amount'))['total'] or Decimal('0.00')
 
     avg_order_value = (total_revenue / Decimal(total_orders)) if total_orders > 0 else Decimal('0.00')
 
@@ -3454,44 +3577,52 @@ def order_settle_api(request, pk, restaurant_slug=None):
     valid_payments = list(order.payments or [])
 
     advance_paid = order.advance_amount_paid or Decimal('0.00')
+    existing_paid = order.paid_amount or Decimal('0.00')
     order_grand_total = order.total_amount if (order.total_amount is not None and order.total_amount > Decimal('0.00')) else order.calculate_bill_breakdown()['final_total']
-    net_payable_target = max(Decimal('0.00'), order_grand_total - advance_paid)
+    remaining_due_target = max(Decimal('0.00'), order_grand_total - advance_paid - existing_paid)
 
+    new_payments = []
     if isinstance(payments_input, list) and len(payments_input) > 0:
-        valid_payments = []
         for p in payments_input:
             amt = safe_dec(p.get('amount'))
             if amt > 0:
-                valid_payments.append({
+                new_payments.append({
                     'method': str(p.get('method') or payment_method),
                     'amount': float(amt)
                 })
-        paid_val = sum(safe_dec(p['amount']) for p in valid_payments)
+        new_paid_sum = sum(safe_dec(p['amount']) for p in new_payments)
     elif data.get('paid_amount') is not None and str(data.get('paid_amount')).strip() != '':
-        paid_val = safe_dec(data.get('paid_amount'))
-        valid_payments = [{'method': payment_method, 'amount': float(paid_val)}]
+        new_paid_sum = safe_dec(data.get('paid_amount'))
+        new_payments = [{'method': payment_method, 'amount': float(new_paid_sum)}]
     elif data.get('amount') is not None and str(data.get('amount')).strip() != '':
-        added_amt = safe_dec(data.get('amount'))
-        paid_val = (order.paid_amount or Decimal('0.00')) + added_amt
-        valid_payments.append({'method': payment_method, 'amount': float(added_amt)})
+        new_paid_sum = safe_dec(data.get('amount'))
+        new_payments = [{'method': payment_method, 'amount': float(new_paid_sum)}]
     else:
-        paid_val = net_payable_target
-        valid_payments = [{'method': payment_method, 'amount': float(net_payable_target)}]
+        new_paid_sum = remaining_due_target
+        new_payments = [{'method': payment_method, 'amount': float(remaining_due_target)}]
 
-    due_val = max(Decimal('0.00'), net_payable_target - paid_val)
+    # Check if user submitted full total or incremental remaining settlement
+    if new_paid_sum >= (order_grand_total - advance_paid):
+        total_paid_val = new_paid_sum
+        valid_payments = new_payments
+    else:
+        total_paid_val = existing_paid + new_paid_sum
+        valid_payments = list(order.payments or []) + new_payments
+
+    due_val = max(Decimal('0.00'), order_grand_total - advance_paid - total_paid_val)
 
     if due_val <= Decimal('0.00'):
         order.payment_status = Order.PaymentStatus.PAID
         order.due_amount = Decimal('0.00')
-        order.paid_amount = paid_val
-    elif (paid_val + advance_paid) > Decimal('0.00'):
+        order.paid_amount = total_paid_val
+    elif (total_paid_val + advance_paid) > Decimal('0.00'):
         order.payment_status = Order.PaymentStatus.PARTIALLY_PAID
-        order.paid_amount = paid_val
+        order.paid_amount = total_paid_val
         order.due_amount = due_val
     else:
         order.payment_status = Order.PaymentStatus.UNPAID
         order.paid_amount = Decimal('0.00')
-        order.due_amount = net_payable_target
+        order.due_amount = max(Decimal('0.00'), order_grand_total - advance_paid)
 
     if order.advance_receipt and order.advance_receipt.status == 'active':
         order.advance_receipt.status = 'redeemed'
@@ -3759,12 +3890,20 @@ def order_kot(request, pk, restaurant_slug=None):
     total = max(Decimal('0.00'), subtotal + cgst_amount + sgst_amount + service_amount - discount_amount)
 
     food_items, bar_items = order.get_food_and_bar_items()
+
+    item_ids_param = request.GET.get('items')
+    if item_ids_param:
+        filter_ids = [int(x) for x in item_ids_param.split(',') if x.isdigit()]
+        if filter_ids:
+            food_items = [it for it in food_items if it.id in filter_ids]
+            bar_items = [it for it in bar_items if it.id in filter_ids]
+
     total_food_qty = sum(item.quantity for item in food_items)
     total_bar_qty = sum(item.quantity for item in bar_items)
 
     table_obj = order.table
     zone_obj = table_obj.zone if (table_obj and hasattr(table_obj, 'zone')) else None
-    total_kitchen_items = sum(item.quantity for item in order.items.all())
+    total_kitchen_items = sum(item.quantity for item in (food_items + bar_items))
 
     context = {
         'restaurant': restaurant,
@@ -4216,15 +4355,21 @@ def settings_view(request, restaurant_slug=None):
         branch.save()
 
     active_branch = get_active_branch(request, restaurant)
+    if not branch and active_branch:
+        branch = active_branch
+
     custom_charges = CustomCharge.objects.filter(restaurant=restaurant, is_active=True)
     if active_branch:
         custom_charges = custom_charges.filter(Q(branch=active_branch) | Q(branch__isnull=True))
     custom_charges = custom_charges.order_by('charge_name')
 
     doc_types = ['sales', 'purchase', 'receipt', 'challan']
+    if branch and branch.serves_alcohol:
+        doc_types.append('vat_bill')
+
     doc_sequences = {}
     for dt in doc_types:
-        doc_sequences[dt] = DocumentSequenceSetting.get_sequence_setting(restaurant, dt)
+        doc_sequences[dt] = DocumentSequenceSetting.get_sequence_setting(restaurant, dt, branch=branch)
 
     if request.method == 'POST':
         form = RestaurantSettingsForm(request.POST, request.FILES, instance=settings_obj)
@@ -4625,8 +4770,10 @@ def receipt_create_page(request, restaurant_slug=None):
         from django.http import HttpResponseForbidden
         return HttpResponseForbidden("No restaurant associated with this account.")
 
+    active_branch = get_active_branch(request, restaurant)
+
     if request.method == 'GET':
-        seq_info = get_document_sequence_info(restaurant, 'receipt')
+        seq_info = get_document_sequence_info(restaurant, 'receipt', branch=active_branch)
         next_receipt_no = seq_info['next_number']
         
         max_num = Order.objects.filter(restaurant=restaurant).aggregate(Max('branch_order_number'))['branch_order_number__max'] or 0
@@ -4635,7 +4782,6 @@ def receipt_create_page(request, restaurant_slug=None):
             max_num = last_order.id if last_order else 0
         next_reference_no = f"ORD-{(max_num + 1):04d}"
 
-        active_branch = get_active_branch(request, restaurant)
         customer_parties = Party.objects.filter(restaurant=restaurant, party_type__in=['customer', 'both'])
         if active_branch:
             customer_parties = customer_parties.filter(branch=active_branch)
@@ -4680,6 +4826,7 @@ def receipt_create_page(request, restaurant_slug=None):
             receipt_no = get_and_increment_document_number(
                 restaurant=restaurant,
                 document_type='receipt',
+                branch=active_branch,
                 user_input_no=receipt_no_input
             )
         except ValidationError as ve:
@@ -5240,6 +5387,7 @@ def challan_create(request, restaurant_slug=None):
             challan_no = get_and_increment_document_number(
                 restaurant=restaurant,
                 document_type='challan',
+                branch=active_branch,
                 user_input_no=challan_no_input
             )
         except ValidationError as ve:
@@ -5353,7 +5501,7 @@ def challan_create(request, restaurant_slug=None):
             return redirect('restaurant_admin:challan_create', restaurant_slug=restaurant.slug)
 
     # GET Request: Prepare form data
-    seq_info = get_document_sequence_info(restaurant, 'challan')
+    seq_info = get_document_sequence_info(restaurant, 'challan', branch=active_branch)
     auto_challan_no = seq_info['next_number']
 
     inventory_items = InventoryItem.objects.filter(restaurant=restaurant, is_active=True)
@@ -5730,10 +5878,11 @@ def transaction_desk_create(request, restaurant_slug=None):
     customer_parties = customer_parties.order_by('name')
 
     # Document Sequences Info
-    seq_info_sales = get_document_sequence_info(restaurant, 'sales')
-    seq_info_purchase = get_document_sequence_info(restaurant, 'purchase')
-    seq_info_receipt = get_document_sequence_info(restaurant, 'receipt')
-    seq_info_challan = get_document_sequence_info(restaurant, 'challan')
+    seq_info_sales = get_document_sequence_info(restaurant, 'sales', branch=branch_obj)
+    seq_info_purchase = get_document_sequence_info(restaurant, 'purchase', branch=branch_obj)
+    seq_info_receipt = get_document_sequence_info(restaurant, 'receipt', branch=branch_obj)
+    seq_info_challan = get_document_sequence_info(restaurant, 'challan', branch=branch_obj)
+    seq_info_vat_bill = get_document_sequence_info(restaurant, 'vat_bill', branch=branch_obj) if (branch_obj and branch_obj.serves_alcohol) else None
 
     active_branch_gstin = get_branch_gstin_str(branch_obj, restaurant)
 
@@ -5782,6 +5931,7 @@ def transaction_desk_create(request, restaurant_slug=None):
         'seq_info_purchase': seq_info_purchase,
         'seq_info_receipt': seq_info_receipt,
         'seq_info_challan': seq_info_challan,
+        'seq_info_vat_bill': seq_info_vat_bill,
 
         # POS Full Context
         'menu_items': menu_items_qs,
@@ -5799,6 +5949,8 @@ def transaction_desk_create(request, restaurant_slug=None):
             'vat_imfl_pct': vat_imfl_pct,
             'vat_wine_pct': vat_wine_pct,
             'vat_gen_pct': vat_gen_pct,
+            'service_charge_pct': float(branch_obj.service_charge_percentage if (branch_obj and branch_obj.service_charge_percentage is not None) else (settings_obj.service_charge_percentage or 0)),
+            'service_charge_taxable': getattr(settings_obj, 'service_charge_taxable', True),
         }),
         'custom_charges_json': json.dumps(custom_charges_list),
         'customer_parties': customer_parties,

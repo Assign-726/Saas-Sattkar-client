@@ -44,19 +44,16 @@ def floor_plan_api(request, restaurant_slug=None):
             'tables': []
         }
         for table in zone.tables.filter(is_active=True).order_by('table_number'):
-            active_orders = table.orders.exclude(status='C').exclude(payment_status='F')
+            active_orders = table.orders.exclude(status='C').exclude(payment_status__in=['F', 'paid', 'P'])
             if active_branch:
                 active_orders = active_orders.filter(branch=active_branch)
 
-            if not active_orders.exists() and table.restaurant and table.table_number:
-                active_orders = Order.objects.filter(
-                    restaurant=table.restaurant,
-                    table_number=table.table_number
-                ).exclude(status='C').exclude(payment_status='F')
-                if active_branch:
-                    active_orders = active_orders.filter(branch=active_branch)
-
-            latest_order = active_orders.first()
+            latest_order = active_orders.order_by('-order_time').first()
+            if not latest_order:
+                # If table has a recent order still associated before final clear
+                recent = table.orders.exclude(status='C').exclude(payment_status='F').order_by('-order_time').first()
+                if recent and table.current_status != 'BLANK':
+                    latest_order = recent
             active_order_data = None
             if latest_order:
                 active_order_data = {
