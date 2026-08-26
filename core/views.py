@@ -667,6 +667,7 @@ class RestaurantSettingsViewSet(viewsets.ReadOnlyModelViewSet):
     def list(self, request, *args, **kwargs):
         restaurant_id = self.request.query_params.get('restaurant')
         restaurant_slug = self.request.query_params.get('restaurant_slug')
+        branch_slug = self.request.query_params.get('branch_slug') or self.request.query_params.get('branch')
         restaurant = None
         if restaurant_id:
             restaurant = Restaurant.objects.filter(id=restaurant_id).first()
@@ -674,8 +675,16 @@ class RestaurantSettingsViewSet(viewsets.ReadOnlyModelViewSet):
             restaurant = Restaurant.objects.filter(slug=restaurant_slug).first()
         
         obj = RestaurantSettings.get_settings(restaurant)
-        serializer = self.get_serializer(obj)
-        return Response(serializer.data)
+        data = self.get_serializer(obj).data
+        
+        if restaurant and branch_slug:
+            branch = restaurant.branches.filter(slug=branch_slug).first()
+            if branch:
+                data['enable_customer_ordering'] = getattr(branch, 'enable_customer_ordering', True)
+                data['enable_online_payment'] = getattr(branch, 'enable_online_payment', False)
+                data['enable_pay_at_counter'] = getattr(branch, 'enable_pay_at_counter', True)
+        
+        return Response(data)
 
 
 class BlogPostViewSet(viewsets.ReadOnlyModelViewSet):

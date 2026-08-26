@@ -169,6 +169,11 @@ class RestaurantBranch(models.Model):
     is_hotel_tariff_7500_plus = models.BooleanField(default=False)
     e_invoicing_enabled = models.BooleanField(default=False)
     
+    # Digital ordering & payment settings per branch
+    enable_customer_ordering = models.BooleanField(default=True, help_text="Allow customers to place orders directly from the digital menu for this branch")
+    enable_online_payment = models.BooleanField(default=False, help_text="Enable online payment for this branch")
+    enable_pay_at_counter = models.BooleanField(default=True, help_text="Enable pay at counter for this branch")
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

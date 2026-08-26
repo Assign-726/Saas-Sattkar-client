@@ -159,6 +159,7 @@ class Order(models.Model):
         PENDING = 'P', _('Pending')
         PREPARING = 'PR', _('Preparing')
         SERVED = 'S', _('Served')
+        COMPLETED = 'COMPLETED', _('Completed')
         CANCELLED = 'C', _('Cancelled')
 
     class OrderType(models.TextChoices):
@@ -222,6 +223,9 @@ class Order(models.Model):
     # Coupon fields
     coupon = models.ForeignKey('Coupon', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount_type = models.CharField(max_length=20, default='flat', blank=True, null=True)
+    discount_value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount_reason = models.CharField(max_length=255, blank=True, null=True)
     notes = models.TextField(blank=True)
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='orders', null=True, blank=True)
     branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='orders')
@@ -567,7 +571,9 @@ class Order(models.Model):
         gross_subtotal = food_subtotal + total_liquor_subtotal
 
         discount = Decimal('0.00')
-        if self.coupon:
+        if self.discount_amount and self.discount_amount > Decimal('0.00'):
+            discount = Decimal(str(self.discount_amount))
+        elif self.coupon:
             try:
                 discount = Decimal(str(self.coupon.calculate_discount(gross_subtotal)))
             except Exception:
@@ -577,24 +583,13 @@ class Order(models.Model):
         sc_taxable = getattr(settings_obj, 'service_charge_taxable', True)
         coupon_before_tax = getattr(settings_obj, 'coupon_applies_before_tax', True)
 
-        if coupon_before_tax:
-            discounted_food_subtotal = max(Decimal('0.00'), food_subtotal - discount)
-            rem_discount = max(Decimal('0.00'), discount - food_subtotal)
-
-            d_beer = min(beer_subtotal, rem_discount)
-            rem_discount -= d_beer
-            discounted_beer = beer_subtotal - d_beer
-
-            d_imfl = min(imfl_subtotal, rem_discount)
-            rem_discount -= d_imfl
-            discounted_imfl = imfl_subtotal - d_imfl
-
-            d_wine = min(wine_subtotal, rem_discount)
-            rem_discount -= d_wine
-            discounted_wine = wine_subtotal - d_wine
-
-            d_gen = min(gen_liquor_subtotal, rem_discount)
-            discounted_gen_liquor = gen_liquor_subtotal - d_gen
+        if coupon_before_tax and gross_subtotal > Decimal('0.00'):
+            disc_factor = (gross_subtotal - discount) / gross_subtotal
+            discounted_food_subtotal = (food_subtotal * disc_factor).quantize(Decimal('0.01'))
+            discounted_beer = (beer_subtotal * disc_factor).quantize(Decimal('0.01'))
+            discounted_imfl = (imfl_subtotal * disc_factor).quantize(Decimal('0.01'))
+            discounted_wine = (wine_subtotal * disc_factor).quantize(Decimal('0.01'))
+            discounted_gen_liquor = (gen_liquor_subtotal * disc_factor).quantize(Decimal('0.01'))
         else:
             discounted_food_subtotal = food_subtotal
             discounted_beer = beer_subtotal
@@ -603,6 +598,7 @@ class Order(models.Model):
             discounted_gen_liquor = gen_liquor_subtotal
 
         discounted_liquor_subtotal = discounted_beer + discounted_imfl + discounted_wine + discounted_gen_liquor
+        net_subtotal = discounted_food_subtotal + discounted_liquor_subtotal
 
         # Custom / Additional Charges Calculation
         custom_charges_list = []
@@ -629,7 +625,7 @@ class Order(models.Model):
                     raw_types = [raw_types]
                 types = [norm_ot(t) for t in raw_types]
                 if curr_ot in types:
-                    amt = cc.calculate_amount(gross_subtotal)
+                    amt = cc.calculate_amount(net_subtotal)
                     custom_charges_total += amt
                     if cc.is_taxable:
                         taxable_custom_charges_base += amt
@@ -641,24 +637,24 @@ class Order(models.Model):
                         'is_taxable': cc.is_taxable,
                     })
 
-        service_charge = (discounted_food_subtotal * service_pct) / Decimal('100') if bill_type != 'liquor' else Decimal('0.00')
+        service_charge = ((discounted_food_subtotal * service_pct) / Decimal('100')).quantize(Decimal('0.01')) if bill_type != 'liquor' else Decimal('0.00')
 
         if sc_taxable and bill_type != 'liquor':
             gst_base = discounted_food_subtotal + service_charge + taxable_custom_charges_base
         else:
             gst_base = discounted_food_subtotal + taxable_custom_charges_base
 
-        cgst = (gst_base * cgst_pct) / Decimal('100')
-        sgst = (gst_base * sgst_pct) / Decimal('100')
+        cgst = ((gst_base * cgst_pct) / Decimal('100')).quantize(Decimal('0.01'))
+        sgst = ((gst_base * sgst_pct) / Decimal('100')).quantize(Decimal('0.01'))
 
-        beer_vat = (discounted_beer * vat_beer_pct) / Decimal('100') if bill_type != 'food' else Decimal('0.00')
-        imfl_vat = (discounted_imfl * vat_imfl_pct) / Decimal('100') if bill_type != 'food' else Decimal('0.00')
-        wine_vat = (discounted_wine * vat_wine_pct) / Decimal('100') if bill_type != 'food' else Decimal('0.00')
-        gen_vat = (discounted_gen_liquor * vat_gen_pct) / Decimal('100') if bill_type != 'food' else Decimal('0.00')
+        beer_vat = ((discounted_beer * vat_beer_pct) / Decimal('100')).quantize(Decimal('0.01')) if bill_type != 'food' else Decimal('0.00')
+        imfl_vat = ((discounted_imfl * vat_imfl_pct) / Decimal('100')).quantize(Decimal('0.01')) if bill_type != 'food' else Decimal('0.00')
+        wine_vat = ((discounted_wine * vat_wine_pct) / Decimal('100')).quantize(Decimal('0.01')) if bill_type != 'food' else Decimal('0.00')
+        gen_vat = ((discounted_gen_liquor * vat_gen_pct) / Decimal('100')).quantize(Decimal('0.01')) if bill_type != 'food' else Decimal('0.00')
         vat_amount = beer_vat + imfl_vat + wine_vat + gen_vat
 
         from decimal import ROUND_HALF_UP
-        raw_total = discounted_food_subtotal + service_charge + custom_charges_total + cgst + sgst + discounted_liquor_subtotal + vat_amount
+        raw_total = net_subtotal + service_charge + custom_charges_total + cgst + sgst + vat_amount
         rounded_total = raw_total.quantize(Decimal('1'), rounding=ROUND_HALF_UP)
         round_off_amount = (rounded_total - raw_total).quantize(Decimal('0.01'))
 
@@ -791,6 +787,28 @@ class RestaurantSettings(models.Model):
     enable_pay_at_counter = models.BooleanField(default=True)
     enable_customer_ordering = models.BooleanField(default=True, help_text="Allow customers to place orders directly from the digital menu")
     
+    # Printing & POS Template settings
+    class BillTemplate(models.TextChoices):
+        THERMAL = 'thermal', 'Thermal POS Receipt (80mm)'
+        STANDARD = 'standard', 'Standard Modern Invoice (A4)'
+
+    class KotTemplate(models.TextChoices):
+        THERMAL = 'thermal', 'Thermal POS KOT (80mm)'
+        STANDARD = 'standard', 'Standard Kitchen Order Ticket'
+
+    bill_template = models.CharField(
+        max_length=20,
+        choices=BillTemplate.choices,
+        default=BillTemplate.THERMAL,
+        help_text="Default print template for customer bills/invoices"
+    )
+    kot_template = models.CharField(
+        max_length=20,
+        choices=KotTemplate.choices,
+        default=KotTemplate.THERMAL,
+        help_text="Default print template for Kitchen Order Tickets (KOT)"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

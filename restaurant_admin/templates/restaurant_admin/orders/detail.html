@@ -321,6 +321,12 @@
             <div class="od-item-info">
                 <div class="od-item-name">{{ item.menu_item.name }}</div>
                 <div class="od-item-qty">Quantity: {{ item.quantity }} &times; &#8377;{{ item.unit_price|floatformat:2 }}</div>
+                {% if item.notes %}
+                <div style="font-size: 0.75rem; color: #b45309; background: #fef3c7; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px;"><i class="fas fa-sticky-note me-1"></i> {{ item.notes }}</div>
+                {% endif %}
+                {% if item.discount_reason %}
+                <div style="font-size: 0.75rem; color: #4338ca; background: #e0e7ff; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px;"><i class="fas fa-tag me-1"></i> Discount Reason: {{ item.discount_reason }}</div>
+                {% endif %}
             </div>
             <div class="od-item-price">&#8377;{{ item.subtotal|floatformat:2 }}</div>
         </div>
@@ -335,37 +341,50 @@
                 <span><i class="bi bi-receipt text-primary me-1"></i> Order Total</span>
             </h6>
 
-            {% if food_subtotal > 0 and liquor_subtotal > 0 %}
             <div class="od-total-row">
-                <span class="text-muted"><i class="bi bi-egg-fried text-primary me-1"></i> Food Subtotal (GST Base)</span>
-                <span class="fw-semibold">&#8377;{{ food_subtotal|floatformat:2 }}</span>
-            </div>
-            <div class="od-total-row">
-                <span class="text-muted"><i class="bi bi-cup-straw text-warning me-1"></i> Liquor Subtotal (Excise Base)</span>
-                <span class="fw-semibold">&#8377;{{ liquor_subtotal|floatformat:2 }}</span>
-            </div>
-            <div class="od-total-row fw-semibold" style="border-top:1px dashed #e2e8f0; padding-top:6px; margin-top:2px;">
-                <span>Total Subtotal</span>
+                <span>Items Subtotal</span>
                 <span>&#8377;{{ subtotal|floatformat:2 }}</span>
             </div>
-            {% else %}
-            <div class="od-total-row">
-                <span>Subtotal</span>
-                <span>&#8377;{{ subtotal|floatformat:2 }}</span>
+
+            {% if discount_amount > 0 %}
+            <div class="od-total-row discount" style="color: #dc2626; font-weight: 600;">
+                <span><i class="bi bi-tag-fill me-1"></i> Bill Discount {% if order.discount_reason %}<span style="font-size:0.75rem; color:#4338ca; background:#e0e7ff; padding:2px 6px; border-radius:4px; margin-left:8px; font-weight:500;">Reason: {{ order.discount_reason }}</span>{% endif %}</span>
+                <span>-&#8377;{{ discount_amount|floatformat:2 }}</span>
             </div>
             {% endif %}
 
-            <!-- Additional / Custom Charges -->
+            {% if food_subtotal > 0 and liquor_subtotal > 0 %}
+            <div class="od-total-row text-muted" style="font-size:0.82rem; padding-left:8px;">
+                <span>• Food (GST Base)</span>
+                <span>&#8377;{{ food_subtotal|floatformat:2 }}</span>
+            </div>
+            <div class="od-total-row text-muted" style="font-size:0.82rem; padding-left:8px;">
+                <span>• Liquor (Excise Base)</span>
+                <span>&#8377;{{ liquor_subtotal|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+
+            <!-- 1. Taxable Additions: Service Charge & Taxable Custom Charges -->
             {% if custom_charges_list %}
             {% for cc in custom_charges_list %}
+            {% if cc.is_taxable %}
             <div class="od-total-row text-muted" style="font-size:0.84rem;">
                 <span>
                     <i class="bi bi-tag-fill text-primary me-1"></i> {{ cc.name }}
-                    {% if cc.is_taxable %}<span class="badge bg-light text-primary border ms-1" style="font-size:0.65rem;">Taxable</span>{% endif %}
+                    <span class="badge bg-light text-primary border ms-1" style="font-size:0.65rem;">Taxable</span>
                 </span>
                 <span>&#8377;{{ cc.amount|floatformat:2 }}</span>
             </div>
+            {% endif %}
             {% endfor %}
+            {% endif %}
+
+            <!-- Service Charge (Taxable) -->
+            {% if service_percentage > 0 and service_amount > 0 %}
+            <div class="od-total-row">
+                <span>Service Charge ({{ service_percentage|floatformat:0 }}%) <span class="badge bg-light text-primary border" style="font-size:0.65rem;">Taxable</span></span>
+                <span>&#8377;{{ service_amount|floatformat:2 }}</span>
+            </div>
             {% endif %}
 
             <!-- GST Taxes (Food) -->
@@ -406,18 +425,21 @@
             </div>
             {% endif %}
 
-            {% if service_percentage > 0 %}
-            <div class="od-total-row">
-                <span>Service Charge ({{ service_percentage|floatformat:0 }}%)</span>
-                <span>&#8377;{{ service_amount|floatformat:2 }}</span>
+            <!-- 2. Non-Taxable Additions (Placed below taxes) -->
+            {% if custom_charges_list %}
+            {% for cc in custom_charges_list %}
+            {% if not cc.is_taxable %}
+            <div class="od-total-row text-muted" style="font-size:0.84rem;">
+                <span>
+                    <i class="bi bi-tag-fill text-secondary me-1"></i> {{ cc.name }}
+                    <span class="badge bg-light text-secondary border ms-1" style="font-size:0.65rem;">Non-tax</span>
+                </span>
+                <span>&#8377;{{ cc.amount|floatformat:2 }}</span>
             </div>
             {% endif %}
-            {% if discount_amount > 0 %}
-            <div class="od-total-row discount">
-                <span>Discount</span>
-                <span>-&#8377;{{ discount_amount|floatformat:2 }}</span>
-            </div>
+            {% endfor %}
             {% endif %}
+
             {% if round_off_amount and round_off_amount != 0 %}
             <div class="od-total-row">
                 <span>Round Off</span>
@@ -502,6 +524,85 @@
             <input type="text" id="detCustomInvInput" class="form-control form-control-sm" style="font-family:monospace; font-weight:600;" value="{{ order.gstin_no|default:'' }}" placeholder="e.g. INV-2026-0042">
           </div>
 
+          <!-- Thermal Receipt Breakdown Container (.rcpt) -->
+          <div class="rcpt" id="detSettleRcptBox" style="background:#F9F9F8; border:1px solid #E3DFD7; border-radius:9px; padding:14px; font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; font-size:11.5px; color:#38342F; line-height:1.5;">
+            {% for it in order.items.all %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+              <span>{{ it.quantity }} × {{ it.menu_item.name|default:'Item' }}{% if it.discount_amount and it.discount_amount > 0 %} <small style="color:#B45309;">(-₹{{ it.discount_amount|floatformat:2 }})</small>{% endif %}</span>
+              <span>{{ it.subtotal|floatformat:2 }}</span>
+            </div>
+            {% if it.notes %}
+            <div class="rr" style="opacity:.65; font-size:10px; padding-left:12px;"><span>↳ {{ it.notes }}</span><span></span></div>
+            {% endif %}
+            {% endfor %}
+
+            {% if discount_amount and discount_amount > 0 %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; color:#B45309;">
+              <span>Bill discount</span>
+              <span>-₹{{ discount_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+
+            {% if service_percentage and service_percentage > 0 and service_amount > 0 %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+              <span>Service charge ({{ service_percentage|floatformat:0 }}%)</span>
+              <span>₹{{ service_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+
+            {% if custom_charges_list %}
+            {% for cc in custom_charges_list %}
+            {% if cc.is_taxable %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+              <span>{{ cc.name }} ({% if cc.type == 'flat' %}₹{{ cc.value|floatformat:2 }}{% else %}{{ cc.value }}%{% endif %})</span>
+              <span>₹{{ cc.amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% endif %}
+
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; border-top:1px dashed #E3DFD7; margin-top:4px; padding-top:4px; font-weight:600;">
+              <span>Taxable value</span>
+              <span>₹{{ gst_base|floatformat:2 }}</span>
+            </div>
+
+            {% if cgst_amount and cgst_amount > 0 %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+              <span>CGST @ {{ cgst_percentage|floatformat:1 }}%</span>
+              <span>₹{{ cgst_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            {% if sgst_amount and sgst_amount > 0 %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+              <span>SGST @ {{ sgst_percentage|floatformat:1 }}%</span>
+              <span>₹{{ sgst_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+
+            {% if custom_charges_list %}
+            {% for cc in custom_charges_list %}
+            {% if not cc.is_taxable %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+              <span>{{ cc.name }} ({% if cc.type == 'flat' %}₹{{ cc.value|floatformat:2 }}{% else %}{{ cc.value }}%{% endif %})</span>
+              <span>₹{{ cc.amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% endif %}
+
+            {% if round_off_amount and round_off_amount != 0 %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+              <span>Round off</span>
+              <span>{% if round_off_amount > 0 %}+{% endif %}{{ round_off_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+
+            <div class="rt" style="display:flex; justify-content:space-between; font-weight:700; margin-top:8px; padding-top:8px; border-top:1px dashed #A8A29E; color:#1A1815; font-size:13px;">
+              <span>TOTAL</span>
+              <span>₹{{ total|floatformat:2 }}</span>
+            </div>
+          </div>
+
           {% if order.advance_amount_paid > 0 or order.paid_amount > 0 %}
           <!-- Prior Payment / Deposit Settlement Card -->
           <div id="detSettleDeductionCard" style="background:#EFF6FF; border:1px solid #BFDBFE; border-radius:8px; padding:12px 14px; font-size:12px; color:#1E40AF;">
@@ -539,11 +640,11 @@
           <div id="detSettleCompanyBox" style="display:none; flex-direction:column; gap:10px;">
             <div>
               <label style="display:block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:4px;">CUSTOMER GSTIN</label>
-              <input type="text" id="detSettleGstinInput" maxlength="15" value="{{ order.gstin_no|default:'' }}" placeholder="08AAACS1234C1Z5" style="width:100%; padding:9px 12px; font-size:13px; font-family:monospace; border:1.5px solid #E3DFD7; border-radius:7px; outline:none; text-transform:uppercase; box-sizing:border-box;">
+              <input type="text" id="detSettleGstinInput" maxlength="15" value="{% if order.party and order.party.gstin and order.party.gst_registration_type != 'unregistered' %}{{ order.party.gstin }}{% endif %}" placeholder="08AAACS1234C1Z5" style="width:100%; padding:9px 12px; font-size:13px; font-family:monospace; border:1.5px solid #E3DFD7; border-radius:7px; outline:none; text-transform:uppercase; box-sizing:border-box;">
             </div>
             <div>
               <label style="display:block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:4px;">REGISTERED NAME</label>
-              <input type="text" id="detSettleRegNameInput" value="{{ order.customer_name|default:'' }}" placeholder="As per GST registration" style="width:100%; padding:9px 12px; font-size:13px; border:1.5px solid #E3DFD7; border-radius:7px; outline:none; box-sizing:border-box;">
+              <input type="text" id="detSettleRegNameInput" value="{% if order.customer_name and order.customer_name != 'Guest' and order.customer_name != 'Walk-in' %}{{ order.customer_name }}{% endif %}" placeholder="As per GST registration" style="width:100%; padding:9px 12px; font-size:13px; border:1.5px solid #E3DFD7; border-radius:7px; outline:none; box-sizing:border-box;">
             </div>
             <div class="note" style="border-left:3.5px solid #2F3E9E; background:#EEF2FF; padding:10px 12px; border-radius:6px; font-size:11.5px; color:#3730A3; line-height:1.4;">
               <strong>The tax stays CGST + SGST</strong> even when the company is registered in another state. For a meal served here the place of supply is this restaurant, so IGST never applies.
@@ -572,8 +673,8 @@
         <!-- Footer -->
         <div class="cf" style="padding:14px 24px; border-top:1px solid #E3DFD7; display:flex; gap:10px; justify-content:flex-end; background:#F7F6F3;">
           <button type="button" onclick="detCloseSettlementModal()" style="padding:9px 18px; border-radius:7px; border:1px solid #E3DFD7; background:#FFF; font-weight:600; font-size:12.5px; cursor:pointer; color:#57524A;">Back <kbd style="font-size:10px; background:#F2EFE9; padding:2px 5px; border-radius:4px; border:1px solid #D6D1C7; color:#57524A; margin-left:4px;">Esc</kbd></button>
-          <button type="button" id="btn-submit-detail-save-only" onclick="detSubmitSettlement(false, this)" style="padding:9px 16px; border-radius:7px; border:1px solid #2F3E9E; background:#FFF; color:#2F3E9E; font-weight:700; font-size:12.5px; cursor:pointer;">Save Order</button>
-          <button type="button" id="btn-submit-detail-settle" onclick="detSubmitSettlement(true, this)" style="padding:9px 22px; border-radius:7px; border:none; background:#2F3E9E; color:#FFF; font-weight:700; font-size:12.5px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 8px rgba(47,62,158,.25);">Save &amp; Print Bill <kbd style="font-size:10px; background:rgba(255,255,255,.25); padding:2px 5px; border-radius:4px; color:#FFF; margin-left:4px;">↵</kbd></button>
+          <button type="button" id="btn-submit-detail-save-only" onclick="detSubmitSettlement(false, this)" style="padding:9px 16px; border-radius:7px; border:1px solid #2F3E9E; background:#FFF; color:#2F3E9E; font-weight:700; font-size:12.5px; cursor:pointer;">Save Only</button>
+          <button type="button" id="btn-submit-detail-settle" onclick="detSubmitSettlement(true, this)" style="padding:9px 22px; border-radius:7px; border:none; background:#2F3E9E; color:#FFF; font-weight:700; font-size:12.5px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 8px rgba(47,62,158,.25);">Print &amp; close <kbd style="font-size:10px; background:rgba(255,255,255,.25); padding:2px 5px; border-radius:4px; color:#FFF; margin-left:4px;">↵</kbd></button>
         </div>
 
       </div>
@@ -642,7 +743,7 @@
         netPayable: netPayableTarget,
         hasAlcohol: hasAlcohol,
         payMode: 'Cash',
-        billTarget: "{% if order.gstin_no %}company{% else %}walkin{% endif %}"
+        billTarget: "{% if order.party and order.party.gstin and order.party.gst_registration_type != 'unregistered' %}company{% else %}walkin{% endif %}"
     };
 
     window.detOpenSettlementModal = function() {
@@ -877,7 +978,18 @@
 
         if (clickedBtn) {
             clickedBtn.disabled = true;
-            clickedBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Processing...';
+        let customerGstinVal = '';
+        if (detState.billTarget === 'company') {
+            const gVal = (document.getElementById('detSettleGstinInput')?.value || '').trim().toUpperCase();
+            if (gVal && gVal.length !== 15) {
+                alert('Please enter a valid 15-character GSTIN or switch to Walk-in guest.');
+                if (clickedBtn) {
+                    clickedBtn.disabled = false;
+                    clickedBtn.innerHTML = 'Print & close 🖨️';
+                }
+                return;
+            }
+            customerGstinVal = gVal;
         }
 
         const payload = {
@@ -887,7 +999,9 @@
             payments: payments,
             paid_amount: paidAmt.toFixed(2),
             due_amount: dueAmt.toFixed(2),
-            gstin_no: invNoOverride || (document.getElementById('detSettleGstinInput')?.value || '')
+            gstin_no: invNoOverride || '',
+            customer_gstin: customerGstinVal,
+            registered_name: (document.getElementById('detSettleRegNameInput')?.value || '').trim()
         };
 
         fetch("{% url 'restaurant_admin:order_settle_api' restaurant_slug=rslug pk=order.id %}", {

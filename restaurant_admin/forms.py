@@ -390,6 +390,7 @@ class RestaurantSettingsForm(forms.ModelForm):
         model = RestaurantSettings
         fields = [
             'cgst_percentage', 'sgst_percentage', 'service_charge_percentage', 'notification_sound',
+            'bill_template', 'kot_template',
             'enable_customer_ordering', 'enable_online_payment', 'enable_pay_at_counter', 'razorpay_key_id', 'razorpay_key_secret'
         ]
         widgets = {
@@ -397,6 +398,8 @@ class RestaurantSettingsForm(forms.ModelForm):
             'sgst_percentage': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
             'service_charge_percentage': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
             'notification_sound': forms.ClearableFileInput(attrs={'accept': 'audio/*'}),
+            'bill_template': forms.Select(attrs={'class': 'form-select'}),
+            'kot_template': forms.Select(attrs={'class': 'form-select'}),
             'razorpay_key_id': forms.TextInput(attrs={'placeholder': 'rzp_test_...'}),
             'razorpay_key_secret': forms.PasswordInput(render_value=True, attrs={'placeholder': 'Razorpay Key Secret'}),
         }
@@ -406,6 +409,9 @@ class RestaurantSettingsForm(forms.ModelForm):
         for field in ['cgst_percentage', 'sgst_percentage', 'service_charge_percentage', 'razorpay_key_id', 'razorpay_key_secret']:
             if field in self.fields:
                 self.fields[field].widget.attrs.update({'class': 'form-control'})
+        for field in ['bill_template', 'kot_template']:
+            if field in self.fields:
+                self.fields[field].widget.attrs.update({'class': 'form-select'})
         for field in ['enable_customer_ordering', 'enable_online_payment', 'enable_pay_at_counter']:
             if field in self.fields:
                 self.fields[field].widget.attrs.update({'class': 'form-check-input'})

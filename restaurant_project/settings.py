@@ -12,13 +12,29 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import os
 from pathlib import Path
+from datetime import timedelta
 import environ
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env(
-    DEBUG=(bool, False)
+    DEBUG=(bool, False),
+    CORS_ALLOW_ALL_ORIGINS=(bool, False),
+    CORS_ALLOW_CREDENTIALS=(bool, True),
+    SECURE_SSL_REDIRECT=(bool, False),
+    SESSION_COOKIE_SECURE=(bool, False),
+    CSRF_COOKIE_SECURE=(bool, False),
+    SECURE_HSTS_SECONDS=(int, 0),
+    SECURE_HSTS_INCLUDE_SUBDOMAINS=(bool, False),
+    SECURE_HSTS_PRELOAD=(bool, False),
+    EMAIL_PORT=(int, 587),
+    EMAIL_USE_TLS=(bool, True),
+    EMAIL_USE_SSL=(bool, False),
+    DB_PORT=(int, 5432),
+    DB_CONN_MAX_AGE=(int, 600),
+    JWT_ACCESS_TOKEN_LIFETIME_HOURS=(int, 1),
+    JWT_REFRESH_TOKEN_LIFETIME_DAYS=(int, 1),
 )
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
@@ -27,12 +43,15 @@ environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = env('DJANGO_SECRET_KEY')
+SECRET_KEY = env('DJANGO_SECRET_KEY', default=env('SECRET_KEY', default='django-insecure-&6l70up@$mc-r=%ra9arh_@9axe8&(@$@pxd3%tfcz!t8c-nje'))
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env.bool('DJANGO_DEBUG', default=False)
+DEBUG = env.bool('DJANGO_DEBUG', default=env.bool('DEBUG', default=False))
 
-ALLOWED_HOSTS = env.list('DJANGO_ALLOWED_HOSTS', default=['127.0.0.1', '192.168.1.7'])
+ALLOWED_HOSTS = env.list('DJANGO_ALLOWED_HOSTS', default=env.list('ALLOWED_HOSTS', default=['127.0.0.1', 'localhost', '192.168.1.7', '*']))
+
+# Frontend application base URL
+FRONTEND_URL = env('FRONTEND_URL', default=env('CUSTOM_FRONTEND_URL', default='http://localhost:3000'))
 
 
 # Application definition
@@ -57,14 +76,12 @@ INSTALLED_APPS = [
     'reservations',
 ]
 
-# CORS settings
-CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=['http://localhost:3000'])
-CORS_ALLOW_CREDENTIALS = True
+# CORS & CSRF settings
+CORS_ALLOW_ALL_ORIGINS = env.bool('CORS_ALLOW_ALL_ORIGINS', default=False)
+CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=['http://localhost:3000', 'http://127.0.0.1:3000'])
+CORS_ALLOW_CREDENTIALS = env.bool('CORS_ALLOW_CREDENTIALS', default=True)
 
-# Media files
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=['http://localhost:3000', 'http://127.0.0.1:3000'])
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -77,7 +94,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
-# CORS settings duplicated, removed
 
 # REST Framework settings
 REST_FRAMEWORK = {
@@ -90,10 +106,9 @@ REST_FRAMEWORK = {
 }
 
 # JWT settings
-from datetime import timedelta
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=env.int('JWT_ACCESS_TOKEN_LIFETIME_HOURS', default=1)),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=env.int('JWT_REFRESH_TOKEN_LIFETIME_DAYS', default=1)),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
 }
@@ -122,16 +137,25 @@ WSGI_APPLICATION = 'restaurant_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'Hotel',
-        'USER': 'postgres',
-        'PASSWORD': env('DJANGO_DB_PASSWORD'),
-        'HOST': 'localhost',
-        'PORT': '5432',  
+if env('DATABASE_URL', default=None):
+    DATABASES = {
+        'default': {
+            **env.db('DATABASE_URL'),
+            'CONN_MAX_AGE': env.int('DB_CONN_MAX_AGE', default=600),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': env('DB_ENGINE', default='django.db.backends.postgresql'),
+            'NAME': env('DB_NAME', default='Hotel'),
+            'USER': env('DB_USER', default='postgres'),
+            'PASSWORD': env('DB_PASSWORD', default=env('DJANGO_DB_PASSWORD', default='Admin1234')),
+            'HOST': env('DB_HOST', default='localhost'),
+            'PORT': str(env('DB_PORT', default='5432')),
+            'CONN_MAX_AGE': env.int('DB_CONN_MAX_AGE', default=600),
+        }
+    }
 
 
 # Password validation
@@ -156,19 +180,20 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = env('LANGUAGE_CODE', default='en-us')
 
-TIME_ZONE = 'Asia/Kolkata'
+TIME_ZONE = env('TIME_ZONE', default='Asia/Kolkata')
 
 USE_I18N = True
 
 USE_TZ = True
 
+
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_URL = env('STATIC_URL', default='/static/')
+STATIC_ROOT = env('STATIC_ROOT', default=os.path.join(BASE_DIR, 'staticfiles'))
 STATICFILES_FINDERS = [
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
@@ -179,8 +204,8 @@ STATICFILES_DIRS = [
 ]
 
 # Media files (Uploaded files)
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = env('MEDIA_URL', default='/media/')
+MEDIA_ROOT = env('MEDIA_ROOT', default=os.path.join(BASE_DIR, 'media'))
 
 # Ensure the media directory exists
 os.makedirs(MEDIA_ROOT, exist_ok=True)
@@ -194,16 +219,31 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Authentication settings
 LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = 'restaurant_admin:dashboard'  # Updated to match your URL name
+LOGIN_REDIRECT_URL = 'restaurant_admin:dashboard'
 LOGOUT_REDIRECT_URL = 'login'
 
+# Email settings
+EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = env('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = env.int('EMAIL_PORT', default=587)
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
+EMAIL_USE_SSL = env.bool('EMAIL_USE_SSL', default=False)
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='webmaster@localhost')
+
+# Security settings for production
 if not DEBUG:
-    SECURE_SSL_REDIRECT = True
-    SECURE_HSTS_SECONDS = 31536000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=True)
+    SECURE_HSTS_SECONDS = env.int('SECURE_HSTS_SECONDS', default=31536000)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=True)
+    SECURE_HSTS_PRELOAD = env.bool('SECURE_HSTS_PRELOAD', default=True)
+    SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=True)
+    CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=True)
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_BROWSER_XSS_FILTER = True
-    X_FRAME_OPTIONS = 'DENY'
+    X_FRAME_OPTIONS = env('X_FRAME_OPTIONS', default='DENY')
+    
+    # Reverse proxy SSL header (for Nginx / Cloudflare / AWS ELB / Traefik)
+    if env.bool('SECURE_PROXY_SSL_HEADER_ENABLED', default=True):
+        SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

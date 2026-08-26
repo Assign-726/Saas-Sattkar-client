@@ -319,23 +319,14 @@
           <div class="card border-0 shadow-sm rounded-3 mb-2">
             <div class="card-body p-4">
               <h6 class="fw-bold text-dark border-bottom pb-2 mb-3">
-                <i class="bi bi-file-earmark-text text-warning me-2"></i>3. Statutory & GST Details (Optional)
+                <i class="bi bi-file-earmark-text text-warning me-2"></i>3. Statutory &amp; GST Details (Optional)
               </h6>
 
               <div class="row g-3">
-                <div class="col-md-4">
-                  <label for="modalPartyGstin" class="form-label fw-semibold text-dark small mb-1">GSTIN</label>
-                  <div class="input-group">
-                    <span class="input-group-text bg-white text-muted"><i class="bi bi-card-heading"></i></span>
-                    <input type="text" class="form-control font-monospace fw-semibold" name="gstin" id="modalPartyGstin"
-                      placeholder="e.g. 27ABCDE1234F1Z5">
-                  </div>
-                </div>
-
-                <div class="col-md-4">
+                <div class="col-md-6">
                   <label for="modalPartyGstRegistrationType" class="form-label fw-semibold text-dark small mb-1">GST
                     Registration Type</label>
-                  <select class="form-select" name="gst_registration_type" id="modalPartyGstRegistrationType">
+                  <select class="form-select fw-semibold" name="gst_registration_type" id="modalPartyGstRegistrationType">
                     <option value="unregistered" selected>Unregistered / Consumer</option>
                     <option value="regular">GST Registered - Regular</option>
                     <option value="composition">GST Registered - Composition</option>
@@ -343,13 +334,30 @@
                   </select>
                 </div>
 
-                <div class="col-md-4">
-                  <label for="modalPartyPlaceOfSupply" class="form-label fw-semibold text-dark small mb-1">Place of
-                    Supply</label>
+                <div class="col-md-6" id="unregisteredNoticeBox">
+                  <div class="p-2 px-3 rounded bg-light border text-muted small mt-4">
+                    <i class="bi bi-info-circle text-primary me-1"></i> Retail consumer / unregistered party. GSTIN &amp; Place of Supply not required.
+                  </div>
+                </div>
+              </div>
+
+              <!-- Registered GST Fields (Only shown for Regular/Composition/Overseas) -->
+              <div class="row g-3 mt-1" id="registeredGstFields" style="display: none;">
+                <div class="col-md-6">
+                  <label for="modalPartyGstin" class="form-label fw-semibold text-dark small mb-1">Company / Party GSTIN</label>
+                  <div class="input-group">
+                    <span class="input-group-text bg-white text-muted"><i class="bi bi-card-heading"></i></span>
+                    <input type="text" class="form-control font-monospace fw-semibold text-uppercase" name="gstin" id="modalPartyGstin"
+                      maxlength="15" placeholder="e.g. 08AAACG4567K1Z9">
+                  </div>
+                </div>
+
+                <div class="col-md-6">
+                  <label for="modalPartyPlaceOfSupply" class="form-label fw-semibold text-dark small mb-1">Place of Supply</label>
                   <div class="input-group">
                     <span class="input-group-text bg-white text-muted"><i class="bi bi-compass"></i></span>
                     <input type="text" class="form-control" name="place_of_supply" id="modalPartyPlaceOfSupply"
-                      placeholder="e.g. 27-Maharashtra">
+                      placeholder="e.g. 08-Rajasthan">
                   </div>
                 </div>
               </div>
@@ -373,14 +381,52 @@
 <script>
   let partyModalInstance = null;
 
+  function syncGstFieldsVisibility() {
+    const regType = document.getElementById('modalPartyGstRegistrationType')?.value || 'unregistered';
+    const isUnreg = (regType === 'unregistered');
+    const gstFields = document.getElementById('registeredGstFields');
+    const noticeBox = document.getElementById('unregisteredNoticeBox');
+    const gstinInp = document.getElementById('modalPartyGstin');
+    const posInp = document.getElementById('modalPartyPlaceOfSupply');
+
+    if (isUnreg) {
+      if (gstFields) gstFields.style.display = 'none';
+      if (noticeBox) noticeBox.style.display = 'block';
+      if (gstinInp) gstinInp.value = '';
+      if (posInp) posInp.value = '';
+    } else {
+      if (gstFields) gstFields.style.display = 'flex';
+      if (noticeBox) noticeBox.style.display = 'none';
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     partyModalInstance = new bootstrap.Modal(document.getElementById('partyModal'));
+
+    const regSelect = document.getElementById('modalPartyGstRegistrationType');
+    if (regSelect) {
+      regSelect.addEventListener('change', syncGstFieldsVisibility);
+    }
+
+    const partyTypeSelect = document.getElementById('modalPartyType');
+    if (partyTypeSelect) {
+      partyTypeSelect.addEventListener('change', function() {
+        if (!document.getElementById('modalPartyId').value) {
+          if (this.value === 'customer') {
+            if (regSelect) regSelect.value = 'unregistered';
+          } else {
+            if (regSelect) regSelect.value = 'regular';
+          }
+          syncGstFieldsVisibility();
+        }
+      });
+    }
   });
 
   function openAddPartyModal() {
     document.getElementById('modalPartyId').value = '';
     document.getElementById('modalPartyName').value = '';
-    document.getElementById('modalPartyType').value = 'vendor';
+    document.getElementById('modalPartyType').value = 'customer';
     document.getElementById('modalPartyPhone').value = '';
     document.getElementById('modalPartyEmail').value = '';
     document.getElementById('modalPartyAddressLine1').value = '';
@@ -391,6 +437,7 @@
     document.getElementById('modalPartyGstRegistrationType').value = 'unregistered';
     document.getElementById('modalPartyPlaceOfSupply').value = '';
 
+    syncGstFieldsVisibility();
     document.getElementById('partyModalLabel').textContent = 'Add New Party';
     partyModalInstance.show();
   }
@@ -414,6 +461,7 @@
         document.getElementById('modalPartyGstRegistrationType').value = data.gst_registration_type || 'unregistered';
         document.getElementById('modalPartyPlaceOfSupply').value = data.place_of_supply || '';
 
+        syncGstFieldsVisibility();
         document.getElementById('partyModalLabel').textContent = 'Edit Party Details';
         partyModalInstance.show();
       }

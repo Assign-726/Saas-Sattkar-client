@@ -344,6 +344,17 @@
                     </select>
                 </div>
 
+                <!-- Order Type -->
+                <div class="filter-group">
+                    <label for="order_type">Order Type</label>
+                    <select name="order_type" id="order_type" class="filter-control">
+                        <option value="">All Types</option>
+                        {% for val, label in order_types %}
+                            <option value="{{ val }}" {% if order_type_filter == val %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
                 <!-- Action Buttons -->
                 <div class="filter-group" style="display: flex; gap: 8px;">
                     <button type="submit" class="btn btn-primary" style="flex: 1; padding: 9px;">
@@ -415,6 +426,16 @@
                                 No items
                             {% endfor %}
                         </div>
+                        {% if o.notes %}
+                        <div style="font-size: 0.75rem; color: #b45309; background: #fef3c7; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px;">
+                            <i class="fas fa-sticky-note me-1"></i> {{ o.notes }}
+                        </div>
+                        {% endif %}
+                        {% if o.discount_reason %}
+                        <div style="font-size: 0.75rem; color: #4338ca; background: #e0e7ff; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px;">
+                            <i class="fas fa-tag me-1"></i> Discount: {{ o.discount_reason }}
+                        </div>
+                        {% endif %}
                     </td>
                     <td style="text-align: right; font-weight: 700; color: #111827;">
                         ₹{{ o.total_amount|floatformat:2 }}
@@ -464,7 +485,8 @@
                             data-due="{% if o.due_amount %}{{ o.due_amount|floatformat:2 }}{% else %}{{ o.total_amount|floatformat:2 }}{% endif %}"
                             data-advance-paid="{{ o.advance_amount_paid|floatformat:2 }}"
                             data-receipt-no="{% if o.advance_receipt %}{{ o.advance_receipt.receipt_no }}{% endif %}"
-                            data-gstin="{{ o.gstin_no|default:'' }}"
+                            data-invoice-no="{{ o.gstin_no|default:'' }}"
+                            data-customer-gstin="{% if o.party and o.party.gstin and o.party.gst_registration_type != 'unregistered' %}{{ o.party.gstin }}{% endif %}"
                             data-excise="{{ o.excise_bill_no|default:'' }}"
                             data-has-alcohol="{% if o.check_item_types.1 %}true{% else %}false{% endif %}"
                             title="Settle & Checkout Order">
@@ -528,6 +550,11 @@
       <div id="recInvOverrideBox" style="display:none; background:#F7F6F3; padding:10px 12px; border-radius:8px; border:1px solid #E3DFD7;">
         <label style="display:block; font-size:10px; font-weight:700; color:#6E675C; text-transform:uppercase; margin-bottom:4px;">Custom Invoice No.</label>
         <input type="text" id="recCustomInvInput" class="form-control form-control-sm" style="font-family:monospace; font-weight:600;" placeholder="e.g. INV-2026-0042">
+      </div>
+
+      <!-- Thermal Receipt Breakdown Container (.rcpt) -->
+      <div class="rcpt" id="recSettleRcptBox" style="background:#F9F9F8; border:1px solid #E3DFD7; border-radius:9px; padding:14px; font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; font-size:11.5px; color:#38342F; line-height:1.5;">
+        <div class="text-center py-2 text-muted" style="font-size:11px;"><i class="bi bi-arrow-repeat spin me-1"></i> Loading bill breakdown...</div>
       </div>
 
       <!-- Prior Payment / Deposit Settlement Card -->
@@ -598,8 +625,8 @@
     <!-- Footer -->
     <div class="cf" style="padding:14px 24px; border-top:1px solid #E3DFD7; display:flex; gap:10px; justify-content:flex-end; background:#F7F6F3;">
       <button type="button" onclick="recCloseSettlementModal()" style="padding:9px 18px; border-radius:7px; border:1px solid #E3DFD7; background:#FFF; font-weight:600; font-size:12.5px; cursor:pointer; color:#57524A;">Back <kbd style="font-size:10px; background:#F2EFE9; padding:2px 5px; border-radius:4px; border:1px solid #D6D1C7; color:#57524A; margin-left:4px;">Esc</kbd></button>
-      <button type="button" id="btn-submit-records-save-only" onclick="recSubmitSettlement(false, this)" style="padding:9px 16px; border-radius:7px; border:1px solid #2F3E9E; background:#FFF; color:#2F3E9E; font-weight:700; font-size:12.5px; cursor:pointer;">Save Order</button>
-      <button type="button" id="btn-submit-records-settle" onclick="recSubmitSettlement(true, this)" style="padding:9px 22px; border-radius:7px; border:none; background:#2F3E9E; color:#FFF; font-weight:700; font-size:12.5px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 8px rgba(47,62,158,.25);">Save &amp; Print Bill <kbd style="font-size:10px; background:rgba(255,255,255,.25); padding:2px 5px; border-radius:4px; color:#FFF; margin-left:4px;">↵</kbd></button>
+      <button type="button" id="btn-submit-records-save-only" onclick="recSubmitSettlement(false, this)" style="padding:9px 16px; border-radius:7px; border:1px solid #2F3E9E; background:#FFF; color:#2F3E9E; font-weight:700; font-size:12.5px; cursor:pointer;">Save Only</button>
+      <button type="button" id="btn-submit-records-settle" onclick="recSubmitSettlement(true, this)" style="padding:9px 22px; border-radius:7px; border:none; background:#2F3E9E; color:#FFF; font-weight:700; font-size:12.5px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 8px rgba(47,62,158,.25);">Print &amp; close <kbd style="font-size:10px; background:rgba(255,255,255,.25); padding:2px 5px; border-radius:4px; color:#FFF; margin-left:4px;">↵</kbd></button>
     </div>
 
   </div>
@@ -794,6 +821,113 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function renderRecThermalReceipt(ord) {
+        const rcptEl = document.getElementById('recSettleRcptBox');
+        if (!rcptEl) return;
+
+        let rowsHtml = '';
+        const items = ord.items || [];
+        items.forEach(l => {
+            const gross = (parseFloat(l.unit_price) || 0) * (parseInt(l.quantity) || 1);
+            const disc = parseFloat(l.discount_amount) || 0;
+            const net = Math.max(0, gross - disc);
+            rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+                <span>${l.quantity} × ${escapeHtml(l.name || l.menu_item_name || 'Item')}${disc > 0 ? ' <small style="color:#B45309;">(-₹' + disc.toFixed(2) + ')</small>' : ''}</span>
+                <span>${net.toFixed(2)}</span>
+            </div>`;
+            if (l.notes || l.note) {
+                rowsHtml += `<div class="rr" style="opacity:.65; font-size:10px; padding-left:12px;"><span>↳ ${escapeHtml(l.notes || l.note)}</span><span></span></div>`;
+            }
+        });
+
+        // Bill Discount
+        const billDisc = parseFloat(ord.discount_amount || (ord.order_discount ? ord.order_discount.amount : 0)) || 0;
+        if (billDisc > 0) {
+            rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; color:#B45309;">
+                <span>Bill discount</span>
+                <span>-₹${billDisc.toFixed(2)}</span>
+            </div>`;
+        }
+
+        // Service Charge (Taxable)
+        const scAmt = parseFloat(ord.service_charge || ord.service_amount || ord.service_charge_amount) || 0;
+        const scPct = ord.service_charge_pct || ord.service_percentage || 11;
+        if (scAmt > 0) {
+            rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+                <span>Service charge (${scPct}%)</span>
+                <span>₹${scAmt.toFixed(2)}</span>
+            </div>`;
+        }
+
+        // Taxable Custom Charges
+        const customCharges = ord.applied_custom_charges || ord.custom_charges_list || [];
+        customCharges.filter(cc => cc.is_taxable).forEach(cc => {
+            const valLabel = cc.type === 'flat' ? `₹${parseFloat(cc.value).toFixed(2)}` : `${cc.value}%`;
+            rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+                <span>${escapeHtml(cc.name)} (${valLabel})</span>
+                <span>₹${parseFloat(cc.amount).toFixed(2)}</span>
+            </div>`;
+        });
+
+        // Taxable Value
+        const gstBase = parseFloat(ord.gst_base || ord.subtotal || ord.food_subtotal) || 0;
+        rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; border-top:1px dashed #E3DFD7; margin-top:4px; padding-top:4px; font-weight:600;">
+            <span>Taxable value</span>
+            <span>₹${gstBase.toFixed(2)}</span>
+        </div>`;
+
+        // Taxes
+        const cgstAmt = parseFloat(ord.cgst || ord.cgst_amount) || (parseFloat(ord.tax_amount) ? (parseFloat(ord.tax_amount) / 2) : 0);
+        const sgstAmt = parseFloat(ord.sgst || ord.sgst_amount) || (parseFloat(ord.tax_amount) ? (parseFloat(ord.tax_amount) / 2) : 0);
+        const cgstPct = ord.cgst_percentage || 2.5;
+        const sgstPct = ord.sgst_percentage || 2.5;
+
+        if (cgstAmt > 0) {
+            rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+                <span>CGST @ ${cgstPct}%</span>
+                <span>₹${cgstAmt.toFixed(2)}</span>
+            </div>`;
+        }
+        if (sgstAmt > 0) {
+            rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+                <span>SGST @ ${sgstPct}%</span>
+                <span>₹${sgstAmt.toFixed(2)}</span>
+            </div>`;
+        }
+
+        // Non-taxable Custom Charges (Placed below taxes)
+        customCharges.filter(cc => !cc.is_taxable).forEach(cc => {
+            const valLabel = cc.type === 'flat' ? `₹${parseFloat(cc.value).toFixed(2)}` : `${cc.value}%`;
+            rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+                <span>${escapeHtml(cc.name)} (${valLabel})</span>
+                <span>₹${parseFloat(cc.amount).toFixed(2)}</span>
+            </div>`;
+        });
+
+        // Round Off
+        const roundOff = parseFloat(ord.round_off_amount) || 0;
+        if (Math.abs(roundOff) >= 0.005) {
+            rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+                <span>Round off</span>
+                <span>${roundOff > 0 ? '+' : ''}${roundOff.toFixed(2)}</span>
+            </div>`;
+        }
+
+        // Total
+        const total = parseFloat(ord.total_amount || ord.grand_total || ord.total) || 0;
+        rowsHtml += `<div class="rt" style="display:flex; justify-content:space-between; font-weight:700; margin-top:8px; padding-top:8px; border-top:1px dashed #A8A29E; color:#1A1815; font-size:13px;">
+            <span>TOTAL</span>
+            <span>₹${total.toFixed(2)}</span>
+        </div>`;
+
+        rcptEl.innerHTML = rowsHtml;
+    }
+
     document.querySelectorAll('.btn-records-quick-settle').forEach(btn => {
         btn.addEventListener('click', function() {
             const orderId = this.dataset.orderId;
@@ -806,7 +940,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const receiptNo = this.dataset.receiptNo || '';
             const totalDeductions = advancePaid + alreadyPaid;
             const netPayableTarget = Math.max(0, amount - totalDeductions);
-            const gstin = this.dataset.gstin || '';
+            const invoiceNo = this.dataset.invoiceNo || '';
+            const customerGstin = this.dataset.customerGstin || '';
             const excise = this.dataset.excise || '';
             const hasAlcohol = (this.dataset.hasAlcohol === 'true');
 
@@ -817,17 +952,35 @@ document.addEventListener('DOMContentLoaded', function() {
             recState.netPayable = netPayableTarget;
             recState.receiptNo = receiptNo;
             recState.customerName = customer;
-            recState.gstinNo = gstin;
+            recState.invoiceNo = invoiceNo;
+            recState.customerGstin = customerGstin;
             recState.hasAlcohol = hasAlcohol;
 
             document.getElementById('recSettleGrandTitle').textContent = `Settle — ₹${netPayableTarget.toFixed(2)}`;
             document.getElementById('recSettleOrderMeta').textContent = `${orderNum} · ${table} · Dine-in`;
 
             // Suggested invoice
-            const suggestedInv = gstin || `INV-${new Date().getFullYear()}-${String(orderId).padStart(4, '0')}`;
+            const suggestedInv = invoiceNo || `INV-${new Date().getFullYear()}-${String(orderId).padStart(4, '0')}`;
             document.getElementById('recSettleInvVal').textContent = suggestedInv;
             document.getElementById('recCustomInvInput').value = suggestedInv;
             document.getElementById('recInvOverrideBox').style.display = 'none';
+
+            // Thermal Receipt Breakdown Loading State & Fetch
+            const rcptEl = document.getElementById('recSettleRcptBox');
+            if (rcptEl) rcptEl.innerHTML = '<div class="text-center py-2 text-muted" style="font-size:11px;"><i class="bi bi-arrow-repeat spin me-1"></i> Loading bill breakdown...</div>';
+
+            fetch(`{% url "restaurant_admin:pos_draft_order_api" restaurant_slug=rslug %}?order_id=${orderId}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.order) {
+                    renderRecThermalReceipt(data.order);
+                }
+            })
+            .catch(err => {
+                console.error("Error loading order breakdown:", err);
+            });
 
             // Deductions / Prior Paid card
             const deductCard = document.getElementById('recSettleDeductionCard');
@@ -866,14 +1019,18 @@ document.addEventListener('DOMContentLoaded', function() {
             // Customer / Target
             const wName = document.getElementById('recSettleWalkinName');
             if (wName) wName.textContent = customer || 'Walk-in';
-            if (gstin) {
+            if (customerGstin && customerGstin.length === 15) {
                 recSetBillTarget('company');
                 const gInp = document.getElementById('recSettleGstinInput');
                 const nInp = document.getElementById('recSettleRegNameInput');
-                if (gInp) gInp.value = gstin;
+                if (gInp) gInp.value = customerGstin;
                 if (nInp) nInp.value = customer || '';
             } else {
                 recSetBillTarget('walkin');
+                const gInp = document.getElementById('recSettleGstinInput');
+                const nInp = document.getElementById('recSettleRegNameInput');
+                if (gInp) gInp.value = '';
+                if (nInp) nInp.value = (customer && !['guest', 'walk-in', 'walk-in guest'].includes(customer.toLowerCase())) ? customer : '';
             }
 
             // Default Payment Method
@@ -894,6 +1051,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let pStatus = 'paid';
         let payments = [];
         let payMethod = 'cash';
+        let customerGstinVal = '';
 
         // 1. Validate Company / GSTIN
         if (recState.billTarget === 'company') {
@@ -903,8 +1061,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert('Please enter a valid 15-character GSTIN or switch to Walk-in guest.');
                 return;
             }
-            if (gstinVal) recState.gstinNo = gstinVal;
+            customerGstinVal = gstinVal;
+            recState.customerGstin = gstinVal;
             if (regNameVal) recState.customerName = regNameVal;
+        } else {
+            recState.customerGstin = '';
         }
 
         // 2. Payment Parsing
@@ -963,7 +1124,9 @@ document.addEventListener('DOMContentLoaded', function() {
             payments: payments,
             paid_amount: paidAmt.toFixed(2),
             due_amount: dueAmt.toFixed(2),
-            gstin_no: invNoOverride || recState.gstinNo || ''
+            gstin_no: invNoOverride || '',
+            customer_gstin: customerGstinVal,
+            customer_name: recState.customerName
         };
 
         fetch(url, {

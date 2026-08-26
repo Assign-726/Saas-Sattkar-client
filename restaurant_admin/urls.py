@@ -64,6 +64,9 @@ urlpatterns = [
     path('orders/<int:pk>/kot/', views.order_kot, name='order_kot'),
     path('orders/<int:pk>/prep-time/', views.order_set_prep_time, name='order_set_prep_time'),
     path('orders/<int:pk>/mark-ready/', views.order_mark_ready, name='order_mark_ready'),
+    path('orders/draft/', views.pos_draft_order_api, name='pos_draft_order_api'),
+    path('orders/draft/sync-items/', views.pos_sync_draft_items_api, name='pos_sync_draft_items_api'),
+    path('orders/draft/finalize/', views.pos_finalize_order_api, name='pos_finalize_order_api'),
     path('orders/<int:pk>/settle/', views.order_settle_api, name='order_settle_api'),
 
     # Inventory & Purchases Management
