@@ -1,0 +1,187 @@
+{% extends 'restaurant_admin/base.html' %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h3 class="mb-1 text-dark fw-bold"><i class="bi bi-tag-fill text-primary me-2"></i>{{ title }}</h3>
+      <p class="text-muted small mb-0">Configure dynamic raw material category hierarchy and default input GST tax rules</p>
+    </div>
+    <a href="{% url 'restaurant_admin:inventory_category_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+      <i class="bi bi-arrow-left me-1"></i> Back to Categories
+    </a>
+  </div>
+
+  <div class="card border-0 shadow-sm rounded-3">
+    <div class="card-body p-4">
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-folder2 me-1"></i> 1. Category & Hierarchy Profile</h6>
+        <div class="row g-3 mb-4">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold text-secondary small">Category Name <span class="text-danger">*</span></label>
+            {{ form.name }}
+            <div class="form-text fs-8 text-muted">e.g., Raw Vegetables, Dairy, Soft Drinks, Packaging Materials</div>
+            {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold text-secondary small">Parent Category (Optional Subcategory nesting)</label>
+            {{ form.parent }}
+            <div class="form-text fs-8 text-muted">Select a parent category if this item is a sub-category.</div>
+            {% if form.parent.errors %}<div class="text-danger small mt-1">{{ form.parent.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+
+        <hr class="my-4">
+        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-percent me-1"></i> 2. Input GST & Tax Configuration Hierarchy</h6>
+        <p class="text-muted small mb-3">Choose whether this category inherits tax rules from its parent category/company defaults or overrides them.</p>
+
+        <div class="row g-3 mb-4">
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-dark small">Tax Configuration Mode <span class="text-danger">*</span></label>
+            {{ form.tax_configuration }}
+            <div class="form-text fs-8 text-muted">Inherit from Parent or Override.</div>
+            {% if form.tax_configuration.errors %}<div class="text-danger small mt-1">{{ form.tax_configuration.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-secondary small">Taxability Type</label>
+            {{ form.taxability_type }}
+            {% if form.taxability_type.errors %}<div class="text-danger small mt-1">{{ form.taxability_type.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-secondary small">Default HSN / SAC Code</label>
+            {{ form.hsn_sac_code }}
+            <div class="form-text fs-8 text-muted">4 to 8 digit HSN tariff code.</div>
+            {% if form.hsn_sac_code.errors %}<div class="text-danger small mt-1">{{ form.hsn_sac_code.errors|join:", " }}</div>{% endif %}
+          </div>
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-secondary small">Default GST Rate (%)</label>
+            {{ form.gst_rate }}
+            <div class="form-text fs-8 text-muted">Standard GST % (e.g. 5, 12, 18).</div>
+            {% if form.gst_rate.errors %}<div class="text-danger small mt-1">{{ form.gst_rate.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-danger mb-3">{{ form.non_field_errors|join:", " }}</div>
+        {% endif %}
+
+        <div class="d-flex justify-content-end gap-2 pt-3 border-top">
+          <a href="{% url 'restaurant_admin:inventory_category_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary px-4">Cancel</a>
+          <button type="submit" class="btn btn-primary px-4 fw-semibold"><i class="bi bi-check-circle me-1"></i> Save Category</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const parentSelect = document.getElementById('{{ form.parent.id_for_label }}');
+  const configSelect = document.getElementById('{{ form.tax_configuration.id_for_label }}');
+  const taxabilitySelect = document.getElementById('{{ form.taxability_type.id_for_label }}');
+  const hsnInput = document.getElementById('{{ form.hsn_sac_code.id_for_label }}');
+  const gstInput = document.getElementById('{{ form.gst_rate.id_for_label }}');
+
+  let categoryTaxMap = {};
+
+  let storedHsn = hsnInput ? hsnInput.value : '';
+  let storedGst = gstInput ? gstInput.value : '';
+
+  if (hsnInput) {
+    hsnInput.addEventListener('input', function() {
+      if (configSelect.value === 'override') storedHsn = hsnInput.value;
+    });
+  }
+  if (gstInput) {
+    gstInput.addEventListener('input', function() {
+      if (configSelect.value === 'override') storedGst = gstInput.value;
+    });
+  }
+
+  function updateInheritanceUI() {
+    const isInherit = configSelect.value === 'inherit';
+    const parentId = parentSelect ? parentSelect.value : null;
+
+    if (isInherit) {
+      if (taxabilitySelect) {
+        taxabilitySelect.disabled = true;
+        taxabilitySelect.classList.add('bg-light');
+      }
+      if (hsnInput) {
+        hsnInput.disabled = true;
+        hsnInput.classList.add('bg-light');
+      }
+      if (gstInput) {
+        gstInput.disabled = true;
+        gstInput.classList.add('bg-light');
+      }
+
+      let resolvedGst = "0%";
+      let resolvedHsn = "None";
+      let resolvedTaxability = "taxable";
+
+      if (parentId && categoryTaxMap[parentId]) {
+        const parentData = categoryTaxMap[parentId];
+        resolvedGst = (parentData.resolved_gst_rate !== undefined && parentData.resolved_gst_rate !== null) ? (parentData.resolved_gst_rate + "%") : "0%";
+        resolvedHsn = parentData.resolved_hsn_sac_code || "None";
+        resolvedTaxability = parentData.resolved_taxability_type || "taxable";
+      } else {
+        resolvedGst = "0% (Company Default)";
+        resolvedHsn = "Company Default";
+        resolvedTaxability = "taxable";
+      }
+
+      if (taxabilitySelect) taxabilitySelect.value = resolvedTaxability;
+
+      if (hsnInput) {
+        hsnInput.value = '';
+        hsnInput.placeholder = `Inherited: ${resolvedHsn}`;
+      }
+
+      if (gstInput) {
+        gstInput.type = 'text';
+        gstInput.value = '';
+        gstInput.placeholder = `Inherited: ${resolvedGst}`;
+      }
+    } else {
+      if (taxabilitySelect) {
+        taxabilitySelect.disabled = false;
+        taxabilitySelect.classList.remove('bg-light');
+      }
+      if (hsnInput) {
+        hsnInput.disabled = false;
+        hsnInput.classList.remove('bg-light');
+        hsnInput.placeholder = 'e.g. 0401, 2202';
+        hsnInput.value = storedHsn;
+      }
+      if (gstInput) {
+        gstInput.disabled = false;
+        gstInput.classList.remove('bg-light');
+        gstInput.type = 'number';
+        gstInput.placeholder = '0.00';
+        gstInput.value = storedGst;
+      }
+    }
+  }
+
+  fetch("{% url 'restaurant_admin:inventory_category_api' restaurant_slug=restaurant.slug %}")
+    .then(r => r.json())
+    .then(data => {
+      if (data.success && data.categories) {
+        data.categories.forEach(c => { categoryTaxMap[c.id] = c; });
+      }
+      updateInheritanceUI();
+    })
+    .catch(err => {
+      console.error("Error fetching category taxonomy:", err);
+      updateInheritanceUI();
+    });
+
+  if (configSelect) configSelect.addEventListener('change', updateInheritanceUI);
+  if (parentSelect) parentSelect.addEventListener('change', updateInheritanceUI);
+});
+</script>
+{% endblock %}

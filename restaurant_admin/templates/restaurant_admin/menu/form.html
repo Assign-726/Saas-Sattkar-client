@@ -12,9 +12,9 @@
                 <form method="post" enctype="multipart/form-data" id="menuItemForm">
                     {% csrf_token %}
                     {% for field in form %}
-                        {% if field.name != 'subcategory' %}
+                        {% if field.name != 'subcategory' and field.name != 'is_tax_inclusive' %}
                         <div class="mb-3">
-                            <label for="{{ field.id_for_label }}" class="form-label">
+                            <label for="{{ field.id_for_label }}" class="form-label" {% if field.name == 'price' %}id="price-label"{% endif %}>
                                 {{ field.label }}
                                 {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
                             </label>
@@ -26,6 +26,25 @@
                                 <div class="invalid-feedback d-block">{{ error }}</div>
                             {% endfor %}
                         </div>
+
+                        {% if field.name == 'price' %}
+                        <!-- Tax Inclusive Toggle - rendered right after Price -->
+                        <div class="mb-3">
+                            <div class="form-check form-switch" style="padding-left: 2.8em;">
+                                {{ form.is_tax_inclusive }}
+                                <label class="form-check-label fw-medium" for="{{ form.is_tax_inclusive.id_for_label }}" style="cursor: pointer;">
+                                    <i class="bi bi-receipt-cutoff me-1 text-primary"></i> Price is Inclusive of Tax
+                                </label>
+                            </div>
+                            <div class="form-text ms-4 ps-2" id="tax-inclusive-hint" style="font-size: 0.78rem; color: #6b7280;">
+                                When enabled, the entered price includes tax. The system will reverse-calculate the base price.
+                            </div>
+                            {% for error in form.is_tax_inclusive.errors %}
+                                <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
                         {% endif %}
                     {% endfor %}
                     
@@ -63,8 +82,28 @@
         // Add Bootstrap classes to form elements
         $('input:not([type="checkbox"]), select, textarea').addClass('form-control');
         $('input[type="checkbox"]').addClass('form-check-input');
-        $('input[type="checkbox"]').parent().addClass('form-check form-switch');
-        $('input[type="checkbox"]').next('label').addClass('form-check-label');
+        // Apply form-switch to checkboxes except is_tax_inclusive (already styled)
+        $('input[type="checkbox"]').not('#id_is_tax_inclusive').parent().addClass('form-check form-switch');
+        $('input[type="checkbox"]').not('#id_is_tax_inclusive').next('label').addClass('form-check-label');
+
+        // Dynamic label switching for tax-inclusive toggle
+        function updatePriceLabel() {
+            const isInclusive = $('#id_is_tax_inclusive').is(':checked');
+            const priceLabel = $('#price-label');
+            const priceInput = $('#id_price');
+            const hint = $('#tax-inclusive-hint');
+            if (isInclusive) {
+                priceLabel.html('Price (Tax Inclusive) <span class="text-danger">*</span>');
+                priceInput.attr('placeholder', 'e.g. 100 (Customer pays exactly 100)');
+                hint.html('The entered price <strong>includes</strong> tax. The system will reverse-calculate the base taxable value.');
+            } else {
+                priceLabel.html('Base Price (Tax Exclusive) <span class="text-danger">*</span>');
+                priceInput.attr('placeholder', 'e.g. 100 (Tax will be added on top)');
+                hint.html('The entered price is the base price. Tax will be calculated and added on top.');
+            }
+        }
+        $('#id_is_tax_inclusive').on('change', updatePriceLabel);
+        updatePriceLabel(); // Set correct state on page load
         
         // Image preview
         const imageInput = $('input[type="file"]');
@@ -117,9 +156,10 @@
                         subcategoryField.html(options);
                         
                         // Set the previously selected subcategory if editing
-                        {% if form.instance.subcategory_id %}
-                            subcategoryField.val('{{ form.instance.subcategory_id }}');
-                        {% endif %}
+                        const selectedSubcategory = "{{ form.instance.subcategory_id|default:'' }}";
+                        if (selectedSubcategory) {
+                            subcategoryField.val(selectedSubcategory);
+                        }
                     },
                     error: function() {
                         subcategoryField.html('<option value="">Error loading subcategories</option>');

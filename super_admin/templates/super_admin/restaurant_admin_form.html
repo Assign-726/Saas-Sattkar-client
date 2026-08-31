@@ -75,4 +75,39 @@
     </div>
   </div>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const restSelect = document.getElementById("id_restaurant");
+  const branchSelect = document.getElementById("id_branch");
+  if (!restSelect || !branchSelect) return;
+
+  function loadBranches(restId, selectedBranchId) {
+    if (!restId) {
+      branchSelect.innerHTML = '<option value="">--------- (Business Primary Admin)</option>';
+      return;
+    }
+    fetch(`/super/api/branches-by-restaurant/?restaurant_id=${restId}`)
+      .then(res => res.json())
+      .then(data => {
+        let html = '<option value="">--------- (Business Primary Admin)</option>';
+        if (data.branches) {
+          data.branches.forEach(b => {
+            const isSel = String(b.id) === String(selectedBranchId) ? 'selected' : '';
+            html += `<option value="${b.id}" ${isSel}>${b.name}</option>`;
+          });
+        }
+        branchSelect.innerHTML = html;
+      })
+      .catch(err => console.error("Error loading branches:", err));
+  }
+
+  // Initial load
+  loadBranches(restSelect.value, "{{ form.branch.value|default:'' }}");
+
+  restSelect.addEventListener("change", function() {
+    loadBranches(this.value, "");
+  });
+});
+</script>
 {% endblock %}

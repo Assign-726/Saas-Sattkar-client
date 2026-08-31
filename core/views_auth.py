@@ -21,7 +21,9 @@ class CustomLoginView(BaseLoginView):
         # Prefer next= if provided and safe
         next_url = self.request.GET.get('next') or self.request.POST.get('next')
         if next_url:
-            return next_url
+            from django.utils.http import url_has_allowed_host_and_scheme
+            if url_has_allowed_host_and_scheme(next_url, allowed_hosts={self.request.get_host()}, require_https=self.request.is_secure()):
+                return next_url
         # Redirect staff restaurant admins to their slugged dashboard
         slug = self._user_restaurant_slug(self.request.user)
         if slug:
@@ -43,7 +45,7 @@ class CustomLoginView(BaseLoginView):
 
 class CustomLogoutView(BaseLogoutView):
     next_page = 'login'
-    http_method_names = ['get', 'post', 'options']
+    http_method_names = ['post', 'options']
     
     def dispatch(self, request, *args, **kwargs):
         # Handle both GET and POST requests
@@ -53,9 +55,7 @@ class CustomLogoutView(BaseLogoutView):
             handler = self.http_method_not_allowed
         return handler(request, *args, **kwargs)
     
-    def get(self, request, *args, **kwargs):
-        # Handle GET request by calling the post method
-        return self.post(request, *args, **kwargs)
+
     
     def post(self, request, *args, **kwargs):
         # Get the next page from the request parameters or use the default

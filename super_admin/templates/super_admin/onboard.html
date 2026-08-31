@@ -422,6 +422,21 @@
           <p>These details should match your PAN records.</p>
         </div>
 
+        {% if all_restaurants %}
+        <div class="form-group full-width" style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 14px; border-radius: 10px; margin-bottom: 20px;">
+          <label class="form-label" style="color: #166534; font-weight: 700;">
+            <i class="fa-solid fa-building"></i> Select Registered Business (To Add Outlet)
+          </label>
+          <select class="form-select" id="select_existing_business" onchange="loadExistingBusiness(this.value)" style="border-color: #86efac;">
+            <option value="">-- Register a New Business --</option>
+            {% for r in all_restaurants %}
+              <option value="{{ r.id }}">{{ r.trade_name|default:r.name }} ({{ r.legal_name }})</option>
+            {% endfor %}
+          </select>
+          <span class="form-hint" style="color: #15803d; font-size: 12px; margin-top: 4px;">Selecting an existing business auto-fills its company details and pre-loads outlets so you can easily add a new branch.</span>
+        </div>
+        {% endif %}
+
         <div class="form-grid">
           <!-- Legal Name -->
           <div class="form-group">
@@ -560,6 +575,17 @@
             </div>
             <span class="form-hint">You'll add the GSTIN while creating a branch</span>
           </div>
+
+          <!-- Website & Business Active Toggle -->
+          <div class="form-group">
+            <label class="form-label">Website & Business Status</label>
+            <input type="hidden" name="restaurant_is_active" id="id_restaurant_is_active" value="{% if form.restaurant_is_active.value or form.restaurant_is_active.value is None %}on{% endif %}">
+            <div class="toggle-group" id="active-main-toggle">
+              <button type="button" class="toggle-btn {% if form.restaurant_is_active.value or form.restaurant_is_active.value is None %}active{% endif %}" onclick="setMainActive(true)">Active</button>
+              <button type="button" class="toggle-btn {% if form.restaurant_is_active.value == False %}active{% endif %}" onclick="setMainActive(false)">Inactive</button>
+            </div>
+            <span class="form-hint">Sets whether this business and website are active and visible to customers</span>
+          </div>
         </div>
 
         <div class="step-actions">
@@ -595,7 +621,7 @@
       <div id="step-3-content" class="step-pane hidden">
         <div class="step-header">
           <h2>Review & Complete Onboarding</h2>
-          <p>Review business & branch details and set up administrator login credentials.</p>
+          <p>Review business & branch details.</p>
         </div>
 
         <div class="summary-box">
@@ -682,52 +708,6 @@
         </div>
 
 
-        <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-color);">
-          <h4 style="margin: 0 0 16px 0; color: var(--text-main); font-size: 16px; font-weight: 700;">
-            <i class="fa-solid fa-user-shield" style="margin-right: 6px; color: var(--brand-primary);"></i> Primary Administrator Account
-          </h4>
-
-          <div class="form-grid">
-            <div class="form-group">
-              <label class="form-label">First Name</label>
-              <input type="text" class="form-input" name="admin_first_name" id="id_admin_first_name" placeholder="John" value="{{ form.admin_first_name.value|default:'' }}">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Last Name</label>
-              <input type="text" class="form-input" name="admin_last_name" id="id_admin_last_name" placeholder="Doe" value="{{ form.admin_last_name.value|default:'' }}">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Username <span class="req">*</span></label>
-              <input type="text" class="form-input" name="admin_username" id="id_admin_username" placeholder="spicevilla_admin" value="{{ form.admin_username.value|default:'' }}">
-              {% if form.admin_username.errors %}
-                <span class="form-error">{{ form.admin_username.errors.0 }}</span>
-              {% endif %}
-            </div>
-            <div class="form-group">
-              <label class="form-label">Admin Email</label>
-              <input type="email" class="form-input" name="admin_email" id="id_admin_email" placeholder="admin@spicevilla.in" value="{{ form.admin_email.value|default:'' }}">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Password <span class="req">*</span></label>
-              <input type="password" class="form-input" name="admin_password" id="id_admin_password" placeholder="••••••••">
-              {% if form.admin_password.errors %}
-                <span class="form-error">{{ form.admin_password.errors.0 }}</span>
-              {% endif %}
-            </div>
-            <div class="form-group">
-              <label class="form-label">Confirm Password <span class="req">*</span></label>
-              <input type="password" class="form-input" name="admin_password_confirm" id="id_admin_password_confirm" placeholder="••••••••">
-              {% if form.admin_password_confirm.errors %}
-                <span class="form-error">{{ form.admin_password_confirm.errors.0 }}</span>
-              {% endif %}
-            </div>
-            <div class="form-group full-width" style="flex-direction: row; align-items: center; gap: 8px;">
-              <input type="checkbox" name="is_primary_admin" id="id_is_primary_admin" checked style="width: 16px; height: 16px; accent-color: var(--brand-primary);">
-              <label for="id_is_primary_admin" style="font-size: 14px; font-weight: 500; cursor: pointer; margin: 0;">Designate as Primary Restaurant Administrator</label>
-            </div>
-          </div>
-        </div>
-
         <div class="step-actions">
           <button type="button" class="btn-back" onclick="goToStep(2)"><i class="fa-solid fa-arrow-left"></i> Back</button>
           <button type="submit" class="btn-submit-final" onclick="prepareSubmit(event)">
@@ -742,7 +722,7 @@
 
 <script>
   let currentStep = 1;
-  let branches = {{ initial_branches_json|safe|default:"[]" }};
+  let branches = JSON.parse('{{ initial_branches_json|escapejs|default:"[]" }}');
 
   const BUSINESS_RULES = {
     "Sole Proprietorship": { panChar: "P", label: null },
@@ -762,7 +742,46 @@
       renderBranchCards();
     }
     updateBusinessTypeRules();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("step") === "2") {
+      goToStep(2);
+    }
   });
+
+  function loadExistingBusiness(restId) {
+    if (!restId) return;
+    fetch(`/super/api/branches-by-restaurant/?restaurant_id=${restId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (!data.restaurant) return;
+        const r = data.restaurant;
+        if (document.getElementById("id_legal_name")) document.getElementById("id_legal_name").value = r.legal_name || "";
+        if (document.getElementById("id_trade_name")) document.getElementById("id_trade_name").value = r.trade_name || "";
+        if (document.getElementById("id_business_type")) document.getElementById("id_business_type").value = r.business_type || "";
+        if (document.getElementById("id_pan")) document.getElementById("id_pan").value = r.pan || "";
+        if (document.getElementById("id_cin_llpin")) document.getElementById("id_cin_llpin").value = r.cin_llpin || "";
+        if (document.getElementById("id_restaurant_address_line_1")) document.getElementById("id_restaurant_address_line_1").value = r.address_line_1 || "";
+        if (document.getElementById("id_restaurant_address_line_2")) document.getElementById("id_restaurant_address_line_2").value = r.address_line_2 || "";
+        if (document.getElementById("id_restaurant_city")) document.getElementById("id_restaurant_city").value = r.city || "";
+        if (document.getElementById("id_restaurant_state")) document.getElementById("id_restaurant_state").value = r.state || "";
+        if (document.getElementById("id_restaurant_pincode")) document.getElementById("id_restaurant_pincode").value = r.pincode || "";
+        if (document.getElementById("id_restaurant_email")) document.getElementById("id_restaurant_email").value = r.email || "";
+        if (document.getElementById("id_restaurant_phone")) document.getElementById("id_restaurant_phone").value = r.phone || "";
+        if (typeof setMainGst === "function") setMainGst(r.is_gst_registered);
+        if (typeof setMainActive === "function") setMainActive(r.is_active !== undefined ? r.is_active : true);
+
+        updateBusinessTypeRules();
+
+        if (data.branches && data.branches.length > 0) {
+          branches = data.branches;
+        } else {
+          branches = [];
+        }
+        addNewBranchCard(branches.length === 0);
+      })
+      .catch(err => console.error("Error loading existing business:", err));
+  }
 
 
   function updateBusinessTypeRules() {
@@ -840,6 +859,16 @@
     hidden.value = val ? "on" : "";
     btns[0].classList.toggle("active", val);
     btns[1].classList.toggle("active", !val);
+  }
+
+  function setMainActive(val) {
+    const hidden = document.getElementById("id_restaurant_is_active");
+    const btns = document.querySelectorAll("#active-main-toggle .toggle-btn");
+    if (hidden) hidden.value = val ? "on" : "";
+    if (btns && btns.length >= 2) {
+      btns[0].classList.toggle("active", val);
+      btns[1].classList.toggle("active", !val);
+    }
   }
 
   function goToStep(step) {
@@ -974,6 +1003,9 @@
 
 
   function addNewBranchCard(isFirst = false) {
+    if (!isFirst) {
+      syncBranchesFromDOM();
+    }
     const idx = branches.length;
     const defaultTradeName = document.getElementById("id_trade_name").value.trim() || "Spice Villa";
     const defaultState = document.getElementById("id_restaurant_state").value || "Rajasthan";

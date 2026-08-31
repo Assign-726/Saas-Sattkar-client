@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KOT {{ order.order_number }} - {{ restaurant.name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: #f1f5f9;
+      font-family: 'Inter', -apple-system, sans-serif;
+      color: #1e293b;
+      padding: 20px 10px;
+    }
+
+    /* Top Action Bar (Hidden on Print) */
+    .top-action-bar {
+      max-width: 80mm;
+      margin: 0 auto 16px;
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .btn-action {
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      color: #334155;
+      transition: all 0.15s ease;
+    }
+    .btn-action:hover {
+      background: #f8fafc;
+      border-color: #94a3b8;
+    }
+    .btn-action.primary {
+      background: #dc2626;
+      color: #ffffff;
+      border-color: #dc2626;
+    }
+    .btn-action.primary:hover {
+      background: #b91c1c;
+    }
+
+    /* Thermal KOT Container (80mm / ~3 inches) */
+    .thermal-kot {
+      width: 78mm;
+      margin: 0 auto 20px;
+      background: #ffffff;
+      padding: 14px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+      font-family: 'IBM Plex Mono', 'Courier New', Courier, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #000000;
+    }
+
+    .pCenter {
+      text-align: center;
+    }
+    .pTitle {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      margin-bottom: 2px;
+    }
+    .pTableBox {
+      border: 2.5px solid #000000;
+      padding: 6px 10px;
+      margin: 8px auto;
+      font-size: 16px;
+      font-weight: 800;
+      text-align: center;
+      letter-spacing: 1px;
+      background: #ffffff;
+      display: block;
+    }
+    .pRule {
+      border-top: 1px dashed #000000;
+      margin: 6px 0;
+    }
+    .pRuleHeavy {
+      border-top: 2.5px solid #000000;
+      margin: 8px 0;
+    }
+    .pMetaRow {
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+      font-size: 11px;
+      padding: 1px 0;
+    }
+    .pItemsTable {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 6px 0;
+    }
+    .pItemsTable th {
+      font-size: 13px;
+      font-weight: 800;
+      border-bottom: 1.5px solid #000000;
+      padding-bottom: 4px;
+      text-align: left;
+    }
+    .pItemsTable td {
+      padding: 5px 0;
+      vertical-align: top;
+    }
+    .pQtyCol {
+      font-size: 16px;
+      font-weight: 800;
+      width: 40px;
+    }
+    .pItemName {
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .pItemNote {
+      font-size: 11px;
+      font-style: italic;
+      padding-top: 2px;
+    }
+    .pCountRow {
+      font-size: 13px;
+      font-weight: 700;
+      text-align: center;
+      margin-top: 6px;
+    }
+
+    @media print {
+      body {
+        background: #ffffff !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      .top-action-bar {
+        display: none !important;
+      }
+      .thermal-kot {
+        width: 78mm !important;
+        max-width: 78mm !important;
+        border: none !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        padding: 2mm 3mm !important;
+        margin: 0 0 10mm 0 !important;
+        page-break-after: always !important;
+        break-after: page !important;
+      }
+      .thermal-kot:last-child {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+      }
+      @page {
+        size: 80mm auto;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Action Bar -->
+  <div class="top-action-bar">
+    <button onclick="window.print()" class="btn-action primary">
+      <i class="bi bi-printer-fill"></i> Print KOT
+    </button>
+    <a href="?template=standard" class="btn-action" title="View standard ticket format">
+      <i class="bi bi-card-text"></i> Switch to Standard
+    </a>
+    <button onclick="window.close()" class="btn-action">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <!-- 1. FOOD KITCHEN TICKET -->
+  {% if has_food %}
+  <div class="thermal-kot">
+    <div class="pCenter pTitle">🍔 KITCHEN ORDER TICKET (KOT)</div>
+    <div class="pCenter" style="font-size: 11.5px; font-weight: 600;">{{ restaurant.name }}</div>
+
+    <div class="pTableBox">
+      {% if order.table %}TABLE: {{ order.table.name|upper }}{% elif table_obj %}TABLE: {{ table_obj.name|upper }}{% elif order.table_number %}TABLE #{{ order.table_number }}{% else %}TAKEAWAY{% endif %}
+    </div>
+
+    <div class="pRule"></div>
+
+    <div class="pMetaRow">
+      <span>KOT #: <strong>KOT-{{ order.branch_order_number|default:order.id|stringformat:"04d" }}</strong></span>
+      <span>Order: <strong>{{ order.order_number }}</strong></span>
+    </div>
+    <div class="pMetaRow">
+      <span>Type: <strong>{{ order.get_order_type_display|default:"Dine-In" }}</strong></span>
+      <span>Time: <strong>{{ order.order_time|date:"h:i A" }}</strong></span>
+    </div>
+    <div class="pMetaRow">
+      <span>Date: <strong>{{ order.order_time|date:"d/m/Y" }}</strong></span>
+    </div>
+
+    <div class="pRuleHeavy"></div>
+
+    <table class="pItemsTable">
+      <thead>
+        <tr>
+          <th class="pQtyCol">QTY</th>
+          <th>ITEM DESCRIPTION</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in food_items %}
+        <tr>
+          <td class="pQtyCol">{{ it.quantity }}</td>
+          <td>
+            <div class="pItemName">{{ it.menu_item.name|default:'Item' }}</div>
+            {% if it.notes %}<div class="pItemNote">↳ {{ it.notes }}</div>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="pRuleHeavy"></div>
+    <div class="pCountRow">TOTAL ITEMS: {{ total_food_qty }}</div>
+    <div class="pCenter" style="font-size: 10px; margin-top: 4px; opacity: 0.8;">--- Kitchen Copy ---</div>
+  </div>
+  {% endif %}
+
+  <!-- 2. BAR TICKET (IF ALCOHOL ITEMS PRESENT) -->
+  {% if has_bar %}
+  <div class="thermal-kot">
+    <div class="pCenter pTitle" style="color: #b45309;">🍺 BAR ORDER TICKET (BOT)</div>
+    <div class="pCenter" style="font-size: 11.5px; font-weight: 600;">{{ restaurant.name }}</div>
+
+    <div class="pTableBox" style="border-color: #b45309;">
+      {% if order.table %}TABLE: {{ order.table.name|upper }}{% elif table_obj %}TABLE: {{ table_obj.name|upper }}{% elif order.table_number %}TABLE #{{ order.table_number }}{% else %}TAKEAWAY{% endif %}
+    </div>
+
+    <div class="pRule"></div>
+
+    <div class="pMetaRow">
+      <span>BOT #: <strong>BOT-{{ order.branch_order_number|default:order.id|stringformat:"04d" }}</strong></span>
+      <span>Order: <strong>{{ order.order_number }}</strong></span>
+    </div>
+    <div class="pMetaRow">
+      <span>Type: <strong>{{ order.get_order_type_display|default:"Dine-In" }}</strong></span>
+      <span>Time: <strong>{{ order.order_time|date:"h:i A" }}</strong></span>
+    </div>
+    <div class="pMetaRow">
+      <span>Date: <strong>{{ order.order_time|date:"d/m/Y" }}</strong></span>
+    </div>
+
+    <div class="pRuleHeavy"></div>
+
+    <table class="pItemsTable">
+      <thead>
+        <tr>
+          <th class="pQtyCol">QTY</th>
+          <th>DRINK / LIQUOR ITEM</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in bar_items %}
+        <tr>
+          <td class="pQtyCol">{{ it.quantity }}</td>
+          <td>
+            <div class="pItemName">{{ it.menu_item.name|default:'Item' }}</div>
+            {% if it.notes %}<div class="pItemNote">↳ {{ it.notes }}</div>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="pRuleHeavy"></div>
+    <div class="pCountRow">TOTAL DRINKS: {{ total_bar_qty }}</div>
+    <div class="pCenter" style="font-size: 10px; margin-top: 4px; opacity: 0.8;">--- Bar Dispensary Copy ---</div>
+  </div>
+  {% endif %}
+
+  <script>
+    // Auto trigger print when requested via ?autoprint=1 or direct pos action
+    window.addEventListener('load', function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('autoprint') === '1') {
+        setTimeout(function() { window.print(); }, 250);
+      }
+    });
+  </script>
+</body>
+</html>

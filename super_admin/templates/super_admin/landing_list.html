@@ -31,17 +31,20 @@
               <td style="font-weight: 600; color: var(--text);">{{ r.name }}</td>
               <td class="muted">{{ r.phone|default:'Not Provided' }}</td>
               <td>
-                {% if r.is_active %}
-                  <span class="badge ok">
-                    <i class="fa-solid fa-circle-check"></i>
-                    <span>Active</span>
-                  </span>
-                {% else %}
-                  <span class="badge neutral">
-                    <i class="fa-solid fa-circle-minus"></i>
-                    <span>Inactive</span>
-                  </span>
-                {% endif %}
+                <form method="post" action="{% url 'super_admin:restaurant_toggle_active' r.id %}" style="display: inline;">
+                  {% csrf_token %}
+                  {% if r.is_active %}
+                    <button type="submit" class="badge ok" style="border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px;" title="Click to Deactivate Landing Page / Website">
+                      <i class="fa-solid fa-circle-check"></i>
+                      <span>Active</span>
+                    </button>
+                  {% else %}
+                    <button type="submit" class="badge neutral" style="border: none; cursor: pointer; background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px;" title="Click to Activate Landing Page / Website">
+                      <i class="fa-solid fa-circle-xmark"></i>
+                      <span>Inactive (Click to Activate)</span>
+                    </button>
+                  {% endif %}
+                </form>
               </td>
               <td>
                 <div class="action-row" style="justify-content: flex-end; padding-right: 8px;">

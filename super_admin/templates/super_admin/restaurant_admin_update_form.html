@@ -41,11 +41,19 @@
             {% endif %}
           </div>
           <div class="col-6">
-            <label for="id_restaurant">Assigned Restaurant *</label>
+            <label for="id_restaurant">Assigned Business / Restaurant *</label>
             {{ form.restaurant }}
             {% if form.restaurant.errors %}
               <div class="hint" style="color: var(--danger);">{{ form.restaurant.errors.as_text }}</div>
             {% endif %}
+          </div>
+          <div class="col-6">
+            <label for="id_branch">Assigned Branch Outlet (Optional)</label>
+            {{ form.branch }}
+            {% if form.branch.errors %}
+              <div class="hint" style="color: var(--danger);">{{ form.branch.errors.as_text }}</div>
+            {% endif %}
+            <div class="hint" style="font-size: 0.8rem; color: var(--text-muted);">Leave blank for Business-wide Primary Admin</div>
           </div>
           <div class="col-12" style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
             {{ form.is_primary_admin }}
@@ -67,4 +75,41 @@
     </div>
   </div>
 </div>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const restSelect = document.getElementById("id_restaurant");
+  const branchSelect = document.getElementById("id_branch");
+  if (!restSelect || !branchSelect) return;
+
+  const initialBranchId = "{{ form.branch.value|default:'' }}";
+
+  function loadBranches(restId, selectedBranchId) {
+    if (!restId) {
+      branchSelect.innerHTML = '<option value="">---------</option>';
+      return;
+    }
+    fetch(`/super/api/branches-by-restaurant/?restaurant_id=${restId}`)
+      .then(res => res.json())
+      .then(data => {
+        let html = '<option value="">--------- (Business Primary Admin)</option>';
+        if (data.branches) {
+          data.branches.forEach(b => {
+            const isSel = String(b.id) === String(selectedBranchId) ? 'selected' : '';
+            html += `<option value="${b.id}" ${isSel}>${b.name}</option>`;
+          });
+        }
+        branchSelect.innerHTML = html;
+      })
+      .catch(err => console.error("Error loading branches:", err));
+  }
+
+  if (restSelect.value) {
+    loadBranches(restSelect.value, initialBranchId);
+  }
+
+  restSelect.addEventListener("change", function() {
+    loadBranches(this.value, "");
+  });
+});
+</script>
 {% endblock %}

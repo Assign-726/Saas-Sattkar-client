@@ -14,6 +14,9 @@ urlpatterns = [
     # Unified Transaction Desk
     path('transactions/create/', views.transaction_desk_create, name='transaction_desk_create'),
 
+    # Branch Switching
+    path('switch-branch/', views.switch_branch, name='switch_branch'),
+
     # Dashboard & Analytics
     path('', views.dashboard, name='dashboard'),
     path('analytics/', views.sales_analytics, name='sales_analytics'),
@@ -21,11 +24,6 @@ urlpatterns = [
     path('settings/custom-charges/save/', views.custom_charge_save, name='custom_charge_save'),
     path('settings/custom-charges/<int:pk>/delete/', views.custom_charge_delete, name='custom_charge_delete'),
     
-    # Internal Branch Management
-    path('settings/branches/', views.branch_list, name='branch_list'),
-    path('settings/branches/save/', views.branch_save, name='branch_save'),
-    path('settings/branches/<int:pk>/delete/', views.branch_delete, name='branch_delete'),
-
     # Delivery Challans Management
     path('challans/', views.challan_list, name='challan_list'),
     path('challans/create/', views.challan_create, name='challan_create'),
@@ -66,10 +64,18 @@ urlpatterns = [
     path('orders/<int:pk>/kot/', views.order_kot, name='order_kot'),
     path('orders/<int:pk>/prep-time/', views.order_set_prep_time, name='order_set_prep_time'),
     path('orders/<int:pk>/mark-ready/', views.order_mark_ready, name='order_mark_ready'),
+    path('orders/draft/', views.pos_draft_order_api, name='pos_draft_order_api'),
+    path('orders/draft/sync-items/', views.pos_sync_draft_items_api, name='pos_sync_draft_items_api'),
+    path('orders/draft/finalize/', views.pos_finalize_order_api, name='pos_finalize_order_api'),
     path('orders/<int:pk>/settle/', views.order_settle_api, name='order_settle_api'),
 
     # Inventory & Purchases Management
     path('inventory/', views.inventory_list, name='inventory_list'),
+    path('inventory/categories/', views.inventory_category_list, name='inventory_category_list'),
+    path('inventory/categories/add/', views.inventory_category_add, name='inventory_category_add'),
+    path('inventory/categories/<int:pk>/edit/', views.inventory_category_edit, name='inventory_category_edit'),
+    path('inventory/categories/<int:pk>/delete/', views.inventory_category_delete, name='inventory_category_delete'),
+    path('inventory/categories/api/', views.inventory_category_api, name='inventory_category_api'),
     path('inventory/add/', views.inventory_add, name='inventory_add'),
     path('inventory/quick-add-api/', views.inventory_quick_add_api, name='inventory_quick_add_api'),
     path('inventory/<int:pk>/edit/', views.inventory_edit, name='inventory_edit'),
@@ -78,6 +84,7 @@ urlpatterns = [
     path('inventory/logs/', views.inventory_logs, name='inventory_logs'),
     path('purchases/', views.purchase_list, name='purchase_list'),
     path('purchases/create/', views.purchase_create, name='purchase_create'),
+    path('purchases/<int:pk>/edit/', views.purchase_edit, name='purchase_edit'),
 
     # Party Management
     path('parties/', views.party_list, name='party_list'),
@@ -126,9 +133,10 @@ urlpatterns = [
     path('reservations/<int:pk>/edit/', views_reservations.reservation_edit, name='reservation_edit'),
     path('reservations/<int:pk>/delete/', views_reservations.reservation_delete, name='reservation_delete'),
 
-    # Receipt System (Advance Booking & Deposit Settlement)
+    # Receipt System (Payment Receipts & Deposits)
     path('receipts/', views.receipt_list, name='receipt_list'),
     path('receipts/create/', views.receipt_create_page, name='receipt_create_page'),
+    path('receipts/<int:pk>/edit/', views.receipt_edit_page, name='receipt_edit_page'),
     path('receipts/api/create/', views.receipt_create_api, name='receipt_create_api'),
     path('receipts/<int:pk>/print/', views.receipt_print, name='receipt_print'),
     path('receipts/<int:pk>/cancel/', views.receipt_cancel_api, name='receipt_cancel_api'),

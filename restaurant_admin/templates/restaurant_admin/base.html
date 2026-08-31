@@ -33,14 +33,98 @@
             --warning: #FB6340;
             --dark: #32325D;
             --light: #F8F9FE;
-            --sidebar-width: 260px;
-            --sidebar-collapsed-width: 75px;
+            --sidebar-width: 240px;
+            --sidebar-collapsed-width: 70px;
         }
 
+        html,
         body {
-            font-family: 'Poppins', sans-serif;
+            font-size: 13.5px;
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             background-color: #F0F2F5;
             color: #525F7F;
+        }
+
+        h1,
+        .h1 {
+            font-size: 1.5rem;
+        }
+
+        h2,
+        .h2 {
+            font-size: 1.3rem;
+        }
+
+        h3,
+        .h3 {
+            font-size: 1.15rem;
+        }
+
+        h4,
+        .h4 {
+            font-size: 1.05rem;
+        }
+
+        h5,
+        .h5 {
+            font-size: 0.95rem;
+        }
+
+        h6,
+        .h6 {
+            font-size: 0.85rem;
+        }
+
+        .btn {
+            font-size: 0.85rem;
+            padding: 0.4rem 0.85rem;
+        }
+
+        .btn-sm {
+            font-size: 0.775rem;
+            padding: 0.25rem 0.55rem;
+        }
+
+        .btn-lg {
+            font-size: 0.95rem;
+            padding: 0.55rem 1.1rem;
+        }
+
+        .form-control,
+        .form-select,
+        .input-group-text {
+            font-size: 0.85rem;
+            padding: 0.4rem 0.75rem;
+        }
+
+        .form-control-sm,
+        .form-select-sm {
+            font-size: 0.775rem;
+            padding: 0.25rem 0.5rem;
+        }
+
+        .form-control-lg,
+        .form-select-lg {
+            font-size: 0.95rem;
+            padding: 0.5rem 0.9rem;
+        }
+
+        .form-label {
+            font-size: 0.825rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .table {
+            font-size: 0.835rem;
+        }
+
+        .table th {
+            padding: 0.6rem 0.75rem;
+            font-weight: 600;
+        }
+
+        .table td {
+            padding: 0.55rem 0.75rem;
         }
 
         .sidebar {
@@ -311,7 +395,7 @@
 
         .main-content {
             margin-left: var(--sidebar-width);
-            padding: 2rem;
+            padding: 1.25rem 1.5rem;
             width: calc(100% - var(--sidebar-width));
             min-height: 100vh;
             background-color: #F0F2F5;
@@ -327,22 +411,26 @@
         .card {
             border: none;
             border-radius: 0.5rem;
-            box-shadow: 0 0 2rem 0 rgba(136, 152, 170, 0.1);
-            margin-bottom: 1.5rem;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 0 1.25rem 0 rgba(136, 152, 170, 0.08);
+            margin-bottom: 1.25rem;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
         .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 0 2rem 0 rgba(136, 152, 170, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 0 1.5rem 0 rgba(136, 152, 170, 0.15);
         }
 
         .card-header {
             background: white;
             border-bottom: 1px solid #E9ECEF;
-            padding: 1.25rem 1.5rem;
+            padding: 0.85rem 1.25rem;
             border-top-left-radius: 0.5rem !important;
             border-top-right-radius: 0.5rem !important;
+        }
+
+        .card-body {
+            padding: 1.25rem;
         }
 
         .card-title {
@@ -469,8 +557,7 @@
                 aria-label="Toggle Sidebar Menu">
                 <i class="fas fa-bars fs-5"></i>
             </button>
-            <span class="fw-bold text-dark text-truncate" style="max-width: 180px;">{{
-                current_restaurant.name|default:"Admin Panel" }}</span>
+            <span class="fw-bold text-dark text-truncate" style="max-width: 180px;">{{ current_restaurant.name|default:"Admin Panel" }}</span>
         </div>
         {% if current_branch %}
         <span class="badge bg-primary text-wrap" style="font-size: 0.72rem;">{{ current_branch.name }}</span>
@@ -483,9 +570,10 @@
         <div class="sidebar">
             <div class="sidebar-header d-flex justify-content-between align-items-center">
                 <a href="{% url 'restaurant_admin:dashboard' restaurant_slug=rslug %}"
-                    class="sidebar-brand text-truncate">
+                    class="sidebar-brand text-truncate"
+                    title="{{ current_branch.name|default:current_restaurant.name|default:'Admin Panel' }}">
                     <i class="fas fa-utensils"></i>
-                    <span>Admin Panel</span>
+                    <span style="font-size: 0.95rem; font-weight: 700;">{{ current_branch.name|default:current_restaurant.name|default:"Admin Panel" }}</span>
                 </a>
                 <button
                     class="btn btn-sm btn-light border-0 text-secondary d-none d-lg-flex align-items-center justify-content-center p-1"
@@ -497,18 +585,21 @@
             <div class="sidebar-menu">
                 <!-- Group 1: Overview -->
                 <div class="sidebar-group">
-                    <div class="sidebar-group-header {% if active_menu == 'dashboard' or active_menu == 'analytics' %}open active-group{% endif %}" data-group-target="#group-overview">
+                    <div class="sidebar-group-header {% if active_menu == 'dashboard' or active_menu == 'analytics' %}open active-group{% endif %}"
+                        data-group-target="#group-overview">
                         <div class="group-title">
                             <i class="fas fa-chart-pie"></i>
                             <span>Overview</span>
                         </div>
                         <i class="fas fa-chevron-down group-chevron"></i>
                     </div>
-                    <div class="sidebar-group-content {% if active_menu == 'dashboard' or active_menu == 'analytics' %}show{% endif %}" id="group-overview">
+                    <div class="sidebar-group-content {% if active_menu == 'dashboard' or active_menu == 'analytics' %}show{% endif %}"
+                        id="group-overview">
                         <ul class="nav flex-column">
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'dashboard' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:dashboard' restaurant_slug=rslug %}" title="Dashboard">
+                                    href="{% url 'restaurant_admin:dashboard' restaurant_slug=rslug %}"
+                                    title="Dashboard">
                                     <i class="fas fa-tachometer-alt"></i>
                                     <span>Dashboard</span>
                                 </a>
@@ -527,14 +618,16 @@
 
                 <!-- Group 2: Point of Sale -->
                 <div class="sidebar-group">
-                    <div class="sidebar-group-header {% if active_menu == 'order_records' or active_menu == 'order_list' or active_menu == 'receipts' or active_menu == 'order_create_manual' %}open active-group{% endif %}" data-group-target="#group-pos">
+                    <div class="sidebar-group-header {% if active_menu == 'order_records' or active_menu == 'order_list' or active_menu == 'receipts' or active_menu == 'order_create_manual' %}open active-group{% endif %}"
+                        data-group-target="#group-pos">
                         <div class="group-title">
                             <i class="fas fa-cash-register"></i>
                             <span>Point of Sale</span>
                         </div>
                         <i class="fas fa-chevron-down group-chevron"></i>
                     </div>
-                    <div class="sidebar-group-content {% if active_menu == 'order_records' or active_menu == 'order_list' or active_menu == 'receipts' or active_menu == 'order_create_manual' %}show{% endif %}" id="group-pos">
+                    <div class="sidebar-group-content {% if active_menu == 'order_records' or active_menu == 'order_list' or active_menu == 'receipts' or active_menu == 'order_create_manual' %}show{% endif %}"
+                        id="group-pos">
                         <ul class="nav flex-column">
                             <li class="nav-item">
                                 <a class="nav-link sidebar-cta-link {% if active_menu == 'transactions_create' %}active{% endif %}"
@@ -554,7 +647,8 @@
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'order_records' or active_menu == 'order_list' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:order_records' restaurant_slug=rslug %}" title="Orders">
+                                    href="{% url 'restaurant_admin:order_records' restaurant_slug=rslug %}"
+                                    title="Orders">
                                     <i class="fas fa-shopping-cart"></i>
                                     <span>Orders</span>
                                 </a>
@@ -562,9 +656,9 @@
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'receipts' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:receipt_list' restaurant_slug=rslug %}"
-                                    title="Advance Receipts">
+                                    title="Receipts System">
                                     <i class="bi bi-receipt-cutoff"></i>
-                                    <span>Advance Receipts</span>
+                                    <span>Receipt System</span>
                                 </a>
                             </li>
                         </ul>
@@ -573,14 +667,16 @@
 
                 <!-- Group 3: Dine-In Operations -->
                 <div class="sidebar-group">
-                    <div class="sidebar-group-header {% if active_menu == 'floor_plan' or active_menu == 'tables' or active_menu == 'reservations' %}open active-group{% endif %}" data-group-target="#group-dinein">
+                    <div class="sidebar-group-header {% if active_menu == 'floor_plan' or active_menu == 'tables' or active_menu == 'reservations' %}open active-group{% endif %}"
+                        data-group-target="#group-dinein">
                         <div class="group-title">
                             <i class="fas fa-chair"></i>
                             <span>Dine-In Operations</span>
                         </div>
                         <i class="fas fa-chevron-down group-chevron"></i>
                     </div>
-                    <div class="sidebar-group-content {% if active_menu == 'floor_plan' or active_menu == 'tables' or active_menu == 'reservations' %}show{% endif %}" id="group-dinein">
+                    <div class="sidebar-group-content {% if active_menu == 'floor_plan' or active_menu == 'tables' or active_menu == 'reservations' %}show{% endif %}"
+                        id="group-dinein">
                         <ul class="nav flex-column">
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'floor_plan' %}active{% endif %}"
@@ -611,32 +707,37 @@
 
                 <!-- Group 4: Menu & Marketing -->
                 <div class="sidebar-group">
-                    <div class="sidebar-group-header {% if active_menu == 'category_list' or active_menu == 'categories' or active_menu == 'menu_list' or active_menu == 'menu' or active_menu == 'coupons' or active_menu == 'qr_generator' %}open active-group{% endif %}" data-group-target="#group-menu">
+                    <div class="sidebar-group-header {% if active_menu == 'category_list' or active_menu == 'categories' or active_menu == 'menu_list' or active_menu == 'menu' or active_menu == 'coupons' or active_menu == 'qr_generator' %}open active-group{% endif %}"
+                        data-group-target="#group-menu">
                         <div class="group-title">
                             <i class="fas fa-utensils"></i>
                             <span>Menu & Marketing</span>
                         </div>
                         <i class="fas fa-chevron-down group-chevron"></i>
                     </div>
-                    <div class="sidebar-group-content {% if active_menu == 'category_list' or active_menu == 'categories' or active_menu == 'menu_list' or active_menu == 'menu' or active_menu == 'coupons' or active_menu == 'qr_generator' %}show{% endif %}" id="group-menu">
+                    <div class="sidebar-group-content {% if active_menu == 'category_list' or active_menu == 'categories' or active_menu == 'menu_list' or active_menu == 'menu' or active_menu == 'coupons' or active_menu == 'qr_generator' %}show{% endif %}"
+                        id="group-menu">
                         <ul class="nav flex-column">
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'category_list' or active_menu == 'categories' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:category_list' restaurant_slug=rslug %}" title="Categories">
+                                    href="{% url 'restaurant_admin:category_list' restaurant_slug=rslug %}"
+                                    title="Menu Categories">
                                     <i class="fas fa-list"></i>
-                                    <span>Categories</span>
+                                    <span>Menu Categories</span>
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'menu_list' or active_menu == 'menu' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:menu_list' restaurant_slug=rslug %}" title="Menu Items">
+                                    href="{% url 'restaurant_admin:menu_list' restaurant_slug=rslug %}"
+                                    title="Menu Items">
                                     <i class="fas fa-utensils"></i>
                                     <span>Menu Items</span>
                                 </a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'coupons' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:coupon_list' restaurant_slug=rslug %}" title="Coupons">
+                                    href="{% url 'restaurant_admin:coupon_list' restaurant_slug=rslug %}"
+                                    title="Coupons">
                                     <i class="bi bi-ticket-perforated"></i>
                                     <span>Coupons</span>
                                 </a>
@@ -655,20 +756,31 @@
 
                 <!-- Group 5: Stock & Supply Chain -->
                 <div class="sidebar-group">
-                    <div class="sidebar-group-header {% if active_menu == 'inventory' or active_menu == 'purchases' or active_menu == 'challans' or active_menu == 'inventory_logs' %}open active-group{% endif %}" data-group-target="#group-stock">
+                    <div class="sidebar-group-header {% if active_menu == 'inventory' or active_menu == 'inventory_categories' or active_menu == 'purchases' or active_menu == 'challans' or active_menu == 'inventory_logs' %}open active-group{% endif %}"
+                        data-group-target="#group-stock">
                         <div class="group-title">
                             <i class="fas fa-boxes"></i>
                             <span>Stock & Supply Chain</span>
                         </div>
                         <i class="fas fa-chevron-down group-chevron"></i>
                     </div>
-                    <div class="sidebar-group-content {% if active_menu == 'inventory' or active_menu == 'purchases' or active_menu == 'challans' or active_menu == 'inventory_logs' %}show{% endif %}" id="group-stock">
+                    <div class="sidebar-group-content {% if active_menu == 'inventory' or active_menu == 'inventory_categories' or active_menu == 'purchases' or active_menu == 'challans' or active_menu == 'inventory_logs' %}show{% endif %}"
+                        id="group-stock">
                         <ul class="nav flex-column">
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'inventory' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:inventory_list' restaurant_slug=rslug %}" title="Inventory">
+                                    href="{% url 'restaurant_admin:inventory_list' restaurant_slug=rslug %}"
+                                    title="Inventory">
                                     <i class="fas fa-boxes"></i>
-                                    <span>Inventory</span>
+                                    <span>Inventory/Stock </span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'inventory_categories' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:inventory_category_list' restaurant_slug=rslug %}"
+                                    title="Inventory Categories">
+                                    <i class="bi bi-tags"></i>
+                                    <span>Stock Categories</span>
                                 </a>
                             </li>
                             <li class="nav-item">
@@ -701,32 +813,27 @@
 
                 <!-- Group 6: Admin & Setup -->
                 <div class="sidebar-group">
-                    <div class="sidebar-group-header {% if active_menu == 'parties' or active_menu == 'branches' or active_tab == 'branches' or active_menu == 'settings' %}open active-group{% endif %}" data-group-target="#group-admin">
+                    <div class="sidebar-group-header {% if active_menu == 'parties' or active_menu == 'settings' %}open active-group{% endif %}"
+                        data-group-target="#group-admin">
                         <div class="group-title">
                             <i class="fas fa-sliders-h"></i>
                             <span>Admin & Setup</span>
                         </div>
                         <i class="fas fa-chevron-down group-chevron"></i>
                     </div>
-                    <div class="sidebar-group-content {% if active_menu == 'parties' or active_menu == 'branches' or active_tab == 'branches' or active_menu == 'settings' %}show{% endif %}" id="group-admin">
+                    <div class="sidebar-group-content {% if active_menu == 'parties' or active_menu == 'settings' %}show{% endif %}"
+                        id="group-admin">
                         <ul class="nav flex-column">
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'parties' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:party_list' restaurant_slug=rslug %}" title="Parties">
+                                    href="{% url 'restaurant_admin:party_list' restaurant_slug=rslug %}"
+                                    title="Parties">
                                     <i class="bi bi-people-fill"></i>
                                     <span>Parties</span>
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link {% if active_menu == 'branches' or active_tab == 'branches' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:branch_list' restaurant_slug=rslug %}"
-                                    title="Internal Branches">
-                                    <i class="bi bi-diagram-3-fill"></i>
-                                    <span>Internal Branches</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link {% if active_menu == 'settings' and active_tab != 'branches' %}active{% endif %}"
+                                <a class="nav-link {% if active_menu == 'settings' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:settings' restaurant_slug=rslug %}" title="Settings">
                                     <i class="fas fa-sliders-h"></i>
                                     <span>Settings</span>

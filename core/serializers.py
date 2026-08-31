@@ -1,6 +1,6 @@
 from rest_framework import serializers
 # pyrefly: ignore [missing-import]
-from .models import Category, SubCategory, MenuItem, Order, OrderItem, RestaurantLanding, GalleryImage, TeamMember, Review, RestaurantSettings, Event
+from .models import Category, SubCategory, MenuItem, Order, OrderItem, RestaurantLanding, GalleryImage, TeamMember, Review, RestaurantSettings, Event, BlogPost, BlogComment
 from super_admin.models import Restaurant
 from django.utils import timezone
 
@@ -34,7 +34,7 @@ class MenuItemSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = MenuItem
-        fields = ['id', 'name', 'description', 'price', 'image', 'image_url', 'availability', 'subcategory', 'category']
+        fields = ['id', 'name', 'short_code', 'description', 'price', 'image', 'image_url', 'availability', 'subcategory', 'category']
         read_only_fields = ['image_url']
         
     def get_image_url(self, obj):
@@ -286,7 +286,13 @@ class RestaurantLandingSerializer(serializers.ModelSerializer):
             'id', 'restaurant', 'restaurant_name', 'restaurant_slug', 'logo', 'hero_title', 'hero_subtitle',
             'hero_image', 'hero_video', 'cta_text', 'cta_link',
             'about_heading', 'about_italic', 'about_bullet_1', 'about_bullet_2', 'about_bullet_3', 'about_body',
-            'about_image', 'address', 'phone', 'email', 'opening_hours', 'seo_title', 'seo_description',
+            'about_image',
+            'about_video_url',
+            'about_stat_num_1', 'about_stat_label_1', 'about_stat_desc_1',
+            'about_stat_num_2', 'about_stat_label_2', 'about_stat_desc_2',
+            'about_stat_num_3', 'about_stat_label_3', 'about_stat_desc_3',
+            'about_stat_num_4', 'about_stat_label_4', 'about_stat_desc_4',
+            'address', 'phone', 'email', 'opening_hours', 'seo_title', 'seo_description',
             'show_hero', 'show_about', 'show_why_us', 'show_specials', 'show_events', 'show_gallery', 'show_team', 'show_reviews',
             'why_us_title_1', 'why_us_description_1',
             'why_us_title_2', 'why_us_description_2',
@@ -302,3 +308,36 @@ class RestaurantSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = RestaurantSettings
         fields = ['restaurant_id', 'cgst_percentage', 'sgst_percentage', 'service_charge_percentage', 'enable_online_payment', 'enable_pay_at_counter', 'enable_customer_ordering', 'razorpay_key_id']
+
+
+class BlogCommentSerializer(serializers.ModelSerializer):
+    date_formatted = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BlogComment
+        fields = ['id', 'author_name', 'author_email', 'content', 'created_at', 'date_formatted']
+
+    def get_date_formatted(self, obj):
+        return obj.created_at.strftime('%I:%M %p %B %d, %Y')
+
+
+class BlogPostSerializer(serializers.ModelSerializer):
+    comments = serializers.SerializerMethodField()
+    comments_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BlogPost
+        fields = [
+            'id', 'restaurant', 'title', 'slug', 'category', 'author', 'cover_image',
+            'shape_pattern', 'excerpt', 'intro_content', 'section_1_title', 'section_1_text',
+            'quote', 'section_2_title', 'section_2_text', 'gallery_image_1', 'gallery_image_2',
+            'tags', 'seo_title', 'seo_description', 'is_published', 'display_order',
+            'created_at', 'updated_at', 'comments', 'comments_count'
+        ]
+
+    def get_comments(self, obj):
+        approved_comments = obj.comments.filter(is_approved=True)
+        return BlogCommentSerializer(approved_comments, many=True).data
+
+    def get_comments_count(self, obj):
+        return obj.comments.filter(is_approved=True).count()

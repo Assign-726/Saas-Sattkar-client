@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 import os
 import json
 from django.shortcuts import render, redirect, get_object_or_404
@@ -13,10 +14,11 @@ from decimal import Decimal
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.conf import settings
 from django.apps import apps
-from core.models import Zone, Table, Category, SubCategory, MenuItem, Order, OrderItem, RestaurantSettings, RestaurantLanding, InventoryItem, Coupon, MenuItemIngredient, InventoryTransaction, Supplier, PurchaseOrder, PurchaseOrderItem, Party, CustomCharge, AdvanceReceipt, Branch, DeliveryChallan, DeliveryChallanItem
+from core.models import Zone, Table, Category, SubCategory, MenuItem, Order, OrderItem, RestaurantSettings, RestaurantLanding, InventoryItem, InventoryCategory, Coupon, MenuItemIngredient, InventoryTransaction, Supplier, PurchaseOrder, PurchaseOrderItem, Party, CustomCharge, AdvanceReceipt, Branch, DeliveryChallan, DeliveryChallanItem, DocumentSequenceSetting
+from restaurant_admin.sequence_helpers import get_document_sequence_info, get_and_increment_document_number, validate_unique_document_number
 from django.db import transaction
-from super_admin.models import Restaurant, RestaurantUser
-from restaurant_admin.forms import MenuItemForm, CategoryForm, SubCategoryForm, OrderStatusForm, RestaurantSettingsForm, InventoryItemForm, CouponForm, RestaurantBranchComplianceForm
+from super_admin.models import Restaurant, RestaurantUser, RestaurantBranch
+from restaurant_admin.forms import MenuItemForm, CategoryForm, SubCategoryForm, OrderStatusForm, RestaurantSettingsForm, InventoryItemForm, InventoryCategoryForm, CouponForm, RestaurantBranchComplianceForm
 
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
@@ -34,14 +36,52 @@ from django.http import StreamingHttpResponse
 def is_admin(user):
     return user.is_authenticated and user.is_staff
 
+
+@login_required
+@user_passes_test(is_admin)
+def switch_branch(request):
+    """
+    POST/GET endpoint to switch the admin's active branch.
+    Stores the selection in the session, then redirects back
+    to the 'next' URL (or dashboard).
+    """
+    branch_id = request.POST.get('branch_id') or request.GET.get('branch_id')
+    restaurant = getattr(request, 'restaurant', None)
+
+    # Fallback: resolve restaurant from profile
+    if not restaurant and request.user.is_authenticated and hasattr(request.user, 'restaurant_profile'):
+        try:
+            restaurant = request.user.restaurant_profile.restaurant
+        except Exception:
+            pass
+
+    if branch_id and restaurant:
+        try:
+            branch = restaurant.branches.filter(id=int(branch_id)).first()
+            if branch:
+                request.session[f'active_branch_{restaurant.id}'] = branch.id
+        except (ValueError, TypeError):
+            pass
+
+    next_url = request.POST.get('next') or request.GET.get('next') or '/'
+    # Safety: only allow relative redirects
+    if not next_url.startswith('/'):
+        next_url = '/'
+    return redirect(next_url)
+
 def resolve_restaurant(request, restaurant_slug=None):
-    """Resolve the Restaurant object based on slug or the user's linked restaurant.
-    If restaurant_slug is provided, use it. Otherwise, fall back to the user's profile.
-    Enforce that a logged-in staff user can only access their own restaurant when both are present.
+    """Resolve the Restaurant object based on branch slug, company slug, or user profile.
+    If branch slug is passed, sets active_branch in session.
     """
     if restaurant_slug:
-        restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
-        # If user has a linked restaurant, ensure it matches
+        branch_match = RestaurantBranch.objects.filter(slug__iexact=restaurant_slug).select_related('restaurant').first()
+        if branch_match:
+            restaurant = branch_match.restaurant
+            request.session[f'active_branch_{restaurant.id}'] = branch_match.id
+        else:
+            restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+
+        # Permission enforcement
         if request.user.is_authenticated and hasattr(request.user, 'restaurant_profile') and request.user.is_staff:
             try:
                 user_restaurant = request.user.restaurant_profile.restaurant
@@ -59,6 +99,45 @@ def resolve_restaurant(request, restaurant_slug=None):
         from django.http import HttpResponseForbidden
         return HttpResponseForbidden("No restaurant associated with this account.")
 
+def get_active_branch(request, restaurant):
+    """Returns the currently active branch for the logged in user / request session."""
+    if not restaurant:
+        return None
+    profile = getattr(request.user, 'restaurant_profile', None)
+    if profile and profile.branch:
+        return profile.branch
+    branch_id = request.GET.get('branch_id') or request.session.get(f'active_branch_{restaurant.id}') or request.session.get('active_branch_id')
+    if branch_id and str(branch_id).isdigit():
+        branch = restaurant.branches.filter(id=int(branch_id)).first()
+        if branch:
+            return branch
+    return restaurant.branches.first()
+
+def get_branch_gstin_str(branch=None, restaurant=None):
+    """Returns normalized GSTIN string for a given branch or restaurant."""
+    if branch:
+        if getattr(branch, 'gst_registration', None) and getattr(branch.gst_registration, 'gstin', None) and branch.gst_registration.gstin.strip():
+            return branch.gst_registration.gstin.strip()
+        if getattr(branch, 'gstin', None) and branch.gstin.strip():
+            return branch.gstin.strip()
+    
+    if restaurant:
+        if hasattr(restaurant, 'branches'):
+            for b in restaurant.branches.all():
+                if getattr(b, 'gst_registration', None) and getattr(b.gst_registration, 'gstin', None) and b.gst_registration.gstin.strip():
+                    return b.gst_registration.gstin.strip()
+                if getattr(b, 'gstin', None) and b.gstin.strip():
+                    return b.gstin.strip()
+        if hasattr(restaurant, 'gst_registrations'):
+            reg = restaurant.gst_registrations.filter(gstin__isnull=False).exclude(gstin='').first()
+            if reg and reg.gstin and reg.gstin.strip():
+                return reg.gstin.strip()
+        if getattr(restaurant, 'gstin', None) and restaurant.gstin.strip():
+            return restaurant.gstin.strip()
+    return ''
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
 def test_template(request):
     """Simple test view to check template rendering"""
     context = {
@@ -75,10 +154,14 @@ def test_template(request):
     }
     return render(request, 'restaurant_admin/test.html', context)
 
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
 def test_static(request):
     """Test view to check static files loading"""
     return render(request, 'restaurant_admin/test_static.html')
 
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
 def debug_menu_list(request):
     """Debug version of menu_list without authentication"""
     try:
@@ -98,7 +181,11 @@ def debug_menu_list(request):
             )
         
         # Paginate the menu items
-        paginator = Paginator(menu_items, 20)  # Show 20 items per page
+        try:
+            per_page = int(request.GET.get('per_page', 20))
+        except ValueError:
+            per_page = 20
+        paginator = Paginator(menu_items, per_page)
         page_number = request.GET.get('page')
         page_obj = paginator.get_page(page_number)
         
@@ -150,21 +237,183 @@ def order_mark_ready(request, pk, restaurant_slug=None):
     messages.success(request, f'Order #{order.branch_order_number or order.id} marked ready now.')
     return redirect('restaurant_admin:order_list', restaurant_slug=restaurant.slug)
 
+# Inventory Category Management Views
+@login_required
+@user_passes_test(is_admin)
+def inventory_category_list(request, restaurant_slug=None):
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
+
+    active_branch = get_active_branch(request, restaurant)
+    q = request.GET.get('q', '').strip()
+
+    categories_qs = InventoryCategory.objects.filter(restaurant=restaurant)
+    if active_branch:
+        categories_qs = categories_qs.filter(branch=active_branch)
+
+    if q:
+        categories_qs = categories_qs.filter(Q(name__icontains=q) | Q(hsn_sac_code__icontains=q))
+
+    categories_qs = categories_qs.select_related('parent').prefetch_related('subcategories', 'items').order_by('name')
+
+    try:
+        per_page = int(request.GET.get('per_page', 20))
+    except ValueError:
+        per_page = 20
+    paginator = Paginator(categories_qs, per_page)
+    page_number = request.GET.get('page')
+    categories = paginator.get_page(page_number)
+
+    return render(request, 'restaurant_admin/inventory/category_list.html', {
+        'categories': categories,
+        'active_menu': 'inventory_categories',
+        'search_query': q,
+        'restaurant': restaurant,
+    })
+
+
+@login_required
+@user_passes_test(is_admin)
+def inventory_category_add(request, restaurant_slug=None):
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
+
+    active_branch = get_active_branch(request, restaurant)
+
+    if request.method == 'POST':
+        form = InventoryCategoryForm(request.POST, restaurant=restaurant, branch=active_branch)
+        if form.is_valid():
+            category = form.save()
+            messages.success(request, f'Inventory Category "{category.name}" added successfully!')
+            return redirect('restaurant_admin:inventory_category_list', restaurant_slug=restaurant.slug)
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        form = InventoryCategoryForm(restaurant=restaurant, branch=active_branch)
+
+    return render(request, 'restaurant_admin/inventory/category_form.html', {
+        'form': form,
+        'title': 'Add Inventory Category',
+        'active_menu': 'inventory_categories',
+        'restaurant': restaurant,
+    })
+
+
+@login_required
+@user_passes_test(is_admin)
+def inventory_category_edit(request, pk, restaurant_slug=None):
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
+
+    active_branch = get_active_branch(request, restaurant)
+    category = get_object_or_404(InventoryCategory, pk=pk, restaurant=restaurant)
+
+    if request.method == 'POST':
+        form = InventoryCategoryForm(request.POST, instance=category, restaurant=restaurant, branch=active_branch)
+        if form.is_valid():
+            category = form.save()
+            messages.success(request, f'Inventory Category "{category.name}" updated successfully!')
+            return redirect('restaurant_admin:inventory_category_list', restaurant_slug=restaurant.slug)
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        form = InventoryCategoryForm(instance=category, restaurant=restaurant, branch=active_branch)
+
+    return render(request, 'restaurant_admin/inventory/category_form.html', {
+        'form': form,
+        'title': 'Edit Inventory Category',
+        'active_menu': 'inventory_categories',
+        'restaurant': restaurant,
+    })
+
+
+@login_required
+@user_passes_test(is_admin)
+def inventory_category_delete(request, pk, restaurant_slug=None):
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
+
+    category = get_object_or_404(InventoryCategory, pk=pk, restaurant=restaurant)
+    if request.method == 'POST':
+        cat_name = category.name
+        category.delete()
+        messages.success(request, f'Inventory Category "{cat_name}" deleted successfully.')
+
+    return redirect('restaurant_admin:inventory_category_list', restaurant_slug=restaurant.slug)
+
+
+@login_required
+@user_passes_test(is_admin)
+def inventory_category_api(request, restaurant_slug=None):
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return JsonResponse({'success': False, 'error': 'Invalid restaurant'}, status=400)
+
+    active_branch = get_active_branch(request, restaurant)
+    cats_qs = InventoryCategory.objects.filter(restaurant=restaurant).select_related('parent', 'restaurant')
+    if active_branch:
+        cats_qs = cats_qs.filter(branch=active_branch)
+
+    category_data = []
+    for cat in cats_qs:
+        resolved_gst = cat.resolve_category_value('default_gst_rate')
+        resolved_hsn = cat.resolve_category_value('default_hsn_code')
+        resolved_taxability = cat.resolve_category_value('taxability')
+
+        category_data.append({
+            'id': cat.id,
+            'name': str(cat),
+            'parent_id': cat.parent_id,
+            'tax_configuration': cat.tax_configuration,
+            'taxability_type': cat.taxability_type or 'taxable',
+            'hsn_sac_code': cat.hsn_sac_code or '',
+            'gst_rate': float(cat.gst_rate or 0) if cat.gst_rate is not None else None,
+            'resolved_taxability_type': resolved_taxability or 'taxable',
+            'resolved_hsn_sac_code': resolved_hsn or '',
+            'resolved_gst_rate': float(resolved_gst or 0)
+        })
+
+    return JsonResponse({'success': True, 'categories': category_data})
+
+
 # Inventory Management
 @login_required
 @user_passes_test(is_admin)
 def inventory_list(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
+
+    active_branch = get_active_branch(request, restaurant)
 
     q = request.GET.get('q', '').strip()
-    items = InventoryItem.objects.filter(restaurant=restaurant)
+    items = InventoryItem.objects.filter(restaurant=restaurant).select_related('category', 'category__parent')
+    if active_branch:
+        items = items.filter(branch=active_branch)
     if q:
-        items = items.filter(Q(name__icontains=q) | Q(sku__icontains=q))
-    items = items.order_by('name')
+        items = items.filter(
+            Q(name__icontains=q) |
+            Q(sku__icontains=q) |
+            Q(category__name__icontains=q) |
+            Q(hsn_sac_code__icontains=q) |
+            Q(category__default_hsn_code__icontains=q) |
+            Q(category__hsn_sac_code__icontains=q) |
+            Q(category__parent__default_hsn_code__icontains=q) |
+            Q(category__parent__hsn_sac_code__icontains=q)
+        ).distinct()
+    items_qs = items.order_by('name')
+    
+    try:
+        per_page = int(request.GET.get('per_page', 20))
+    except ValueError:
+        per_page = 20
+    paginator = Paginator(items_qs, per_page)
+    page_number = request.GET.get('page')
+    items = paginator.get_page(page_number)
 
     return render(request, 'restaurant_admin/inventory/list.html', {
         'items': items,
@@ -180,23 +429,32 @@ def inventory_quick_add_api(request, restaurant_slug=None):
     if not isinstance(restaurant, Restaurant):
         return JsonResponse({'success': False, 'error': 'Invalid restaurant'}, status=400)
 
+    active_branch = get_active_branch(request, restaurant)
+
     if request.method == 'POST':
-        form = InventoryItemForm(request.POST, restaurant=restaurant)
+        form = InventoryItemForm(request.POST, restaurant=restaurant, branch=active_branch)
         if form.is_valid():
             item = form.save()
+            if item.quantity != 0:
+                InventoryTransaction.objects.create(
+                    inventory_item=item,
+                    transaction_type=InventoryTransaction.TransactionType.RESTOCK,
+                    delta=item.quantity,
+                    performed_by=request.user
+                )
             return JsonResponse({
                 'success': True,
                 'item': {
                     'id': item.id,
                     'name': item.name,
                     'sku': item.sku or '',
-                    'category': item.get_category_display() or item.category,
+                    'category': str(item.category) if item.category else '',
                     'unit': item.unit or '',
                     'quantity': item.quantity,
                     'cost_price': float(item.unit_cost),
-                    'hsn_sac_code': item.hsn_sac_code or '',
-                    'gst_rate': float(item.gst_rate or 0),
-                    'taxability_type': item.taxability_type or 'taxable'
+                    'hsn_sac_code': item.effective_hsn_code or '',
+                    'gst_rate': float(item.effective_gst_rate or 0),
+                    'taxability_type': item.effective_taxability or 'taxable'
                 }
             })
         else:
@@ -209,14 +467,14 @@ def inventory_quick_add_api(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def inventory_add(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
+
+    active_branch = get_active_branch(request, restaurant)
 
     if request.method == 'POST':
-        form = InventoryItemForm(request.POST, restaurant=restaurant)
+        form = InventoryItemForm(request.POST, restaurant=restaurant, branch=active_branch)
         if form.is_valid():
             item = form.save()
             # Log starting stock if it's non-zero
@@ -232,7 +490,7 @@ def inventory_add(request, restaurant_slug=None):
         else:
             messages.error(request, 'Please correct the errors below.')
     else:
-        form = InventoryItemForm(restaurant=restaurant)
+        form = InventoryItemForm(restaurant=restaurant, branch=active_branch)
 
     return render(request, 'restaurant_admin/inventory/form.html', {
         'form': form,
@@ -240,6 +498,165 @@ def inventory_add(request, restaurant_slug=None):
         'active_menu': 'inventory',
         'restaurant': restaurant,
     })
+
+
+def serialize_pos_order(order):
+    if not order:
+        return None
+    items = []
+    for item in order.items.select_related('menu_item', 'menu_item__category').all():
+        mi = item.menu_item
+        cat_name = mi.category.name if mi and mi.category else 'General'
+        tax_type = (mi.tax_type if mi else 'GST_FOOD') or 'GST_FOOD'
+        if tax_type == 'GST_FOOD' and cat_name:
+            c_name_lower = cat_name.lower()
+            if 'beer' in c_name_lower:
+                tax_type = 'VAT_BEER'
+            elif 'wine' in c_name_lower:
+                tax_type = 'VAT_WINE'
+            elif any(k in c_name_lower for k in ['liquor', 'bar', 'spirit', 'whiskey', 'vodka', 'rum', 'cocktail']):
+                tax_type = 'VAT_IMFL'
+
+        items.append({
+            'id': mi.id if mi else 0,
+            'name': mi.name if mi else 'Item',
+            'quantity': item.quantity,
+            'unit_price': float(item.unit_price or (mi.price if mi else 0)),
+            'tax_type': tax_type,
+            'category_name': cat_name,
+            'discount_type': item.discount_type or 'flat',
+            'discount_value': float(item.discount_value or 0),
+            'discount_amount': float(item.discount_amount or 0),
+            'discount_reason': item.discount_reason or '',
+            'notes': item.notes or '',
+            'sent': True if order.status in [Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING, Order.OrderStatus.SERVED, Order.OrderStatus.COMPLETED] else False
+        })
+
+    table_name = ''
+    if order.table:
+        table_name = order.table.name
+    elif order.table_number:
+        table_name = f"Table {order.table_number}"
+
+    disc_amt = float(order.discount_amount or 0)
+    order_discount = None
+    if disc_amt > 0:
+        order_discount = {
+            'amount': disc_amt,
+            'type': order.discount_type or 'flat',
+            'value': float(order.discount_value or disc_amt),
+            'reason': order.discount_reason or (order.coupon.code if order.coupon else '') or 'Bill discount'
+        }
+
+    return {
+        'id': order.id,
+        'order_number': order.order_number or f"ORD-{order.id:04d}",
+        'branch_order_number': order.branch_order_number or order.id,
+        'customer_name': order.customer_name or 'Walk-in Guest',
+        'phone': order.phone or '',
+        'notes': order.notes or '',
+        'table_id': order.table.id if order.table else None,
+        'table_name': table_name,
+        'table_number': order.table_number or (order.table.table_number if order.table else None),
+        'order_type': order.order_type or 'dine_in',
+        'payment_method': order.payment_method or 'cash',
+        'payment_status': order.payment_status or 'unpaid',
+        'status': order.status,
+        'subtotal': float(order.subtotal or 0),
+        'tax_amount': float(order.tax_amount or 0),
+        'discount_amount': disc_amt,
+        'order_discount': order_discount,
+        'round_off_amount': float(order.round_off_amount or 0),
+        'total_amount': float(order.total_amount or 0),
+        'guest_count': order.guest_count or 2,
+        'items': items
+    }
+
+
+def get_pos_active_orders(restaurant, active_branch=None):
+    from django.utils import timezone
+    from django.db.models import Q
+    # Unsettled orders (Drafts, Pending, Preparing, and Unpaid)
+    orders_qs = Order.objects.filter(
+        restaurant=restaurant
+    ).exclude(
+        status=Order.OrderStatus.CANCELLED
+    ).filter(
+        Q(status__in=[Order.OrderStatus.DRAFT, Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING]) |
+        Q(payment_status__in=['unpaid', 'partially_paid', 'advance_paid', 'failed'])
+    )
+    if active_branch:
+        orders_qs = orders_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+
+    orders_qs = orders_qs.select_related('table').prefetch_related('items', 'items__menu_item', 'items__menu_item__category').order_by('-order_time')[:50]
+
+    results = []
+    for ord_obj in orders_qs:
+        elapsed_str = ''
+        if ord_obj.order_time:
+            diff = timezone.now() - ord_obj.order_time
+            tot_sec = int(diff.total_seconds())
+            if tot_sec < 60:
+                elapsed_str = 'just now'
+            elif tot_sec < 3600:
+                elapsed_str = f"{tot_sec // 60}m"
+            elif tot_sec < 86400:
+                h = tot_sec // 3600
+                m = (tot_sec % 3600) // 60
+                elapsed_str = f"{h}h {m}m" if m else f"{h}h"
+            else:
+                elapsed_str = f"{tot_sec // 86400}d"
+
+        num = ord_obj.branch_order_number or ord_obj.id
+        ord_type = ord_obj.order_type or 'dine_in'
+        if ord_type == 'dine_in':
+            title = f"Dine-in #{num}"
+            if ord_obj.table:
+                title = f"Dine-in {ord_obj.table.name}"
+            elif ord_obj.table_number:
+                title = f"Dine-in T-{ord_obj.table_number}"
+        elif ord_type == 'takeaway':
+            title = f"Takeaway #{num}"
+        else:
+            title = f"Delivery #{num}"
+
+        items_count = ord_obj.items.count()
+
+        results.append({
+            'id': ord_obj.id,
+            'order_number': ord_obj.order_number or f"ORD-{ord_obj.id:04d}",
+            'branch_order_number': num,
+            'title': title,
+            'customer_name': ord_obj.customer_name or 'Walk-in Guest',
+            'phone': ord_obj.phone or '',
+            'notes': ord_obj.notes or '',
+            'table_id': ord_obj.table.id if ord_obj.table else None,
+            'table_number': ord_obj.table_number or (ord_obj.table.table_number if ord_obj.table else None),
+            'order_type': ord_type,
+            'order_type_display': ord_obj.get_order_type_display(),
+            'status': ord_obj.status,
+            'subtotal': float(ord_obj.subtotal or 0),
+            'tax_amount': float(ord_obj.tax_amount or 0),
+            'discount_amount': float(ord_obj.discount_amount or 0),
+            'total_amount': float(ord_obj.total_amount or 0),
+            'order_time': ord_obj.order_time.strftime('%I:%M %p') if ord_obj.order_time else '',
+            'elapsed': elapsed_str,
+            'lines_count': items_count,
+            'items': [
+                {
+                    'id': it.menu_item.id if it.menu_item else 0,
+                    'name': it.menu_item.name if it.menu_item else 'Item',
+                    'quantity': it.quantity,
+                    'unit_price': float(it.unit_price or 0),
+                    'line_total': float(it.subtotal or 0),
+                    'tax_type': it.menu_item.tax_type if it.menu_item else 'GST_FOOD',
+                    'discount_amount': float(it.discount_amount or 0),
+                }
+                for it in ord_obj.items.all()
+            ]
+        })
+    return results
+
 
 @login_required
 @user_passes_test(is_admin)
@@ -268,9 +685,54 @@ def order_create_manual(request, restaurant_slug=None):
             data = request.POST
 
         customer_name = (data.get('customer_name') or 'Guest').strip()
+        bypass_same_gstin = data.get('bypass_same_gstin') in [1, '1', True, 'true'] or request.POST.get('bypass_same_gstin') == '1'
+
+        if customer_name and not bypass_same_gstin and customer_name.lower() not in ['guest', 'walk-in guest', '']:
+            active_b = get_active_branch(request, restaurant)
+            party_qs = Party.objects.filter(restaurant=restaurant, name__iexact=customer_name)
+            if active_b:
+                party_qs = party_qs.filter(branch=active_b)
+            matched_party = party_qs.first()
+            if matched_party and matched_party.gstin:
+                active_b = get_active_branch(request, restaurant)
+                active_b_gstin = get_branch_gstin_str(active_b, restaurant)
+                import re
+                clean_p_gstin = re.sub(r'[^A-Za-z0-9]', '', matched_party.gstin).upper()
+                clean_b_gstin = re.sub(r'[^A-Za-z0-9]', '', active_b_gstin).upper()
+                if clean_p_gstin and clean_b_gstin and clean_p_gstin == clean_b_gstin:
+                    if is_json:
+                        return JsonResponse({
+                            'success': False,
+                            'same_gstin_warning': True,
+                            'party_name': matched_party.name,
+                            'party_gstin': matched_party.gstin,
+                            'party_phone': matched_party.phone or '',
+                            'party_address': matched_party.full_address or '',
+                            'active_branch_gstin': active_b_gstin,
+                            'error': f"Internal Transfer Warning: Buyer party '{matched_party.name}' shares the same GSTIN ({matched_party.gstin}) as your active branch. Delivery Challan recommended."
+                        }, status=400)
+
         phone = (data.get('phone_number') or data.get('phone') or '').strip()
         notes = (data.get('notes') or '').strip()
-        order_type = data.get('order_type') or Order.OrderType.DINE_IN
+        table_id_val = data.get('table_id') or data.get('table')
+
+        table_obj = None
+        if table_id_val:
+            table_val_str = str(table_id_val).strip()
+            if table_val_str.isdigit():
+                table_obj = Table.objects.filter(pk=int(table_val_str), restaurant=restaurant).first()
+                if not table_obj:
+                    table_obj = Table.objects.filter(table_number=int(table_val_str), restaurant=restaurant).first()
+            if not table_obj:
+                table_obj = Table.objects.filter(name__iexact=table_val_str, restaurant=restaurant).first()
+            if not table_obj:
+                clean_name = table_val_str.replace('Table', '').strip()
+                table_obj = Table.objects.filter(name__iexact=clean_name, restaurant=restaurant).first()
+
+        order_type = data.get('order_type') or (Order.OrderType.DINE_IN if table_obj else Order.OrderType.DINE_IN)
+        if table_obj:
+            order_type = Order.OrderType.DINE_IN
+
         payment_method = data.get('payment_method') or Order.PaymentMethod.CASH
         payment_status = data.get('payment_status') or Order.PaymentStatus.PAID
         action = data.get('action', 'save')
@@ -284,11 +746,20 @@ def order_create_manual(request, restaurant_slug=None):
 
         subtotal_val = safe_decimal(data.get('subtotal'))
         tax_amount_val = safe_decimal(data.get('tax_amount'))
+        discount_amount_val = safe_decimal(data.get('discount_amount'))
+        discount_type_val = (data.get('discount_type') or 'flat').strip()
+        discount_value_val = safe_decimal(data.get('discount_value'))
+        discount_reason_val = (data.get('discount_reason') or '').strip() or None
         round_off_amount_val = safe_decimal(data.get('round_off_amount'))
         grand_total_val = safe_decimal(data.get('grand_total'))
 
         receipt_no_input = (data.get('receipt_no') or '').strip()
         advance_amount_input = safe_decimal(data.get('advance_amount_paid') or data.get('advance_amount'))
+
+        if receipt_no_input and advance_amount_input <= Decimal('0.00'):
+            arc = AdvanceReceipt.objects.filter(restaurant=restaurant, receipt_no=receipt_no_input).first()
+            if arc:
+                advance_amount_input = arc.advance_amount
 
         # Determine payments, paid_amount, due_amount & payment_status
         payments_input = data.get('payments')
@@ -329,6 +800,7 @@ def order_create_manual(request, restaurant_slug=None):
             due_amount_val = grand_total_val
 
         # Determine order status based on action
+        # Determine order status based on action
         if action in ['fire_kot', 'save_kot']:
             initial_status = Order.OrderStatus.PENDING
         elif action in ['settle_order', 'print_close']:
@@ -336,15 +808,79 @@ def order_create_manual(request, restaurant_slug=None):
         else:
             initial_status = Order.OrderStatus.PENDING
 
-        gstin_no = (data.get('gstin_no') or data.get('gstin') or '').strip()
-        excise_bill_no = (data.get('excise_bill_no') or data.get('excise') or '').strip()
+        # Document Sequence & Invoice Number handling
+        gstin_no = (data.get('gstin_no') or data.get('gstin') or data.get('invoice_number') or '').strip()
+        excise_bill_no = (data.get('excise_bill_no') or data.get('excise') or data.get('vat_bill_no') or '').strip()
+
+        should_assign_invoice_number = (
+            action in ['settle_order', 'print_close', 'save_invoice', 'save_food_invoice', 'save_liquor_invoice', 'save_combined_invoice'] or
+            data.get('payment_status') == 'paid' or
+            initial_payment_status == Order.PaymentStatus.PAID
+        )
+
+        active_branch = get_active_branch(request, restaurant)
+        sales_seq_info = get_document_sequence_info(restaurant, 'sales', branch=active_branch)
+        vat_seq_info = get_document_sequence_info(restaurant, 'vat_bill', branch=active_branch) if (active_branch and active_branch.serves_alcohol) else None
+
+        if should_assign_invoice_number and sales_seq_info['mode'] in ['automatic', 'manual_override'] and not gstin_no:
+            try:
+                gstin_no = get_and_increment_document_number(restaurant, 'sales', branch=active_branch, user_input_no=gstin_no, exclude_pk=order_id)
+            except ValidationError as ve:
+                if is_json:
+                    return JsonResponse({'success': False, 'error': str(ve)}, status=400)
+                messages.error(request, str(ve))
+                return redirect(request.path)
+        elif gstin_no:
+            try:
+                validate_unique_document_number(restaurant, 'sales', gstin_no, branch=active_branch, exclude_pk=order_id)
+            except ValidationError as ve:
+                if is_json:
+                    return JsonResponse({'success': False, 'error': str(ve)}, status=400)
+                messages.error(request, str(ve))
+                return redirect(request.path)
+
+        if should_assign_invoice_number and vat_seq_info and vat_seq_info['mode'] in ['automatic', 'manual_override'] and not excise_bill_no:
+            # Check if items contain liquor
+            items_data = data.get('items')
+            has_alcohol = False
+            if isinstance(items_data, list):
+                for it in items_data:
+                    m_id = it.get('menu_item_id') or it.get('id')
+                    if m_id:
+                        m_obj = MenuItem.objects.filter(id=m_id).first()
+                        if m_obj and m_obj.tax_type in [MenuItem.TaxType.VAT_BEER, MenuItem.TaxType.VAT_IMFL, MenuItem.TaxType.VAT_WINE, MenuItem.TaxType.VAT_LIQUOR]:
+                            has_alcohol = True
+                            break
+            if has_alcohol:
+                try:
+                    excise_bill_no = get_and_increment_document_number(restaurant, 'vat_bill', branch=active_branch, user_input_no=excise_bill_no, exclude_pk=order_id)
+                except ValidationError as ve:
+                    if is_json:
+                        return JsonResponse({'success': False, 'error': str(ve)}, status=400)
+                    messages.error(request, str(ve))
+                    return redirect(request.path)
+        elif excise_bill_no:
+            try:
+                validate_unique_document_number(restaurant, 'vat_bill', excise_bill_no, branch=active_branch, exclude_pk=order_id)
+            except ValidationError as ve:
+                if is_json:
+                    return JsonResponse({'success': False, 'error': str(ve)}, status=400)
+                messages.error(request, str(ve))
+                return redirect(request.path)
 
         if order_id:
             order = get_object_or_404(Order, pk=order_id, restaurant=restaurant)
+            if not order.branch and active_branch:
+                order.branch = active_branch
             order.customer_name = customer_name or order.customer_name
             order.phone = phone or order.phone
             order.notes = notes if notes is not None else order.notes
-            order.order_type = order_type or order.order_type
+            if table_obj:
+                order.table = table_obj
+                order.table_number = table_obj.table_number
+                order.order_type = Order.OrderType.DINE_IN
+            else:
+                order.order_type = order_type or order.order_type
             order.payment_method = payment_method or order.payment_method
             order.payment_status = initial_payment_status
             order.payments = valid_payments
@@ -358,6 +894,10 @@ def order_create_manual(request, restaurant_slug=None):
             order.status = initial_status
             order.subtotal = subtotal_val
             order.tax_amount = tax_amount_val
+            order.discount_amount = discount_amount_val
+            order.discount_type = discount_type_val
+            order.discount_value = discount_value_val
+            order.discount_reason = discount_reason_val
             order.round_off_amount = round_off_amount_val
             order.total_amount = grand_total_val
             if gstin_no:
@@ -370,16 +910,26 @@ def order_create_manual(request, restaurant_slug=None):
             else:
                 order.excise_bill_no = None
             order.save()
-            # Clear existing items if new items provided
+            # Clear existing items if items data is provided
             items_data = data.get('items')
-            if isinstance(items_data, list) and len(items_data) > 0:
+            if isinstance(items_data, list):
                 order.items.all().delete()
+
+            voided_item = data.get('voided_item_name')
+            void_reason = data.get('void_reason')
+            if voided_item and void_reason:
+                void_entry = f"[Voided {voided_item}: {void_reason}]"
+                if void_entry not in (order.notes or ''):
+                    order.notes = f"{order.notes}\n{void_entry}".strip() if order.notes else void_entry
+                    order.save(update_fields=['notes'])
         else:
             order = Order.objects.create(
                 customer_name=customer_name or 'Walk-in Guest',
                 phone=phone,
                 notes=notes,
                 order_type=order_type,
+                table=table_obj,
+                table_number=table_obj.table_number if table_obj else None,
                 payment_method=payment_method,
                 payment_status=initial_payment_status,
                 payments=valid_payments,
@@ -387,31 +937,54 @@ def order_create_manual(request, restaurant_slug=None):
                 due_amount=due_amount_val,
                 status=initial_status,
                 restaurant=restaurant,
-                branch=restaurant.branches.first() if hasattr(restaurant, 'branches') else None,
+                branch=active_branch,
                 subtotal=subtotal_val,
                 tax_amount=tax_amount_val,
+                discount_amount=discount_amount_val,
+                discount_type=discount_type_val,
+                discount_value=discount_value_val,
+                discount_reason=discount_reason_val,
                 round_off_amount=round_off_amount_val,
                 total_amount=grand_total_val,
                 gstin_no=gstin_no or None,
                 excise_bill_no=excise_bill_no or None,
             )
 
-        if customer_name and customer_name.lower() not in ['guest', 'walk-in guest']:
-            party, _ = Party.objects.get_or_create(
-                restaurant=restaurant,
-                name__iexact=customer_name,
-                defaults={
-                    'name': customer_name,
-                    'party_type': Party.PartyType.CUSTOMER,
-                    'phone': phone,
-                    'gstin': gstin_no
-                }
-            )
-            if phone and not party.phone:
-                party.phone = phone
-                party.save(update_fields=['phone'])
+        if customer_name and customer_name.strip().lower() not in ['guest', 'walk-in', 'walk-in guest']:
+            party_lookup = {'restaurant': restaurant, 'name__iexact': customer_name.strip()}
+            if active_branch:
+                party_lookup['branch'] = active_branch
+            existing_party = Party.objects.filter(**party_lookup).first()
+            if not existing_party and phone and len(phone) >= 4:
+                # Also try looking up party by phone (exact or substring)
+                existing_party = Party.objects.filter(restaurant=restaurant, phone__icontains=phone).first()
+
+            party_gstin_input = (data.get('party_gstin') or data.get('customer_gstin') or '').strip()
+
+            if existing_party:
+                party = existing_party
+                # If order has incomplete or missing phone but party has full phone, auto-populate order.phone
+                if party.phone and (not order.phone or len(str(order.phone)) < len(str(party.phone))):
+                    order.phone = party.phone
+                    order.save(update_fields=['phone'])
+                if party_gstin_input and not party.gstin:
+                    party.gstin = party_gstin_input
+                    party.save(update_fields=['gstin'])
+            else:
+                party = Party.objects.create(
+                    restaurant=restaurant,
+                    branch=active_branch,
+                    name=customer_name.strip(),
+                    party_type=Party.PartyType.CUSTOMER,
+                    phone=phone or '',
+                    gstin=party_gstin_input or ''
+                )
             order.party = party
             order.save(update_fields=['party'])
+        else:
+            if order.party and (not customer_name or customer_name.strip().lower() in ['guest', 'walk-in', 'walk-in guest']):
+                order.party = None
+                order.save(update_fields=['party'])
 
         if receipt_no_input:
             arc = AdvanceReceipt.objects.filter(restaurant=restaurant, receipt_no=receipt_no_input).first()
@@ -449,9 +1022,16 @@ def order_create_manual(request, restaurant_slug=None):
                 if not item_id or qty <= 0:
                     continue
                 try:
-                    menu_item = MenuItem.objects.get(pk=item_id, restaurant=restaurant)
+                    mi_filter = {'pk': item_id, 'restaurant': restaurant}
+                    if active_branch:
+                        mi_filter['branch'] = active_branch
+                    menu_item = MenuItem.objects.get(**mi_filter)
                 except MenuItem.DoesNotExist:
-                    continue
+                    # Fallback: allow untagged/legacy items that lack a branch
+                    try:
+                        menu_item = MenuItem.objects.get(pk=item_id, restaurant=restaurant)
+                    except MenuItem.DoesNotExist:
+                        continue
                 if u_price <= 0:
                     u_price = menu_item.price
 
@@ -459,12 +1039,14 @@ def order_create_manual(request, restaurant_slug=None):
                 disc_val = safe_decimal(item.get('discount_value'))
                 disc_amt = safe_decimal(item.get('discount_amount'))
                 disc_reason = (item.get('discount_reason') or '').strip() or None
+                item_notes = (item.get('notes') or item.get('note') or '').strip()
 
                 created_item = OrderItem.objects.create(
                     order=order,
                     menu_item=menu_item,
                     quantity=qty,
                     unit_price=u_price,
+                    notes=item_notes,
                     discount_type=disc_type,
                     discount_value=disc_val,
                     discount_amount=disc_amt,
@@ -475,8 +1057,12 @@ def order_create_manual(request, restaurant_slug=None):
         table_id = data.get('table_id') or data.get('table')
         if table_id:
             try:
-                order.table_id = int(table_id)
-                order.save()
+                t_obj = Table.objects.filter(pk=int(table_id), restaurant=restaurant).first()
+                if t_obj:
+                    order.table = t_obj
+                    order.table_number = t_obj.table_number
+                    order.order_type = Order.OrderType.DINE_IN
+                    order.save(update_fields=['table', 'table_number', 'order_type'])
             except Exception:
                 pass
 
@@ -491,10 +1077,18 @@ def order_create_manual(request, restaurant_slug=None):
 
         order.assign_invoice_numbers()
 
-        if order.payment_status == Order.PaymentStatus.PAID or order.status in [Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING, Order.OrderStatus.SERVED]:
-            order.deduct_inventory()
+        # Check if only new items are being fired in KOT
+        items_data = data.get('items')
+        new_item_ids = []
+        if isinstance(items_data, list) and len(items_data) > 0 and len(created_items) > 0:
+            for ci, item_data in zip(created_items, items_data):
+                if not item_data.get('sent'):
+                    new_item_ids.append(str(ci.id))
 
         kot_url = reverse('restaurant_admin:order_kot', kwargs={'restaurant_slug': restaurant.slug, 'pk': order.id})
+        if new_item_ids and len(new_item_ids) < len(created_items):
+            kot_url = kot_url + '?items=' + ','.join(new_item_ids)
+
         invoice_url = reverse('restaurant_admin:order_invoice', kwargs={'restaurant_slug': restaurant.slug, 'pk': order.id})
         food_invoice_url = invoice_url + '?type=food'
         liquor_invoice_url = invoice_url + '?type=liquor'
@@ -525,7 +1119,10 @@ def order_create_manual(request, restaurant_slug=None):
             active_orders_qs = Order.objects.filter(
                 restaurant=restaurant,
                 status__in=[Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING]
-            ).select_related('table').prefetch_related('items', 'items__menu_item').order_by('-order_time')[:30]
+            )
+            if active_branch:
+                active_orders_qs = active_orders_qs.filter(branch=active_branch)
+            active_orders_qs = active_orders_qs.select_related('table').prefetch_related('items', 'items__menu_item').order_by('-order_time')[:30]
 
             active_orders_resp = []
             for ao in active_orders_qs:
@@ -582,13 +1179,22 @@ def order_create_manual(request, restaurant_slug=None):
         return redirect(order_list_url)
 
     # GET
-    from core.models import Table
-    tables_qs = Table.objects.filter(restaurant=restaurant).order_by('table_number')
-    menu_items_qs = MenuItem.objects.filter(restaurant=restaurant, availability=True).select_related('category', 'subcategory').order_by('category__name', 'name')
-    categories_qs = Category.objects.filter(restaurant=restaurant).order_by('name')
+    active_branch = get_active_branch(request, restaurant)
+    tables_qs = Table.objects.filter(restaurant=restaurant)
+    if active_branch:
+        tables_qs = tables_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    tables_qs = tables_qs.order_by('table_number')
+
+    menu_items_qs = MenuItem.objects.filter(restaurant=restaurant, availability=True).select_related('category', 'subcategory')
+    categories_qs = Category.objects.filter(restaurant=restaurant)
+    if active_branch:
+        menu_items_qs = menu_items_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+        categories_qs = categories_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    menu_items_qs = menu_items_qs.order_by('category__name', 'name')
+    categories_qs = categories_qs.order_by('name')
 
     settings_obj = RestaurantSettings.get_settings(restaurant)
-    branch_obj = restaurant.branches.first() if hasattr(restaurant, 'branches') else None
+    branch_obj = active_branch or (restaurant.branches.first() if hasattr(restaurant, 'branches') else None)
 
     cgst_pct = float(settings_obj.cgst_percentage or 2.50)
     sgst_pct = float(settings_obj.sgst_percentage or 2.50)
@@ -616,60 +1222,41 @@ def order_create_manual(request, restaurant_slug=None):
         menu_items_list.append({
             'id': mi.id,
             'name': mi.name,
+            'short_code': mi.short_code or str(mi.id),
             'price': float(mi.price),
             'category_id': cat_id,
             'category_name': cat_name,
             'image_url': img_url,
-            'tax_type': tax_type
+            'tax_type': tax_type,
+            'is_tax_inclusive': mi.is_tax_inclusive
         })
 
     categories_list = [{'id': c.id, 'name': c.name} for c in categories_qs]
 
-    # Calculate top selling item IDs for this restaurant
+    # Calculate top selling item IDs scoped to active branch (with top items fallback)
     from django.db.models import Sum
+    top_selling_filter = {'order__restaurant': restaurant}
+    if active_branch:
+        top_selling_filter['order__branch'] = active_branch
     top_selling_qs = (
-        OrderItem.objects.filter(order__restaurant=restaurant)
+        OrderItem.objects.filter(**top_selling_filter)
         .values('menu_item_id')
         .annotate(total_qty=Sum('quantity'))
-        .order_by('-total_qty')[:12]
+        .order_by('-total_qty')[:20]
     )
     top_selling_ids = [item['menu_item_id'] for item in top_selling_qs if item['menu_item_id']]
+    if len(top_selling_ids) < 6:
+        for mi_obj in menu_items_qs[:12]:
+            if mi_obj.id not in top_selling_ids:
+                top_selling_ids.append(mi_obj.id)
 
-    # Active / In-kitchen orders
-    active_orders_qs = Order.objects.filter(
-        restaurant=restaurant,
-        status__in=[Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING]
-    ).select_related('table').prefetch_related('items', 'items__menu_item').order_by('-order_time')[:30]
+    # Active / In-kitchen / Draft orders (branch-scoped)
+    active_orders_list = get_pos_active_orders(restaurant, active_branch)
 
-    active_orders_list = []
-    for ao in active_orders_qs:
-        active_orders_list.append({
-            'id': ao.id,
-            'order_number': ao.order_number,
-            'customer_name': ao.customer_name or 'Walk-in Guest',
-            'phone': ao.phone or '',
-            'notes': ao.notes or '',
-            'table_id': ao.table.id if ao.table else None,
-            'table_number': ao.table_number or (ao.table.table_number if ao.table else None),
-            'order_type': ao.order_type,
-            'subtotal': float(ao.subtotal),
-            'tax_amount': float(ao.tax_amount),
-            'total_amount': float(ao.total_amount),
-            'order_time': ao.order_time.strftime('%I:%M %p'),
-            'items': [
-                {
-                    'id': it.menu_item.id if it.menu_item else 0,
-                    'name': it.menu_item.name if it.menu_item else 'Item',
-                    'quantity': it.quantity,
-                    'unit_price': float(it.unit_price),
-                    'line_total': float(it.subtotal),
-                    'tax_type': it.menu_item.tax_type if it.menu_item else 'GST_FOOD'
-                }
-                for it in ao.items.all()
-            ]
-        })
-
-    custom_charges_qs = CustomCharge.objects.filter(restaurant=restaurant, is_active=True).order_by('charge_name')
+    custom_charges_qs = CustomCharge.objects.filter(restaurant=restaurant, is_active=True)
+    if active_branch:
+        custom_charges_qs = custom_charges_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    custom_charges_qs = custom_charges_qs.order_by('charge_name')
     custom_charges_list = []
     for cc in custom_charges_qs:
         custom_charges_list.append({
@@ -686,17 +1273,47 @@ def order_create_manual(request, restaurant_slug=None):
     attached_receipt = None
     draft_order = None
     order_id_param = request.GET.get('order_id')
+    new_param = request.GET.get('new')
     receipt_no_param = request.GET.get('receipt_no')
 
     if order_id_param:
         draft_order = Order.objects.filter(pk=order_id_param, restaurant=restaurant).first()
         if draft_order and draft_order.advance_receipt:
             attached_receipt = draft_order.advance_receipt
+    elif not new_param:
+        # Check if there is an existing DRAFT order for this user/branch
+        draft_qs = Order.objects.filter(restaurant=restaurant, status=Order.OrderStatus.DRAFT)
+        if active_branch:
+            draft_qs = draft_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+        draft_order = draft_qs.order_by('-order_time').first()
 
     if not attached_receipt and receipt_no_param:
         attached_receipt = AdvanceReceipt.objects.filter(restaurant=restaurant, receipt_no=receipt_no_param).first()
-        if attached_receipt and attached_receipt.order:
+
+    if attached_receipt:
+        if attached_receipt.order:
             draft_order = attached_receipt.order
+        elif attached_receipt.receipt_type == 'advance':
+            active_branch_for_receipt = get_active_branch(request, restaurant)
+            draft_order = Order.objects.create(
+                restaurant=restaurant,
+                branch=active_branch_for_receipt,
+                party=attached_receipt.party,
+                customer_name=attached_receipt.customer_name or (attached_receipt.party.name if attached_receipt.party else 'Walk-in Guest'),
+                phone=attached_receipt.phone or (attached_receipt.party.phone if attached_receipt.party else ''),
+                status=Order.OrderStatus.DRAFT,
+                order_type=Order.OrderType.DINE_IN,
+                payment_status=Order.PaymentStatus.ADVANCE_PAID if attached_receipt.advance_amount > 0 else Order.PaymentStatus.UNPAID,
+                advance_amount_paid=attached_receipt.advance_amount,
+                advance_receipt=attached_receipt,
+                notes=f"Draft order linked to Advance Receipt #{attached_receipt.receipt_no}",
+            )
+            attached_receipt.order = draft_order
+            attached_receipt.reference_number = draft_order.order_number
+            attached_receipt.booking_ref = draft_order.order_number
+            attached_receipt.save(update_fields=['order', 'reference_number', 'booking_ref'])
+
+    existing_order_json = json.dumps(serialize_pos_order(draft_order)) if draft_order else 'null'
 
     if not attached_receipt and draft_order and draft_order.advance_amount_paid > 0:
         attached_receipt_json = json.dumps({
@@ -710,9 +1327,9 @@ def order_create_manual(request, restaurant_slug=None):
         })
     elif attached_receipt:
         attached_receipt_json = json.dumps({
-            'order_id': attached_receipt.order.id if attached_receipt.order else 0,
+            'order_id': attached_receipt.order.id if attached_receipt.order else (draft_order.id if draft_order else 0),
             'receipt_no': attached_receipt.receipt_no,
-            'booking_ref': attached_receipt.order.order_number if attached_receipt.order else attached_receipt.booking_ref,
+            'booking_ref': attached_receipt.order.order_number if attached_receipt.order else (draft_order.order_number if draft_order else attached_receipt.booking_ref),
             'customer_name': attached_receipt.customer_name,
             'phone': attached_receipt.phone,
             'advance_amount': float(attached_receipt.advance_amount),
@@ -721,6 +1338,29 @@ def order_create_manual(request, restaurant_slug=None):
     else:
         attached_receipt_json = 'null'
 
+    # Sequence info for invoice numbers
+    gst_seq_info = get_document_sequence_info(restaurant, 'sales', branch=branch_obj)
+    excise_seq_info = get_document_sequence_info(restaurant, 'vat_bill', branch=branch_obj) if (branch_obj and branch_obj.serves_alcohol) else gst_seq_info
+
+    cust_parties_qs = Party.objects.filter(restaurant=restaurant, party_type__in=['customer', 'both'])
+    if branch_obj:
+        cust_parties_qs = cust_parties_qs.filter(branch=branch_obj)
+    cust_parties_qs = cust_parties_qs.order_by('name')
+    cust_parties_list = [
+        {
+            'id': p.id,
+            'name': p.name,
+            'phone': p.phone or '',
+            'email': p.email or '',
+            'gstin': p.gstin or '',
+            'full_address': p.full_address or ''
+        }
+        for p in cust_parties_qs
+    ]
+    active_branch_gstin_manual = get_branch_gstin_str(branch_obj, restaurant)
+
+    service_charge_pct_val = float(branch_obj.service_charge_percentage if (branch_obj and branch_obj.service_charge_percentage is not None) else (settings_obj.service_charge_percentage or 0))
+
     return render(request, 'restaurant_admin/orders/manual_create.html', {
         'menu_items': menu_items_qs,
         'menu_items_json': json.dumps(menu_items_list),
@@ -728,7 +1368,7 @@ def order_create_manual(request, restaurant_slug=None):
         'categories_json': json.dumps(categories_list),
         'categories': categories_qs,
         'tables': tables_qs,
-        'active_orders': active_orders_qs,
+        'active_orders': active_orders_list,
         'active_orders_json': json.dumps(active_orders_list),
         'tax_settings_json': json.dumps({
             'cgst_pct': cgst_pct,
@@ -737,14 +1377,260 @@ def order_create_manual(request, restaurant_slug=None):
             'vat_imfl_pct': vat_imfl_pct,
             'vat_wine_pct': vat_wine_pct,
             'vat_gen_pct': vat_gen_pct,
+            'service_charge_pct': service_charge_pct_val,
+            'service_charge_taxable': getattr(settings_obj, 'service_charge_taxable', True),
         }),
-        'customer_parties': Party.objects.filter(restaurant=restaurant, party_type__in=['customer', 'both']).order_by('name'),
+        'customer_parties': cust_parties_qs,
+        'customer_parties_json': json.dumps(cust_parties_list),
+        'active_branch_gstin': active_branch_gstin_manual,
+        'active_branch_gstin_json': json.dumps(active_branch_gstin_manual),
         'custom_charges_json': json.dumps(custom_charges_list),
         'attached_receipt': attached_receipt,
         'attached_receipt_json': attached_receipt_json,
+        'existing_order_json': existing_order_json,
+        'is_edit_mode': True if draft_order else False,
+        'order': draft_order,
+        'gst_seq_info': gst_seq_info,
+        'excise_seq_info': excise_seq_info,
+        'gst_seq_info_json': json.dumps(gst_seq_info),
+        'excise_seq_info_json': json.dumps(excise_seq_info),
         'active_menu': 'order_list',
         'restaurant': restaurant,
     })
+
+
+@login_required
+@user_passes_test(is_admin)
+def pos_draft_order_api(request, restaurant_slug=None):
+    try:
+        restaurant = request.user.restaurant_profile.restaurant
+    except RestaurantUser.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'No restaurant profile'}, status=403)
+
+    active_branch = get_active_branch(request, restaurant)
+
+    if request.method == 'GET':
+        order_id = request.GET.get('order_id')
+        if order_id:
+            order = Order.objects.filter(pk=order_id, restaurant=restaurant).first()
+        else:
+            draft_qs = Order.objects.filter(restaurant=restaurant, status=Order.OrderStatus.DRAFT)
+            if active_branch:
+                draft_qs = draft_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+            order = draft_qs.order_by('-order_time').first()
+
+        return JsonResponse({
+            'success': True,
+            'order': serialize_pos_order(order),
+            'active_orders': get_pos_active_orders(restaurant, active_branch)
+        })
+
+    elif request.method == 'POST':
+        import json
+        try:
+            data = json.loads(request.body.decode('utf-8'))
+        except Exception:
+            data = request.POST
+
+        order_id = data.get('order_id')
+        customer_name = (data.get('customer_name') or 'Walk-in Guest').strip()
+        phone = (data.get('phone') or '').strip()
+        notes = (data.get('notes') or '').strip()
+        order_type = data.get('order_type') or 'dine_in'
+        table_id = data.get('table_id') or data.get('table')
+        guest_count = data.get('guest_count') or data.get('covers')
+
+        table_obj = None
+        if table_id:
+            table_obj = Table.objects.filter(pk=table_id, restaurant=restaurant).first()
+            if table_obj:
+                order_type = 'dine_in'
+
+        if order_id:
+            order = Order.objects.filter(pk=order_id, restaurant=restaurant).first()
+            if order:
+                order.customer_name = customer_name
+                order.phone = phone
+                order.notes = notes
+                order.order_type = order_type
+                order.table = table_obj
+                order.table_number = table_obj.table_number if table_obj else None
+                if guest_count:
+                    order.guest_count = int(guest_count)
+                order.save()
+        else:
+            order = Order.objects.create(
+                restaurant=restaurant,
+                branch=active_branch,
+                status=Order.OrderStatus.DRAFT,
+                customer_name=customer_name,
+                phone=phone,
+                notes=notes,
+                order_type=order_type,
+                table=table_obj,
+                table_number=table_obj.table_number if table_obj else None,
+                guest_count=int(guest_count) if guest_count else 2
+            )
+
+        return JsonResponse({
+            'success': True,
+            'order_id': order.id,
+            'order_number': order.order_number or f"ORD-{order.id:04d}",
+            'order': serialize_pos_order(order),
+            'active_orders': get_pos_active_orders(restaurant, active_branch)
+        })
+
+
+@login_required
+@user_passes_test(is_admin)
+def pos_sync_draft_items_api(request, restaurant_slug=None):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST required'}, status=405)
+
+    try:
+        restaurant = request.user.restaurant_profile.restaurant
+    except RestaurantUser.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'No restaurant profile'}, status=403)
+
+    active_branch = get_active_branch(request, restaurant)
+
+    import json
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+
+    def safe_dec(val, default='0.00'):
+        try:
+            return Decimal(str(val or '0'))
+        except Exception:
+            return Decimal(default)
+
+    order_id = data.get('order_id')
+    customer_name = (data.get('customer_name') or 'Walk-in Guest').strip()
+    phone = (data.get('phone') or '').strip()
+    notes = (data.get('notes') or '').strip()
+    order_type = data.get('order_type') or 'dine_in'
+    table_id = data.get('table_id') or data.get('table')
+    guest_count = data.get('guest_count') or data.get('covers')
+
+    table_obj = None
+    if table_id:
+        table_obj = Table.objects.filter(pk=table_id, restaurant=restaurant).first()
+        if table_obj:
+            order_type = 'dine_in'
+
+    subtotal_val = safe_dec(data.get('subtotal'))
+    tax_amount_val = safe_dec(data.get('tax_amount'))
+    discount_amount_val = safe_dec(data.get('discount_amount'))
+    discount_type_val = (data.get('discount_type') or 'flat').strip()
+    discount_value_val = safe_dec(data.get('discount_value'))
+    discount_reason_val = (data.get('discount_reason') or '').strip() or None
+    round_off_amount_val = safe_dec(data.get('round_off_amount'))
+    grand_total_val = safe_dec(data.get('grand_total'))
+
+    from django.db import transaction
+    with transaction.atomic():
+        if order_id:
+            order = Order.objects.filter(pk=order_id, restaurant=restaurant).first()
+            if not order:
+                order = Order.objects.create(
+                    restaurant=restaurant,
+                    branch=active_branch,
+                    status=Order.OrderStatus.DRAFT,
+                    customer_name=customer_name,
+                    phone=phone,
+                    notes=notes,
+                    order_type=order_type,
+                    table=table_obj,
+                    table_number=table_obj.table_number if table_obj else None,
+                    guest_count=int(guest_count) if guest_count else 2
+                )
+            else:
+                order.customer_name = customer_name
+                order.phone = phone
+                order.notes = notes
+                order.order_type = order_type
+                order.table = table_obj
+                order.table_number = table_obj.table_number if table_obj else None
+                if guest_count:
+                    order.guest_count = int(guest_count)
+        else:
+            order = Order.objects.create(
+                restaurant=restaurant,
+                branch=active_branch,
+                status=Order.OrderStatus.DRAFT,
+                customer_name=customer_name,
+                phone=phone,
+                notes=notes,
+                order_type=order_type,
+                table=table_obj,
+                table_number=table_obj.table_number if table_obj else None,
+                guest_count=int(guest_count) if guest_count else 2
+            )
+
+        # 1. Sync items first using bulk_create to avoid intermediate individual item save triggers
+        items_data = data.get('items', [])
+        if isinstance(items_data, list):
+            OrderItem.objects.filter(order=order).delete()
+            new_items = []
+            for it in items_data:
+                item_id = it.get('menu_item_id') or it.get('id')
+                qty = int(it.get('quantity') or 0)
+                u_price = safe_dec(it.get('unit_price') or it.get('price'))
+                if not item_id or qty <= 0:
+                    continue
+
+                mi = MenuItem.objects.filter(pk=item_id, restaurant=restaurant).first()
+                if not mi:
+                    continue
+                if u_price <= 0:
+                    u_price = mi.price
+
+                disc_type = it.get('discount_type', 'flat') or 'flat'
+                disc_val = safe_dec(it.get('discount_value'))
+                disc_amt = safe_dec(it.get('discount_amount'))
+                disc_reason = (it.get('discount_reason') or '').strip() or None
+                it_notes = (it.get('notes') or it.get('note') or '').strip()
+
+                new_items.append(OrderItem(
+                    order=order,
+                    menu_item=mi,
+                    quantity=qty,
+                    unit_price=u_price,
+                    discount_type=disc_type,
+                    discount_value=disc_val,
+                    discount_amount=disc_amt,
+                    discount_reason=disc_reason,
+                    notes=it_notes
+                ))
+            if new_items:
+                OrderItem.objects.bulk_create(new_items)
+
+        # 2. Persist order discount and computed totals
+        order.subtotal = subtotal_val
+        order.tax_amount = tax_amount_val
+        order.discount_amount = discount_amount_val
+        order.discount_type = discount_type_val
+        order.discount_value = discount_value_val
+        order.discount_reason = discount_reason_val
+        order.round_off_amount = round_off_amount_val
+        order.total_amount = grand_total_val
+        order.save()
+
+    return JsonResponse({
+        'success': True,
+        'order_id': order.id,
+        'order_number': order.order_number or f"ORD-{order.id:04d}",
+        'order': serialize_pos_order(order),
+        'active_orders': get_pos_active_orders(restaurant, active_branch)
+    })
+
+
+@login_required
+@user_passes_test(is_admin)
+def pos_finalize_order_api(request, restaurant_slug=None):
+    return order_create_manual(request, restaurant_slug=restaurant_slug)
 
 
 @login_required
@@ -817,6 +1703,28 @@ def order_edit_manual(request, pk, restaurant_slug=None):
                     'unit_price': u_price
                 })
 
+        initial_payment_status = order.payment_status
+        receipt_no_input = (data.get('receipt_no') or data.get('advance_receipt_no') or '').strip()
+        advance_amount_input = safe_decimal(data.get('advance_amount') or data.get('advance_amount_paid'))
+
+        arc = None
+        if receipt_no_input:
+            arc = AdvanceReceipt.objects.filter(restaurant=restaurant, receipt_no=receipt_no_input).first()
+        elif order and order.advance_receipt:
+            arc = order.advance_receipt
+
+        if arc:
+            order.advance_receipt = arc
+            if advance_amount_input > 0:
+                order.advance_amount_paid = advance_amount_input
+            elif arc.advance_amount > 0:
+                order.advance_amount_paid = arc.advance_amount
+            order.save(update_fields=['advance_receipt', 'advance_amount_paid'])
+            if action in ['settle_order', 'print_close'] or data.get('payment_status') == 'paid' or initial_payment_status == Order.PaymentStatus.PAID:
+                arc.status = AdvanceReceipt.ReceiptStatus.REDEEMED
+                arc.order = order
+                arc.save(update_fields=['status', 'order'])
+
         if isinstance(items_data, list):
             order.items.all().delete()
             for item in items_data:
@@ -830,9 +1738,16 @@ def order_edit_manual(request, pk, restaurant_slug=None):
                 if not item_id or qty <= 0:
                     continue
                 try:
-                    menu_item = MenuItem.objects.get(pk=item_id, restaurant=restaurant)
+                    mi_filter = {'pk': item_id, 'restaurant': restaurant}
+                    edit_branch = get_active_branch(request, restaurant)
+                    if edit_branch:
+                        mi_filter['branch'] = edit_branch
+                    menu_item = MenuItem.objects.get(**mi_filter)
                 except MenuItem.DoesNotExist:
-                    continue
+                    try:
+                        menu_item = MenuItem.objects.get(pk=item_id, restaurant=restaurant)
+                    except MenuItem.DoesNotExist:
+                        continue
                 if u_price <= 0:
                     u_price = menu_item.price
 
@@ -842,6 +1757,10 @@ def order_edit_manual(request, pk, restaurant_slug=None):
                     quantity=qty,
                     unit_price=u_price,
                 )
+
+        discount_amount_val = safe_decimal(data.get('discount_amount'))
+        if discount_amount_val > 0:
+            order.discount_amount = discount_amount_val
 
         if grand_total_val > 0:
             order.subtotal = subtotal_val
@@ -870,7 +1789,7 @@ def order_edit_manual(request, pk, restaurant_slug=None):
             elif action == 'save_liquor_invoice':
                 target_url = liquor_invoice_url
             elif action in ['save_invoice', 'save_combined_invoice']:
-                target_url = food_invoice_url  # Combined bill disabled; fallback to separate food bill
+                target_url = food_invoice_url
             else:
                 target_url = order_detail_url
 
@@ -894,15 +1813,21 @@ def order_edit_manual(request, pk, restaurant_slug=None):
         if action == 'save_liquor_invoice':
             return redirect(liquor_invoice_url)
         if action in ['save_invoice', 'save_combined_invoice']:
-            return redirect(food_invoice_url)  # Combined bill disabled; fallback to separate food bill
+            return redirect(food_invoice_url)
         return redirect(order_detail_url)
 
     # GET
-    menu_items_qs = MenuItem.objects.filter(restaurant=restaurant, availability=True).select_related('category', 'subcategory').order_by('category__name', 'name')
-    categories_qs = Category.objects.filter(restaurant=restaurant).order_by('name')
+    active_branch = get_active_branch(request, restaurant)
+    menu_items_qs = MenuItem.objects.filter(restaurant=restaurant, availability=True).select_related('category', 'subcategory')
+    categories_qs = Category.objects.filter(restaurant=restaurant)
+    if active_branch:
+        menu_items_qs = menu_items_qs.filter(branch=active_branch)
+        categories_qs = categories_qs.filter(branch=active_branch)
+    menu_items_qs = menu_items_qs.order_by('category__name', 'name')
+    categories_qs = categories_qs.order_by('name')
 
     settings_obj = RestaurantSettings.get_settings(restaurant)
-    branch_obj = restaurant.branches.first() if hasattr(restaurant, 'branches') else None
+    branch_obj = active_branch
 
     cgst_pct = float(settings_obj.cgst_percentage or 2.50)
     sgst_pct = float(settings_obj.sgst_percentage or 2.50)
@@ -930,11 +1855,13 @@ def order_edit_manual(request, pk, restaurant_slug=None):
         menu_items_list.append({
             'id': mi.id,
             'name': mi.name,
+            'short_code': mi.short_code or str(mi.id),
             'price': float(mi.price),
             'category_id': cat_id,
             'category_name': cat_name,
             'image_url': img_url,
-            'tax_type': tax_type
+            'tax_type': tax_type,
+            'is_tax_inclusive': mi.is_tax_inclusive
         })
 
     categories_list = [{'id': c.id, 'name': c.name} for c in categories_qs]
@@ -959,7 +1886,8 @@ def order_edit_manual(request, pk, restaurant_slug=None):
             'unit_price': float(item.unit_price or (mi.price if mi else 0)),
             'quantity': item.quantity,
             'tax_type': tax_type,
-            'category_name': cat_name
+            'category_name': cat_name,
+            'is_tax_inclusive': mi.is_tax_inclusive if mi else False
         })
 
     existing_order_dict = {
@@ -986,9 +1914,32 @@ def order_edit_manual(request, pk, restaurant_slug=None):
         .order_by('-total_qty')[:12]
     )
     top_selling_ids = [item['menu_item_id'] for item in top_selling_qs if item['menu_item_id']]
+    tables_qs = Table.objects.filter(restaurant=restaurant)
+    if active_branch:
+        tables_qs = tables_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    custom_charges_qs = CustomCharge.objects.filter(restaurant=restaurant, is_active=True)
+    if active_branch:
+        custom_charges_qs = custom_charges_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    custom_charges_qs = custom_charges_qs.order_by('charge_name')
+    custom_charges_list = []
+    for cc in custom_charges_qs:
+        custom_charges_list.append({
+            'id': cc.id,
+            'name': cc.charge_name,
+            'charge_name': cc.charge_name,
+            'type': cc.charge_type,
+            'value': float(cc.value),
+            'is_taxable': cc.is_taxable,
+            'applied_order_types': cc.applied_order_types or ['dine_in', 'takeaway', 'delivery'],
+            'is_auto_applied': cc.is_auto_applied,
+        })
 
-    from core.models import Table
-    tables_qs = Table.objects.filter(restaurant=restaurant).order_by('table_number')
+    cust_parties_qs = Party.objects.filter(restaurant=restaurant).order_by('name')
+    if active_branch:
+        cust_parties_qs = cust_parties_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    cust_parties_list = [{'id': p.id, 'name': p.name, 'phone': p.phone, 'email': p.email, 'gstin': p.gstin or ''} for p in cust_parties_qs]
+
+    active_branch_gstin_manual = get_branch_gstin_str(active_branch, restaurant)
 
     import json
     return render(request, 'restaurant_admin/orders/manual_create.html', {
@@ -1005,7 +1956,14 @@ def order_edit_manual(request, pk, restaurant_slug=None):
             'vat_imfl_pct': vat_imfl_pct,
             'vat_wine_pct': vat_wine_pct,
             'vat_gen_pct': vat_gen_pct,
+            'service_charge_pct': float(settings_obj.service_charge_percentage or 0),
+            'service_charge_taxable': getattr(settings_obj, 'service_charge_taxable', True),
         }),
+        'customer_parties': cust_parties_qs,
+        'customer_parties_json': json.dumps(cust_parties_list),
+        'active_branch_gstin': active_branch_gstin_manual,
+        'active_branch_gstin_json': json.dumps(active_branch_gstin_manual),
+        'custom_charges_json': json.dumps(custom_charges_list),
         'existing_order_json': json.dumps(existing_order_dict),
         'is_edit_mode': True,
         'order': order,
@@ -1017,13 +1975,14 @@ def order_edit_manual(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def menu_quick_add_api(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
         return JsonResponse({'success': False, 'error': 'No restaurant associated with account.'}, status=403)
 
+    active_branch = get_active_branch(request, restaurant)
+
     if request.method == 'POST':
-        form = MenuItemForm(request.POST, request.FILES, restaurant=restaurant)
+        form = MenuItemForm(request.POST, request.FILES, restaurant=restaurant, branch=active_branch)
         if form.is_valid():
             menu_item = form.save()
             return JsonResponse({
@@ -1034,7 +1993,8 @@ def menu_quick_add_api(request, restaurant_slug=None):
                     'price': float(menu_item.price),
                     'tax_type': menu_item.tax_type or 'GST_FOOD',
                     'category_id': menu_item.category.id if menu_item.category else None,
-                    'category_name': menu_item.category.name if menu_item.category else 'General'
+                    'category_name': menu_item.category.name if menu_item.category else 'General',
+                    'is_tax_inclusive': menu_item.is_tax_inclusive
                 }
             })
         else:
@@ -1046,16 +2006,16 @@ def menu_quick_add_api(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def inventory_edit(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
 
+    active_branch = get_active_branch(request, restaurant)
     item = get_object_or_404(InventoryItem, pk=pk, restaurant=restaurant)
+
     if request.method == 'POST':
         old_quantity = item.quantity or 0
-        form = InventoryItemForm(request.POST, instance=item, restaurant=restaurant)
+        form = InventoryItemForm(request.POST, instance=item, restaurant=restaurant, branch=active_branch)
         if form.is_valid():
             item = form.save()
             new_quantity = item.quantity or 0
@@ -1072,7 +2032,7 @@ def inventory_edit(request, pk, restaurant_slug=None):
         else:
             messages.error(request, 'Please correct the errors below.')
     else:
-        form = InventoryItemForm(instance=item, restaurant=restaurant)
+        form = InventoryItemForm(instance=item, restaurant=restaurant, branch=active_branch)
 
     return render(request, 'restaurant_admin/inventory/form.html', {
         'form': form,
@@ -1161,7 +2121,11 @@ def menu_recipe(request, pk, restaurant_slug=None):
             messages.error(request, f"Error saving recipe requirement: {str(e)}")
 
     # GET: fetch all inventory items for this restaurant
-    all_inventory = InventoryItem.objects.filter(restaurant=restaurant, is_active=True).order_by('name')
+    active_branch = get_active_branch(request, restaurant)
+    all_inventory = InventoryItem.objects.filter(restaurant=restaurant, is_active=True)
+    if active_branch:
+        all_inventory = all_inventory.filter(branch=active_branch)
+    all_inventory = all_inventory.order_by('name')
 
     return render(request, 'restaurant_admin/menu/recipe.html', {
         'menu_item': menu_item,
@@ -1197,7 +2161,21 @@ def inventory_logs(request, restaurant_slug=None):
         from django.http import HttpResponseForbidden
         return HttpResponseForbidden("No restaurant associated with this account.")
 
-    logs = InventoryTransaction.objects.filter(inventory_item__restaurant=restaurant).select_related('inventory_item', 'order', 'performed_by').order_by('-created_at')
+    active_branch = get_active_branch(request, restaurant)
+    logs_qs = InventoryTransaction.objects.filter(inventory_item__restaurant=restaurant)
+    if active_branch:
+        logs_qs = logs_qs.filter(inventory_item__branch=active_branch)
+    logs_qs = logs_qs.select_related('inventory_item', 'order', 'performed_by').order_by('-created_at')
+
+    try:
+        per_page = int(request.GET.get('per_page', 20))
+    except ValueError:
+        per_page = 20
+
+    from django.core.paginator import Paginator
+    paginator = Paginator(logs_qs, per_page)
+    page_number = request.GET.get('page')
+    logs = paginator.get_page(page_number)
 
     return render(request, 'restaurant_admin/inventory/logs.html', {
         'logs': logs,
@@ -1210,14 +2188,11 @@ def inventory_logs(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def party_list(request, restaurant_slug=None):
-    if restaurant_slug:
-        restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
-    else:
-        try:
-            restaurant = request.user.restaurant_profile.restaurant
-        except RestaurantUser.DoesNotExist:
-            from django.http import HttpResponseForbidden
-            return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
+
+    active_branch = get_active_branch(request, restaurant)
 
     if request.method == 'POST':
         party_id = request.POST.get('party_id')
@@ -1234,6 +2209,10 @@ def party_list(request, restaurant_slug=None):
         pincode = request.POST.get('pincode', '').strip()
         address = request.POST.get('address', '').strip()
 
+        if gst_registration_type == 'unregistered':
+            gstin = ''
+            place_of_supply = ''
+
         combined_parts = [p for p in [address_line1, city, state, pincode] if p]
         full_addr_str = ", ".join(combined_parts) if combined_parts else address
 
@@ -1243,6 +2222,8 @@ def party_list(request, restaurant_slug=None):
 
         if party_id:
             party = get_object_or_404(Party, id=party_id, restaurant=restaurant)
+            if not party.branch and active_branch:
+                party.branch = active_branch
             party.name = name
             party.party_type = party_type
             party.phone = phone
@@ -1260,6 +2241,7 @@ def party_list(request, restaurant_slug=None):
         else:
             party = Party.objects.create(
                 restaurant=restaurant,
+                branch=active_branch,
                 name=name,
                 party_type=party_type,
                 phone=phone,
@@ -1283,6 +2265,8 @@ def party_list(request, restaurant_slug=None):
     q = request.GET.get('q', '').strip()
 
     parties = Party.objects.filter(restaurant=restaurant)
+    if active_branch:
+        parties = parties.filter(branch=active_branch)
     if tab == 'vendor':
         parties = parties.filter(party_type__in=['vendor', 'both'])
     elif tab == 'customer':
@@ -1291,7 +2275,15 @@ def party_list(request, restaurant_slug=None):
     if q:
         parties = parties.filter(Q(name__icontains=q) | Q(phone__icontains=q) | Q(gstin__icontains=q))
 
-    parties = parties.order_by('name')
+    parties_qs = parties.order_by('name')
+
+    try:
+        per_page = int(request.GET.get('per_page', 20))
+    except ValueError:
+        per_page = 20
+    paginator = Paginator(parties_qs, per_page)
+    page_number = request.GET.get('page')
+    parties = paginator.get_page(page_number)
 
     return render(request, 'restaurant_admin/parties/list.html', {
         'restaurant': restaurant,
@@ -1342,13 +2334,28 @@ def party_ledger_detail(request, restaurant_slug, pk):
 
     party = get_object_or_404(Party, pk=pk, restaurant=restaurant)
 
+    active_branch = get_active_branch(request, restaurant)
+
     purchases = PurchaseOrder.objects.filter(restaurant=restaurant).filter(
         Q(party=party) | Q(supplier_name__iexact=party.name)
-    ).order_by('-purchase_date', '-id')
+    )
+    if active_branch:
+        purchases = purchases.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    purchases = purchases.order_by('-purchase_date', '-id')
 
     sales = Order.objects.filter(restaurant=restaurant).filter(
         Q(party=party) | Q(customer_name__iexact=party.name) | (Q(phone=party.phone) if party.phone else Q(pk=None))
-    ).exclude(status='C').order_by('-order_time', '-id')
+    ).exclude(status='C')
+    if active_branch:
+        sales = sales.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    sales = sales.order_by('-order_time', '-id')
+
+    advance_receipts = AdvanceReceipt.objects.filter(restaurant=restaurant).filter(
+        Q(party=party) | Q(customer_name__iexact=party.name) | (Q(phone=party.phone) if party.phone else Q(pk=None))
+    )
+    if active_branch:
+        advance_receipts = advance_receipts.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    advance_receipts = advance_receipts.order_by('-created_at', '-id')
 
     ledger = []
     for po in purchases:
@@ -1377,15 +2384,49 @@ def party_ledger_detail(request, restaurant_slug, pk):
             'type_code': 'SALE',
             'amount': ord_obj.total_amount,
             'payment_status': p_status,
+            'paid_amount': ord_obj.paid_amount,
+            'advance_paid': ord_obj.advance_amount_paid or Decimal('0.00'),
             'url': reverse('restaurant_admin:order_invoice', kwargs={'restaurant_slug': restaurant.slug, 'pk': ord_obj.id})
+        })
+
+    for arc in advance_receipts:
+        if not arc.party:
+            arc.party = party
+            arc.save(update_fields=['party'])
+        ref_no = arc.receipt_no
+        receipt_date = arc.event_date or arc.created_at.date()
+        ref_info = arc.reference_number or arc.booking_ref
+        if arc.order:
+            order_num = arc.order.branch_order_number or f"ORD-{arc.order.id:04d}"
+            ref_info = f"Redeemed for Order #{order_num}"
+        ledger.append({
+            'date': receipt_date,
+            'created_at': arc.created_at,
+            'ref_no': ref_no,
+            'type_label': 'Advance / Payment Receipt',
+            'type_code': 'RECEIPT',
+            'amount': arc.advance_amount,
+            'payment_status': arc.status,
+            'ref_info': ref_info,
+            'url': reverse('restaurant_admin:receipt_list', kwargs={'restaurant_slug': restaurant.slug})
         })
 
     ledger.sort(key=lambda x: (x['date'], x['created_at']), reverse=True)
 
+    try:
+        per_page = int(request.GET.get('per_page', 20))
+    except ValueError:
+        per_page = 20
+
+    from django.core.paginator import Paginator
+    paginator = Paginator(ledger, per_page)
+    page_number = request.GET.get('page')
+    ledger_page = paginator.get_page(page_number)
+
     return render(request, 'restaurant_admin/parties/ledger.html', {
         'restaurant': restaurant,
         'party': party,
-        'ledger': ledger,
+        'ledger': ledger_page,
         'active_menu': 'parties',
     })
 
@@ -1401,6 +2442,8 @@ def purchase_create(request, restaurant_slug=None):
         except RestaurantUser.DoesNotExist:
             from django.http import HttpResponseForbidden
             return HttpResponseForbidden("No restaurant associated with this account.")
+
+    active_branch = get_active_branch(request, restaurant)
 
     if request.method == 'POST':
         from django.db import transaction
@@ -1437,9 +2480,16 @@ def purchase_create(request, restaurant_slug=None):
             err = 'Supplier Name is required.'
             return JsonResponse({'success': False, 'error': err}, status=400) if is_json else (messages.error(request, err) or redirect(request.path))
 
-        if not invoice_number:
-            err = 'Supplier Bill/Invoice No. is required.'
-            return JsonResponse({'success': False, 'error': err}, status=400) if is_json else (messages.error(request, err) or redirect(request.path))
+        active_branch = get_active_branch(request, restaurant)
+        try:
+            invoice_number = get_and_increment_document_number(
+                restaurant=restaurant,
+                document_type='purchase',
+                branch=active_branch,
+                user_input_no=(data.get('entry_no') or data.get('invoice_number') or '').strip()
+            )
+        except ValidationError as ve:
+            return JsonResponse({'success': False, 'error': str(ve)}, status=400) if is_json else (messages.error(request, str(ve)) or redirect(request.path))
 
         if not items:
             err = 'Please add at least one inventory item to the purchase list.'
@@ -1447,9 +2497,11 @@ def purchase_create(request, restaurant_slug=None):
 
         try:
             with transaction.atomic():
+                sup_lookup = {'restaurant': restaurant, 'name__iexact': supplier_name}
+                if active_branch:
+                    sup_lookup['branch'] = active_branch
                 supplier, _ = Supplier.objects.get_or_create(
-                    restaurant=restaurant,
-                    name__iexact=supplier_name,
+                    **sup_lookup,
                     defaults={
                         'name': supplier_name,
                         'gstin': (data.get('supplier_gstin') or '').strip()
@@ -1462,9 +2514,11 @@ def purchase_create(request, restaurant_slug=None):
                         supplier.save(update_fields=['gstin'])
 
                 # Find or create Party
+                party_lookup = {'restaurant': restaurant, 'name__iexact': supplier_name}
+                if active_branch:
+                    party_lookup['branch'] = active_branch
                 party, _ = Party.objects.get_or_create(
-                    restaurant=restaurant,
-                    name__iexact=supplier_name,
+                    **party_lookup,
                     defaults={
                         'name': supplier_name,
                         'party_type': Party.PartyType.VENDOR,
@@ -1476,26 +2530,51 @@ def purchase_create(request, restaurant_slug=None):
                     party.save(update_fields=['gstin'])
 
                 subtotal = Decimal('0.00')
+                calc_total_tax = Decimal('0.00')
                 parsed_items = []
                 for item_data in items:
                     item_id = item_data.get('item_id')
-                    inv_item = get_object_or_404(InventoryItem, id=item_id, restaurant=restaurant)
+                    # Scope inventory item lookup to branch if possible
+                    inv_filter = {'id': item_id, 'restaurant': restaurant}
+                    if active_branch:
+                        inv_filter['branch'] = active_branch
+                    try:
+                        inv_item = InventoryItem.objects.get(**inv_filter)
+                    except InventoryItem.DoesNotExist:
+                        inv_item = get_object_or_404(InventoryItem, id=item_id, restaurant=restaurant)
                     qty = Decimal(str(item_data.get('quantity') or 1))
                     cost = Decimal(str(item_data.get('unit_cost') if item_data.get('unit_cost') is not None else (inv_item.price_per_unit or 0)))
+                    
+                    user_gst = item_data.get('gst_rate')
+                    if user_gst is not None and str(user_gst) != '':
+                        gst_rate_val = Decimal(str(user_gst))
+                    else:
+                        eff_gst_rate = inv_item.get_effective_value('default_gst_rate')
+                        gst_rate_val = Decimal(str(eff_gst_rate if eff_gst_rate is not None else 0))
+                    eff_hsn_code = inv_item.get_effective_value('default_hsn_code') or ''
+
                     line_total = (qty * cost).quantize(Decimal('0.01'))
+                    line_gst = (line_total * gst_rate_val / Decimal('100.00')).quantize(Decimal('0.01'))
+                    
                     subtotal += line_total
+                    calc_total_tax += line_gst
+
                     parsed_items.append({
                         'inventory_item': inv_item,
                         'quantity': qty,
                         'unit_cost': cost,
+                        'gst_rate': gst_rate_val,
+                        'hsn_code': eff_hsn_code,
                         'line_total': line_total
                     })
 
-                tax_amount = Decimal(str(data.get('tax_amount') or 0)).quantize(Decimal('0.01'))
+                user_tax = data.get('tax_amount')
+                tax_amount = Decimal(str(user_tax if user_tax is not None else calc_total_tax)).quantize(Decimal('0.01'))
                 grand_total = subtotal + tax_amount
 
                 po = PurchaseOrder.objects.create(
                     restaurant=restaurant,
+                    branch=active_branch,
                     party=party,
                     supplier=supplier,
                     supplier_name=supplier.name,
@@ -1516,6 +2595,8 @@ def purchase_create(request, restaurant_slug=None):
                         inventory_item=pi['inventory_item'],
                         quantity=pi['quantity'],
                         unit_cost=pi['unit_cost'],
+                        gst_rate=pi['gst_rate'],
+                        hsn_code=pi['hsn_code'],
                         line_total=pi['line_total']
                     )
 
@@ -1554,40 +2635,79 @@ def purchase_create(request, restaurant_slug=None):
             return redirect(request.path)
 
     # GET request
-    suppliers = Supplier.objects.filter(restaurant=restaurant).order_by('name')
-    vendor_parties = Party.objects.filter(restaurant=restaurant, party_type__in=['vendor', 'both']).order_by('name')
-    inventory_items = InventoryItem.objects.filter(restaurant=restaurant, is_active=True).order_by('name')
+    suppliers = Supplier.objects.filter(restaurant=restaurant)
+    if active_branch:
+        suppliers = suppliers.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    suppliers = suppliers.order_by('name')
+
+    vendor_parties = Party.objects.filter(restaurant=restaurant, party_type__in=['vendor', 'both'])
+    if active_branch:
+        vendor_parties = vendor_parties.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    vendor_parties = vendor_parties.order_by('name')
+
+    vendor_parties_list = [
+        {
+            'id': str(p.id),
+            'name': p.name,
+            'gstin': p.gstin or '',
+            'phone': p.phone or '',
+            'email': p.email or ''
+        }
+        for p in vendor_parties
+    ]
+    for supp in suppliers:
+        if not any(v['name'].lower() == supp.name.lower() for v in vendor_parties_list):
+            vendor_parties_list.append({
+                'id': f'supp_{supp.id}',
+                'name': supp.name,
+                'gstin': supp.gstin or '',
+                'phone': supp.phone or '',
+                'email': ''
+            })
+
+    inventory_items = InventoryItem.objects.filter(restaurant=restaurant, is_active=True)
+    if active_branch:
+        inventory_items = inventory_items.filter(branch=active_branch)
+    inventory_items = inventory_items.select_related('category', 'category__parent', 'restaurant').order_by('name')
     
     inventory_items_list = []
     for item in inventory_items:
+        eff_gst = item.get_effective_value('default_gst_rate')
+        eff_hsn = item.get_effective_value('default_hsn_code')
+        eff_taxability = item.get_effective_value('taxability')
         inventory_items_list.append({
             'id': item.id,
             'name': item.name,
             'sku': item.sku or '',
-            'category': item.get_category_display() if hasattr(item, 'get_category_display') else item.category,
+            'category': str(item.category) if item.category else '',
             'unit': item.unit or 'unit',
             'quantity': item.quantity,
             'cost_price': float(item.unit_cost),
-            'hsn_sac_code': item.hsn_sac_code or '',
-            'gst_rate': float(item.gst_rate or 0),
-            'taxability_type': item.taxability_type or 'taxable'
+            'hsn_sac_code': str(eff_hsn or ''),
+            'gst_rate': float(eff_gst if eff_gst is not None else 0),
+            'taxability_type': str(eff_taxability or 'taxable')
         })
-    categories = [choice[0] for choice in InventoryItem.CategoryChoices.choices]
+    categories_qs = InventoryCategory.objects.filter(restaurant=restaurant)
+    if active_branch:
+        categories_qs = categories_qs.filter(branch=active_branch)
+    categories = list(categories_qs.values_list('name', flat=True))
     today_date = timezone.now().strftime('%Y-%m-%d')
 
-    last_po = PurchaseOrder.objects.filter(restaurant=restaurant).order_by('-id').first()
-    next_po_id = (last_po.id + 1001) if last_po else 1001
-    entry_no = f"PO-{next_po_id}"
+    seq_info = get_document_sequence_info(restaurant, 'purchase', branch=active_branch)
+    entry_no = seq_info['next_number']
 
     return render(request, 'restaurant_admin/purchases/create.html', {
         'restaurant': restaurant,
         'suppliers': suppliers,
         'vendor_parties': vendor_parties,
+        'vendor_parties_json': json.dumps(vendor_parties_list),
         'inventory_items': inventory_items,
         'inventory_items_json': json.dumps(inventory_items_list),
         'categories': categories,
+        'category_objects': categories_qs,
         'today_date': today_date,
         'entry_no': entry_no,
+        'seq_info': seq_info,
         'active_menu': 'purchases',
     })
 
@@ -1604,9 +2724,17 @@ def purchase_list(request, restaurant_slug=None):
             from django.http import HttpResponseForbidden
             return HttpResponseForbidden("No restaurant associated with this account.")
 
-    purchases = PurchaseOrder.objects.filter(restaurant=restaurant).select_related('supplier', 'created_by').prefetch_related('items__inventory_item').order_by('-purchase_date', '-id')
+    active_branch = get_active_branch(request, restaurant)
+    purchases = PurchaseOrder.objects.filter(restaurant=restaurant)
+    if active_branch:
+        purchases = purchases.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    purchases = purchases.select_related('supplier', 'created_by').prefetch_related('items__inventory_item').order_by('-purchase_date', '-id')
 
-    paginator = Paginator(purchases, 20)
+    try:
+        per_page = int(request.GET.get('per_page', 20))
+    except ValueError:
+        per_page = 20
+    paginator = Paginator(purchases, per_page)
     page = request.GET.get('page')
     try:
         purchases_page = paginator.page(page)
@@ -1620,6 +2748,58 @@ def purchase_list(request, restaurant_slug=None):
         'purchases': purchases_page,
         'active_menu': 'purchases',
     })
+
+
+@login_required
+@user_passes_test(is_admin)
+def purchase_edit(request, restaurant_slug=None, pk=None):
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
+
+    po = get_object_or_404(PurchaseOrder, pk=pk, restaurant=restaurant)
+
+    if request.method == 'POST':
+        invoice_number = request.POST.get('invoice_number', '').strip()
+        purchase_date = request.POST.get('purchase_date', '').strip()
+        supplier_name = request.POST.get('supplier_name', '').strip()
+        supplier_gstin = request.POST.get('supplier_gstin', '').strip()
+        payment_method = request.POST.get('payment_method', po.payment_method)
+        payment_status = request.POST.get('payment_status', po.payment_status)
+
+        if not invoice_number:
+            messages.error(request, "Invoice / Ref Number is required.")
+            return redirect('restaurant_admin:purchase_list', restaurant_slug=restaurant.slug)
+
+        # Validate unique invoice number for this restaurant excluding current PO
+        try:
+            validate_unique_document_number(restaurant, 'purchase', invoice_number, exclude_pk=po.pk)
+        except ValidationError as ve:
+            messages.error(request, str(ve))
+            return redirect('restaurant_admin:purchase_list', restaurant_slug=restaurant.slug)
+
+        po.invoice_number = invoice_number
+        if purchase_date:
+            try:
+                po.purchase_date = datetime.strptime(purchase_date, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        if supplier_name:
+            po.supplier_name = supplier_name
+            if po.supplier and po.supplier.name != supplier_name:
+                po.supplier.name = supplier_name
+                po.supplier.save(update_fields=['name'])
+        po.supplier_gstin = supplier_gstin
+        if payment_method in [c[0] for c in PurchaseOrder.PaymentMethod.choices]:
+            po.payment_method = payment_method
+        if payment_status in [c[0] for c in PurchaseOrder.PaymentStatus.choices]:
+            po.payment_status = payment_status
+
+        po.save()
+        messages.success(request, f"Purchase entry #{po.id} updated successfully!")
+        return redirect('restaurant_admin:purchase_list', restaurant_slug=restaurant.slug)
+
+    return redirect('restaurant_admin:purchase_list', restaurant_slug=restaurant.slug)
 
 
 class MenuListView(ListView):
@@ -1647,37 +2827,57 @@ def dashboard(request, restaurant_slug=None):
     if not isinstance(restaurant, Restaurant):
         return restaurant  # HttpResponse
 
+    # Resolve active branch
+    profile = getattr(request.user, 'restaurant_profile', None)
+    active_branch = profile.branch if profile else None
+    if not active_branch and restaurant:
+        branch_id = request.GET.get('branch_id') or request.session.get(f'active_branch_{restaurant.id}')
+        if branch_id and str(branch_id).isdigit():
+            active_branch = restaurant.branches.filter(id=int(branch_id)).first()
+            if active_branch:
+                request.session[f'active_branch_{restaurant.id}'] = active_branch.id
+        if not active_branch:
+            active_branch = restaurant.branches.first()
+            if active_branch:
+                request.session[f'active_branch_{restaurant.id}'] = active_branch.id
+
     # Get today's date
     today = timezone.now()
     
-    # Get statistics (scoped to restaurant)
-    total_orders = Order.objects.filter(restaurant=restaurant).exclude(status=Order.OrderStatus.DRAFT).count()
-    today_orders = Order.objects.filter(restaurant=restaurant, order_time__date=today.date()).exclude(status=Order.OrderStatus.DRAFT).count()
-    total_menu_items = MenuItem.objects.filter(restaurant=restaurant).count()
+    # Base order queryset scoped to active_branch
+    base_orders = Order.objects.filter(restaurant=restaurant)
+    if active_branch:
+        base_orders = base_orders.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+
+    # Get statistics (scoped to branch)
+    total_orders = base_orders.exclude(status=Order.OrderStatus.DRAFT).count()
+    today_orders = base_orders.filter(order_time__date=today.date()).exclude(status=Order.OrderStatus.DRAFT).count()
+    menu_items_qs_dash = MenuItem.objects.filter(restaurant=restaurant)
+    if active_branch:
+        menu_items_qs_dash = menu_items_qs_dash.filter(branch=active_branch)
+    total_menu_items = menu_items_qs_dash.count()
     
     # Calculate total revenue from completed/served orders only (excluding drafts)
-    total_revenue = Order.objects.filter(
-        restaurant=restaurant,
+    total_revenue = base_orders.filter(
         status__in=['C', 'S']  # Completed or Served
     ).exclude(status=Order.OrderStatus.DRAFT).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
 
     # Today's advance collections (Cashflow for end-of-day drawer balance)
-    today_advance_collected = Order.objects.filter(
-        restaurant=restaurant,
+    today_advance_collected = base_orders.filter(
         order_time__date=today.date()
     ).aggregate(s=Sum('advance_amount_paid'))['s'] or Decimal('0.00')
     
     # Get recent orders
-    recent_orders = Order.objects.filter(restaurant=restaurant).order_by('-order_time')[:5]
+    recent_orders = base_orders.order_by('-order_time')[:5]
     
     # Get top selling items
-    top_items = OrderItem.objects.filter(order__restaurant=restaurant).values(
+    top_items = OrderItem.objects.filter(order__in=base_orders).values(
         'menu_item__name'
     ).annotate(
         total_ordered=Sum('quantity')
     ).order_by('-total_ordered')[:5]
     
-    agg_dash = Order.objects.filter(restaurant=restaurant).aggregate(
+    agg_dash = base_orders.aggregate(
         latest_order_time=Max('order_time'),
         total_orders=Count('id'),
     )
@@ -1727,19 +2927,26 @@ def menu_list(request, restaurant_slug=None):
     if not isinstance(restaurant, Restaurant):
         return restaurant
     
-    # Get search query and category filter
+    active_branch = get_active_branch(request, restaurant)
     search_query = request.GET.get('q', '')
     category_id = request.GET.get('category')
+
+    # Get all categories for the filter dropdown (scoped to branch)
+    categories = Category.objects.filter(restaurant=restaurant)
+    if active_branch:
+        categories = categories.filter(branch=active_branch)
+    categories = categories.order_by('name')
     
-    # Get all categories for the filter dropdown (scoped)
-    categories = Category.objects.filter(restaurant=restaurant).order_by('name')
-    
-    # Base queryset scoped to restaurant
-    menu_items = MenuItem.objects.select_related('subcategory__category').filter(restaurant=restaurant)
+    # Base queryset scoped to restaurant & branch
+    menu_items = MenuItem.objects.select_related('category', 'subcategory__category').filter(restaurant=restaurant)
+    if active_branch:
+        menu_items = menu_items.filter(branch=active_branch)
     
     # Apply category filter if selected
     if category_id:
-        menu_items = menu_items.filter(subcategory__category_id=category_id)
+        menu_items = menu_items.filter(
+            Q(category_id=category_id) | Q(subcategory__category_id=category_id)
+        )
     
     # Apply search filter if query exists
     if search_query:
@@ -1747,14 +2954,19 @@ def menu_list(request, restaurant_slug=None):
             Q(name__icontains=search_query) |
             Q(description__icontains=search_query) |
             Q(subcategory__name__icontains=search_query) |
-            Q(subcategory__category__name__icontains=search_query)
+            Q(subcategory__category__name__icontains=search_query) |
+            Q(category__name__icontains=search_query)
         )
     
     # Order by category and name
-    menu_items = menu_items.order_by('subcategory__category__name', 'name')
+    menu_items = menu_items.order_by('category__name', 'subcategory__category__name', 'name')
     
     # Paginate the menu items
-    paginator = Paginator(menu_items, 12)  # Show 12 items per page (3x4 grid)
+    try:
+        per_page = int(request.GET.get('per_page', 12))
+    except ValueError:
+        per_page = 12
+    paginator = Paginator(menu_items, per_page)
     page_number = request.GET.get('page')
     
     try:
@@ -1769,14 +2981,17 @@ def menu_list(request, restaurant_slug=None):
     if 'page' in url_params:
         del url_params['page']
     
+    rslug = (active_branch.slug if (active_branch and active_branch.slug) else restaurant.slug)
     context = {
         'menu_items': page_obj,
         'categories': categories,
         'search_query': search_query,
-        'active_menu': 'menu_list',  # This should match the menu item's active class check
+        'active_menu': 'menu_list',
         'title': 'Menu Management',
         'url_params': url_params.urlencode() if url_params else '',
         'restaurant': restaurant,
+        'rslug': rslug,
+        'current_branch': active_branch,
     }
     
     return render(request, 'restaurant_admin/menu/dashboard.html', context)
@@ -1785,39 +3000,46 @@ def menu_list(request, restaurant_slug=None):
 @user_passes_test(is_admin)
 def menu_add(request, restaurant_slug=None):
     # Resolve restaurant
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
+
+    active_branch = get_active_branch(request, restaurant)
 
     if request.method == 'POST':
-        form = MenuItemForm(request.POST, request.FILES, restaurant=restaurant)
+        form = MenuItemForm(request.POST, request.FILES, restaurant=restaurant, branch=active_branch)
         if form.is_valid():
-            # Form enforces category/subcategory; save directly
             menu_item = form.save()
             messages.success(request, 'Menu item added successfully!')
             return redirect('restaurant_admin:menu_list', restaurant_slug=restaurant.slug)
         else:
             messages.error(request, 'Please correct the errors below.')
     else:
-        form = MenuItemForm(restaurant=restaurant)
+        form = MenuItemForm(restaurant=restaurant, branch=active_branch)
     
+    categories_qs = Category.objects.filter(restaurant=restaurant)
+    if active_branch:
+        categories_qs = categories_qs.filter(branch=active_branch)
+
+    rslug = (active_branch.slug if (active_branch and active_branch.slug) else restaurant.slug)
     return render(request, 'restaurant_admin/menu/form.html', {
         'form': form, 
         'title': 'Add Menu Item',
-        'categories': Category.objects.all(),
+        'categories': categories_qs,
         'restaurant': restaurant,
+        'rslug': rslug,
+        'current_branch': active_branch,
+        'active_menu': 'menu_list',
     })
 
 @login_required
 @user_passes_test(is_admin)
 def menu_bulk_add(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
+
+    active_branch = get_active_branch(request, restaurant)
 
     if request.method == 'POST':
         import json
@@ -1870,7 +3092,8 @@ def menu_bulk_add(request, restaurant_slug=None):
             cat_name = str(item.get('category', 'General')).strip() or 'General'
             category, _ = Category.objects.get_or_create(
                 name=cat_name,
-                restaurant=restaurant
+                restaurant=restaurant,
+                branch=active_branch
             )
 
             subcat_name = str(item.get('subcategory', '')).strip()
@@ -1888,14 +3111,17 @@ def menu_bulk_add(request, restaurant_slug=None):
                 tax_type = MenuItem.TaxType.GST_FOOD
 
             availability = bool(item.get('availability', True))
+            is_tax_inclusive = bool(item.get('is_tax_inclusive', False))
 
             menu_item, created = MenuItem.objects.update_or_create(
                 name=name,
                 restaurant=restaurant,
+                branch=active_branch,
                 defaults={
                     'description': description,
                     'price': price,
                     'tax_type': tax_type,
+                    'is_tax_inclusive': is_tax_inclusive,
                     'category': category,
                     'subcategory': subcategory,
                     'availability': availability,
@@ -1908,7 +3134,8 @@ def menu_bulk_add(request, restaurant_slug=None):
                 updated_count += 1
 
         if created_count > 0 or updated_count > 0:
-            messages.success(request, f"Successfully imported menu items ({created_count} created, {updated_count} updated).")
+            branch_label = f" for branch '{active_branch.name}'" if active_branch else ""
+            messages.success(request, f"Successfully imported menu items ({created_count} created, {updated_count} updated){branch_label}.")
 
         if error_list:
             for err in error_list[:10]:
@@ -1949,10 +3176,13 @@ def menu_bulk_add(request, restaurant_slug=None):
         }
     ], indent=2)
 
+    rslug = (active_branch.slug if (active_branch and active_branch.slug) else restaurant.slug)
     return render(request, 'restaurant_admin/menu/bulk_add.html', {
         'title': 'Bulk Import Menu Items (JSON)',
         'sample_json': sample_json,
         'restaurant': restaurant,
+        'rslug': rslug,
+        'current_branch': active_branch,
         'active_menu': 'menu_list',
     })
 
@@ -1960,15 +3190,16 @@ def menu_bulk_add(request, restaurant_slug=None):
 @user_passes_test(is_admin)
 def menu_edit(request, pk, restaurant_slug=None):
     # Resolve restaurant and ensure object belongs to it
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
 
+    active_branch = get_active_branch(request, restaurant)
     menu_item = get_object_or_404(MenuItem, pk=pk, restaurant=restaurant)
+    item_branch = menu_item.branch or active_branch
+
     if request.method == 'POST':
-        form = MenuItemForm(request.POST, request.FILES, instance=menu_item, restaurant=restaurant)
+        form = MenuItemForm(request.POST, request.FILES, instance=menu_item, restaurant=restaurant, branch=item_branch)
         if form.is_valid():
             menu_item = form.save()
             messages.success(request, 'Menu item updated successfully!')
@@ -1976,29 +3207,44 @@ def menu_edit(request, pk, restaurant_slug=None):
         else:
             messages.error(request, 'Please correct the errors below.')
     else:
-        form = MenuItemForm(instance=menu_item, restaurant=restaurant)
+        form = MenuItemForm(instance=menu_item, restaurant=restaurant, branch=item_branch)
         
+    categories_qs = Category.objects.filter(restaurant=restaurant)
+    if item_branch:
+        categories_qs = categories_qs.filter(branch=item_branch)
+
+    rslug = (active_branch.slug if (active_branch and active_branch.slug) else restaurant.slug)
     return render(request, 'restaurant_admin/menu/form.html', {
         'form': form, 
         'title': 'Edit Menu Item',
-        'categories': Category.objects.all(),
+        'categories': categories_qs,
         'restaurant': restaurant,
+        'rslug': rslug,
+        'current_branch': active_branch,
+        'active_menu': 'menu_list',
     })
 
 @login_required
 @user_passes_test(is_admin)
 def menu_delete(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
+
     menu_item = get_object_or_404(MenuItem, pk=pk, restaurant=restaurant)
     if request.method == 'POST':
         menu_item.delete()
         messages.success(request, 'Menu item deleted successfully!')
         return redirect('restaurant_admin:menu_list', restaurant_slug=restaurant.slug)
-    return render(request, 'restaurant_admin/confirm_delete.html', {'object': menu_item, 'restaurant': restaurant})
+
+    active_branch = get_active_branch(request, restaurant)
+    rslug = (active_branch.slug if (active_branch and active_branch.slug) else restaurant.slug)
+    return render(request, 'restaurant_admin/confirm_delete.html', {
+        'object': menu_item, 
+        'restaurant': restaurant, 
+        'rslug': rslug,
+        'current_branch': active_branch,
+    })
 @login_required
 @user_passes_test(is_admin)
 def order_list(request, restaurant_slug=None):
@@ -2040,7 +3286,11 @@ def order_list(request, restaurant_slug=None):
         )
 
     # Paginate
-    paginator = Paginator(orders_qs, 10)
+    try:
+        per_page = int(request.GET.get('per_page', 10))
+    except ValueError:
+        per_page = 10
+    paginator = Paginator(orders_qs, per_page)
     page_number = request.GET.get('page')
     try:
         page_obj = paginator.page(page_number)
@@ -2150,10 +3400,18 @@ def order_list(request, restaurant_slug=None):
 def _filter_order_queryset(request, restaurant):
     profile = getattr(request.user, 'restaurant_profile', None)
     branch = profile.branch if profile else None
+    if not branch and restaurant:
+        branch_id = request.GET.get('branch_id') or request.session.get(f'active_branch_{restaurant.id}')
+        if branch_id and str(branch_id).isdigit():
+            branch = restaurant.branches.filter(id=int(branch_id)).first()
+            if branch:
+                request.session[f'active_branch_{restaurant.id}'] = branch.id
+        if not branch:
+            branch = restaurant.branches.first()
 
     orders_qs = Order.objects.filter(restaurant=restaurant)
     if branch:
-        orders_qs = orders_qs.filter(branch=branch)
+        orders_qs = orders_qs.filter(Q(branch=branch) | Q(branch__isnull=True))
 
     # Search filter
     q = request.GET.get('q', '').strip()
@@ -2179,6 +3437,11 @@ def _filter_order_queryset(request, restaurant):
     payment_method = request.GET.get('payment_method', '').strip()
     if payment_method:
         orders_qs = orders_qs.filter(payment_method=payment_method)
+
+    # Order Type filter
+    order_type = request.GET.get('order_type', '').strip()
+    if order_type:
+        orders_qs = orders_qs.filter(order_type=order_type)
 
     # Date / Period filtering
     period = request.GET.get('period', '').strip()
@@ -2227,13 +3490,16 @@ def order_records(request, restaurant_slug=None):
     total_orders = orders_qs.count()
     total_revenue = orders_qs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
 
-    paid_orders = orders_qs.filter(payment_status=Order.PaymentStatus.PAID)
-    paid_revenue = paid_orders.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    paid_revenue = orders_qs.aggregate(total=Sum('paid_amount'))['total'] or Decimal('0.00')
 
     avg_order_value = (total_revenue / Decimal(total_orders)) if total_orders > 0 else Decimal('0.00')
 
     # Paginate
-    paginator = Paginator(orders_qs, 20)
+    try:
+        per_page = int(request.GET.get('per_page', 20))
+    except ValueError:
+        per_page = 20
+    paginator = Paginator(orders_qs, per_page)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
@@ -2257,10 +3523,12 @@ def order_records(request, restaurant_slug=None):
         'status_filter': request.GET.get('status', ''),
         'payment_status_filter': request.GET.get('payment_status', ''),
         'payment_method_filter': request.GET.get('payment_method', ''),
+        'order_type_filter': request.GET.get('order_type', ''),
         'search_query': request.GET.get('q', ''),
         'order_statuses': Order.OrderStatus.choices,
         'payment_statuses': Order.PaymentStatus.choices,
         'payment_methods': Order.PaymentMethod.choices,
+        'order_types': Order.OrderType.choices,
         'url_params': url_params,
     })
 
@@ -2505,6 +3773,9 @@ def orders_stream(request, restaurant_slug=None):
         return HttpResponseForbidden("No restaurant associated with this account.")
 
     slug = getattr(restaurant, 'slug', None)
+    if restaurant_slug and slug != restaurant_slug:
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden("You do not have permission for this restaurant.")
     if not slug:
         return HttpResponseBadRequest('Missing restaurant slug')
 
@@ -2554,15 +3825,14 @@ def order_detail(request, pk, restaurant_slug=None):
     # Calculate subtotal, taxes, round off, and totals using Order breakdown
     breakdown = order.calculate_bill_breakdown(bill_type='combined')
     subtotal = breakdown['gross_subtotal']
-    cgst_percentage = breakdown['cgst_percentage']
-    sgst_percentage = breakdown['sgst_percentage']
-    service_percentage = breakdown['service_charge_percentage']
-    cgst_amount = breakdown['cgst']
-    sgst_amount = breakdown['sgst']
-    service_amount = breakdown['service_charge']
-    discount_amount = breakdown['discount_amount']
-    round_off_amount = breakdown['round_off_amount']
     total = breakdown['final_total']
+    if order.total_amount != total or order.discount_amount != breakdown['discount_amount']:
+        order.discount_amount = breakdown['discount_amount']
+        order.subtotal = breakdown['gross_subtotal']
+        order.tax_amount = breakdown['cgst'] + breakdown['sgst'] + breakdown['vat']
+        order.round_off_amount = breakdown['round_off_amount']
+        order.total_amount = total
+        order.save(update_fields=['discount_amount', 'subtotal', 'tax_amount', 'round_off_amount', 'total_amount'])
 
     # Notification sound URL
     try:
@@ -2575,15 +3845,33 @@ def order_detail(request, pk, restaurant_slug=None):
     return render(request, 'restaurant_admin/orders/detail.html', {
         'order': order,
         'active_menu': 'order_list',
+        'breakdown': breakdown,
         'subtotal': subtotal,
-        'cgst_percentage': cgst_percentage,
-        'sgst_percentage': sgst_percentage,
-        'service_percentage': service_percentage,
-        'cgst_amount': cgst_amount,
-        'sgst_amount': sgst_amount,
-        'service_amount': service_amount,
-        'discount_amount': discount_amount,
-        'round_off_amount': round_off_amount,
+        'food_subtotal': breakdown['food_subtotal'],
+        'liquor_subtotal': breakdown['liquor_subtotal'],
+        'beer_subtotal': breakdown['beer_subtotal'],
+        'imfl_subtotal': breakdown['imfl_subtotal'],
+        'wine_subtotal': breakdown['wine_subtotal'],
+        'gen_liquor_subtotal': breakdown['gen_liquor_subtotal'],
+        'cgst_percentage': breakdown['cgst_percentage'],
+        'sgst_percentage': breakdown['sgst_percentage'],
+        'service_percentage': breakdown['service_charge_percentage'],
+        'cgst_amount': breakdown['cgst'],
+        'sgst_amount': breakdown['sgst'],
+        'beer_vat': breakdown['beer_vat'],
+        'imfl_vat': breakdown['imfl_vat'],
+        'wine_vat': breakdown['wine_vat'],
+        'gen_vat': breakdown['gen_vat'],
+        'vat_amount': breakdown['vat'],
+        'vat_beer_percentage': breakdown['vat_beer_percentage'],
+        'vat_imfl_percentage': breakdown['vat_imfl_percentage'],
+        'vat_wine_percentage': breakdown['vat_wine_percentage'],
+        'vat_percentage': breakdown['vat_percentage'],
+        'custom_charges_total': breakdown.get('custom_charges_total', Decimal('0.00')),
+        'custom_charges_list': breakdown.get('custom_charges_list', []),
+        'service_amount': breakdown['service_charge'],
+        'discount_amount': breakdown['discount_amount'],
+        'round_off_amount': breakdown['round_off_amount'],
         'total': total,
         'minutes_choices': [5, 10, 15, 20, 25, 30, 45, 60, 90, 120],
         'restaurant': restaurant,
@@ -2632,7 +3920,6 @@ def order_set_prep_time(request, pk, restaurant_slug=None):
     return redirect('restaurant_admin:order_list', restaurant_slug=restaurant.slug)
 
 
-@csrf_exempt
 @login_required
 @user_passes_test(is_admin)
 def order_settle_api(request, pk, restaurant_slug=None):
@@ -2669,43 +3956,52 @@ def order_settle_api(request, pk, restaurant_slug=None):
     valid_payments = list(order.payments or [])
 
     advance_paid = order.advance_amount_paid or Decimal('0.00')
-    net_payable_target = max(Decimal('0.00'), order.total_amount - advance_paid)
+    existing_paid = order.paid_amount or Decimal('0.00')
+    order_grand_total = order.total_amount if (order.total_amount is not None and order.total_amount > Decimal('0.00')) else order.calculate_bill_breakdown()['final_total']
+    remaining_due_target = max(Decimal('0.00'), order_grand_total - advance_paid - existing_paid)
 
+    new_payments = []
     if isinstance(payments_input, list) and len(payments_input) > 0:
-        valid_payments = []
         for p in payments_input:
             amt = safe_dec(p.get('amount'))
             if amt > 0:
-                valid_payments.append({
+                new_payments.append({
                     'method': str(p.get('method') or payment_method),
                     'amount': float(amt)
                 })
-        paid_val = sum(safe_dec(p['amount']) for p in valid_payments)
+        new_paid_sum = sum(safe_dec(p['amount']) for p in new_payments)
     elif data.get('paid_amount') is not None and str(data.get('paid_amount')).strip() != '':
-        paid_val = safe_dec(data.get('paid_amount'))
-        valid_payments = [{'method': payment_method, 'amount': float(paid_val)}]
+        new_paid_sum = safe_dec(data.get('paid_amount'))
+        new_payments = [{'method': payment_method, 'amount': float(new_paid_sum)}]
     elif data.get('amount') is not None and str(data.get('amount')).strip() != '':
-        added_amt = safe_dec(data.get('amount'))
-        paid_val = (order.paid_amount or Decimal('0.00')) + added_amt
-        valid_payments.append({'method': payment_method, 'amount': float(added_amt)})
+        new_paid_sum = safe_dec(data.get('amount'))
+        new_payments = [{'method': payment_method, 'amount': float(new_paid_sum)}]
     else:
-        paid_val = net_payable_target
-        valid_payments = [{'method': payment_method, 'amount': float(net_payable_target)}]
+        new_paid_sum = remaining_due_target
+        new_payments = [{'method': payment_method, 'amount': float(remaining_due_target)}]
 
-    due_val = max(Decimal('0.00'), net_payable_target - paid_val)
+    # Check if user submitted full total or incremental remaining settlement
+    if new_paid_sum >= (order_grand_total - advance_paid):
+        total_paid_val = new_paid_sum
+        valid_payments = new_payments
+    else:
+        total_paid_val = existing_paid + new_paid_sum
+        valid_payments = list(order.payments or []) + new_payments
+
+    due_val = max(Decimal('0.00'), order_grand_total - advance_paid - total_paid_val)
 
     if due_val <= Decimal('0.00'):
         order.payment_status = Order.PaymentStatus.PAID
         order.due_amount = Decimal('0.00')
-        order.paid_amount = paid_val
-    elif (paid_val + advance_paid) > Decimal('0.00'):
+        order.paid_amount = total_paid_val
+    elif (total_paid_val + advance_paid) > Decimal('0.00'):
         order.payment_status = Order.PaymentStatus.PARTIALLY_PAID
-        order.paid_amount = paid_val
+        order.paid_amount = total_paid_val
         order.due_amount = due_val
     else:
         order.payment_status = Order.PaymentStatus.UNPAID
         order.paid_amount = Decimal('0.00')
-        order.due_amount = net_payable_target
+        order.due_amount = max(Decimal('0.00'), order_grand_total - advance_paid)
 
     if order.advance_receipt and order.advance_receipt.status == 'active':
         order.advance_receipt.status = 'redeemed'
@@ -2717,24 +4013,37 @@ def order_settle_api(request, pk, restaurant_slug=None):
     if order.status == Order.OrderStatus.PENDING:
         order.status = Order.OrderStatus.SERVED
 
-    gstin_no = (data.get('gstin_no') or data.get('gstin') or '').strip()
+    gstin_no = (data.get('gstin_no') or '').strip()
     excise_bill_no = (data.get('excise_bill_no') or data.get('excise') or '').strip()
     if gstin_no:
         order.gstin_no = gstin_no
     if excise_bill_no:
         order.excise_bill_no = excise_bill_no
 
-    if not order.party and order.customer_name and order.customer_name.lower() not in ['guest', 'walk-in guest']:
-        party, _ = Party.objects.get_or_create(
-            restaurant=restaurant,
-            name__iexact=order.customer_name,
-            defaults={
-                'name': order.customer_name,
-                'party_type': Party.PartyType.CUSTOMER,
-                'phone': order.phone,
-            }
-        )
-        order.party = party
+    customer_gstin = (data.get('customer_gstin') or data.get('party_gstin') or '').strip().upper()
+    registered_name = (data.get('registered_name') or data.get('customer_name') or '').strip()
+    if registered_name and registered_name.lower() not in ['guest', 'walk-in', 'walk-in guest']:
+        order.customer_name = registered_name
+
+    if order.customer_name and order.customer_name.lower() not in ['guest', 'walk-in', 'walk-in guest']:
+        party = order.party
+        if not party:
+            party, _ = Party.objects.get_or_create(
+                restaurant=restaurant,
+                name__iexact=order.customer_name,
+                defaults={
+                    'name': order.customer_name,
+                    'party_type': Party.PartyType.CUSTOMER,
+                    'phone': order.phone,
+                    'gstin': customer_gstin if len(customer_gstin) == 15 else '',
+                    'gst_registration_type': 'regular' if len(customer_gstin) == 15 else 'unregistered'
+                }
+            )
+            order.party = party
+        if customer_gstin and len(customer_gstin) == 15:
+            party.gstin = customer_gstin
+            party.gst_registration_type = 'regular'
+            party.save(update_fields=['gstin', 'gst_registration_type'])
 
     order.save()
 
@@ -2753,17 +4062,26 @@ def order_settle_api(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def coupon_list(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
 
+    active_branch = get_active_branch(request, restaurant)
     q = (request.GET.get('q') or '').strip()
-    coupons = Coupon.objects.filter(restaurant=restaurant) | Coupon.objects.filter(restaurant__isnull=True)
+    coupons = Coupon.objects.filter(restaurant=restaurant)
+    if active_branch:
+        coupons = coupons.filter(Q(branch=active_branch) | Q(branch__isnull=True))
     if q:
         coupons = coupons.filter(Q(code__icontains=q) | Q(description__icontains=q))
-    coupons = coupons.order_by('-updated_at')
+    coupons_qs = coupons.order_by('-updated_at')
+
+    try:
+        per_page = int(request.GET.get('per_page', 20))
+    except ValueError:
+        per_page = 20
+    paginator = Paginator(coupons_qs, per_page)
+    page_number = request.GET.get('page')
+    coupons = paginator.get_page(page_number)
 
     return render(request, 'restaurant_admin/coupons/list.html', {
         'coupons': coupons,
@@ -2776,14 +4094,14 @@ def coupon_list(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def coupon_add(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
+
+    active_branch = get_active_branch(request, restaurant)
 
     if request.method == 'POST':
-        form = CouponForm(request.POST, restaurant=restaurant)
+        form = CouponForm(request.POST, restaurant=restaurant, branch=active_branch)
         if form.is_valid():
             form.save()
             messages.success(request, 'Coupon created successfully!')
@@ -2791,7 +4109,7 @@ def coupon_add(request, restaurant_slug=None):
         else:
             messages.error(request, 'Please correct the errors below.')
     else:
-        form = CouponForm(restaurant=restaurant)
+        form = CouponForm(restaurant=restaurant, branch=active_branch)
 
     return render(request, 'restaurant_admin/coupons/form.html', {
         'form': form,
@@ -2929,12 +4247,21 @@ def order_invoice(request, pk, restaurant_slug=None):
         'wine_vat': breakdown['wine_vat'],
         'gen_vat': breakdown['gen_vat'],
         'vat_amount': breakdown['vat'],
+        'custom_charges_total': breakdown.get('custom_charges_total', Decimal('0.00')),
+        'custom_charges_list': breakdown.get('custom_charges_list', []),
         'gst_base': breakdown['gst_base'],
         'round_off_amount': breakdown['round_off_amount'],
         'total': breakdown['final_total'],
     }
 
-    return render(request, 'restaurant_admin/orders/invoice.html', context)
+    settings_obj = RestaurantSettings.get_settings(restaurant)
+    template_choice = (request.GET.get('template') or getattr(settings_obj, 'bill_template', 'thermal') or 'thermal').lower()
+    if template_choice == 'standard':
+        template_name = 'restaurant_admin/orders/invoice.html'
+    else:
+        template_name = 'restaurant_admin/orders/invoice_thermal.html'
+
+    return render(request, template_name, context)
 
 @login_required
 def order_kot(request, pk, restaurant_slug=None):
@@ -2964,12 +4291,20 @@ def order_kot(request, pk, restaurant_slug=None):
     total = max(Decimal('0.00'), subtotal + cgst_amount + sgst_amount + service_amount - discount_amount)
 
     food_items, bar_items = order.get_food_and_bar_items()
+
+    item_ids_param = request.GET.get('items')
+    if item_ids_param:
+        filter_ids = [int(x) for x in item_ids_param.split(',') if x.isdigit()]
+        if filter_ids:
+            food_items = [it for it in food_items if it.id in filter_ids]
+            bar_items = [it for it in bar_items if it.id in filter_ids]
+
     total_food_qty = sum(item.quantity for item in food_items)
     total_bar_qty = sum(item.quantity for item in bar_items)
 
     table_obj = order.table
     zone_obj = table_obj.zone if (table_obj and hasattr(table_obj, 'zone')) else None
-    total_kitchen_items = sum(item.quantity for item in order.items.all())
+    total_kitchen_items = sum(item.quantity for item in (food_items + bar_items))
 
     context = {
         'restaurant': restaurant,
@@ -2991,7 +4326,13 @@ def order_kot(request, pk, restaurant_slug=None):
         'total': total,
     }
 
-    return render(request, 'restaurant_admin/orders/kot.html', context)
+    template_choice = (request.GET.get('template') or getattr(settings_obj, 'kot_template', 'thermal') or 'thermal').lower()
+    if template_choice == 'standard':
+        template_name = 'restaurant_admin/orders/kot.html'
+    else:
+        template_name = 'restaurant_admin/orders/kot_thermal.html'
+
+    return render(request, template_name, context)
 
 @login_required
 @user_passes_test(is_admin)
@@ -3055,15 +4396,26 @@ def category_list(request, restaurant_slug=None):
     except RestaurantUser.DoesNotExist:
         from django.http import HttpResponseForbidden
         return HttpResponseForbidden("No restaurant associated with this account.")
-    # First get the count of subcategories for each category (scoped)
-    categories = Category.objects.filter(restaurant=restaurant).annotate(
+    active_branch = get_active_branch(request, restaurant)
+    # First get the count of subcategories for each category (scoped to branch)
+    categories = Category.objects.filter(restaurant=restaurant)
+    if active_branch:
+        categories = categories.filter(branch=active_branch)
+    categories = categories.annotate(
         subcategory_count=Count('subcategories', distinct=True)
     )
     
-    # Then get the count of menu items for each category
-    categories = categories.annotate(
+    categories_qs = categories.annotate(
         menu_item_count=Count('subcategories__menu_items', distinct=True)
     )
+    
+    try:
+        per_page = int(request.GET.get('per_page', 20))
+    except ValueError:
+        per_page = 20
+    paginator = Paginator(categories_qs, per_page)
+    page_number = request.GET.get('page')
+    categories = paginator.get_page(page_number)
     
     return render(request, 'restaurant_admin/categories/list.html', {
         'categories': categories,
@@ -3097,15 +4449,22 @@ def category_add(request, restaurant_slug=None):
     except RestaurantUser.DoesNotExist:
         from django.http import HttpResponseForbidden
         return HttpResponseForbidden("No restaurant associated with this account.")
+    active_branch = get_active_branch(request, restaurant)
     if request.method == 'POST':
-        form = CategoryForm(request.POST, request.FILES, restaurant=restaurant)
+        form = CategoryForm(request.POST, request.FILES, restaurant=restaurant, branch=active_branch)
         if form.is_valid():
             form.save()
             messages.success(request, 'Category added successfully!')
             return redirect('restaurant_admin:category_list', restaurant_slug=restaurant.slug)
     else:
-        form = CategoryForm(restaurant=restaurant)
-    return render(request, 'restaurant_admin/categories/form.html', {'form': form, 'title': 'Add Category'})
+        form = CategoryForm(restaurant=restaurant, branch=active_branch)
+    return render(request, 'restaurant_admin/categories/form.html', {
+        'form': form,
+        'title': 'Add Category',
+        'active_menu': 'category_list',
+        'restaurant': restaurant,
+        'rslug': restaurant.slug,
+    })
 
 @login_required
 @user_passes_test(is_admin)
@@ -3115,16 +4474,24 @@ def category_edit(request, pk, restaurant_slug=None):
     except RestaurantUser.DoesNotExist:
         from django.http import HttpResponseForbidden
         return HttpResponseForbidden("No restaurant associated with this account.")
+    active_branch = get_active_branch(request, restaurant)
     category = get_object_or_404(Category, pk=pk, restaurant=restaurant)
     if request.method == 'POST':
-        form = CategoryForm(request.POST, request.FILES, instance=category, restaurant=restaurant)
+        form = CategoryForm(request.POST, request.FILES, instance=category, restaurant=restaurant, branch=active_branch)
         if form.is_valid():
             form.save()
             messages.success(request, 'Category updated successfully!')
             return redirect('restaurant_admin:category_list', restaurant_slug=restaurant.slug)
     else:
-        form = CategoryForm(instance=category, restaurant=restaurant)
-    return render(request, 'restaurant_admin/categories/form.html', {'form': form, 'title': 'Edit Category'})
+        form = CategoryForm(instance=category, restaurant=restaurant, branch=active_branch)
+    return render(request, 'restaurant_admin/categories/form.html', {
+        'form': form,
+        'title': 'Edit Category',
+        'active_menu': 'category_list',
+        'restaurant': restaurant,
+        'rslug': restaurant.slug,
+        'category': category,
+    })
 
 @login_required
 @user_passes_test(is_admin)
@@ -3150,7 +4517,15 @@ def subcategory_list(request, restaurant_slug=None):
     except RestaurantUser.DoesNotExist:
         from django.http import HttpResponseForbidden
         return HttpResponseForbidden("No restaurant associated with this account.")
-    subcategories = SubCategory.objects.select_related('category').filter(category__restaurant=restaurant)
+    subcategories_qs = SubCategory.objects.select_related('category').filter(category__restaurant=restaurant)
+
+    try:
+        per_page = int(request.GET.get('per_page', 20))
+    except ValueError:
+        per_page = 20
+    paginator = Paginator(subcategories_qs, per_page)
+    page_number = request.GET.get('page')
+    subcategories = paginator.get_page(page_number)
     return render(request, 'restaurant_admin/subcategories/list.html', {
         'subcategories': subcategories,
         'active_menu': 'subcategory_list'
@@ -3372,9 +4747,36 @@ def settings_view(request, restaurant_slug=None):
     if not isinstance(restaurant, Restaurant):
         return restaurant
     settings_obj = RestaurantSettings.get_settings(restaurant)
-    branch = restaurant.branches.first()
 
-    custom_charges = CustomCharge.objects.filter(restaurant=restaurant, is_active=True).order_by('charge_name')
+    # Resolve active branch dynamically
+    profile = getattr(request.user, 'restaurant_profile', None)
+    branch = profile.branch if profile else None
+    if not branch and restaurant:
+        branch_id = request.GET.get('branch_id') or request.session.get(f'active_branch_{restaurant.id}')
+        if branch_id and str(branch_id).isdigit():
+            branch = restaurant.branches.filter(id=int(branch_id)).first()
+        if not branch:
+            branch = restaurant.branches.first()
+
+    if branch and not branch.slug:
+        branch.save()
+
+    active_branch = get_active_branch(request, restaurant)
+    if not branch and active_branch:
+        branch = active_branch
+
+    custom_charges = CustomCharge.objects.filter(restaurant=restaurant, is_active=True)
+    if active_branch:
+        custom_charges = custom_charges.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    custom_charges = custom_charges.order_by('charge_name')
+
+    doc_types = ['sales', 'purchase', 'receipt', 'challan']
+    if branch and branch.serves_alcohol:
+        doc_types.append('vat_bill')
+
+    doc_sequences = {}
+    for dt in doc_types:
+        doc_sequences[dt] = DocumentSequenceSetting.get_sequence_setting(restaurant, dt, branch=branch)
 
     if request.method == 'POST':
         form = RestaurantSettingsForm(request.POST, request.FILES, instance=settings_obj)
@@ -3386,26 +4788,90 @@ def settings_view(request, restaurant_slug=None):
         if form_valid and branch_valid:
             settings_instance = form.save(commit=False)
             settings_instance.restaurant = restaurant
+            # Keep global settings enabled so it does not accidentally disable other branches
+            settings_instance.enable_customer_ordering = True
             settings_instance.save()
+            
+            # Save branch-specific digital ordering & payment settings
+            if branch:
+                branch.enable_customer_ordering = form.cleaned_data.get('enable_customer_ordering', True)
+                branch.enable_online_payment = form.cleaned_data.get('enable_online_payment', False)
+                branch.enable_pay_at_counter = form.cleaned_data.get('enable_pay_at_counter', True)
+                branch.save()
+            
             if branch_form:
                 branch_form.save()
-            messages.success(request, 'Settings updated successfully.')
-            return redirect('restaurant_admin:settings', restaurant_slug=restaurant_slug)
+
+            # Process Document Sequence Settings
+            for dt in doc_types:
+                seq_obj = doc_sequences[dt]
+                mode = request.POST.get(f'seq_{dt}_mode')
+                if mode in [DocumentSequenceSetting.GenerationMode.AUTOMATIC,
+                            DocumentSequenceSetting.GenerationMode.MANUAL_OVERRIDE,
+                            DocumentSequenceSetting.GenerationMode.MANUAL]:
+                    seq_obj.generation_mode = mode
+
+                prefix = request.POST.get(f'seq_{dt}_prefix')
+                if prefix is not None:
+                    seq_obj.prefix = prefix.strip()
+
+                suffix = request.POST.get(f'seq_{dt}_suffix')
+                if suffix is not None:
+                    seq_obj.suffix = suffix.strip()
+
+                padding = request.POST.get(f'seq_{dt}_padding')
+                if padding and padding.isdigit():
+                    seq_obj.padding_digits = max(1, int(padding))
+
+                counter = request.POST.get(f'seq_{dt}_counter')
+                if counter and counter.isdigit():
+                    seq_obj.current_counter = max(1, int(counter))
+
+                v_from = request.POST.get(f'seq_{dt}_valid_from')
+                if v_from:
+                    try:
+                        seq_obj.valid_from = datetime.strptime(v_from, '%Y-%m-%d').date()
+                    except ValueError:
+                        seq_obj.valid_from = None
+                else:
+                    seq_obj.valid_from = None
+
+                v_to = request.POST.get(f'seq_{dt}_valid_to')
+                if v_to:
+                    try:
+                        seq_obj.valid_to = datetime.strptime(v_to, '%Y-%m-%d').date()
+                    except ValueError:
+                        seq_obj.valid_to = None
+                else:
+                    seq_obj.valid_to = None
+
+                seq_obj.save()
+
+            messages.success(request, 'Settings and Document Numbering Configurations updated successfully.')
+            redirect_slug = branch.slug if (branch and branch.slug) else getattr(restaurant, 'slug', restaurant_slug)
+            return redirect('restaurant_admin:settings', restaurant_slug=redirect_slug)
         else:
             messages.error(request, 'Please correct the errors below.')
     else:
         form = RestaurantSettingsForm(instance=settings_obj)
+        if branch:
+            form.initial['enable_customer_ordering'] = getattr(branch, 'enable_customer_ordering', True)
+            form.initial['enable_online_payment'] = getattr(branch, 'enable_online_payment', False)
+            form.initial['enable_pay_at_counter'] = getattr(branch, 'enable_pay_at_counter', True)
         branch_form = RestaurantBranchComplianceForm(instance=branch) if branch else None
+
+    rslug = branch.slug if (branch and branch.slug) else getattr(restaurant, 'slug', None)
 
     return render(request, 'restaurant_admin/settings.html', {
         'form': form,
         'branch_form': branch_form,
         'branch': branch,
         'custom_charges': custom_charges,
+        'doc_sequences': doc_sequences,
         'active_menu': 'settings',
         'title': 'Restaurant Settings',
         'restaurant': restaurant,
-        'rslug': getattr(restaurant, 'slug', None),
+        'rslug': rslug,
     })
 
 
@@ -3415,6 +4881,8 @@ def custom_charge_save(request, restaurant_slug=None):
     restaurant = resolve_restaurant(request, restaurant_slug)
     if not isinstance(restaurant, Restaurant):
         return restaurant
+
+    active_branch = get_active_branch(request, restaurant)
 
     if request.method == 'POST':
         charge_id = request.POST.get('charge_id')
@@ -3440,6 +4908,8 @@ def custom_charge_save(request, restaurant_slug=None):
 
         if charge_id:
             charge = get_object_or_404(CustomCharge, id=charge_id, restaurant=restaurant)
+            if not charge.branch and active_branch:
+                charge.branch = active_branch
             charge.charge_name = charge_name
             charge.charge_type = charge_type
             charge.value = value
@@ -3451,6 +4921,7 @@ def custom_charge_save(request, restaurant_slug=None):
         else:
             charge = CustomCharge.objects.create(
                 restaurant=restaurant,
+                branch=active_branch,
                 charge_name=charge_name,
                 charge_type=charge_type,
                 value=value,
@@ -3484,6 +4955,8 @@ def sales_analytics(request, restaurant_slug=None):
     except RestaurantUser.DoesNotExist:
         from django.http import HttpResponseForbidden
         return HttpResponseForbidden("No restaurant associated with this account.")
+
+    active_branch = get_active_branch(request, restaurant)
 
     import json
     from datetime import datetime
@@ -3522,10 +4995,29 @@ def sales_analytics(request, restaurant_slug=None):
         end_date = None
 
     orders_qs = Order.objects.filter(restaurant=restaurant).exclude(status__in=['C', Order.OrderStatus.DRAFT])
+    if active_branch:
+        orders_qs = orders_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
     if start_date and end_date:
         orders_qs = orders_qs.filter(order_time__date__range=[start_date, end_date])
 
     total_orders = orders_qs.count()
+
+    # Order Type breakdown & Guest count
+    total_guests = orders_qs.aggregate(total=Sum('guest_count'))['total'] or 0
+    dine_in_count = orders_qs.filter(order_type='dine_in').count()
+    takeaway_count = orders_qs.filter(order_type='takeaway').count()
+    delivery_count = orders_qs.filter(order_type='delivery').count()
+
+    dine_in_revenue = Decimal('0.00')
+    takeaway_revenue = Decimal('0.00')
+    delivery_revenue = Decimal('0.00')
+
+    # Hourly distribution (0 to 23 hours)
+    hourly_orders = [0] * 24
+    hourly_revenue = [0.0] * 24
+
+    # Table sales map
+    table_sales = {}
 
     total_gross_subtotal = Decimal('0.00')
     total_food_subtotal = Decimal('0.00')
@@ -3549,7 +5041,7 @@ def sales_analytics(request, restaurant_slug=None):
 
     daily_data = {}
 
-    for o in orders_qs.prefetch_related('items', 'items__menu_item'):
+    for o in orders_qs.prefetch_related('items', 'items__menu_item').select_related('table', 'table__zone'):
         b = o.calculate_bill_breakdown()
         total_gross_subtotal += b['gross_subtotal']
         total_food_subtotal += b['food_subtotal']
@@ -3568,6 +5060,32 @@ def sales_analytics(request, restaurant_slug=None):
         total_vat += b['vat']
         total_revenue += b['final_total']
 
+        # Track channel revenue
+        otype = o.order_type or 'dine_in'
+        if otype == 'dine_in':
+            dine_in_revenue += b['final_total']
+        elif otype == 'takeaway':
+            takeaway_revenue += b['final_total']
+        elif otype == 'delivery':
+            delivery_revenue += b['final_total']
+
+        # Track hourly data
+        if o.order_time:
+            loc_time = timezone.localtime(o.order_time) if timezone.is_aware(o.order_time) else o.order_time
+            h = loc_time.hour
+            if 0 <= h < 24:
+                hourly_orders[h] += 1
+                hourly_revenue[h] += float(b['final_total'])
+
+        # Track table sales
+        if o.table:
+            z_name = o.table.zone.name if (hasattr(o.table, 'zone') and o.table.zone) else 'Main Floor'
+            t_key = f"{o.table.name} ({z_name})"
+            if t_key not in table_sales:
+                table_sales[t_key] = {'name': o.table.name, 'zone': z_name, 'orders': 0, 'revenue': Decimal('0.00')}
+            table_sales[t_key]['orders'] += 1
+            table_sales[t_key]['revenue'] += b['final_total']
+
         pm = o.get_payment_method_display() or 'Counter / Cash'
         payment_method_counts[pm] = payment_method_counts.get(pm, 0) + 1
         payment_method_totals[pm] = payment_method_totals.get(pm, Decimal('0.00')) + b['final_total']
@@ -3582,17 +5100,59 @@ def sales_analytics(request, restaurant_slug=None):
 
     total_gst = total_cgst + total_sgst
     aov = (total_revenue / Decimal(str(total_orders))) if total_orders > 0 else Decimal('0.00')
+    avg_spend_per_guest = (total_revenue / Decimal(str(total_guests))) if total_guests > 0 else Decimal('0.00')
+    discount_rate_pct = ((total_discounts / (total_gross_subtotal or Decimal('1.00'))) * 100) if total_gross_subtotal > 0 else Decimal('0.00')
 
+    # Peak Rush Hour
+    max_hour_orders = max(hourly_orders) if total_orders > 0 else 0
+    if max_hour_orders > 0:
+        peak_hour_idx = hourly_orders.index(max_hour_orders)
+        peak_hour_str = f"{peak_hour_idx % 12 or 12}:00 {'AM' if peak_hour_idx < 12 else 'PM'} - {(peak_hour_idx + 1) % 12 or 12}:00 {'AM' if (peak_hour_idx + 1) < 12 or (peak_hour_idx + 1) == 24 else 'PM'}"
+    else:
+        peak_hour_str = "No Data"
+
+    # Category-wise sales
+    category_sales_qs = OrderItem.objects.filter(order__in=orders_qs).values(
+        'menu_item__category__name'
+    ).annotate(
+        total_qty=Sum('quantity'),
+        total_sales=Sum(F('quantity') * F('unit_price'))
+    ).order_by('-total_sales')[:8]
+
+    category_labels = [c['menu_item__category__name'] or 'General / Direct' for c in category_sales_qs]
+    category_sales_data = [float(c['total_sales'] or 0) for c in category_sales_qs]
+    category_qtys = [int(c['total_qty'] or 0) for c in category_sales_qs]
+
+    # Top Items & Slow Items
     top_items_qs = OrderItem.objects.filter(order__in=orders_qs).values('menu_item__name', 'menu_item__tax_type').annotate(
         total_qty=Sum('quantity'),
         total_sales=Sum(F('quantity') * F('unit_price'))
-    ).order_by('-total_sales')[:10]
+    ).order_by('-total_sales')[:8]
+
+    slow_items_qs = OrderItem.objects.filter(order__in=orders_qs).values('menu_item__name', 'menu_item__tax_type').annotate(
+        total_qty=Sum('quantity'),
+        total_sales=Sum(F('quantity') * F('unit_price'))
+    ).order_by('total_sales')[:5]
+
+    top_tables = sorted(table_sales.values(), key=lambda x: x['revenue'], reverse=True)[:5]
 
     sorted_dates = sorted(daily_data.keys())
     chart_labels = sorted_dates
     chart_revenue = [float(daily_data[d]['revenue']) for d in sorted_dates]
     chart_gst = [float(daily_data[d]['gst']) for d in sorted_dates]
     chart_vat = [float(daily_data[d]['vat']) for d in sorted_dates]
+
+    hourly_labels = ["12 AM", "1 AM", "2 AM", "3 AM", "4 AM", "5 AM", "6 AM", "7 AM", "8 AM", "9 AM", "10 AM", "11 AM",
+                     "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM", "6 PM", "7 PM", "8 PM", "9 PM", "10 PM", "11 PM"]
+
+    # Channel chart data
+    channel_labels = ['Dine-In', 'Takeaway', 'Delivery']
+    channel_counts = [dine_in_count, takeaway_count, delivery_count]
+    channel_revenues = [float(dine_in_revenue), float(takeaway_revenue), float(delivery_revenue)]
+
+    # Payment chart data
+    payment_labels = list(payment_method_totals.keys())
+    payment_amounts = [float(payment_method_totals[k]) for k in payment_labels]
 
     context = {
         'restaurant': restaurant,
@@ -3603,6 +5163,9 @@ def sales_analytics(request, restaurant_slug=None):
         'end_date': end_date,
         'total_orders': total_orders,
         'aov': aov,
+        'avg_spend_per_guest': avg_spend_per_guest,
+        'discount_rate_pct': discount_rate_pct,
+        'peak_hour_str': peak_hour_str,
         'total_gross_subtotal': total_gross_subtotal,
         'total_food_subtotal': total_food_subtotal,
         'total_beer_subtotal': total_beer_subtotal,
@@ -3625,10 +5188,29 @@ def sales_analytics(request, restaurant_slug=None):
             for k in payment_method_counts
         ],
         'top_items': top_items_qs,
+        'slow_items': slow_items_qs,
+        'top_tables': top_tables,
         'chart_labels_json': json.dumps(chart_labels),
         'chart_revenue_json': json.dumps(chart_revenue),
         'chart_gst_json': json.dumps(chart_gst),
         'chart_vat_json': json.dumps(chart_vat),
+        'hourly_labels_json': json.dumps(hourly_labels),
+        'hourly_orders_json': json.dumps(hourly_orders),
+        'hourly_revenue_json': json.dumps(hourly_revenue),
+        'channel_labels_json': json.dumps(channel_labels),
+        'channel_counts_json': json.dumps(channel_counts),
+        'channel_revenues_json': json.dumps(channel_revenues),
+        'category_labels_json': json.dumps(category_labels),
+        'category_sales_json': json.dumps(category_sales_data),
+        'payment_labels_json': json.dumps(payment_labels),
+        'payment_amounts_json': json.dumps(payment_amounts),
+        'total_guests': total_guests,
+        'dine_in_count': dine_in_count,
+        'takeaway_count': takeaway_count,
+        'delivery_count': delivery_count,
+        'dine_in_revenue': dine_in_revenue,
+        'takeaway_revenue': takeaway_revenue,
+        'delivery_revenue': delivery_revenue,
     }
 
     return render(request, 'restaurant_admin/analytics.html', context)
@@ -3647,12 +5229,17 @@ def receipt_list(request, restaurant_slug=None):
         from django.http import HttpResponseForbidden
         return HttpResponseForbidden("No restaurant associated with this account.")
 
-    qs = AdvanceReceipt.objects.filter(restaurant=restaurant).select_related('party', 'order')
+    active_branch = get_active_branch(request, restaurant)
+    qs = AdvanceReceipt.objects.filter(restaurant=restaurant)
+    if active_branch:
+        qs = qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    qs = qs.select_related('party', 'order')
 
     search_query = request.GET.get('q', '').strip()
     if search_query:
         qs = qs.filter(
             Q(receipt_no__icontains=search_query) |
+            Q(reference_number__icontains=search_query) |
             Q(booking_ref__icontains=search_query) |
             Q(customer_name__icontains=search_query) |
             Q(phone__icontains=search_query)
@@ -3662,13 +5249,19 @@ def receipt_list(request, restaurant_slug=None):
     if status_filter in ['active', 'redeemed', 'cancelled']:
         qs = qs.filter(status=status_filter)
 
-    # Compute Statistics
+    # Compute Statistics (branch-scoped)
     stats_qs = AdvanceReceipt.objects.filter(restaurant=restaurant)
+    if active_branch:
+        stats_qs = stats_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
     total_advance_collected = stats_qs.exclude(status='cancelled').aggregate(s=Sum('advance_amount'))['s'] or Decimal('0.00')
     active_receipts_count = stats_qs.filter(status='active').count()
     redeemed_receipts_count = stats_qs.filter(status='redeemed').count()
 
-    paginator = Paginator(qs, 20)
+    try:
+        per_page = int(request.GET.get('per_page', 20))
+    except ValueError:
+        per_page = 20
+    paginator = Paginator(qs, per_page)
     page = request.GET.get('page', 1)
     try:
         receipts = paginator.page(page)
@@ -3677,7 +5270,10 @@ def receipt_list(request, restaurant_slug=None):
     except EmptyPage:
         receipts = paginator.page(paginator.num_pages)
 
-    customer_parties = Party.objects.filter(restaurant=restaurant, party_type__in=['customer', 'both']).order_by('name')
+    customer_parties = Party.objects.filter(restaurant=restaurant, party_type__in=['customer', 'both'])
+    if active_branch:
+        customer_parties = customer_parties.filter(branch=active_branch)
+    customer_parties = customer_parties.order_by('name')
 
     return render(request, 'restaurant_admin/receipts/list.html', {
         'receipts': receipts,
@@ -3702,12 +5298,22 @@ def receipt_create_page(request, restaurant_slug=None):
         from django.http import HttpResponseForbidden
         return HttpResponseForbidden("No restaurant associated with this account.")
 
-    if request.method == 'GET':
-        last_receipt = AdvanceReceipt.objects.filter(restaurant=restaurant).order_by('-id').first()
-        next_seq = (last_receipt.id + 1001) if last_receipt else 1001
-        next_receipt_no = f"REC-{next_seq}"
+    active_branch = get_active_branch(request, restaurant)
 
-        customer_parties = Party.objects.filter(restaurant=restaurant, party_type__in=['customer', 'both']).order_by('name')
+    if request.method == 'GET':
+        seq_info = get_document_sequence_info(restaurant, 'receipt', branch=active_branch)
+        next_receipt_no = seq_info['next_number']
+        
+        max_num = Order.objects.filter(restaurant=restaurant).aggregate(Max('branch_order_number'))['branch_order_number__max'] or 0
+        if not max_num:
+            last_order = Order.objects.filter(restaurant=restaurant).order_by('-id').first()
+            max_num = last_order.id if last_order else 0
+        next_reference_no = f"ORD-{(max_num + 1):04d}"
+
+        customer_parties = Party.objects.filter(restaurant=restaurant, party_type__in=['customer', 'both'])
+        if active_branch:
+            customer_parties = customer_parties.filter(branch=active_branch)
+        customer_parties = customer_parties.order_by('name')
         parties_list = [
             {'id': p.id, 'name': p.name, 'phone': p.phone or '', 'email': p.email or ''}
             for p in customer_parties
@@ -3716,7 +5322,10 @@ def receipt_create_page(request, restaurant_slug=None):
         today_date = timezone.now().strftime('%Y-%m-%d')
 
         return render(request, 'restaurant_admin/receipts/create.html', {
+            'is_edit': False,
             'next_receipt_no': next_receipt_no,
+            'next_reference_no': next_reference_no,
+            'seq_info': seq_info,
             'today_date': today_date,
             'customer_parties': customer_parties,
             'customer_parties_json': json.dumps(parties_list),
@@ -3729,7 +5338,9 @@ def receipt_create_page(request, restaurant_slug=None):
         is_json = (request.content_type == 'application/json' or request.headers.get('X-Requested-With') == 'XMLHttpRequest')
         data = json.loads(request.body.decode('utf-8')) if (is_json and request.body) else request.POST
 
-        receipt_no = (data.get('receipt_no') or '').strip()
+        receipt_type = (data.get('receipt_type') or 'on_account').strip()
+        receipt_no_input = (data.get('receipt_no') or '').strip()
+        reference_number = (data.get('reference_number') or '').strip()
         receipt_date_str = (data.get('receipt_date') or '').strip()
         customer_name = (data.get('customer_name') or '').strip()
         phone = (data.get('phone') or '').strip()
@@ -3739,17 +5350,17 @@ def receipt_create_page(request, restaurant_slug=None):
         notes = (data.get('notes') or '').strip()
         party_id = data.get('party_id')
 
-        if not receipt_no:
-            last_receipt = AdvanceReceipt.objects.filter(restaurant=restaurant).order_by('-id').first()
-            next_seq = (last_receipt.id + 1001) if last_receipt else 1001
-            receipt_no = f"REC-{next_seq}"
-
-        # Uniqueness check for custom receipt_no
-        if AdvanceReceipt.objects.filter(restaurant=restaurant, receipt_no__iexact=receipt_no).exists():
-            err_msg = f"Receipt No. '{receipt_no}' already exists for this restaurant. Please use a unique receipt number."
+        try:
+            receipt_no = get_and_increment_document_number(
+                restaurant=restaurant,
+                document_type='receipt',
+                branch=active_branch,
+                user_input_no=receipt_no_input
+            )
+        except ValidationError as ve:
             if is_json:
-                return JsonResponse({'success': False, 'error': err_msg}, status=400)
-            messages.error(request, err_msg)
+                return JsonResponse({'success': False, 'error': str(ve)}, status=400)
+            messages.error(request, str(ve))
             return redirect('restaurant_admin:receipt_create_page', restaurant_slug=restaurant.slug)
 
         if not customer_name:
@@ -3762,19 +5373,190 @@ def receipt_create_page(request, restaurant_slug=None):
         try:
             advance_amount = Decimal(str(advance_amount_val))
             if advance_amount <= Decimal('0.00'):
-                err_msg = 'Advance amount must be greater than 0.'
+                err_msg = 'Receipt amount must be greater than 0.'
                 if is_json:
                     return JsonResponse({'success': False, 'error': err_msg}, status=400)
                 messages.error(request, err_msg)
                 return redirect('restaurant_admin:receipt_create_page', restaurant_slug=restaurant.slug)
         except Exception:
-            err_msg = 'Invalid advance amount.'
+            err_msg = 'Invalid receipt amount.'
             if is_json:
                 return JsonResponse({'success': False, 'error': err_msg}, status=400)
             messages.error(request, err_msg)
             return redirect('restaurant_admin:receipt_create_page', restaurant_slug=restaurant.slug)
 
         issue_date = timezone.now().date()
+        if receipt_date_str:
+            try:
+                issue_date = datetime.strptime(receipt_date_str, '%Y-%m-%d').date()
+            except Exception:
+                pass
+
+        active_branch_for_receipt = get_active_branch(request, restaurant)
+        party = None
+        if party_id:
+            party = Party.objects.filter(pk=party_id, restaurant=restaurant).first()
+
+        if not party and customer_name.lower() not in ['guest', 'walk-in guest']:
+            party_lookup = {'restaurant': restaurant, 'name__iexact': customer_name}
+            if active_branch_for_receipt:
+                party_lookup['branch'] = active_branch_for_receipt
+            party, _ = Party.objects.get_or_create(
+                **party_lookup,
+                defaults={
+                    'name': customer_name,
+                    'party_type': Party.PartyType.CUSTOMER,
+                    'phone': phone,
+                    'email': email,
+                }
+            )
+            if phone and not party.phone:
+                party.phone = phone
+                party.save(update_fields=['phone'])
+
+        active_branch_for_receipt = get_active_branch(request, restaurant)
+        receipt = AdvanceReceipt.objects.create(
+            restaurant=restaurant,
+            branch=active_branch_for_receipt,
+            party=party,
+            receipt_no=receipt_no,
+            receipt_type=receipt_type,
+            reference_number=reference_number if receipt_type == 'on_account' else '',
+            booking_ref=reference_number if receipt_type == 'on_account' else '',
+            customer_name=customer_name,
+            phone=phone,
+            email=email,
+            event_date=issue_date,
+            advance_amount=advance_amount,
+            payment_method=payment_method,
+            notes=notes,
+            status=AdvanceReceipt.ReceiptStatus.ACTIVE,
+            created_by=request.user,
+        )
+
+        if receipt_type == 'advance':
+            user_ref_no = (data.get('reference_number') or '').strip()
+            custom_branch_num = None
+            if user_ref_no:
+                import re
+                match = re.search(r'\d+', user_ref_no)
+                if match:
+                    num_val = int(match.group(0))
+                    if num_val > 0 and not Order.objects.filter(restaurant=restaurant, branch_order_number=num_val).exists():
+                        custom_branch_num = num_val
+
+            order_kwargs = {
+                'restaurant': restaurant,
+                'branch': active_branch_for_receipt,
+                'party': party,
+                'customer_name': customer_name or (party.name if party else 'Walk-in Guest'),
+                'phone': phone or (party.phone if party else ''),
+                'status': Order.OrderStatus.DRAFT,
+                'order_type': Order.OrderType.DINE_IN,
+                'payment_status': Order.PaymentStatus.ADVANCE_PAID if advance_amount > 0 else Order.PaymentStatus.UNPAID,
+                'advance_amount_paid': advance_amount,
+                'advance_receipt': receipt,
+                'notes': f"Draft order linked to Advance Receipt #{receipt.receipt_no}",
+            }
+            if custom_branch_num:
+                order_kwargs['branch_order_number'] = custom_branch_num
+
+            draft_order = Order.objects.create(**order_kwargs)
+            final_ref_no = user_ref_no or draft_order.order_number
+            receipt.order = draft_order
+            receipt.reference_number = final_ref_no
+            receipt.booking_ref = final_ref_no
+            receipt.save(update_fields=['order', 'reference_number', 'booking_ref'])
+
+        redirect_target = reverse('restaurant_admin:receipt_list', kwargs={'restaurant_slug': restaurant.slug})
+
+        if is_json:
+            return JsonResponse({'success': True, 'redirect_url': redirect_target})
+
+        messages.success(request, f"Payment Receipt '{receipt.receipt_no}' created successfully.")
+        return redirect(redirect_target)
+
+
+@login_required
+@user_passes_test(is_admin)
+def receipt_edit_page(request, pk, restaurant_slug=None):
+    try:
+        restaurant = request.user.restaurant_profile.restaurant
+    except RestaurantUser.DoesNotExist:
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden("No restaurant associated with this account.")
+
+    receipt = get_object_or_404(AdvanceReceipt, pk=pk, restaurant=restaurant)
+
+    if request.method == 'GET':
+        customer_parties = Party.objects.filter(restaurant=restaurant, party_type__in=['customer', 'both']).order_by('name')
+        parties_list = [
+            {'id': p.id, 'name': p.name, 'phone': p.phone or '', 'email': p.email or ''}
+            for p in customer_parties
+        ]
+
+        formatted_date = receipt.event_date.strftime('%Y-%m-%d') if receipt.event_date else timezone.now().strftime('%Y-%m-%d')
+
+        return render(request, 'restaurant_admin/receipts/create.html', {
+            'is_edit': True,
+            'receipt': receipt,
+            'today_date': formatted_date,
+            'customer_parties': customer_parties,
+            'customer_parties_json': json.dumps(parties_list),
+            'active_menu': 'receipts',
+            'restaurant': restaurant,
+            'rslug': restaurant.slug if restaurant else '',
+        })
+
+    elif request.method == 'POST':
+        is_json = (request.content_type == 'application/json' or request.headers.get('X-Requested-With') == 'XMLHttpRequest')
+        data = json.loads(request.body.decode('utf-8')) if (is_json and request.body) else request.POST
+
+        receipt_type = (data.get('receipt_type') or receipt.receipt_type or 'on_account').strip()
+        receipt_no = (data.get('receipt_no') or '').strip()
+        reference_number = (data.get('reference_number') or '').strip()
+        receipt_date_str = (data.get('receipt_date') or '').strip()
+        customer_name = (data.get('customer_name') or '').strip()
+        phone = (data.get('phone') or '').strip()
+        email = (data.get('email') or '').strip()
+        advance_amount_val = data.get('advance_amount') or 0
+        payment_method = data.get('payment_method') or 'upi'
+        notes = (data.get('notes') or '').strip()
+        party_id = data.get('party_id')
+
+        if not receipt_no:
+            receipt_no = receipt.receipt_no
+
+        if AdvanceReceipt.objects.filter(restaurant=restaurant, receipt_no__iexact=receipt_no).exclude(pk=receipt.pk).exists():
+            err_msg = f"Receipt No. '{receipt_no}' is already used by another receipt."
+            if is_json:
+                return JsonResponse({'success': False, 'error': err_msg}, status=400)
+            messages.error(request, err_msg)
+            return redirect('restaurant_admin:receipt_edit_page', restaurant_slug=restaurant.slug, pk=receipt.pk)
+
+        if not customer_name:
+            err_msg = 'Customer name is required.'
+            if is_json:
+                return JsonResponse({'success': False, 'error': err_msg}, status=400)
+            messages.error(request, err_msg)
+            return redirect('restaurant_admin:receipt_edit_page', restaurant_slug=restaurant.slug, pk=receipt.pk)
+
+        try:
+            advance_amount = Decimal(str(advance_amount_val))
+            if advance_amount <= Decimal('0.00'):
+                err_msg = 'Receipt amount must be greater than 0.'
+                if is_json:
+                    return JsonResponse({'success': False, 'error': err_msg}, status=400)
+                messages.error(request, err_msg)
+                return redirect('restaurant_admin:receipt_edit_page', restaurant_slug=restaurant.slug, pk=receipt.pk)
+        except Exception:
+            err_msg = 'Invalid receipt amount.'
+            if is_json:
+                return JsonResponse({'success': False, 'error': err_msg}, status=400)
+            messages.error(request, err_msg)
+            return redirect('restaurant_admin:receipt_edit_page', restaurant_slug=restaurant.slug, pk=receipt.pk)
+
+        issue_date = receipt.event_date or timezone.now().date()
         if receipt_date_str:
             try:
                 issue_date = datetime.strptime(receipt_date_str, '%Y-%m-%d').date()
@@ -3796,54 +5578,82 @@ def receipt_create_page(request, restaurant_slug=None):
                     'email': email,
                 }
             )
-            if phone and not party.phone:
-                party.phone = phone
-                party.save(update_fields=['phone'])
 
-        # Create main Draft Order
-        draft_order = Order.objects.create(
-            restaurant=restaurant,
-            party=party,
-            customer_name=customer_name,
-            phone=phone,
-            status=Order.OrderStatus.DRAFT,
-            payment_status=Order.PaymentStatus.ADVANCE_PAID,
-            payment_method=payment_method,
-            advance_amount_paid=advance_amount,
-            paid_amount=advance_amount,
-            due_amount=Decimal('0.00'),
-            total_amount=Decimal('0.00'),
-            subtotal=Decimal('0.00'),
-            event_date=issue_date,
-            notes=notes or '',
-            payments=[{'method': payment_method, 'amount': float(advance_amount)}]
-        )
+        # Update fields cleanly via Django ORM
+        receipt.receipt_no = receipt_no
+        receipt.receipt_type = receipt_type
+        receipt.customer_name = customer_name
+        receipt.phone = phone
+        receipt.email = email
+        receipt.party = party
+        receipt.event_date = issue_date
+        receipt.advance_amount = advance_amount
+        receipt.payment_method = payment_method
+        receipt.notes = notes
 
-        receipt = AdvanceReceipt.objects.create(
-            restaurant=restaurant,
-            party=party,
-            receipt_no=receipt_no,
-            booking_ref=draft_order.order_number if hasattr(draft_order, 'order_number') else f"ORD-{draft_order.id:04d}",
-            customer_name=customer_name,
-            phone=phone,
-            email=email,
-            event_date=issue_date,
-            advance_amount=advance_amount,
-            payment_method=payment_method,
-            notes=notes,
-            status=AdvanceReceipt.ReceiptStatus.ACTIVE,
-            order=draft_order,
-            created_by=request.user,
-        )
-        draft_order.advance_receipt = receipt
-        draft_order.save(update_fields=['advance_receipt'])
+        if receipt_type == 'on_account':
+            receipt.reference_number = reference_number
+            receipt.booking_ref = reference_number
+        elif receipt_type == 'advance':
+            user_ref_no = reference_number.strip()
+            if not receipt.order:
+                active_branch_for_receipt = get_active_branch(request, restaurant)
+                custom_branch_num = None
+                if user_ref_no:
+                    import re
+                    match = re.search(r'\d+', user_ref_no)
+                    if match:
+                        num_val = int(match.group(0))
+                        if num_val > 0 and not Order.objects.filter(restaurant=restaurant, branch_order_number=num_val).exists():
+                            custom_branch_num = num_val
+
+                order_kwargs = {
+                    'restaurant': restaurant,
+                    'branch': active_branch_for_receipt,
+                    'party': party,
+                    'customer_name': customer_name or (party.name if party else 'Walk-in Guest'),
+                    'phone': phone or (party.phone if party else ''),
+                    'status': Order.OrderStatus.DRAFT,
+                    'order_type': Order.OrderType.DINE_IN,
+                    'payment_status': Order.PaymentStatus.ADVANCE_PAID if advance_amount > 0 else Order.PaymentStatus.UNPAID,
+                    'advance_amount_paid': advance_amount,
+                    'advance_receipt': receipt,
+                    'notes': f"Draft order linked to Advance Receipt #{receipt.receipt_no}",
+                }
+                if custom_branch_num:
+                    order_kwargs['branch_order_number'] = custom_branch_num
+
+                draft_order = Order.objects.create(**order_kwargs)
+                final_ref_no = user_ref_no or draft_order.order_number
+                receipt.order = draft_order
+                receipt.reference_number = final_ref_no
+                receipt.booking_ref = final_ref_no
+            else:
+                receipt.order.customer_name = customer_name
+                receipt.order.phone = phone
+                receipt.order.party = party
+                receipt.order.advance_amount_paid = advance_amount
+                if user_ref_no:
+                    import re
+                    match = re.search(r'\d+', user_ref_no)
+                    if match:
+                        num_val = int(match.group(0))
+                        if num_val > 0 and not Order.objects.filter(restaurant=restaurant, branch_order_number=num_val).exclude(pk=receipt.order.pk).exists():
+                            receipt.order.branch_order_number = num_val
+                receipt.order.save()
+
+                final_ref_no = user_ref_no or receipt.order.order_number
+                receipt.reference_number = final_ref_no
+                receipt.booking_ref = final_ref_no
+
+        receipt.save()
 
         redirect_target = reverse('restaurant_admin:receipt_list', kwargs={'restaurant_slug': restaurant.slug})
 
         if is_json:
             return JsonResponse({'success': True, 'redirect_url': redirect_target})
 
-        messages.success(request, f"Advance Receipt '{receipt.receipt_no}' generated successfully.")
+        messages.success(request, f"Payment Receipt '{receipt.receipt_no}' updated successfully.")
         return redirect(redirect_target)
 
 
@@ -3854,6 +5664,8 @@ def receipt_create_api(request, restaurant_slug=None):
         restaurant = request.user.restaurant_profile.restaurant
     except RestaurantUser.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'No restaurant associated with account.'}, status=403)
+
+    active_branch = get_active_branch(request, restaurant)
 
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'POST method required.'}, status=405)
@@ -3922,29 +5734,9 @@ def receipt_create_api(request, restaurant_slug=None):
             party.phone = phone
             party.save(update_fields=['phone'])
 
-    # Create the main Draft Order immediately
-    draft_order = Order.objects.create(
-        restaurant=restaurant,
-        party=party,
-        customer_name=customer_name,
-        phone=phone,
-        status=Order.OrderStatus.DRAFT,
-        payment_status=Order.PaymentStatus.ADVANCE_PAID,
-        payment_method=payment_method,
-        advance_amount_paid=advance_amount,
-        paid_amount=advance_amount,
-        due_amount=Decimal('0.00'),
-        total_amount=Decimal('0.00'),
-        subtotal=Decimal('0.00'),
-        event_date=event_date,
-        event_time=event_time,
-        guest_count=guest_count,
-        notes=notes or '',
-        payments=[{'method': payment_method, 'amount': float(advance_amount)}]
-    )
-
     receipt = AdvanceReceipt.objects.create(
         restaurant=restaurant,
+        branch=active_branch,
         party=party,
         customer_name=customer_name,
         phone=phone,
@@ -3956,21 +5748,17 @@ def receipt_create_api(request, restaurant_slug=None):
         payment_method=payment_method,
         notes=notes,
         status=AdvanceReceipt.ReceiptStatus.ACTIVE,
-        order=draft_order,
-        booking_ref=draft_order.order_number if hasattr(draft_order, 'order_number') else f"ORD-{draft_order.id:04d}",
         created_by=request.user,
     )
-    draft_order.advance_receipt = receipt
-    draft_order.save(update_fields=['advance_receipt'])
 
     print_url = reverse('restaurant_admin:receipt_print', kwargs={'restaurant_slug': restaurant.slug, 'pk': receipt.id})
-    start_order_url = reverse('restaurant_admin:order_create_manual', kwargs={'restaurant_slug': restaurant.slug}) + f"?order_id={draft_order.id}"
 
     return JsonResponse({
         'success': True,
         'receipt': {
             'id': receipt.id,
             'receipt_no': receipt.receipt_no,
+            'reference_number': receipt.reference_number,
             'booking_ref': receipt.booking_ref,
             'customer_name': receipt.customer_name,
             'phone': receipt.phone,
@@ -3982,7 +5770,6 @@ def receipt_create_api(request, restaurant_slug=None):
             'status': receipt.status,
         },
         'print_url': print_url,
-        'start_order_url': start_order_url,
     })
 
 
@@ -4057,101 +5844,6 @@ def receipt_detail_api(request, receipt_no, restaurant_slug=None):
     })
 
 
-# Internal Branch Management Views
-@login_required
-@user_passes_test(is_admin)
-def branch_list(request, restaurant_slug=None):
-    restaurant = resolve_restaurant(request, restaurant_slug)
-    if not isinstance(restaurant, Restaurant):
-        return restaurant
-
-    branches = Branch.objects.filter(restaurant=restaurant).order_by('branch_name')
-
-    return render(request, 'restaurant_admin/branches/list.html', {
-        'branches': branches,
-        'restaurant': restaurant,
-        'active_menu': 'settings',
-        'active_tab': 'branches',
-    })
-
-
-@login_required
-@user_passes_test(is_admin)
-def branch_save(request, restaurant_slug=None):
-    restaurant = resolve_restaurant(request, restaurant_slug)
-    if not isinstance(restaurant, Restaurant):
-        return restaurant
-
-    if request.method == 'POST':
-        pk = request.POST.get('pk')
-        branch_name = request.POST.get('branch_name', '').strip()
-        branch_code = request.POST.get('branch_code', '').strip()
-        address_line_1 = request.POST.get('address_line_1', '').strip()
-        address_line_2 = request.POST.get('address_line_2', '').strip()
-        city = request.POST.get('city', '').strip()
-        state = request.POST.get('state', '').strip()
-        pincode = request.POST.get('pincode', '').strip()
-        address = request.POST.get('address', '').strip()
-        gstin = request.POST.get('gstin', '').strip()
-        is_active = request.POST.get('is_active') == 'on' or request.POST.get('is_active') == 'true' or request.POST.get('is_active') == '1'
-
-        addr_parts = [address_line_1, address_line_2, city, state, pincode]
-        constructed_addr = ", ".join([p for p in addr_parts if p])
-        final_address = constructed_addr if constructed_addr else address
-
-        if not branch_name:
-            messages.error(request, "Branch name is required.")
-            return redirect('restaurant_admin:branch_list', restaurant_slug=restaurant.slug)
-
-        if pk:
-            branch = get_object_or_404(Branch, pk=pk, restaurant=restaurant)
-            branch.branch_name = branch_name
-            branch.branch_code = branch_code
-            branch.address_line_1 = address_line_1
-            branch.address_line_2 = address_line_2
-            branch.city = city
-            branch.state = state
-            branch.pincode = pincode
-            branch.address = final_address
-            branch.gstin = gstin
-            branch.is_active = is_active
-            branch.save()
-            messages.success(request, f"Branch '{branch.branch_name}' updated successfully.")
-        else:
-            Branch.objects.create(
-                restaurant=restaurant,
-                branch_name=branch_name,
-                branch_code=branch_code,
-                address_line_1=address_line_1,
-                address_line_2=address_line_2,
-                city=city,
-                state=state,
-                pincode=pincode,
-                address=final_address,
-                gstin=gstin,
-                is_active=is_active
-            )
-            messages.success(request, f"Internal branch '{branch_name}' created successfully.")
-
-    return redirect('restaurant_admin:branch_list', restaurant_slug=restaurant.slug)
-
-
-@login_required
-@user_passes_test(is_admin)
-def branch_delete(request, pk, restaurant_slug=None):
-    restaurant = resolve_restaurant(request, restaurant_slug)
-    if not isinstance(restaurant, Restaurant):
-        return restaurant
-
-    if request.method == 'POST':
-        branch = get_object_or_404(Branch, pk=pk, restaurant=restaurant)
-        name = branch.branch_name
-        branch.delete()
-        messages.success(request, f"Branch '{name}' deleted successfully.")
-
-    return redirect('restaurant_admin:branch_list', restaurant_slug=restaurant.slug)
-
-
 # Delivery Challan Management Views
 @login_required
 @user_passes_test(is_admin)
@@ -4162,14 +5854,22 @@ def challan_list(request, restaurant_slug=None):
 
     challans = DeliveryChallan.objects.filter(restaurant=restaurant).select_related(
         'from_branch', 'to_branch', 'created_by'
-    ).prefetch_related('items__inventory_item').order_by('-dispatch_date', '-created_at')
+    ).prefetch_related('items__inventory_item', 'items__menu_item').order_by('-dispatch_date', '-created_at')
 
     status_filter = request.GET.get('status', '').strip()
     if status_filter:
         challans = challans.filter(status=status_filter)
 
+    try:
+        per_page = int(request.GET.get('per_page', 20))
+    except ValueError:
+        per_page = 20
+    paginator = Paginator(challans, per_page)
+    page_number = request.GET.get('page')
+    challans_page = paginator.get_page(page_number)
+
     return render(request, 'restaurant_admin/challans/list.html', {
-        'challans': challans,
+        'challans': challans_page,
         'restaurant': restaurant,
         'active_menu': 'challans',
         'status_filter': status_filter,
@@ -4183,28 +5883,44 @@ def challan_create(request, restaurant_slug=None):
     if not isinstance(restaurant, Restaurant):
         return restaurant
 
+    active_branch = get_active_branch(request, restaurant)
+
     if request.method == 'POST':
-        challan_no = request.POST.get('challan_no', '').strip()
+        challan_no_input = request.POST.get('challan_no', '').strip()
         dispatch_date_str = request.POST.get('dispatch_date', '').strip()
-        from_branch_id = request.POST.get('from_branch_id')
-        to_branch_id = request.POST.get('to_branch_id')
+        reason_for_transport = request.POST.get('reason_for_transport', 'Branch Transfer').strip() or 'Branch Transfer'
+        transport_mode = request.POST.get('transport_mode', 'Road').strip() or 'Road'
+        vehicle_no = request.POST.get('vehicle_no', '').strip()
+
+        receiver_party_id = request.POST.get('receiver_party_id', '').strip()
+        receiver_name = request.POST.get('receiver_name', '').strip()
+        receiver_address = request.POST.get('receiver_address', '').strip()
+        receiver_state = request.POST.get('receiver_state', '').strip()
+        receiver_gstin = request.POST.get('receiver_gstin', '').strip()
+
         notes = request.POST.get('notes', '').strip()
 
-        if not challan_no:
-            messages.error(request, "Challan Number is required.")
-            return redirect('restaurant_admin:challan_create', restaurant_slug=restaurant.slug)
+        receiver_party_obj = None
+        if receiver_party_id and receiver_party_id.isdigit():
+            receiver_party_obj = Party.objects.filter(pk=int(receiver_party_id), restaurant=restaurant).first()
+            if receiver_party_obj:
+                if not receiver_name:
+                    receiver_name = receiver_party_obj.name
+                if not receiver_address:
+                    receiver_address = receiver_party_obj.full_address or receiver_party_obj.address
+                if not receiver_gstin:
+                    receiver_gstin = receiver_party_obj.gstin
 
-        if not to_branch_id:
-            messages.error(request, "Destination Branch is required.")
+        try:
+            challan_no = get_and_increment_document_number(
+                restaurant=restaurant,
+                document_type='challan',
+                branch=active_branch,
+                user_input_no=challan_no_input
+            )
+        except ValidationError as ve:
+            messages.error(request, str(ve))
             return redirect('restaurant_admin:challan_create', restaurant_slug=restaurant.slug)
-
-        to_branch = get_object_or_404(Branch, pk=to_branch_id, restaurant=restaurant)
-        from_branch = None
-        if from_branch_id:
-            from_branch = Branch.objects.filter(pk=from_branch_id, restaurant=restaurant).first()
-            if from_branch and from_branch.id == to_branch.id:
-                messages.error(request, "Destination branch cannot be the same as source branch.")
-                return redirect('restaurant_admin:challan_create', restaurant_slug=restaurant.slug)
 
         try:
             dispatch_date = datetime.strptime(dispatch_date_str, '%Y-%m-%d').date() if dispatch_date_str else timezone.now().date()
@@ -4212,11 +5928,13 @@ def challan_create(request, restaurant_slug=None):
             dispatch_date = timezone.now().date()
 
         item_ids = request.POST.getlist('item_id[]')
+        hsn_codes = request.POST.getlist('hsn_code[]')
         quantities = request.POST.getlist('quantity[]')
+        units = request.POST.getlist('unit[]')
         unit_values = request.POST.getlist('unit_value[]')
 
         if not item_ids or len(item_ids) == 0:
-            messages.error(request, "Please add at least one inventory item to the delivery challan.")
+            messages.error(request, "Please add at least one item to the delivery challan.")
             return redirect('restaurant_admin:challan_create', restaurant_slug=restaurant.slug)
 
         try:
@@ -4224,8 +5942,15 @@ def challan_create(request, restaurant_slug=None):
                 challan = DeliveryChallan.objects.create(
                     restaurant=restaurant,
                     challan_no=challan_no,
-                    from_branch=from_branch,
-                    to_branch=to_branch,
+                    from_branch=active_branch,
+                    reason_for_transport=reason_for_transport,
+                    transport_mode=transport_mode,
+                    vehicle_no=vehicle_no,
+                    receiver_party=receiver_party_obj,
+                    receiver_name=receiver_name,
+                    receiver_address=receiver_address,
+                    receiver_state=receiver_state or 'Rajasthan (08)',
+                    receiver_gstin=receiver_gstin,
                     dispatch_date=dispatch_date,
                     status=DeliveryChallan.StatusChoices.IN_TRANSIT,
                     notes=notes,
@@ -4233,9 +5958,14 @@ def challan_create(request, restaurant_slug=None):
                 )
 
                 total_val = Decimal('0.00')
-                for item_id, qty_str, unit_val_str in zip(item_ids, quantities, unit_values):
-                    if not item_id or not qty_str:
+                for idx, item_id_val in enumerate(item_ids):
+                    if not item_id_val:
                         continue
+                    qty_str = quantities[idx] if idx < len(quantities) else '0'
+                    unit_val_str = unit_values[idx] if idx < len(unit_values) else '0'
+                    hsn = hsn_codes[idx] if idx < len(hsn_codes) else ''
+                    u_unit = units[idx] if idx < len(units) else ''
+
                     qty = Decimal(str(qty_str or '0'))
                     unit_val = Decimal(str(unit_val_str or '0'))
                     if qty <= 0:
@@ -4244,31 +5974,54 @@ def challan_create(request, restaurant_slug=None):
                     line_total = qty * unit_val
                     total_val += line_total
 
-                    inv_item = get_object_or_404(InventoryItem, pk=item_id, restaurant=restaurant)
+                    item_str = str(item_id_val)
+                    if item_str.startswith('menu_'):
+                        menu_id = int(item_str.replace('menu_', ''))
+                        menu_item = get_object_or_404(MenuItem, pk=menu_id, restaurant=restaurant)
+                        DeliveryChallanItem.objects.create(
+                            challan=challan,
+                            menu_item=menu_item,
+                            inventory_item=None,
+                            hsn_code=hsn or '2106',
+                            quantity=qty,
+                            unit=u_unit or 'Pcs',
+                            unit_value=unit_val,
+                            line_total=line_total
+                        )
+                    else:
+                        raw_id = item_str.replace('inv_', '')
+                        inv_item = get_object_or_404(InventoryItem, pk=int(raw_id), restaurant=restaurant)
 
-                    DeliveryChallanItem.objects.create(
-                        challan=challan,
-                        inventory_item=inv_item,
-                        quantity=qty,
-                        unit_value=unit_val,
-                        line_total=line_total
-                    )
+                        DeliveryChallanItem.objects.create(
+                            challan=challan,
+                            inventory_item=inv_item,
+                            menu_item=None,
+                            hsn_code=hsn or getattr(inv_item, 'hsn_code', '') or '2106',
+                            quantity=qty,
+                            unit=u_unit or inv_item.unit or 'Units',
+                            unit_value=unit_val,
+                            line_total=line_total
+                        )
 
-                    # Handshake Dispatch Action: Deduct quantity from source branch inventory item
-                    inv_item.adjust(-int(qty))
+                        # Deduct quantity from inventory item stock
+                        inv_item.adjust(-int(qty))
 
-                    # Record transaction log
-                    InventoryTransaction.objects.create(
-                        inventory_item=inv_item,
-                        transaction_type=InventoryTransaction.TransactionType.MANUAL,
-                        delta=-int(qty),
-                        performed_by=request.user
-                    )
+                        # Record transaction log
+                        InventoryTransaction.objects.create(
+                            inventory_item=inv_item,
+                            transaction_type=InventoryTransaction.TransactionType.MANUAL,
+                            delta=-int(qty),
+                            performed_by=request.user
+                        )
 
                 challan.total_value = total_val
-                challan.save(update_fields=['total_value'])
+                challan.cgst_amount = Decimal('0.00')
+                challan.sgst_amount = Decimal('0.00')
+                challan.igst_amount = Decimal('0.00')
+                challan.total_tax = Decimal('0.00')
+                challan.save(update_fields=['total_value', 'cgst_amount', 'sgst_amount', 'igst_amount', 'total_tax'])
 
-                messages.success(request, f"Delivery Challan #{challan_no} created and dispatched (In Transit)!")
+                messages.success(request, f"Delivery Challan #{challan_no} created successfully!")
                 return redirect('restaurant_admin:challan_list', restaurant_slug=restaurant.slug)
 
         except Exception as e:
@@ -4276,23 +6029,108 @@ def challan_create(request, restaurant_slug=None):
             return redirect('restaurant_admin:challan_create', restaurant_slug=restaurant.slug)
 
     # GET Request: Prepare form data
-    last_challan = DeliveryChallan.objects.filter(restaurant=restaurant).order_by('-id').first()
-    next_num = (last_challan.id + 1001) if last_challan else 1001
-    auto_challan_no = f"DC-{next_num}"
-    while DeliveryChallan.objects.filter(restaurant=restaurant, challan_no=auto_challan_no).exists():
-        next_num += 1
-        auto_challan_no = f"DC-{next_num}"
+    seq_info = get_document_sequence_info(restaurant, 'challan', branch=active_branch)
+    auto_challan_no = seq_info['next_number']
 
-    branches = Branch.objects.filter(restaurant=restaurant, is_active=True).order_by('branch_name')
-    inventory_items = InventoryItem.objects.filter(restaurant=restaurant, is_active=True).order_by('name')
+    inventory_items = InventoryItem.objects.filter(restaurant=restaurant, is_active=True)
+    if active_branch:
+        inventory_items = inventory_items.filter(branch=active_branch)
+    inventory_items = inventory_items.order_by('name')
+
+    menu_items = MenuItem.objects.filter(restaurant=restaurant, availability=True)
+    if active_branch:
+        menu_items = menu_items.filter(branch=active_branch)
+    menu_items = menu_items.order_by('name')
+
+    customer_parties = Party.objects.filter(restaurant=restaurant)
+    if active_branch:
+        customer_parties = customer_parties.filter(branch=active_branch)
+    customer_parties = customer_parties.order_by('name')
+
+    sender_name = active_branch.name if active_branch and hasattr(active_branch, 'name') and active_branch.name else (restaurant.name if restaurant else '')
+    sender_address = (active_branch.address_line_1 + (' ' + active_branch.address_line_2 if active_branch.address_line_2 else '') + (', ' + active_branch.city if active_branch.city else '')) if active_branch and active_branch.address_line_1 else getattr(restaurant, 'address', '')
+    sender_state = (active_branch.state + (f" ({active_branch.state_code})" if hasattr(active_branch, 'state_code') and active_branch.state_code else '')) if active_branch and active_branch.state else 'Rajasthan (08)'
+    sender_gstin = get_branch_gstin_str(active_branch, restaurant)
+
+    party_name = request.GET.get('party_name', '').strip()
+    party_gstin = request.GET.get('party_gstin', '').strip()
+    party_phone = request.GET.get('party_phone', '').strip()
+    party_address = request.GET.get('party_address', '').strip()
+
+    prefill_notes = request.GET.get('notes', '').strip()
+    if not prefill_notes and (party_name or party_gstin):
+        gstin_str = f" (GSTIN: {party_gstin})" if party_gstin else ''
+        prefill_notes = f"Inter-branch/godown transfer for buyer party '{party_name}'{gstin_str}."
+
+    customer_parties_json = json.dumps([
+        {
+            'id': p.id,
+            'name': p.name,
+            'phone': p.phone or '',
+            'gstin': p.gstin or '',
+            'address': p.full_address or p.address or ''
+        }
+        for p in customer_parties
+    ])
 
     return render(request, 'restaurant_admin/challans/create.html', {
         'auto_challan_no': auto_challan_no,
+        'seq_info': seq_info,
         'today_date': timezone.now().strftime('%Y-%m-%d'),
-        'branches': branches,
         'inventory_items': inventory_items,
+        'menu_items': menu_items,
+        'customer_parties': customer_parties,
+        'customer_parties_json': customer_parties_json,
         'restaurant': restaurant,
         'active_menu': 'challans',
+        'sender_name': sender_name,
+        'sender_address': sender_address,
+        'sender_state': sender_state,
+        'sender_gstin': sender_gstin,
+        'party_name': party_name,
+        'party_gstin': party_gstin,
+        'party_phone': party_phone,
+        'party_address': party_address,
+        'prefill_notes': prefill_notes,
+    })
+
+
+@login_required
+@user_passes_test(is_admin)
+def challan_detail(request, pk, restaurant_slug=None):
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
+
+    challan = get_object_or_404(
+        DeliveryChallan.objects.select_related('from_branch', 'to_branch', 'receiver_party', 'created_by').prefetch_related('items__inventory_item', 'items__menu_item'),
+        pk=pk,
+        restaurant=restaurant
+    )
+
+    active_branch = challan.from_branch or get_active_branch(request, restaurant)
+    sender_name = active_branch.name if active_branch and hasattr(active_branch, 'name') and active_branch.name else (restaurant.name if restaurant else '')
+    sender_address = (active_branch.address_line_1 + (' ' + active_branch.address_line_2 if active_branch.address_line_2 else '') + (', ' + active_branch.city if active_branch.city else '')) if active_branch and active_branch.address_line_1 else getattr(restaurant, 'address', '')
+    sender_state = (active_branch.state + (f" ({active_branch.state_code})" if hasattr(active_branch, 'state_code') and active_branch.state_code else '')) if active_branch and active_branch.state else 'Rajasthan (08)'
+    sender_gstin = get_branch_gstin_str(active_branch, restaurant)
+
+    receiver_name = challan.receiver_name or (challan.receiver_party.name if challan.receiver_party else '')
+    receiver_address = challan.receiver_address or (challan.receiver_party.full_address if challan.receiver_party else '')
+    receiver_state = challan.receiver_state or 'Rajasthan (08)'
+    receiver_gstin = challan.receiver_gstin or (challan.receiver_party.gstin if challan.receiver_party else '')
+
+    return render(request, 'restaurant_admin/challans/detail.html', {
+        'challan': challan,
+        'restaurant': restaurant,
+        'active_menu': 'challans',
+        'sender_name': sender_name,
+        'sender_address': sender_address,
+        'sender_state': sender_state,
+        'sender_gstin': sender_gstin,
+        'receiver_name': receiver_name,
+        'receiver_address': receiver_address,
+        'receiver_state': receiver_state,
+        'receiver_gstin': receiver_gstin,
     })
 
 
@@ -4317,73 +6155,12 @@ def challan_mark_received(request, pk, restaurant_slug=None):
         with transaction.atomic():
             challan.status = DeliveryChallan.StatusChoices.RECEIVED
             challan.save(update_fields=['status', 'updated_at'])
-
-            # Handshake Receive Action: Credit stock to target branch
-            for item_record in challan.items.all():
-                src_item = item_record.inventory_item
-                qty = int(item_record.quantity)
-
-                # Check if there is a target-branch-specific InventoryItem or update source item
-                target_item = InventoryItem.objects.filter(
-                    restaurant=restaurant,
-                    internal_branch=challan.to_branch,
-                    name__iexact=src_item.name
-                ).first()
-
-                if not target_item:
-                    if src_item.internal_branch and src_item.internal_branch != challan.to_branch:
-                        target_item = InventoryItem.objects.create(
-                            restaurant=restaurant,
-                            internal_branch=challan.to_branch,
-                            name=src_item.name,
-                            sku=f"{src_item.sku}-{challan.to_branch.branch_code}" if src_item.sku and challan.to_branch.branch_code else (src_item.sku or ''),
-                            category=src_item.category,
-                            unit=src_item.unit,
-                            quantity=qty,
-                            cost_price=src_item.cost_price,
-                            unit_cost=src_item.unit_cost,
-                            taxability_type=src_item.taxability_type,
-                            gst_rate=src_item.gst_rate
-                        )
-                    else:
-                        target_item = src_item
-                        target_item.adjust(qty)
-                else:
-                    target_item.adjust(qty)
-
-                InventoryTransaction.objects.create(
-                    inventory_item=target_item,
-                    transaction_type=InventoryTransaction.TransactionType.RESTOCK,
-                    delta=qty,
-                    performed_by=request.user
-                )
-
-            messages.success(request, f"Challan #{challan.challan_no} marked as RECEIVED. Inventory stock credited to '{challan.to_branch.branch_name}'.")
+            messages.success(request, f"Challan #{challan.challan_no} marked as RECEIVED.")
 
     except Exception as e:
         messages.error(request, f"Failed to mark challan as received: {str(e)}")
 
     return redirect('restaurant_admin:challan_list', restaurant_slug=restaurant.slug)
-
-
-@login_required
-@user_passes_test(is_admin)
-def challan_detail(request, pk, restaurant_slug=None):
-    restaurant = resolve_restaurant(request, restaurant_slug)
-    if not isinstance(restaurant, Restaurant):
-        return restaurant
-
-    challan = get_object_or_404(
-        DeliveryChallan.objects.select_related('from_branch', 'to_branch', 'created_by').prefetch_related('items__inventory_item'),
-        pk=pk,
-        restaurant=restaurant
-    )
-
-    return render(request, 'restaurant_admin/challans/detail.html', {
-        'challan': challan,
-        'restaurant': restaurant,
-        'active_menu': 'challans',
-    })
 
 
 @login_required
@@ -4408,13 +6185,14 @@ def challan_cancel(request, pk, restaurant_slug=None):
 
             # Restore deducted inventory stock to source
             for item_record in challan.items.all():
-                item_record.inventory_item.adjust(int(item_record.quantity))
-                InventoryTransaction.objects.create(
-                    inventory_item=item_record.inventory_item,
-                    transaction_type=InventoryTransaction.TransactionType.CANCEL,
-                    delta=int(item_record.quantity),
-                    performed_by=request.user
-                )
+                if item_record.inventory_item:
+                    item_record.inventory_item.adjust(int(item_record.quantity))
+                    InventoryTransaction.objects.create(
+                        inventory_item=item_record.inventory_item,
+                        transaction_type=InventoryTransaction.TransactionType.CANCEL,
+                        delta=int(item_record.quantity),
+                        performed_by=request.user
+                    )
 
             messages.success(request, f"Delivery Challan #{challan.challan_no} has been cancelled and stock restored.")
     except Exception as e:
@@ -4448,12 +6226,19 @@ def transaction_desk_create(request, restaurant_slug=None):
     today_date = timezone.now().strftime('%Y-%m-%d')
 
     # POS Context Data Generation
-    tables_qs = Table.objects.filter(restaurant=restaurant).order_by('table_number')
-    menu_items_qs = MenuItem.objects.filter(restaurant=restaurant, availability=True).select_related('category', 'subcategory').order_by('category__name', 'name')
-    categories_qs = Category.objects.filter(restaurant=restaurant).order_by('name')
+    branch_obj = get_active_branch(request, restaurant)
+    tables_qs = Table.objects.filter(restaurant=restaurant)
+    menu_items_qs = MenuItem.objects.filter(restaurant=restaurant, availability=True).select_related('category', 'subcategory')
+    categories_qs = Category.objects.filter(restaurant=restaurant)
+    if branch_obj:
+        tables_qs = tables_qs.filter(Q(branch=branch_obj) | Q(branch__isnull=True))
+        menu_items_qs = menu_items_qs.filter(branch=branch_obj)
+        categories_qs = categories_qs.filter(branch=branch_obj)
+    tables_qs = tables_qs.order_by('table_number')
+    menu_items_qs = menu_items_qs.order_by('category__name', 'name')
+    categories_qs = categories_qs.order_by('name')
 
     settings_obj = RestaurantSettings.get_settings(restaurant)
-    branch_obj = restaurant.branches.first() if hasattr(restaurant, 'branches') else None
 
     cgst_pct = float(settings_obj.cgst_percentage or 2.50)
     sgst_pct = float(settings_obj.sgst_percentage or 2.50)
@@ -4485,13 +6270,17 @@ def transaction_desk_create(request, restaurant_slug=None):
             'category_id': cat_id,
             'category_name': cat_name,
             'image_url': img_url,
-            'tax_type': tax_type
+            'tax_type': tax_type,
+            'is_tax_inclusive': mi.is_tax_inclusive
         })
 
     categories_list = [{'id': c.id, 'name': c.name} for c in categories_qs]
 
+    top_selling_filter = {'order__restaurant': restaurant}
+    if branch_obj:
+        top_selling_filter['order__branch'] = branch_obj
     top_selling_qs = (
-        OrderItem.objects.filter(order__restaurant=restaurant)
+        OrderItem.objects.filter(**top_selling_filter)
         .values('menu_item_id')
         .annotate(total_qty=Sum('quantity'))
         .order_by('-total_qty')[:12]
@@ -4501,7 +6290,10 @@ def transaction_desk_create(request, restaurant_slug=None):
     active_orders_qs = Order.objects.filter(
         restaurant=restaurant,
         status__in=[Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING]
-    ).select_related('table').prefetch_related('items', 'items__menu_item').order_by('-order_time')[:30]
+    )
+    if branch_obj:
+        active_orders_qs = active_orders_qs.filter(branch=branch_obj)
+    active_orders_qs = active_orders_qs.select_related('table').prefetch_related('items', 'items__menu_item').order_by('-order_time')[:30]
 
     active_orders_list = []
     for ao in active_orders_qs:
@@ -4531,7 +6323,10 @@ def transaction_desk_create(request, restaurant_slug=None):
             ]
         })
 
-    custom_charges_qs = CustomCharge.objects.filter(restaurant=restaurant, is_active=True).order_by('charge_name')
+    custom_charges_qs = CustomCharge.objects.filter(restaurant=restaurant, is_active=True)
+    if branch_obj:
+        custom_charges_qs = custom_charges_qs.filter(Q(branch=branch_obj) | Q(branch__isnull=True))
+    custom_charges_qs = custom_charges_qs.order_by('charge_name')
     custom_charges_list = []
     for cc in custom_charges_qs:
         custom_charges_list.append({
@@ -4605,33 +6400,51 @@ def transaction_desk_create(request, restaurant_slug=None):
             ]
         })
 
-    customer_parties = Party.objects.filter(restaurant=restaurant, party_type__in=['customer', 'both']).order_by('name')
+    customer_parties = Party.objects.filter(restaurant=restaurant, party_type__in=['customer', 'both'])
+    if branch_obj:
+        customer_parties = customer_parties.filter(Q(branch=branch_obj) | Q(branch__isnull=True))
+    customer_parties = customer_parties.order_by('name')
+
+    # Document Sequences Info
+    seq_info_sales = get_document_sequence_info(restaurant, 'sales', branch=branch_obj)
+    seq_info_purchase = get_document_sequence_info(restaurant, 'purchase', branch=branch_obj)
+    seq_info_receipt = get_document_sequence_info(restaurant, 'receipt', branch=branch_obj)
+    seq_info_challan = get_document_sequence_info(restaurant, 'challan', branch=branch_obj)
+    seq_info_vat_bill = get_document_sequence_info(restaurant, 'vat_bill', branch=branch_obj) if (branch_obj and branch_obj.serves_alcohol) else None
+
+    active_branch_gstin = get_branch_gstin_str(branch_obj, restaurant)
 
     # Advance Receipt Context Data
-    last_receipt = AdvanceReceipt.objects.filter(restaurant=restaurant).order_by('-id').first()
-    next_receipt_seq = (last_receipt.id + 1001) if last_receipt else 1001
-    next_receipt_no = f"REC-{next_receipt_seq}"
+    next_receipt_no = seq_info_receipt['next_number']
     parties_list = [
-        {'id': p.id, 'name': p.name, 'phone': p.phone or '', 'email': p.email or ''}
+        {
+            'id': p.id,
+            'name': p.name,
+            'phone': p.phone or '',
+            'email': p.email or '',
+            'gstin': p.gstin or '',
+            'full_address': p.full_address or ''
+        }
         for p in customer_parties
     ]
 
     # Purchase Context Data
-    inventory_items = InventoryItem.objects.filter(restaurant=restaurant).order_by('name')
+    inventory_items = InventoryItem.objects.filter(restaurant=restaurant)
+    if branch_obj:
+        inventory_items = inventory_items.filter(branch=branch_obj)
+    inventory_items = inventory_items.order_by('name')
     inventory_items_list = [
         {'id': i.id, 'name': i.name, 'cost_price': float(i.cost_price or 0), 'unit': i.unit or 'Units'}
         for i in inventory_items
     ]
-    suppliers = Supplier.objects.filter(restaurant=restaurant).order_by('name')
-    last_purchase = PurchaseOrder.objects.filter(restaurant=restaurant).order_by('-id').first()
-    next_purchase_seq = (last_purchase.id + 1001) if last_purchase else 1001
-    next_purchase_no = f"PUR-{next_purchase_seq}"
+    suppliers = Supplier.objects.filter(restaurant=restaurant)
+    if branch_obj:
+        suppliers = suppliers.filter(branch=branch_obj)
+    suppliers = suppliers.order_by('name')
+    next_purchase_no = seq_info_purchase['next_number']
 
     # Delivery Challan Context Data
-    last_challan = DeliveryChallan.objects.filter(restaurant=restaurant).order_by('-id').first()
-    next_challan_seq = (last_challan.id + 1001) if last_challan else 1001
-    auto_challan_no = f"DC-{next_challan_seq}"
-    branches = Branch.objects.filter(restaurant=restaurant).order_by('branch_name')
+    auto_challan_no = seq_info_challan['next_number']
 
     context = {
         'active_type': active_type,
@@ -4639,6 +6452,14 @@ def transaction_desk_create(request, restaurant_slug=None):
         'restaurant': restaurant,
         'rslug': restaurant.slug,
         'active_menu': 'transactions_create',
+        'active_branch_gstin': active_branch_gstin,
+        'active_branch_gstin_json': json.dumps(active_branch_gstin),
+
+        'seq_info_sales': seq_info_sales,
+        'seq_info_purchase': seq_info_purchase,
+        'seq_info_receipt': seq_info_receipt,
+        'seq_info_challan': seq_info_challan,
+        'seq_info_vat_bill': seq_info_vat_bill,
 
         # POS Full Context
         'menu_items': menu_items_qs,
@@ -4656,6 +6477,8 @@ def transaction_desk_create(request, restaurant_slug=None):
             'vat_imfl_pct': vat_imfl_pct,
             'vat_wine_pct': vat_wine_pct,
             'vat_gen_pct': vat_gen_pct,
+            'service_charge_pct': float(branch_obj.service_charge_percentage if (branch_obj and branch_obj.service_charge_percentage is not None) else (settings_obj.service_charge_percentage or 0)),
+            'service_charge_taxable': getattr(settings_obj, 'service_charge_taxable', True),
         }),
         'custom_charges_json': json.dumps(custom_charges_list),
         'customer_parties': customer_parties,
@@ -4678,7 +6501,6 @@ def transaction_desk_create(request, restaurant_slug=None):
 
         # Delivery Challan Context
         'auto_challan_no': auto_challan_no,
-        'branches': branches,
     }
 
     return render(request, 'restaurant_admin/transactions/create.html', context)

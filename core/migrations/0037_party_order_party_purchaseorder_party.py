@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(max_length=200)),
-                ('party_type', models.CharField(choices=[('vendor', 'Vendor (Seller)'), ('customer', 'Customer (Buyer)'), ('both', 'Both (Vendor & Customer)')], default='vendor', max_length=20)),
+                ('party_type', models.CharField(choices=[('vendor', 'Vendor (Seller)'), ('customer', 'Customer (Buyer)')], default='vendor', max_length=20)),
                 ('phone', models.CharField(blank=True, max_length=50, null=True)),
                 ('email', models.EmailField(blank=True, max_length=254, null=True)),
                 ('gstin', models.CharField(blank=True, max_length=50, null=True)),

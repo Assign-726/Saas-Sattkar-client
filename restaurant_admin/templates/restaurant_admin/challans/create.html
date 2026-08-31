@@ -1,23 +1,19 @@
 {% extends 'restaurant_admin/base.html' %}
 {% load static %}
 
-{% block title %}Create Delivery Challan - Inter-Branch Transfer{% endblock %}
+{% block title %}Create Delivery Challan{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<link rel="stylesheet" href="{% static 'restaurant_admin/css/tally-engine.css' %}">
+<div class="container-fluid py-3">
   <form action="{% url 'restaurant_admin:challan_create' restaurant_slug=restaurant.slug %}" method="POST" id="challanForm">
     {% csrf_token %}
     
     <!-- Header & Action Bar -->
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
       <div>
-        <div class="d-flex align-items-center gap-2 mb-1">
-          <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 font-monospace">
-            INTER-BRANCH TRANSFER
-          </span>
-          <span class="text-muted small">&bull; Stock Handshake Module</span>
-        </div>
-        <h3 class="fw-bold mb-0">Create Delivery Challan</h3>
+        <h3 class="fw-bold mb-1"><i class="bi bi-truck me-2 text-primary"></i>Create Delivery Challan</h3>
+        <p class="text-muted small mb-0">Record inter-branch stock movement & generate statutory delivery challan (Not an Invoice)</p>
       </div>
 
       <div class="d-flex align-items-center gap-2">
@@ -39,74 +35,166 @@
       {% endfor %}
     {% endif %}
 
-    <!-- Top Metadata Card (Challan No. & Dispatch Date) -->
-    <div class="row g-4 mb-4">
-      <div class="col-md-6">
-        <div class="card shadow-sm border-0 h-100">
-          <div class="card-body p-4">
-            <label class="form-label fw-bold text-secondary text-uppercase small mb-2">
-              <i class="bi bi-hash me-1 text-primary"></i> Delivery Challan No. <span class="text-danger">*</span>
-            </label>
-            <input type="text" class="form-control font-monospace fs-5 fw-bold text-primary" name="challan_no" value="{{ auto_challan_no }}" required>
-            <div class="form-text mt-1 text-muted">Auto-generated reference identifier. Editable if needed.</div>
-          </div>
+    {% if party_name or party_gstin %}
+    <div class="alert alert-info border-info shadow-sm d-flex align-items-center justify-content-between mb-4 p-3 rounded-3">
+      <div class="d-flex align-items-center gap-3">
+        <i class="bi bi-arrow-left-right fs-3 text-info"></i>
+        <div>
+          <h6 class="fw-bold mb-1 text-dark">Internal Transfer Destination: {{ party_name }}</h6>
+          <p class="mb-0 small text-muted">
+            {% if party_gstin %}<strong>GSTIN:</strong> <code class="fw-bold text-dark">{{ party_gstin }}</code> | {% endif %}
+            {% if party_phone %}<strong>Phone:</strong> {{ party_phone }} | {% endif %}
+            {% if party_address %}<strong>Address:</strong> {{ party_address }}{% endif %}
+          </p>
         </div>
       </div>
-
-      <div class="col-md-6">
-        <div class="card shadow-sm border-0 h-100">
-          <div class="card-body p-4">
-            <label class="form-label fw-bold text-secondary text-uppercase small mb-2">
-              <i class="bi bi-calendar-event me-1 text-primary"></i> Dispatch Date <span class="text-danger">*</span>
-            </label>
-            <input type="date" class="form-control font-monospace fs-5 text-dark" name="dispatch_date" value="{{ today_date }}" required>
-            <div class="form-text mt-1 text-muted">Date when inventory items exit current branch.</div>
-          </div>
-        </div>
-      </div>
+      <span class="badge bg-info-subtle text-info border border-info-subtle px-3 py-2 font-monospace">Same GSTIN Entity</span>
     </div>
+    {% endif %}
 
-    <!-- Section 1: Internal Locations Setup -->
+    <!-- Section 1: Metadata & Transport Details -->
     <div class="card shadow-sm border-0 mb-4">
       <div class="card-header bg-white py-3 border-0">
         <h5 class="card-title fw-bold mb-0 text-primary">
-          <i class="bi bi-diagram-3 me-2"></i>Section 1: Internal Locations Setup
+          <i class="bi bi-info-circle me-2"></i>Challan & Transport Details
         </h5>
       </div>
       <div class="card-body p-4 pt-1">
-        <div class="row g-4">
-          <div class="col-md-6">
-            <label class="form-label fw-semibold">Source Branch (From)</label>
-            <select class="form-select" name="from_branch_id">
-              <option value="">Main Central Kitchen / Store (Default)</option>
-              {% for branch in branches %}
-                <option value="{{ branch.id }}">{{ branch.branch_name }} {% if branch.branch_code %}({{ branch.branch_code }}){% endif %}</option>
-              {% endfor %}
+        <div class="row g-3">
+          <div class="col-md-3">
+            <label class="form-label fw-bold text-secondary small mb-1">
+              <i class="bi bi-hash me-1 text-primary"></i> Challan No. <span class="text-danger">*</span>
+            </label>
+            <input type="text" class="form-control font-monospace fw-bold text-primary tally-input" name="challan_no" value="{{ auto_challan_no|default:'' }}"
+                   {% if seq_info and seq_info.readonly %}readonly{% endif %}
+                   {% if seq_info and seq_info.required %}required{% endif %}>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label fw-bold text-secondary small mb-1">
+              <i class="bi bi-calendar-event me-1 text-primary"></i> Dispatch Date <span class="text-danger">*</span>
+            </label>
+            <input type="date" class="form-control font-monospace text-dark tally-input" name="dispatch_date" value="{{ today_date }}" required>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label fw-bold text-secondary small mb-1">
+              <i class="bi bi-arrow-right-square me-1 text-primary"></i> Reason for Transport <span class="text-danger">*</span>
+            </label>
+            <select class="form-select tally-input" name="reason_for_transport" required>
+              <option value="Branch Transfer" selected>Branch Transfer</option>
+              <option value="Supply on Approval">Supply on Approval</option>
+              <option value="Job Work">Job Work</option>
+              <option value="Sales Return">Sales Return</option>
+              <option value="Other">Other</option>
             </select>
           </div>
 
-          <div class="col-md-6">
-            <label class="form-label fw-semibold">Destination Branch (To) <span class="text-danger">*</span></label>
-            <select class="form-select" name="to_branch_id" required>
-              <option value="">-- Select Destination Internal Branch --</option>
-              {% for branch in branches %}
-                <option value="{{ branch.id }}">{{ branch.branch_name }} {% if branch.branch_code %}({{ branch.branch_code }}){% endif %}</option>
-              {% endfor %}
-            </select>
-            <div class="form-text text-muted">Exclusively fetched from internal <code>branches</code> table. Bypasses external vendor/customer parties ledger.</div>
+          <div class="col-md-3">
+            <label class="form-label fw-bold text-secondary small mb-1">
+              <i class="bi bi-truck me-1 text-primary"></i> Transport Mode & Vehicle
+            </label>
+            <div class="input-group">
+              <select class="form-select tally-input" name="transport_mode" style="max-width: 110px;">
+                <option value="Road" selected>Road</option>
+                <option value="Rail">Rail</option>
+                <option value="Air">Air</option>
+                <option value="Ship">Ship</option>
+              </select>
+              <input type="text" class="form-control tally-input" name="vehicle_no" placeholder="Vehicle No. (e.g. RJ14-XX-1234)">
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Section 2: Inventory Items & Transfer Quantities -->
+    <!-- Section 2: Sender & Receiver Details -->
+    <div class="row g-4 mb-4">
+      <!-- Sender Card -->
+      <div class="col-md-6">
+        <div class="card shadow-sm border-0 h-100 border-top border-4 border-primary">
+          <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+            <h5 class="card-title fw-bold mb-0 text-primary">
+              <i class="bi bi-building me-2"></i>SENDER DETAILS (DISPATCHER)
+            </h5>
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace px-2.5 py-1">Source Branch</span>
+          </div>
+          <div class="card-body p-4 pt-1">
+            <div class="mb-2">
+              <span class="text-muted small d-block">Sender Name:</span>
+              <strong class="fs-6 text-dark" id="senderName">{{ sender_name|default:'Current Branch' }}</strong>
+            </div>
+            <div class="mb-2">
+              <span class="text-muted small d-block">Dispatch Address:</span>
+              <span class="text-dark small" id="senderAddress">{{ sender_address|default:'Main Branch Premises' }}</span>
+            </div>
+            <div class="row g-2">
+              <div class="col-6">
+                <span class="text-muted small d-block">State:</span>
+                <span class="badge bg-light text-dark border font-monospace" id="senderState">{{ sender_state|default:'Rajasthan (08)' }}</span>
+              </div>
+              <div class="col-6">
+                <span class="text-muted small d-block">Sender GSTIN:</span>
+                <code class="fw-bold fs-6 text-dark" id="senderGstin">{{ sender_gstin|default:'N/A' }}</code>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Receiver Card -->
+      <div class="col-md-6">
+        <div class="card shadow-sm border-0 h-100 border-top border-4 border-info">
+          <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+            <h5 class="card-title fw-bold mb-0 text-info">
+              <i class="bi bi-geo-alt me-2"></i>RECEIVER DETAILS (DESTINATION)
+            </h5>
+            <span class="badge bg-info-subtle text-info border border-info-subtle font-monospace px-2.5 py-1">Recipient</span>
+          </div>
+          <div class="card-body p-4 pt-1">
+            <div class="mb-3">
+              <label class="form-label fw-semibold small text-muted mb-1">Select Receiver Party / Godown:</label>
+              <select class="form-select tally-input" id="receiver_party_id" name="receiver_party_id" onchange="onReceiverPartyChange(this)">
+                <option value="">-- Select Saved Party or Enter Manually --</option>
+                {% for party in customer_parties %}
+                  <option value="{{ party.id }}"
+                          data-name="{{ party.name }}"
+                          data-address="{{ party.full_address|default:party.address|default:'' }}"
+                          data-gstin="{{ party.gstin|default:'' }}"
+                          {% if party_name and party.name|lower == party_name|lower %}selected{% endif %}>
+                    {{ party.name }} {% if party.gstin %}(GSTIN: {{ party.gstin }}){% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="row g-2 mb-2">
+              <div class="col-12">
+                <input type="text" class="form-control tally-input" id="receiver_name" name="receiver_name" value="{{ party_name|default:'' }}" placeholder="Receiver / Destination Name *" required>
+              </div>
+              <div class="col-12">
+                <input type="text" class="form-control tally-input" id="receiver_address" name="receiver_address" value="{{ party_address|default:'' }}" placeholder="Destination Address">
+              </div>
+              <div class="col-6">
+                <input type="text" class="form-control font-monospace tally-input" id="receiver_state" name="receiver_state" value="Rajasthan (08)" placeholder="State (e.g. Rajasthan (08))">
+              </div>
+              <div class="col-6">
+                <input type="text" class="form-control font-monospace fw-bold tally-input" id="receiver_gstin" name="receiver_gstin" value="{{ party_gstin|default:'' }}" placeholder="Receiver GSTIN">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Inventory Items & Quantities Table -->
     <div class="card shadow-sm border-0 mb-4">
       <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
         <h5 class="card-title fw-bold mb-0 text-primary">
-          <i class="bi bi-boxes me-2"></i>Section 2: Inventory Items & Transfer Quantities
+          <i class="bi bi-boxes me-2"></i>Product Details
         </h5>
-        <button type="button" class="btn btn-outline-primary btn-sm fw-semibold" onclick="addItemRow()">
-          <i class="bi bi-plus-circle me-1"></i> Add Item Row
+        <button type="button" id="btnAddProductRow" class="btn btn-outline-primary btn-sm fw-semibold tally-input" onclick="addItemRow()" onkeydown="handleAddBtnKeyDown(event)">
+          <i class="bi bi-plus-circle me-1"></i> Add Product Row
         </button>
       </div>
       <div class="card-body p-4 pt-1">
@@ -114,35 +202,66 @@
           <table class="table table-hover align-middle" id="itemsTable">
             <thead class="table-light">
               <tr>
-                <th style="width: 40%;">Select Inventory Item</th>
-                <th style="width: 15%;">Available Stock</th>
-                <th style="width: 15%;">Transfer Qty</th>
-                <th style="width: 15%;">Unit Value (₹)</th>
-                <th style="width: 15%; text-align: right;">Line Total (₹)</th>
+                <th style="width: 40px;" class="text-center">Sl.</th>
+                <th style="width: 32%;">Item Description</th>
+                <th style="width: 12%;">HSN Code</th>
+                <th style="width: 12%;">Available Stock</th>
+                <th style="width: 12%;">Transfer Qty</th>
+                <th style="width: 10%;">Unit</th>
+                <th style="width: 14%;">Declared Value (₹)</th>
+                <th style="width: 14%; text-align: right;">Line Total (₹)</th>
                 <th style="width: 40px;"></th>
               </tr>
             </thead>
             <tbody id="itemsTbody">
               <!-- Default Row 1 -->
               <tr class="item-row">
+                <td class="text-center fw-bold text-muted sl-num">1</td>
                 <td>
-                  <select class="form-select item-select" name="item_id[]" onchange="onItemChange(this)" required>
-                    <option value="">-- Select Item --</option>
-                    {% for item in inventory_items %}
-                      <option value="{{ item.id }}" data-cost="{{ item.unit_cost }}" data-stock="{{ item.quantity }}" data-unit="{{ item.unit|default:'' }}">
-                        {{ item.name }} {% if item.sku %}(SKU: {{ item.sku }}){% endif %} - Stock: {{ item.quantity }} {{ item.unit }}
-                      </option>
-                    {% endfor %}
+                  <select class="form-select item-select tally-input" name="item_id[]" onchange="onItemChange(this)" onkeydown="handleItemSelectNav(event, this)" required>
+                    <option value="">-- Select Item (Inventory / Menu) --</option>
+                    {% if inventory_items %}
+                      <optgroup label="📦 Inventory Items">
+                        {% for item in inventory_items %}
+                          <option value="inv_{{ item.id }}"
+                                  data-cost="{{ item.unit_cost }}"
+                                  data-stock="{{ item.quantity }}"
+                                  data-unit="{{ item.unit|default:'Units' }}"
+                                  data-hsn="{{ item.effective_hsn_code|default:'2106' }}">
+                            {{ item.name }} {% if item.sku %}(SKU: {{ item.sku }}){% endif %} - Stock: {{ item.quantity }} {{ item.unit }}
+                          </option>
+                        {% endfor %}
+                      </optgroup>
+                    {% endif %}
+                    {% if menu_items %}
+                      <optgroup label="🍽️ Menu Items">
+                        {% for item in menu_items %}
+                          <option value="menu_{{ item.id }}"
+                                  data-cost="{{ item.price }}"
+                                  data-stock="N/A"
+                                  data-unit="Pcs"
+                                  data-hsn="2106">
+                            {{ item.name }} - Price: ₹{{ item.price }}
+                          </option>
+                        {% endfor %}
+                      </optgroup>
+                    {% endif %}
                   </select>
+                </td>
+                <td>
+                  <input type="text" class="form-control font-monospace hsn-input text-center tally-input" name="hsn_code[]" value="2106" placeholder="HSN">
                 </td>
                 <td>
                   <span class="stock-badge font-monospace text-muted">&mdash;</span>
                 </td>
                 <td>
-                  <input type="number" step="0.01" min="0.01" class="form-control qty-input font-monospace" name="quantity[]" placeholder="0.00" oninput="calculateRowTotal(this)" required>
+                  <input type="number" step="0.01" min="0.01" class="form-control qty-input font-monospace fw-bold tally-input" name="quantity[]" placeholder="0.00" oninput="calculateRowTotal(this)" required>
                 </td>
                 <td>
-                  <input type="number" step="0.01" min="0.00" class="form-control unit-val-input font-monospace" name="unit_value[]" placeholder="0.00" oninput="calculateRowTotal(this)" required>
+                  <input type="text" class="form-control font-monospace unit-input text-center tally-input" name="unit[]" value="Kg" placeholder="Unit">
+                </td>
+                <td>
+                  <input type="number" step="0.01" min="0.00" class="form-control unit-val-input font-monospace tally-input" data-tally-custom="true" name="unit_value[]" placeholder="0.00" oninput="calculateRowTotal(this)" onkeydown="handleUnitValNav(event, this)" required>
                 </td>
                 <td class="text-end font-monospace fw-bold text-success line-total-cell fs-6">
                   ₹0.00
@@ -156,33 +275,93 @@
             </tbody>
           </table>
         </div>
-
-        <!-- Grand Total Summary -->
-        <div class="d-flex justify-content-end align-items-center mt-3 pt-3 border-top">
-          <div class="text-end">
-            <span class="text-muted fw-semibold me-3 fs-6">Total Transfer Value:</span>
-            <span class="fs-3 font-monospace fw-bold text-success" id="grandTotal">₹0.00</span>
-          </div>
-        </div>
       </div>
     </div>
 
-    <!-- Notes / Remarks -->
-    <div class="card shadow-sm border-0 mb-4">
-      <div class="card-header bg-white py-3 border-0">
-        <h5 class="card-title fw-bold mb-0 text-secondary">
-          <i class="bi bi-file-text me-2"></i>Transfer Notes / Remarks
-        </h5>
+    <!-- Section 4: Transfer Notes & Financial Totals Breakdown -->
+    <div class="row g-4 mb-4">
+      <div class="col-md-7">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-header bg-white py-3 border-0">
+            <h5 class="card-title fw-bold mb-0 text-secondary">
+              <i class="bi bi-file-text me-2"></i>Transfer Notes / Remarks
+            </h5>
+          </div>
+          <div class="card-body p-4 pt-1">
+            <textarea class="form-control tally-input" name="notes" rows="4" placeholder="Add dispatch instructions, vehicle/transporter details, driver info...">{{ prefill_notes|default:'' }}</textarea>
+          </div>
+        </div>
       </div>
-      <div class="card-body p-4 pt-1">
-        <textarea class="form-control" name="notes" rows="2" placeholder="Add dispatch instructions, vehicle/transporter details, driver info..."></textarea>
+
+      <div class="col-md-5">
+        <div class="card shadow-sm border-0 h-100">
+          <div class="card-header bg-white py-3 border-0">
+            <h5 class="card-title fw-bold mb-0 text-secondary">
+              <i class="bi bi-calculator me-2"></i>Totals & Statutory Tax Summary
+            </h5>
+          </div>
+          <div class="card-body p-4 pt-1">
+            <div class="d-flex justify-content-between mb-2">
+              <span class="text-muted">Total Declared Value:</span>
+              <strong class="font-monospace text-dark fs-6" id="summarySubtotal">₹0.00</strong>
+            </div>
+            <div class="d-flex justify-content-between mb-2 text-muted small">
+              <span>CGST (0%):</span>
+              <span class="font-monospace">₹0.00</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2 text-muted small">
+              <span>SGST (0%):</span>
+              <span class="font-monospace">₹0.00</span>
+            </div>
+            <div class="d-flex justify-content-between mb-3 text-muted small">
+              <span>Total Tax:</span>
+              <span class="font-monospace">₹0.00</span>
+            </div>
+            <hr>
+            <div class="d-flex justify-content-between align-items-center">
+              <span class="fw-bold text-dark fs-6">Grand Total Value:</span>
+              <span class="fs-3 font-monospace fw-bold text-success" id="grandTotal">₹0.00</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </form>
 </div>
 
-<!-- Template Script for Dynamic Rows and Calculations -->
+<!-- Template Script for Dynamic Rows, Receiver Autofill and Calculations -->
+<script type="application/json" id="customer-parties-data">{% if customer_parties_json %}{{ customer_parties_json|safe }}{% else %}[]{% endif %}</script>
+
 <script>
+  let customerParties = [];
+  try {
+    customerParties = JSON.parse(document.getElementById('customer-parties-data')?.textContent || '[]');
+  } catch (e) {
+    console.error('Error parsing customer parties data:', e);
+  }
+
+  function onReceiverPartyChange(selectElem) {
+    const pId = selectElem.value;
+    const selectedOpt = selectElem.options[selectElem.selectedIndex];
+
+    if (pId && selectedOpt) {
+      const pName = selectedOpt.getAttribute('data-name') || '';
+      const pAddress = selectedOpt.getAttribute('data-address') || '';
+      const pGstin = selectedOpt.getAttribute('data-gstin') || '';
+
+      document.getElementById('receiver_name').value = pName;
+      document.getElementById('receiver_address').value = pAddress;
+      document.getElementById('receiver_gstin').value = pGstin;
+    }
+  }
+
+  function updateSlNumbers() {
+    document.querySelectorAll('.item-row').forEach((row, idx) => {
+      const slCell = row.querySelector('.sl-num');
+      if (slCell) slCell.textContent = (idx + 1);
+    });
+  }
+
   function addItemRow() {
     const tbody = document.getElementById('itemsTbody');
     const firstRow = tbody.querySelector('.item-row');
@@ -190,12 +369,20 @@
 
     // Reset inputs
     newRow.querySelector('.item-select').value = '';
+    newRow.querySelector('.hsn-input').value = '2106';
     newRow.querySelector('.stock-badge').innerHTML = '&mdash;';
     newRow.querySelector('.qty-input').value = '';
+    newRow.querySelector('.unit-input').value = 'Kg';
     newRow.querySelector('.unit-val-input').value = '';
     newRow.querySelector('.line-total-cell').textContent = '₹0.00';
 
     tbody.appendChild(newRow);
+    updateSlNumbers();
+
+    // Bind Tally navigation to newly added row inputs
+    if (challanTallyEngine) {
+      challanTallyEngine.bindEventsToContainer(newRow);
+    }
   }
 
   function removeRow(btn) {
@@ -203,6 +390,7 @@
     const rows = tbody.querySelectorAll('.item-row');
     if (rows.length > 1) {
       btn.closest('tr').remove();
+      updateSlNumbers();
       updateGrandTotal();
     } else {
       alert('Delivery challan must contain at least one item.');
@@ -214,13 +402,22 @@
     const selectedOpt = select.options[select.selectedIndex];
     const cost = selectedOpt.getAttribute('data-cost') || '0.00';
     const stock = selectedOpt.getAttribute('data-stock') || '0';
-    const unit = selectedOpt.getAttribute('data-unit') || '';
+    const unit = selectedOpt.getAttribute('data-unit') || 'Units';
+    const hsn = selectedOpt.getAttribute('data-hsn') || '2106';
 
     const stockBadge = row.querySelector('.stock-badge');
     const unitValInput = row.querySelector('.unit-val-input');
+    const unitInput = row.querySelector('.unit-input');
+    const hsnInput = row.querySelector('.hsn-input');
 
     if (selectedOpt.value) {
-      stockBadge.innerHTML = `<span class="badge bg-light text-dark border font-monospace">${stock} ${unit}</span>`;
+      if (stock === 'N/A') {
+        stockBadge.innerHTML = `<span class="badge bg-light text-muted border font-monospace">N/A</span>`;
+      } else {
+        stockBadge.innerHTML = `<span class="badge bg-light text-dark border font-monospace">${stock} ${unit}</span>`;
+      }
+      if (unitInput) unitInput.value = unit;
+      if (hsnInput) hsnInput.value = hsn;
       if (!unitValInput.value || parseFloat(unitValInput.value) === 0) {
         unitValInput.value = parseFloat(cost).toFixed(2);
       }
@@ -247,7 +444,124 @@
       const unitVal = parseFloat(row.querySelector('.unit-val-input').value) || 0;
       grandTotal += (qty * unitVal);
     });
-    document.getElementById('grandTotal').textContent = '₹' + grandTotal.toFixed(2);
+
+    const formatted = '₹' + grandTotal.toFixed(2);
+    document.getElementById('summarySubtotal').textContent = formatted;
+    document.getElementById('grandTotal').textContent = formatted;
   }
+
+  function handleUnitValNav(event, elem) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const currentRow = elem.closest('tr');
+      const tbody = document.getElementById('itemsTbody');
+      const rows = Array.from(tbody.querySelectorAll('.item-row'));
+      const isLastRow = (rows[rows.length - 1] === currentRow);
+
+      if (isLastRow) {
+        // Focus the "+ Add Product Row" button!
+        const addBtn = document.getElementById('btnAddProductRow');
+        if (addBtn) {
+          addBtn.focus();
+        } else {
+          const notesInp = document.querySelector('[name="notes"]');
+          if (notesInp) notesInp.focus();
+        }
+      } else {
+        const currentIndex = rows.indexOf(currentRow);
+        const nextRow = rows[currentIndex + 1];
+        if (nextRow) {
+          const nextSelect = nextRow.querySelector('.item-select');
+          if (nextSelect) nextSelect.focus();
+        }
+      }
+    }
+  }
+
+  let addBtnEnterPressCount = 0;
+  let addBtnResetTimer = null;
+
+  function handleAddBtnKeyDown(event) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      event.stopPropagation();
+
+      addBtnEnterPressCount++;
+
+      if (addBtnEnterPressCount === 1) {
+        // Single Enter: Add new row & focus new row's item select
+        addItemRow();
+        setTimeout(() => {
+          const tbody = document.getElementById('itemsTbody');
+          const newRows = tbody.querySelectorAll('.item-row');
+          const lastAddedRow = newRows[newRows.length - 1];
+          if (lastAddedRow) {
+            const newSelect = lastAddedRow.querySelector('.item-select');
+            if (newSelect) {
+              newSelect.focus();
+            }
+          }
+        }, 60);
+
+        if (addBtnResetTimer) clearTimeout(addBtnResetTimer);
+        addBtnResetTimer = setTimeout(() => { addBtnEnterPressCount = 0; }, 400);
+
+      } else {
+        // Double Enter: Switch focus to Transfer Notes / Remarks
+        if (addBtnResetTimer) clearTimeout(addBtnResetTimer);
+        addBtnEnterPressCount = 0;
+        const notesInp = document.querySelector('[name="notes"]');
+        if (notesInp) {
+          notesInp.focus();
+        }
+      }
+    } else if (['ArrowDown', 'Tab'].includes(event.key)) {
+      event.preventDefault();
+      const notesInp = document.querySelector('[name="notes"]');
+      if (notesInp) {
+        notesInp.focus();
+      }
+    }
+  }
+
+  function handleItemSelectNav(event, elem) {
+    if (event.key === 'Enter') {
+      if (!elem.value) {
+        event.preventDefault();
+        event.stopPropagation();
+        const notesInp = document.querySelector('[name="notes"]');
+        if (notesInp) {
+          notesInp.focus();
+        }
+      }
+    }
+  }
+</script>
+<script src="{% static 'restaurant_admin/js/tally-engine.js' %}"></script>
+<script>
+  let challanTallyEngine = null;
+  document.addEventListener('DOMContentLoaded', function() {
+    challanTallyEngine = new TallyFormEngine({
+      container: '#challanForm'
+    });
+
+    // Auto-focus initial field on page load without needing mouse click
+    setTimeout(function() {
+      const challanNoInp = document.querySelector('[name="challan_no"]');
+      const dispatchDateInp = document.querySelector('[name="dispatch_date"]');
+      const receiverInp = document.getElementById('receiver_name');
+
+      if (challanNoInp && !challanNoInp.readOnly && !challanNoInp.disabled) {
+        challanNoInp.focus();
+        try { challanNoInp.select(); } catch(e){}
+      } else if (dispatchDateInp) {
+        dispatchDateInp.focus();
+      } else if (receiverInp) {
+        receiverInp.focus();
+      }
+    }, 150);
+  });
 </script>
 {% endblock %}

@@ -1,9 +1,10 @@
 {% extends 'restaurant_admin/base.html' %}
 {% load static %}
 
-{% block title %}Generate Advance Receipt | {{ restaurant.name }}{% endblock %}
+{% block title %}{% if is_edit %}Edit Payment Receipt{% else %}Create Payment Receipt{% endif %} | {{ restaurant.name }}{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{% static 'restaurant_admin/css/tally-engine.css' %}">
 <style>
   .combobox-wrapper {
     position: relative;
@@ -45,10 +46,10 @@
   <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
       <a href="{% url 'restaurant_admin:receipt_list' restaurant_slug=rslug %}" class="text-decoration-none text-muted small fw-bold">
-        <i class="bi bi-arrow-left me-1"></i> Back to Advance Receipts
+        <i class="bi bi-arrow-left me-1"></i> Back to Payment Receipts
       </a>
-      <h3 class="fw-extrabold text-dark mb-0 mt-1">Generate Advance Receipt</h3>
-      <p class="text-muted small mb-0">Create an advance deposit record & generate a linked Draft Order immediately.</p>
+      <h3 class="fw-extrabold text-dark mb-0 mt-1">{% if is_edit %}Edit Payment Receipt{% else %}Create Payment Receipt{% endif %}</h3>
+      <p class="text-muted small mb-0">{% if is_edit %}Modify details for receipt #{{ receipt.receipt_no }}.{% else %}Log a receipt for invoices, VAT bills, general ledgers, or advances.{% endif %}</p>
     </div>
   </div>
 
@@ -61,41 +62,55 @@
   {% endfor %}
   {% endif %}
 
-  <form id="receiptCreateForm" method="post" action="{% url 'restaurant_admin:receipt_create_page' restaurant_slug=rslug %}">
+  <form id="receiptCreateForm" method="post" action="{% if is_edit %}{% url 'restaurant_admin:receipt_edit_page' restaurant_slug=rslug pk=receipt.id %}{% else %}{% url 'restaurant_admin:receipt_create_page' restaurant_slug=rslug %}{% endif %}">
     {% csrf_token %}
 
-    <!-- Top Meta Card: Receipt Sequence & Date -->
+    <!-- Top Meta Card: Receipt Sequence, Reference & Date -->
     <div class="card border-0 shadow-sm rounded-3 mb-4 overflow-hidden">
       <div class="card-header bg-dark text-white py-3 px-4 d-flex justify-content-between align-items-center">
         <span class="fw-bold text-uppercase small" style="letter-spacing: 0.5px;">Receipt Metadata</span>
-        <span class="badge bg-warning text-dark font-monospace">Draft Order Auto-Linked</span>
       </div>
       <div class="card-body p-4 bg-light">
         <div class="row g-3">
-          <!-- Top Left: Editable Receipt No. -->
-          <div class="col-md-6">
+          <!-- Receipt No. -->
+          <div class="col-md-4">
             <label for="receipt_no" class="form-label fw-bold text-dark small mb-1">
               Receipt No. <span class="text-danger">*</span>
             </label>
             <div class="input-group">
               <span class="input-group-text bg-white fw-bold text-primary"><i class="bi bi-hash"></i></span>
-              <input type="text" name="receipt_no" id="receipt_no" class="form-control fw-bold font-monospace text-primary fs-6" 
-                     value="{{ next_receipt_no }}" placeholder="e.g. REC-1001" required>
+              <input type="text" name="receipt_no" id="receipt_no" class="form-control fw-bold font-monospace text-primary fs-6 tally-input" 
+                     value="{% if is_edit %}{{ receipt.receipt_no }}{% else %}{{ next_receipt_no|default:'' }}{% endif %}" placeholder="e.g. REC-1001"
+                     {% if seq_info and seq_info.readonly %}readonly{% endif %}
+                     {% if seq_info and seq_info.required %}required{% endif %}>
             </div>
-            <div class="form-text extra-small text-muted">Auto-generated sequence number. You can edit this manually.</div>
+            <div class="form-text extra-small text-muted">Sequence receipt number. Editable.</div>
           </div>
 
-          <!-- Top Right: Receipt Date -->
-          <div class="col-md-6">
+          <!-- Reference No. (Optional) -->
+          <div class="col-md-4">
+            <label for="reference_number" id="reference_number_label" class="form-label fw-bold text-dark small mb-1">
+              Reference No. (Optional)
+            </label>
+            <div class="input-group">
+              <span class="input-group-text bg-white text-muted"><i class="bi bi-journal-bookmark"></i></span>
+              <input type="text" name="reference_number" id="reference_number" class="form-control fw-bold font-monospace text-secondary fs-6 tally-input" 
+                     value="{% if is_edit %}{{ receipt.reference_number|default:receipt.booking_ref }}{% else %}{{ next_reference_no }}{% endif %}" placeholder="e.g. INV-101, EXC-202, ORD-1001">
+            </div>
+            <div class="form-text extra-small text-muted">Auto-generated or custom Tax Invoice, VAT Bill No, etc.</div>
+          </div>
+
+          <!-- Receipt Date -->
+          <div class="col-md-4">
             <label for="receipt_date" class="form-label fw-bold text-dark small mb-1">
               Receipt Date <span class="text-danger">*</span>
             </label>
             <div class="input-group">
               <span class="input-group-text bg-white text-muted"><i class="bi bi-calendar3"></i></span>
-              <input type="date" name="receipt_date" id="receipt_date" class="form-control fw-semibold" 
+              <input type="date" name="receipt_date" id="receipt_date" class="form-control fw-semibold tally-input" 
                      value="{{ today_date }}" required>
             </div>
-            <div class="form-text extra-small text-muted">Date of issue for the advance deposit.</div>
+            <div class="form-text extra-small text-muted">Date of receipt issue.</div>
           </div>
         </div>
       </div>
@@ -108,23 +123,26 @@
           <i class="bi bi-person-circle text-primary me-2"></i>1. Customer Information
         </h5>
 
-        <input type="hidden" name="party_id" id="party_id" value="">
+        <input type="hidden" name="party_id" id="party_id" value="{% if is_edit %}{{ receipt.party_id|default:'' }}{% endif %}">
 
         <div class="row g-3">
-          <!-- Customer Full Name Autocomplete Combobox -->
+          <!-- Single Unified Customer Full Name Input with Searchable Dropdown -->
           <div class="col-md-12">
             <label for="customer_name" class="form-label fw-bold text-dark small mb-1">
               Customer Full Name <span class="text-danger">*</span>
             </label>
             <div class="combobox-wrapper">
               <div class="input-group">
-                <span class="input-group-text bg-white text-muted"><i class="bi bi-search"></i></span>
-                <input type="text" name="customer_name" id="customer_name" class="form-control fw-semibold" 
-                       placeholder="Type or search customer from Party Ledger..." autocomplete="off" required>
+                <span class="input-group-text bg-white text-muted"><i class="bi bi-person"></i></span>
+                <input type="text" name="customer_name" id="customer_name" class="form-control fw-semibold tally-input" 
+                       value="{% if is_edit %}{{ receipt.customer_name }}{% endif %}"
+                       placeholder="Type custom name or select saved customer from list..." autocomplete="off" required
+                       role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="combobox-suggestions">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="btn-toggle-party-list" aria-label="Toggle customer list" tabindex="-1"></button>
               </div>
-              <div id="combobox-suggestions" class="combobox-dropdown"></div>
+              <div id="combobox-suggestions" class="combobox-dropdown" role="listbox"></div>
             </div>
-            <div class="form-text extra-small text-muted">Search existing customer from ledger or type a new customer name.</div>
+            <div class="form-text extra-small text-muted">Select saved customer from dropdown list or type new customer name directly.</div>
           </div>
 
           <!-- Phone Number -->
@@ -132,7 +150,8 @@
             <label for="phone" class="form-label fw-bold text-dark small mb-1">Phone Number</label>
             <div class="input-group">
               <span class="input-group-text bg-white text-muted"><i class="bi bi-telephone"></i></span>
-              <input type="tel" name="phone" id="phone" class="form-control" placeholder="e.g. 9876543210">
+              <input type="tel" name="phone" id="phone" class="form-control tally-input" 
+                     value="{% if is_edit %}{{ receipt.phone }}{% endif %}" placeholder="e.g. 9876543210">
             </div>
           </div>
 
@@ -141,50 +160,63 @@
             <label for="email" class="form-label fw-bold text-dark small mb-1">Email Address (Optional)</label>
             <div class="input-group">
               <span class="input-group-text bg-white text-muted"><i class="bi bi-envelope"></i></span>
-              <input type="email" name="email" id="email" class="form-control" placeholder="e.g. customer@example.com">
+              <input type="email" name="email" id="email" class="form-control tally-input" 
+                     value="{% if is_edit %}{{ receipt.email }}{% endif %}" placeholder="e.g. customer@example.com">
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Card 2: Advance Deposit Payment -->
+    <!-- Card 2: Payment Details -->
     <div class="card border-0 shadow-sm rounded-3 mb-4">
       <div class="card-body p-4">
         <h5 class="fw-bold text-dark mb-3 border-bottom pb-2">
-          <i class="bi bi-cash-coin text-success me-2"></i>2. Advance Deposit Payment
+          <i class="bi bi-cash-coin text-success me-2"></i>2. Payment Details
         </h5>
 
         <div class="row g-3">
-          <!-- Advance Amount -->
-          <div class="col-md-6">
+          <!-- Receipt Type -->
+          <div class="col-md-4">
+            <label for="receipt_type" class="form-label fw-bold text-dark small mb-1">
+              Receipt Type <span class="text-danger">*</span>
+            </label>
+            <select name="receipt_type" id="receipt_type" class="form-select form-select-lg fw-semibold tally-input" required>
+              <option value="on_account" {% if is_edit and receipt.receipt_type == 'on_account' %}selected{% elif not is_edit %}selected{% endif %}>On-Account Payment</option>
+              <option value="advance" {% if is_edit and receipt.receipt_type == 'advance' %}selected{% endif %}>Advance Booking</option>
+            </select>
+          </div>
+
+          <!-- Receipt Amount -->
+          <div class="col-md-4">
             <label for="advance_amount" class="form-label fw-bold text-dark small mb-1">
-              Advance Deposit Amount (₹) <span class="text-danger">*</span>
+              Receipt Amount (₹) <span class="text-danger">*</span>
             </label>
             <div class="input-group input-group-lg">
               <span class="input-group-text bg-light fw-bold text-success">₹</span>
               <input type="number" step="0.01" min="0.01" name="advance_amount" id="advance_amount" 
-                     class="form-control fw-bold text-success fs-4" placeholder="e.g. 2000.00" required>
+                     class="form-control fw-bold text-success fs-4 tally-input" 
+                     value="{% if is_edit %}{{ receipt.advance_amount }}{% endif %}" placeholder="e.g. 2000.00" required>
             </div>
           </div>
 
           <!-- Payment Method -->
-          <div class="col-md-6">
+          <div class="col-md-4">
             <label for="payment_method" class="form-label fw-bold text-dark small mb-1">
               Payment Method <span class="text-danger">*</span>
             </label>
-            <select name="payment_method" id="payment_method" class="form-select form-select-lg fw-semibold" required>
-              <option value="upi" selected>UPI / QR Code (PhonePe, GPay, Paytm)</option>
-              <option value="cash">Cash</option>
-              <option value="card">Credit / Debit Card</option>
-              <option value="bank_transfer">Bank Transfer</option>
+            <select name="payment_method" id="payment_method" class="form-select form-select-lg fw-semibold tally-input" required>
+              <option value="upi" {% if is_edit and receipt.payment_method == 'upi' %}selected{% elif not is_edit %}selected{% endif %}>UPI / QR Code (PhonePe, GPay, Paytm)</option>
+              <option value="cash" {% if is_edit and receipt.payment_method == 'cash' %}selected{% endif %}>Cash</option>
+              <option value="card" {% if is_edit and receipt.payment_method == 'card' %}selected{% endif %}>Credit / Debit Card</option>
+              <option value="bank_transfer" {% if is_edit and receipt.payment_method == 'bank_transfer' %}selected{% endif %}>Bank Transfer</option>
             </select>
           </div>
 
           <!-- Notes / Remarks -->
           <div class="col-md-12">
             <label for="notes" class="form-label fw-bold text-dark small mb-1">Notes / Booking Remarks</label>
-            <textarea name="notes" id="notes" rows="3" class="form-control" placeholder="e.g. Advance deposit for upcoming event/party reservation"></textarea>
+            <textarea name="notes" id="notes" rows="3" class="form-control tally-input" placeholder="e.g. Payment receipt for tax invoice / advance deposit / general ledger">{% if is_edit %}{{ receipt.notes }}{% endif %}</textarea>
           </div>
         </div>
       </div>
@@ -196,7 +228,11 @@
         Cancel
       </a>
       <button type="submit" id="btn-submit-receipt" class="btn btn-success px-4 py-2 fw-bold shadow-sm">
+        {% if is_edit %}
+        <i class="bi bi-check-circle me-1"></i> Update Payment Receipt
+        {% else %}
         <i class="bi bi-check-circle me-1"></i> Save & Generate Receipt
+        {% endif %}
       </button>
     </div>
   </form>
@@ -205,61 +241,262 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'restaurant_admin/js/tally-engine.js' %}"></script>
 <script>
+  let receiptTallyEngine = null;
   document.addEventListener('DOMContentLoaded', function () {
+    receiptTallyEngine = new TallyFormEngine({
+      container: '#receiptCreateForm'
+    });
+
+    // Auto-focus initial field on page load without needing mouse click
+    setTimeout(function() {
+      const recNoInp = document.getElementById('receipt_no');
+      const refNoInp = document.getElementById('reference_number');
+      const custNameInp = document.getElementById('customer_name');
+
+      if (recNoInp && !recNoInp.readOnly && !recNoInp.disabled) {
+        recNoInp.focus();
+        try { recNoInp.select(); } catch(e){}
+      } else if (refNoInp && !refNoInp.readOnly && !refNoInp.disabled) {
+        refNoInp.focus();
+        try { refNoInp.select(); } catch(e){}
+      } else if (custNameInp) {
+        custNameInp.focus();
+      }
+    }, 150);
+    const receiptTypeSelect = document.getElementById('receipt_type');
+    const refNoInput = document.getElementById('reference_number');
+    const refNoLabel = document.getElementById('reference_number_label');
+    const nextRefNoDefault = "{{ next_reference_no|escapejs }}";
+
+    function updateReferenceNoField() {
+      if (!receiptTypeSelect || !refNoInput || !refNoLabel) return;
+      refNoInput.readOnly = false;
+      if (receiptTypeSelect.value === 'advance') {
+        refNoLabel.textContent = 'Linked Order No. (Editable)';
+        refNoInput.placeholder = 'e.g. ORD-0001';
+        if (!refNoInput.value.trim() && nextRefNoDefault) {
+          refNoInput.value = nextRefNoDefault;
+        }
+      } else {
+        refNoLabel.textContent = 'Reference No. (Optional)';
+        refNoInput.placeholder = 'e.g. INV-101, EXC-202';
+      }
+    }
+
+    if (receiptTypeSelect) {
+      receiptTypeSelect.addEventListener('change', updateReferenceNoField);
+      updateReferenceNoField();
+    }
+
     const parties = JSON.parse('{{ customer_parties_json|escapejs }}') || [];
     const nameInput = document.getElementById('customer_name');
     const phoneInput = document.getElementById('phone');
     const emailInput = document.getElementById('email');
     const partyIdInput = document.getElementById('party_id');
     const dropdown = document.getElementById('combobox-suggestions');
+    const toggleBtn = document.getElementById('btn-toggle-party-list');
+    const receiptForm = document.getElementById('receiptCreateForm');
+
+    let activeIndex = -1;
+    let currentFilteredItems = [];
+
+    function setActiveIndex(idx) {
+      if (!dropdown) return;
+      const items = dropdown.querySelectorAll('.combobox-item');
+      items.forEach(el => {
+        el.classList.remove('active');
+        el.setAttribute('aria-selected', 'false');
+      });
+
+      if (idx >= 0 && idx < items.length) {
+        activeIndex = idx;
+        const activeItem = items[activeIndex];
+        activeItem.classList.add('active');
+        activeItem.setAttribute('aria-selected', 'true');
+        if (nameInput) nameInput.setAttribute('aria-activedescendant', activeItem.id);
+        activeItem.scrollIntoView({ block: 'nearest' });
+      } else {
+        activeIndex = -1;
+        if (nameInput) nameInput.removeAttribute('aria-activedescendant');
+      }
+    }
+
+    function selectItem(p) {
+      if (!p) return;
+      if (nameInput) nameInput.value = p.name;
+      if (phoneInput) phoneInput.value = p.phone || '';
+      if (emailInput) emailInput.value = p.email || '';
+      if (partyIdInput) partyIdInput.value = p.id || '';
+      closeDropdown();
+    }
+
+    function closeDropdown() {
+      if (!dropdown) return;
+      dropdown.style.display = 'none';
+      if (nameInput) {
+        nameInput.setAttribute('aria-expanded', 'false');
+        nameInput.removeAttribute('aria-activedescendant');
+      }
+      activeIndex = -1;
+      currentFilteredItems = [];
+    }
 
     function renderDropdown(items) {
-      if (!items || items.length === 0) {
-        dropdown.style.display = 'none';
+      currentFilteredItems = items || [];
+      if (!dropdown) return;
+
+      if (!currentFilteredItems || currentFilteredItems.length === 0) {
+        closeDropdown();
         return;
       }
-      dropdown.innerHTML = items.map(p => `
-        <div class="combobox-item" data-id="${p.id}" data-name="${p.name}" data-phone="${p.phone}" data-email="${p.email}">
+
+      dropdown.innerHTML = currentFilteredItems.map((p, idx) => `
+        <div class="combobox-item" id="combobox-item-${idx}" role="option" aria-selected="false" data-index="${idx}">
           <div class="fw-bold text-dark">${p.name}</div>
           <div class="small text-muted">${p.phone ? '<i class="bi bi-telephone me-1"></i>' + p.phone : ''} ${p.email ? '| ' + p.email : ''}</div>
         </div>
       `).join('');
-      dropdown.style.display = 'block';
 
-      dropdown.querySelectorAll('.combobox-item').forEach(el => {
-        el.addEventListener('click', function () {
-          nameInput.value = this.dataset.name;
-          phoneInput.value = this.dataset.phone || '';
-          emailInput.value = this.dataset.email || '';
-          partyIdInput.value = this.dataset.id || '';
-          dropdown.style.display = 'none';
+      dropdown.style.display = 'block';
+      if (nameInput) nameInput.setAttribute('aria-expanded', 'true');
+      activeIndex = -1;
+
+      dropdown.querySelectorAll('.combobox-item').forEach((el, idx) => {
+        el.addEventListener('mouseenter', function () {
+          setActiveIndex(idx);
+        });
+        el.addEventListener('click', function (e) {
+          e.preventDefault();
+          selectItem(currentFilteredItems[idx]);
         });
       });
     }
 
-    nameInput.addEventListener('input', function () {
-      const q = this.value.trim().toLowerCase();
-      partyIdInput.value = ''; // Reset party_id when user types custom text
+    function filterAndShowSuggestions() {
+      if (!nameInput) return;
+      const q = nameInput.value.trim().toLowerCase();
       if (!q) {
         renderDropdown(parties.slice(0, 10));
-        return;
+      } else {
+        const filtered = parties.filter(p => p.name.toLowerCase().includes(q) || (p.phone && p.phone.includes(q)));
+        renderDropdown(filtered.slice(0, 10));
       }
-      const filtered = parties.filter(p => p.name.toLowerCase().includes(q) || p.phone.includes(q));
-      renderDropdown(filtered.slice(0, 10));
-    });
+    }
 
-    nameInput.addEventListener('focus', function () {
-      const q = this.value.trim().toLowerCase();
-      const filtered = q ? parties.filter(p => p.name.toLowerCase().includes(q) || p.phone.includes(q)) : parties;
-      renderDropdown(filtered.slice(0, 10));
-    });
+    if (nameInput) {
+      nameInput.addEventListener('input', function () {
+        if (partyIdInput) partyIdInput.value = ''; // Reset party_id when user types custom text
+        filterAndShowSuggestions();
+      });
+
+      nameInput.addEventListener('focus', function () {
+        filterAndShowSuggestions();
+      });
+
+      nameInput.addEventListener('keydown', function (e) {
+        const isDropdownOpen = dropdown && dropdown.style.display !== 'none' && currentFilteredItems.length > 0;
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (!isDropdownOpen) {
+            filterAndShowSuggestions();
+          } else {
+            setActiveIndex(activeIndex + 1 >= currentFilteredItems.length ? 0 : activeIndex + 1);
+          }
+        } else if (e.key === 'ArrowUp') {
+          if (isDropdownOpen) {
+            e.preventDefault();
+            setActiveIndex(activeIndex - 1 < 0 ? currentFilteredItems.length - 1 : activeIndex - 1);
+          }
+        } else if (e.key === 'Enter') {
+          if (isDropdownOpen && activeIndex >= 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            selectItem(currentFilteredItems[activeIndex]);
+          }
+        } else if (e.key === 'Escape') {
+          if (isDropdownOpen) {
+            e.preventDefault();
+            closeDropdown();
+          }
+        }
+      });
+    }
+
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (dropdown && dropdown.style.display === 'block') {
+          closeDropdown();
+        } else {
+          nameInput.focus();
+          filterAndShowSuggestions();
+        }
+      });
+    }
 
     document.addEventListener('click', function (e) {
-      if (!nameInput.contains(e.target) && !dropdown.contains(e.target)) {
-        dropdown.style.display = 'none';
+      if (nameInput && dropdown && toggleBtn && !nameInput.contains(e.target) && !dropdown.contains(e.target) && !toggleBtn.contains(e.target)) {
+        closeDropdown();
       }
     });
+
+    // Form-Wide Enter Key Focus Traversal
+    function getNavigableFields() {
+      if (!receiptForm) return [];
+      const selectors = 'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button[type="submit"]:not([disabled])';
+      const allElements = Array.from(receiptForm.querySelectorAll(selectors));
+      return allElements.filter(el => {
+        return el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0;
+      });
+    }
+
+    if (receiptForm) {
+      receiptForm.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+
+        const activeEl = document.activeElement;
+        if (!activeEl || !receiptForm.contains(activeEl)) return;
+
+        // If target is submit button, let default submit behavior happen
+        if (activeEl.type === 'submit' || activeEl.id === 'btn-submit-receipt') {
+          return;
+        }
+
+        // If target is customer_name and dropdown was open with active item, keydown listener on customer_name handled item selection
+        if (activeEl === nameInput && dropdown && dropdown.style.display !== 'none' && activeIndex >= 0) {
+          return;
+        }
+
+        // Textarea handling: Shift+Enter inserts newline, plain Enter advances focus
+        if (activeEl.tagName.toLowerCase() === 'textarea') {
+          if (e.shiftKey) return; // Allow Shift+Enter for multiline newline
+        }
+
+        e.preventDefault();
+
+        const fields = getNavigableFields();
+        const currentIndex = fields.indexOf(activeEl);
+
+        if (currentIndex !== -1 && currentIndex < fields.length - 1) {
+          const nextField = fields[currentIndex + 1];
+          nextField.focus();
+
+          if (typeof nextField.select === 'function' && nextField.tagName.toLowerCase() === 'input' && nextField.type !== 'date') {
+            nextField.select();
+          }
+        } else if (currentIndex === fields.length - 1) {
+          // Final field pressed Enter -> submit form
+          if (typeof receiptForm.requestSubmit === 'function') {
+            receiptForm.requestSubmit();
+          } else {
+            receiptForm.submit();
+          }
+        }
+      });
+    }
   });
 </script>
 {% endblock %}

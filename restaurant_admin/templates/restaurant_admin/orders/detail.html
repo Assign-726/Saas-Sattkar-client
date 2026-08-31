@@ -287,7 +287,7 @@
         <div class="od-info-card">
             <div class="od-info-label"><i class="bi bi-grid-3x3-gap"></i> Dining Area</div>
             <div class="od-info-value">
-                {% if order.table_number %}Table #{{ order.table_number }}{% else %}Pickup / Takeaway{% endif %}
+                {% if order.table %}Table {{ order.table.name }}{% if order.table.zone %} ({{ order.table.zone.name }}){% endif %}{% elif order.table_number %}Table #{{ order.table_number }}{% elif order.order_type == 'dine_in' %}Dine-In{% else %}Pickup / Takeaway{% endif %}
             </div>
         </div>
         {% if order.advance_amount_paid > 0 %}
@@ -321,6 +321,12 @@
             <div class="od-item-info">
                 <div class="od-item-name">{{ item.menu_item.name }}</div>
                 <div class="od-item-qty">Quantity: {{ item.quantity }} &times; &#8377;{{ item.unit_price|floatformat:2 }}</div>
+                {% if item.notes %}
+                <div style="font-size: 0.75rem; color: #b45309; background: #fef3c7; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px;"><i class="fas fa-sticky-note me-1"></i> {{ item.notes }}</div>
+                {% endif %}
+                {% if item.discount_reason %}
+                <div style="font-size: 0.75rem; color: #4338ca; background: #e0e7ff; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px;"><i class="fas fa-tag me-1"></i> Discount Reason: {{ item.discount_reason }}</div>
+                {% endif %}
             </div>
             <div class="od-item-price">&#8377;{{ item.subtotal|floatformat:2 }}</div>
         </div>
@@ -331,47 +337,116 @@
     <div class="od-total-grid">
         <!-- Order Total -->
         <div class="od-total-card">
-            <h6 style="font-weight:700; color:#1a202c; margin-bottom:14px;">Order Total</h6>
+            <h6 style="font-weight:700; color:#1a202c; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between;">
+                <span><i class="bi bi-receipt text-primary me-1"></i> Order Total</span>
+            </h6>
+
             <div class="od-total-row">
-                <span>Subtotal</span>
+                <span>Items Subtotal</span>
                 <span>&#8377;{{ subtotal|floatformat:2 }}</span>
             </div>
-            {% if cgst_percentage > 0 %}
+
+            {% if discount_amount > 0 %}
+            <div class="od-total-row discount" style="color: #dc2626; font-weight: 600;">
+                <span><i class="bi bi-tag-fill me-1"></i> Bill Discount {% if order.discount_reason %}<span style="font-size:0.75rem; color:#4338ca; background:#e0e7ff; padding:2px 6px; border-radius:4px; margin-left:8px; font-weight:500;">Reason: {{ order.discount_reason }}</span>{% endif %}</span>
+                <span>-&#8377;{{ discount_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+
+            {% if food_subtotal > 0 and liquor_subtotal > 0 %}
+            <div class="od-total-row text-muted" style="font-size:0.82rem; padding-left:8px;">
+                <span>• Food (GST Base)</span>
+                <span>&#8377;{{ food_subtotal|floatformat:2 }}</span>
+            </div>
+            <div class="od-total-row text-muted" style="font-size:0.82rem; padding-left:8px;">
+                <span>• Liquor (Excise Base)</span>
+                <span>&#8377;{{ liquor_subtotal|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+
+            <!-- 1. Taxable Additions: Service Charge & Taxable Custom Charges -->
+            {% if custom_charges_list %}
+            {% for cc in custom_charges_list %}
+            {% if cc.is_taxable %}
+            <div class="od-total-row text-muted" style="font-size:0.84rem;">
+                <span>
+                    <i class="bi bi-tag-fill text-primary me-1"></i> {{ cc.name }}
+                    <span class="badge bg-light text-primary border ms-1" style="font-size:0.65rem;">Taxable</span>
+                </span>
+                <span>&#8377;{{ cc.amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% endif %}
+
+            <!-- Service Charge (Taxable) -->
+            {% if service_percentage > 0 and service_amount > 0 %}
             <div class="od-total-row">
+                <span>Service Charge ({{ service_percentage|floatformat:0 }}%) <span class="badge bg-light text-primary border" style="font-size:0.65rem;">Taxable</span></span>
+                <span>&#8377;{{ service_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+
+            <!-- GST Taxes (Food) -->
+            {% if cgst_amount > 0 or sgst_amount > 0 %}
+            <div class="od-total-row" style="color: #1e40af;">
                 <span>CGST ({{ cgst_percentage|floatformat:1 }}%)</span>
                 <span>&#8377;{{ cgst_amount|floatformat:2 }}</span>
             </div>
-            {% endif %}
-            {% if sgst_percentage > 0 %}
-            <div class="od-total-row">
+            <div class="od-total-row" style="color: #1e40af;">
                 <span>SGST ({{ sgst_percentage|floatformat:1 }}%)</span>
                 <span>&#8377;{{ sgst_amount|floatformat:2 }}</span>
             </div>
             {% endif %}
-            {% if cgst_percentage == 0 and sgst_percentage == 0 %}
-            <div class="od-total-row" style="color:#94a3b8;">
-                <span>Taxes (CGST/SGST 0%)</span>
-                <span>&#8377;0.00</span>
+
+            <!-- State Excise VAT Taxes (Liquor) -->
+            {% if beer_vat > 0 %}
+            <div class="od-total-row" style="color: #c2410c;">
+                <span>🍺 Beer VAT ({{ vat_beer_percentage|floatformat:1 }}%)</span>
+                <span>&#8377;{{ beer_vat|floatformat:2 }}</span>
             </div>
             {% endif %}
-            {% if service_percentage > 0 %}
-            <div class="od-total-row">
-                <span>Service Charge ({{ service_percentage|floatformat:0 }}%)</span>
-                <span>&#8377;{{ service_amount|floatformat:2 }}</span>
+            {% if imfl_vat > 0 %}
+            <div class="od-total-row" style="color: #c2410c;">
+                <span>🥃 IMFL VAT ({{ vat_imfl_percentage|floatformat:1 }}%)</span>
+                <span>&#8377;{{ imfl_vat|floatformat:2 }}</span>
             </div>
             {% endif %}
-            {% if discount_amount > 0 %}
-            <div class="od-total-row discount">
-                <span>Discount</span>
-                <span>-&#8377;{{ discount_amount|floatformat:2 }}</span>
+            {% if wine_vat > 0 %}
+            <div class="od-total-row" style="color: #c2410c;">
+                <span>🍷 Wine VAT ({{ vat_wine_percentage|floatformat:1 }}%)</span>
+                <span>&#8377;{{ wine_vat|floatformat:2 }}</span>
             </div>
             {% endif %}
+            {% if gen_vat > 0 %}
+            <div class="od-total-row" style="color: #c2410c;">
+                <span>🍾 Liquor VAT ({{ vat_percentage|floatformat:1 }}%)</span>
+                <span>&#8377;{{ gen_vat|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+
+            <!-- 2. Non-Taxable Additions (Placed below taxes) -->
+            {% if custom_charges_list %}
+            {% for cc in custom_charges_list %}
+            {% if not cc.is_taxable %}
+            <div class="od-total-row text-muted" style="font-size:0.84rem;">
+                <span>
+                    <i class="bi bi-tag-fill text-secondary me-1"></i> {{ cc.name }}
+                    <span class="badge bg-light text-secondary border ms-1" style="font-size:0.65rem;">Non-tax</span>
+                </span>
+                <span>&#8377;{{ cc.amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% endif %}
+
             {% if round_off_amount and round_off_amount != 0 %}
             <div class="od-total-row">
                 <span>Round Off</span>
                 <span>{% if round_off_amount > 0 %}+&#8377;{{ round_off_amount|floatformat:2 }}{% else %}-&#8377;{{ round_off_amount|floatformat:2|slice:"1:" }}{% endif %}</span>
             </div>
             {% endif %}
+
             <div class="od-total-row divider grand-total">
                 <span>Total</span>
                 <span>&#8377;{{ total|floatformat:2 }}</span>
@@ -392,7 +467,7 @@
                     <i class="bi bi-shield-check me-1"></i> Online Prepaid Order
                 </div>
                 {% else %}
-                <button type="button" class="btn btn-success fw-bold w-100 py-2 shadow-sm d-flex align-items-center justify-content-center gap-2" data-bs-toggle="modal" data-bs-target="#detailSettleModal">
+                <button type="button" class="btn btn-success fw-bold w-100 py-2 shadow-sm d-flex align-items-center justify-content-center gap-2" onclick="detOpenSettlementModal()">
                     <i class="bi bi-credit-card-fill"></i> 💳 Settle & Mark Paid
                 </button>
                 {% endif %}
@@ -407,165 +482,201 @@
                         <i class="bi bi-check-circle"></i> Mark as Served
                     </button>
                 </form>
-                <form method="post" action="{% url 'restaurant_admin:order_update_status' restaurant_slug=rslug pk=order.id %}" style="width:100%">
-                    {% csrf_token %}
-                    <input type="hidden" name="status" value="C">
-                    <button type="submit" class="btn-cancel-order" style="width:100%; justify-content:center;">
-                        <i class="bi bi-x-circle"></i> Cancel Order
-                    </button>
-                </form>
-                {% elif order.status == 'S' %}
-                <div class="od-status-done served" style="width:100%; justify-content:center;">
-                    <i class="bi bi-check-circle-fill"></i> Order Served
-                </div>
-                {% elif order.status == 'C' %}
-                <div class="od-status-done cancelled" style="width:100%; justify-content:center;">
-                    <i class="bi bi-x-circle-fill"></i> Order Cancelled
-                </div>
                 {% endif %}
+                <a href="{% url 'restaurant_admin:order_invoice' restaurant_slug=rslug pk=order.id %}" target="_blank" class="btn-print-action">
+                    <i class="bi bi-receipt"></i> Print Tax Invoice
+                </a>
+                <a href="{% url 'restaurant_admin:order_kot' restaurant_slug=rslug pk=order.id %}" target="_blank" class="btn-print-action">
+                    <i class="bi bi-printer"></i> Print KOT
+                </a>
             </div>
         </div>
     </div>
 
-    <!-- Full Settlement Modal on Detail Page -->
-    <div class="modal fade" id="detailSettleModal" tabindex="-1" aria-labelledby="detailSettleModalLabel" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content border-0 shadow-lg overflow-hidden">
-          <div class="modal-header bg-dark text-white py-3">
-            <h5 class="modal-title fw-bold text-white mb-0 d-flex align-items-center" id="detailSettleModalLabel">
-              <i class="bi bi-wallet2 text-warning me-2 fs-4"></i> Settle & Checkout Order
-            </h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+    <!-- Unified Settle & Checkout Modal for Order Details Page -->
+    <div id="detSettleVeil" class="veil" style="display:none; position:fixed; inset:0; background:rgba(20,22,28,.6); z-index:9999; align-items:center; justify-content:center; padding:16px; animation:fade .14s ease-out;">
+      <div class="card wide" style="background:#FFF; border:1px solid #E3DFD7; border-radius:14px; max-width:540px; width:100%; max-height:92vh; display:flex; flex-direction:column; box-shadow:0 24px 60px rgba(0,0,0,.2); overflow:hidden; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+        
+        <!-- Header -->
+        <div class="ch" style="padding:18px 24px 14px; border-bottom:1px solid #E3DFD7; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <h3 id="detSettleGrandTitle" style="font-family:'Bricolage Grotesque',sans-serif; font-size:20px; font-weight:800; margin:0; color:#1A1815;">Settle — ₹{% if order.due_amount is not None and order.due_amount > 0 %}{{ order.due_amount|floatformat:2 }}{% elif order.advance_amount_paid > 0 %}{{ order.net_payable|floatformat:2 }}{% else %}{{ total|floatformat:2 }}{% endif %}</h3>
+            <p id="detSettleOrderMeta" style="font-size:12px; color:#6E675C; margin:3px 0 0 0; font-weight:500;">{% if order.order_number %}{{ order.order_number }}{% else %}Order #{{ order.branch_order_number|default:order.id }}{% endif %} · {% if order.table %}{{ order.table.name }}{% else %}Counter / Takeaway{% endif %} · Dine-in</p>
+          </div>
+          <button type="button" class="btn-close-settle" onclick="detCloseSettlementModal()" style="background:none; border:none; font-size:22px; color:#8C857B; cursor:pointer; padding:4px 8px; line-height:1;" title="Close (Esc)">&times;</button>
+        </div>
+
+        <!-- Body (scrollable) -->
+        <div class="cb" style="padding:18px 24px; overflow-y:auto; display:flex; flex-direction:column; gap:14px;">
+          
+          <!-- Invoice No Row -->
+          <div class="invRow" style="display:flex; align-items:center; justify-content:space-between; padding-bottom:10px; border-bottom:1px dashed #E3DFD7;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="invLbl" style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#6E675C;">INVOICE NO.</span>
+              <span class="invVal" id="detSettleInvVal" style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; font-weight:700; font-size:14px; color:#1A1815;">{{ order.gstin_no|default:'INV-000001' }}</span>
+            </div>
+            <button type="button" id="detBtnOverrideInv" onclick="detToggleInvOverride()" style="background:#FFF; border:1px solid #E3DFD7; border-radius:6px; padding:3px 9px; font-size:11px; font-weight:600; color:#57524A; cursor:pointer;">Override</button>
+          </div>
+          
+          <!-- Override Input Box (hidden by default) -->
+          <div id="detInvOverrideBox" style="display:none; background:#F7F6F3; padding:10px 12px; border-radius:8px; border:1px solid #E3DFD7;">
+            <label style="display:block; font-size:10px; font-weight:700; color:#6E675C; text-transform:uppercase; margin-bottom:4px;">Custom Invoice No.</label>
+            <input type="text" id="detCustomInvInput" class="form-control form-control-sm" style="font-family:monospace; font-weight:600;" value="{{ order.gstin_no|default:'' }}" placeholder="e.g. INV-2026-0042">
           </div>
 
-          <div class="modal-body p-4">
-            <input type="hidden" id="det-settle-order-id" value="{{ order.id }}">
-            <input type="hidden" id="det-settle-grand-total" value="{{ total|floatformat:2 }}">
-
-            <!-- Top Order Info Summary Box -->
-            <div class="p-3 bg-light rounded-3 mb-4 border d-flex justify-content-between align-items-center">
-              <div>
-                <h6 class="fw-bold text-dark mb-1">{% if order.order_number %}{{ order.order_number }}{% else %}Order #{{ order.branch_order_number|default:order.id }}{% endif %}</h6>
-                <div class="text-muted small">{% if order.table %}{{ order.table.name }}{% else %}Counter / Takeaway{% endif %} | Billed To: {{ order.customer_name|default:"Guest" }}</div>
-              </div>
-              <div class="text-end">
-                <span class="d-block text-muted uppercase extra-small fw-bold" style="font-size: 0.75rem;">Amount Payable</span>
-                <span class="fs-3 fw-bold text-success">₹{% if order.advance_amount_paid > 0 %}{{ order.net_payable|floatformat:2 }}{% else %}{{ total|floatformat:2 }}{% endif %}</span>
-              </div>
+          <!-- Thermal Receipt Breakdown Container (.rcpt) -->
+          <div class="rcpt" id="detSettleRcptBox" style="background:#F9F9F8; border:1px solid #E3DFD7; border-radius:9px; padding:14px; font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; font-size:11.5px; color:#38342F; line-height:1.5;">
+            {% for it in order.items.all %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+              <span>{{ it.quantity }} × {{ it.menu_item.name|default:'Item' }}{% if it.discount_amount and it.discount_amount > 0 %} <small style="color:#B45309;">(-₹{{ it.discount_amount|floatformat:2 }})</small>{% endif %}</span>
+              <span>{{ it.subtotal|floatformat:2 }}</span>
             </div>
+            {% if it.notes %}
+            <div class="rr" style="opacity:.65; font-size:10px; padding-left:12px;"><span>↳ {{ it.notes }}</span><span></span></div>
+            {% endif %}
+            {% endfor %}
 
-            {% if order.advance_amount_paid and order.advance_amount_paid > 0 %}
-            <!-- Advance Deposit Settlement Breakdown Card -->
-            <div id="det-modal-advance-deduction-card" class="card border-primary border-opacity-20 bg-primary bg-opacity-10 rounded-3 mb-4 p-3 shadow-sm">
-              <div class="d-flex justify-content-between align-items-center mb-2">
-                <span class="fw-bold text-dark"><i class="bi bi-bookmark-star-fill text-warning me-1"></i> Advance Deposit Attached ({% if order.advance_receipt %}{{ order.advance_receipt.receipt_no }}{% else %}Deposit Attached{% endif %})</span>
-                <span class="badge bg-primary text-white">Deposit Settlement</span>
-              </div>
-              <div class="row text-center g-2 pt-2 border-top border-primary border-opacity-20">
-                <div class="col-4">
-                  <span class="d-block text-muted small text-uppercase font-weight-bold" style="font-size:0.7rem;">Grand Total</span>
-                  <span class="fw-bold text-dark fs-6">₹{{ total|floatformat:2 }}</span>
-                </div>
-                <div class="col-4 border-start border-end border-primary border-opacity-20">
-                  <span class="d-block text-success small text-uppercase font-weight-bold" style="font-size:0.7rem;">Less Advance Paid</span>
-                  <span class="fw-bold text-success fs-6">-₹{{ order.advance_amount_paid|floatformat:2 }}</span>
-                </div>
-                <div class="col-4">
-                  <span class="d-block text-primary small text-uppercase font-weight-bold" style="font-size:0.7rem;">Net Payable</span>
-                  <span class="fw-bold text-primary fs-5">₹{{ order.net_payable|floatformat:2 }}</span>
-                </div>
-              </div>
+            {% if discount_amount and discount_amount > 0 %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; color:#B45309;">
+              <span>Bill discount</span>
+              <span>-₹{{ discount_amount|floatformat:2 }}</span>
             </div>
             {% endif %}
 
-            <!-- 1. Select Invoice Mode -->
-            <div class="mb-4">
-              <label class="form-label fw-bold text-dark mb-2">
-                <i class="bi bi-receipt me-1 text-primary"></i> 1. Select Invoice Mode
-              </label>
-              <div class="btn-group w-100 pos-invoice-mode-group" role="group">
-                <input type="radio" class="btn-check" name="det_settle_invoice_mode" id="det_mode_food" value="food" {% if not order.check_item_types.1 %}checked{% endif %}>
-                <label class="btn btn-outline-primary py-2 fw-semibold" for="det_mode_food">
-                  <i class="bi bi-egg-fried me-1"></i> Food GST Invoice
-                </label>
+            {% if service_percentage and service_percentage > 0 and service_amount > 0 %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+              <span>Service charge ({{ service_percentage|floatformat:0 }}%)</span>
+              <span>₹{{ service_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
 
-                <input type="radio" class="btn-check" name="det_settle_invoice_mode" id="det_mode_bar" value="liquor" {% if order.check_item_types.1 and not order.check_item_types.0 %}checked{% endif %}>
-                <label class="btn btn-outline-warning text-dark py-2 fw-semibold" for="det_mode_bar">
-                  <i class="bi bi-cup-straw me-1"></i> Bar Excise Bill
-                </label>
+            {% if custom_charges_list %}
+            {% for cc in custom_charges_list %}
+            {% if cc.is_taxable %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+              <span>{{ cc.name }} ({% if cc.type == 'flat' %}₹{{ cc.value|floatformat:2 }}{% else %}{{ cc.value }}%{% endif %})</span>
+              <span>₹{{ cc.amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% endif %}
 
-                <input type="radio" class="btn-check" name="det_settle_invoice_mode" id="det_mode_split" value="split" {% if order.check_item_types.0 and order.check_item_types.1 %}checked{% endif %}>
-                <label class="btn btn-outline-success py-2 fw-semibold" for="det_mode_split">
-                  <i class="bi bi-layers me-1"></i> Auto-Split Invoices
-                </label>
-              </div>
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; border-top:1px dashed #E3DFD7; margin-top:4px; padding-top:4px; font-weight:600;">
+              <span>Taxable value</span>
+              <span>₹{{ gst_base|floatformat:2 }}</span>
             </div>
 
-            <!-- 2. Invoice Serial Number Fields -->
-            <div class="row g-3 mb-4" id="det-row-settlement-serial-numbers">
-              <div class="col-md-6" id="det-wrapper-gstin">
-                <label class="form-label fw-semibold text-dark small mb-1">
-                  <i class="bi bi-card-heading me-1 text-primary"></i>Tax Invoice No. (GST)
-                </label>
-                <input type="text" id="det-gstin-no" class="form-control" value="{{ order.gstin_no|default:'' }}" placeholder="e.g. INV-2026-0042">
-              </div>
-              <div class="col-md-6" id="det-wrapper-excise">
-                <label class="form-label fw-semibold text-dark small mb-1">
-                  <i class="bi bi-file-earmark-medical me-1 text-warning"></i>Retail Excise Bill No. (VAT)
-                </label>
-                <input type="text" id="det-excise-bill-no" class="form-control" value="{{ order.excise_bill_no|default:'' }}" placeholder="e.g. EXC-2026-0042">
-              </div>
+            {% if cgst_amount and cgst_amount > 0 %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+              <span>CGST @ {{ cgst_percentage|floatformat:1 }}%</span>
+              <span>₹{{ cgst_amount|floatformat:2 }}</span>
             </div>
+            {% endif %}
+            {% if sgst_amount and sgst_amount > 0 %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+              <span>SGST @ {{ sgst_percentage|floatformat:1 }}%</span>
+              <span>₹{{ sgst_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
 
-            <!-- 3. Split Payment & Multi-Method Engine -->
-            <div class="mb-4 p-3 bg-light rounded-3 border">
-              <div class="d-flex justify-content-between align-items-center mb-2">
-                <label class="form-label fw-bold text-dark mb-0">
-                  <i class="bi bi-credit-card me-1 text-info"></i> 3. Payment Method & Split Received
-                </label>
-                <button type="button" id="btn-det-add-payment-split" class="btn btn-sm btn-outline-primary fw-semibold">
-                  <i class="bi bi-plus-circle me-1"></i> Add Payment Split
-                </button>
-              </div>
+            {% if custom_charges_list %}
+            {% for cc in custom_charges_list %}
+            {% if not cc.is_taxable %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+              <span>{{ cc.name }} ({% if cc.type == 'flat' %}₹{{ cc.value|floatformat:2 }}{% else %}{{ cc.value }}%{% endif %})</span>
+              <span>₹{{ cc.amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            {% endfor %}
+            {% endif %}
 
-              <div id="det-payment-split-rows-container">
-                <!-- Dynamic split rows -->
-              </div>
+            {% if round_off_amount and round_off_amount != 0 %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+              <span>Round off</span>
+              <span>{% if round_off_amount > 0 %}+{% endif %}{{ round_off_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
 
-              <!-- Live Balance Summary Cards -->
-              <div class="row g-2 mt-2 pt-2 border-top">
-                <div class="col-4">
-                  <div class="p-2 bg-white rounded border text-center">
-                    <span class="d-block text-muted uppercase small fw-bold" style="font-size: 0.7rem;">TOTAL PAID</span>
-                    <span class="fw-bold text-success fs-6" id="det-split-summary-paid">₹0.00</span>
-                  </div>
-                </div>
-                <div class="col-4">
-                  <div class="p-2 bg-white rounded border text-center">
-                    <span class="d-block text-muted uppercase small fw-bold" style="font-size: 0.7rem;">REMAINING DUE</span>
-                    <span class="fw-bold text-danger fs-6" id="det-split-summary-due">₹0.00</span>
-                  </div>
-                </div>
-                <div class="col-4">
-                  <div class="p-2 bg-white rounded border text-center">
-                    <span class="d-block text-muted uppercase small fw-bold" style="font-size: 0.7rem;">STATUS</span>
-                    <span class="badge bg-success mt-1" id="det-split-summary-status">Paid</span>
-                  </div>
-                </div>
-              </div>
+            <div class="rt" style="display:flex; justify-content:space-between; font-weight:700; margin-top:8px; padding-top:8px; border-top:1px dashed #A8A29E; color:#1A1815; font-size:13px;">
+              <span>TOTAL</span>
+              <span>₹{{ total|floatformat:2 }}</span>
             </div>
           </div>
 
-          <div class="modal-footer bg-light py-3">
-            <button type="button" class="btn btn-outline-secondary fw-semibold px-3" data-bs-dismiss="modal">Cancel</button>
-            <button type="button" id="btn-submit-detail-save-only" class="btn btn-primary fw-bold px-3 py-2">
-              <i class="bi bi-check-circle me-1"></i> Save Order
-            </button>
-            <button type="button" id="btn-submit-detail-settle" class="btn btn-success fw-bold px-3 py-2">
-              <i class="bi bi-printer me-1"></i> Save & Print Bill
-            </button>
+          {% if order.advance_amount_paid > 0 or order.paid_amount > 0 %}
+          <!-- Prior Payment / Deposit Settlement Card -->
+          <div id="detSettleDeductionCard" style="background:#EFF6FF; border:1px solid #BFDBFE; border-radius:8px; padding:12px 14px; font-size:12px; color:#1E40AF;">
+            <div style="font-weight:700; display:flex; justify-content:space-between; align-items:center;">
+              <span><i class="bi bi-info-circle-fill text-primary me-1"></i> {% if order.paid_amount > 0 and order.advance_amount_paid > 0 %}Deposit & Prior Payment{% elif order.paid_amount > 0 %}Partial Payment Received{% else %}Advance Deposit Attached ({% if order.advance_receipt %}{{ order.advance_receipt.receipt_no }}{% else %}REC{% endif %}){% endif %}</span>
+              <span class="badge bg-primary text-white" style="font-size:10.5px;">{% if order.paid_amount > 0 %}Partial Paid{% else %}Deposit Settlement{% endif %}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:8px; padding-top:8px; border-top:1px solid #DBEAFE; font-size:12px;">
+              <div><span style="color:#64748B; font-size:11px; display:block;">Grand Total</span><strong style="color:#1E293B;">₹{{ total|floatformat:2 }}</strong></div>
+              <div style="text-align:center;"><span style="color:#16A34A; font-size:11px; display:block;">Already Paid / Dep.</span><strong style="color:#16A34A;">-₹{% if order.advance_amount_paid > 0 and order.paid_amount > 0 %}{{ order.advance_amount_paid|add:order.paid_amount|floatformat:2 }}{% elif order.paid_amount > 0 %}{{ order.paid_amount|floatformat:2 }}{% else %}{{ order.advance_amount_paid|floatformat:2 }}{% endif %}</strong></div>
+              <div style="text-align:right;"><span style="color:#2563EB; font-size:11px; display:block;">Remaining Due</span><strong style="color:#2563EB;">₹{% if order.due_amount is not None %}{{ order.due_amount|floatformat:2 }}{% else %}{{ order.net_payable|floatformat:2 }}{% endif %}</strong></div>
+            </div>
           </div>
+          {% endif %}
+
+          <!-- WHO IS THIS BILL FOR -->
+          <div>
+            <label class="lb" style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:6px;">WHO IS THIS BILL FOR</label>
+            <div class="seg" style="display:flex; border:1.5px solid #E3DFD7; border-radius:8px; overflow:hidden;">
+              <button type="button" id="detTabBillWalkin" onclick="detSetBillTarget('walkin')" style="flex:1; padding:9px 8px; border:none; background:#2F3E9E; color:#FFF; font-size:12px; font-weight:700; cursor:pointer; transition:.15s;">Walk-in guest</button>
+              <button type="button" id="detTabBillCompany" onclick="detSetBillTarget('company')" style="flex:1; padding:9px 8px; border:none; background:#FFF; color:#57524A; font-size:12px; font-weight:600; cursor:pointer; transition:.15s;">Company (has GSTIN)</button>
+            </div>
+          </div>
+
+          <!-- Walk-in Info Row -->
+          <div id="detSettleWalkinBox" style="background:#F7F6F3; border:1px solid #E3DFD7; border-radius:8px; padding:10px 14px; font-size:12px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <span style="color:#6E675C; font-size:11px;">Billed To:</span>
+              <strong id="detSettleWalkinName" style="color:#1A1815; margin-left:4px;">{{ order.customer_name|default:'Walk-in' }}</strong>
+              <span id="detSettleWalkinPhone" style="color:#6E675C; font-size:11px; margin-left:6px;">{% if order.phone %}({{ order.phone }}){% endif %}</span>
+            </div>
+          </div>
+
+          <!-- Company (GSTIN) Box (shown when Company selected) -->
+          <div id="detSettleCompanyBox" style="display:none; flex-direction:column; gap:10px;">
+            <div>
+              <label style="display:block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:4px;">CUSTOMER GSTIN</label>
+              <input type="text" id="detSettleGstinInput" maxlength="15" value="{% if order.party and order.party.gstin and order.party.gst_registration_type != 'unregistered' %}{{ order.party.gstin }}{% endif %}" placeholder="08AAACS1234C1Z5" style="width:100%; padding:9px 12px; font-size:13px; font-family:monospace; border:1.5px solid #E3DFD7; border-radius:7px; outline:none; text-transform:uppercase; box-sizing:border-box;">
+            </div>
+            <div>
+              <label style="display:block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:4px;">REGISTERED NAME</label>
+              <input type="text" id="detSettleRegNameInput" value="{% if order.customer_name and order.customer_name != 'Guest' and order.customer_name != 'Walk-in' %}{{ order.customer_name }}{% endif %}" placeholder="As per GST registration" style="width:100%; padding:9px 12px; font-size:13px; border:1.5px solid #E3DFD7; border-radius:7px; outline:none; box-sizing:border-box;">
+            </div>
+            <div class="note" style="border-left:3.5px solid #2F3E9E; background:#EEF2FF; padding:10px 12px; border-radius:6px; font-size:11.5px; color:#3730A3; line-height:1.4;">
+              <strong>The tax stays CGST + SGST</strong> even when the company is registered in another state. For a meal served here the place of supply is this restaurant, so IGST never applies.
+            </div>
+          </div>
+
+          <!-- PAYMENT METHOD -->
+          <div>
+            <label class="lb" style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:6px;">PAYMENT</label>
+            <div class="pillrow" id="detSettlePayPills" style="display:flex; flex-wrap:wrap; gap:8px;">
+              <button type="button" class="on" onclick="detSetSettlePay('Cash')" style="padding:8px 16px; border-radius:7px; border:1.5px solid #2F3E9E; background:#2F3E9E; color:#FFF; font-size:12.5px; font-weight:700; cursor:pointer;">Cash</button>
+              <button type="button" onclick="detSetSettlePay('Card')" style="padding:8px 16px; border-radius:7px; border:1.5px solid #E3DFD7; background:#FFF; color:#1A1815; font-size:12.5px; font-weight:600; cursor:pointer;">Card</button>
+              <button type="button" onclick="detSetSettlePay('UPI')" style="padding:8px 16px; border-radius:7px; border:1.5px solid #E3DFD7; background:#FFF; color:#1A1815; font-size:12.5px; font-weight:600; cursor:pointer;">UPI</button>
+              <button type="button" onclick="detSetSettlePay('Split')" style="padding:8px 16px; border-radius:7px; border:1.5px solid #E3DFD7; background:#FFF; color:#1A1815; font-size:12.5px; font-weight:600; cursor:pointer;">Split</button>
+              <button type="button" onclick="detSetSettlePay('Credit')" style="padding:8px 16px; border-radius:7px; border:1.5px solid #E3DFD7; background:#FFF; color:#B45309; font-size:12.5px; font-weight:600; cursor:pointer;">Credit / Pending</button>
+            </div>
+          </div>
+
+          <!-- Dynamic Pay Box -->
+          <div id="detSettlePayBox">
+            <!-- Rendered dynamically -->
+          </div>
+
         </div>
+
+        <!-- Footer -->
+        <div class="cf" style="padding:14px 24px; border-top:1px solid #E3DFD7; display:flex; gap:10px; justify-content:flex-end; background:#F7F6F3;">
+          <button type="button" onclick="detCloseSettlementModal()" style="padding:9px 18px; border-radius:7px; border:1px solid #E3DFD7; background:#FFF; font-weight:600; font-size:12.5px; cursor:pointer; color:#57524A;">Back <kbd style="font-size:10px; background:#F2EFE9; padding:2px 5px; border-radius:4px; border:1px solid #D6D1C7; color:#57524A; margin-left:4px;">Esc</kbd></button>
+          <button type="button" id="btn-submit-detail-save-only" onclick="detSubmitSettlement(false, this)" style="padding:9px 16px; border-radius:7px; border:1px solid #2F3E9E; background:#FFF; color:#2F3E9E; font-weight:700; font-size:12.5px; cursor:pointer;">Save Only</button>
+          <button type="button" id="btn-submit-detail-settle" onclick="detSubmitSettlement(true, this)" style="padding:9px 22px; border-radius:7px; border:none; background:#2F3E9E; color:#FFF; font-weight:700; font-size:12.5px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; box-shadow:0 2px 8px rgba(47,62,158,.25);">Print &amp; close <kbd style="font-size:10px; background:rgba(255,255,255,.25); padding:2px 5px; border-radius:4px; color:#FFF; margin-left:4px;">↵</kbd></button>
+        </div>
+
       </div>
     </div>
 
@@ -607,267 +718,331 @@
     const _prepStart = "{{ order.prep_start|date:'c'|default:'' }}";
     if (_readyAt) startCountdown(_readyAt, _prepStart);
 
-    // ── Prep form AJAX ──────────────────────────────────────────────
     function getCsrf() {
         const m = document.cookie.match(/csrftoken=([^;]+)/);
         return m ? decodeURIComponent(m[1]) : '';
     }
 
-    document.addEventListener('DOMContentLoaded', function () {
-        const grandTotal = parseFloat("{{ total }}") || 0;
-        const advancePaid = parseFloat("{{ order.advance_amount_paid|default:0 }}") || 0;
-        const netPayableTarget = Math.max(0, grandTotal - advancePaid);
-        const dueInitial = parseFloat("{{ order.due_amount|default:0 }}") || netPayableTarget;
-        const hasAlcohol = {% if order.check_item_types.1 %}true{% else %}false{% endif %};
+    function safeParseFloat(v) {
+        if (!v) return 0;
+        const cleaned = String(v).replace(/[^0-9.-]/g, '');
+        const n = parseFloat(cleaned);
+        return isNaN(n) ? 0 : n;
+    }
 
-        let detState = {
-            grandTotal: grandTotal,
-            advancePaid: advancePaid,
-            netPayable: netPayableTarget,
-            hasAlcohol: hasAlcohol,
-            calculatedPayments: [],
-            calculatedPaidAmount: 0,
-            calculatedDueAmount: 0,
-            calculatedPaymentStatus: 'paid'
-        };
+    const grandTotal = safeParseFloat("{{ total }}");
+    const advancePaid = safeParseFloat("{{ order.advance_amount_paid|default:0 }}");
+    const alreadyPaid = safeParseFloat("{{ order.paid_amount|default:0 }}");
+    const netPayableTarget = Math.max(0, grandTotal - advancePaid - alreadyPaid);
+    const hasAlcohol = "{{ order.check_item_types.1|yesno:'true,false' }}" === "true";
 
-        function detCreatePaymentSplitRowHtml(method = 'cash', amount = '') {
-          return `
-            <div class="det-payment-split-row row g-2 align-items-center mb-2">
-              <div class="col-6">
-                <select class="form-select form-select-sm det-payment-split-method fw-semibold">
-                  <option value="cash" ${method === 'cash' ? 'selected' : ''}>Cash</option>
-                  <option value="upi" ${method === 'upi' ? 'selected' : ''}>UPI / QR Code</option>
-                  <option value="card" ${method === 'card' ? 'selected' : ''}>Credit / Debit Card</option>
-                  <option value="bank_transfer" ${method === 'bank_transfer' ? 'selected' : ''}>Bank Transfer</option>
-                  <option value="credit" ${method === 'credit' ? 'selected' : ''}>Credit / Pending</option>
-                </select>
-              </div>
-              <div class="col-5">
-                <div class="input-group input-group-sm">
-                  <span class="input-group-text">₹</span>
-                  <input type="number" step="0.01" min="0" class="form-control det-payment-split-amount fw-bold text-success" value="${amount}" placeholder="Amount">
+    let detState = {
+        grandTotal: grandTotal,
+        advancePaid: advancePaid,
+        alreadyPaid: alreadyPaid,
+        netPayable: netPayableTarget,
+        hasAlcohol: hasAlcohol,
+        payMode: 'Cash',
+        billTarget: "{% if order.party and order.party.gstin and order.party.gst_registration_type != 'unregistered' %}company{% else %}walkin{% endif %}"
+    };
+
+    window.detOpenSettlementModal = function() {
+        detSetSettlePay('Cash');
+        detSetBillTarget(detState.billTarget);
+        const veil = document.getElementById('detSettleVeil');
+        if (veil) veil.style.display = 'flex';
+    };
+
+    window.detCloseSettlementModal = function() {
+        const veil = document.getElementById('detSettleVeil');
+        if (veil) veil.style.display = 'none';
+    };
+
+    window.detToggleInvOverride = function() {
+        const box = document.getElementById('detInvOverrideBox');
+        const inp = document.getElementById('detCustomInvInput');
+        if (box.style.display === 'none') {
+            box.style.display = 'block';
+            if (inp) inp.focus();
+        } else {
+            box.style.display = 'none';
+        }
+    };
+
+    window.detSetBillTarget = function(target) {
+        detState.billTarget = target;
+        const tabWalkin = document.getElementById('detTabBillWalkin');
+        const tabCompany = document.getElementById('detTabBillCompany');
+        const walkinBox = document.getElementById('detSettleWalkinBox');
+        const companyBox = document.getElementById('detSettleCompanyBox');
+
+        if (target === 'walkin') {
+            if (tabWalkin) { tabWalkin.style.background = '#2F3E9E'; tabWalkin.style.color = '#FFF'; tabWalkin.style.fontWeight = '700'; }
+            if (tabCompany) { tabCompany.style.background = '#FFF'; tabCompany.style.color = '#57524A'; tabCompany.style.fontWeight = '600'; }
+            if (walkinBox) walkinBox.style.display = 'flex';
+            if (companyBox) companyBox.style.display = 'none';
+        } else {
+            if (tabCompany) { tabCompany.style.background = '#2F3E9E'; tabCompany.style.color = '#FFF'; tabCompany.style.fontWeight = '700'; }
+            if (tabWalkin) { tabWalkin.style.background = '#FFF'; tabWalkin.style.color = '#57524A'; tabWalkin.style.fontWeight = '600'; }
+            if (walkinBox) walkinBox.style.display = 'none';
+            if (companyBox) companyBox.style.display = 'flex';
+            setTimeout(() => document.getElementById('detSettleGstinInput')?.focus(), 50);
+        }
+    };
+
+    window.detSetSettlePay = function(mode) {
+        detState.payMode = mode;
+        const pills = document.querySelectorAll('#detSettlePayPills button');
+        pills.forEach(b => {
+            const isMatch = b.textContent.trim().toLowerCase().startsWith(mode.toLowerCase());
+            if (isMatch) {
+                b.className = 'on';
+                b.style.background = mode === 'Credit' ? '#B45309' : '#2F3E9E';
+                b.style.color = '#FFF';
+                b.style.borderColor = mode === 'Credit' ? '#B45309' : '#2F3E9E';
+                b.style.fontWeight = '700';
+            } else {
+                b.className = '';
+                b.style.background = '#FFF';
+                b.style.color = b.textContent.includes('Credit') ? '#B45309' : '#1A1815';
+                b.style.borderColor = '#E3DFD7';
+                b.style.fontWeight = '600';
+            }
+        });
+        detDrawSettlePayBox();
+    };
+
+    function detDrawSettlePayBox() {
+        const el = document.getElementById('detSettlePayBox');
+        if (!el) return;
+        const netPayable = detState.netPayable;
+
+        if (detState.payMode === 'Cash') {
+            el.innerHTML = `
+                <div>
+                    <label style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:4px;">CASH RECEIVED</label>
+                    <input id="detCashRecv" type="number" step="0.01" min="0" value="${netPayable.toFixed(2)}" placeholder="${netPayable.toFixed(2)}" style="width:100%; padding:10px 14px; font-size:15px; font-family:monospace; font-weight:700; border:1.5px solid #E3DFD7; border-radius:8px; outline:none; background:#FFF; color:#1A1815; box-sizing:border-box;">
+                    <div id="detCashChangeDue" style="display:none; margin-top:6px; padding:8px 12px; border-radius:6px; font-size:12px; font-weight:600;"></div>
                 </div>
-              </div>
-              <div class="col-1 text-end">
-                <button type="button" class="btn btn-sm btn-outline-danger btn-det-delete-payment-row p-1" title="Delete Split">
-                  <i class="bi bi-trash"></i>
-                </button>
-              </div>
-            </div>
-          `;
-        }
-
-        function detInitPaymentSplitRows() {
-          const container = document.getElementById('det-payment-split-rows-container');
-          if (!container) return;
-          container.innerHTML = detCreatePaymentSplitRowHtml('cash', detState.netPayable.toFixed(2));
-          detAttachPaymentSplitEventListeners();
-          detRecalculatePaymentSplits();
-        }
-
-        function detAttachPaymentSplitEventListeners() {
-          const container = document.getElementById('det-payment-split-rows-container');
-          if (!container) return;
-
-          container.querySelectorAll('.det-payment-split-amount').forEach(inp => {
-            inp.removeEventListener('input', detRecalculatePaymentSplits);
-            inp.addEventListener('input', detRecalculatePaymentSplits);
-          });
-
-          container.querySelectorAll('.det-payment-split-method').forEach(sel => {
-            sel.removeEventListener('change', detRecalculatePaymentSplits);
-            sel.addEventListener('change', detRecalculatePaymentSplits);
-          });
-
-          container.querySelectorAll('.btn-det-delete-payment-row').forEach(btn => {
-            btn.onclick = function() {
-              const rows = container.querySelectorAll('.det-payment-split-row');
-              if (rows.length > 1) {
-                this.closest('.det-payment-split-row').remove();
-                detRecalculatePaymentSplits();
-              }
-            };
-          });
-        }
-
-        document.getElementById('btn-det-add-payment-split')?.addEventListener('click', () => {
-          const container = document.getElementById('det-payment-split-rows-container');
-          if (!container) return;
-
-          const currentTotalPaid = Array.from(container.querySelectorAll('.det-payment-split-amount'))
-            .reduce((sum, inp) => sum + (parseFloat(inp.value) || 0), 0);
-          const remaining = Math.max(0, detState.netPayable - currentTotalPaid);
-
-          const div = document.createElement('div');
-          div.innerHTML = detCreatePaymentSplitRowHtml('upi', remaining > 0 ? remaining.toFixed(2) : '0.00');
-          container.appendChild(div.firstElementChild);
-
-          detAttachPaymentSplitEventListeners();
-          detRecalculatePaymentSplits();
-        });
-
-        function detRecalculatePaymentSplits() {
-          const container = document.getElementById('det-payment-split-rows-container');
-          if (!container) return;
-
-          const rows = container.querySelectorAll('.det-payment-split-row');
-          const deleteBtns = container.querySelectorAll('.btn-det-delete-payment-row');
-          deleteBtns.forEach(b => b.disabled = (rows.length <= 1));
-
-          let totalPaid = 0;
-          const payments = [];
-
-          rows.forEach(r => {
-            const method = r.querySelector('.det-payment-split-method')?.value || 'cash';
-            const amt = parseFloat(r.querySelector('.det-payment-split-amount')?.value) || 0;
-            if (amt > 0) {
-              totalPaid += amt;
-              payments.push({ method, amount: amt });
-            }
-          });
-
-          const dueAmount = Math.max(0, detState.netPayable - totalPaid);
-
-          const paidEl = document.getElementById('det-split-summary-paid');
-          const dueEl = document.getElementById('det-split-summary-due');
-          const statusBadge = document.getElementById('det-split-summary-status');
-
-          if (paidEl) paidEl.textContent = `₹${totalPaid.toFixed(2)}`;
-          if (dueEl) dueEl.textContent = `₹${dueAmount.toFixed(2)}`;
-
-          let calcStatus = 'paid';
-          if (dueAmount <= 0.01) {
-            calcStatus = 'paid';
-            if (statusBadge) {
-              statusBadge.className = 'badge bg-success mt-1';
-              statusBadge.textContent = 'Paid';
-            }
-          } else if ((totalPaid + detState.advancePaid) > 0) {
-            calcStatus = 'partially_paid';
-            if (statusBadge) {
-              statusBadge.className = 'badge bg-warning text-dark mt-1';
-              statusBadge.textContent = 'Partially Paid';
-            }
-          } else {
-            calcStatus = 'unpaid';
-            if (statusBadge) {
-              statusBadge.className = 'badge bg-danger mt-1';
-              statusBadge.textContent = 'Unpaid / Credit';
-            }
-          }
-
-          detState.calculatedPayments = payments;
-          detState.calculatedPaidAmount = totalPaid;
-          detState.calculatedDueAmount = dueAmount;
-          detState.calculatedPaymentStatus = calcStatus;
-        }
-
-        function detSyncSettlementFieldsVisibility() {
-          const mode = document.querySelector('input[name="det_settle_invoice_mode"]:checked')?.value || 'food';
-          const wrapperGstin = document.getElementById('det-wrapper-gstin');
-          const wrapperExcise = document.getElementById('det-wrapper-excise');
-          const gstinInput = document.getElementById('det-gstin-no');
-          const exciseInput = document.getElementById('det-excise-bill-no');
-
-          if (!wrapperGstin || !wrapperExcise) return;
-
-          let showGstin = (mode === 'food' || mode === 'split');
-          let showExcise = (mode === 'liquor' || (mode === 'split' && detState.hasAlcohol));
-
-          const currentYear = new Date().getFullYear();
-          const randNum = Math.floor(1000 + Math.random() * 9000);
-
-          if (showGstin) {
-            wrapperGstin.style.display = 'block';
-            wrapperGstin.className = showExcise ? 'col-md-6' : 'col-md-12';
-            if (gstinInput && !gstinInput.value) gstinInput.value = `INV-${currentYear}-${randNum}`;
-          } else {
-            wrapperGstin.style.display = 'none';
-            if (gstinInput) gstinInput.value = '';
-          }
-
-          if (showExcise) {
-            wrapperExcise.style.display = 'block';
-            wrapperExcise.className = showGstin ? 'col-md-6' : 'col-md-12';
-            if (exciseInput && !exciseInput.value) exciseInput.value = `EXC-${currentYear}-${randNum}`;
-          } else {
-            wrapperExcise.style.display = 'none';
-            if (exciseInput) exciseInput.value = '';
-          }
-        }
-
-        document.querySelectorAll('input[name="det_settle_invoice_mode"]').forEach(r => {
-          r.addEventListener('change', detSyncSettlementFieldsVisibility);
-        });
-
-        const modalEl = document.getElementById('detailSettleModal');
-        if (modalEl) {
-          modalEl.addEventListener('show.bs.modal', function() {
-            detSyncSettlementFieldsVisibility();
-            detInitPaymentSplitRows();
-          });
-        }
-
-        function detSubmitSettlement(printBill = true, clickedBtn) {
-            detRecalculatePaymentSplits();
-
-            const invoiceMode = document.querySelector('input[name="det_settle_invoice_mode"]:checked')?.value || 'food';
-            const wrapperGstin = document.getElementById('det-wrapper-gstin');
-            const wrapperExcise = document.getElementById('det-wrapper-excise');
-
-            const gstinNo = (wrapperGstin && wrapperGstin.style.display !== 'none') ? (document.getElementById('det-gstin-no')?.value || '') : '';
-            const exciseBillNo = (wrapperExcise && wrapperExcise.style.display !== 'none') ? (document.getElementById('det-excise-bill-no')?.value || '') : '';
-
-            if (clickedBtn) {
-              clickedBtn.disabled = true;
-              clickedBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Settling...';
-            }
-
-            const payload = {
-                invoice_mode: invoiceMode,
-                payment_method: detState.calculatedPayments[0]?.method || 'cash',
-                payment_status: detState.calculatedPaymentStatus,
-                payments: detState.calculatedPayments,
-                paid_amount: detState.calculatedPaidAmount.toFixed(2),
-                due_amount: detState.calculatedDueAmount.toFixed(2),
-                gstin_no: gstinNo,
-                excise_bill_no: exciseBillNo
-            };
-
-            fetch("{% url 'restaurant_admin:order_settle_api' restaurant_slug=rslug pk=order.id %}", {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCsrf(),
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify(payload)
-            })
-            .then(r => r.json())
-            .then(d => {
-                if (d.success) {
-                    if (printBill) {
-                      window.open("{% url 'restaurant_admin:order_invoice' restaurant_slug=rslug pk=order.id %}", '_blank');
-                    }
-                    window.location.reload();
+            `;
+            const inp = document.getElementById('detCashRecv');
+            const d = document.getElementById('detCashChangeDue');
+            function calcCash() {
+                const v = parseFloat(inp.value);
+                if (isNaN(v) || v <= 0) { d.style.display = 'none'; return; }
+                const diff = Math.round((v - netPayable) * 100) / 100;
+                d.style.display = 'block';
+                if (diff >= 0) {
+                    d.style.background = '#F0FDF4';
+                    d.style.color = '#166534';
+                    d.style.border = '1px solid #BBF7D0';
+                    d.innerHTML = `<i class="bi bi-arrow-return-left me-1"></i> Change to return: <strong>₹${diff.toFixed(2)}</strong>`;
                 } else {
-                    alert(d.error || 'Failed to settle payment.');
-                    if (clickedBtn) {
-                        clickedBtn.disabled = false;
-                        clickedBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Mark Paid & Complete';
-                    }
+                    d.style.background = '#FEF2F2';
+                    d.style.color = '#991B1B';
+                    d.style.border = '1px solid #FECACA';
+                    d.innerHTML = `<i class="bi bi-exclamation-circle me-1"></i> Short by: <strong>₹${(-diff).toFixed(2)}</strong> (Remaining will be logged as Credit/Due)`;
                 }
-            })
-            .catch(() => {
-                alert('Network error while settling payment.');
+            }
+            inp.addEventListener('input', calcCash);
+            setTimeout(() => { inp.focus(); try { inp.select(); } catch(e){} }, 50);
+        } else if (detState.payMode === 'Card') {
+            el.innerHTML = `
+                <div>
+                    <label style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:4px;">CARD RECEIVED</label>
+                    <input id="detCardRecv" type="number" step="0.01" min="0" value="${netPayable.toFixed(2)}" style="width:100%; padding:10px 14px; font-size:15px; font-family:monospace; font-weight:700; border:1.5px solid #E3DFD7; border-radius:8px; outline:none; background:#FFF; color:#1A1815; box-sizing:border-box;">
+                </div>
+            `;
+        } else if (detState.payMode === 'UPI') {
+            el.innerHTML = `
+                <div>
+                    <label style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:4px;">UPI / QR CODE RECEIVED</label>
+                    <input id="detUpiRecv" type="number" step="0.01" min="0" value="${netPayable.toFixed(2)}" style="width:100%; padding:10px 14px; font-size:15px; font-family:monospace; font-weight:700; border:1.5px solid #E3DFD7; border-radius:8px; outline:none; background:#FFF; color:#1A1815; box-sizing:border-box;">
+                </div>
+            `;
+        } else if (detState.payMode === 'Split') {
+            el.innerHTML = `
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    <div>
+                        <label style="font-size:10px; font-weight:700; color:#6E675C; text-transform:uppercase; display:block; margin-bottom:4px;">Cash Portion</label>
+                        <input id="detSplitCashInp" type="number" step="0.01" min="0" value="${(netPayable/2).toFixed(2)}" style="width:100%; padding:8px 12px; font-family:monospace; font-weight:700; font-size:14px; border:1.5px solid #E3DFD7; border-radius:7px; box-sizing:border-box;">
+                    </div>
+                    <div>
+                        <label style="font-size:10px; font-weight:700; color:#6E675C; text-transform:uppercase; display:block; margin-bottom:4px;">Card / UPI Portion</label>
+                        <input id="detSplitOtherInp" type="number" step="0.01" min="0" value="${(netPayable/2).toFixed(2)}" style="width:100%; padding:8px 12px; font-family:monospace; font-weight:700; font-size:14px; border:1.5px solid #E3DFD7; border-radius:7px; box-sizing:border-box;">
+                    </div>
+                </div>
+                <div id="detSplitMsg" style="margin-top:8px; font-size:11.5px; font-weight:600; padding:7px 12px; border-radius:6px; background:#F0FDF4; color:#166534; border:1px solid #BBF7D0;">
+                    ✓ Splits match the total payable.
+                </div>
+            `;
+            const sc = document.getElementById('detSplitCashInp');
+            const so = document.getElementById('detSplitOtherInp');
+            const sm = document.getElementById('detSplitMsg');
+            function calcSplit() {
+                const a = parseFloat(sc.value) || 0;
+                const b = parseFloat(so.value) || 0;
+                const diff = Math.round((netPayable - a - b) * 100) / 100;
+                if (Math.abs(diff) < 0.01) {
+                    sm.style.background = '#F0FDF4';
+                    sm.style.color = '#166534';
+                    sm.style.border = '1px solid #BBF7D0';
+                    sm.textContent = '✓ Splits match the total payable.';
+                } else if (diff > 0) {
+                    sm.style.background = '#FFFBEB';
+                    sm.style.color = '#B45309';
+                    sm.style.border = '1px solid #FDE68A';
+                    sm.textContent = `₹${diff.toFixed(2)} still unaccounted (will be marked as Pending/Credit).`;
+                } else {
+                    sm.style.background = '#FEF2F2';
+                    sm.style.color = '#991B1B';
+                    sm.style.border = '1px solid #FECACA';
+                    sm.textContent = `₹${(-diff).toFixed(2)} over the total payable.`;
+                }
+            }
+            sc.addEventListener('input', calcSplit);
+            so.addEventListener('input', calcSplit);
+        } else if (detState.payMode === 'Credit') {
+            el.innerHTML = `
+                <div>
+                    <label style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#B45309; margin-bottom:4px;">CREDIT / PENDING DUE AMOUNT</label>
+                    <input id="detCreditRecv" type="number" step="0.01" min="0" value="${netPayable.toFixed(2)}" style="width:100%; padding:10px 14px; font-size:15px; font-family:monospace; font-weight:700; color:#B45309; border:1.5px solid #FCD34D; background:#FEFCE8; border-radius:8px; outline:none; box-sizing:border-box;">
+                    <div style="margin-top:6px; font-size:11.5px; color:#92400E; padding:8px 12px; background:#FEF3C7; border-radius:6px; border-left:3.5px solid #D97706; line-height:1.4;">
+                        <strong>Customer Account Ledger:</strong> This unpaid order balance of ₹${netPayable.toFixed(2)} will be attached to the customer's Khata account.
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    window.detSubmitSettlement = function(printBill = true, clickedBtn) {
+        const netPayable = detState.netPayable;
+        let paidAmt = 0;
+        let dueAmt = 0;
+        let pStatus = 'paid';
+        let payments = [];
+        let payMethod = 'cash';
+
+        // 1. Validate Company / GSTIN
+        if (detState.billTarget === 'company') {
+            const gstinVal = (document.getElementById('detSettleGstinInput')?.value || '').trim().toUpperCase();
+            const regNameVal = (document.getElementById('detSettleRegNameInput')?.value || '').trim();
+            if (gstinVal && gstinVal.length !== 15) {
+                alert('Please enter a valid 15-character GSTIN or switch to Walk-in guest.');
+                return;
+            }
+        }
+
+        // 2. Payment Parsing
+        if (detState.payMode === 'Cash') {
+            payMethod = 'cash';
+            const cashVal = parseFloat(document.getElementById('detCashRecv')?.value) || netPayable;
+            paidAmt = Math.min(cashVal, netPayable);
+            dueAmt = Math.max(0, netPayable - paidAmt);
+            payments = [{ method: 'cash', amount: paidAmt }];
+        } else if (detState.payMode === 'Card') {
+            payMethod = 'card';
+            const cardVal = parseFloat(document.getElementById('detCardRecv')?.value) || netPayable;
+            paidAmt = Math.min(cardVal, netPayable);
+            dueAmt = Math.max(0, netPayable - paidAmt);
+            payments = [{ method: 'card', amount: paidAmt }];
+        } else if (detState.payMode === 'UPI') {
+            payMethod = 'upi';
+            const upiVal = parseFloat(document.getElementById('detUpiRecv')?.value) || netPayable;
+            paidAmt = Math.min(upiVal, netPayable);
+            dueAmt = Math.max(0, netPayable - paidAmt);
+            payments = [{ method: 'upi', amount: paidAmt }];
+        } else if (detState.payMode === 'Split') {
+            payMethod = 'split';
+            const cVal = parseFloat(document.getElementById('detSplitCashInp')?.value) || 0;
+            const oVal = parseFloat(document.getElementById('detSplitOtherInp')?.value) || 0;
+            paidAmt = cVal + oVal;
+            dueAmt = Math.max(0, netPayable - paidAmt);
+            payments = [];
+            if (cVal > 0) payments.push({ method: 'cash', amount: cVal });
+            if (oVal > 0) payments.push({ method: 'card', amount: oVal });
+        } else if (detState.payMode === 'Credit') {
+            payMethod = 'credit';
+            paidAmt = 0;
+            dueAmt = netPayable;
+            payments = [{ method: 'credit', amount: netPayable }];
+        }
+
+        if (dueAmt <= 0.01) pStatus = 'paid';
+        else if (paidAmt > 0) pStatus = 'partially_paid';
+        else pStatus = 'unpaid';
+
+        // Check invoice override
+        const customInvInp = document.getElementById('detCustomInvInput');
+        const invNoOverride = (document.getElementById('detInvOverrideBox')?.style.display !== 'none' && customInvInp) ? customInvInp.value.trim() : '';
+
+        if (clickedBtn) {
+            clickedBtn.disabled = true;
+        let customerGstinVal = '';
+        if (detState.billTarget === 'company') {
+            const gVal = (document.getElementById('detSettleGstinInput')?.value || '').trim().toUpperCase();
+            if (gVal && gVal.length !== 15) {
+                alert('Please enter a valid 15-character GSTIN or switch to Walk-in guest.');
                 if (clickedBtn) {
                     clickedBtn.disabled = false;
-                    clickedBtn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Mark Paid & Complete';
+                    clickedBtn.innerHTML = 'Print & close 🖨️';
                 }
-            });
-        });
+                return;
+            }
+            customerGstinVal = gVal;
+        }
 
+        const payload = {
+            invoice_mode: detState.hasAlcohol ? 'split' : 'food',
+            payment_method: payMethod,
+            payment_status: pStatus,
+            payments: payments,
+            paid_amount: paidAmt.toFixed(2),
+            due_amount: dueAmt.toFixed(2),
+            gstin_no: invNoOverride || '',
+            customer_gstin: customerGstinVal,
+            registered_name: (document.getElementById('detSettleRegNameInput')?.value || '').trim()
+        };
+
+        fetch("{% url 'restaurant_admin:order_settle_api' restaurant_slug=rslug pk=order.id %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrf(),
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) {
+                if (printBill) {
+                    window.open("{% url 'restaurant_admin:order_invoice' restaurant_slug=rslug pk=order.id %}", '_blank');
+                }
+                window.location.reload();
+            } else {
+                alert(d.error || 'Failed to settle payment.');
+                if (clickedBtn) clickedBtn.disabled = false;
+            }
+        })
+        .catch(() => {
+            alert('Network error while settling payment.');
+            if (clickedBtn) clickedBtn.disabled = false;
+        });
+    };
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        const veil = document.getElementById('detSettleVeil');
+        if (veil && veil.style.display !== 'none') {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                detCloseSettlementModal();
+            } else if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                e.preventDefault();
+                detSubmitSettlement(true);
+            }
+        }
     });
 </script>
 {% endblock %}

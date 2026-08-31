@@ -119,6 +119,10 @@
                 <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
                   <i class="bi bi-truck me-1"></i> {{ item.type_label }}
                 </span>
+                {% elif item.type_code == 'RECEIPT' %}
+                <span class="badge bg-info-subtle text-info border border-info-subtle">
+                  <i class="bi bi-receipt me-1"></i> {{ item.type_label }}
+                </span>
                 {% else %}
                 <span class="badge bg-success-subtle text-success border border-success-subtle">
                   <i class="bi bi-cart me-1"></i> {{ item.type_label }}
@@ -129,10 +133,24 @@
               <td>
                 {% if item.payment_status == 'paid' or item.payment_status == 'P' %}
                 <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i> Paid</span>
+                {% elif item.payment_status == 'redeemed' %}
+                <span class="badge bg-info text-white"><i class="bi bi-box-arrow-right me-1"></i> Redeemed</span>
+                {% if item.ref_info %}<div class="small text-muted mt-1">{{ item.ref_info }}</div>{% endif %}
+                {% elif item.payment_status == 'active' %}
+                <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle me-1"></i> Active</span>
+                {% elif item.payment_status == 'cancelled' %}
+                <span class="badge bg-secondary"><i class="bi bi-x-circle me-1"></i> Cancelled</span>
                 {% elif item.payment_status == 'unpaid' or item.payment_status == 'U' %}
                 <span class="badge bg-danger"><i class="bi bi-exclamation-circle me-1"></i> Unpaid</span>
+                {% elif item.payment_status == 'partially_paid' %}
+                <span class="badge bg-warning text-dark"><i class="bi bi-pie-chart me-1"></i> Partially Paid</span>
+                {% elif item.payment_status == 'advance_paid' %}
+                <span class="badge bg-primary"><i class="bi bi-wallet2 me-1"></i> Advance Paid</span>
                 {% else %}
                 <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i> {{ item.payment_status|title }}</span>
+                {% endif %}
+                {% if item.type_code == 'SALE' and item.advance_paid > 0 %}
+                <div class="small text-muted mt-1"><i class="bi bi-wallet2 me-1"></i>Incl. ₹{{ item.advance_paid }} Advance</div>
                 {% endif %}
               </td>
               <td class="text-end">
@@ -152,6 +170,7 @@
           </tbody>
         </table>
       </div>
+      {% include 'restaurant_admin/includes/pagination.html' with page_obj=ledger %}
     </div>
   </div>
 </div>

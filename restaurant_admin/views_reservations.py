@@ -1,3 +1,4 @@
+from django import forms
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
@@ -6,9 +7,7 @@ from django.http import HttpResponseBadRequest
 
 from super_admin.models import Restaurant, RestaurantUser
 from reservations.models import Reservation, ReservationSetting
-from .views import is_admin, resolve_restaurant
-from django import forms
-
+from restaurant_admin.views import is_admin, resolve_restaurant, get_active_branch
 
 @login_required
 @user_passes_test(is_admin)
@@ -17,16 +16,24 @@ def reservation_list(request, restaurant_slug=None):
     if not isinstance(restaurant, Restaurant):
         return restaurant
 
+    active_branch = get_active_branch(request, restaurant)
     status = request.GET.get('status', '')
     date = request.GET.get('date', '')
 
-    qs = Reservation.objects.filter(restaurant=restaurant).order_by('-date', '-start_time')
+    qs = Reservation.objects.filter(restaurant=restaurant)
+    if active_branch:
+        qs = qs.filter(branch=active_branch)
+    qs = qs.order_by('-date', '-start_time')
     if status:
         qs = qs.filter(status=status)
     if date:
         qs = qs.filter(date=date)
 
-    paginator = Paginator(qs, 12)
+    try:
+        per_page = int(request.GET.get('per_page', 12))
+    except ValueError:
+        per_page = 12
+    paginator = Paginator(qs, per_page)
     page_number = request.GET.get('page')
     try:
         page_obj = paginator.page(page_number)

@@ -58,8 +58,8 @@
           <tr>
             <th class="ps-4">Challan No.</th>
             <th>Dispatch Date</th>
-            <th>Source (From)</th>
-            <th>Destination (To)</th>
+            <th>Receiver / Destination</th>
+            <th>Reason & Transport Mode</th>
             <th>Items Count</th>
             <th>Total Value</th>
             <th>Status</th>
@@ -76,15 +76,14 @@
               </td>
               <td>{{ challan.dispatch_date|date:"d M Y" }}</td>
               <td>
-                {% if challan.from_branch %}
-                  <span class="badge bg-light text-dark border"><i class="bi bi-geo-alt me-1"></i>{{ challan.from_branch.branch_name }}</span>
-                {% else %}
-                  <span class="badge bg-light text-muted border">Main Store</span>
+                <div class="fw-bold text-dark">{{ challan.receiver_name|default:challan.receiver_party.name|default:'Internal Branch/Godown' }}</div>
+                {% if challan.receiver_gstin %}
+                  <small class="font-monospace text-muted">GSTIN: {{ challan.receiver_gstin }}</small>
                 {% endif %}
               </td>
               <td>
-                <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">
-                  <i class="bi bi-building me-1"></i>{{ challan.to_branch.branch_name }}
+                <span class="badge bg-light text-dark border font-monospace">
+                  {{ challan.reason_for_transport|default:'Branch Transfer' }} | {{ challan.transport_mode|default:'Road' }}
                 </span>
               </td>
               <td class="font-monospace fw-semibold">{{ challan.items.count }} items</td>
@@ -111,7 +110,7 @@
                   </a>
 
                   {% if challan.status == 'in_transit' %}
-                    <form action="{% url 'restaurant_admin:challan_mark_received' restaurant_slug=restaurant.slug pk=challan.id %}" method="POST" class="d-inline" onsubmit="return confirm('Confirm receipt of Delivery Challan #{{ challan.challan_no }}? This will add item stock to destination branch.');">
+                    <form action="{% url 'restaurant_admin:challan_mark_received' restaurant_slug=restaurant.slug pk=challan.id %}" method="POST" class="d-inline" onsubmit="return confirm('Confirm receipt of Delivery Challan #{{ challan.challan_no }}?');">
                       {% csrf_token %}
                       <button type="submit" class="btn btn-sm btn-success fw-semibold shadow-sm">
                         <i class="bi bi-check2-circle me-1"></i> Mark as Received
@@ -130,8 +129,11 @@
             </tr>
           {% endfor %}
         </tbody>
-      </table>
     </div>
   </div>
+
+  <!-- Pagination -->
+  {% include 'restaurant_admin/includes/pagination.html' with page_obj=challans %}
+
 </div>
 {% endblock %}

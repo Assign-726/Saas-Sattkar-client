@@ -5,7 +5,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Advance Payment Receipt {{ receipt.receipt_no }} - {{ restaurant.name }}</title>
+  <title>Payment Receipt {{ receipt.receipt_no }} - {{ restaurant.name }}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   <style>
@@ -138,7 +138,7 @@
     
     <!-- Top Statutory Warning Header -->
     <div class="not-tax-invoice-banner">
-      <i class="bi bi-exclamation-triangle-fill me-1"></i> ADVANCE PAYMENT RECEIPT (NOT A TAX INVOICE)
+      <i class="bi bi-exclamation-triangle-fill me-1"></i> PAYMENT RECEIPT (ACKNOWLEDGEMENT)
     </div>
 
     <!-- Header Section -->
@@ -160,8 +160,8 @@
             <div class="fw-bold fs-6 text-primary">{{ receipt.receipt_no }}</div>
           </div>
           <div class="col-4 border-end">
-            <div class="text-muted small uppercase font-weight-bold" style="font-size: 0.7rem;">ORDER NO.</div>
-            <div class="fw-bold fs-6 text-dark">{% if receipt.order %}{% if receipt.order.order_number %}{{ receipt.order.order_number }}{% else %}ORD-{{ receipt.order.id }}{% endif %}{% else %}{{ receipt.booking_ref }}{% endif %}</div>
+            <div class="text-muted small uppercase font-weight-bold" style="font-size: 0.7rem;">REFERENCE NO.</div>
+            <div class="fw-bold fs-6 text-dark">{{ receipt.reference_number|default:receipt.booking_ref }}</div>
           </div>
           <div class="col-4">
             <div class="text-muted small uppercase font-weight-bold" style="font-size: 0.7rem;">ISSUE DATE</div>
@@ -170,7 +170,7 @@
         </div>
       </div>
 
-      <!-- Customer & Event Grid -->
+      <!-- Customer & Remarks Grid -->
       <div class="row g-3 mb-3">
         <div class="col-6">
           <div class="section-title">Received From (Customer)</div>
@@ -179,33 +179,30 @@
           {% if receipt.email %}<div class="small text-muted">Email: {{ receipt.email }}</div>{% endif %}
         </div>
         <div class="col-6">
-          <div class="section-title">Event Schedule</div>
-          <div class="fw-semibold text-dark"><i class="bi bi-calendar-event me-1"></i>{{ receipt.event_date|date:"D, d M Y" }}</div>
-          {% if receipt.event_time %}<div class="small text-muted"><i class="bi bi-clock me-1"></i>{{ receipt.event_time|date:"h:i A" }}</div>{% endif %}
-          <div class="small text-muted"><i class="bi bi-people me-1"></i>Guest Count: <strong>{{ receipt.guest_count }}</strong></div>
+          <div class="section-title">Payment Remarks</div>
+          <div class="fw-semibold text-dark">
+            {% if receipt.notes %}
+              {{ receipt.notes }}
+            {% else %}
+              <span class="text-muted small">N/A</span>
+            {% endif %}
+          </div>
         </div>
       </div>
 
       <!-- Big Highlight Amount Box -->
       <div class="amount-highlight-box">
-        <div class="lbl">Advance Deposit Received</div>
+        <div class="lbl">Payment Received</div>
         <div class="val">₹{{ receipt.advance_amount|floatformat:2 }}</div>
         <div class="small text-muted mt-1">Payment Method: <strong>{{ receipt.get_payment_method_display }}</strong></div>
       </div>
-
-      {% if receipt.notes %}
-      <div class="mb-3 p-2 bg-light rounded border small">
-        <strong>Notes / Remarks:</strong> {{ receipt.notes }}
-      </div>
-      {% endif %}
 
       <!-- Statutory Disclaimer -->
       <div class="disclaimer-box">
         <strong>Terms & Conditions:</strong>
         <ul class="mb-0 ps-3 mt-1">
-          <li>This is an acknowledgement receipt for advance payment received towards event/table reservation.</li>
-          <li>This advance deposit will be automatically deducted from your final bill at POS checkout.</li>
-          <li>This document is strictly an advance payment receipt and <strong>NOT a GST Tax Invoice or Bill of Supply</strong>.</li>
+          <li>This is an official acknowledgement of payment received against the referenced document/invoice.</li>
+          <li>This document is strictly a payment receipt and <strong>NOT a GST Tax Invoice or Bill of Supply</strong>.</li>
         </ul>
       </div>
 

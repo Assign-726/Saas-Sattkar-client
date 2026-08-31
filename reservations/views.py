@@ -4,8 +4,8 @@ from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.response import Response
 from django.utils import timezone
 from datetime import datetime, timedelta
-from .models import Reservation, ReservationSetting
-from .serializers import ReservationSerializer
+from reservations.models import Reservation, ReservationSetting
+from reservations.serializers import ReservationSerializer
 from super_admin.models import Restaurant
 
 
@@ -14,7 +14,7 @@ class ReservationViewSet(viewsets.ModelViewSet):
     serializer_class = ReservationSerializer
 
     def get_permissions(self):
-        if self.action in ['create', 'list', 'availability']:
+        if self.action in ['create', 'availability']:
             return [AllowAny()]
         return [IsAdminUser()]
 

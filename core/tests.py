@@ -208,3 +208,213 @@ class RazorpayPaymentTests(TestCase):
         # Admin can retrieve order without token
         response = client.get(f'/api/orders/{order1.id}/')
         self.assertEqual(response.status_code, 200)
+
+
+class DocumentSequenceSettingTests(TestCase):
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name="Hotel ECT", slug="hotel-ect")
+
+    def test_sequence_formatting_example(self):
+        from core.models import DocumentSequenceSetting
+        seq = DocumentSequenceSetting.objects.create(
+            restaurant=self.restaurant,
+            document_type='sales',
+            generation_mode='automatic',
+            prefix='ect/',
+            padding_digits=3,
+            suffix='/26-27',
+            current_counter=3
+        )
+        self.assertEqual(seq.format_number(), 'ect/003/26-27')
+
+    def test_sequence_incrementing(self):
+        from restaurant_admin.sequence_helpers import get_and_increment_document_number
+        from core.models import DocumentSequenceSetting
+
+        seq = DocumentSequenceSetting.get_sequence_setting(self.restaurant, 'receipt')
+        seq.prefix = 'REC/'
+        seq.padding_digits = 4
+        seq.suffix = ''
+        seq.current_counter = 10
+        seq.save()
+
+        num1 = get_and_increment_document_number(self.restaurant, 'receipt')
+        self.assertEqual(num1, 'REC/0010')
+
+        num2 = get_and_increment_document_number(self.restaurant, 'receipt')
+        self.assertEqual(num2, 'REC/0011')
+
+    def test_duplicate_prevention(self):
+        from restaurant_admin.sequence_helpers import validate_unique_document_number
+        from django.core.exceptions import ValidationError
+        from core.models import DeliveryChallan
+        from super_admin.models import RestaurantBranch
+
+        branch = RestaurantBranch.objects.create(restaurant=self.restaurant, name="Main Branch")
+        DeliveryChallan.objects.create(
+            restaurant=self.restaurant,
+            challan_no="DC/001/26-27",
+            to_branch_id=branch.id,
+            dispatch_date="2026-04-01"
+        )
+
+        with self.assertRaises(ValidationError):
+            validate_unique_document_number(self.restaurant, 'challan', 'DC/001/26-27')
+
+    def test_manual_mode_sequence(self):
+        from restaurant_admin.sequence_helpers import get_and_increment_document_number
+        from core.models import DocumentSequenceSetting
+
+        seq = DocumentSequenceSetting.get_sequence_setting(self.restaurant, 'purchase')
+        seq.generation_mode = 'manual'
+        seq.save()
+
+        # Should accept manual user entry
+        num = get_and_increment_document_number(self.restaurant, 'purchase', user_input_no='PUR-CUSTOM-99')
+        self.assertEqual(num, 'PUR-CUSTOM-99')
+
+    def test_delivery_challan_item_with_menu_item(self):
+        from core.models import DeliveryChallan, DeliveryChallanItem, MenuItem, InventoryItem
+        from super_admin.models import RestaurantBranch
+
+        branch = RestaurantBranch.objects.create(restaurant=self.restaurant, name="Branch A")
+        challan = DeliveryChallan.objects.create(
+            restaurant=self.restaurant,
+            challan_no="DC/999/26-27",
+            to_branch_id=branch.id,
+            dispatch_date="2026-08-05"
+        )
+
+        menu_item = MenuItem.objects.create(name="Paneer Butter Masala", price=250.00, restaurant=self.restaurant)
+        inv_item = InventoryItem.objects.create(name="Raw Rice", quantity=100, unit="kg", restaurant=self.restaurant)
+
+        item1 = DeliveryChallanItem.objects.create(
+            challan=challan,
+            menu_item=menu_item,
+            quantity=2,
+            unit="Pcs",
+            unit_value=250.00,
+            line_total=500.00
+        )
+        item2 = DeliveryChallanItem.objects.create(
+            challan=challan,
+            inventory_item=inv_item,
+            quantity=5,
+            unit="kg",
+            unit_value=50.00,
+            line_total=250.00
+        )
+
+        self.assertEqual(item1.item_name, "Paneer Butter Masala")
+        self.assertEqual(item2.item_name, "Raw Rice")
+        self.assertIn("Paneer Butter Masala", str(item1))
+        self.assertIn("Raw Rice", str(item2))
+
+    def test_branch_sequence_isolation(self):
+        from restaurant_admin.sequence_helpers import get_and_increment_document_number, get_document_sequence_info
+        from core.models import DocumentSequenceSetting
+        from super_admin.models import RestaurantBranch
+
+        branch_murlipura = RestaurantBranch.objects.create(restaurant=self.restaurant, name="Sharma Hotel Murlipura", slug="murlipura")
+        branch_vdn = RestaurantBranch.objects.create(restaurant=self.restaurant, name="Sharma Hotel VDN", slug="vdn")
+
+        # Configure Murlipura sequence
+        seq_murlipura = DocumentSequenceSetting.get_sequence_setting(self.restaurant, 'sales', branch=branch_murlipura)
+        seq_murlipura.prefix = 'INV/Murlipura-'
+        seq_murlipura.suffix = '/26-27'
+        seq_murlipura.padding_digits = 3
+        seq_murlipura.current_counter = 35
+        seq_murlipura.save()
+
+        # Configure VDN sequence
+        seq_vdn = DocumentSequenceSetting.get_sequence_setting(self.restaurant, 'sales', branch=branch_vdn)
+        seq_vdn.prefix = 'INV/VDN-'
+        seq_vdn.suffix = '/26-27'
+        seq_vdn.padding_digits = 3
+        seq_vdn.current_counter = 1
+        seq_vdn.save()
+
+        # Verify preview / info isolation
+        info_murlipura = get_document_sequence_info(self.restaurant, 'sales', branch=branch_murlipura)
+        info_vdn = get_document_sequence_info(self.restaurant, 'sales', branch=branch_vdn)
+        self.assertEqual(info_murlipura['next_number'], 'INV/Murlipura-035/26-27')
+        self.assertEqual(info_vdn['next_number'], 'INV/VDN-001/26-27')
+
+        # Increment Murlipura sequence
+        num_m1 = get_and_increment_document_number(self.restaurant, 'sales', branch=branch_murlipura)
+        self.assertEqual(num_m1, 'INV/Murlipura-035/26-27')
+
+        # Verify VDN counter is untouched and produces its own independent number
+        num_v1 = get_and_increment_document_number(self.restaurant, 'sales', branch=branch_vdn)
+        self.assertEqual(num_v1, 'INV/VDN-001/26-27')
+
+        # Next Murlipura number is 036
+        num_m2 = get_and_increment_document_number(self.restaurant, 'sales', branch=branch_murlipura)
+        self.assertEqual(num_m2, 'INV/Murlipura-036/26-27')
+
+    def test_branch_service_charge_isolation(self):
+        from core.models import Order, OrderItem, MenuItem, Table
+        from super_admin.models import RestaurantBranch
+        from decimal import Decimal
+
+        branch_murlipura = RestaurantBranch.objects.create(
+            restaurant=self.restaurant,
+            name="Sharma Hotel Murlipura",
+            slug="murlipura-sc",
+            service_charge_percentage=Decimal('5.00')
+        )
+        branch_vdn = RestaurantBranch.objects.create(
+            restaurant=self.restaurant,
+            name="Sharma Hotel VDN",
+            slug="vdn-sc",
+            service_charge_percentage=Decimal('10.00')
+        )
+
+        item = MenuItem.objects.create(name="Thali", price=Decimal('100.00'), restaurant=self.restaurant)
+        table_m = Table.objects.create(restaurant=self.restaurant, branch=branch_murlipura, name="T1", table_number=1)
+        table_v = Table.objects.create(restaurant=self.restaurant, branch=branch_vdn, name="T2", table_number=2)
+
+        order_m = Order.objects.create(restaurant=self.restaurant, branch=branch_murlipura, table=table_m)
+        OrderItem.objects.create(order=order_m, menu_item=item, quantity=1, unit_price=Decimal('100.00'))
+
+        order_v = Order.objects.create(restaurant=self.restaurant, branch=branch_vdn, table=table_v)
+        OrderItem.objects.create(order=order_v, menu_item=item, quantity=1, unit_price=Decimal('100.00'))
+
+        breakdown_m = order_m.calculate_bill_breakdown()
+        breakdown_v = order_v.calculate_bill_breakdown()
+
+        self.assertEqual(breakdown_m['service_charge_percentage'], Decimal('5.00'))
+        self.assertEqual(breakdown_m['service_charge'], Decimal('5.00'))
+
+        self.assertEqual(breakdown_v['service_charge_percentage'], Decimal('10.00'))
+        self.assertEqual(breakdown_v['service_charge'], Decimal('10.00'))
+
+    def test_branch_vat_bill_sequence(self):
+        from restaurant_admin.sequence_helpers import get_and_increment_document_number, get_document_sequence_info
+        from core.models import DocumentSequenceSetting
+        from super_admin.models import RestaurantBranch
+
+        branch_vdn = RestaurantBranch.objects.create(
+            restaurant=self.restaurant,
+            name="Sharma Hotel VDN Liquor",
+            slug="vdn-liq",
+            serves_alcohol=True
+        )
+
+        seq_vat = DocumentSequenceSetting.get_sequence_setting(self.restaurant, 'vat_bill', branch=branch_vdn)
+        seq_vat.prefix = 'VAT/VDN/'
+        seq_vat.padding_digits = 4
+        seq_vat.suffix = '/2026'
+        seq_vat.current_counter = 100
+        seq_vat.save()
+
+        info = get_document_sequence_info(self.restaurant, 'vat_bill', branch=branch_vdn)
+        self.assertEqual(info['next_number'], 'VAT/VDN/0100/2026')
+
+        num = get_and_increment_document_number(self.restaurant, 'vat_bill', branch=branch_vdn)
+        self.assertEqual(num, 'VAT/VDN/0100/2026')
+
+        info2 = get_document_sequence_info(self.restaurant, 'vat_bill', branch=branch_vdn)
+        self.assertEqual(info2['next_number'], 'VAT/VDN/0101/2026')
+
+
