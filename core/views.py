@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from django.utils.decorators import method_decorator
@@ -6,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser, AllowAny
 from django.views.generic import TemplateView
 from django.shortcuts import get_object_or_404, redirect
-from super_admin.models import Restaurant
+from super_admin.models import Restaurant, RestaurantBranch
 from django.db.models import Prefetch
 
 # pyrefly: ignore [missing-import]
@@ -124,13 +125,39 @@ class RestaurantCartView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         restaurant_slug = kwargs.get('restaurant_slug')
-        restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
-        settings_obj = RestaurantSettings.get_settings()
+        restaurant = Restaurant.objects.filter(slug=restaurant_slug).first()
+        branch = None
+        if not restaurant:
+            branch = RestaurantBranch.objects.filter(slug=restaurant_slug).first()
+            if branch:
+                restaurant = branch.restaurant
+        if not restaurant:
+            restaurant = Restaurant.objects.first()
+
+        settings_obj = RestaurantSettings.get_settings(restaurant)
+        active_b = branch or (restaurant.branches.first() if restaurant else None)
+        cgst_p = Decimal('2.50')
+        sgst_p = Decimal('2.50')
+        if active_b:
+            if active_b.gst_registration_type == 'R18' or active_b.is_hotel_tariff_7500_plus:
+                cgst_p = Decimal('9.00')
+                sgst_p = Decimal('9.00')
+            elif active_b.gst_registration_type in ['C', 'U']:
+                cgst_p = Decimal('0.00')
+                sgst_p = Decimal('0.00')
+            else:
+                cgst_p = Decimal(str(settings_obj.cgst_percentage or 2.50))
+                sgst_p = Decimal(str(settings_obj.sgst_percentage or 2.50))
+        else:
+            cgst_p = Decimal(str(settings_obj.cgst_percentage or 2.50))
+            sgst_p = Decimal(str(settings_obj.sgst_percentage or 2.50))
+
         context.update({
-            'cgst_percentage': settings_obj.cgst_percentage,
-            'sgst_percentage': settings_obj.sgst_percentage,
-            'service_percentage': settings_obj.service_charge_percentage,
+            'cgst_percentage': cgst_p,
+            'sgst_percentage': sgst_p,
+            'service_percentage': settings_obj.service_charge_percentage if settings_obj else Decimal('0.00'),
             'restaurant': restaurant,
+            'branch': active_b,
         })
         return context
 
@@ -140,11 +167,40 @@ class CartView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        settings_obj = RestaurantSettings.get_settings()
+        restaurant_slug = kwargs.get('restaurant_slug')
+        restaurant = Restaurant.objects.filter(slug=restaurant_slug).first()
+        branch = None
+        if not restaurant:
+            branch = RestaurantBranch.objects.filter(slug=restaurant_slug).first()
+            if branch:
+                restaurant = branch.restaurant
+        if not restaurant:
+            restaurant = Restaurant.objects.first()
+
+        settings_obj = RestaurantSettings.get_settings(restaurant)
+        active_b = branch or (restaurant.branches.first() if restaurant else None)
+        cgst_p = Decimal('2.50')
+        sgst_p = Decimal('2.50')
+        if active_b:
+            if active_b.gst_registration_type == 'R18' or active_b.is_hotel_tariff_7500_plus:
+                cgst_p = Decimal('9.00')
+                sgst_p = Decimal('9.00')
+            elif active_b.gst_registration_type in ['C', 'U']:
+                cgst_p = Decimal('0.00')
+                sgst_p = Decimal('0.00')
+            else:
+                cgst_p = Decimal(str(settings_obj.cgst_percentage or 2.50))
+                sgst_p = Decimal(str(settings_obj.sgst_percentage or 2.50))
+        else:
+            cgst_p = Decimal(str(settings_obj.cgst_percentage or 2.50))
+            sgst_p = Decimal(str(settings_obj.sgst_percentage or 2.50))
+
         context.update({
-            'cgst_percentage': settings_obj.cgst_percentage,
-            'sgst_percentage': settings_obj.sgst_percentage,
-            'service_percentage': settings_obj.service_charge_percentage,
+            'cgst_percentage': cgst_p,
+            'sgst_percentage': sgst_p,
+            'service_percentage': settings_obj.service_charge_percentage if settings_obj else Decimal('0.00'),
+            'restaurant': restaurant,
+            'branch': active_b,
         })
         return context
 
@@ -155,7 +211,10 @@ class OrdersListView(TemplateView):
         context = super().get_context_data(**kwargs)
         restaurant_slug = kwargs.get('restaurant_slug')
         if restaurant_slug:
-            restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+            restaurant = Restaurant.objects.filter(slug=restaurant_slug).first()
+            if not restaurant:
+                b = RestaurantBranch.objects.filter(slug=restaurant_slug).first()
+                restaurant = b.restaurant if b else None
             context['restaurant'] = restaurant
         return context
 
@@ -165,11 +224,40 @@ class OrderDetailView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        settings_obj = RestaurantSettings.get_settings()
+        restaurant_slug = kwargs.get('restaurant_slug')
+        restaurant = Restaurant.objects.filter(slug=restaurant_slug).first()
+        branch = None
+        if not restaurant:
+            branch = RestaurantBranch.objects.filter(slug=restaurant_slug).first()
+            if branch:
+                restaurant = branch.restaurant
+        if not restaurant:
+            restaurant = Restaurant.objects.first()
+
+        settings_obj = RestaurantSettings.get_settings(restaurant)
+        active_b = branch or (restaurant.branches.first() if restaurant else None)
+        cgst_p = Decimal('2.50')
+        sgst_p = Decimal('2.50')
+        if active_b:
+            if active_b.gst_registration_type == 'R18' or active_b.is_hotel_tariff_7500_plus:
+                cgst_p = Decimal('9.00')
+                sgst_p = Decimal('9.00')
+            elif active_b.gst_registration_type in ['C', 'U']:
+                cgst_p = Decimal('0.00')
+                sgst_p = Decimal('0.00')
+            else:
+                cgst_p = Decimal(str(settings_obj.cgst_percentage or 2.50))
+                sgst_p = Decimal(str(settings_obj.sgst_percentage or 2.50))
+        else:
+            cgst_p = Decimal(str(settings_obj.cgst_percentage or 2.50))
+            sgst_p = Decimal(str(settings_obj.sgst_percentage or 2.50))
+
         context.update({
-            'cgst_percentage': settings_obj.cgst_percentage,
-            'sgst_percentage': settings_obj.sgst_percentage,
-            'service_percentage': settings_obj.service_charge_percentage,
+            'cgst_percentage': cgst_p,
+            'sgst_percentage': sgst_p,
+            'service_percentage': settings_obj.service_charge_percentage if settings_obj else Decimal('0.00'),
+            'restaurant': restaurant,
+            'branch': active_b,
         })
         return context
 
@@ -177,50 +265,7 @@ class OrderDetailView(TemplateView):
 class OrderConfirmView(TemplateView):
     template_name = 'core/order_confirm.html'
 
-class LandingView(TemplateView):
-    template_name = 'core/landing.html'
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        restaurant_slug = kwargs.get('restaurant_slug')
-        restaurant = None
-        if restaurant_slug:
-            restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
-        else:
-            restaurant = Restaurant.objects.first()
-        landing = None
-        if restaurant:
-            # Try to fetch with prefetch of related content
-            try:
-                landing = RestaurantLanding.objects.select_related('restaurant').prefetch_related('gallery_images', 'team_members', 'reviews').get(restaurant=restaurant)
-            except RestaurantLanding.DoesNotExist:
-                landing = RestaurantLanding.objects.create(restaurant=restaurant)
-        context['restaurant'] = restaurant
-        context['landing'] = landing
-        # Provide restaurant lists for navbar selection
-        # All active restaurants (used for Menu dropdown)
-        context['all_restaurants'] = Restaurant.objects.filter(is_active=True).order_by('name')
-        # Backward compat: restaurants with same name (may be single due to unique constraint)
-        if restaurant:
-            context['same_named_restaurants'] = Restaurant.objects.filter(name=restaurant.name).order_by('id')
-        else:
-            context['same_named_restaurants'] = Restaurant.objects.none()
-        return context
-
-
-class AboutView(TemplateView):
-    def get(self, request, *args, **kwargs):
-        return redirect('/#about')
-
-
-class ContactView(TemplateView):
-    def get(self, request, *args, **kwargs):
-        return redirect('/#visit')
-
-
-class GalleryView(TemplateView):
-    def get(self, request, *args, **kwargs):
-        return redirect('/#gallery')
 
 
 class ReserveEntryView(TemplateView):
@@ -360,9 +405,30 @@ class OrderViewSet(viewsets.ModelViewSet):
         if not settings_obj.enable_online_payment or not settings_obj.razorpay_key_id or not settings_obj.razorpay_key_secret:
             return Response({'error': 'Online payment is not enabled for this restaurant.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        branch_id = data.get('branch_id') or data.get('branch')
+        branch = None
+        if branch_id:
+            branch = RestaurantBranch.objects.filter(id=branch_id, restaurant=restaurant).first()
+        if not branch and restaurant:
+            branch = restaurant.branches.first()
+
         # Compute taxes & service charges
-        cgst_pct = Decimal(str(settings_obj.cgst_percentage or 0))
-        sgst_pct = Decimal(str(settings_obj.sgst_percentage or 0))
+        cgst_pct = Decimal('2.50')
+        sgst_pct = Decimal('2.50')
+        if branch:
+            if branch.gst_registration_type == 'R18' or branch.is_hotel_tariff_7500_plus:
+                cgst_pct = Decimal('9.00')
+                sgst_pct = Decimal('9.00')
+            elif branch.gst_registration_type in ['C', 'U']:
+                cgst_pct = Decimal('0.00')
+                sgst_pct = Decimal('0.00')
+            else:
+                cgst_pct = Decimal(str(settings_obj.cgst_percentage or 2.50))
+                sgst_pct = Decimal(str(settings_obj.sgst_percentage or 2.50))
+        else:
+            cgst_pct = Decimal(str(settings_obj.cgst_percentage or 2.50))
+            sgst_pct = Decimal(str(settings_obj.sgst_percentage or 2.50))
+
         service_pct = Decimal(str(settings_obj.service_charge_percentage or 0))
 
         cgst_amt = (subtotal * cgst_pct) / Decimal('100')

@@ -126,6 +126,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'restaurant_admin.context_processors.restaurant_context',
+                'restaurant_project.context_processors.app_constants',
             ],
         },
     },
