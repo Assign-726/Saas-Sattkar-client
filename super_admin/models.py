@@ -1,6 +1,14 @@
-from django.db import models
+﻿from django.db import models
 from django.contrib.auth.models import User
 from django.utils.text import slugify
+import requests
+import hmac
+import hashlib
+import time
+import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Restaurant(models.Model):
@@ -33,6 +41,24 @@ class Restaurant(models.Model):
     )
     phone = models.CharField(max_length=20, blank=True)
     is_active = models.BooleanField(default=True)
+
+    # Master Dashboard Integration
+    master_license_key = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        unique=True,
+        verbose_name="Master License Key",
+        help_text="Auto-assigned by MasterPanel on onboarding"
+    )
+    master_sync_status = models.CharField(
+        max_length=20,
+        blank=True,
+        default="PENDING",
+        verbose_name="Master Sync Status",
+        help_text="PENDING / SYNCED / FAILED"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -82,6 +108,119 @@ class Restaurant(models.Model):
             self.slug = slugify(self.name or self.legal_name or 'restaurant')
         super().save(*args, **kwargs)
 
+    def sync_to_master_dashboard(self, master_url: str, api_secret: str = "") -> dict:
+        """
+        Cryptographically pushes complete business registration data to MasterPanel.
+        Includes full legal, tax, address, contact, and branch hierarchy.
+        Uses HMAC-SHA256 signature and Bearer token for end-to-end security.
+        """
+        url = master_url.rstrip("/") + "/api/register"
+
+        # Serialize GST registrations
+        gst_list = []
+        try:
+            for g in self.gst_registrations.all():
+                gst_list.append({
+                    "gstin": g.gstin,
+                    "state_code": g.state_code,
+                    "reg_type": g.reg_type,
+                })
+        except Exception:
+            pass
+
+        # Serialize Branches
+        branch_list = []
+        try:
+            for b in self.branches.all():
+                branch_list.append({
+                    "id": b.id,
+                    "name": b.name,
+                    "phone": b.phone,
+                    "address_line_1": b.address_line_1,
+                    "address_line_2": b.address_line_2,
+                    "city": b.city,
+                    "state": b.state or self.state,
+                    "pincode": b.pincode,
+                    "fssai_license_no": b.fssai_license_no,
+                    "serves_alcohol": b.serves_alcohol,
+                    "gstin": b.gstin or (b.gst_registration.gstin if b.gst_registration else ""),
+                    "gst_registration_type": b.gst_registration_type,
+                    "vat_tin": b.vat_tin,
+                    "excise_license_no": b.excise_license_no,
+                })
+        except Exception:
+            pass
+
+        payload = {
+            # Core Identifiers
+            "business_name": self.trade_name or self.legal_name or self.name,
+            "legal_name": self.legal_name or "",
+            "trade_name": self.trade_name or "",
+            "domain": self.slug,
+
+            # Legal & Tax
+            "business_type": self.business_type or "",
+            "pan": self.pan or "",
+            "cin_llpin": self.cin_llpin or "",
+            "is_gst_registered": bool(self.is_gst_registered),
+            "gst_type": self.gst_type or "U",
+            "gst_registrations": gst_list,
+
+            # Address
+            "address_line_1": self.address_line_1 or "",
+            "address_line_2": self.address_line_2 or "",
+            "city": self.city or "",
+            "state": self.state or "",
+            "pincode": self.pincode or "",
+            "mailing_address": self.mailing_address or "",
+
+            # Contact
+            "email": self.email or "",
+            "phone": self.phone or "",
+
+            # Outlets
+            "branch_count": len(branch_list),
+            "branches": branch_list,
+            "api_secret": api_secret,
+        }
+
+        # Build JSON body
+        body_json = json.dumps(payload, separators=(',', ':'))
+        timestamp = str(int(time.time()))
+
+        # Generate HMAC-SHA256 signature
+        message = f"{timestamp}.{body_json}".encode('utf-8')
+        secret_bytes = (api_secret or "").encode('utf-8')
+        signature = hmac.new(secret_bytes, message, hashlib.sha256).hexdigest()
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_secret}",
+            "X-Signature": signature,
+            "X-Timestamp": timestamp,
+        }
+
+        try:
+            resp = requests.post(url, data=body_json, headers=headers, timeout=10)
+            data = resp.json()
+            if resp.ok and data.get("license_key"):
+                Restaurant.objects.filter(pk=self.pk).update(
+                    master_license_key=data["license_key"],
+                    master_sync_status="SYNCED",
+                )
+                self.master_license_key = data["license_key"]
+                self.master_sync_status = "SYNCED"
+                logger.info(f"[MasterPanel] Synced '{self.name}' - key: {data['license_key']}")
+            else:
+                Restaurant.objects.filter(pk=self.pk).update(master_sync_status="FAILED")
+                self.master_sync_status = "FAILED"
+                logger.error(f"[MasterPanel] Sync failed for '{self.name}': {data}")
+            return data
+        except Exception as exc:
+            Restaurant.objects.filter(pk=self.pk).update(master_sync_status="FAILED")
+            self.master_sync_status = "FAILED"
+            logger.error(f"[MasterPanel] Request error for '{self.name}': {exc}")
+            return {"error": str(exc)}
 
 class GstRegistration(models.Model):
     class RegType(models.TextChoices):
@@ -94,11 +233,11 @@ class GstRegistration(models.Model):
     reg_type = models.CharField(max_length=20, choices=RegType.choices, default=RegType.REGULAR)
     specified_premises = models.BooleanField(
         default=False,
-        help_text="Restaurant in hotel where room tariff > ₹7,500/night in previous FY (attracts 18% GST with ITC)"
+        help_text="Restaurant in hotel where room tariff > â‚¹7,500/night in previous FY (attracts 18% GST with ITC)"
     )
     einvoice_enabled = models.BooleanField(
         default=False,
-        help_text="Turnover ₹5 Cr+ requires IRN + QR code on B2B invoices"
+        help_text="Turnover â‚¹5 Cr+ requires IRN + QR code on B2B invoices"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

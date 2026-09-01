@@ -1,4 +1,4 @@
-from django.contrib.auth.decorators import user_passes_test
+﻿from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 
@@ -73,6 +73,7 @@ def restaurant_admin_create(request):
 
 
 import json
+import os
 
 
 @superuser_required
@@ -87,10 +88,28 @@ def onboard_restaurant(request):
 
         if form.is_valid():
             restaurant = form.save(branches_data=branches_data)
-            messages.success(
-                request,
-                f"Restaurant '{restaurant.name}' updated / onboarded successfully with {restaurant.branches.count()} branch outlet(s)."
-            )
+
+            # ── Auto-sync to MasterPanel ─────────────────────────────────────
+            master_url = os.environ.get('MASTER_DASHBOARD_URL', '')
+            api_secret = os.environ.get('MASTER_API_SECRET', '')
+            if master_url and not restaurant.master_license_key:
+                sync_result = restaurant.sync_to_master_dashboard(master_url, api_secret)
+                if sync_result.get('license_key'):
+                    messages.success(
+                        request,
+                        f"Restaurant '{restaurant.name}' onboarded. License key: {sync_result['license_key']}"
+                    )
+                else:
+                    messages.warning(
+                        request,
+                        f"Restaurant '{restaurant.name}' saved, but MasterPanel sync failed. Retry from dashboard."
+                    )
+            else:
+                messages.success(
+                    request,
+                    f"Restaurant '{restaurant.name}' updated / onboarded successfully with {restaurant.branches.count()} branch outlet(s)."
+                )
+
             return redirect('super_admin:dashboard')
     else:
         form = OnboardRestaurantForm()
