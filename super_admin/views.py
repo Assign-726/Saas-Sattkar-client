@@ -1,4 +1,4 @@
-﻿from django.contrib.auth.decorators import user_passes_test
+from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 
@@ -19,6 +19,7 @@ from super_admin.forms import (
 )
 from super_admin.models import Restaurant, RestaurantUser, GstRegistration, RestaurantBranch, DocumentSeries
 from core.models import RestaurantLanding, GalleryImage, TeamMember, Review, Event, BlogPost, BlogComment
+from restaurant_project import constants
 
 
 
@@ -48,6 +49,14 @@ def dashboard(request):
 
 @superuser_required
 def restaurant_create(request):
+    if constants.MAX_ALLOWED_BUSINESSES > 0 and Restaurant.objects.count() >= constants.MAX_ALLOWED_BUSINESSES:
+        existing = Restaurant.objects.first()
+        messages.warning(
+            request,
+            f"Business limit reached ({constants.MAX_ALLOWED_BUSINESSES} allowed). You can edit '{existing.trade_name or existing.name}' details and manage outlets below."
+        )
+        return redirect('super_admin:restaurant_edit', pk=existing.pk)
+
     if request.method == 'POST':
         form = RestaurantForm(request.POST)
         if form.is_valid():
@@ -78,8 +87,16 @@ import os
 
 @superuser_required
 def onboard_restaurant(request):
+    existing_restaurant = Restaurant.objects.first()
+
+    # If a restaurant already exists on GET, seamlessly redirect to edit mode for that single business
+    if request.method == 'GET' and existing_restaurant:
+        return redirect('super_admin:restaurant_edit', pk=existing_restaurant.pk)
+
     if request.method == 'POST':
-        form = OnboardRestaurantForm(request.POST)
+        # If a restaurant exists, bind to it to guarantee update rather than duplicate creation
+        target_instance = existing_restaurant
+        form = OnboardRestaurantForm(request.POST, instance=target_instance)
         branches_json = request.POST.get('branches_json', '[]')
         try:
             branches_data = json.loads(branches_json)
@@ -87,7 +104,7 @@ def onboard_restaurant(request):
             branches_data = []
 
         if form.is_valid():
-            restaurant = form.save(branches_data=branches_data)
+            restaurant = form.save(instance=target_instance, branches_data=branches_data)
 
             # ── Auto-sync to MasterPanel ─────────────────────────────────────
             master_url = os.environ.get('MASTER_DASHBOARD_URL', '')
@@ -105,14 +122,16 @@ def onboard_restaurant(request):
                         f"Restaurant '{restaurant.name}' saved, but MasterPanel sync failed. Retry from dashboard."
                     )
             else:
+                action_word = "updated" if target_instance else "onboarded"
                 messages.success(
                     request,
-                    f"Restaurant '{restaurant.name}' updated / onboarded successfully with {restaurant.branches.count()} branch outlet(s)."
+                    f"Business '{restaurant.trade_name or restaurant.name}' {action_word} successfully with {restaurant.branches.count()} branch outlet(s)."
                 )
 
             return redirect('super_admin:dashboard')
     else:
         form = OnboardRestaurantForm()
+
     all_restaurants = Restaurant.objects.all().order_by('name')
     return render(request, 'super_admin/onboard.html', {
         'form': form,
@@ -135,7 +154,7 @@ def restaurant_edit(request, pk):
 
         if form.is_valid():
             restaurant = form.save(instance=restaurant, branches_data=branches_data)
-            messages.success(request, f"Restaurant '{restaurant.name}' updated successfully.")
+            messages.success(request, f"Business '{restaurant.trade_name or restaurant.name}' updated successfully.")
             return redirect('super_admin:dashboard')
     else:
         initial = {
@@ -180,6 +199,7 @@ def restaurant_edit(request, pk):
         'form': form,
         'is_edit': True,
         'restaurant': restaurant,
+        'all_restaurants': [restaurant],
         'initial_branches_json': json.dumps(existing_branches),
     })
 

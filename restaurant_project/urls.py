@@ -22,7 +22,7 @@ from django.views.generic import RedirectView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.contrib.auth import views as auth_views
 import os
-from core.views import HomeView, CartView, OrdersListView, OrderDetailView, OrderConfirmView, RestaurantMenuView, RestaurantCartView, LandingView, AboutView, ContactView, GalleryView, ReserveEntryView, ReservationPageView
+from core.views import HomeView, CartView, OrdersListView, OrderDetailView, OrderConfirmView, RestaurantMenuView, RestaurantCartView, ReserveEntryView, ReservationPageView
 from core.views_auth import CustomLoginView, CustomLogoutView
 from core.admin_custom import custom_admin_site
 from restaurant_admin import urls as restaurant_admin_urls
@@ -33,21 +33,19 @@ admin.site = custom_admin_site
 admin.autodiscover()
 
 urlpatterns = [
-    # Landing pages
-    path('', LandingView.as_view(), name='home'),
-    path('about/', AboutView.as_view(), name='about'),
-    path('contact/', ContactView.as_view(), name='contact'),
-    path('gallery/', GalleryView.as_view(), name='gallery'),
-    path('reserve/', ReserveEntryView.as_view(), name='reserve_entry'),
+    # Admin / Authentication at root
+    path('', CustomLoginView.as_view(template_name='admin/login.html'), name='home'),
+    path('login/', CustomLoginView.as_view(template_name='admin/login.html'), name='login'),
+    path('logout/', CustomLogoutView.as_view(), name='logout'),
+    path('dj-admin/logout/', CustomLogoutView.as_view(), name='admin_logout'),
+
     # Customer pages
+    path('reserve/', ReserveEntryView.as_view(), name='reserve_entry'),
     path('cart/', CartView.as_view(), name='cart'),
     # Fix common typo missing slash before 'cart': /r/<slug>cart/ -> /r/<slug>/cart/
     path('r/<slug:restaurant_slug>cart/', RedirectView.as_view(pattern_name='restaurant_cart', permanent=False)),
     path('r/<slug:restaurant_slug>/', RestaurantMenuView.as_view(), name='restaurant_menu'),
     path('r/<slug:restaurant_slug>/reserve/', ReservationPageView.as_view(), name='restaurant_reserve'),
-    path('r/<slug:restaurant_slug>/about/', AboutView.as_view(), name='restaurant_about'),
-    path('r/<slug:restaurant_slug>/contact/', ContactView.as_view(), name='restaurant_contact'),
-    path('r/<slug:restaurant_slug>/gallery/', GalleryView.as_view(), name='restaurant_gallery'),
     path('r/<slug:restaurant_slug>/cart/', RestaurantCartView.as_view(), name='restaurant_cart'),
     path('r/<slug:restaurant_slug>/orders/', OrdersListView.as_view(), name='restaurant_orders'),
     path('orders/', OrdersListView.as_view(), name='orders_list'),
@@ -73,11 +71,6 @@ urlpatterns = [
     
     # Debug URL
     #path('test-urls/', views.test_urls, name='test_urls'),
-    
-    # Authentication
-    path('login/', CustomLoginView.as_view(template_name='admin/login.html'), name='login'),
-    path('logout/', CustomLogoutView.as_view(), name='logout'),
-    path('dj-admin/logout/', CustomLogoutView.as_view(), name='admin_logout'),
     
     # API Token Authentication
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),

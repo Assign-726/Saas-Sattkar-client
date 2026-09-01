@@ -1196,8 +1196,20 @@ def order_create_manual(request, restaurant_slug=None):
     settings_obj = RestaurantSettings.get_settings(restaurant)
     branch_obj = active_branch or (restaurant.branches.first() if hasattr(restaurant, 'branches') else None)
 
-    cgst_pct = float(settings_obj.cgst_percentage or 2.50)
-    sgst_pct = float(settings_obj.sgst_percentage or 2.50)
+    if branch_obj:
+        if branch_obj.gst_registration_type == 'R18' or branch_obj.is_hotel_tariff_7500_plus:
+            cgst_pct = 9.00
+            sgst_pct = 9.00
+        elif branch_obj.gst_registration_type in ['C', 'U']:
+            cgst_pct = 0.00
+            sgst_pct = 0.00
+        else:
+            cgst_pct = 2.50
+            sgst_pct = 2.50
+    else:
+        cgst_pct = float(settings_obj.cgst_percentage or 2.50)
+        sgst_pct = float(settings_obj.sgst_percentage or 2.50)
+
     vat_beer_pct = float(branch_obj.vat_beer_rate if branch_obj and getattr(branch_obj, 'vat_beer_rate', None) is not None else 60.00)
     vat_imfl_pct = float(branch_obj.vat_imfl_rate if branch_obj and getattr(branch_obj, 'vat_imfl_rate', None) is not None else 65.00)
     vat_wine_pct = float(branch_obj.vat_wine_rate if branch_obj and getattr(branch_obj, 'vat_wine_rate', None) is not None else 60.00)
@@ -1829,8 +1841,20 @@ def order_edit_manual(request, pk, restaurant_slug=None):
     settings_obj = RestaurantSettings.get_settings(restaurant)
     branch_obj = active_branch
 
-    cgst_pct = float(settings_obj.cgst_percentage or 2.50)
-    sgst_pct = float(settings_obj.sgst_percentage or 2.50)
+    if branch_obj:
+        if branch_obj.gst_registration_type == 'R18' or branch_obj.is_hotel_tariff_7500_plus:
+            cgst_pct = 9.00
+            sgst_pct = 9.00
+        elif branch_obj.gst_registration_type in ['C', 'U']:
+            cgst_pct = 0.00
+            sgst_pct = 0.00
+        else:
+            cgst_pct = 2.50
+            sgst_pct = 2.50
+    else:
+        cgst_pct = float(settings_obj.cgst_percentage or 2.50)
+        sgst_pct = float(settings_obj.sgst_percentage or 2.50)
+
     vat_beer_pct = float(branch_obj.vat_beer_rate if branch_obj and getattr(branch_obj, 'vat_beer_rate', None) is not None else 60.00)
     vat_imfl_pct = float(branch_obj.vat_imfl_rate if branch_obj and getattr(branch_obj, 'vat_imfl_rate', None) is not None else 65.00)
     vat_wine_pct = float(branch_obj.vat_wine_rate if branch_obj and getattr(branch_obj, 'vat_wine_rate', None) is not None else 60.00)
@@ -4778,6 +4802,20 @@ def settings_view(request, restaurant_slug=None):
     for dt in doc_types:
         doc_sequences[dt] = DocumentSequenceSetting.get_sequence_setting(restaurant, dt, branch=branch)
 
+    # Resolve branch-specific GST rates for settings display
+    branch_cgst = Decimal('2.50')
+    branch_sgst = Decimal('2.50')
+    if branch:
+        if branch.gst_registration_type == 'R18' or branch.is_hotel_tariff_7500_plus:
+            branch_cgst = Decimal('9.00')
+            branch_sgst = Decimal('9.00')
+        elif branch.gst_registration_type in ['C', 'U']:
+            branch_cgst = Decimal('0.00')
+            branch_sgst = Decimal('0.00')
+        else:
+            branch_cgst = Decimal('2.50')
+            branch_sgst = Decimal('2.50')
+
     if request.method == 'POST':
         form = RestaurantSettingsForm(request.POST, request.FILES, instance=settings_obj)
         branch_form = RestaurantBranchComplianceForm(request.POST, instance=branch) if branch else None
@@ -4797,6 +4835,10 @@ def settings_view(request, restaurant_slug=None):
                 branch.enable_customer_ordering = form.cleaned_data.get('enable_customer_ordering', True)
                 branch.enable_online_payment = form.cleaned_data.get('enable_online_payment', False)
                 branch.enable_pay_at_counter = form.cleaned_data.get('enable_pay_at_counter', True)
+                if branch_form:
+                    sc = branch_form.cleaned_data.get('service_charge_percentage')
+                    if sc is not None:
+                        branch.service_charge_percentage = sc
                 branch.save()
             
             if branch_form:
@@ -4855,6 +4897,10 @@ def settings_view(request, restaurant_slug=None):
     else:
         form = RestaurantSettingsForm(instance=settings_obj)
         if branch:
+            form.initial['cgst_percentage'] = branch_cgst
+            form.initial['sgst_percentage'] = branch_sgst
+            if branch.service_charge_percentage is not None:
+                form.initial['service_charge_percentage'] = branch.service_charge_percentage
             form.initial['enable_customer_ordering'] = getattr(branch, 'enable_customer_ordering', True)
             form.initial['enable_online_payment'] = getattr(branch, 'enable_online_payment', False)
             form.initial['enable_pay_at_counter'] = getattr(branch, 'enable_pay_at_counter', True)
@@ -6240,8 +6286,19 @@ def transaction_desk_create(request, restaurant_slug=None):
 
     settings_obj = RestaurantSettings.get_settings(restaurant)
 
-    cgst_pct = float(settings_obj.cgst_percentage or 2.50)
-    sgst_pct = float(settings_obj.sgst_percentage or 2.50)
+    if branch_obj:
+        if branch_obj.gst_registration_type == 'R18' or branch_obj.is_hotel_tariff_7500_plus:
+            cgst_pct = 9.00
+            sgst_pct = 9.00
+        elif branch_obj.gst_registration_type in ['C', 'U']:
+            cgst_pct = 0.00
+            sgst_pct = 0.00
+        else:
+            cgst_pct = 2.50
+            sgst_pct = 2.50
+    else:
+        cgst_pct = float(settings_obj.cgst_percentage or 2.50)
+        sgst_pct = float(settings_obj.sgst_percentage or 2.50)
     vat_beer_pct = float(branch_obj.vat_beer_rate if branch_obj and getattr(branch_obj, 'vat_beer_rate', None) is not None else 60.00)
     vat_imfl_pct = float(branch_obj.vat_imfl_rate if branch_obj and getattr(branch_obj, 'vat_imfl_rate', None) is not None else 65.00)
     vat_wine_pct = float(branch_obj.vat_wine_rate if branch_obj and getattr(branch_obj, 'vat_wine_rate', None) is not None else 60.00)

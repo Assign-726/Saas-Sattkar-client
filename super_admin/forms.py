@@ -4,6 +4,7 @@ import re
 from decimal import Decimal
 from super_admin.models import Restaurant, RestaurantUser, RestaurantBranch, GstRegistration, DocumentSeries
 from core.models import RestaurantLanding, GalleryImage, TeamMember, Review, Event, MenuItem, RestaurantSettings, BlogPost
+from restaurant_project import constants
 
 
 STATE_CHOICES = [
@@ -93,6 +94,16 @@ class RestaurantForm(forms.ModelForm):
             "gst_type",
             "is_active",
         ]
+
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if not self.instance.pk and constants.MAX_ALLOWED_BUSINESSES > 0:
+            if Restaurant.objects.count() >= constants.MAX_ALLOWED_BUSINESSES:
+                raise forms.ValidationError(
+                    f"Only {constants.MAX_ALLOWED_BUSINESSES} registered business is permitted on this system. You can edit the existing business details instead."
+                )
+        return cleaned_data
 
 
 class RestaurantAdminCreateForm(forms.Form):
@@ -192,12 +203,29 @@ class OnboardRestaurantForm(forms.Form):
             self.add_error("cin_llpin", "CIN is required for Corporate Entities.")
         elif btype == "LLP" and not cin:
             self.add_error("cin_llpin", "LLPIN is required for Limited Liability Partnerships.")
+
+        # Enforce business limit restriction
+        if not self.instance and constants.MAX_ALLOWED_BUSINESSES > 0:
+            if Restaurant.objects.count() >= constants.MAX_ALLOWED_BUSINESSES:
+                existing = Restaurant.objects.first()
+                t_name = (cleaned.get("trade_name") or cleaned.get("legal_name") or "").strip()
+                if not existing or existing.name.lower() != t_name.lower():
+                    raise forms.ValidationError(
+                        f"Only {constants.MAX_ALLOWED_BUSINESSES} registered business is permitted on this system. You can edit the existing business details instead."
+                    )
         return cleaned
 
     def save(self, instance=None, branches_data=None):
         trade_name = self.cleaned_data["trade_name"]
         legal_name = self.cleaned_data["legal_name"]
         t_name = trade_name or legal_name
+
+        if branches_data and isinstance(branches_data, list) and constants.MAX_ALLOWED_BRANCHES > 0:
+            valid_branches = [b for b in branches_data if b.get("name")]
+            if len(valid_branches) > constants.MAX_ALLOWED_BRANCHES:
+                raise forms.ValidationError(
+                    f"Branch limit reached. Your license allows a maximum of {constants.MAX_ALLOWED_BRANCHES} branch outlets (attempted {len(valid_branches)})."
+                )
 
         target_restaurant = instance or self.instance or Restaurant.objects.filter(name__iexact=t_name).first()
         if target_restaurant:
@@ -268,6 +296,13 @@ class OnboardRestaurantForm(forms.Form):
                 if target_restaurant and branch_id and str(branch_id).isdigit():
                     branch = RestaurantBranch.objects.filter(id=int(branch_id), restaurant=restaurant).first()
 
+                is_hotel_tariff = bool(bdata.get("is_hotel_tariff_7500_plus", False))
+                gst_reg_type = bdata.get("gst_registration_type", RestaurantBranch.GSTRegType.REGULAR_5)
+                if is_hotel_tariff:
+                    gst_reg_type = RestaurantBranch.GSTRegType.REGULAR_18
+                elif gst_reg_type == RestaurantBranch.GSTRegType.REGULAR_18:
+                    is_hotel_tariff = True
+
                 if branch:
                     branch.name = bdata.get("name", "")
                     branch.phone = bdata.get("phone", "")
@@ -281,8 +316,8 @@ class OnboardRestaurantForm(forms.Form):
                     branch.serves_alcohol = bdata.get("serves_alcohol", False)
                     branch.gstin = gstin_val
                     branch.gst_registration = gst_reg_obj
-                    branch.gst_registration_type = bdata.get("gst_registration_type", RestaurantBranch.GSTRegType.REGULAR_5)
-                    branch.is_hotel_tariff_7500_plus = bdata.get("is_hotel_tariff_7500_plus", False)
+                    branch.gst_registration_type = gst_reg_type
+                    branch.is_hotel_tariff_7500_plus = is_hotel_tariff
                     branch.e_invoicing_enabled = bdata.get("e_invoicing_enabled", False)
                     branch.save()
                 else:
@@ -300,8 +335,8 @@ class OnboardRestaurantForm(forms.Form):
                         fssai_license_no=bdata.get("fssai_license_no", ""),
                         serves_alcohol=bdata.get("serves_alcohol", False),
                         gstin=gstin_val,
-                        gst_registration_type=bdata.get("gst_registration_type", RestaurantBranch.GSTRegType.REGULAR_5),
-                        is_hotel_tariff_7500_plus=bdata.get("is_hotel_tariff_7500_plus", False),
+                        gst_registration_type=gst_reg_type,
+                        is_hotel_tariff_7500_plus=is_hotel_tariff,
                         e_invoicing_enabled=bdata.get("e_invoicing_enabled", False),
                     )
 

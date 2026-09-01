@@ -393,7 +393,7 @@
 </style>
 
 <div class="onboard-container">
-  <!-- Left Step Navigation Sidebar -->
+  <!-- Steps Navigation Sidebar -->
   <div class="steps-nav">
     <div class="step-item active" id="nav-step-1" onclick="goToStep(1)">
       <span class="step-num" id="num-step-1">1</span>
@@ -411,29 +411,52 @@
 
   <!-- Main Content Card -->
   <div class="onboard-card">
-    <form method="post" id="onboard-form" action="{% url 'super_admin:onboard' %}">
+    <form method="post" id="onboard-form" action="{% if is_edit and restaurant %}{% url 'super_admin:restaurant_edit' restaurant.id %}{% else %}{% url 'super_admin:onboard' %}{% endif %}">
       {% csrf_token %}
       <input type="hidden" name="branches_json" id="branches_json" value="[]">
 
       <!-- ==================== STEP 1: BUSINESS DETAILS ==================== -->
       <div id="step-1-content" class="step-pane">
         <div class="step-header">
-          <h2>Business details</h2>
-          <p>These details should match your PAN records.</p>
+          <h2>{% if is_edit %}Edit Business Details{% else %}Business Details{% endif %}</h2>
+          <p>These details should match your PAN and legal entity records.</p>
         </div>
 
-        {% if all_restaurants %}
+        {% if is_edit and restaurant %}
+        <div class="form-group full-width" style="background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border: 1px solid #86efac; padding: 16px 20px; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="width: 40px; height: 40px; border-radius: 10px; background: #22c55e; color: white; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                <i class="fa-solid fa-building-circle-check"></i>
+              </div>
+              <div>
+                <div style="font-weight: 800; font-size: 1rem; color: #14532d;">
+                  Managing Business: {{ restaurant.trade_name|default:restaurant.name }}
+                  {% if restaurant.legal_name and restaurant.legal_name != restaurant.trade_name %}
+                    <span style="font-weight: 500; font-size: 0.85rem; color: #166534;">({{ restaurant.legal_name }})</span>
+                  {% endif %}
+                </div>
+                <div style="font-size: 0.82rem; color: #15803d; margin-top: 2px;">
+                  <i class="fa-solid fa-circle-info" style="margin-right: 4px;"></i> Single Business Instance: You can update legal & tax profile below, or manage / add branch outlets in Step 2.
+                </div>
+              </div>
+            </div>
+            <span class="badge ok" style="padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 0.78rem; background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;">
+              1 / 1 Business Registered
+            </span>
+          </div>
+        </div>
+        {% elif all_restaurants %}
         <div class="form-group full-width" style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 14px; border-radius: 10px; margin-bottom: 20px;">
           <label class="form-label" style="color: #166534; font-weight: 700;">
-            <i class="fa-solid fa-building"></i> Select Registered Business (To Add Outlet)
+            <i class="fa-solid fa-building"></i> Select Registered Business
           </label>
           <select class="form-select" id="select_existing_business" onchange="loadExistingBusiness(this.value)" style="border-color: #86efac;">
-            <option value="">-- Register a New Business --</option>
             {% for r in all_restaurants %}
-              <option value="{{ r.id }}">{{ r.trade_name|default:r.name }} ({{ r.legal_name }})</option>
+              <option value="{{ r.id }}" selected>{{ r.trade_name|default:r.name }} ({{ r.legal_name }})</option>
             {% endfor %}
           </select>
-          <span class="form-hint" style="color: #15803d; font-size: 12px; margin-top: 4px;">Selecting an existing business auto-fills its company details and pre-loads outlets so you can easily add a new branch.</span>
+          <span class="form-hint" style="color: #15803d; font-size: 12px; margin-top: 4px;">Only 1 registered business is supported on this system. You can update its company information and manage branch outlets.</span>
         </div>
         {% endif %}
 
@@ -597,9 +620,16 @@
 
       <!-- ==================== STEP 2: BRANCHES (ADD OUTLETS) ==================== -->
       <div id="step-2-content" class="step-pane hidden">
-        <div class="step-header">
-          <h2>Add your outlets</h2>
-          <p>Just the basics — numbering and other settings are available later in the branch panel.</p>
+        <div class="step-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h2>Add your outlets</h2>
+            <p>Configure outlet locations, contact information, and state-level GSTINs.</p>
+          </div>
+          {% if MAX_ALLOWED_BRANCHES > 0 %}
+          <span class="badge neutral" style="font-size: 0.8rem; padding: 6px 12px; border-radius: 6px; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;">
+            <i class="fa-solid fa-store" style="margin-right: 4px;"></i> Limit: Max {{ MAX_ALLOWED_BRANCHES }} Outlets
+          </span>
+          {% endif %}
         </div>
 
         <div id="branches-container">
@@ -700,7 +730,7 @@
             <div>Items Subtotal: 760.00</div>
             <div id="preview-cgst">CGST (2.5%): 19.00</div>
             <div id="preview-sgst">SGST (2.5%): 19.00</div>
-            <div style="font-size: 14px; font-weight: bold; margin-top: 4px; border-top: 1px solid #1e293b; padding-top: 4px;">Grand Total: ₹798.00</div>
+            <div id="preview-grand-total" style="font-size: 14px; font-weight: bold; margin-top: 4px; border-top: 1px solid #1e293b; padding-top: 4px;">Grand Total: ₹798.00</div>
           </div>
           <div id="preview-declaration" style="font-size: 10px; color: #64748b; text-align: center; margin-top: 10px; font-style: italic;">
             Thank you for dining with us!
@@ -775,10 +805,11 @@
 
         if (data.branches && data.branches.length > 0) {
           branches = data.branches;
+          renderBranchCards();
         } else {
           branches = [];
+          addNewBranchCard(true);
         }
-        addNewBranchCard(branches.length === 0);
       })
       .catch(err => console.error("Error loading existing business:", err));
   }
@@ -1005,6 +1036,11 @@
   function addNewBranchCard(isFirst = false) {
     if (!isFirst) {
       syncBranchesFromDOM();
+      const maxBranches = parseInt('{{ MAX_ALLOWED_BRANCHES|default:0 }}');
+      if (maxBranches > 0 && branches.length >= maxBranches) {
+        alert(`Branch limit reached! Your license allows a maximum of ${maxBranches} branch outlets.`);
+        return;
+      }
     }
     const idx = branches.length;
     const defaultTradeName = document.getElementById("id_trade_name").value.trim() || "Spice Villa";
@@ -1012,7 +1048,7 @@
     const branchName = isFirst && defaultTradeName ? `${defaultTradeName} — Main Branch` : "";
 
     const newBranch = {
-      id: idx,
+      id: null,
       name: branchName,
       phone: "",
       use_company_address: true,
@@ -1156,9 +1192,9 @@
 
             <div class="form-group">
               <label class="form-label">Registration Type <span class="req">*</span></label>
-              <select class="form-select" id="branch-gsttype-${idx}" onchange="branches[${idx}].gst_registration_type = this.value">
-                <option value="R5" ${b.gst_registration_type === 'R5' ? 'selected' : ''}>Regular (5% GST on bills)</option>
-                <option value="R18" ${b.gst_registration_type === 'R18' ? 'selected' : ''}>Regular (18% GST with ITC)</option>
+              <select class="form-select" id="branch-gsttype-${idx}" onchange="setBranchGstType(${idx}, this.value)">
+                ${!b.is_hotel_tariff_7500_plus ? `<option value="R5" ${b.gst_registration_type === 'R5' ? 'selected' : ''}>Regular (5% GST on bills)</option>` : ''}
+                <option value="R18" ${b.gst_registration_type === 'R18' || b.is_hotel_tariff_7500_plus ? 'selected' : ''}>Regular (18% GST with ITC)${b.is_hotel_tariff_7500_plus ? ' [Mandatory for ₹7,500+ tariff]' : ''}</option>
                 <option value="C" ${b.gst_registration_type === 'C' ? 'selected' : ''}>Composition</option>
                 <option value="U" ${b.gst_registration_type === 'U' ? 'selected' : ''}>Unregistered</option>
               </select>
@@ -1170,7 +1206,7 @@
                 <button type="button" class="toggle-btn ${b.is_hotel_tariff_7500_plus ? 'active' : ''}" onclick="setBranchHotelTariff(${idx}, true)">Yes</button>
                 <button type="button" class="toggle-btn ${!b.is_hotel_tariff_7500_plus ? 'active' : ''}" onclick="setBranchHotelTariff(${idx}, false)">No</button>
               </div>
-              <span class="form-hint">18% GST with ITC applies</span>
+              <span class="form-hint">${b.is_hotel_tariff_7500_plus ? '18% GST with ITC applies (5% GST disabled)' : '18% GST with ITC applies'}</span>
             </div>
 
             <div class="form-group full-width">
@@ -1199,7 +1235,26 @@
   }
 
   function setBranchHotelTariff(idx, val) {
+    syncBranchesFromDOM();
     branches[idx].is_hotel_tariff_7500_plus = val;
+    if (val === true) {
+      branches[idx].gst_registration_type = 'R18';
+    } else {
+      if (branches[idx].gst_registration_type === 'R18') {
+        branches[idx].gst_registration_type = 'R5';
+      }
+    }
+    renderBranchCards();
+  }
+
+  function setBranchGstType(idx, val) {
+    syncBranchesFromDOM();
+    branches[idx].gst_registration_type = val;
+    if (val === 'R18') {
+      branches[idx].is_hotel_tariff_7500_plus = true;
+    } else {
+      branches[idx].is_hotel_tariff_7500_plus = false;
+    }
     renderBranchCards();
   }
 
@@ -1284,29 +1339,33 @@
     document.getElementById("preview-gstin").innerText = isGstReg ? `GSTIN: ${branchGstin}` : "GST: Unregistered";
     document.getElementById("preview-fssai").innerText = `FSSAI: ${branchFssai}`;
 
-    const gstType = mainBranch.gst_registration_type || "R5";
+    const gstType = mainBranch.gst_registration_type || (mainBranch.is_hotel_tariff_7500_plus ? "R18" : "R5");
     const titleElem = document.getElementById("preview-doc-title");
     const cgstElem = document.getElementById("preview-cgst");
     const sgstElem = document.getElementById("preview-sgst");
     const decElem = document.getElementById("preview-declaration");
+    const grandTotalElem = document.getElementById("preview-grand-total");
 
     if (!isGstReg || gstType === "U") {
       titleElem.innerText = "BILL / RECEIPT";
       cgstElem.style.display = "none";
       sgstElem.style.display = "none";
       decElem.innerText = "Plain Receipt — Non-GST Invoice";
+      if (grandTotalElem) grandTotalElem.innerText = "Grand Total: ₹760.00";
     } else if (gstType === "C") {
       titleElem.innerText = "BILL OF SUPPLY";
       cgstElem.style.display = "none";
       sgstElem.style.display = "none";
       decElem.innerText = "Composition taxable person, not eligible to collect tax on supplies";
+      if (grandTotalElem) grandTotalElem.innerText = "Grand Total: ₹760.00";
     } else if (gstType === "R18" || mainBranch.is_hotel_tariff_7500_plus) {
       titleElem.innerText = "TAX INVOICE";
       cgstElem.style.display = "block";
       sgstElem.style.display = "block";
       cgstElem.innerText = "CGST (9.0%): 68.40";
       sgstElem.innerText = "SGST (9.0%): 68.40";
-      decElem.innerText = "18% GST Rate (Specified Premises / Hotel Tariff ₹7,500+)";
+      decElem.innerText = "18% GST Rate (Specified Premises / Hotel Tariff ₹7,500+ with ITC)";
+      if (grandTotalElem) grandTotalElem.innerText = "Grand Total: ₹896.80";
     } else {
       titleElem.innerText = "TAX INVOICE";
       cgstElem.style.display = "block";
@@ -1314,6 +1373,7 @@
       cgstElem.innerText = "CGST (2.5%): 19.00";
       sgstElem.innerText = "SGST (2.5%): 19.00";
       decElem.innerText = "Standard Restaurant GST (5% without ITC)";
+      if (grandTotalElem) grandTotalElem.innerText = "Grand Total: ₹798.00";
     }
   }
 
