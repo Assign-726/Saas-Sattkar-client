@@ -2,17 +2,24 @@
 
 {% block title %}Create Restaurant Admin | Delicious Bites{% endblock %}
 
+{% block header_title %}
+<i class="fa-solid fa-user-shield" style="color: var(--primary); margin-right: 4px;"></i> Create Restaurant Admin
+{% endblock %}
+
+{% block header_actions %}
+<a class="btn secondary small" href="{% url 'super_admin:dashboard' %}">
+  <i class="fa-solid fa-arrow-left"></i> <span>Back to Dashboard</span>
+</a>
+{% endblock %}
+
 {% block content %}
 <div class="grid">
-  <div class="card" style="max-width: 700px; margin: 0 auto; grid-column: span 12;">
+  <div class="card" style="max-width: 760px; margin: 0 auto; grid-column: span 12;">
     <div class="hd">
-      <div>
-        <i class="fa-solid fa-user-shield" style="color: var(--primary); margin-right: 8px;"></i>
-        Create Restaurant Admin
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <i class="fa-solid fa-user-plus" style="color: var(--primary);"></i>
+        <span>Admin User Account Information</span>
       </div>
-      <a class="btn secondary small" href="{% url 'super_admin:dashboard' %}">
-        <i class="fa-solid fa-arrow-left"></i> Back
-      </a>
     </div>
     
     <div class="bd">
@@ -53,7 +60,7 @@
             {% if form.branch.errors %}
               <div class="hint" style="color: var(--danger);">{{ form.branch.errors.as_text }}</div>
             {% endif %}
-            <div class="hint" style="font-size: 0.8rem; color: var(--text-muted);">Leave blank for Business-wide Primary Admin</div>
+            <div class="hint">Leave blank for Business-wide Primary Admin</div>
           </div>
           <div class="col-12" style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
             {{ form.is_primary_admin }}
@@ -62,7 +69,22 @@
               <div class="hint" style="color: var(--danger);">{{ form.is_primary_admin.errors.as_text }}</div>
             {% endif %}
           </div>
+          <div class="col-12" style="display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 10px; border-top: 1px dashed var(--border);">
+            {{ form.is_2fa_enabled }}
+            <label for="id_is_2fa_enabled" style="margin-bottom: 0; cursor: pointer; font-weight: 600;">
+              <i class="fa-solid fa-shield-halved" style="color: var(--primary); margin-right: 4px;"></i> Enable Two-Factor Authentication (Require OTP on Login)
+            </label>
+            {% if form.is_2fa_enabled.errors %}
+              <div class="hint" style="color: var(--danger);">{{ form.is_2fa_enabled.errors.as_text }}</div>
+            {% endif %}
+          </div>
+          <div class="col-12" style="margin-top: 2px;">
+            <div class="hint" style="font-size: 12px; color: var(--muted); margin-left: 24px;">
+              If checked, this branch admin must enter a 6-digit email OTP on sign in. If unchecked, direct login with password is permitted.
+            </div>
+          </div>
         </div>
+
         
         <div class="actions" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border);">
           <a class="btn secondary" href="{% url 'super_admin:dashboard' %}">Cancel</a>

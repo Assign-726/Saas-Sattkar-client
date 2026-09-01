@@ -1912,3 +1912,96 @@ class BlogComment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.author_name} on {self.post.title}"
+
+
+class EmailOTP(models.Model):
+    class Purpose(models.TextChoices):
+        LOGIN = 'LOGIN', 'Login Verification'
+        PASSWORD_RESET = 'PASSWORD_RESET', 'Password Reset'
+        EMAIL_VERIFY = 'EMAIL_VERIFY', 'Email Verification'
+
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='email_otps')
+    email = models.EmailField(help_text="Email address the OTP was dispatched to")
+    otp_code = models.CharField(max_length=6, help_text="6-digit numerical code")
+    purpose = models.CharField(max_length=20, choices=Purpose.choices, default=Purpose.LOGIN)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+    attempts = models.PositiveIntegerField(default=0)
+    max_attempts = models.PositiveIntegerField(default=5)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Email OTP'
+        verbose_name_plural = 'Email OTPs'
+        indexes = [
+            models.Index(fields=['user', 'purpose', 'is_used']),
+            models.Index(fields=['email', 'otp_code']),
+        ]
+
+    def __str__(self):
+        return f"{self.purpose} OTP for {self.user.username} ({self.email}) - {'Used' if self.is_used else ('Expired' if self.is_expired else 'Active')}"
+
+    @property
+    def is_expired(self):
+        from django.utils import timezone
+        return timezone.now() >= self.expires_at
+
+    @property
+    def is_valid(self):
+        return not self.is_used and not self.is_expired and self.attempts < self.max_attempts
+
+    @classmethod
+    def generate_otp(cls, user, email=None, purpose=Purpose.LOGIN, expiry_minutes=10, max_attempts=5, ip_address=None):
+        import secrets
+        from datetime import timedelta
+        from django.utils import timezone
+
+        dest_email = email or user.email
+        if not dest_email:
+            raise ValueError("User does not have an email address configured.")
+
+        # Invalidate previous unused OTPs for same user and purpose
+        cls.objects.filter(user=user, purpose=purpose, is_used=False).update(is_used=True)
+
+        # Generate secure 6-digit code
+        code = f"{secrets.randbelow(900000) + 100000:06d}"
+        expires_at = timezone.now() + timedelta(minutes=expiry_minutes)
+
+        return cls.objects.create(
+            user=user,
+            email=dest_email,
+            otp_code=code,
+            purpose=purpose,
+            expires_at=expires_at,
+            max_attempts=max_attempts,
+            ip_address=ip_address,
+        )
+
+    def verify(self, code_input):
+        """
+        Verifies the given code.
+        Returns (success: bool, error_message: str or None)
+        """
+        if self.is_used:
+            return False, "This verification code has already been used. Please request a new code."
+
+        if self.is_expired:
+            return False, "This verification code has expired. Please request a new code."
+
+        if self.attempts >= self.max_attempts:
+            return False, "Maximum verification attempts exceeded. Please request a new code."
+
+        clean_input = str(code_input or '').strip()
+        if clean_input == self.otp_code:
+            self.is_used = True
+            self.save(update_fields=['is_used'])
+            return True, None
+
+        self.attempts += 1
+        self.save(update_fields=['attempts'])
+        remaining = max(0, self.max_attempts - self.attempts)
+        if remaining > 0:
+            return False, f"Invalid verification code. {remaining} attempt{'s' if remaining != 1 else ''} remaining."
+        return False, "Invalid verification code. Maximum attempts exceeded. Please request a new code."

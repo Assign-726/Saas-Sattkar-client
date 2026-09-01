@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth.models import User, Group
 import re
 from decimal import Decimal
-from super_admin.models import Restaurant, RestaurantUser, RestaurantBranch, GstRegistration, DocumentSeries
+from super_admin.models import Restaurant, RestaurantUser, RestaurantBranch, GstRegistration, DocumentSeries, UserSecuritySetting
 from core.models import RestaurantLanding, GalleryImage, TeamMember, Review, Event, MenuItem, RestaurantSettings, BlogPost
 from restaurant_project import constants
 
@@ -107,26 +107,36 @@ class RestaurantForm(forms.ModelForm):
 
 
 class RestaurantAdminCreateForm(forms.Form):
-    username = forms.CharField(max_length=150)
-    email = forms.EmailField(required=False)
-    password = forms.CharField(widget=forms.PasswordInput)
-    restaurant = forms.ModelChoiceField(queryset=Restaurant.objects.all())
-    branch = forms.ModelChoiceField(queryset=RestaurantBranch.objects.all(), required=False, help_text="Optional: Restrict admin to a specific branch")
-    is_primary_admin = forms.BooleanField(required=False, initial=False)
+    username = forms.CharField(max_length=150, label="Username*")
+    email = forms.EmailField(required=False, label="Email Address")
+    password = forms.CharField(widget=forms.PasswordInput, label="Password*")
+    restaurant = forms.ModelChoiceField(queryset=Restaurant.objects.all(), label="Assigned Business / Restaurant*")
+    branch = forms.ModelChoiceField(queryset=RestaurantBranch.objects.all(), required=False, label="Assigned Branch Outlet (Optional)", help_text="Optional: Restrict admin to a specific branch")
+    is_primary_admin = forms.BooleanField(required=False, initial=False, label="Designate as Primary Admin")
+    is_2fa_enabled = forms.BooleanField(required=False, initial=True, label="Enable Two-Factor Authentication (OTP on Login)")
 
     def clean_username(self):
         username = self.cleaned_data.get("username")
-        if User.objects.filter(username=username).exists():
+        if User.objects.filter(username__iexact=username).exists():
             raise forms.ValidationError("Username already exists")
         return username
 
+    def clean(self):
+        cleaned_data = super().clean()
+        is_2fa = cleaned_data.get("is_2fa_enabled")
+        email = (cleaned_data.get("email") or "").strip()
+        if is_2fa and not email:
+            self.add_error("email", "An email address is required when Two-Factor Authentication (OTP) is enabled.")
+        return cleaned_data
+
     def save(self):
         username = self.cleaned_data["username"]
-        email = self.cleaned_data.get("email", "")
+        email = self.cleaned_data.get("email", "").strip()
         password = self.cleaned_data["password"]
         restaurant = self.cleaned_data["restaurant"]
         branch = self.cleaned_data.get("branch")
         is_primary = self.cleaned_data.get("is_primary_admin", False)
+        is_2fa = self.cleaned_data.get("is_2fa_enabled", True)
 
         user = User.objects.create_user(username=username, email=email)
         user.is_staff = True
@@ -145,7 +155,14 @@ class RestaurantAdminCreateForm(forms.Form):
             branch=branch,
             is_primary_admin=is_primary,
         )
+
+        UserSecuritySetting.objects.update_or_create(
+            user=user,
+            defaults={'is_2fa_enabled': is_2fa}
+        )
+
         return ru
+
 
 
 
@@ -406,11 +423,12 @@ class OnboardRestaurantForm(forms.Form):
 
 class RestaurantAdminUpdateForm(forms.Form):
     username = forms.CharField(max_length=150, label="Username*")
-    email = forms.EmailField(required=False, label="Email")
+    email = forms.EmailField(required=False, label="Email Address")
     password = forms.CharField(widget=forms.PasswordInput, required=False, label="New Password (optional)")
-    restaurant = forms.ModelChoiceField(queryset=Restaurant.objects.all(), label="Restaurant")
-    branch = forms.ModelChoiceField(queryset=RestaurantBranch.objects.all(), required=False, label="Assigned Branch", help_text="Optional: Restrict admin to a specific branch")
-    is_primary_admin = forms.BooleanField(required=False, initial=False, label="Primary admin")
+    restaurant = forms.ModelChoiceField(queryset=Restaurant.objects.all(), label="Assigned Business / Restaurant*")
+    branch = forms.ModelChoiceField(queryset=RestaurantBranch.objects.all(), required=False, label="Assigned Branch Outlet (Optional)", help_text="Optional: Restrict admin to a specific branch")
+    is_primary_admin = forms.BooleanField(required=False, initial=False, label="Designate as Primary Admin")
+    is_2fa_enabled = forms.BooleanField(required=False, initial=True, label="Enable Two-Factor Authentication (OTP on Login)")
 
     def __init__(self, *args, **kwargs):
         self.instance: RestaurantUser = kwargs.pop('instance', None)
@@ -422,19 +440,33 @@ class RestaurantAdminUpdateForm(forms.Form):
             self.fields['branch'].initial = self.instance.branch
             self.fields['is_primary_admin'].initial = self.instance.is_primary_admin
 
+            sec_setting = getattr(self.instance.user, 'security_setting', None)
+            if sec_setting is not None:
+                self.fields['is_2fa_enabled'].initial = sec_setting.is_2fa_enabled
+            else:
+                self.fields['is_2fa_enabled'].initial = True
+
     def clean_username(self):
         username = self.cleaned_data.get('username')
-        qs = User.objects.filter(username=username)
+        qs = User.objects.filter(username__iexact=username)
         if self.instance:
             qs = qs.exclude(pk=self.instance.user.pk)
         if qs.exists():
             raise forms.ValidationError('Username already exists')
         return username
 
+    def clean(self):
+        cleaned_data = super().clean()
+        is_2fa = cleaned_data.get("is_2fa_enabled")
+        email = (cleaned_data.get("email") or "").strip()
+        if is_2fa and not email:
+            self.add_error("email", "An email address is required when Two-Factor Authentication (OTP) is enabled.")
+        return cleaned_data
+
     def save(self):
         user = self.instance.user
         user.username = self.cleaned_data['username']
-        user.email = self.cleaned_data.get('email', '')
+        user.email = (self.cleaned_data.get('email') or '').strip()
         pwd = self.cleaned_data.get('password')
         if pwd:
             user.set_password(pwd)
@@ -444,7 +476,15 @@ class RestaurantAdminUpdateForm(forms.Form):
         self.instance.branch = self.cleaned_data.get('branch')
         self.instance.is_primary_admin = self.cleaned_data.get('is_primary_admin', False)
         self.instance.save()
+
+        is_2fa = self.cleaned_data.get('is_2fa_enabled', True)
+        UserSecuritySetting.objects.update_or_create(
+            user=user,
+            defaults={'is_2fa_enabled': is_2fa}
+        )
+
         return self.instance
+
 
 
 class RestaurantLandingForm(forms.ModelForm):
@@ -502,4 +542,96 @@ class BlogPostForm(forms.ModelForm):
             'section_2_title', 'section_2_text', 'gallery_image_1', 'gallery_image_2',
             'tags', 'seo_title', 'seo_description', 'is_published', 'display_order'
         ]
+
+
+class AdminSetupForm(forms.Form):
+    first_name = forms.CharField(max_length=150, required=False, label="First Name")
+    last_name = forms.CharField(max_length=150, required=False, label="Last Name")
+    username = forms.CharField(max_length=150, required=True, label="Username")
+    email = forms.EmailField(required=False, label="Email Address", disabled=True)
+    is_2fa_enabled = forms.BooleanField(required=False, initial=True, label="Enable Two-Factor Authentication (OTP)")
+
+    old_password = forms.CharField(widget=forms.PasswordInput, required=False, label="Current Password")
+    new_password = forms.CharField(widget=forms.PasswordInput, required=False, label="New Password")
+    confirm_password = forms.CharField(widget=forms.PasswordInput, required=False, label="Confirm New Password")
+
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop('instance_user', None)
+        self.request = kwargs.pop('request', None)
+        super().__init__(*args, **kwargs)
+
+        if self.user:
+            self.fields['first_name'].initial = self.user.first_name
+            self.fields['last_name'].initial = self.user.last_name
+            self.fields['username'].initial = self.user.username
+            self.fields['email'].initial = self.user.email
+
+            sec_setting = getattr(self.user, 'security_setting', None)
+            if sec_setting is not None:
+                self.fields['is_2fa_enabled'].initial = sec_setting.is_2fa_enabled
+            else:
+                self.fields['is_2fa_enabled'].initial = True
+
+    def clean_username(self):
+        username = self.cleaned_data.get('username')
+        if not username:
+            raise forms.ValidationError("Username cannot be blank.")
+        qs = User.objects.filter(username__iexact=username)
+        if self.user:
+            qs = qs.exclude(pk=self.user.pk)
+        if qs.exists():
+            raise forms.ValidationError("This username is already in use by another administrator.")
+        return username
+
+    def clean(self):
+        cleaned_data = super().clean()
+        old_password = cleaned_data.get('old_password')
+        new_password = cleaned_data.get('new_password')
+        confirm_password = cleaned_data.get('confirm_password')
+
+        # Check if user wants to change password
+        if old_password or new_password or confirm_password:
+            if not old_password:
+                self.add_error('old_password', "Please enter your current password to set a new password.")
+            elif not self.user.check_password(old_password):
+                self.add_error('old_password', "Current password is incorrect.")
+
+            if not new_password:
+                self.add_error('new_password', "Please enter a new password.")
+            elif len(new_password) < 6:
+                self.add_error('new_password', "New password must be at least 6 characters long.")
+
+            if new_password and confirm_password and new_password != confirm_password:
+                self.add_error('confirm_password', "New passwords do not match.")
+
+        return cleaned_data
+
+    def save(self):
+        if not self.user:
+            return None
+
+        self.user.first_name = self.cleaned_data.get('first_name', '')
+        self.user.last_name = self.cleaned_data.get('last_name', '')
+        self.user.username = self.cleaned_data.get('username', self.user.username)
+
+        new_password = self.cleaned_data.get('new_password')
+        if new_password:
+            self.user.set_password(new_password)
+
+        self.user.save()
+
+        # Update or create 2FA setting
+        is_2fa = self.cleaned_data.get('is_2fa_enabled', True)
+        UserSecuritySetting.objects.update_or_create(
+            user=self.user,
+            defaults={'is_2fa_enabled': is_2fa}
+        )
+
+        # Keep the user session active if password was updated
+        if new_password and self.request:
+            from django.contrib.auth import update_session_auth_hash
+            update_session_auth_hash(self.request, self.user)
+
+        return self.user
+
 

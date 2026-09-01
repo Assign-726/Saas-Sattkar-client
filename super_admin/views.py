@@ -16,8 +16,9 @@ from super_admin.forms import (
     ReviewForm,
     EventForm,
     BlogPostForm,
+    AdminSetupForm,
 )
-from super_admin.models import Restaurant, RestaurantUser, GstRegistration, RestaurantBranch, DocumentSeries
+from super_admin.models import Restaurant, RestaurantUser, GstRegistration, RestaurantBranch, DocumentSeries, UserSecuritySetting
 from core.models import RestaurantLanding, GalleryImage, TeamMember, Review, Event, BlogPost, BlogComment
 from restaurant_project import constants
 
@@ -535,6 +536,30 @@ def blog_delete(request, blog_id):
         blog_post.delete()
         messages.success(request, f'Blog post "{title}" deleted.')
     return redirect('super_admin:landing_edit', pk=restaurant_id)
+
+
+@superuser_required
+def setup_view(request):
+    user = request.user
+    sec_setting, _ = UserSecuritySetting.objects.get_or_create(user=user, defaults={'is_2fa_enabled': True})
+
+    if request.method == 'POST':
+        form = AdminSetupForm(request.POST, instance_user=user, request=request)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Account settings and 2FA security preferences updated successfully.")
+            return redirect('super_admin:setup')
+        else:
+            messages.error(request, "Please correct the form errors below.")
+    else:
+        form = AdminSetupForm(instance_user=user, request=request)
+
+    return render(request, 'super_admin/setup.html', {
+        'form': form,
+        'user_obj': user,
+        'sec_setting': sec_setting,
+    })
+
 
 
 

@@ -26,7 +26,9 @@ urlpatterns = [
     path('restaurants/admins/<int:pk>/edit/', views.restaurant_admin_edit, name='restaurant_admin_edit'),
     path('restaurants/admins/<int:pk>/delete/', views.restaurant_admin_delete, name='restaurant_admin_delete'),
     path('onboard/', views.onboard_restaurant, name='onboard'),
+    path('setup/', views.setup_view, name='setup'),
     path('api/gstins-by-state/', views.api_gstins_by_state, name='api_gstins_by_state'),
     path('api/branches-by-restaurant/', views.api_branches_by_restaurant, name='api_branches_by_restaurant'),
 ]
+
 

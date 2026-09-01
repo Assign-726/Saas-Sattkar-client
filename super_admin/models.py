@@ -222,6 +222,7 @@ class Restaurant(models.Model):
             logger.error(f"[MasterPanel] Request error for '{self.name}': {exc}")
             return {"error": str(exc)}
 
+
 class GstRegistration(models.Model):
     class RegType(models.TextChoices):
         REGULAR = 'regular', 'Regular'
@@ -233,11 +234,11 @@ class GstRegistration(models.Model):
     reg_type = models.CharField(max_length=20, choices=RegType.choices, default=RegType.REGULAR)
     specified_premises = models.BooleanField(
         default=False,
-        help_text="Restaurant in hotel where room tariff > â‚¹7,500/night in previous FY (attracts 18% GST with ITC)"
+        help_text="Restaurant in hotel where room tariff > ₹7,500/night in previous FY (attracts 18% GST with ITC)"
     )
     einvoice_enabled = models.BooleanField(
         default=False,
-        help_text="Turnover â‚¹5 Cr+ requires IRN + QR code on B2B invoices"
+        help_text="Turnover ₹5 Cr+ requires IRN + QR code on B2B invoices"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -344,7 +345,6 @@ class RestaurantBranch(models.Model):
         return bool(self.vat_tin and self.excise_license_no)
 
 
-
 class DocumentSeries(models.Model):
     class VoucherType(models.TextChoices):
         SALE = 'SALE', 'Sale (Tax Invoice / Bill of Supply / Receipt)'
@@ -404,3 +404,15 @@ class RestaurantUser(models.Model):
         return f"{self.user.username} -> {self.restaurant.name}{branch_str}"
 
 
+class UserSecuritySetting(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='security_setting')
+    is_2fa_enabled = models.BooleanField(default=True, help_text="Require 6-digit OTP verification code on login")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'User Security Setting'
+        verbose_name_plural = 'User Security Settings'
+
+    def __str__(self):
+        return f"{self.user.username} (2FA: {'ON' if self.is_2fa_enabled else 'OFF'})"
