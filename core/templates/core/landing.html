@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ landing.seo_title|default:restaurant.name }} – {{ restaurant.name }}</title>
+  <title>{% firstof landing.seo_title restaurant.name "Restaurant" %}{% if restaurant.name %} – {{ restaurant.name }}{% endif %}</title>
   <meta name="description" content="{{ landing.seo_description }}">
   <link rel="icon" href="{% if landing.logo %}{{ landing.logo.url }}{% else %}{% static 'img/favicon.ico' %}{% endif %}">
 
@@ -720,9 +720,10 @@
         </div>
       </div>
       {% empty %}
+      {% static 'img/placeholder-food.jpg' as placeholder_img %}
       {% for i in "12345678" %}
-      <div class="gallery-item" onclick="openLightbox('{% static 'img/placeholder-food.jpg' %}', 'Gallery Image {{ i }}')">
-        <img src="{% static 'img/placeholder-food.jpg' %}" alt="Gallery {{ i }}">
+      <div class="gallery-item" onclick="openLightbox('{{ placeholder_img }}', 'Gallery Image {{ i }}')">
+        <img src="{{ placeholder_img }}" alt="Gallery {{ i }}">
         <div class="gallery-overlay">
           <h4>Gallery Image {{ i }}</h4>
           <p>A moment captured</p>
