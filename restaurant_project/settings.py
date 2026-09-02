@@ -219,19 +219,34 @@ os.makedirs(os.path.join(MEDIA_ROOT, 'order_images'), exist_ok=True)
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Authentication settings
+AUTHENTICATION_BACKENDS = [
+    'core.auth_backends.EmailOrUsernameModelBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'restaurant_admin:dashboard'
 LOGOUT_REDIRECT_URL = 'login'
 
+# OTP Security settings
+OTP_EXPIRY_MINUTES = env.int('OTP_EXPIRY_MINUTES', default=10)
+OTP_RESEND_COOLDOWN_SECONDS = env.int('OTP_RESEND_COOLDOWN_SECONDS', default=60)
+OTP_MAX_ATTEMPTS = env.int('OTP_MAX_ATTEMPTS', default=5)
+
 # Email settings
-EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend')
+EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST = env('EMAIL_HOST', default='smtp.gmail.com')
 EMAIL_PORT = env.int('EMAIL_PORT', default=587)
 EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
 EMAIL_USE_SSL = env.bool('EMAIL_USE_SSL', default=False)
 EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='webmaster@localhost')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default=env('EMAIL_HOST_USER', default='webmaster@localhost'))
+
+# Master Dashboard Integration
+MASTER_DASHBOARD_URL = env('MASTER_DASHBOARD_URL', default='http://localhost:3000')
+MASTER_API_SECRET = env('MASTER_API_SECRET', default='T9@fK!xR!!72m$Qv%Lp&6Za!Wc@3Ns')
+
+
 
 # Security settings for production
 if not DEBUG:

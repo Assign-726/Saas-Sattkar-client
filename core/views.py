@@ -14,6 +14,7 @@ from django.db.models import Prefetch
 from .models import Category, SubCategory, MenuItem, Order, RestaurantSettings, RestaurantLanding, BlogPost, BlogComment
 # pyrefly: ignore [missing-import]
 from .serializers import (
+    RestaurantBranchSerializer,
     CategorySerializer, 
     SubCategorySerializer,
     MenuItemSerializer, 
@@ -298,10 +299,18 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
         qs = super().get_queryset()
         restaurant_id = self.request.query_params.get('restaurant')
         restaurant_slug = self.request.query_params.get('restaurant_slug')
+        branch_slug = self.request.query_params.get('branch_slug') or self.request.query_params.get('branch')
+        branch_id = self.request.query_params.get('branch_id')
         if restaurant_id:
             qs = qs.filter(restaurant_id=restaurant_id)
         elif restaurant_slug:
             qs = qs.filter(restaurant__slug=restaurant_slug)
+        if branch_slug:
+            from django.db.models import Q
+            qs = qs.filter(Q(branch__slug=branch_slug) | Q(branch__isnull=True))
+        elif branch_id:
+            from django.db.models import Q
+            qs = qs.filter(Q(branch_id=branch_id) | Q(branch__isnull=True))
         return qs
 
 
@@ -329,24 +338,24 @@ class MenuItemViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        # First, get all menu items with their relationships
         queryset = MenuItem.objects.filter(availability=True)
-        
-        # # Debug: Print the raw query and count
-        # print("\n=== DEBUG: MenuItem Query ===")
-        # print(f"Total available items: {queryset.count()}")
-        
-        # Apply filtering if needed
         subcategory = self.request.query_params.get('subcategory')
         if subcategory:
             queryset = queryset.filter(subcategory_id=subcategory)
         restaurant_id = self.request.query_params.get('restaurant')
         restaurant_slug = self.request.query_params.get('restaurant_slug')
+        branch_slug = self.request.query_params.get('branch_slug') or self.request.query_params.get('branch')
+        branch_id = self.request.query_params.get('branch_id')
         if restaurant_id:
             queryset = queryset.filter(restaurant_id=restaurant_id)
         elif restaurant_slug:
             queryset = queryset.filter(restaurant__slug=restaurant_slug)
-        
+        if branch_slug:
+            from django.db.models import Q
+            queryset = queryset.filter(Q(branch__slug=branch_slug) | Q(branch__isnull=True))
+        elif branch_id:
+            from django.db.models import Q
+            queryset = queryset.filter(Q(branch_id=branch_id) | Q(branch__isnull=True))
         return queryset.order_by('name')
     
     def get_serializer_context(self):
@@ -788,3 +797,74 @@ class BlogPostViewSet(viewsets.ReadOnlyModelViewSet):
         )
         serializer = BlogCommentSerializer(comment)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+class RestaurantBranchViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = RestaurantBranch.objects.all()
+    serializer_class = RestaurantBranchSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        restaurant_id = self.request.query_params.get('restaurant')
+        restaurant_slug = self.request.query_params.get('restaurant_slug') or self.request.query_params.get('slug')
+        if restaurant_id:
+            qs = qs.filter(restaurant_id=restaurant_id)
+        elif restaurant_slug:
+            qs = qs.filter(restaurant__slug=restaurant_slug)
+        return qs.order_by('id')
+
+
+from super_admin.models import CustomerInquiry
+from core.serializers import CustomerInquirySerializer
+from reservations.views import ReservationAnonRateThrottle
+
+
+class CustomerInquiryViewSet(viewsets.ModelViewSet):
+    queryset = CustomerInquiry.objects.all()
+    serializer_class = CustomerInquirySerializer
+    throttle_classes = [ReservationAnonRateThrottle]
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [AllowAny()]
+        return [IsAdminUser()]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        rslug = self.request.query_params.get('restaurant_slug')
+        if rslug:
+            qs = qs.filter(restaurant__slug=rslug)
+        return qs.order_by('-created_at')
+
+
+from super_admin.models import NewsletterSubscriber
+from core.serializers import NewsletterSubscriberSerializer
+
+
+class NewsletterSubscriberViewSet(viewsets.ModelViewSet):
+    queryset = NewsletterSubscriber.objects.all()
+    serializer_class = NewsletterSubscriberSerializer
+    throttle_classes = [ReservationAnonRateThrottle]
+
+    def get_permissions(self):
+        if self.action in ['create', 'subscribe']:
+            return [AllowAny()]
+        return [IsAdminUser()]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        was_created = getattr(serializer, '_was_created', True)
+        if was_created:
+            return Response({
+                'status': 'success',
+                'message': 'Thank you for subscribing! Check your inbox for your 25% discount code.',
+                'email': instance.email
+            }, status=status.HTTP_201_CREATED)
+        else:
+            return Response({
+                'status': 'already_subscribed',
+                'message': 'You are already subscribed to our newsletter!',
+                'email': instance.email
+            }, status=status.HTTP_200_OK)

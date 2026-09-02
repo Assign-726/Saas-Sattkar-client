@@ -23,7 +23,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.contrib.auth import views as auth_views
 import os
 from core.views import HomeView, CartView, OrdersListView, OrderDetailView, OrderConfirmView, RestaurantMenuView, RestaurantCartView, ReserveEntryView, ReservationPageView
-from core.views_auth import CustomLoginView, CustomLogoutView
+from core.views_auth import CustomLoginView, CustomLogoutView, VerifyOTPView, ResendOTPView, SubmitEnquiryView
 from core.admin_custom import custom_admin_site
 from restaurant_admin import urls as restaurant_admin_urls
 
@@ -36,8 +36,14 @@ urlpatterns = [
     # Admin / Authentication at root
     path('', CustomLoginView.as_view(template_name='admin/login.html'), name='home'),
     path('login/', CustomLoginView.as_view(template_name='admin/login.html'), name='login'),
+    path('login/verify-otp/', VerifyOTPView.as_view(), name='verify_otp'),
+    path('login/resend-otp/', ResendOTPView.as_view(), name='resend_otp'),
+    path('api/enquiries', SubmitEnquiryView.as_view(), name='submit_enquiry_no_slash'),
+    path('api/enquiries/', SubmitEnquiryView.as_view(), name='submit_enquiry'),
     path('logout/', CustomLogoutView.as_view(), name='logout'),
     path('dj-admin/logout/', CustomLogoutView.as_view(), name='admin_logout'),
+
+
 
     # Customer pages
     path('reserve/', ReserveEntryView.as_view(), name='reserve_entry'),

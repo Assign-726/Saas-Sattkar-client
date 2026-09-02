@@ -1,47 +1,59 @@
 {% extends 'super_admin/base.html' %}
 
-{% block title %}Landing Pages | Delicious Bites{% endblock %}
+{% block title %}Website Pages | Super Admin{% endblock %}
 
-{% block header_title %}Landing Pages{% endblock %}
+{% block header_title %}
+<i class="fa-solid fa-window-restore" style="color: var(--primary); margin-right: 4px;"></i> Website Pages
+{% endblock %}
+
+{% block header_actions %}
+<a class="btn secondary small" href="{% url 'super_admin:dashboard' %}">
+  <i class="fa-solid fa-arrow-left"></i>
+  <span>Back to Dashboard</span>
+</a>
+{% endblock %}
 
 {% block content %}
 <div class="card">
   <div class="hd">
-    <div>
-      <i class="fa-solid fa-window-restore" style="color: var(--primary); margin-right: 8px;"></i>
-      Manage Restaurant Landing Pages
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <i class="fa-solid fa-list-check" style="color: var(--primary);"></i>
+      <span>Manage Restaurant Website Pages</span>
     </div>
-    <span class="badge neutral">Active Locations</span>
+    <span class="badge neutral">{{ restaurants|length }} Active Location(s)</span>
   </div>
-  <div class="bd">
+  <div class="bd" style="padding: 0;">
     {% if restaurants %}
       <div class="table-container">
-        <table class="table">
+        <table class="table" style="margin: 0;">
           <thead>
             <tr>
               <th>Restaurant Name</th>
               <th>Phone Number</th>
               <th>Status</th>
-              <th style="width: 240px; text-align: right; padding-right: 24px;">Actions</th>
+              <th style="text-align: right; padding-right: 20px;">Actions</th>
             </tr>
           </thead>
           <tbody>
             {% for r in restaurants %}
             <tr>
-              <td style="font-weight: 600; color: var(--text);">{{ r.name }}</td>
-              <td class="muted">{{ r.phone|default:'Not Provided' }}</td>
+              <td style="font-weight: 600; color: var(--text);">
+                <i class="fa-solid fa-hotel" style="color: var(--muted); margin-right: 6px;"></i>
+                {{ r.name }}
+              </td>
+              <td style="color: #475569;">{{ r.phone|default:'Not Provided' }}</td>
               <td>
                 <form method="post" action="{% url 'super_admin:restaurant_toggle_active' r.id %}" style="display: inline;">
                   {% csrf_token %}
                   {% if r.is_active %}
-                    <button type="submit" class="badge ok" style="border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px;" title="Click to Deactivate Landing Page / Website">
+                    <button type="submit" class="badge ok" style="border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px;" title="Click to Deactivate Landing Page">
                       <i class="fa-solid fa-circle-check"></i>
                       <span>Active</span>
                     </button>
                   {% else %}
-                    <button type="submit" class="badge neutral" style="border: none; cursor: pointer; background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px;" title="Click to Activate Landing Page / Website">
+                    <button type="submit" class="badge neutral" style="border: none; cursor: pointer; background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px;" title="Click to Activate Landing Page">
                       <i class="fa-solid fa-circle-xmark"></i>
-                      <span>Inactive (Click to Activate)</span>
+                      <span>Inactive</span>
                     </button>
                   {% endif %}
                 </form>
@@ -49,8 +61,8 @@
               <td>
                 <div class="action-row" style="justify-content: flex-end; padding-right: 8px;">
                   <a class="btn small" href="{% url 'super_admin:landing_edit' r.id %}">
-                    <i class="fa-solid fa-window-restore"></i>
-                    <span>Customize Landing</span>
+                    <i class="fa-solid fa-pen-to-square"></i>
+                    <span>Customize Website</span>
                   </a>
                 </div>
               </td>

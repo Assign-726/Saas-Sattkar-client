@@ -1,17 +1,47 @@
 from rest_framework import serializers
 # pyrefly: ignore [missing-import]
-from .models import Category, SubCategory, MenuItem, Order, OrderItem, RestaurantLanding, GalleryImage, TeamMember, Review, RestaurantSettings, Event, BlogPost, BlogComment
-from super_admin.models import Restaurant
+from .models import Category, SubCategory, MenuItem, Table, Order, OrderItem, RestaurantLanding, GalleryImage, TeamMember, Review, RestaurantSettings, Event, BlogPost, BlogComment
+from super_admin.models import Restaurant, RestaurantBranch
 from django.utils import timezone
+
+
+class RestaurantBranchSerializer(serializers.ModelSerializer):
+    address = serializers.SerializerMethodField()
+    gstin = serializers.SerializerMethodField()
+    service_charge_percentage = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RestaurantBranch
+        fields = [
+            'id', 'name', 'slug', 'phone', 'address_line_1', 'address_line_2',
+            'city', 'state', 'pincode', 'address', 'serves_alcohol',
+            'service_charge_percentage', 'fssai_license_no', 'gstin',
+            'enable_customer_ordering', 'enable_online_payment', 'enable_pay_at_counter'
+        ]
+
+    def get_address(self, obj):
+        addr_parts = [p for p in [obj.address_line_1, obj.address_line_2, obj.city, obj.state, obj.pincode] if p]
+        if addr_parts:
+            return ", ".join(addr_parts)
+        return obj.restaurant.address if obj.restaurant else ""
+
+    def get_gstin(self, obj):
+        if getattr(obj, 'gst_registration', None) and getattr(obj.gst_registration, 'gstin', None):
+            return obj.gst_registration.gstin
+        return obj.gstin or ""
+
+    def get_service_charge_percentage(self, obj):
+        return str(obj.service_charge_percentage or 0)
 
 
 class CategorySerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
+    branch_id = serializers.ReadOnlyField(source='branch.id')
 
     class Meta:
         model = Category
-        fields = ['id', 'name', 'description', 'image', 'image_url']
-        read_only_fields = ['image_url']
+        fields = ['id', 'name', 'description', 'image', 'image_url', 'branch_id']
+        read_only_fields = ['image_url', 'branch_id']
 
     def get_image_url(self, obj):
         if obj.image and hasattr(obj.image, 'url'):
@@ -31,15 +61,15 @@ class SubCategorySerializer(serializers.ModelSerializer):
 class MenuItemSerializer(serializers.ModelSerializer):
     category = serializers.SerializerMethodField()
     image_url = serializers.SerializerMethodField()
+    branch_id = serializers.ReadOnlyField(source='branch.id')
     
     class Meta:
         model = MenuItem
-        fields = ['id', 'name', 'short_code', 'description', 'price', 'image', 'image_url', 'availability', 'subcategory', 'category']
-        read_only_fields = ['image_url']
+        fields = ['id', 'name', 'short_code', 'description', 'price', 'image', 'image_url', 'availability', 'subcategory', 'category', 'branch_id']
+        read_only_fields = ['image_url', 'branch_id']
         
     def get_image_url(self, obj):
         if obj.image and hasattr(obj.image, 'url'):
-            # This ensures we get the full URL including the domain
             request = self.context.get('request')
             if request is not None:
                 return request.build_absolute_uri(obj.image.url)
@@ -48,13 +78,11 @@ class MenuItemSerializer(serializers.ModelSerializer):
     
     def get_category(self, obj):
         try:
-            # Prefer direct category field if set
             if getattr(obj, 'category', None):
                 return {
                     'id': obj.category.id,
                     'name': obj.category.name
                 }
-            # Fallback to subcategory -> category
             if hasattr(obj, 'subcategory') and obj.subcategory and getattr(obj.subcategory, 'category', None):
                 return {
                     'id': obj.subcategory.category.id,
@@ -67,7 +95,6 @@ class MenuItemSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        # Ensure we have all required fields
         data['category'] = self.get_category(instance)
         return data
 
@@ -87,7 +114,12 @@ class OrderSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     payment_method_display = serializers.CharField(source='get_payment_method_display', read_only=True)
     payment_status_display = serializers.CharField(source='get_payment_status_display', read_only=True)
-    restaurant_slug = serializers.ReadOnlyField(source='restaurant.slug')
+    restaurant_slug = serializers.CharField(required=False, write_only=True)
+    branch_slug = serializers.CharField(required=False, write_only=True, allow_blank=True)
+    branch_id = serializers.IntegerField(required=False, allow_null=True)
+    branch_name = serializers.ReadOnlyField(source='branch.name')
+    branch_slug_display = serializers.ReadOnlyField(source='branch.slug')
+    order_restaurant_slug = serializers.ReadOnlyField(source='restaurant.slug')
     remaining_seconds = serializers.SerializerMethodField()
     progress_pct = serializers.SerializerMethodField()
     coupon_code = serializers.CharField(write_only=True, required=False, allow_blank=True)
@@ -102,19 +134,20 @@ class OrderSerializer(serializers.ModelSerializer):
             'id', 'order_number', 'branch_order_number', 'customer_name', 'phone', 'table_number', 'order_time',
             'status', 'status_display', 'total_amount', 'discount_amount', 'notes', 'items',
             'coupon_code', 'applied_coupon_code', 'payment_method', 'payment_method_display', 'payment_status', 'payment_status_display',
-            'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature', 'restaurant_slug', 'security_token',
+            'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature', 'restaurant_slug', 'branch_slug', 'branch_id', 'branch_name', 'branch_slug_display', 'order_restaurant_slug', 'security_token',
             'prep_minutes', 'prep_start', 'ready_at', 'remaining_seconds', 'progress_pct'
         ]
-        read_only_fields = ['order_time', 'total_amount', 'discount_amount', 'restaurant_slug', 'security_token', 'order_number', 'branch_order_number']
+        read_only_fields = ['order_time', 'total_amount', 'discount_amount', 'security_token', 'order_number', 'branch_order_number', 'branch_name', 'branch_slug_display', 'order_restaurant_slug']
 
     def create(self, validated_data):
-        # pyrefly: ignore [missing-import]
-        from .models import Coupon, RestaurantSettings
+        from core.models import Coupon, RestaurantSettings
         items_data = validated_data.pop('items')
         coupon_code = validated_data.pop('coupon_code', '').strip().upper() if 'coupon_code' in validated_data else ''
         payment_method = validated_data.get('payment_method', 'C')
+        restaurant_slug = validated_data.pop('restaurant_slug', None)
+        branch_slug = validated_data.pop('branch_slug', None)
+        branch_id = validated_data.pop('branch_id', None)
 
-        # Determine restaurant from items and validate consistency
         restaurant = None
         resolved_items = []
         for item_data in items_data:
@@ -127,12 +160,35 @@ class OrderSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(f"Menu item {menu_item.name} is not available")
             resolved_items.append(item_data)
 
-        # Validate settings for the restaurant
+        if not restaurant and restaurant_slug:
+            restaurant = Restaurant.objects.filter(slug=restaurant_slug).first()
+
+        branch = None
+        if restaurant and branch_slug:
+            branch = restaurant.branches.filter(slug=branch_slug).first()
+            if not branch and str(branch_slug).isdigit():
+                branch = restaurant.branches.filter(id=int(branch_slug)).first()
+        elif restaurant and branch_id:
+            branch = restaurant.branches.filter(id=branch_id).first()
+
+        if not branch and resolved_items:
+            for it in resolved_items:
+                mi = it['menu_item']
+                if getattr(mi, 'branch', None):
+                    branch = mi.branch
+                    break
+
         settings_obj = RestaurantSettings.get_settings(restaurant)
-        if not settings_obj.enable_customer_ordering:
-            raise serializers.ValidationError("Ordering is currently disabled for this restaurant.")
+        if branch:
+            if not getattr(branch, 'enable_customer_ordering', True):
+                raise serializers.ValidationError(f"Digital ordering is currently disabled for {branch.name}.")
+        else:
+            if not settings_obj.enable_customer_ordering:
+                raise serializers.ValidationError("Ordering is currently disabled for this restaurant.")
 
         if payment_method == 'O':
+            if branch and not getattr(branch, 'enable_online_payment', False) and not settings_obj.enable_online_payment:
+                raise serializers.ValidationError("Online payment is not enabled for this outlet.")
             if not settings_obj.enable_online_payment or not settings_obj.razorpay_key_id or not settings_obj.razorpay_key_secret:
                 raise serializers.ValidationError("Online payment is not enabled for this restaurant.")
 
@@ -155,14 +211,34 @@ class OrderSerializer(serializers.ModelSerializer):
             if not hmac.compare_digest(generated_signature, rzp_signature):
                 raise serializers.ValidationError("Razorpay signature verification failed.")
 
-            validated_data['payment_status'] = 'paid' # Paid
+            validated_data['payment_status'] = 'paid'
         else:
-            if not settings_obj.enable_pay_at_counter:
+            if branch and not getattr(branch, 'enable_pay_at_counter', True):
+                raise serializers.ValidationError("Pay at counter is not enabled for this outlet. You must pay online.")
+            elif not branch and not settings_obj.enable_pay_at_counter:
                 raise serializers.ValidationError("Pay at counter is not enabled for this restaurant. You must pay online.")
-            validated_data['payment_status'] = 'C' # Pay at Counter
+            validated_data['payment_status'] = 'C'
 
-        # Attach restaurant to order
-        order = Order.objects.create(restaurant=restaurant, **validated_data)
+        table_number = validated_data.get('table_number')
+        table_obj = None
+        if table_number and restaurant:
+            try:
+                t_num = int(table_number)
+                t_filter = {'restaurant': restaurant, 'table_number': t_num}
+                if branch:
+                    t_filter['branch'] = branch
+                table_obj = Table.objects.filter(**t_filter).first()
+                if not table_obj and branch:
+                    table_obj = Table.objects.filter(restaurant=restaurant, table_number=t_num).first()
+            except Exception:
+                pass
+
+        if table_obj or table_number:
+            validated_data['order_type'] = Order.OrderType.DINE_IN
+        else:
+            validated_data['order_type'] = Order.OrderType.TAKEAWAY
+
+        order = Order.objects.create(restaurant=restaurant, branch=branch, table=table_obj, **validated_data)
         
         for item_data in resolved_items:
             menu_item = item_data['menu_item']
@@ -173,7 +249,6 @@ class OrderSerializer(serializers.ModelSerializer):
                 unit_price=menu_item.price,
                 notes=item_data.get('notes', '')
             )
-        # Apply coupon if provided
         if coupon_code:
             coupon_qs = Coupon.objects.filter(code__iexact=coupon_code)
             if restaurant:
@@ -181,25 +256,25 @@ class OrderSerializer(serializers.ModelSerializer):
             else:
                 coupon = coupon_qs.first()
             if coupon:
-                # compute subtotal using Decimal baseline
                 from decimal import Decimal
                 subtotal = sum((it.subtotal for it in order.items.all()), Decimal('0.00'))
                 if coupon.is_valid_for(subtotal, restaurant=restaurant):
                     order.coupon = coupon
                     order.update_total()
-                    # increment usage counter optimistically
                     if coupon.max_uses is None or coupon.used_count < (coupon.max_uses or 0) or coupon.max_uses == 0:
                         coupon.used_count = (coupon.used_count or 0) + 1
                         coupon.save(update_fields=['used_count'])
+                else:
+                    order.update_total()
+            else:
+                order.update_total()
         else:
-            # Force total amount calculation
             order.update_total()
 
-        # Publish SSE notification for new order
         try:
             from core.sse import publish
             if order.restaurant and order.restaurant.slug:
-                publish(order.restaurant.slug, {'type': 'new_order', 'order_id': order.id})
+                publish(order.restaurant.slug, {'type': 'new_order', 'order_id': order.id, 'branch_id': branch.id if branch else None})
         except Exception:
             pass
 
@@ -277,13 +352,14 @@ class RestaurantLandingSerializer(serializers.ModelSerializer):
     team_members = TeamMemberSerializer(many=True, read_only=True)
     reviews = ReviewSerializer(many=True, read_only=True)
     events = EventSerializer(many=True, read_only=True)
+    branches = RestaurantBranchSerializer(source='restaurant.branches', many=True, read_only=True)
     restaurant_name = serializers.ReadOnlyField(source='restaurant.name')
     restaurant_slug = serializers.ReadOnlyField(source='restaurant.slug')
 
     class Meta:
         model = RestaurantLanding
         fields = [
-            'id', 'restaurant', 'restaurant_name', 'restaurant_slug', 'logo', 'hero_title', 'hero_subtitle',
+            'id', 'restaurant', 'restaurant_name', 'restaurant_slug', 'logo', 'favicon', 'hero_title', 'hero_subtitle',
             'hero_image', 'hero_video', 'cta_text', 'cta_link',
             'about_heading', 'about_italic', 'about_bullet_1', 'about_bullet_2', 'about_bullet_3', 'about_body',
             'about_image',
@@ -292,13 +368,16 @@ class RestaurantLandingSerializer(serializers.ModelSerializer):
             'about_stat_num_2', 'about_stat_label_2', 'about_stat_desc_2',
             'about_stat_num_3', 'about_stat_label_3', 'about_stat_desc_3',
             'about_stat_num_4', 'about_stat_label_4', 'about_stat_desc_4',
-            'address', 'phone', 'email', 'opening_hours', 'seo_title', 'seo_description',
+            'address', 'phone', 'email', 'opening_hours',
+            'seo_title', 'seo_description', 'seo_keywords', 'seo_canonical_url',
+            'og_title', 'og_description', 'og_url', 'og_site_name', 'og_locale', 'og_type',
+            'twitter_card_type', 'twitter_title', 'twitter_description', 'pages_seo',
             'show_hero', 'show_about', 'show_why_us', 'show_specials', 'show_events', 'show_gallery', 'show_team', 'show_reviews',
             'why_us_title_1', 'why_us_description_1',
             'why_us_title_2', 'why_us_description_2',
             'why_us_title_3', 'why_us_description_3',
             'map_iframe_url',
-            'gallery_images', 'team_members', 'reviews', 'events'
+            'gallery_images', 'team_members', 'reviews', 'events', 'branches'
         ]
 
 
@@ -341,3 +420,125 @@ class BlogPostSerializer(serializers.ModelSerializer):
 
     def get_comments_count(self, obj):
         return obj.comments.filter(is_approved=True).count()
+
+from super_admin.models import CustomerInquiry
+
+
+class CustomerInquirySerializer(serializers.ModelSerializer):
+    restaurant_slug = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    hp_website = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    restaurant_name = serializers.ReadOnlyField(source='restaurant.name')
+
+    class Meta:
+        model = CustomerInquiry
+        fields = [
+            'id', 'restaurant', 'restaurant_slug', 'restaurant_name',
+            'name', 'email', 'phone', 'subject', 'message', 'is_read',
+            'hp_website', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['is_read', 'created_at', 'updated_at', 'restaurant_name']
+
+    def validate(self, attrs):
+        import re
+        from django.core.validators import validate_email
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        # 1. Honeypot check
+        hp = attrs.pop('hp_website', None)
+        if hp and str(hp).strip():
+            raise serializers.ValidationError({'detail': 'Invalid request detected.'})
+
+        # 2. Name check
+        name = (attrs.get('name') or '').strip()
+        if not name:
+            raise serializers.ValidationError({'name': 'Name is required.'})
+        if len(name) < 2:
+            raise serializers.ValidationError({'name': 'Name must be at least 2 characters.'})
+        attrs['name'] = name
+
+        # 3. Phone check
+        phone = (attrs.get('phone') or '').strip()
+        if phone:
+            digits = re.sub(r'\D', '', phone)
+            if len(digits) < 7 or len(digits) > 15:
+                raise serializers.ValidationError({'phone': 'Please enter a valid phone number (7 to 15 digits).'})
+            attrs['phone'] = phone
+
+        # 4. Email check
+        email = (attrs.get('email') or '').strip()
+        if email:
+            try:
+                validate_email(email)
+            except DjangoValidationError:
+                raise serializers.ValidationError({'email': 'Please enter a valid email address.'})
+            attrs['email'] = email
+
+        # 5. Message check
+        msg = (attrs.get('message') or '').strip()
+        if not msg:
+            raise serializers.ValidationError({'message': 'Message is required.'})
+        attrs['message'] = msg
+
+        # 6. Restaurant resolution
+        rslug = attrs.pop('restaurant_slug', None)
+        if rslug and not attrs.get('restaurant'):
+            restaurant = Restaurant.objects.filter(slug=rslug).first()
+            if restaurant:
+                attrs['restaurant'] = restaurant
+
+        return attrs
+
+from super_admin.models import NewsletterSubscriber
+
+
+class NewsletterSubscriberSerializer(serializers.ModelSerializer):
+    restaurant_slug = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    hp_website = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    restaurant_name = serializers.ReadOnlyField(source='restaurant.name')
+
+    class Meta:
+        model = NewsletterSubscriber
+        fields = ['id', 'restaurant', 'restaurant_slug', 'restaurant_name', 'email', 'source', 'is_active', 'hp_website', 'subscribed_at']
+        read_only_fields = ['is_active', 'subscribed_at', 'restaurant_name']
+
+    def validate(self, attrs):
+        from django.core.validators import validate_email
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        hp = attrs.pop('hp_website', None)
+        if hp and str(hp).strip():
+            raise serializers.ValidationError({'detail': 'Invalid request detected.'})
+
+        email = (attrs.get('email') or '').strip().lower()
+        if not email:
+            raise serializers.ValidationError({'email': 'Email is required.'})
+        try:
+            validate_email(email)
+        except DjangoValidationError:
+            raise serializers.ValidationError({'email': 'Please enter a valid email address.'})
+        attrs['email'] = email
+
+        rslug = attrs.pop('restaurant_slug', None)
+        if rslug and not attrs.get('restaurant'):
+            restaurant = Restaurant.objects.filter(slug=rslug).first()
+            if restaurant:
+                attrs['restaurant'] = restaurant
+
+        return attrs
+
+    def create(self, validated_data):
+        restaurant = validated_data.get('restaurant')
+        email = validated_data.get('email')
+        source = validated_data.get('source', 'web_footer')
+
+        obj, created = NewsletterSubscriber.objects.get_or_create(
+            restaurant=restaurant,
+            email=email,
+            defaults={'source': source, 'is_active': True}
+        )
+        if not created and not obj.is_active:
+            obj.is_active = True
+            obj.save(update_fields=['is_active'])
+
+        self._was_created = created
+        return obj

@@ -1,0 +1,758 @@
+{% extends 'super_admin/base.html' %}
+
+{% block title %}Account & Security Settings | Super Admin{% endblock %}
+{% block header_title %}<i class="fa-solid fa-gear" style="color: var(--primary); margin-right: 8px;"></i> Administrator Settings{% endblock %}
+
+{% block header_actions %}
+<a href="{% url 'super_admin:dashboard' %}" class="btn" style="background: var(--panel); color: var(--text); border: 1px solid var(--border);">
+    <i class="fa-solid fa-arrow-left" style="margin-right: 6px;"></i> Back to Dashboard
+</a>
+{% endblock %}
+
+{% block head %}
+<style>
+    .setup-grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 24px;
+    }
+
+    .setup-main-col {
+        grid-column: span 8;
+    }
+
+    .setup-side-col {
+        grid-column: span 4;
+    }
+
+    @media (max-width: 991.98px) {
+        .setup-main-col, .setup-side-col {
+            grid-column: span 12;
+        }
+    }
+
+    /* Settings Tab Navigation */
+    .settings-tabs-nav {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: #f1f5f9;
+        padding: 6px;
+        border-radius: 14px;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 20px;
+        overflow-x: auto;
+    }
+
+    .settings-tab-btn {
+        flex: 1;
+        min-width: 140px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 16px;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        color: #64748b;
+        font-weight: 700;
+        font-size: 13.5px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-family: inherit;
+        white-space: nowrap;
+    }
+
+    .settings-tab-btn i {
+        font-size: 15px;
+        color: #94a3b8;
+        transition: all 0.2s ease;
+    }
+
+    .settings-tab-btn:hover {
+        color: var(--primary);
+        background: rgba(255, 255, 255, 0.7);
+    }
+
+    .settings-tab-btn:hover i {
+        color: var(--primary);
+    }
+
+    .settings-tab-btn.active {
+        color: #0f172a;
+        background: #ffffff;
+        border-color: #e2e8f0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .settings-tab-btn.active i {
+        color: var(--primary);
+    }
+
+    .settings-tab-pane {
+        display: none;
+    }
+
+    .settings-tab-pane.active {
+        display: block;
+    }
+
+    .form-card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        margin-bottom: 24px;
+        overflow: hidden;
+    }
+
+    .form-card-header {
+        padding: 18px 24px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: rgba(248, 250, 252, 0.6);
+    }
+
+    .form-card-header h3 {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text);
+        margin: 0;
+    }
+
+    .form-card-header i {
+        font-size: 1.2rem;
+        color: var(--primary);
+    }
+
+    .form-card-body {
+        padding: 24px;
+    }
+
+    .form-row-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    @media (max-width: 640px) {
+        .form-row-2 {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group:last-child {
+        margin-bottom: 0;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text);
+        margin-bottom: 8px;
+    }
+
+    .input-addon-group {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .input-addon-group i.input-icon {
+        position: absolute;
+        left: 14px;
+        color: var(--muted);
+        font-size: 0.95rem;
+        pointer-events: none;
+    }
+
+    .input-addon-group input {
+        width: 100%;
+        padding: 11px 14px 11px 40px;
+        border: 1.5px solid var(--border);
+        border-radius: 10px;
+        font-size: 0.95rem;
+        font-family: inherit;
+        color: var(--text);
+        background: #ffffff;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .input-addon-group input:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--primary-light);
+    }
+
+    .input-addon-group input:disabled, .input-addon-group input[readonly] {
+        background-color: #f1f5f9;
+        color: #64748b;
+        cursor: not-allowed;
+        border-color: #e2e8f0;
+    }
+
+    .toggle-pwd-btn {
+        position: absolute;
+        right: 12px;
+        background: none;
+        border: none;
+        color: var(--muted);
+        cursor: pointer;
+        padding: 4px;
+        font-size: 0.95rem;
+        transition: color 0.15s ease;
+    }
+
+    .toggle-pwd-btn:hover {
+        color: var(--text);
+    }
+
+    .field-hint {
+        font-size: 0.8rem;
+        color: var(--muted);
+        margin-top: 6px;
+        line-height: 1.4;
+    }
+
+    .field-error {
+        font-size: 0.82rem;
+        color: var(--danger);
+        margin-top: 6px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    /* Modern Toggle Switch */
+    .switch-container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 20px;
+        background: #f8fafc;
+        border: 1.5px solid var(--border);
+        border-radius: 12px;
+        transition: all 0.2s ease;
+    }
+
+    .switch-container:hover {
+        border-color: #cbd5e1;
+    }
+
+    .switch-label-area {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .switch-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .switch-desc {
+        font-size: 0.85rem;
+        color: var(--muted);
+        line-height: 1.4;
+    }
+
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 54px;
+        height: 30px;
+        flex-shrink: 0;
+    }
+
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #cbd5e1;
+        transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: 34px;
+    }
+
+    .slider:before {
+        position: absolute;
+        content: "";
+        height: 22px;
+        width: 22px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: 50%;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    input:checked + .slider {
+        background-color: var(--primary);
+    }
+
+    input:focus + .slider {
+        box-shadow: 0 0 0 3px var(--primary-light);
+    }
+
+    input:checked + .slider:before {
+        transform: translateX(24px);
+    }
+
+    /* 2FA Status Box */
+    .status-badge-box {
+        margin-top: 14px;
+        padding: 12px 16px;
+        border-radius: 10px;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        line-height: 1.4;
+    }
+
+    .status-badge-box.active {
+        background-color: #f0fdf4;
+        border: 1px solid #dcfce7;
+        color: #15803d;
+    }
+
+    .status-badge-box.inactive {
+        background-color: #fffbeb;
+        border: 1px solid #fef3c7;
+        color: #b45309;
+    }
+
+    .status-badge-box i {
+        font-size: 1.1rem;
+        flex-shrink: 0;
+    }
+
+    .save-bar {
+        padding: 18px 24px;
+        background: #f8fafc;
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .info-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .info-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .info-item i {
+        color: var(--primary);
+        font-size: 1.1rem;
+        margin-top: 2px;
+        flex-shrink: 0;
+    }
+
+    .info-item div {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .info-item strong {
+        font-size: 0.875rem;
+        color: var(--text);
+    }
+
+    .info-item span {
+        font-size: 0.8rem;
+        color: var(--muted);
+        line-height: 1.4;
+    }
+
+    .alert-banner {
+        padding: 12px 16px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+
+    .alert-success {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        color: #15803d;
+    }
+
+    .alert-error {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #b91c1c;
+    }
+
+    .alert-warning {
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        color: #b45309;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if messages %}
+<div style="margin-bottom: 20px;">
+    {% for message in messages %}
+    <div class="alert-banner {% if message.tags == 'success' %}alert-success{% elif message.tags == 'error' %}alert-error{% else %}alert-warning{% endif %}">
+        <i class="fa-solid {% if message.tags == 'success' %}fa-circle-check{% elif message.tags == 'error' %}fa-triangle-exclamation{% else %}fa-circle-info{% endif %}"></i>
+        <span>{{ message }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<form method="post" action="{% url 'super_admin:setup' %}">
+    {% csrf_token %}
+    <div class="setup-grid">
+        <!-- Main Form Column with Tabs -->
+        <div class="setup-main-col">
+            <!-- Tabs Switcher Header -->
+            <div class="settings-tabs-nav">
+                <button type="button" class="settings-tab-btn active" id="tab-btn-profile" onclick="switchSettingsTab('profile')">
+                    <i class="fa-solid fa-user-gear"></i>
+                    <span>Administrator Profile</span>
+                </button>
+                <button type="button" class="settings-tab-btn" id="tab-btn-2fa" onclick="switchSettingsTab('2fa')">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <span>Two-Factor Auth (2FA)</span>
+                </button>
+                <button type="button" class="settings-tab-btn" id="tab-btn-password" onclick="switchSettingsTab('password')">
+                    <i class="fa-solid fa-key"></i>
+                    <span>Change Password</span>
+                </button>
+            </div>
+
+            <!-- TAB 1: ADMINISTRATOR PROFILE -->
+            <div id="pane-profile" class="settings-tab-pane active">
+                <div class="form-card">
+                    <div class="form-card-header">
+                        <i class="fa-solid fa-user-gear"></i>
+                        <div>
+                            <h3>Administrator Profile</h3>
+                            <div style="font-size: 0.8rem; color: var(--muted); margin-top: 2px;">Update your name, username, and administrator identity</div>
+                        </div>
+                    </div>
+                    <div class="form-card-body">
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label for="id_first_name">First Name</label>
+                                <div class="input-addon-group">
+                                    <i class="fa-regular fa-user input-icon"></i>
+                                    <input type="text" name="first_name" id="id_first_name" value="{{ form.first_name.value|default:'' }}" placeholder="First name">
+                                </div>
+                                {% if form.first_name.errors %}
+                                <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i> {{ form.first_name.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="form-group">
+                                <label for="id_last_name">Last Name</label>
+                                <div class="input-addon-group">
+                                    <i class="fa-regular fa-user input-icon"></i>
+                                    <input type="text" name="last_name" id="id_last_name" value="{{ form.last_name.value|default:'' }}" placeholder="Last name">
+                                </div>
+                                {% if form.last_name.errors %}
+                                <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i> {{ form.last_name.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="id_username">Username <span style="color: var(--danger);">*</span></label>
+                            <div class="input-addon-group">
+                                <i class="fa-solid fa-at input-icon"></i>
+                                <input type="text" name="username" id="id_username" value="{{ form.username.value|default:'' }}" required placeholder="Username">
+                            </div>
+                            <div class="field-hint">Used to identify your account across the administrative portal.</div>
+                            {% if form.username.errors %}
+                            <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i> {{ form.username.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label for="id_email">Email Address <span style="font-size: 0.75rem; color: var(--muted); font-weight: normal;">(Read-only)</span></label>
+                            <div class="input-addon-group">
+                                <i class="fa-solid fa-lock input-icon"></i>
+                                <input type="email" name="email" id="id_email" value="{{ user_obj.email }}" disabled readonly>
+                            </div>
+                            <div class="field-hint">
+                                <i class="fa-solid fa-shield-halved" style="color: var(--primary);"></i> Your registered email address is fixed as your primary security identifier for 2FA OTP codes.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="save-bar">
+                        <button type="submit" class="btn" style="padding: 11px 24px; font-size: 0.95rem; font-weight: 700;">
+                            <i class="fa-solid fa-floppy-disk" style="margin-right: 8px;"></i> Save Profile Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: TWO-FACTOR AUTHENTICATION (2FA) -->
+            <div id="pane-2fa" class="settings-tab-pane">
+                <div class="form-card">
+                    <div class="form-card-header">
+                        <i class="fa-solid fa-shield-halved"></i>
+                        <div>
+                            <h3>Two-Factor Authentication (2FA)</h3>
+                            <div style="font-size: 0.8rem; color: var(--muted); margin-top: 2px;">Configure email OTP security verification for administrative sign-in</div>
+                        </div>
+                    </div>
+                    <div class="form-card-body">
+                        <div class="switch-container">
+                            <div class="switch-label-area">
+                                <div class="switch-title">
+                                    <span>Require Email OTP at Sign In</span>
+                                </div>
+                                <div class="switch-desc">
+                                    When enabled, you will receive a secure 6-digit code on <strong>{{ user_obj.email }}</strong> each time you sign in.
+                                </div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" name="is_2fa_enabled" id="id_is_2fa_enabled" {% if form.is_2fa_enabled.value %}checked{% endif %} onchange="update2FALabel(this)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div id="2fa-status-active" class="status-badge-box active" {% if not form.is_2fa_enabled.value %}style="display: none;"{% endif %}>
+                            <i class="fa-solid fa-circle-check"></i>
+                            <div>
+                                <strong>2FA is ON (Recommended)</strong>: High security enabled. An email verification OTP code will be sent and required during login.
+                            </div>
+                        </div>
+
+                        <div id="2fa-status-inactive" class="status-badge-box inactive" {% if form.is_2fa_enabled.value %}style="display: none;"{% endif %}>
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <div>
+                                <strong>2FA is OFF</strong>: Direct login enabled. You will sign in with username/email and password only without OTP prompt.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="save-bar">
+                        <button type="submit" class="btn" style="padding: 11px 24px; font-size: 0.95rem; font-weight: 700;">
+                            <i class="fa-solid fa-floppy-disk" style="margin-right: 8px;"></i> Save 2FA Preferences
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: CHANGE PASSWORD -->
+            <div id="pane-password" class="settings-tab-pane">
+                <div class="form-card">
+                    <div class="form-card-header">
+                        <i class="fa-solid fa-key"></i>
+                        <div>
+                            <h3>Change Password</h3>
+                            <div style="font-size: 0.8rem; color: var(--muted); margin-top: 2px;">Ensure your administrative account is protected with a strong password</div>
+                        </div>
+                    </div>
+                    <div class="form-card-body">
+                        <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 18px;">
+                            Leave these fields empty if you do not wish to change your current password.
+                        </p>
+
+                        <div class="form-group">
+                            <label for="id_old_password">Current Password</label>
+                            <div class="input-addon-group">
+                                <i class="fa-solid fa-lock input-icon"></i>
+                                <input type="password" name="old_password" id="id_old_password" placeholder="Enter current password">
+                                <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('id_old_password', this)">
+                                    <i class="fa-regular fa-eye"></i>
+                                </button>
+                            </div>
+                            {% if form.old_password.errors %}
+                            <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i> {{ form.old_password.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label for="id_new_password">New Password</label>
+                                <div class="input-addon-group">
+                                    <i class="fa-solid fa-key input-icon"></i>
+                                    <input type="password" name="new_password" id="id_new_password" placeholder="Enter new password">
+                                    <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('id_new_password', this)">
+                                        <i class="fa-regular fa-eye"></i>
+                                    </button>
+                                </div>
+                                {% if form.new_password.errors %}
+                                <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i> {{ form.new_password.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="form-group">
+                                <label for="id_confirm_password">Confirm New Password</label>
+                                <div class="input-addon-group">
+                                    <i class="fa-solid fa-circle-check input-icon"></i>
+                                    <input type="password" name="confirm_password" id="id_confirm_password" placeholder="Confirm new password">
+                                    <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('id_confirm_password', this)">
+                                        <i class="fa-regular fa-eye"></i>
+                                    </button>
+                                </div>
+                                {% if form.confirm_password.errors %}
+                                <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i> {{ form.confirm_password.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="save-bar">
+                        <button type="submit" class="btn" style="padding: 11px 24px; font-size: 0.95rem; font-weight: 700;">
+                            <i class="fa-solid fa-floppy-disk" style="margin-right: 8px;"></i> Update Password
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar Info Column -->
+        <div class="setup-side-col">
+            <div class="form-card">
+                <div class="form-card-header">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <h3>Security Guidelines</h3>
+                </div>
+                <div class="form-card-body">
+                    <div class="info-item">
+                        <i class="fa-solid fa-shield-halved"></i>
+                        <div>
+                            <strong>Two-Factor OTP Security</strong>
+                            <span>When enabled, OTP codes protect against unauthorized sign-in attempts even if your password is compromised.</span>
+                        </div>
+                    </div>
+
+                    <div class="info-item">
+                        <i class="fa-solid fa-envelope-circle-check"></i>
+                        <div>
+                            <strong>Email Delivery</strong>
+                            <span>OTPs are sent directly to <code>{{ user_obj.email }}</code> and expire automatically after 10 minutes.</span>
+                        </div>
+                    </div>
+
+                    <div class="info-item">
+                        <i class="fa-solid fa-lock"></i>
+                        <div>
+                            <strong>Password Strength</strong>
+                            <span>Use a combination of uppercase letters, numbers, and symbols for maximum account protection.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-card" style="background: rgba(242, 108, 13, 0.04); border-color: rgba(242, 108, 13, 0.2);">
+                <div class="form-card-body">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                        <i class="fa-solid fa-user-shield" style="font-size: 1.3rem; color: var(--primary);"></i>
+                        <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700;">Super Administrator</h4>
+                    </div>
+                    <p style="font-size: 0.82rem; color: var(--muted); line-height: 1.45; margin-bottom: 0;">
+                        Logged in as <strong>{{ user_obj.username }}</strong>. Super admin privileges allow managing businesses, branch outlets, document series, and restaurant admin accounts.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+function switchSettingsTab(tabName) {
+    // Hide all tab panes
+    document.querySelectorAll('.settings-tab-pane').forEach(function(pane) {
+        pane.classList.remove('active');
+    });
+
+    // Remove active class from all tab buttons
+    document.querySelectorAll('.settings-tab-btn').forEach(function(btn) {
+        btn.classList.remove('active');
+    });
+
+    // Activate selected pane
+    var targetPane = document.getElementById('pane-' + tabName);
+    if (targetPane) {
+        targetPane.classList.add('active');
+    }
+
+    // Activate selected button
+    var targetBtn = document.getElementById('tab-btn-' + tabName);
+    if (targetBtn) {
+        targetBtn.classList.add('active');
+    }
+
+    // Save active tab preference
+    localStorage.setItem('activeSuperSettingsTab', tabName);
+}
+
+function update2FALabel(checkbox) {
+    var activeBox = document.getElementById('2fa-status-active');
+    var inactiveBox = document.getElementById('2fa-status-inactive');
+    if (checkbox.checked) {
+        activeBox.style.display = 'flex';
+        inactiveBox.style.display = 'none';
+    } else {
+        activeBox.style.display = 'none';
+        inactiveBox.style.display = 'flex';
+    }
+}
+
+function togglePasswordVisibility(fieldId, btn) {
+    var field = document.getElementById(fieldId);
+    var icon = btn.querySelector('i');
+    if (field.type === 'password') {
+        field.type = 'text';
+        icon.className = 'fa-regular fa-eye-slash';
+    } else {
+        field.type = 'password';
+        icon.className = 'fa-regular fa-eye';
+    }
+}
+
+// Restore active tab or select based on form errors
+document.addEventListener('DOMContentLoaded', function() {
+    {% if form.old_password.errors or form.new_password.errors or form.confirm_password.errors %}
+    switchSettingsTab('password');
+    {% elif form.first_name.errors or form.last_name.errors or form.username.errors %}
+    switchSettingsTab('profile');
+    {% else %}
+    var savedTab = localStorage.getItem('activeSuperSettingsTab');
+    if (savedTab && document.getElementById('pane-' + savedTab)) {
+        switchSettingsTab(savedTab);
+    }
+    {% endif %}
+});
+</script>
+{% endblock %}

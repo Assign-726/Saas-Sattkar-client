@@ -4,312 +4,1202 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign In | {{ APP_NAME|default:'Hotel Management System' }}</title>
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sign In | {{ APP_NAME|default:'Hotel Management Restro' }}</title>
+    <!-- Google Fonts: Outfit & Caveat (for signature script) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous">
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
         :root {
             --primary: #f26c0d;
+            --primary-gradient: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
             --primary-hover: #d45d0a;
-            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            --card-bg: rgba(255, 255, 255, 0.95);
-            --text-main: #1e293b;
+            --primary-light: rgba(242, 108, 13, 0.12);
+            --dark-bg: #090e1a;
+            --text-dark: #0f172a;
             --text-muted: #64748b;
             --border-color: #e2e8f0;
-            --focus-ring: rgba(242, 108, 13, 0.2);
         }
 
-        * {
+        *, *::before, *::after {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
         }
 
-        body {
-            font-family: 'Outfit', sans-serif;
-            background: var(--bg-gradient);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 1.5rem;
-            color: var(--text-main);
-            overflow-x: hidden;
-            position: relative;
-        }
-
-        /* Decorative background elements */
-        body::before {
-            content: '';
-            position: absolute;
-            width: 300px;
-            height: 300px;
-            background: radial-gradient(circle, rgba(242, 108, 13, 0.15) 0%, transparent 70%);
-            top: -50px;
-            right: -50px;
-            border-radius: 50%;
-            z-index: 0;
-        }
-
-        body::after {
-            content: '';
-            position: absolute;
-            width: 400px;
-            height: 400px;
-            background: radial-gradient(circle, rgba(242, 108, 13, 0.1) 0%, transparent 70%);
-            bottom: -100px;
-            left: -100px;
-            border-radius: 50%;
-            z-index: 0;
-        }
-
-        .login-container {
-            position: relative;
-            z-index: 10;
+        html, body {
             width: 100%;
-            max-width: 440px;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+            background: #ffffff;
+            color: var(--text-dark);
+            -webkit-tap-highlight-color: transparent;
+            overflow: hidden;
         }
 
-        .brand-logo {
-            text-align: center;
-            margin-bottom: 2rem;
+        /* Split-Screen Main Layout */
+        .login-wrapper {
+            display: flex;
+            height: 100vh;
+            height: 100dvh;
+            max-height: 100vh;
+            max-height: 100dvh;
+            width: 100vw;
+            overflow: hidden;
+            background: #ffffff;
         }
 
-        .brand-logo i {
-            font-size: 2.5rem;
-            color: var(--primary);
-            margin-bottom: 0.5rem;
-            filter: drop-shadow(0 4px 6px rgba(242, 108, 13, 0.2));
-        }
-
-        .brand-logo h1 {
-            font-size: 1.75rem;
-            font-weight: 800;
+        /* ------------------------------------------------------------- */
+        /* LEFT HERO BRANDING COLUMN (Dark Luxury Aesthetic)            */
+        /* ------------------------------------------------------------- */
+        .hero-column {
+            flex: 1.15;
+            height: 100%;
+            position: relative;
+            background-color: #0b1220;
+            background-image: 
+                linear-gradient(180deg, rgba(11, 18, 32, 0.38) 0%, rgba(11, 18, 32, 0.68) 100%),
+                url('https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1600&q=85');
+            background-size: cover;
+            background-position: center center;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: clamp(20px, 3.5vh, 40px) clamp(24px, 3.5vw, 48px) clamp(16px, 2.5vh, 28px);
             color: #ffffff;
-            letter-spacing: -0.5px;
+            overflow: hidden;
         }
 
-        .brand-logo h1 span {
+        /* Ambient Glow & Vector Lines */
+        .hero-column::after {
+            content: '';
+            position: absolute;
+            bottom: -50px;
+            right: -50px;
+            width: 350px;
+            height: 350px;
+            background: radial-gradient(circle, rgba(242, 108, 13, 0.15) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .hero-decorative-curves {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 280px;
+            height: 280px;
+            pointer-events: none;
+            opacity: 0.35;
+            z-index: 1;
+        }
+
+        /* Brand Logo Badge */
+        .hero-logo-badge {
+            width: 58px;
+            height: 58px;
+            background: #ffffff;
+            border-radius: 14px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+            padding: 5px;
+            text-align: center;
+            margin-bottom: clamp(8px, 1.8vh, 16px);
+        }
+
+        .hero-logo-badge i {
+            font-size: 19px;
             color: var(--primary);
+            margin-bottom: 2px;
+        }
+
+        .hero-logo-badge span {
+            font-size: 7px;
+            font-weight: 800;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+            color: #1e293b;
+            line-height: 1.1;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            max-width: 540px;
+        }
+
+        /* Headline & Description */
+        .hero-headline {
+            font-size: clamp(1.6rem, 2.2vw, 2.3rem);
+            font-weight: 800;
+            line-height: 1.12;
+            letter-spacing: -0.5px;
+            color: #ffffff;
+            margin-bottom: 2px;
+            text-align: left;
+            text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+        }
+
+        .hero-headline .script-restro {
+            font-family: 'Caveat', cursive;
+            font-size: clamp(2.1rem, 2.8vw, 2.85rem);
+            font-weight: 700;
+            background: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: block;
+            margin-top: -4px;
+            margin-bottom: clamp(6px, 1.2vh, 10px);
+            filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
+        }
+
+        .hero-subtitle {
+            font-size: clamp(0.82rem, 1vw, 0.9rem);
+            color: #e2e8f0;
+            line-height: 1.45;
+            margin-bottom: clamp(8px, 1.4vh, 12px);
+            max-width: 460px;
+            text-align: left;
+            text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+        }
+
+        .hero-divider {
+            width: 36px;
+            height: 3px;
+            background: var(--primary);
+            border-radius: 3px;
+            margin-bottom: clamp(10px, 1.8vh, 16px);
+            box-shadow: 0 2px 6px rgba(242, 108, 13, 0.4);
+        }
+
+        /* Feature Cards Grid (2x2 on Desktop, 4 in a row on Mobile) */
+        .hero-features-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: clamp(8px, 1.2vh, 12px);
+            margin-bottom: clamp(8px, 1.4vh, 14px);
+        }
+
+        .hero-feature-card {
+            background: rgba(11, 18, 32, 0.45);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 14px;
+            padding: clamp(9px, 1.3vh, 13px) clamp(12px, 1.3vw, 15px);
+            transition: all 0.25s ease;
+        }
+
+        .hero-feature-card:hover {
+            background: rgba(255, 255, 255, 0.07);
+            border-color: rgba(242, 108, 13, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .hero-feature-icon {
+            width: 28px;
+            height: 28px;
+            background: rgba(242, 108, 13, 0.15);
+            border: 1px solid rgba(242, 108, 13, 0.25);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fb923c;
+            font-size: 12.5px;
+            margin-bottom: 5px;
+        }
+
+        .hero-feature-title {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+            color: #f8fafc;
+            margin-bottom: 2px;
+        }
+
+        .hero-feature-desc {
+            font-size: 10.5px;
+            color: #94a3b8;
+            line-height: 1.25;
+        }
+
+        /* Bottom Hero Footer */
+        .hero-footer {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 9.5px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: #64748b;
+            padding-top: clamp(6px, 1.2vh, 12px);
+        }
+
+        .hero-footer span.brand-accent {
+            color: #e2e8f0;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .brand-logo-img {
+            width: 16px;
+            height: 16px;
+            object-fit: contain;
+            display: inline-block;
+            vertical-align: middle;
+            filter: drop-shadow(0 1px 3px rgba(0,0,0,0.4));
+        }
+
+        /* ------------------------------------------------------------- */
+        /* RIGHT FORM COLUMN (Crisp Modern White Container)              */
+        /* ------------------------------------------------------------- */
+        .form-column {
+            flex: 0.85;
+            min-width: 430px;
+            max-width: 540px;
+            height: 100%;
+            background: #f8fafc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: clamp(16px, 2.5vh, 28px) clamp(20px, 3vw, 36px);
+            position: relative;
+            overflow-y: auto;
+        }
+
+        /* Decorative Dot Matrix in top right */
+        .decorative-dots {
+            position: absolute;
+            top: 20px;
+            right: 24px;
+            width: 64px;
+            height: 64px;
+            background-image: radial-gradient(#cbd5e1 1.5px, transparent 1.5px);
+            background-size: 10px 10px;
+            opacity: 0.7;
+            pointer-events: none;
         }
 
         .login-card {
-            background: var(--card-bg);
-            backdrop-filter: blur(10px);
-            border-radius: 1.5rem;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 3rem 2.5rem;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            width: 100%;
+            max-width: 400px;
+            background: #ffffff;
+            border-radius: 20px;
+            padding: clamp(20px, 3vh, 30px) clamp(20px, 2.2vw, 28px);
+            box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.06);
+            border: 1px solid #f1f5f9;
+            position: relative;
+            z-index: 10;
         }
 
-        .login-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.35);
+        /* Card View State Transitions */
+        .card-view {
+            display: none;
+            animation: fadeInView 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .card-view.active {
+            display: block;
+        }
+
+        @keyframes fadeInView {
+            from {
+                opacity: 0;
+                transform: translateX(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* Back to Sign In Button */
+        .back-to-login-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 8px 14px;
+            border-radius: 10px;
+            color: #475569;
+            font-weight: 700;
+            font-size: 0.85rem;
+            cursor: pointer;
+            margin-bottom: 20px;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .back-to-login-btn:hover {
+            background: #f1f5f9;
+            color: var(--primary);
+            border-color: #cbd5e1;
+            transform: translateX(-2px);
         }
 
         .login-header {
-            margin-bottom: 2.25rem;
-            text-align: center;
+            margin-bottom: clamp(12px, 2vh, 18px);
+            text-align: left;
         }
 
-        .login-title {
-            font-size: 1.75rem;
-            font-weight: 700;
-            color: var(--text-main);
-            margin-bottom: 0.5rem;
+        .login-header-title {
+            font-size: clamp(1.4rem, 1.8vw, 1.6rem);
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.3px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 2px;
         }
 
-        .login-subtitle {
-            font-size: 0.95rem;
-            color: var(--text-muted);
-            font-weight: 400;
+        .login-header-subtitle {
+            font-size: 0.85rem;
+            color: #64748b;
         }
 
+        /* Form Inputs */
         .form-group {
-            margin-bottom: 1.5rem;
-            position: relative;
+            margin-bottom: clamp(10px, 1.5vh, 13px);
         }
 
         .form-group label {
-            display: block;
-            font-size: 0.875rem;
-            font-weight: 600;
-            color: var(--text-main);
-            margin-bottom: 0.5rem;
-            letter-spacing: 0.2px;
+            display: none;
         }
 
-        .input-wrapper {
+        .input-group-wrapper {
             position: relative;
+            display: flex;
+            align-items: center;
         }
 
-        .input-wrapper i {
+        .input-group-wrapper i.input-icon {
             position: absolute;
-            left: 1rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-muted);
-            font-size: 1.1rem;
+            left: 14px;
+            color: #f97316;
+            font-size: 15px;
+            pointer-events: none;
             transition: color 0.2s ease;
         }
 
-        .form-control {
+        .form-control-input {
             width: 100%;
-            padding: 0.875rem 1rem 0.875rem 2.75rem;
-            border: 1.5px solid var(--border-color);
-            border-radius: 0.75rem;
-            font-size: 0.95rem;
+            padding: 11.5px 14px 11.5px 42px;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 0.92rem;
             font-family: inherit;
-            color: var(--text-main);
-            background-color: #ffffff;
+            color: #0f172a;
+            background: #ffffff;
             transition: all 0.2s ease;
         }
 
-        .form-control:focus {
+        .form-control-input:focus {
             outline: none;
             border-color: var(--primary);
-            box-shadow: 0 0 0 4px var(--focus-ring);
+            box-shadow: 0 0 0 4px var(--primary-light);
         }
 
-        .form-control:focus+i {
-            color: var(--primary);
+        .form-control-input::placeholder {
+            color: #94a3b8;
+            font-weight: 400;
         }
 
-        .error-container {
-            background-color: #fef2f2;
-            border: 1px solid #fee2e2;
-            color: #ef4444;
-            padding: 1rem;
-            border-radius: 0.75rem;
-            margin-bottom: 1.75rem;
-            font-size: 0.875rem;
-            display: flex;
-            align-items: flex-start;
-            gap: 0.75rem;
+        textarea.form-control-input {
+            padding-left: 42px;
+            resize: vertical;
+            min-height: 70px;
         }
 
-        .error-container i {
-            margin-top: 0.15rem;
-            font-size: 1.1rem;
-        }
-
-        .error-list {
-            list-style: none;
-        }
-
-        .submit-btn {
-            background-color: var(--primary);
-            color: #ffffff;
+        .toggle-password-btn {
+            position: absolute;
+            right: 12px;
+            background: none;
             border: none;
-            width: 100%;
-            padding: 1rem;
-            font-size: 1rem;
-            font-weight: 700;
-            border-radius: 0.75rem;
+            color: #94a3b8;
             cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 4px 12px rgba(242, 108, 13, 0.25);
+            padding: 4px;
+            font-size: 15px;
             display: flex;
-            justify-content: center;
             align-items: center;
-            gap: 0.5rem;
+            justify-content: center;
+            transition: color 0.15s ease;
+        }
+
+        .toggle-password-btn:hover {
+            color: #0f172a;
+        }
+
+        /* Options Row: Remember Me & Forgot Password */
+        .form-options-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: clamp(8px, 1.2vh, 12px) 0 clamp(10px, 1.6vh, 15px);
+            font-size: 0.82rem;
+        }
+
+        .remember-me-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            color: #64748b;
+            cursor: pointer;
+            user-select: none;
+            font-weight: 500;
+        }
+
+        .remember-me-label input[type="checkbox"] {
+            width: 15px;
+            height: 15px;
+            border-radius: 4px;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        .forgot-password-link {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 0.82rem;
+            transition: color 0.15s ease;
+            cursor: pointer;
+        }
+
+        .forgot-password-link:hover {
+            color: var(--primary-hover);
+            text-decoration: underline;
+        }
+
+        /* Primary Submit Button */
+        .submit-btn {
+            width: 100%;
+            padding: 11.5px 18px;
+            background: var(--primary-gradient);
+            border: none;
+            border-radius: 10px;
+            color: #ffffff;
+            font-size: 0.95rem;
+            font-weight: 700;
+            font-family: inherit;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer;
+            box-shadow: 0 6px 18px rgba(234, 88, 12, 0.22);
+            transition: all 0.2s ease;
         }
 
         .submit-btn:hover {
-            background-color: var(--primary-hover);
+            box-shadow: 0 8px 22px rgba(234, 88, 12, 0.32);
             transform: translateY(-1px);
-            box-shadow: 0 6px 18px rgba(242, 108, 13, 0.35);
         }
 
         .submit-btn:active {
             transform: translateY(0);
         }
 
-        .footer-note {
+        /* Assistance Callout Card */
+        .assistance-card {
+            margin-top: clamp(12px, 1.8vh, 18px);
+            background: #fff7ed;
+            border: 1px solid #ffedd5;
+            border-radius: 12px;
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-align: left;
+        }
+
+        .assistance-icon-badge {
+            width: 32px;
+            height: 32px;
+            background: #ffffff;
+            border: 1px solid #fed7aa;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .assistance-content {
+            flex: 1;
+        }
+
+        .assistance-title {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 1px;
+        }
+
+        .assistance-desc {
+            font-size: 0.72rem;
+            color: #64748b;
+            margin-bottom: 3px;
+            line-height: 1.25;
+        }
+
+        .assistance-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            color: var(--primary);
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            transition: gap 0.15s ease;
+        }
+
+        .assistance-link:hover {
+            gap: 7px;
+            color: var(--primary-hover);
+        }
+
+        /* Error and Alert Banners */
+        .alert-box {
+            padding: 10px 14px;
+            border-radius: 10px;
+            margin-bottom: 16px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            line-height: 1.4;
+            text-align: left;
+        }
+
+        .alert-error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #b91c1c;
+        }
+
+        .alert-warning {
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            color: #b45309;
+        }
+
+        .alert-success {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            color: #15803d;
+        }
+
+        /* Support Sent State */
+        .support-success-box {
             text-align: center;
-            margin-top: 2rem;
+            padding: 10px 0 10px;
+        }
+
+        .support-success-icon {
+            width: 56px;
+            height: 56px;
+            background: #dcfce7;
+            color: #16a34a;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            margin: 0 auto 14px;
+        }
+
+        .support-success-box h4 {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: var(--text-dark);
+            margin-bottom: 6px;
+        }
+
+        .support-success-box p {
             font-size: 0.875rem;
             color: var(--text-muted);
+            margin-bottom: 20px;
+            line-height: 1.5;
         }
 
-        .footer-note a {
-            color: var(--primary);
-            text-decoration: none;
-            font-weight: 600;
+        /* ------------------------------------------------------------- */
+        /* RESPONSIVE BREAKPOINTS (Mobile & Tablet Adjustments)           */
+        /* ------------------------------------------------------------- */
+        @media (max-width: 991.98px) {
+            .login-wrapper {
+                flex-direction: column;
+                height: auto;
+                min-height: 100dvh;
+                background: var(--dark-bg);
+            }
+
+            .hero-column {
+                flex: none;
+                padding: 24px 18px 24px;
+                text-align: left;
+                align-items: flex-start;
+            }
+
+            .hero-logo-badge {
+                width: 64px;
+                height: 64px;
+                border-radius: 14px;
+                margin-bottom: 18px;
+            }
+
+            .hero-logo-badge i {
+                font-size: 20px;
+            }
+
+            .hero-logo-badge span {
+                font-size: 7px;
+            }
+
+            .hero-content {
+                max-width: 100%;
+                width: 100%;
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                text-align: left;
+            }
+
+            .hero-headline {
+                font-size: 1.65rem;
+                text-align: left;
+            }
+
+            .hero-headline .script-restro {
+                font-size: 2.15rem;
+                margin-bottom: 8px;
+            }
+
+            .hero-subtitle {
+                font-size: 0.82rem;
+                line-height: 1.45;
+                margin-bottom: 12px;
+                text-align: left;
+            }
+
+            .hero-divider {
+                width: 36px;
+                height: 3px;
+                margin-bottom: 18px;
+            }
+
+            /* 4 Vertical Pillar Cards in a Single Row (matching Image 2) */
+            .hero-features-grid {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 6px;
+                width: 100%;
+                margin-bottom: 14px;
+            }
+
+            .hero-feature-card {
+                padding: 10px 4px;
+                border-radius: 12px;
+                text-align: center;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                min-height: 108px;
+                background: rgba(11, 18, 32, 0.45);
+                backdrop-filter: blur(12px);
+                -webkit-backdrop-filter: blur(12px);
+                border: 1px solid rgba(255, 255, 255, 0.12);
+            }
+
+            .hero-feature-icon {
+                width: 28px;
+                height: 28px;
+                border-radius: 50%;
+                font-size: 12px;
+                margin-bottom: 6px;
+            }
+
+            .hero-feature-title {
+                font-size: 7.5px;
+                font-weight: 800;
+                letter-spacing: 0.3px;
+                line-height: 1.15;
+                color: #f8fafc;
+                margin-bottom: 3px;
+                text-align: center;
+            }
+
+            .hero-feature-desc {
+                font-size: 7.5px;
+                color: #94a3b8;
+                line-height: 1.15;
+                text-align: center;
+            }
+
+            .hero-footer {
+                display: none;
+            }
+
+            /* Sheet sliding up from bottom */
+            .form-column {
+                flex: 1;
+                min-width: 100%;
+                max-width: 100%;
+                background: #ffffff;
+                border-radius: 28px 28px 0 0;
+                padding: 24px 18px 32px;
+                margin-top: -12px;
+                box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.3);
+            }
+
+            .decorative-dots {
+                display: none;
+            }
+
+            .login-card {
+                box-shadow: none;
+                border: none;
+                padding: 0;
+            }
+
+            .mobile-pull-pill {
+                display: block;
+                width: 44px;
+                height: 4.5px;
+                background: linear-gradient(90deg, #f97316, #ea580c);
+                border-radius: 4px;
+                margin: 0 auto 16px;
+            }
+
+            .mobile-bottom-brand {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 1.5px;
+                text-transform: uppercase;
+                color: #94a3b8;
+                margin-top: 24px;
+            }
         }
 
-        .footer-note a:hover {
-            text-decoration: underline;
+        @media (min-width: 992px) {
+            .mobile-pull-pill, .mobile-bottom-brand {
+                display: none;
+            }
         }
     </style>
 </head>
 
 <body>
-    <div class="login-container">
-        <div class="brand-logo">
-            <i class="fa-solid fa-utensils"></i>
-            <h1>{{ APP_NAME_PREFIX|default:'Hotel Management' }}<span>{{ APP_NAME_SUFFIX|default:'System' }}</span></h1>
-        </div>
+    <div class="login-wrapper">
 
-        <div class="login-card">
-            <div class="login-header">
-                <h2 class="login-title">Welcome Back</h2>
-                <p class="login-subtitle">{{ APP_TAGLINE|default:'Sign in to access your administrative dashboard' }}</p>
+        <!-- ========================================================= -->
+        <!-- 1. LEFT HERO BRANDING COLUMN (Desktop & Mobile Top)       -->
+        <!-- ========================================================= -->
+        <div class="hero-column">
+            <!-- Decorative Vector Curves at Bottom Right -->
+            <svg class="hero-decorative-curves" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M0 200C50 150 120 180 200 130" stroke="rgba(242,108,13,0.4)" stroke-width="1.5"/>
+                <path d="M0 200C70 120 150 160 200 80" stroke="rgba(242,108,13,0.25)" stroke-width="1.5"/>
+                <path d="M0 200C90 90 170 130 200 40" stroke="rgba(242,108,13,0.15)" stroke-width="1.5"/>
+            </svg>
+
+            <!-- Top Brand Logo -->
+            <div class="hero-logo-badge">
+                <i class="fa-solid fa-utensils"></i>
+                <span>Culinary<br>Excellence</span>
             </div>
 
-            {% if form.errors %}
-            <div class="error-container">
-                <i class="fa-solid fa-triangle-exclamation"></i>
-                <div class="error-list">
-                    {% if form.non_field_errors %}
-                    {% for error in form.non_field_errors %}
-                    <div>{{ error }}</div>
+            <div class="hero-content">
+                <!-- Brand Headings (Left-aligned) -->
+                <h1 class="hero-headline">
+                    Hotel Management
+                    <span class="script-restro">Restro</span>
+                </h1>
+
+                <!-- Subtitle -->
+                <p class="hero-subtitle">
+                    Elevating culinary operations through precision engineering and seamless service orchestration.
+                </p>
+
+                <div class="hero-divider"></div>
+
+                <!-- 4 Feature Cards (2x2 on Desktop, 4 Columns in single row on Mobile) -->
+                <div class="hero-features-grid">
+                    <div class="hero-feature-card">
+                        <div class="hero-feature-icon">
+                            <i class="fa-solid fa-chart-line"></i>
+                        </div>
+                        <div class="hero-feature-title">Precision<br>Analytics</div>
+                        <div class="hero-feature-desc">Data-driven<br>insights</div>
+                    </div>
+
+                    <div class="hero-feature-card">
+                        <div class="hero-feature-icon">
+                            <i class="fa-solid fa-bell-concierge"></i>
+                        </div>
+                        <div class="hero-feature-title">Seamless<br>Service</div>
+                        <div class="hero-feature-desc">Smooth<br>operations</div>
+                    </div>
+
+                    <div class="hero-feature-card">
+                        <div class="hero-feature-icon">
+                            <i class="fa-solid fa-utensils"></i>
+                        </div>
+                        <div class="hero-feature-title">Culinary<br>Excellence</div>
+                        <div class="hero-feature-desc">Premium<br>standards</div>
+                    </div>
+
+                    <div class="hero-feature-card">
+                        <div class="hero-feature-icon">
+                            <i class="fa-solid fa-globe"></i>
+                        </div>
+                        <div class="hero-feature-title">Global<br>Reach</div>
+                        <div class="hero-feature-desc">Worldwide<br>impact</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Desktop Bottom Footer -->
+            <div class="hero-footer">
+                <span>ENGINEERED BY</span>
+                <span class="brand-accent">
+                    <img src="{% static 'images/ecentra-logo.svg' %}" alt="Ecentra Technologies" class="brand-logo-img">
+                    Ecentra Technologies
+                </span>
+            </div>
+        </div>
+
+        <!-- ========================================================= -->
+        <!-- 2. RIGHT FORM COLUMN (In-Place View Switching)           -->
+        <!-- ========================================================= -->
+        <div class="form-column">
+            <div class="decorative-dots"></div>
+
+            <div class="login-card">
+                <!-- Mobile Orange Indicator Pill -->
+                <div class="mobile-pull-pill"></div>
+
+                <!-- VIEW A: SIGN IN VIEW -->
+                <div id="view-signin" class="card-view active">
+                    <div class="login-header">
+                        <h2 class="login-header-title">Welcome Back &#128075;</h2>
+                        <p class="login-header-subtitle">Access your management dashboard.</p>
+                    </div>
+
+                    <!-- Messages & Alerts -->
+                    {% if messages %}
+                    {% for message in messages %}
+                    <div class="alert-box {% if message.tags == 'warning' %}alert-warning{% elif message.tags == 'success' %}alert-success{% else %}alert-error{% endif %}">
+                        <i class="fa-solid {% if message.tags == 'warning' %}fa-circle-exclamation{% elif message.tags == 'success' %}fa-circle-check{% else %}fa-triangle-exclamation{% endif %}"></i>
+                        <div>{{ message }}</div>
+                    </div>
                     {% endfor %}
-                    {% else %}
-                    <div>Invalid username or password. Please try again.</div>
                     {% endif %}
+
+                    {% if form.errors %}
+                    <div class="alert-box alert-error">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <div class="error-list">
+                            {% if form.non_field_errors %}
+                            {% for error in form.non_field_errors %}
+                            <div>{{ error }}</div>
+                            {% endfor %}
+                            {% else %}
+                            <div>Invalid credentials. Please verify your username and password.</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Sign In Form -->
+                    <form action="" method="post" id="login-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ next }}">
+
+                        <!-- Username / Email Input -->
+                        <div class="form-group">
+                            <div class="input-group-wrapper">
+                                <i class="fa-regular fa-user input-icon"></i>
+                                <input type="text" name="username" id="id_username" class="form-control-input" autofocus required
+                                    value="{{ form.username.value|default:'' }}" placeholder="Username" autocomplete="username">
+                            </div>
+                        </div>
+
+                        <!-- Password Input -->
+                        <div class="form-group">
+                            <div class="input-group-wrapper">
+                                <i class="fa-solid fa-lock input-icon"></i>
+                                <input type="password" name="password" id="id_password" class="form-control-input" required
+                                    placeholder="Password" autocomplete="current-password">
+                                <button type="button" class="toggle-password-btn" onclick="toggleLoginPassword(this)" aria-label="Toggle password visibility">
+                                    <i class="fa-regular fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Remember Me & Forgot Password Row -->
+                        <div class="form-options-row">
+                            <label class="remember-me-label">
+                                <input type="checkbox" name="remember_me" id="remember_me">
+                                <span>Remember me</span>
+                            </label>
+                            <a href="javascript:void(0)" class="forgot-password-link" onclick="showSupportView()">Forgot password?</a>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <button type="submit" class="submit-btn" id="loginSubmitBtn">
+                            <span id="loginSubmitText">Sign In</span>
+                            <i id="loginSubmitIcon" class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </form>
+
+                    <!-- Assistance Callout Card -->
+                    <div class="assistance-card">
+                        <div class="assistance-icon-badge">
+                            <i class="fa-solid fa-headset"></i>
+                        </div>
+                        <div class="assistance-content">
+                            <div class="assistance-title">Need assistance?</div>
+                            <div class="assistance-desc">Our support team is here to help.</div>
+                            <a href="javascript:void(0)" class="assistance-link" onclick="showSupportView()">
+                                <span>Contact support</span>
+                                <i class="fa-solid fa-arrow-right"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW B: IN-PLACE SUPPORT / CONTACT FORM -->
+                <div id="view-support" class="card-view">
+                    <!-- Top Back Button to Login Screen -->
+                    <button type="button" class="back-to-login-btn" onclick="showLoginView()">
+                        <i class="fa-solid fa-arrow-left"></i>
+                        <span>Back to Sign In</span>
+                    </button>
+
+                    <div class="login-header">
+                        <h2 class="login-header-title">Need Support? &#127911;</h2>
+                        <p class="login-header-subtitle">Send a message directly to our administrative team.</p>
+                    </div>
+
+                    <div id="enquiryAlert" class="alert-box alert-error" style="display: none;">
+                        <i class="fa-solid fa-circle-exclamation"></i>
+                        <span id="enquiryAlertMsg">Failed to submit message. Please try again.</span>
+                    </div>
+
+                    <!-- In-Place Contact Form -->
+                    <form id="enquiryForm">
+                        <div class="form-group">
+                            <div class="input-group-wrapper">
+                                <i class="fa-regular fa-user input-icon"></i>
+                                <input type="text" id="enquiry_full_name" class="form-control-input" placeholder="Full Name *" required>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class="input-group-wrapper">
+                                <i class="fa-regular fa-envelope input-icon"></i>
+                                <input type="email" id="enquiry_email" class="form-control-input" placeholder="Email Address *" required>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class="input-group-wrapper">
+                                <i class="fa-solid fa-phone input-icon"></i>
+                                <input type="tel" id="enquiry_phone" class="form-control-input" placeholder="Phone Number *" required>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class="input-group-wrapper">
+                                <i class="fa-regular fa-comment-dots input-icon" style="top: 18px;"></i>
+                                <textarea id="enquiry_message" class="form-control-input" rows="3" placeholder="How can we assist you today? *" required></textarea>
+                            </div>
+                        </div>
+
+                        <button type="submit" id="enquirySubmitBtn" class="submit-btn" style="margin-top: 20px;">
+                            <span id="enquirySubmitText">Send Message</span>
+                            <i id="enquirySubmitIcon" class="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </form>
+
+                    <!-- Success State -->
+                    <div id="enquirySuccessState" class="support-success-box" style="display: none;">
+                        <div class="support-success-icon"><i class="fa-solid fa-circle-check"></i></div>
+                        <h4>Message Sent Successfully!</h4>
+                        <p>Thank you for reaching out. Our support team has received your enquiry and will contact you shortly.</p>
+                        <button type="button" class="submit-btn" onclick="showLoginView()">
+                            <span>Return to Sign In</span>
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Mobile Bottom Engineered Brand -->
+                <div class="mobile-bottom-brand">
+                    <span>ENGINEERED BY</span>
+                    <strong style="color: #475569; display: inline-flex; align-items: center; gap: 5px;">
+                        <img src="{% static 'images/ecentra-logo.svg' %}" alt="Ecentra Technologies" class="brand-logo-img" style="width: 14px; height: 14px;">
+                        Ecentra Technologies
+                    </strong>
                 </div>
             </div>
-            {% endif %}
-
-            <form action="" method="post" id="login-form">
-                {% csrf_token %}
-                <input type="hidden" name="next" value="{{ next }}">
-
-                <div class="form-group">
-                    <label for="id_username">Username</label>
-                    <div class="input-wrapper">
-                        <input type="text" name="username" id="id_username" class="form-control" autofocus required
-                            value="{{ form.username.value|default:'' }}" placeholder="Enter username">
-                        <i class="fa-solid fa-user"></i>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="id_password">Password</label>
-                    <div class="input-wrapper">
-                        <input type="password" name="password" id="id_password" class="form-control" required
-                            placeholder="Enter password">
-                        <i class="fa-solid fa-lock"></i>
-                    </div>
-                </div>
-
-                <button type="submit" class="submit-btn">
-                    <span>Sign In</span>
-                    <i class="fa-solid fa-arrow-right-to-bracket"></i>
-                </button>
-            </form>
-        </div>
-
-        <div class="footer-note">
-            <p>Need assistance? Contact support{% if frontend_url %} or <a href="{{ frontend_url }}" target="_blank" rel="noopener">Visit Website</a>{% endif %}</p>
         </div>
     </div>
+
+    <script>
+    function toggleLoginPassword(btn) {
+        const pwdInput = document.getElementById('id_password');
+        const icon = btn.querySelector('i');
+        if (pwdInput.type === 'password') {
+            pwdInput.type = 'text';
+            icon.className = 'fa-regular fa-eye-slash';
+        } else {
+            pwdInput.type = 'password';
+            icon.className = 'fa-regular fa-eye';
+        }
+    }
+
+    function showSupportView() {
+        document.getElementById('view-signin').classList.remove('active');
+        document.getElementById('view-support').classList.add('active');
+        document.getElementById('enquiryAlert').style.display = 'none';
+        setTimeout(() => {
+            const nameField = document.getElementById('enquiry_full_name');
+            if (nameField) nameField.focus();
+        }, 100);
+    }
+
+    function showLoginView() {
+        document.getElementById('view-support').classList.remove('active');
+        document.getElementById('view-signin').classList.add('active');
+        // Reset enquiry state
+        const enquiryForm = document.getElementById('enquiryForm');
+        const successState = document.getElementById('enquirySuccessState');
+        const alertBox = document.getElementById('enquiryAlert');
+        if (enquiryForm) enquiryForm.style.display = 'block';
+        if (successState) successState.style.display = 'none';
+        if (alertBox) alertBox.style.display = 'none';
+        setTimeout(() => {
+            const userInput = document.getElementById('id_username');
+            if (userInput) userInput.focus();
+        }, 100);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const enquiryForm = document.getElementById('enquiryForm');
+        const successState = document.getElementById('enquirySuccessState');
+        const alertBox = document.getElementById('enquiryAlert');
+        const alertMsg = document.getElementById('enquiryAlertMsg');
+        const submitBtn = document.getElementById('enquirySubmitBtn');
+        const submitText = document.getElementById('enquirySubmitText');
+        const submitIcon = document.getElementById('enquirySubmitIcon');
+
+        if (enquiryForm) {
+            enquiryForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                alertBox.style.display = 'none';
+
+                const fullName = document.getElementById('enquiry_full_name').value.trim();
+                const email = document.getElementById('enquiry_email').value.trim();
+                const phone = document.getElementById('enquiry_phone').value.trim();
+                const message = document.getElementById('enquiry_message').value.trim();
+
+                if (!fullName || !email || !phone || !message) {
+                    alertMsg.textContent = 'Please fill out all required fields.';
+                    alertBox.style.display = 'flex';
+                    return;
+                }
+
+                submitBtn.disabled = true;
+                submitText.textContent = 'Sending...';
+                submitIcon.className = 'fa-solid fa-spinner fa-spin';
+
+                fetch('/api/enquiries', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        full_name: fullName,
+                        email: email,
+                        phone: phone,
+                        message: message
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(errData => {
+                            throw new Error(errData.error || errData.message || 'Server error occurred.');
+                        }).catch(() => {
+                            throw new Error(`Request failed with status ${response.status}`);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(() => {
+                    enquiryForm.style.display = 'none';
+                    successState.style.display = 'block';
+                    enquiryForm.reset();
+                    submitBtn.disabled = false;
+                    submitText.textContent = 'Send Message';
+                    submitIcon.className = 'fa-solid fa-paper-plane';
+                })
+                .catch(err => {
+                    console.error('Enquiry Submission Error:', err);
+                    alertMsg.textContent = err.message || 'Unable to connect to the support service. Please try again later.';
+                    alertBox.style.display = 'flex';
+                    submitBtn.disabled = false;
+                    submitText.textContent = 'Send Message';
+                    submitIcon.className = 'fa-solid fa-paper-plane';
+                });
+            });
+        }
+
+        // Login Form Submission Loader
+        const loginForm = document.getElementById('login-form');
+        const loginSubmitBtn = document.getElementById('loginSubmitBtn');
+        const loginSubmitText = document.getElementById('loginSubmitText');
+        const loginSubmitIcon = document.getElementById('loginSubmitIcon');
+
+        if (loginForm) {
+            loginForm.addEventListener('submit', function() {
+                if (loginSubmitBtn) {
+                    loginSubmitBtn.disabled = true;
+                    if (loginSubmitText) loginSubmitText.textContent = 'Signing in...';
+                    if (loginSubmitIcon) {
+                        loginSubmitIcon.className = 'fa-solid fa-spinner fa-spin';
+                    }
+                }
+            });
+        }
+    });
+    </script>
 </body>
 
 </html>

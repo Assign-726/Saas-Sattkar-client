@@ -2,13 +2,27 @@
 
 {% block title %}Edit Blog Post - {{ blog_post.title }} | Super Admin{% endblock %}
 
+{% block header_title %}
+<i class="fa-solid fa-newspaper" style="color: var(--primary); margin-right: 4px;"></i>
+<span>Edit Blog Post</span>
+{% endblock %}
+
+{% block header_actions %}
+<a href="{% url 'super_admin:landing_edit' restaurant.pk %}" class="btn secondary small">
+  <i class="fa-solid fa-arrow-left"></i> <span>Back to Landing CMS</span>
+</a>
+<a href="/r/{{ restaurant.slug }}/blog/{{ blog_post.slug }}" target="_blank" class="btn ghost small" title="View live blog post on website">
+  <i class="fa-solid fa-arrow-up-right-from-square"></i> <span>Preview Live</span>
+</a>
+{% endblock %}
+
 {% block content %}
 <style>
   /* Explicit Grid Rules to guarantee clean responsive columns in Super Admin */
   .grid-row {
     display: grid !important;
     grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
-    gap: 20px !important;
+    gap: 16px !important;
     width: 100% !important;
     box-sizing: border-box !important;
   }
@@ -26,8 +40,20 @@
   .col-2  { grid-column: span 2 !important; }
   .col-1  { grid-column: span 1 !important; }
 
-  @media (max-width: 768px) {
-    .col-8, .col-6, .col-4, .col-3 {
+  @media (max-width: 1200px) {
+    .col-2, .col-3 {
+      grid-column: span 6 !important;
+    }
+    .col-4 {
+      grid-column: span 6 !important;
+    }
+    .col-5, .col-6, .col-7, .col-8, .col-9, .col-10, .col-11 {
+      grid-column: span 12 !important;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .col-1, .col-2, .col-3, .col-4, .col-5, .col-6, .col-7, .col-8, .col-9, .col-10, .col-11 {
       grid-column: span 12 !important;
     }
   }
@@ -36,10 +62,20 @@
   .blog-card-panel {
     background: #ffffff;
     border: 1px solid #cbd5e1;
-    border-radius: 20px;
-    padding: 28px;
-    margin-bottom: 24px;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 20px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  @media (max-width: 768px) {
+    .blog-card-panel {
+      padding: 16px 14px !important;
+      border-radius: 12px !important;
+      margin-bottom: 16px !important;
+    }
   }
 
   .blog-card-header {
@@ -214,30 +250,61 @@
     border-color: #94a3b8;
     color: #0f172a !important;
   }
+
+  /* Sticky Bottom Bar */
+  .blog-sticky-bar {
+    position: sticky;
+    bottom: 20px;
+    z-index: 1000;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(8px);
+    padding: 16px 24px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 24px;
+    gap: 12px;
+  }
+
+  @media (max-width: 768px) {
+    .blog-sticky-bar {
+      bottom: 12px;
+      padding: 12px 14px !important;
+      border-radius: 12px !important;
+      flex-direction: column !important;
+      gap: 10px !important;
+      text-align: center !important;
+    }
+    .blog-sticky-bar .blog-bar-actions {
+      width: 100% !important;
+      display: flex !important;
+      gap: 8px !important;
+    }
+    .blog-sticky-bar .action-btn-primary,
+    .blog-sticky-bar .action-btn-secondary {
+      flex: 1 !important;
+      justify-content: center !important;
+      padding: 10px 14px !important;
+      font-size: 13px !important;
+    }
+  }
 </style>
 
-<div style="max-width: 1100px; margin: 0 auto; padding-bottom: 80px;">
-  <!-- Header Bar -->
-  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 20px; padding: 24px 28px; box-shadow: 0 4px 20px -2px rgba(0,0,0,0.03);">
-    <div>
-      <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--primary, #f26c0d); letter-spacing: 1.2px; margin-bottom: 4px;">
-        BLOG POST EDITOR
-      </div>
-      <h1 style="font-size: 24px; font-weight: 800; color: #0f172a; margin: 0;">
-        Editing: {{ blog_post.title }}
-      </h1>
-      <div style="font-size: 13px; color: #64748b; margin-top: 4px;">
-        Restaurant: <strong>{{ restaurant.name }}</strong> &bull; Public Slug: <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #0f172a;">/blog/{{ blog_post.slug }}</code>
-      </div>
+<div style="max-width: 1100px; margin: 0 auto; padding-bottom: 80px; width: 100%; box-sizing: border-box;">
+  <!-- Blog Info Sub-Header -->
+  <div style="margin-bottom: 20px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+    <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--primary, #f26c0d); letter-spacing: 1px; margin-bottom: 2px;">
+      BLOG POST DETAILS
     </div>
-
-    <div style="display: flex; gap: 12px; align-items: center;">
-      <a href="{% url 'super_admin:landing_edit' restaurant.pk %}" class="action-btn-secondary">
-        <i class="fa-solid fa-arrow-left"></i> Back to Landing CMS
-      </a>
-      <a href="/r/{{ restaurant.slug }}/blog/{{ blog_post.slug }}" target="_blank" class="action-btn-secondary" title="View live blog post on website">
-        <i class="fa-solid fa-arrow-up-right-from-square"></i> Preview Live
-      </a>
+    <h2 style="font-size: 1.15rem; font-weight: 800; color: #0f172a; margin: 0;">
+      {{ blog_post.title }}
+    </h2>
+    <div style="font-size: 13px; color: #64748b; margin-top: 4px; word-break: break-all;">
+      Restaurant: <strong>{{ restaurant.name }}</strong> &bull; Public Slug: <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #0f172a;">/blog/{{ blog_post.slug }}</code>
     </div>
   </div>
 
@@ -313,9 +380,9 @@
       </div>
 
       <div class="grid-row">
-        <div class="col-6">
+        <div class="col-12">
           <div class="field-group">
-            <label for="id_cover_image">Main Cover Photo (Featured Image)</label>
+            <label for="id_cover_image">Main Cover Photo (Featured Image) *</label>
             <div class="file-upload-box">
               <input type="file" name="cover_image" id="id_cover_image" style="width: 100%; cursor: pointer;" accept="image/*" />
               <div style="font-size: 12px; color: #64748b; margin-top: 8px;">Upload JPG/PNG image (Recommended 1600x900px)</div>
@@ -333,9 +400,9 @@
           </div>
         </div>
 
-        <div class="col-3">
+        <div class="col-6">
           <div class="field-group">
-            <label for="id_gallery_image_1">Gallery Photo 1</label>
+            <label for="id_gallery_image_1">Gallery Photo 1 (Optional)</label>
             <div class="file-upload-box">
               <input type="file" name="gallery_image_1" id="id_gallery_image_1" style="width: 100%; cursor: pointer;" accept="image/*" />
             </div>
@@ -349,9 +416,9 @@
           </div>
         </div>
 
-        <div class="col-3">
+        <div class="col-6">
           <div class="field-group">
-            <label for="id_gallery_image_2">Gallery Photo 2</label>
+            <label for="id_gallery_image_2">Gallery Photo 2 (Optional)</label>
             <div class="file-upload-box">
               <input type="file" name="gallery_image_2" id="id_gallery_image_2" style="width: 100%; cursor: pointer;" accept="image/*" />
             </div>
@@ -487,12 +554,12 @@
     </div>
 
     <!-- Sticky Bottom Bar -->
-    <div style="position: fixed; bottom: 20px; right: 40px; left: 300px; z-index: 1000; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(8px); padding: 16px 28px; border-radius: 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 10px 30px rgba(0,0,0,0.25);">
+    <div class="blog-sticky-bar">
       <div style="color: #ffffff; font-size: 14px; font-weight: 600;">
         Editing: <strong>{{ blog_post.title }}</strong>
       </div>
 
-      <div style="display: flex; gap: 12px; align-items: center;">
+      <div class="blog-bar-actions" style="display: flex; gap: 10px; align-items: center;">
         <a href="{% url 'super_admin:landing_edit' restaurant.pk %}" class="action-btn-secondary" style="background: transparent; color: #cbd5e1 !important; border-color: rgba(255,255,255,0.2);">
           Cancel
         </a>
