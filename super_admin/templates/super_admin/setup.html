@@ -1,7 +1,7 @@
 {% extends 'super_admin/base.html' %}
 
-{% block title %}Account & Security Setup | Super Admin{% endblock %}
-{% block header_title %}<i class="fa-solid fa-gear" style="color: var(--primary); margin-right: 8px;"></i> Administrator Setup{% endblock %}
+{% block title %}Account & Security Settings | Super Admin{% endblock %}
+{% block header_title %}<i class="fa-solid fa-gear" style="color: var(--primary); margin-right: 8px;"></i> Administrator Settings{% endblock %}
 
 {% block header_actions %}
 <a href="{% url 'super_admin:dashboard' %}" class="btn" style="background: var(--panel); color: var(--text); border: 1px solid var(--border);">
@@ -29,6 +29,73 @@
         .setup-main-col, .setup-side-col {
             grid-column: span 12;
         }
+    }
+
+    /* Settings Tab Navigation */
+    .settings-tabs-nav {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: #f1f5f9;
+        padding: 6px;
+        border-radius: 14px;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 20px;
+        overflow-x: auto;
+    }
+
+    .settings-tab-btn {
+        flex: 1;
+        min-width: 140px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px 16px;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        color: #64748b;
+        font-weight: 700;
+        font-size: 13.5px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-family: inherit;
+        white-space: nowrap;
+    }
+
+    .settings-tab-btn i {
+        font-size: 15px;
+        color: #94a3b8;
+        transition: all 0.2s ease;
+    }
+
+    .settings-tab-btn:hover {
+        color: var(--primary);
+        background: rgba(255, 255, 255, 0.7);
+    }
+
+    .settings-tab-btn:hover i {
+        color: var(--primary);
+    }
+
+    .settings-tab-btn.active {
+        color: #0f172a;
+        background: #ffffff;
+        border-color: #e2e8f0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .settings-tab-btn.active i {
+        color: var(--primary);
+    }
+
+    .settings-tab-pane {
+        display: none;
+    }
+
+    .settings-tab-pane.active {
+        display: block;
     }
 
     .form-card {
@@ -305,33 +372,64 @@
 
     .info-item i {
         color: var(--primary);
-        font-size: 1rem;
+        font-size: 1.1rem;
         margin-top: 2px;
+        flex-shrink: 0;
     }
 
-    .info-item div strong {
-        display: block;
-        font-size: 0.88rem;
+    .info-item div {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .info-item strong {
+        font-size: 0.875rem;
         color: var(--text);
-        margin-bottom: 2px;
     }
 
-    .info-item div span {
-        font-size: 0.82rem;
+    .info-item span {
+        font-size: 0.8rem;
         color: var(--muted);
         line-height: 1.4;
+    }
+
+    .alert-banner {
+        padding: 12px 16px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+
+    .alert-success {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        color: #15803d;
+    }
+
+    .alert-error {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #b91c1c;
+    }
+
+    .alert-warning {
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        color: #b45309;
     }
 </style>
 {% endblock %}
 
 {% block content %}
 {% if messages %}
-<div style="margin-bottom: 24px;">
+<div style="margin-bottom: 20px;">
     {% for message in messages %}
-    <div style="padding: 14px 18px; border-radius: 12px; margin-bottom: 10px; font-size: 0.9rem; display: flex; align-items: center; gap: 10px;
-        {% if message.tags == 'success' %}background-color: #f0fdf4; border: 1px solid #dcfce7; color: #16a34a;
-        {% elif message.tags == 'error' %}background-color: #fef2f2; border: 1px solid #fee2e2; color: #ef4444;
-        {% else %}background-color: #fffbeb; border: 1px solid #fef3c7; color: #b45309;{% endif %}">
+    <div class="alert-banner {% if message.tags == 'success' %}alert-success{% elif message.tags == 'error' %}alert-error{% else %}alert-warning{% endif %}">
         <i class="fa-solid {% if message.tags == 'success' %}fa-circle-check{% elif message.tags == 'error' %}fa-triangle-exclamation{% else %}fa-circle-info{% endif %}"></i>
         <span>{{ message }}</span>
     </div>
@@ -342,161 +440,202 @@
 <form method="post" action="{% url 'super_admin:setup' %}">
     {% csrf_token %}
     <div class="setup-grid">
-        <!-- Main Form Column -->
+        <!-- Main Form Column with Tabs -->
         <div class="setup-main-col">
-            <!-- 1. Administrator Profile Card -->
-            <div class="form-card">
-                <div class="form-card-header">
+            <!-- Tabs Switcher Header -->
+            <div class="settings-tabs-nav">
+                <button type="button" class="settings-tab-btn active" id="tab-btn-profile" onclick="switchSettingsTab('profile')">
                     <i class="fa-solid fa-user-gear"></i>
-                    <h3>Administrator Profile</h3>
-                </div>
-                <div class="form-card-body">
-                    <div class="form-row-2">
-                        <div class="form-group">
-                            <label for="id_first_name">First Name</label>
-                            <div class="input-addon-group">
-                                <i class="fa-regular fa-user input-icon"></i>
-                                <input type="text" name="first_name" id="id_first_name" value="{{ form.first_name.value|default:'' }}" placeholder="First name">
-                            </div>
-                            {% if form.first_name.errors %}
-                            <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i> {{ form.first_name.errors.0 }}</div>
-                            {% endif %}
-                        </div>
-
-                        <div class="form-group">
-                            <label for="id_last_name">Last Name</label>
-                            <div class="input-addon-group">
-                                <i class="fa-regular fa-user input-icon"></i>
-                                <input type="text" name="last_name" id="id_last_name" value="{{ form.last_name.value|default:'' }}" placeholder="Last name">
-                            </div>
-                            {% if form.last_name.errors %}
-                            <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i> {{ form.last_name.errors.0 }}</div>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="id_username">Username <span style="color: var(--danger);">*</span></label>
-                        <div class="input-addon-group">
-                            <i class="fa-solid fa-at input-icon"></i>
-                            <input type="text" name="username" id="id_username" value="{{ form.username.value|default:'' }}" required placeholder="Username">
-                        </div>
-                        <div class="field-hint">Used to identify your account across the administrative portal.</div>
-                        {% if form.username.errors %}
-                        <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i> {{ form.username.errors.0 }}</div>
-                        {% endif %}
-                    </div>
-
-                    <div class="form-group">
-                        <label for="id_email">Email Address <span style="font-size: 0.75rem; color: var(--muted); font-weight: normal;">(Read-only)</span></label>
-                        <div class="input-addon-group">
-                            <i class="fa-solid fa-lock input-icon"></i>
-                            <input type="email" name="email" id="id_email" value="{{ user_obj.email }}" disabled readonly>
-                        </div>
-                        <div class="field-hint">
-                            <i class="fa-solid fa-shield-halved" style="color: var(--primary);"></i> Your registered email address is fixed as your primary security identifier for 2FA OTP codes.
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 2. Two-Factor Authentication (2FA) Setting -->
-            <div class="form-card">
-                <div class="form-card-header">
+                    <span>Administrator Profile</span>
+                </button>
+                <button type="button" class="settings-tab-btn" id="tab-btn-2fa" onclick="switchSettingsTab('2fa')">
                     <i class="fa-solid fa-shield-halved"></i>
-                    <h3>Two-Factor Authentication (2FA)</h3>
-                </div>
-                <div class="form-card-body">
-                    <div class="switch-container">
-                        <div class="switch-label-area">
-                            <div class="switch-title">
-                                <span>Require Email OTP at Sign In</span>
-                            </div>
-                            <div class="switch-desc">
-                                When enabled, you will receive a secure 6-digit code on <strong>{{ user_obj.email }}</strong> each time you sign in.
-                            </div>
-                        </div>
-                        <label class="toggle-switch">
-                            <input type="checkbox" name="is_2fa_enabled" id="id_is_2fa_enabled" {% if form.is_2fa_enabled.value %}checked{% endif %} onchange="update2FALabel(this)">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
+                    <span>Two-Factor Auth (2FA)</span>
+                </button>
+                <button type="button" class="settings-tab-btn" id="tab-btn-password" onclick="switchSettingsTab('password')">
+                    <i class="fa-solid fa-key"></i>
+                    <span>Change Password</span>
+                </button>
+            </div>
 
-                    <div id="2fa-status-active" class="status-badge-box active" style="{% if not form.is_2fa_enabled.value %}display: none;{% endif %}">
-                        <i class="fa-solid fa-circle-check"></i>
+            <!-- TAB 1: ADMINISTRATOR PROFILE -->
+            <div id="pane-profile" class="settings-tab-pane active">
+                <div class="form-card">
+                    <div class="form-card-header">
+                        <i class="fa-solid fa-user-gear"></i>
                         <div>
-                            <strong>2FA is ON (Recommended)</strong>: High security enabled. An email verification OTP code will be sent and required during login.
+                            <h3>Administrator Profile</h3>
+                            <div style="font-size: 0.8rem; color: var(--muted); margin-top: 2px;">Update your name, username, and administrator identity</div>
                         </div>
                     </div>
+                    <div class="form-card-body">
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label for="id_first_name">First Name</label>
+                                <div class="input-addon-group">
+                                    <i class="fa-regular fa-user input-icon"></i>
+                                    <input type="text" name="first_name" id="id_first_name" value="{{ form.first_name.value|default:'' }}" placeholder="First name">
+                                </div>
+                                {% if form.first_name.errors %}
+                                <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i> {{ form.first_name.errors.0 }}</div>
+                                {% endif %}
+                            </div>
 
-                    <div id="2fa-status-inactive" class="status-badge-box inactive" style="{% if form.is_2fa_enabled.value %}display: none;{% endif %}">
-                        <i class="fa-solid fa-triangle-exclamation"></i>
-                        <div>
-                            <strong>2FA is OFF</strong>: Direct login enabled. You will sign in with username/email and password only without OTP prompt.
+                            <div class="form-group">
+                                <label for="id_last_name">Last Name</label>
+                                <div class="input-addon-group">
+                                    <i class="fa-regular fa-user input-icon"></i>
+                                    <input type="text" name="last_name" id="id_last_name" value="{{ form.last_name.value|default:'' }}" placeholder="Last name">
+                                </div>
+                                {% if form.last_name.errors %}
+                                <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i> {{ form.last_name.errors.0 }}</div>
+                                {% endif %}
+                            </div>
                         </div>
+
+                        <div class="form-group">
+                            <label for="id_username">Username <span style="color: var(--danger);">*</span></label>
+                            <div class="input-addon-group">
+                                <i class="fa-solid fa-at input-icon"></i>
+                                <input type="text" name="username" id="id_username" value="{{ form.username.value|default:'' }}" required placeholder="Username">
+                            </div>
+                            <div class="field-hint">Used to identify your account across the administrative portal.</div>
+                            {% if form.username.errors %}
+                            <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i> {{ form.username.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label for="id_email">Email Address <span style="font-size: 0.75rem; color: var(--muted); font-weight: normal;">(Read-only)</span></label>
+                            <div class="input-addon-group">
+                                <i class="fa-solid fa-lock input-icon"></i>
+                                <input type="email" name="email" id="id_email" value="{{ user_obj.email }}" disabled readonly>
+                            </div>
+                            <div class="field-hint">
+                                <i class="fa-solid fa-shield-halved" style="color: var(--primary);"></i> Your registered email address is fixed as your primary security identifier for 2FA OTP codes.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="save-bar">
+                        <button type="submit" class="btn" style="padding: 11px 24px; font-size: 0.95rem; font-weight: 700;">
+                            <i class="fa-solid fa-floppy-disk" style="margin-right: 8px;"></i> Save Profile Settings
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <!-- 3. Password Management Card -->
-            <div class="form-card">
-                <div class="form-card-header">
-                    <i class="fa-solid fa-key"></i>
-                    <h3>Change Password</h3>
-                </div>
-                <div class="form-card-body">
-                    <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 18px;">
-                        Leave these fields empty if you do not wish to change your current password.
-                    </p>
-
-                    <div class="form-group">
-                        <label for="id_old_password">Current Password</label>
-                        <div class="input-addon-group">
-                            <i class="fa-solid fa-lock input-icon"></i>
-                            <input type="password" name="old_password" id="id_old_password" placeholder="Enter current password">
-                            <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('id_old_password', this)">
-                                <i class="fa-regular fa-eye"></i>
-                            </button>
+            <!-- TAB 2: TWO-FACTOR AUTHENTICATION (2FA) -->
+            <div id="pane-2fa" class="settings-tab-pane">
+                <div class="form-card">
+                    <div class="form-card-header">
+                        <i class="fa-solid fa-shield-halved"></i>
+                        <div>
+                            <h3>Two-Factor Authentication (2FA)</h3>
+                            <div style="font-size: 0.8rem; color: var(--muted); margin-top: 2px;">Configure email OTP security verification for administrative sign-in</div>
                         </div>
-                        {% if form.old_password.errors %}
-                        <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i> {{ form.old_password.errors.0 }}</div>
-                        {% endif %}
                     </div>
+                    <div class="form-card-body">
+                        <div class="switch-container">
+                            <div class="switch-label-area">
+                                <div class="switch-title">
+                                    <span>Require Email OTP at Sign In</span>
+                                </div>
+                                <div class="switch-desc">
+                                    When enabled, you will receive a secure 6-digit code on <strong>{{ user_obj.email }}</strong> each time you sign in.
+                                </div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" name="is_2fa_enabled" id="id_is_2fa_enabled" {% if form.is_2fa_enabled.value %}checked{% endif %} onchange="update2FALabel(this)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
 
-                    <div class="form-row-2">
+                        <div id="2fa-status-active" class="status-badge-box active" {% if not form.is_2fa_enabled.value %}style="display: none;"{% endif %}>
+                            <i class="fa-solid fa-circle-check"></i>
+                            <div>
+                                <strong>2FA is ON (Recommended)</strong>: High security enabled. An email verification OTP code will be sent and required during login.
+                            </div>
+                        </div>
+
+                        <div id="2fa-status-inactive" class="status-badge-box inactive" {% if form.is_2fa_enabled.value %}style="display: none;"{% endif %}>
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <div>
+                                <strong>2FA is OFF</strong>: Direct login enabled. You will sign in with username/email and password only without OTP prompt.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="save-bar">
+                        <button type="submit" class="btn" style="padding: 11px 24px; font-size: 0.95rem; font-weight: 700;">
+                            <i class="fa-solid fa-floppy-disk" style="margin-right: 8px;"></i> Save 2FA Preferences
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: CHANGE PASSWORD -->
+            <div id="pane-password" class="settings-tab-pane">
+                <div class="form-card">
+                    <div class="form-card-header">
+                        <i class="fa-solid fa-key"></i>
+                        <div>
+                            <h3>Change Password</h3>
+                            <div style="font-size: 0.8rem; color: var(--muted); margin-top: 2px;">Ensure your administrative account is protected with a strong password</div>
+                        </div>
+                    </div>
+                    <div class="form-card-body">
+                        <p style="font-size: 0.85rem; color: var(--muted); margin-bottom: 18px;">
+                            Leave these fields empty if you do not wish to change your current password.
+                        </p>
+
                         <div class="form-group">
-                            <label for="id_new_password">New Password</label>
+                            <label for="id_old_password">Current Password</label>
                             <div class="input-addon-group">
-                                <i class="fa-solid fa-key input-icon"></i>
-                                <input type="password" name="new_password" id="id_new_password" placeholder="Enter new password">
-                                <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('id_new_password', this)">
+                                <i class="fa-solid fa-lock input-icon"></i>
+                                <input type="password" name="old_password" id="id_old_password" placeholder="Enter current password">
+                                <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('id_old_password', this)">
                                     <i class="fa-regular fa-eye"></i>
                                 </button>
                             </div>
-                            {% if form.new_password.errors %}
-                            <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i> {{ form.new_password.errors.0 }}</div>
+                            {% if form.old_password.errors %}
+                            <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i> {{ form.old_password.errors.0 }}</div>
                             {% endif %}
                         </div>
 
-                        <div class="form-group">
-                            <label for="id_confirm_password">Confirm New Password</label>
-                            <div class="input-addon-group">
-                                <i class="fa-solid fa-circle-check input-icon"></i>
-                                <input type="password" name="confirm_password" id="id_confirm_password" placeholder="Confirm new password">
-                                <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('id_confirm_password', this)">
-                                    <i class="fa-regular fa-eye"></i>
-                                </button>
+                        <div class="form-row-2">
+                            <div class="form-group">
+                                <label for="id_new_password">New Password</label>
+                                <div class="input-addon-group">
+                                    <i class="fa-solid fa-key input-icon"></i>
+                                    <input type="password" name="new_password" id="id_new_password" placeholder="Enter new password">
+                                    <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('id_new_password', this)">
+                                        <i class="fa-regular fa-eye"></i>
+                                    </button>
+                                </div>
+                                {% if form.new_password.errors %}
+                                <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i> {{ form.new_password.errors.0 }}</div>
+                                {% endif %}
                             </div>
-                            {% if form.confirm_password.errors %}
-                            <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i> {{ form.confirm_password.errors.0 }}</div>
-                            {% endif %}
+
+                            <div class="form-group">
+                                <label for="id_confirm_password">Confirm New Password</label>
+                                <div class="input-addon-group">
+                                    <i class="fa-solid fa-circle-check input-icon"></i>
+                                    <input type="password" name="confirm_password" id="id_confirm_password" placeholder="Confirm new password">
+                                    <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('id_confirm_password', this)">
+                                        <i class="fa-regular fa-eye"></i>
+                                    </button>
+                                </div>
+                                {% if form.confirm_password.errors %}
+                                <div class="field-error"><i class="fa-solid fa-circle-exclamation"></i> {{ form.confirm_password.errors.0 }}</div>
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div class="save-bar">
-                    <button type="submit" class="btn" style="padding: 11px 24px; font-size: 0.95rem; font-weight: 700;">
-                        <i class="fa-solid fa-floppy-disk" style="margin-right: 8px;"></i> Save Setup & Security Settings
-                    </button>
+                    <div class="save-bar">
+                        <button type="submit" class="btn" style="padding: 11px 24px; font-size: 0.95rem; font-weight: 700;">
+                            <i class="fa-solid fa-floppy-disk" style="margin-right: 8px;"></i> Update Password
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -510,7 +649,7 @@
                 </div>
                 <div class="form-card-body">
                     <div class="info-item">
-                        <i class="fa-solid fa-shield-check"></i>
+                        <i class="fa-solid fa-shield-halved"></i>
                         <div>
                             <strong>Two-Factor OTP Security</strong>
                             <span>When enabled, OTP codes protect against unauthorized sign-in attempts even if your password is compromised.</span>
@@ -551,9 +690,36 @@
 </form>
 
 <script>
+function switchSettingsTab(tabName) {
+    // Hide all tab panes
+    document.querySelectorAll('.settings-tab-pane').forEach(function(pane) {
+        pane.classList.remove('active');
+    });
+
+    // Remove active class from all tab buttons
+    document.querySelectorAll('.settings-tab-btn').forEach(function(btn) {
+        btn.classList.remove('active');
+    });
+
+    // Activate selected pane
+    var targetPane = document.getElementById('pane-' + tabName);
+    if (targetPane) {
+        targetPane.classList.add('active');
+    }
+
+    // Activate selected button
+    var targetBtn = document.getElementById('tab-btn-' + tabName);
+    if (targetBtn) {
+        targetBtn.classList.add('active');
+    }
+
+    // Save active tab preference
+    localStorage.setItem('activeSuperSettingsTab', tabName);
+}
+
 function update2FALabel(checkbox) {
-    const activeBox = document.getElementById('2fa-status-active');
-    const inactiveBox = document.getElementById('2fa-status-inactive');
+    var activeBox = document.getElementById('2fa-status-active');
+    var inactiveBox = document.getElementById('2fa-status-inactive');
     if (checkbox.checked) {
         activeBox.style.display = 'flex';
         inactiveBox.style.display = 'none';
@@ -564,8 +730,8 @@ function update2FALabel(checkbox) {
 }
 
 function togglePasswordVisibility(fieldId, btn) {
-    const field = document.getElementById(fieldId);
-    const icon = btn.querySelector('i');
+    var field = document.getElementById(fieldId);
+    var icon = btn.querySelector('i');
     if (field.type === 'password') {
         field.type = 'text';
         icon.className = 'fa-regular fa-eye-slash';
@@ -574,5 +740,19 @@ function togglePasswordVisibility(fieldId, btn) {
         icon.className = 'fa-regular fa-eye';
     }
 }
+
+// Restore active tab or select based on form errors
+document.addEventListener('DOMContentLoaded', function() {
+    {% if form.old_password.errors or form.new_password.errors or form.confirm_password.errors %}
+    switchSettingsTab('password');
+    {% elif form.first_name.errors or form.last_name.errors or form.username.errors %}
+    switchSettingsTab('profile');
+    {% else %}
+    var savedTab = localStorage.getItem('activeSuperSettingsTab');
+    if (savedTab && document.getElementById('pane-' + savedTab)) {
+        switchSettingsTab(savedTab);
+    }
+    {% endif %}
+});
 </script>
 {% endblock %}

@@ -296,7 +296,7 @@ class RestaurantLandingAdmin(admin.ModelAdmin):
     inlines = [GalleryImageInline, TeamMemberInline, ReviewInline]
     fieldsets = (
         ('Brand', {
-            'fields': ('restaurant', 'logo')
+            'fields': ('restaurant', 'logo', 'favicon')
         }),
         ('Hero Section', {
             'fields': ('hero_title', 'hero_subtitle', 'hero_image','hero_video', 'cta_text', 'cta_link')
@@ -307,8 +307,12 @@ class RestaurantLandingAdmin(admin.ModelAdmin):
         ('Contact', {
             'fields': ('address', 'phone', 'opening_hours')
         }),
-        ('SEO', {
-            'fields': ('seo_title', 'seo_description')
+        ('SEO & Metadata', {
+            'fields': (
+                'seo_title', 'seo_description', 'seo_keywords', 'seo_canonical_url',
+                'og_title', 'og_description', 'og_url', 'og_site_name', 'og_locale', 'og_type',
+                'twitter_card_type', 'twitter_title', 'twitter_description', 'pages_seo'
+            )
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),

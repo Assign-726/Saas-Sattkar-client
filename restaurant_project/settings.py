@@ -242,6 +242,10 @@ EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default=env('EMAIL_HOST_USER', default='webmaster@localhost'))
 
+# Master Dashboard Integration
+MASTER_DASHBOARD_URL = env('MASTER_DASHBOARD_URL', default='http://localhost:3000')
+MASTER_API_SECRET = env('MASTER_API_SECRET', default='T9@fK!xR!!72m$Qv%Lp&6Za!Wc@3Ns')
+
 
 
 # Security settings for production

@@ -1,0 +1,1282 @@
+{% extends 'super_admin/base.html' %}
+
+{% block title %}Customer Inquiries & Messages | Super Admin{% endblock %}
+
+{% block header_title %}
+<i class="fa-solid fa-envelope-open-text" style="color: var(--primary); margin-right: 6px;"></i> Customer Inquiries & Messages
+{% endblock %}
+
+{% block header_actions %}
+<a class="btn secondary small" href="{% url 'super_admin:dashboard' %}">
+  <i class="fa-solid fa-arrow-left"></i>
+  <span>Back to Dashboard</span>
+</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  /* Container & Layout Constraints */
+  .inquiries-container {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Stats Grid */
+  .inquiry-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  @media (max-width: 1100px) {
+    .inquiry-stats-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 600px) {
+    .inquiry-stats-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .inquiry-stat-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+
+  .inquiry-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+    border-color: #cbd5e1;
+  }
+
+  .inquiry-stat-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .inquiry-stat-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+  }
+
+  .inquiry-stat-num {
+    font-size: 1.85rem;
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1.15;
+  }
+
+  .inquiry-stat-num.unread-highlight {
+    color: #dc2626;
+  }
+
+  .inquiry-stat-sub {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .inquiry-stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+
+  .inquiry-stat-icon.blue {
+    background: rgba(59, 130, 246, 0.1);
+    color: #2563eb;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+
+  .inquiry-stat-icon.red {
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+  }
+
+  .inquiry-stat-icon.green {
+    background: rgba(16, 185, 129, 0.1);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+
+  .inquiry-stat-icon.orange {
+    background: rgba(242, 108, 13, 0.1);
+    color: var(--primary);
+    border: 1px solid rgba(242, 108, 13, 0.2);
+  }
+
+  /* Pulse indicator for unread */
+  .unread-pulse {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #ef4444;
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+    animation: pulse-red 2s infinite;
+  }
+
+  @keyframes pulse-red {
+    0% {
+      transform: scale(0.95);
+      box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+    }
+    70% {
+      transform: scale(1);
+      box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+    }
+    100% {
+      transform: scale(0.95);
+      box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    }
+  }
+
+  /* Filter & Search Bar */
+  .filter-bar-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 24px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .filter-form-layout {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .filter-controls-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 280px;
+    flex-wrap: wrap;
+  }
+
+  .search-input-wrapper {
+    position: relative;
+    flex: 1 1 240px;
+    min-width: 200px;
+  }
+
+  .search-input-wrapper i.search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    font-size: 0.9rem;
+    pointer-events: none;
+  }
+
+  .search-input-wrapper input {
+    width: 100%;
+    height: 42px;
+    padding: 0 14px 0 38px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-size: 0.88rem;
+    font-family: inherit;
+    color: var(--text);
+    background: #ffffff;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+  }
+
+  .search-input-wrapper input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-light);
+  }
+
+  .filter-select {
+    height: 42px;
+    padding: 0 32px 0 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-size: 0.88rem;
+    font-family: inherit;
+    color: var(--text);
+    background: #ffffff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E") no-repeat right 10px center / 16px;
+    appearance: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 170px;
+    flex: 0 1 auto;
+    box-sizing: border-box;
+  }
+
+  .filter-select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-light);
+  }
+
+  .filter-btn-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Table Card */
+  .inquiries-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .inquiries-card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  }
+
+  .inquiries-card-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* Status Filter Tabs inside Header */
+  .header-status-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #f1f5f9;
+    padding: 3px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+  }
+
+  .status-tab-link {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 8px;
+    color: var(--muted);
+    text-decoration: none;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .status-tab-link:hover {
+    color: var(--text);
+  }
+
+  .status-tab-link.active {
+    background: #ffffff;
+    color: var(--text);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  .status-tab-pill {
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+
+  /* Table Custom Styles */
+  .inquiry-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+  }
+
+  .inquiry-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    text-align: left;
+    min-width: 820px;
+  }
+
+  .inquiry-table thead th {
+    background: #f8fafc;
+    border-bottom: 1px solid var(--border);
+    color: #475569;
+    font-weight: 700;
+    padding: 12px 18px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    white-space: nowrap;
+  }
+
+  .inquiry-table tbody tr {
+    transition: background 0.15s ease;
+  }
+
+  .inquiry-table tbody tr:hover {
+    background: #f8fafc;
+  }
+
+  .inquiry-table tbody tr.unread-row {
+    background: rgba(242, 108, 13, 0.035);
+  }
+
+  .inquiry-table tbody tr.unread-row:hover {
+    background: rgba(242, 108, 13, 0.065);
+  }
+
+  .inquiry-table tbody td {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.88rem;
+    color: var(--text);
+    vertical-align: middle;
+  }
+
+  .inquiry-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  /* Customer Avatar & Details */
+  .customer-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .customer-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+    text-transform: uppercase;
+  }
+
+  .customer-avatar.c-orange { background: #f26c0d; }
+  .customer-avatar.c-blue   { background: #3b82f6; }
+  .customer-avatar.c-green  { background: #10b981; }
+  .customer-avatar.c-purple { background: #8b5cf6; }
+  .customer-avatar.c-pink   { background: #ec4899; }
+
+  .customer-meta-name {
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 2px;
+  }
+
+  .customer-meta-contact {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.78rem;
+    color: var(--muted);
+    flex-wrap: wrap;
+  }
+
+  .customer-meta-contact a {
+    color: var(--muted);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: color 0.15s ease;
+  }
+
+  .customer-meta-contact a:hover {
+    color: var(--primary);
+  }
+
+  /* Badges */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .status-badge.unread {
+    background: rgba(239, 68, 68, 0.12);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+  }
+
+  .status-badge.read {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+  }
+
+  .business-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: var(--text);
+    max-width: 180px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .business-badge i {
+    color: var(--primary);
+  }
+
+  /* Subject & Message snippet */
+  .message-snippet-box {
+    max-width: 320px;
+    min-width: 180px;
+    cursor: pointer;
+  }
+
+  .message-subject-line {
+    font-weight: 700;
+    color: var(--text);
+    font-size: 0.88rem;
+    margin-bottom: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .message-body-snippet {
+    font-size: 0.8rem;
+    color: #64748b;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+  }
+
+  /* Action buttons */
+  .row-action-btns {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  .action-icon-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    border: 1px solid var(--border);
+    background: #ffffff;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-decoration: none;
+  }
+
+  .action-icon-btn:hover {
+    transform: translateY(-1px);
+    border-color: #cbd5e1;
+    color: var(--text);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+
+  .action-icon-btn.view-btn {
+    background: var(--primary-light);
+    color: var(--primary);
+    border-color: rgba(242, 108, 13, 0.25);
+    padding: 0 10px;
+    width: auto;
+    gap: 6px;
+    font-weight: 600;
+    font-size: 0.78rem;
+  }
+
+  .action-icon-btn.view-btn:hover {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+  }
+
+  .action-icon-btn.toggle-btn:hover {
+    color: #2563eb;
+    border-color: #2563eb;
+    background: rgba(37, 99, 235, 0.06);
+  }
+
+  .action-icon-btn.delete-btn:hover {
+    color: #dc2626;
+    border-color: #dc2626;
+    background: rgba(220, 38, 38, 0.06);
+  }
+
+  /* Modal Dialog */
+  .modal-backdrop-blur {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 16px;
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  .modal-dialog-box {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 24px;
+    max-width: 620px;
+    width: 100%;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    position: relative;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .modal-quick-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 16px 0;
+    flex-wrap: wrap;
+  }
+
+  .modal-action-chip {
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    border: 1px solid transparent;
+  }
+
+  .modal-action-chip.email {
+    background: rgba(59, 130, 246, 0.1);
+    color: #2563eb;
+    border-color: rgba(59, 130, 246, 0.2);
+  }
+
+  .modal-action-chip.email:hover {
+    background: #2563eb;
+    color: white;
+  }
+
+  .modal-action-chip.phone {
+    background: rgba(16, 185, 129, 0.1);
+    color: #059669;
+    border-color: rgba(16, 185, 129, 0.2);
+  }
+
+  .modal-action-chip.phone:hover {
+    background: #059669;
+    color: white;
+  }
+
+  /* Empty state */
+  .empty-state-container {
+    padding: 60px 24px;
+    text-align: center;
+    background: #ffffff;
+  }
+
+  .empty-state-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #94a3b8;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    margin-bottom: 16px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="inquiries-container">
+
+  <!-- 1. Top Overview Metric Cards -->
+  <div class="inquiry-stats-grid">
+    <!-- Total Inquiries -->
+    <div class="inquiry-stat-card">
+      <div class="inquiry-stat-info">
+        <span class="inquiry-stat-label">Total Inquiries</span>
+        <span class="inquiry-stat-num">{{ total_count }}</span>
+        <span class="inquiry-stat-sub">Lifetime messages</span>
+      </div>
+      <div class="inquiry-stat-icon blue">
+        <i class="fa-solid fa-inbox"></i>
+      </div>
+    </div>
+
+    <!-- Unread Messages -->
+    <div class="inquiry-stat-card">
+      <div class="inquiry-stat-info">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span class="inquiry-stat-label">Unread Messages</span>
+          {% if unread_count > 0 %}
+            <span class="unread-pulse"></span>
+          {% endif %}
+        </div>
+        <span class="inquiry-stat-num {% if unread_count > 0 %}unread-highlight{% endif %}">
+          {{ unread_count }}
+        </span>
+        <span class="inquiry-stat-sub">{% if unread_count > 0 %}Requires attention{% else %}All caught up!{% endif %}</span>
+      </div>
+      <div class="inquiry-stat-icon red">
+        <i class="fa-solid fa-envelope"></i>
+      </div>
+    </div>
+
+    <!-- Read / Processed -->
+    <div class="inquiry-stat-card">
+      <div class="inquiry-stat-info">
+        <span class="inquiry-stat-label">Processed</span>
+        <span class="inquiry-stat-num">{{ read_count }}</span>
+        <span class="inquiry-stat-sub">Marked as read</span>
+      </div>
+      <div class="inquiry-stat-icon green">
+        <i class="fa-solid fa-circle-check"></i>
+      </div>
+    </div>
+
+    <!-- Active Businesses -->
+    <div class="inquiry-stat-card">
+      <div class="inquiry-stat-info">
+        <span class="inquiry-stat-label">Businesses</span>
+        <span class="inquiry-stat-num">{{ restaurants|length }}</span>
+        <span class="inquiry-stat-sub">Active outlets</span>
+      </div>
+      <div class="inquiry-stat-icon orange">
+        <i class="fa-solid fa-hotel"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Search & Filter Bar -->
+  <div class="filter-bar-card">
+    <form method="get" action="{% url 'super_admin:inquiries' %}" class="filter-form-layout">
+      <div class="filter-controls-group">
+        <!-- Search Input -->
+        <div class="search-input-wrapper">
+          <i class="fa-solid fa-magnifying-glass search-icon"></i>
+          <input
+            type="text"
+            name="q"
+            value="{{ query }}"
+            placeholder="Search by name, email, phone, or subject..."
+            autocomplete="off"
+          />
+        </div>
+
+        <!-- Restaurant Selector -->
+        <select name="restaurant" class="filter-select">
+          <option value="">All Businesses</option>
+          {% for r in restaurants %}
+            <option value="{{ r.id }}" {% if restaurant_filter == r.id|stringformat:"s" %}selected{% endif %}>
+              🏢 {{ r.name }}
+            </option>
+          {% endfor %}
+        </select>
+
+        <!-- Status Selector -->
+        <select name="status" class="filter-select" style="min-width: 130px;">
+          <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Status</option>
+          <option value="unread" {% if status_filter == 'unread' %}selected{% endif %}>Unread ({{ unread_count }})</option>
+          <option value="read" {% if status_filter == 'read' %}selected{% endif %}>Read Only</option>
+        </select>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="filter-btn-group">
+        <button type="submit" class="btn small">
+          <i class="fa-solid fa-filter"></i>
+          <span>Filter</span>
+        </button>
+
+        {% if query or restaurant_filter or status_filter != 'all' %}
+          <a href="{% url 'super_admin:inquiries' %}" class="btn secondary small" title="Reset all filters">
+            <i class="fa-solid fa-rotate-left"></i>
+            <span>Reset</span>
+          </a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
+  <!-- 3. Inquiries Table Card -->
+  <div class="inquiries-card">
+    <div class="inquiries-card-header">
+      <div class="inquiries-card-title">
+        <i class="fa-solid fa-comments" style="color: var(--primary);"></i>
+        <span>Customer Messages</span>
+        <span class="badge neutral" style="font-size: 0.75rem; font-weight: 700; margin-left: 4px;">
+          {{ inquiries.paginator.count }} {{ inquiries.paginator.count|pluralize:"Message,Messages" }}
+        </span>
+      </div>
+
+      <!-- Quick Status Filter Pills -->
+      <div class="header-status-tabs">
+        <a
+          href="?status=all{% if restaurant_filter %}&restaurant={{ restaurant_filter }}{% endif %}{% if query %}&q={{ query }}{% endif %}"
+          class="status-tab-link {% if status_filter == 'all' %}active{% endif %}"
+        >
+          <span>All</span>
+          <span class="status-tab-pill" style="background: #e2e8f0; color: #475569;">{{ total_count }}</span>
+        </a>
+
+        <a
+          href="?status=unread{% if restaurant_filter %}&restaurant={{ restaurant_filter }}{% endif %}{% if query %}&q={{ query }}{% endif %}"
+          class="status-tab-link {% if status_filter == 'unread' %}active{% endif %}"
+        >
+          <span>Unread</span>
+          <span class="status-tab-pill" style="background: rgba(239, 68, 68, 0.15); color: #dc2626;">{{ unread_count }}</span>
+        </a>
+
+        <a
+          href="?status=read{% if restaurant_filter %}&restaurant={{ restaurant_filter }}{% endif %}{% if query %}&q={{ query }}{% endif %}"
+          class="status-tab-link {% if status_filter == 'read' %}active{% endif %}"
+        >
+          <span>Read</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Table Body -->
+    {% if inquiries %}
+      <div class="inquiry-table-wrapper">
+        <table class="inquiry-table">
+          <thead>
+            <tr>
+              <th style="width: 80px;">Status</th>
+              <th style="min-width: 220px;">Customer</th>
+              <th style="min-width: 160px;">Business</th>
+              <th style="min-width: 260px;">Subject & Message</th>
+              <th style="min-width: 140px;">Date & Time</th>
+              <th style="text-align: right; width: 140px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in inquiries %}
+            <tr class="{% if not item.is_read %}unread-row{% endif %}">
+              <!-- Status Badge -->
+              <td>
+                {% if item.is_read %}
+                  <span class="status-badge read">
+                    <i class="fa-solid fa-check" style="font-size: 0.65rem;"></i> Read
+                  </span>
+                {% else %}
+                  <span class="status-badge unread">
+                    <i class="fa-solid fa-circle" style="font-size: 0.5rem;"></i> New
+                  </span>
+                {% endif %}
+              </td>
+
+              <!-- Customer Info -->
+              <td>
+                <div class="customer-cell">
+                  <div class="customer-avatar {% cycle 'c-orange' 'c-blue' 'c-green' 'c-purple' 'c-pink' %}">
+                    {{ item.name|slice:":1"|upper }}
+                  </div>
+                  <div style="min-width: 0;">
+                    <div class="customer-meta-name">{{ item.name }}</div>
+                    <div class="customer-meta-contact">
+                      {% if item.email %}
+                        <a href="mailto:{{ item.email }}" title="Email {{ item.email }}">
+                          <i class="fa-solid fa-envelope"></i>
+                          <span>{{ item.email }}</span>
+                        </a>
+                      {% endif %}
+                      {% if item.phone %}
+                        <a href="tel:{{ item.phone }}" title="Call {{ item.phone }}">
+                          <i class="fa-solid fa-phone"></i>
+                          <span>{{ item.phone }}</span>
+                        </a>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+              </td>
+
+              <!-- Business / Restaurant -->
+              <td>
+                {% if item.restaurant %}
+                  <div class="business-badge" title="{{ item.restaurant.name }}">
+                    <i class="fa-solid fa-hotel"></i>
+                    <span>{{ item.restaurant.name }}</span>
+                  </div>
+                {% else %}
+                  <span class="badge neutral" style="font-size: 0.75rem;">General Inquiry</span>
+                {% endif %}
+              </td>
+
+              <!-- Subject & Message Preview -->
+              <td>
+                <div
+                  class="message-snippet-box"
+                  data-id="{{ item.id }}"
+                  data-name="{{ item.name|escape }}"
+                  data-email="{{ item.email|default:''|escape }}"
+                  data-phone="{{ item.phone|default:''|escape }}"
+                  data-restaurant="{{ item.restaurant.name|default:'General Inquiry'|escape }}"
+                  data-subject="{{ item.subject|default:'General Message'|escape }}"
+                  data-message="{{ item.message|escape }}"
+                  data-date="{{ item.created_at|date:'M d, Y, h:i A' }}"
+                  data-read="{{ item.is_read|yesno:'true,false' }}"
+                  onclick="handleViewInquiry(this)"
+                  title="Click to view full message"
+                >
+                  <div class="message-subject-line">
+                    {{ item.subject|default:"No Subject" }}
+                  </div>
+                  <div class="message-body-snippet">
+                    {{ item.message }}
+                  </div>
+                </div>
+              </td>
+
+              <!-- Date & Time -->
+              <td style="color: var(--muted); font-size: 0.8rem; white-space: nowrap;">
+                <div style="display: flex; align-items: center; gap: 6px; color: var(--text); font-weight: 500;">
+                  <i class="fa-regular fa-calendar" style="color: var(--muted); width: 14px;"></i>
+                  <span>{{ item.created_at|date:"M d, Y" }}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 0.75rem;">
+                  <i class="fa-regular fa-clock" style="color: var(--muted); width: 14px;"></i>
+                  <span>{{ item.created_at|time:"h:i A" }}</span>
+                </div>
+              </td>
+
+              <!-- Action Buttons -->
+              <td>
+                <div class="row-action-btns">
+                  <!-- View Modal Trigger -->
+                  <button
+                    type="button"
+                    class="action-icon-btn view-btn"
+                    data-id="{{ item.id }}"
+                    data-name="{{ item.name|escape }}"
+                    data-email="{{ item.email|default:''|escape }}"
+                    data-phone="{{ item.phone|default:''|escape }}"
+                    data-restaurant="{{ item.restaurant.name|default:'General Inquiry'|escape }}"
+                    data-subject="{{ item.subject|default:'General Message'|escape }}"
+                    data-message="{{ item.message|escape }}"
+                    data-date="{{ item.created_at|date:'M d, Y, h:i A' }}"
+                    data-read="{{ item.is_read|yesno:'true,false' }}"
+                    onclick="handleViewInquiry(this)"
+                    title="Read full inquiry details"
+                  >
+                    <i class="fa-regular fa-eye"></i>
+                    <span>View</span>
+                  </button>
+
+                  <!-- Mark as Read / Unread -->
+                  <form method="post" action="{% url 'super_admin:inquiry_toggle_read' item.id %}" style="display: inline;">
+                    {% csrf_token %}
+                    <button
+                      type="submit"
+                      class="action-icon-btn toggle-btn"
+                      title="{% if item.is_read %}Mark as Unread{% else %}Mark as Read{% endif %}"
+                    >
+                      {% if item.is_read %}
+                        <i class="fa-regular fa-envelope"></i>
+                      {% else %}
+                        <i class="fa-regular fa-envelope-open" style="color: var(--primary);"></i>
+                      {% endif %}
+                    </button>
+                  </form>
+
+                  <!-- Delete -->
+                  <form
+                    method="post"
+                    action="{% url 'super_admin:inquiry_delete' item.id %}"
+                    style="display: inline;"
+                    onsubmit="return confirm('Permanently delete this customer inquiry?');"
+                  >
+                    {% csrf_token %}
+                    <button
+                      type="submit"
+                      class="action-icon-btn delete-btn"
+                      title="Delete inquiry"
+                    >
+                      <i class="fa-regular fa-trash-can"></i>
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination Footer -->
+      {% if inquiries.has_other_pages %}
+      <div style="padding: 16px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; background: #f8fafc;">
+        <span style="font-size: 0.85rem; color: var(--muted);">
+          Showing <strong>{{ inquiries.start_index }}</strong> to <strong>{{ inquiries.end_index }}</strong> of <strong>{{ inquiries.paginator.count }}</strong> inquiries
+        </span>
+
+        <div style="display: flex; align-items: center; gap: 6px;">
+          {% if inquiries.has_previous %}
+            <a
+              href="?page={{ inquiries.previous_page_number }}&status={{ status_filter }}&restaurant={{ restaurant_filter }}&q={{ query }}"
+              class="btn secondary small"
+            >
+              <i class="fa-solid fa-chevron-left" style="font-size: 0.75rem;"></i>
+              <span>Previous</span>
+            </a>
+          {% endif %}
+
+          <span class="badge neutral" style="padding: 6px 12px; font-weight: 700;">
+            Page {{ inquiries.number }} of {{ inquiries.paginator.num_pages }}
+          </span>
+
+          {% if inquiries.has_next %}
+            <a
+              href="?page={{ inquiries.next_page_number }}&status={{ status_filter }}&restaurant={{ restaurant_filter }}&q={{ query }}"
+              class="btn secondary small"
+            >
+              <span>Next</span>
+              <i class="fa-solid fa-chevron-right" style="font-size: 0.75rem;"></i>
+            </a>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+    {% else %}
+      <!-- Empty State -->
+      <div class="empty-state-container">
+        <div class="empty-state-icon">
+          <i class="fa-regular fa-envelope-open"></i>
+        </div>
+        <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text); margin-bottom: 6px;">
+          {% if query or restaurant_filter or status_filter != 'all' %}
+            No Matching Inquiries Found
+          {% else %}
+            No Customer Inquiries Yet
+          {% endif %}
+        </h3>
+        <p style="color: var(--muted); font-size: 0.88rem; max-width: 440px; margin: 0 auto 20px; line-height: 1.5;">
+          {% if query or restaurant_filter or status_filter != 'all' %}
+            No customer messages match your active filters. Try adjusting your search query or reset the filters.
+          {% else %}
+            When visitors submit contact or inquiry forms across your restaurant landing pages, their messages will appear here.
+          {% endif %}
+        </p>
+        {% if query or restaurant_filter or status_filter != 'all' %}
+          <a href="{% url 'super_admin:inquiries' %}" class="btn small">
+            <i class="fa-solid fa-rotate-left"></i>
+            <span>Clear Filters</span>
+          </a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- 4. Premium Customer Inquiry Detail Modal -->
+<div id="inquiryModal" class="modal-backdrop-blur">
+  <div class="modal-dialog-box">
+    
+    <!-- Modal Header -->
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 1px solid #f1f5f9; padding-bottom: 16px; margin-bottom: 16px; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div id="modalAvatar" style="width: 44px; height: 44px; border-radius: 12px; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; font-weight: 800; flex-shrink: 0;">
+          R
+        </div>
+        <div>
+          <h3 id="modalName" style="font-size: 1.2rem; font-weight: 800; color: #0f172a; margin: 0 0 2px;"></h3>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span id="modalDate" style="font-size: 0.78rem; color: #64748b;"></span>
+            <span id="modalStatusBadge" class="status-badge" style="font-size: 0.68rem; padding: 2px 6px;"></span>
+          </div>
+        </div>
+      </div>
+      <button
+        type="button"
+        onclick="closeInquiryModal()"
+        style="background: transparent; border: none; font-size: 1.3rem; color: #94a3b8; cursor: pointer; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: all 0.15s ease;"
+        onmouseover="this.style.color='#0f172a'; this.style.backgroundColor='#f1f5f9';"
+        onmouseout="this.style.color='#94a3b8'; this.style.backgroundColor='transparent';"
+        aria-label="Close dialog"
+      >
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- Quick Communication Actions -->
+    <div class="modal-quick-actions">
+      <a id="modalEmailAction" href="#" class="modal-action-chip email" target="_blank">
+        <i class="fa-solid fa-paper-plane"></i>
+        <span>Reply via Email</span>
+      </a>
+      <a id="modalPhoneAction" href="#" class="modal-action-chip phone">
+        <i class="fa-solid fa-phone"></i>
+        <span>Call Customer</span>
+      </a>
+    </div>
+
+    <!-- Meta Details Grid -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; background: #f8fafc; padding: 14px; border-radius: 12px; border: 1px solid #e2e8f0;">
+      <div>
+        <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Business Outlet</span>
+        <div id="modalRestaurant" style="font-weight: 700; color: #0f172a; margin-top: 2px; font-size: 0.9rem; display: flex; align-items: center; gap: 6px;">
+          <i class="fa-solid fa-hotel" style="color: var(--primary);"></i>
+          <span></span>
+        </div>
+      </div>
+
+      <div>
+        <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Phone Number</span>
+        <div id="modalPhone" style="font-weight: 600; color: #0f172a; margin-top: 2px; font-size: 0.88rem;"></div>
+      </div>
+
+      <div style="grid-column: span 2;">
+        <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Email Address</span>
+        <div id="modalEmail" style="font-weight: 600; color: #0f172a; margin-top: 2px; font-size: 0.88rem;"></div>
+      </div>
+    </div>
+
+    <!-- Subject & Message Box -->
+    <div style="margin-bottom: 24px;">
+      <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Subject</span>
+      <div id="modalSubject" style="font-size: 1.05rem; font-weight: 800; color: #0f172a; margin-top: 2px; margin-bottom: 12px; padding: 6px 0; border-bottom: 1px dashed #e2e8f0;"></div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+        <span style="font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Message Content</span>
+        <button
+          type="button"
+          onclick="copyModalMessage()"
+          id="copyMsgBtn"
+          style="background: transparent; border: none; font-size: 0.75rem; color: var(--primary); cursor: pointer; display: flex; align-items: center; gap: 4px; font-weight: 600;"
+        >
+          <i class="fa-regular fa-copy"></i> Copy Text
+        </button>
+      </div>
+      <div id="modalMessage" style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 16px; font-size: 0.92rem; color: #1e293b; line-height: 1.65; white-space: pre-wrap; max-height: 240px; overflow-y: auto;"></div>
+    </div>
+
+    <!-- Modal Footer Actions -->
+    <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+      <form id="modalToggleForm" method="post" action="" style="display: inline;">
+        {% csrf_token %}
+        <button type="submit" id="modalToggleBtn" class="btn secondary small">
+          <i class="fa-regular fa-envelope"></i>
+          <span>Mark as Read</span>
+        </button>
+      </form>
+
+      <div style="display: flex; gap: 8px;">
+        <form
+          id="modalDeleteForm"
+          method="post"
+          action=""
+          style="display: inline;"
+          onsubmit="return confirm('Permanently delete this customer inquiry?');"
+        >
+          {% csrf_token %}
+          <button type="submit" class="btn danger small">
+            <i class="fa-regular fa-trash-can"></i>
+            <span>Delete</span>
+          </button>
+        </form>
+
+        <button type="button" onclick="closeInquiryModal()" class="btn secondary small">
+          Close
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function handleViewInquiry(elem) {
+  const d = elem.dataset;
+  openInquiryModal(
+    d.id,
+    d.name,
+    d.email,
+    d.phone,
+    d.restaurant,
+    d.subject,
+    d.message,
+    d.date,
+    d.read === 'true'
+  );
+}
+
+function openInquiryModal(id, name, email, phone, restaurant, subject, message, date, isRead) {
+  document.getElementById('modalName').innerText = name || 'Customer';
+  document.getElementById('modalAvatar').innerText = (name && name.length > 0) ? name[0].toUpperCase() : 'U';
+  document.getElementById('modalEmail').innerText = email || 'Not Provided';
+  document.getElementById('modalPhone').innerText = phone || 'Not Provided';
+  
+  const restElem = document.getElementById('modalRestaurant');
+  restElem.querySelector('span').innerText = restaurant || 'General Inquiry';
+  
+  document.getElementById('modalSubject').innerText = subject || 'General Message';
+  document.getElementById('modalMessage').innerText = message || '';
+  document.getElementById('modalDate').innerText = date || '';
+
+  // Status badge inside modal
+  const badge = document.getElementById('modalStatusBadge');
+  if (isRead) {
+    badge.className = 'status-badge read';
+    badge.innerHTML = '<i class="fa-solid fa-check" style="font-size: 0.6rem;"></i> Read';
+  } else {
+    badge.className = 'status-badge unread';
+    badge.innerHTML = '<i class="fa-solid fa-circle" style="font-size: 0.45rem;"></i> Unread';
+  }
+
+  // Quick communication buttons
+  const emailBtn = document.getElementById('modalEmailAction');
+  if (email && email.trim()) {
+    emailBtn.href = `mailto:${encodeURIComponent(email)}?subject=Re: ${encodeURIComponent(subject || 'Inquiry')}`;
+    emailBtn.style.display = 'inline-flex';
+  } else {
+    emailBtn.style.display = 'none';
+  }
+
+  const phoneBtn = document.getElementById('modalPhoneAction');
+  if (phone && phone.trim()) {
+    phoneBtn.href = `tel:${encodeURIComponent(phone.replace(/[^0-9+]/g, ''))}`;
+    phoneBtn.style.display = 'inline-flex';
+  } else {
+    phoneBtn.style.display = 'none';
+  }
+
+  // Forms actions
+  const toggleForm = document.getElementById('modalToggleForm');
+  toggleForm.action = `/super/inquiries/${id}/toggle-read/`;
+  const toggleBtn = document.getElementById('modalToggleBtn');
+  if (isRead) {
+    toggleBtn.innerHTML = '<i class="fa-regular fa-envelope"></i> <span>Mark as Unread</span>';
+  } else {
+    toggleBtn.innerHTML = '<i class="fa-regular fa-envelope-open" style="color: var(--primary);"></i> <span>Mark as Read</span>';
+  }
+
+  const deleteForm = document.getElementById('modalDeleteForm');
+  deleteForm.action = `/super/inquiries/${id}/delete/`;
+
+  document.getElementById('inquiryModal').style.display = 'flex';
+}
+
+function closeInquiryModal() {
+  document.getElementById('inquiryModal').style.display = 'none';
+}
+
+function copyModalMessage() {
+  const msg = document.getElementById('modalMessage').innerText;
+  navigator.clipboard.writeText(msg).then(() => {
+    const btn = document.getElementById('copyMsgBtn');
+    btn.innerHTML = '<i class="fa-solid fa-check" style="color: #10b981;"></i> Copied!';
+    setTimeout(() => {
+      btn.innerHTML = '<i class="fa-regular fa-copy"></i> Copy Text';
+    }, 2000);
+  });
+}
+
+// Close on backdrop click
+window.addEventListener('click', function(e) {
+  const modal = document.getElementById('inquiryModal');
+  if (e.target === modal) {
+    closeInquiryModal();
+  }
+});
+
+// Close on Escape key
+window.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    closeInquiryModal();
+  }
+});
+</script>
+{% endblock %}

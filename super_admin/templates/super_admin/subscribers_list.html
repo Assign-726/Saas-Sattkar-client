@@ -1,0 +1,968 @@
+{% extends 'super_admin/base.html' %}
+
+{% block title %}Newsletter Subscribers | Super Admin{% endblock %}
+
+{% block header_title %}
+<i class="fa-solid fa-users" style="color: var(--primary); margin-right: 6px;"></i> Newsletter Subscribers
+{% endblock %}
+
+{% block header_actions %}
+<a class="btn secondary small" href="{% url 'super_admin:dashboard' %}">
+  <i class="fa-solid fa-arrow-left"></i>
+  <span>Back to Dashboard</span>
+</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  /* Container & Layout Constraints to Prevent Viewport Overflow */
+  .subscribers-container {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Stats Grid */
+  .subscribers-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  @media (max-width: 1100px) {
+    .subscribers-stats-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 600px) {
+    .subscribers-stats-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .subscriber-stat-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+
+  .subscriber-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+    border-color: #cbd5e1;
+  }
+
+  .subscriber-stat-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .subscriber-stat-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+  }
+
+  .subscriber-stat-num {
+    font-size: 1.85rem;
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1.15;
+  }
+
+  .subscriber-stat-num.active-highlight {
+    color: #059669;
+  }
+
+  .subscriber-stat-sub {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .subscriber-stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+
+  .subscriber-stat-icon.blue {
+    background: rgba(59, 130, 246, 0.1);
+    color: #2563eb;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+
+  .subscriber-stat-icon.green {
+    background: rgba(16, 185, 129, 0.1);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+
+  .subscriber-stat-icon.gray {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+  }
+
+  .subscriber-stat-icon.orange {
+    background: rgba(242, 108, 13, 0.1);
+    color: var(--primary);
+    border: 1px solid rgba(242, 108, 13, 0.2);
+  }
+
+  /* Pulse indicator for active audience */
+  .active-pulse {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #10b981;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    animation: pulse-green 2s infinite;
+  }
+
+  @keyframes pulse-green {
+    0% {
+      transform: scale(0.95);
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    }
+    70% {
+      transform: scale(1);
+      box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+    }
+    100% {
+      transform: scale(0.95);
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    }
+  }
+
+  /* Filter & Actions Bar */
+  .filter-bar-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 24px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .filter-form-layout {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .filter-controls-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 280px;
+    flex-wrap: wrap;
+  }
+
+  .search-input-wrapper {
+    position: relative;
+    flex: 1 1 240px;
+    min-width: 200px;
+  }
+
+  .search-input-wrapper i.search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    font-size: 0.9rem;
+    pointer-events: none;
+  }
+
+  .search-input-wrapper input {
+    width: 100%;
+    height: 42px;
+    padding: 0 14px 0 38px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-size: 0.88rem;
+    font-family: inherit;
+    color: var(--text);
+    background: #ffffff;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+  }
+
+  .search-input-wrapper input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-light);
+  }
+
+  .filter-select {
+    height: 42px;
+    padding: 0 32px 0 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-size: 0.88rem;
+    font-family: inherit;
+    color: var(--text);
+    background: #ffffff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E") no-repeat right 10px center / 16px;
+    appearance: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 170px;
+    flex: 0 1 auto;
+    box-sizing: border-box;
+  }
+
+  .filter-select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-light);
+  }
+
+  .filter-btn-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .btn-csv-export {
+    background: #10b981;
+    border: 1px solid #059669;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+  }
+
+  .btn-csv-export:hover {
+    background: #059669;
+    color: #ffffff;
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3);
+  }
+
+  /* Table Card */
+  .subscribers-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .subscribers-card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  }
+
+  .subscribers-card-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* Status Filter Tabs inside Header */
+  .header-status-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #f1f5f9;
+    padding: 3px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+  }
+
+  .status-tab-link {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 8px;
+    color: var(--muted);
+    text-decoration: none;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .status-tab-link:hover {
+    color: var(--text);
+  }
+
+  .status-tab-link.active {
+    background: #ffffff;
+    color: var(--text);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  .status-tab-pill {
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+
+  /* Table Custom Styles */
+  .subscribers-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+  }
+
+  .subscribers-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    text-align: left;
+    min-width: 820px;
+  }
+
+  .subscribers-table thead th {
+    background: #f8fafc;
+    border-bottom: 1px solid var(--border);
+    color: #475569;
+    font-weight: 700;
+    padding: 12px 18px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    white-space: nowrap;
+  }
+
+  .subscribers-table tbody tr {
+    transition: background 0.15s ease;
+  }
+
+  .subscribers-table tbody tr:hover {
+    background: #f8fafc;
+  }
+
+  .subscribers-table tbody tr.inactive-row {
+    opacity: 0.7;
+  }
+
+  .subscribers-table tbody td {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.88rem;
+    color: var(--text);
+    vertical-align: middle;
+  }
+
+  .subscribers-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  /* Subscriber Email Cell */
+  .subscriber-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .subscriber-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+    text-transform: uppercase;
+  }
+
+  .subscriber-avatar.c-green  { background: #10b981; }
+  .subscriber-avatar.c-blue   { background: #3b82f6; }
+  .subscriber-avatar.c-orange { background: #f26c0d; }
+  .subscriber-avatar.c-purple { background: #8b5cf6; }
+  .subscriber-avatar.c-pink   { background: #ec4899; }
+
+  .subscriber-email-text {
+    font-weight: 700;
+    color: var(--text);
+    text-decoration: none;
+    transition: color 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .subscriber-email-text:hover {
+    color: var(--primary);
+  }
+
+  .copy-email-btn {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 0.75rem;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+  }
+
+  .copy-email-btn:hover {
+    color: var(--primary);
+    background: var(--primary-light);
+  }
+
+  /* Badges */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .status-badge.active {
+    background: rgba(16, 185, 129, 0.12);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+  }
+
+  .status-badge.inactive {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+  }
+
+  .business-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: var(--text);
+    max-width: 180px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .business-badge i {
+    color: var(--primary);
+  }
+
+  .source-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    background: rgba(59, 130, 246, 0.08);
+    color: #2563eb;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  /* Action buttons */
+  .row-action-btns {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  .action-icon-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    border: 1px solid var(--border);
+    background: #ffffff;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-decoration: none;
+  }
+
+  .action-icon-btn:hover {
+    transform: translateY(-1px);
+    border-color: #cbd5e1;
+    color: var(--text);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  }
+
+  .action-icon-btn.email-btn:hover {
+    color: #2563eb;
+    border-color: #2563eb;
+    background: rgba(37, 99, 235, 0.06);
+  }
+
+  .action-icon-btn.toggle-btn:hover {
+    color: #059669;
+    border-color: #059669;
+    background: rgba(16, 185, 129, 0.06);
+  }
+
+  .action-icon-btn.delete-btn:hover {
+    color: #dc2626;
+    border-color: #dc2626;
+    background: rgba(220, 38, 38, 0.06);
+  }
+
+  /* Empty state */
+  .empty-state-container {
+    padding: 60px 24px;
+    text-align: center;
+    background: #ffffff;
+  }
+
+  .empty-state-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #94a3b8;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    margin-bottom: 16px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="subscribers-container">
+
+  <!-- 1. Top Overview Metric Cards -->
+  <div class="subscribers-stats-grid">
+    <!-- Total Subscribers -->
+    <div class="subscriber-stat-card">
+      <div class="subscriber-stat-info">
+        <span class="subscriber-stat-label">Total Subscribers</span>
+        <span class="subscriber-stat-num">{{ total_count }}</span>
+        <span class="subscriber-stat-sub">Lifetime audience</span>
+      </div>
+      <div class="subscriber-stat-icon blue">
+        <i class="fa-solid fa-users"></i>
+      </div>
+    </div>
+
+    <!-- Active Subscriptions -->
+    <div class="subscriber-stat-card">
+      <div class="subscriber-stat-info">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span class="subscriber-stat-label">Active Audience</span>
+          {% if active_count > 0 %}
+            <span class="active-pulse"></span>
+          {% endif %}
+        </div>
+        <span class="subscriber-stat-num {% if active_count > 0 %}active-highlight{% endif %}">
+          {{ active_count }}
+        </span>
+        <span class="subscriber-stat-sub">Eligible for newsletters</span>
+      </div>
+      <div class="subscriber-stat-icon green">
+        <i class="fa-solid fa-circle-check"></i>
+      </div>
+    </div>
+
+    <!-- Inactive / Unsubscribed -->
+    <div class="subscriber-stat-card">
+      <div class="subscriber-stat-info">
+        <span class="subscriber-stat-label">Inactive</span>
+        <span class="subscriber-stat-num">{{ inactive_count }}</span>
+        <span class="subscriber-stat-sub">Paused / opted out</span>
+      </div>
+      <div class="subscriber-stat-icon gray">
+        <i class="fa-solid fa-user-slash"></i>
+      </div>
+    </div>
+
+    <!-- Active Businesses -->
+    <div class="subscriber-stat-card">
+      <div class="subscriber-stat-info">
+        <span class="subscriber-stat-label">Businesses</span>
+        <span class="subscriber-stat-num">{{ restaurants|length }}</span>
+        <span class="subscriber-stat-sub">Connected outlets</span>
+      </div>
+      <div class="subscriber-stat-icon orange">
+        <i class="fa-solid fa-hotel"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Search, Filter & Export Bar -->
+  <div class="filter-bar-card">
+    <form method="get" action="{% url 'super_admin:subscribers' %}" class="filter-form-layout">
+      <div class="filter-controls-group">
+        <!-- Search Input -->
+        <div class="search-input-wrapper">
+          <i class="fa-solid fa-magnifying-glass search-icon"></i>
+          <input
+            type="text"
+            name="q"
+            value="{{ query }}"
+            placeholder="Search by email address or source..."
+            autocomplete="off"
+          />
+        </div>
+
+        <!-- Restaurant Selector -->
+        <select name="restaurant" class="filter-select">
+          <option value="">All Businesses</option>
+          {% for r in restaurants %}
+            <option value="{{ r.id }}" {% if restaurant_filter == r.id|stringformat:"s" %}selected{% endif %}>
+              🏢 {{ r.name }}
+            </option>
+          {% endfor %}
+        </select>
+
+        <!-- Status Selector -->
+        <select name="status" class="filter-select" style="min-width: 130px;">
+          <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Status</option>
+          <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active ({{ active_count }})</option>
+          <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive ({{ inactive_count }})</option>
+        </select>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="filter-btn-group">
+        <button type="submit" class="btn small">
+          <i class="fa-solid fa-filter"></i>
+          <span>Filter</span>
+        </button>
+
+        {% if query or restaurant_filter or status_filter != 'all' %}
+          <a href="{% url 'super_admin:subscribers' %}" class="btn secondary small" title="Reset all filters">
+            <i class="fa-solid fa-rotate-left"></i>
+            <span>Reset</span>
+          </a>
+        {% endif %}
+
+        <!-- CSV Export Button -->
+        <a
+          href="{% url 'super_admin:subscribers_export_csv' %}?restaurant={{ restaurant_filter }}&status={{ status_filter }}&q={{ query }}"
+          class="btn small btn-csv-export"
+          title="Download full subscriber CSV list for campaigns"
+        >
+          <i class="fa-solid fa-file-csv"></i>
+          <span>Export CSV</span>
+        </a>
+      </div>
+    </form>
+  </div>
+
+  <!-- 3. Subscribers Table Card -->
+  <div class="subscribers-card">
+    <div class="subscribers-card-header">
+      <div class="subscribers-card-title">
+        <i class="fa-solid fa-envelopes-bulk" style="color: var(--primary);"></i>
+        <span>Subscribed Email List</span>
+        <span class="badge neutral" style="font-size: 0.75rem; font-weight: 700; margin-left: 4px;">
+          {{ subscribers.paginator.count }} {{ subscribers.paginator.count|pluralize:"Subscriber,Subscribers" }}
+        </span>
+      </div>
+
+      <!-- Quick Status Filter Pills -->
+      <div class="header-status-tabs">
+        <a
+          href="?status=all{% if restaurant_filter %}&restaurant={{ restaurant_filter }}{% endif %}{% if query %}&q={{ query }}{% endif %}"
+          class="status-tab-link {% if status_filter == 'all' %}active{% endif %}"
+        >
+          <span>All</span>
+          <span class="status-tab-pill" style="background: #e2e8f0; color: #475569;">{{ total_count }}</span>
+        </a>
+
+        <a
+          href="?status=active{% if restaurant_filter %}&restaurant={{ restaurant_filter }}{% endif %}{% if query %}&q={{ query }}{% endif %}"
+          class="status-tab-link {% if status_filter == 'active' %}active{% endif %}"
+        >
+          <span>Active</span>
+          <span class="status-tab-pill" style="background: rgba(16, 185, 129, 0.15); color: #059669;">{{ active_count }}</span>
+        </a>
+
+        <a
+          href="?status=inactive{% if restaurant_filter %}&restaurant={{ restaurant_filter }}{% endif %}{% if query %}&q={{ query }}{% endif %}"
+          class="status-tab-link {% if status_filter == 'inactive' %}active{% endif %}"
+        >
+          <span>Inactive</span>
+          <span class="status-tab-pill" style="background: #e2e8f0; color: #64748b;">{{ inactive_count }}</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Table Body -->
+    {% if subscribers %}
+      <div class="subscribers-table-wrapper">
+        <table class="subscribers-table">
+          <thead>
+            <tr>
+              <th style="width: 80px;">Status</th>
+              <th style="min-width: 240px;">Subscriber Email</th>
+              <th style="min-width: 180px;">Business / Location</th>
+              <th style="min-width: 130px;">Source</th>
+              <th style="min-width: 140px;">Subscribed Date</th>
+              <th style="text-align: right; width: 130px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in subscribers %}
+            <tr class="{% if not item.is_active %}inactive-row{% endif %}">
+              <!-- Status Badge -->
+              <td>
+                {% if item.is_active %}
+                  <span class="status-badge active">
+                    <i class="fa-solid fa-circle-check" style="font-size: 0.65rem;"></i> Active
+                  </span>
+                {% else %}
+                  <span class="status-badge inactive">
+                    <i class="fa-solid fa-circle-xmark" style="font-size: 0.65rem;"></i> Inactive
+                  </span>
+                {% endif %}
+              </td>
+
+              <!-- Subscriber Email & Avatar -->
+              <td>
+                <div class="subscriber-cell">
+                  <div class="subscriber-avatar {% cycle 'c-green' 'c-blue' 'c-orange' 'c-purple' 'c-pink' %}">
+                    {{ item.email|slice:":1"|upper }}
+                  </div>
+                  <div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <a href="mailto:{{ item.email }}" class="subscriber-email-text" title="Click to email {{ item.email }}">
+                        {{ item.email }}
+                      </a>
+                      <button
+                        type="button"
+                        class="copy-email-btn"
+                        data-email="{{ item.email }}"
+                        onclick="copyEmailAddress(this)"
+                        title="Copy email address"
+                      >
+                        <i class="fa-regular fa-copy"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </td>
+
+              <!-- Business / Outlet -->
+              <td>
+                {% if item.restaurant %}
+                  <div class="business-badge" title="{{ item.restaurant.name }}">
+                    <i class="fa-solid fa-hotel"></i>
+                    <span>{{ item.restaurant.name }}</span>
+                  </div>
+                {% else %}
+                  <span class="badge neutral" style="font-size: 0.75rem;">General / Platform</span>
+                {% endif %}
+              </td>
+
+              <!-- Source -->
+              <td>
+                <span class="source-badge">
+                  <i class="fa-solid fa-bullhorn" style="font-size: 0.65rem;"></i>
+                  <span>{{ item.source|default:"Web" }}</span>
+                </span>
+              </td>
+
+              <!-- Date & Time -->
+              <td style="color: var(--muted); font-size: 0.8rem; white-space: nowrap;">
+                <div style="display: flex; align-items: center; gap: 6px; color: var(--text); font-weight: 500;">
+                  <i class="fa-regular fa-calendar" style="color: var(--muted); width: 14px;"></i>
+                  <span>{{ item.subscribed_at|date:"M d, Y" }}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 0.75rem;">
+                  <i class="fa-regular fa-clock" style="color: var(--muted); width: 14px;"></i>
+                  <span>{{ item.subscribed_at|time:"h:i A" }}</span>
+                </div>
+              </td>
+
+              <!-- Action Buttons -->
+              <td>
+                <div class="row-action-btns">
+                  <!-- Compose Direct Email -->
+                  <a
+                    href="mailto:{{ item.email }}"
+                    class="action-icon-btn email-btn"
+                    title="Compose direct email to {{ item.email }}"
+                  >
+                    <i class="fa-regular fa-paper-plane"></i>
+                  </a>
+
+                  <!-- Toggle Active/Inactive Status -->
+                  <form method="post" action="{% url 'super_admin:subscriber_toggle_active' item.id %}" style="display: inline;">
+                    {% csrf_token %}
+                    <button
+                      type="submit"
+                      class="action-icon-btn toggle-btn"
+                      title="{% if item.is_active %}Deactivate Subscription{% else %}Activate Subscription{% endif %}"
+                    >
+                      {% if item.is_active %}
+                        <i class="fa-solid fa-user-slash" style="color: var(--muted);"></i>
+                      {% else %}
+                        <i class="fa-solid fa-user-check" style="color: #059669;"></i>
+                      {% endif %}
+                    </button>
+                  </form>
+
+                  <!-- Delete -->
+                  <form
+                    method="post"
+                    action="{% url 'super_admin:subscriber_delete' item.id %}"
+                    style="display: inline;"
+                    onsubmit="return confirm('Permanently remove {{ item.email }} from subscribers?');"
+                  >
+                    {% csrf_token %}
+                    <button
+                      type="submit"
+                      class="action-icon-btn delete-btn"
+                      title="Remove subscriber"
+                    >
+                      <i class="fa-regular fa-trash-can"></i>
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination Footer -->
+      {% if subscribers.has_other_pages %}
+      <div style="padding: 16px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; background: #f8fafc;">
+        <span style="font-size: 0.85rem; color: var(--muted);">
+          Showing <strong>{{ subscribers.start_index }}</strong> to <strong>{{ subscribers.end_index }}</strong> of <strong>{{ subscribers.paginator.count }}</strong> subscribers
+        </span>
+
+        <div style="display: flex; align-items: center; gap: 6px;">
+          {% if subscribers.has_previous %}
+            <a
+              href="?page={{ subscribers.previous_page_number }}&status={{ status_filter }}&restaurant={{ restaurant_filter }}&q={{ query }}"
+              class="btn secondary small"
+            >
+              <i class="fa-solid fa-chevron-left" style="font-size: 0.75rem;"></i>
+              <span>Previous</span>
+            </a>
+          {% endif %}
+
+          <span class="badge neutral" style="padding: 6px 12px; font-weight: 700;">
+            Page {{ subscribers.number }} of {{ subscribers.paginator.num_pages }}
+          </span>
+
+          {% if subscribers.has_next %}
+            <a
+              href="?page={{ subscribers.next_page_number }}&status={{ status_filter }}&restaurant={{ restaurant_filter }}&q={{ query }}"
+              class="btn secondary small"
+            >
+              <span>Next</span>
+              <i class="fa-solid fa-chevron-right" style="font-size: 0.75rem;"></i>
+            </a>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+    {% else %}
+      <!-- Empty State -->
+      <div class="empty-state-container">
+        <div class="empty-state-icon">
+          <i class="fa-regular fa-envelope-open"></i>
+        </div>
+        <h3 style="font-size: 1.15rem; font-weight: 800; color: var(--text); margin-bottom: 6px;">
+          {% if query or restaurant_filter or status_filter != 'all' %}
+            No Matching Subscribers Found
+          {% else %}
+            No Newsletter Subscribers Yet
+          {% endif %}
+        </h3>
+        <p style="color: var(--muted); font-size: 0.88rem; max-width: 440px; margin: 0 auto 20px; line-height: 1.5;">
+          {% if query or restaurant_filter or status_filter != 'all' %}
+            No subscriber records match your active search or filters. Try adjusting your search query or reset the filters.
+          {% else %}
+            When visitors subscribe to your newsletters and discount updates from your restaurant websites, their contact details will be listed here.
+          {% endif %}
+        </p>
+        {% if query or restaurant_filter or status_filter != 'all' %}
+          <a href="{% url 'super_admin:subscribers' %}" class="btn small">
+            <i class="fa-solid fa-rotate-left"></i>
+            <span>Clear Filters</span>
+          </a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+function copyEmailAddress(btn) {
+  const email = btn.dataset.email;
+  if (!email) return;
+  navigator.clipboard.writeText(email).then(() => {
+    const icon = btn.querySelector('i');
+    icon.className = 'fa-solid fa-check';
+    btn.style.color = '#10b981';
+    setTimeout(() => {
+      icon.className = 'fa-regular fa-copy';
+      btn.style.color = '';
+    }, 1800);
+  });
+}
+</script>
+{% endblock %}

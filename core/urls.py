@@ -10,9 +10,12 @@ router.register(r'subcategories', views.SubCategoryViewSet)
 router.register(r'menu-items', views.MenuItemViewSet, basename='menuitem')
 router.register(r'orders', views.OrderViewSet, basename='order')
 router.register(r'restaurants', views.RestaurantViewSet, basename='restaurant')
+router.register(r'branches', views.RestaurantBranchViewSet, basename='branch')
 router.register(r'landing', views.RestaurantLandingViewSet, basename='landing')
 router.register(r'settings', views.RestaurantSettingsViewSet, basename='settings')
 router.register(r'blogs', views.BlogPostViewSet, basename='blog')
+router.register(r'contact', views.CustomerInquiryViewSet, basename='contact')
+router.register(r'newsletter/subscribers', views.NewsletterSubscriberViewSet, basename='newsletter_subscribers')
 
 # API URL patterns
 urlpatterns = [

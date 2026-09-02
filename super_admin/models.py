@@ -416,3 +416,42 @@ class UserSecuritySetting(models.Model):
 
     def __str__(self):
         return f"{self.user.username} (2FA: {'ON' if self.is_2fa_enabled else 'OFF'})"
+
+
+class CustomerInquiry(models.Model):
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, null=True, blank=True, related_name='inquiries')
+    name = models.CharField(max_length=150)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=30, blank=True)
+    subject = models.CharField(max_length=255, blank=True)
+    message = models.TextField()
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Customer Inquiry'
+        verbose_name_plural = 'Customer Inquiries'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        rest_name = self.restaurant.name if self.restaurant else "General"
+        return f"[{rest_name}] {self.name} - {self.subject or 'Inquiry'} ({self.created_at.strftime('%Y-%m-%d')})"
+
+
+class NewsletterSubscriber(models.Model):
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, null=True, blank=True, related_name='subscribers')
+    email = models.EmailField()
+    source = models.CharField(max_length=50, default='web_footer', blank=True)
+    is_active = models.BooleanField(default=True)
+    subscribed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Newsletter Subscriber'
+        verbose_name_plural = 'Newsletter Subscribers'
+        unique_together = ('restaurant', 'email')
+        ordering = ['-subscribed_at']
+
+    def __str__(self):
+        rest_name = self.restaurant.name if self.restaurant else "General"
+        return f"[{rest_name}] {self.email}"

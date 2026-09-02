@@ -491,7 +491,7 @@ class RestaurantLandingForm(forms.ModelForm):
     class Meta:
         model = RestaurantLanding
         fields = [
-            'logo', 'hero_title', 'hero_subtitle', 'hero_image', 'hero_video',
+            'logo', 'favicon', 'hero_title', 'hero_subtitle', 'hero_image', 'hero_video',
             'cta_text', 'cta_link',
             'about_heading', 'about_italic', 'about_bullet_1', 'about_bullet_2', 'about_bullet_3', 'about_body', 'about_image',
             'about_video_url',
@@ -500,7 +500,9 @@ class RestaurantLandingForm(forms.ModelForm):
             'about_stat_num_3', 'about_stat_label_3', 'about_stat_desc_3',
             'about_stat_num_4', 'about_stat_label_4', 'about_stat_desc_4',
             'address', 'phone', 'email', 'opening_hours',
-            'seo_title', 'seo_description',
+            'seo_title', 'seo_description', 'seo_keywords', 'seo_canonical_url',
+            'og_title', 'og_description', 'og_url', 'og_site_name', 'og_locale', 'og_type',
+            'twitter_card_type', 'twitter_title', 'twitter_description', 'pages_seo',
             'show_hero', 'show_about', 'show_why_us', 'show_specials', 'show_events', 'show_gallery', 'show_team', 'show_reviews',
             'why_us_title_1', 'why_us_description_1',
             'why_us_title_2', 'why_us_description_2',

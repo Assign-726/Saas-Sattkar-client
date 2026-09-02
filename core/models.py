@@ -1060,6 +1060,7 @@ class Coupon(models.Model):
 class RestaurantLanding(models.Model):
     restaurant = models.OneToOneField('super_admin.Restaurant', on_delete=models.CASCADE, related_name='landing')
     logo = models.ImageField(upload_to='landing/logo/', blank=True, null=True)
+    favicon = models.FileField(upload_to='landing/favicon/', blank=True, null=True, help_text="Upload .ico favicon file")
     hero_title = models.CharField(max_length=200, blank=True)
     hero_subtitle = models.CharField(max_length=300, blank=True)
     hero_image = models.ImageField(upload_to='landing/hero/', blank=True, null=True)
@@ -1095,8 +1096,30 @@ class RestaurantLanding(models.Model):
     phone = models.CharField(max_length=50, blank=True)
     email = models.EmailField(blank=True, default="")
     opening_hours = models.CharField(max_length=200, blank=True)
+    
+    # Dynamic SEO & Metadata
     seo_title = models.CharField(max_length=255, blank=True)
-    seo_description = models.CharField(max_length=500, blank=True)
+    seo_description = models.TextField(blank=True)
+    seo_keywords = models.CharField(max_length=500, blank=True, help_text="Comma separated keywords")
+    seo_canonical_url = models.CharField(max_length=500, blank=True, help_text="Canonical URL path or full link")
+    
+    # Open Graph (Facebook / LinkedIn)
+    og_title = models.CharField(max_length=255, blank=True)
+    og_description = models.TextField(blank=True)
+    og_url = models.CharField(max_length=500, blank=True)
+    og_site_name = models.CharField(max_length=255, blank=True)
+    og_locale = models.CharField(max_length=50, blank=True, default="en_AE")
+    og_type = models.CharField(max_length=50, blank=True, default="website")
+    
+    # Twitter Card
+    twitter_card_type = models.CharField(max_length=50, blank=True, default="summary_large_image")
+    twitter_title = models.CharField(max_length=255, blank=True)
+    twitter_description = models.TextField(blank=True)
+    
+    # Sub-pages SEO config JSON
+    # e.g. {"about": {"title": "...", "description": "..."}, "menu": {...}}
+    pages_seo = models.JSONField(default=dict, blank=True)
+    
     show_hero = models.BooleanField(default=True, verbose_name="Show Hero Section")
     show_about = models.BooleanField(default=True, verbose_name="Show About Us Section")
     show_why_us = models.BooleanField(default=True, verbose_name="Show Why Choose Us Section")

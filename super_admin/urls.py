@@ -5,6 +5,8 @@ app_name = 'super_admin'
 
 urlpatterns = [
     path('', views.dashboard, name='dashboard'),
+    path('analytics/', views.super_analytics, name='analytics'),
+    path('analytics/export/', views.super_analytics_export_csv, name='analytics_export_csv'),
     path('landing/', views.landing_index, name='landing_index'),
     path('restaurants/add/', views.restaurant_create, name='restaurant_create'),
     path('restaurants/<int:pk>/edit/', views.restaurant_edit, name='restaurant_edit'),
@@ -27,6 +29,17 @@ urlpatterns = [
     path('restaurants/admins/<int:pk>/delete/', views.restaurant_admin_delete, name='restaurant_admin_delete'),
     path('onboard/', views.onboard_restaurant, name='onboard'),
     path('setup/', views.setup_view, name='setup'),
+    path('inquiries/', views.inquiries_list, name='inquiries'),
+    path('subscribers/', views.subscribers_list, name='subscribers'),
+    path('subscribers/export/', views.subscribers_export_csv, name='subscribers_export_csv'),
+    path('subscribers/<int:pk>/toggle/', views.subscriber_toggle_active, name='subscriber_toggle_active'),
+    path('subscribers/<int:pk>/delete/', views.subscriber_delete, name='subscriber_delete'),
+    path('inquiries/<int:pk>/toggle-read/', views.inquiry_toggle_read, name='inquiry_toggle_read'),
+    path('inquiries/<int:pk>/delete/', views.inquiry_delete, name='inquiry_delete'),
+    path('billing/', views.billing_view, name='billing'),
+    path('billing/sync/', views.api_billing_sync, name='api_billing_sync'),
+    path('billing/upgrade-request/', views.api_request_plan_upgrade, name='api_request_plan_upgrade'),
+    path('billing/invoice/<str:invoice_id>/', views.billing_invoice_view, name='billing_invoice'),
     path('api/gstins-by-state/', views.api_gstins_by_state, name='api_gstins_by_state'),
     path('api/branches-by-restaurant/', views.api_branches_by_restaurant, name='api_branches_by_restaurant'),
 ]
