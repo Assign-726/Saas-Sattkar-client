@@ -757,7 +757,9 @@
                             <i class="bi bi-pencil"></i>
                           </button>
                           <button type="button" class="btn btn-link btn-sm text-danger p-0"
-                            onclick="submitDeleteCharge('{% url 'restaurant_admin:custom_charge_delete' restaurant_slug=rslug pk=charge.id %}', '{{ charge.charge_name|escapejs }}')">
+                            data-delete-url="{% url 'restaurant_admin:custom_charge_delete' restaurant_slug=rslug pk=charge.id %}"
+                            data-charge-name="{{ charge.charge_name }}"
+                            onclick="submitDeleteChargeFromBtn(this)">
                             <i class="bi bi-trash"></i>
                           </button>
                         </td>
@@ -1048,6 +1050,10 @@
     localStorage.setItem('activeBranchSettingsTab', tabName);
   }
 
+  function submitDeleteChargeFromBtn(btn) {
+    submitDeleteCharge(btn.dataset.deleteUrl, btn.dataset.chargeName);
+  }
+
   function submitDeleteCharge(url, name) {
     if (confirm("Delete charge '" + name + "'?")) {
       var f = document.getElementById('deleteChargeForm');
@@ -1056,6 +1062,8 @@
     }
   }
 
+  const initialErrorTab = "{% if form.bill_template.errors or form.kot_template.errors %}printing{% elif form.enable_customer_ordering.errors or form.enable_pay_at_counter.errors or form.enable_online_payment.errors or form.razorpay_key_id.errors or form.razorpay_key_secret.errors or form.notification_sound.errors %}ordering{% elif form.cgst_percentage.errors or form.sgst_percentage.errors or form.service_charge_percentage.errors or branch_form.fssai_license_no.errors or branch_form.vat_tin.errors or branch_form.excise_license_no.errors %}tax{% endif %}";
+
   document.addEventListener('DOMContentLoaded', function() {
     var modalEl = document.getElementById('customChargeModal');
     if (modalEl && typeof bootstrap !== 'undefined') {
@@ -1063,7 +1071,7 @@
     }
 
     // Initialize document sequence conditional fields & previews
-    const servesAlcohol = {% if branch and branch.serves_alcohol %}true{% else %}false{% endif %};
+    const servesAlcohol = '{{ branch.serves_alcohol|yesno:"1,0" }}' === '1';
     const docTypes = ['sales', 'purchase', 'receipt', 'challan'];
     if (servesAlcohol) {
       docTypes.push('vat_bill');
@@ -1089,18 +1097,14 @@
     }
 
     // Restore active tab or auto-switch on errors
-    {% if form.bill_template.errors or form.kot_template.errors %}
-    switchBranchSettingsTab('printing');
-    {% elif form.enable_customer_ordering.errors or form.enable_pay_at_counter.errors or form.enable_online_payment.errors or form.razorpay_key_id.errors or form.razorpay_key_secret.errors or form.notification_sound.errors %}
-    switchBranchSettingsTab('ordering');
-    {% elif form.cgst_percentage.errors or form.sgst_percentage.errors or form.service_charge_percentage.errors or branch_form.fssai_license_no.errors or branch_form.vat_tin.errors or branch_form.excise_license_no.errors %}
-    switchBranchSettingsTab('tax');
-    {% else %}
-    var savedTab = localStorage.getItem('activeBranchSettingsTab');
-    if (savedTab && document.getElementById('pane-' + savedTab)) {
-      switchBranchSettingsTab(savedTab);
+    if (initialErrorTab) {
+      switchBranchSettingsTab(initialErrorTab);
+    } else {
+      var savedTab = localStorage.getItem('activeBranchSettingsTab');
+      if (savedTab && document.getElementById('pane-' + savedTab)) {
+        switchBranchSettingsTab(savedTab);
+      }
     }
-    {% endif %}
   });
 
   function toggleSeqConfig(dt) {

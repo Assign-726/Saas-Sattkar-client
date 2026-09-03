@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Reservation, ReservationSetting
+from reservations.models import Reservation, ReservationSetting
 
 
 @admin.register(Reservation)

@@ -742,17 +742,17 @@ function togglePasswordVisibility(fieldId, btn) {
 }
 
 // Restore active tab or select based on form errors
+const initialErrorTab = "{% if form.old_password.errors or form.new_password.errors or form.confirm_password.errors %}password{% elif form.first_name.errors or form.last_name.errors or form.username.errors %}profile{% endif %}";
+
 document.addEventListener('DOMContentLoaded', function() {
-    {% if form.old_password.errors or form.new_password.errors or form.confirm_password.errors %}
-    switchSettingsTab('password');
-    {% elif form.first_name.errors or form.last_name.errors or form.username.errors %}
-    switchSettingsTab('profile');
-    {% else %}
-    var savedTab = localStorage.getItem('activeSuperSettingsTab');
-    if (savedTab && document.getElementById('pane-' + savedTab)) {
-        switchSettingsTab(savedTab);
+    if (initialErrorTab) {
+        switchSettingsTab(initialErrorTab);
+    } else {
+        var savedTab = localStorage.getItem('activeSuperSettingsTab');
+        if (savedTab && document.getElementById('pane-' + savedTab)) {
+            switchSettingsTab(savedTab);
+        }
     }
-    {% endif %}
 });
 </script>
 {% endblock %}

@@ -7,4 +7,4 @@ class CoreConfig(AppConfig):
 
     def ready(self):
         # Import signals to register post_save hooks
-        from . import signals  # noqa: F401
+        from core import signals  # noqa: F401

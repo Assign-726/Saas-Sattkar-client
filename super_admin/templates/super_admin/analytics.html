@@ -119,6 +119,32 @@
         color: #ffffff;
         border-color: #0f172a;
     }
+
+    /* Branch Performance Table */
+    .branch-perf-row {
+        border-bottom: 1px solid #f1f5f9;
+        background: transparent;
+        transition: background 0.15s ease;
+    }
+    .branch-perf-row:hover {
+        background: #f8fafc !important;
+    }
+    .branch-perf-row.is-selected {
+        background: #fff7ed;
+    }
+    .branch-share-track {
+        width: 100%;
+        height: 7px;
+        background: #e2e8f0;
+        border-radius: 999px;
+        overflow: hidden;
+    }
+    .branch-share-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #f26522, #ea580c);
+        border-radius: 999px;
+        transition: width 0.4s ease;
+    }
 </style>
 {% endblock %}
 
@@ -327,7 +353,7 @@
             </thead>
             <tbody>
                 {% for bp in branch_performance_list %}
-                <tr style="border-bottom: 1px solid #f1f5f9; background: {% if bp.is_selected %}#fff7ed{% else %}transparent{% endif %}; transition: background 0.15s ease;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='{% if bp.is_selected %}#fff7ed{% else %}transparent{% endif %}'">
+                <tr class="branch-perf-row {% if bp.is_selected %}is-selected{% endif %}">
                     
                     <!-- Rank -->
                     <td style="padding: 16px 18px;">
@@ -383,8 +409,8 @@
                         <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; margin-bottom: 4px; color: #334155;">
                             <span>{{ bp.share_percent }}%</span>
                         </div>
-                        <div style="width: 100%; height: 7px; background: #e2e8f0; border-radius: 999px; overflow: hidden;">
-                            <div style="width: {{ bp.share_percent }}%; height: 100%; background: linear-gradient(90deg, #f26522, #ea580c); border-radius: 999px;"></div>
+                        <div class="branch-share-track">
+                            <div class="branch-share-fill" data-percent="{{ bp.share_percent }}" style="width: 0%;"></div>
                         </div>
                     </td>
 
@@ -596,6 +622,11 @@
         const hourlyOrders = JSON.parse('{{ hourly_orders_json|escapejs }}');
         const paymentLabels = JSON.parse('{{ payment_labels_json|escapejs }}');
         const paymentData = JSON.parse('{{ payment_data_json|escapejs }}');
+
+        // Dynamic branch share progress bar widths
+        document.querySelectorAll('.branch-share-fill[data-percent]').forEach(function(el) {
+            el.style.width = el.getAttribute('data-percent') + '%';
+        });
 
         // 1. Trend Line Chart
         const ctxTrend = document.getElementById('trendChart').getContext('2d');

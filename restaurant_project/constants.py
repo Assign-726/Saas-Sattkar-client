@@ -13,6 +13,15 @@ def _get_env_int(key: str, default: int) -> int:
     except Exception:
         return default
 
+def _get_env_bool(key: str, default: bool = True) -> bool:
+    try:
+        val = os.environ.get(key)
+        if val is None:
+            return default
+        return str(val).strip().lower() in ('true', '1', 'yes', 'on', 't')
+    except Exception:
+        return default
+
 
 # ==========================================
 # 1. Branding & Identity
@@ -37,3 +46,13 @@ MAX_ALLOWED_BRANCHES = _get_env_int('MAX_ALLOWED_BRANCHES', 5)
 # ==========================================
 DEFAULT_CURRENCY = os.environ.get('DEFAULT_CURRENCY', '₹')
 DEFAULT_STATE = os.environ.get('DEFAULT_STATE', 'Rajasthan')
+
+# ==========================================
+# 4. Feature Flags / Module Toggles
+# ==========================================
+# Controls whether Website CMS / Landing Page module is enabled and visible
+SHOW_WEBSITE_PAGES = _get_env_bool(
+    'SHOW_WEBSITE_PAGES',
+    _get_env_bool('ENABLE_WEBSITE_CMS', _get_env_bool('ENABLE_LANDING_PAGE', True))
+)
+
