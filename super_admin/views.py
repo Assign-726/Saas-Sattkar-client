@@ -46,6 +46,9 @@ def superuser_required(view):
 
 @superuser_required
 def landing_index(request):
+    if not constants.SHOW_WEBSITE_PAGES:
+        messages.warning(request, "Website Pages CMS is disabled in system configuration.")
+        return redirect('super_admin:dashboard')
     restaurants = Restaurant.objects.all().order_by('name')
     return render(request, 'super_admin/landing_list.html', {
         'restaurants': restaurants,
@@ -276,6 +279,9 @@ def restaurant_admin_delete(request, pk):
 # --- Landing page management ---
 @superuser_required
 def landing_edit(request, pk):
+    if not constants.SHOW_WEBSITE_PAGES:
+        messages.warning(request, "Website Pages CMS is disabled in system configuration.")
+        return redirect('super_admin:dashboard')
     restaurant = Restaurant.objects.get(pk=pk)
     landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
 

@@ -9,6 +9,7 @@ from django.views.generic import TemplateView
 from django.shortcuts import get_object_or_404, redirect
 from super_admin.models import Restaurant, RestaurantBranch
 from django.db.models import Prefetch
+from restaurant_project import constants
 
 # pyrefly: ignore [missing-import]
 from .models import Category, SubCategory, MenuItem, Order, RestaurantSettings, RestaurantLanding, BlogPost, BlogComment
@@ -724,6 +725,8 @@ class RestaurantLandingViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [AllowAny]
 
     def get_queryset(self):
+        if not constants.SHOW_WEBSITE_PAGES:
+            return RestaurantLanding.objects.none()
         qs = super().get_queryset()
         restaurant_id = self.request.query_params.get('restaurant')
         restaurant_slug = self.request.query_params.get('restaurant_slug')

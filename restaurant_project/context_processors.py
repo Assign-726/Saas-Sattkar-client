@@ -17,4 +17,7 @@ def app_constants(request):
         'MAX_ALLOWED_BRANCHES': constants.MAX_ALLOWED_BRANCHES,
         'DEFAULT_CURRENCY': constants.DEFAULT_CURRENCY,
         'DEFAULT_STATE': constants.DEFAULT_STATE,
+        'SHOW_WEBSITE_PAGES': constants.SHOW_WEBSITE_PAGES,
+        'ENABLE_WEBSITE_CMS': constants.SHOW_WEBSITE_PAGES,
     }
+
