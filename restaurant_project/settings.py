@@ -260,6 +260,8 @@ if not DEBUG:
     SECURE_BROWSER_XSS_FILTER = True
     X_FRAME_OPTIONS = env('X_FRAME_OPTIONS', default='DENY')
     
-    # Reverse proxy SSL header (for Nginx / Cloudflare / AWS ELB / Traefik)
+    # Reverse proxy SSL & Host headers (for Nginx / Cloudflare / AWS ELB / Traefik)
+    USE_X_FORWARDED_HOST = True
+    USE_X_FORWARDED_PORT = True
     if env.bool('SECURE_PROXY_SSL_HEADER_ENABLED', default=True):
         SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

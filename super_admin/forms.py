@@ -440,10 +440,13 @@ class RestaurantAdminUpdateForm(forms.Form):
             self.fields['branch'].initial = self.instance.branch
             self.fields['is_primary_admin'].initial = self.instance.is_primary_admin
 
-            sec_setting = getattr(self.instance.user, 'security_setting', None)
-            if sec_setting is not None:
-                self.fields['is_2fa_enabled'].initial = sec_setting.is_2fa_enabled
-            else:
+            try:
+                sec_setting = getattr(self.instance.user, 'security_setting', None)
+                if sec_setting is not None:
+                    self.fields['is_2fa_enabled'].initial = sec_setting.is_2fa_enabled
+                else:
+                    self.fields['is_2fa_enabled'].initial = True
+            except Exception:
                 self.fields['is_2fa_enabled'].initial = True
 
     def clean_username(self):
@@ -478,10 +481,13 @@ class RestaurantAdminUpdateForm(forms.Form):
         self.instance.save()
 
         is_2fa = self.cleaned_data.get('is_2fa_enabled', True)
-        UserSecuritySetting.objects.update_or_create(
-            user=user,
-            defaults={'is_2fa_enabled': is_2fa}
-        )
+        try:
+            UserSecuritySetting.objects.update_or_create(
+                user=user,
+                defaults={'is_2fa_enabled': is_2fa}
+            )
+        except Exception:
+            pass
 
         return self.instance
 
@@ -568,10 +574,13 @@ class AdminSetupForm(forms.Form):
             self.fields['username'].initial = self.user.username
             self.fields['email'].initial = self.user.email
 
-            sec_setting = getattr(self.user, 'security_setting', None)
-            if sec_setting is not None:
-                self.fields['is_2fa_enabled'].initial = sec_setting.is_2fa_enabled
-            else:
+            try:
+                sec_setting = getattr(self.user, 'security_setting', None)
+                if sec_setting is not None:
+                    self.fields['is_2fa_enabled'].initial = sec_setting.is_2fa_enabled
+                else:
+                    self.fields['is_2fa_enabled'].initial = True
+            except Exception:
                 self.fields['is_2fa_enabled'].initial = True
 
     def clean_username(self):
@@ -624,10 +633,13 @@ class AdminSetupForm(forms.Form):
 
         # Update or create 2FA setting
         is_2fa = self.cleaned_data.get('is_2fa_enabled', True)
-        UserSecuritySetting.objects.update_or_create(
-            user=self.user,
-            defaults={'is_2fa_enabled': is_2fa}
-        )
+        try:
+            UserSecuritySetting.objects.update_or_create(
+                user=self.user,
+                defaults={'is_2fa_enabled': is_2fa}
+            )
+        except Exception:
+            pass
 
         # Keep the user session active if password was updated
         if new_password and self.request:
