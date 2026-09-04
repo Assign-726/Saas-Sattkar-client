@@ -56,3 +56,10 @@ SHOW_WEBSITE_PAGES = _get_env_bool(
     _get_env_bool('ENABLE_WEBSITE_CMS', _get_env_bool('ENABLE_LANDING_PAGE', True))
 )
 
+# Controls whether Alcohol Service & State VAT module is enabled and visible
+ENABLE_ALCOHOL_VAT = _get_env_bool(
+    'ENABLE_ALCOHOL_VAT',
+    _get_env_bool('ENABLE_LIQUOR_VAT', _get_env_bool('ENABLE_ALCOHOL_SERVICE', True))
+)
+
+

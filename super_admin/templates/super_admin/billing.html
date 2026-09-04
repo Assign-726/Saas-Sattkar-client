@@ -139,6 +139,84 @@
     .plan-pricing-card.current .plan-badge-title {
         color: var(--primary);
     }
+
+    /* 4-Column Top KPI Metrics Grid */
+    .billing-kpis-grid {
+        display: grid !important;
+        grid-template-columns: repeat(4, 1fr) !important;
+        gap: 16px !important;
+        margin-bottom: 24px !important;
+        width: 100% !important;
+    }
+    @media (max-width: 1100px) {
+        .billing-kpis-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+        }
+    }
+    @media (max-width: 600px) {
+        .billing-kpis-grid {
+            grid-template-columns: 1fr !important;
+        }
+    }
+    .billing-kpi-card {
+        background: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 14px !important;
+        padding: 18px 20px !important;
+        box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.04) !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+        min-height: 120px !important;
+        transition: all 0.2s ease !important;
+        grid-column: auto !important;
+        width: auto !important;
+        margin: 0 !important;
+        box-sizing: border-box !important;
+    }
+    .billing-kpi-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 22px -4px rgba(0, 0, 0, 0.07) !important;
+        border-color: #cbd5e1 !important;
+    }
+    .billing-kpi-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+    }
+    .billing-kpi-label {
+        font-size: 11.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #64748b;
+        letter-spacing: 0.5px;
+    }
+    .billing-kpi-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 15px;
+        flex-shrink: 0;
+    }
+    .billing-kpi-value {
+        font-size: 1.6rem;
+        font-weight: 800;
+        color: #0f172a;
+        letter-spacing: -0.5px;
+        line-height: 1.2;
+        margin-bottom: 6px;
+    }
+    .billing-kpi-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: #64748b;
+    }
 </style>
 {% endblock %}
 
@@ -151,51 +229,91 @@
 
 {% block header_actions %}
 <div class="stack">
-    <button type="button" id="btnSyncMaster" class="btn secondary" onclick="syncMasterBilling()" style="font-size: 13px; padding: 8px 14px;">
-        <i class="fa-solid fa-rotate" id="syncIcon"></i>
-        <span>Sync with Master Admin</span>
-    </button>
-    <button type="button" class="btn" data-plan="{{ current_plan.name|default:'Professional Tier' }}" data-cycle="{{ subscription.billing_cycle|default:'MONTHLY' }}" onclick="openUpgradeModal(this.dataset.plan, this.dataset.cycle)" style="font-size: 13px; padding: 8px 14px;">
+    {% if is_connected %}
+    <button type="button" class="btn" data-plan="{{ current_plan.name|default:'' }}" data-cycle="{{ subscription.billing_cycle|default:'MONTHLY' }}" onclick="openUpgradeModal(this.dataset.plan, this.dataset.cycle)" style="font-size: 13px; padding: 8px 14px;">
         <i class="fa-solid fa-wand-magic-sparkles"></i>
         <span>Upgrade / Change Plan</span>
     </button>
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block content %}
 
-<!-- ── MasterRestro Cloud Connection Status Micro-Bar ─────────────────────── -->
-<div class="status-strip">
-    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="pulse-dot pulse-green"></span>
-            <span style="font-size: 13px; font-weight: 700; color: #0f172a;">MasterRestro Cloud Node</span>
-            <span style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0;">
-                LIVE CONNECTED
-            </span>
-        </div>
-        
-        <div style="font-size: 12px; color: #64748b; display: flex; align-items: center; gap: 6px;">
-            <span>&bull;</span>
-            <span>License:</span>
-            <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 11.5px; font-weight: 600; color: #334155;">
-                {{ client_info.license_key|default:restaurant.master_license_key|default:'LIC-SHA-13831' }}
-            </code>
-        </div>
+{% if is_connected %}
 
-        <div style="font-size: 12px; color: #94a3b8; display: flex; align-items: center; gap: 6px;">
-            <span>&bull;</span>
-            <span>Endpoint: <span style="color: #64748b; font-family: monospace;">{{ master_url }}/api/billing/subscription</span></span>
+<!-- ── TOP 4 PLAN KPI CARDS ────────────────────────────────────────────────── -->
+<div class="billing-kpis-grid">
+    <!-- Card 1: Active Subscription Tier -->
+    <div class="billing-kpi-card">
+        <div class="billing-kpi-header">
+            <span class="billing-kpi-label">Subscription Tier</span>
+            <div class="billing-kpi-icon" style="background: #fff7ed; color: #ea580c;">
+                <i class="fa-solid fa-crown"></i>
+            </div>
+        </div>
+        <div class="billing-kpi-value" id="currentPlanName" style="font-size: 1.35rem; color: #0f172a;">
+            {{ current_plan.name|default:subscription.plan_name }}
+        </div>
+        <div class="billing-kpi-meta">
+            <span style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 12px; background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; display: inline-flex; align-items: center; gap: 4px;">
+                <i class="fa-solid fa-circle-check" style="font-size: 9px;"></i> Active
+            </span>
+            <span style="font-weight: 600; color: #64748b;">
+                {{ subscription.billing_cycle|default:'MONTHLY'|title }} Billing
+            </span>
         </div>
     </div>
 
-    <div style="display: flex; align-items: center; gap: 12px;">
-        <span style="font-size: 12px; color: #64748b;">
-            Last Synced: <strong style="color: #0f172a;" id="syncTimestamp">Just now</strong>
-        </span>
-        <span style="font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 20px; background: #ecfdf5; color: #059669; border: 1px solid #10b981;">
-            {{ subscription.status|default:'ACTIVE' }}
-        </span>
+    <!-- Card 2: Monthly Recurring Fee (MRR) -->
+    <div class="billing-kpi-card">
+        <div class="billing-kpi-header">
+            <span class="billing-kpi-label">Monthly Recurring (MRR)</span>
+            <div class="billing-kpi-icon" style="background: #ecfdf5; color: #10b981;">
+                <i class="fa-solid fa-credit-card"></i>
+            </div>
+        </div>
+        <div class="billing-kpi-value" id="statMRR">
+            {{ subscription.currency|default:'₹' }}<span id="currentPlanPrice">{{ subscription.monthly_fee|default:0 }}</span><span style="font-size: 13px; font-weight: 500; color: #64748b;"> / mo</span>
+        </div>
+        <div class="billing-kpi-meta">
+            <span>Next Renewal: <strong style="color: #0f172a;" id="nextBillingDateText">{{ formatted_next_billing|default:'-' }}</strong></span>
+        </div>
+    </div>
+
+    <!-- Card 3: One-Time Setup Fee -->
+    <div class="billing-kpi-card">
+        <div class="billing-kpi-header">
+            <span class="billing-kpi-label">One-Time Setup Fee</span>
+            <div class="billing-kpi-icon" style="background: #eff6ff; color: #3b82f6;">
+                <i class="fa-solid fa-shield-halved"></i>
+            </div>
+        </div>
+        <div class="billing-kpi-value" id="statSetup">
+            {{ subscription.currency|default:'₹' }}{{ subscription.setup_fee|default:0 }}
+        </div>
+        <div class="billing-kpi-meta" style="color: #10b981; font-weight: 600;">
+            <i class="fa-solid fa-check"></i> Onboarding Fully Verified
+        </div>
+    </div>
+
+    <!-- Card 4: Branch Outlets Quota -->
+    <div class="billing-kpi-card">
+        <div class="billing-kpi-header">
+            <span class="billing-kpi-label">Branch Outlets Quota</span>
+            <div class="billing-kpi-icon" style="background: #faf5ff; color: #a855f7;">
+                <i class="fa-solid fa-store"></i>
+            </div>
+        </div>
+        <div class="billing-kpi-value" id="statBranches">
+            {{ branch_count }} / {{ max_branches }} <span style="font-size: 13px; font-weight: 600; color: #64748b;">Outlets</span>
+        </div>
+        <div class="billing-kpi-meta" style="display: flex; align-items: center; gap: 8px;">
+            <div style="flex: 1; height: 5px; background: #e2e8f0; border-radius: 999px; overflow: hidden;">
+                <div id="branchQuotaBar" data-progress="{{ branch_usage_percent }}" style="width: 0%; height: 100%; background: #a855f7; border-radius: 999px; transition: width 0.5s ease;"></div>
+            </div>
+            <span style="font-size: 11.5px; font-weight: 700; color: #64748b;">{{ branch_usage_percent }}%</span>
+        </div>
     </div>
 </div>
 
@@ -210,46 +328,42 @@
                     <i class="fa-solid fa-crown" style="font-size: 11px;"></i> Current Active Plan
                 </span>
                 <span style="font-size: 12.5px; color: #64748b; font-weight: 600;">
-                    {{ subscription.billing_cycle|default:'MONTHLY'|title }} Billing
+                    {{ subscription.billing_cycle|default:'MONTHLY'|title }} Billing Cycle
                 </span>
             </div>
 
-            <h1 id="currentPlanName" style="font-size: 1.85rem; font-weight: 800; color: #0f172a; margin: 0 0 8px; letter-spacing: -0.5px;">
-                {{ current_plan.name|default:subscription.plan_name|default:'Professional Tier' }}
+            <h1 style="font-size: 1.85rem; font-weight: 800; color: #0f172a; margin: 0 0 8px; letter-spacing: -0.5px;">
+                {{ current_plan.name|default:subscription.plan_name }}
             </h1>
 
             <p style="font-size: 13.5px; color: #64748b; margin: 0 0 16px; line-height: 1.5;">
-                {{ current_plan.description|default:'Comprehensive package for multi-counter dine-ins, takeaway, KDS, bar operations, and multi-outlet inventory.' }}
+                {{ current_plan.description|default:'Active cloud subscription tier synchronized from Master Admin.' }}
             </p>
 
-            <!-- Price Tag Strip -->
-            <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
-                <span style="font-size: 2.2rem; font-weight: 800; color: #0f172a; letter-spacing: -0.5px;">
-                    {{ subscription.currency|default:'₹' }}<span id="currentPlanPrice">{{ subscription.monthly_fee|default:2999 }}</span>
-                </span>
-                <span style="font-size: 14px; color: #64748b; font-weight: 500;">/ month (recurring)</span>
-                
-                <span style="font-size: 12.5px; color: #64748b; margin-left: 10px; padding-left: 12px; border-left: 1.5px solid #e2e8f0;">
-                    Setup Fee Paid: <strong style="color: #0f172a;">{{ subscription.currency|default:'₹' }}{{ subscription.setup_fee|default:25999 }}</strong>
-                </span>
-                <span style="font-size: 12.5px; color: #64748b; padding-left: 12px; border-left: 1.5px solid #e2e8f0;">
-                    Branch Quota: <strong style="color: #0f172a;">{{ branch_count }}/{{ max_branches }} Outlets</strong>
-                </span>
-            </div>
-
             <!-- Renewal Progress Bar -->
-            <div style="background: #f8fafc; padding: 12px 16px; border-radius: 10px; border: 1px solid #e2e8f0;">
+            <div style="background: #f8fafc; padding: 14px 18px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 18px;">
                 <div style="display: flex; justify-content: space-between; font-size: 12px; color: #64748b; margin-bottom: 6px;">
                     <span>30-Day Billing Cycle Progress</span>
                     <strong style="color: #0f172a;" id="progressLabel">{{ cycle_progress_percent }}% elapsed</strong>
                 </div>
-                <div style="width: 100%; height: 6px; background: #e2e8f0; border-radius: 999px; overflow: hidden;">
+                <div style="width: 100%; height: 7px; background: #e2e8f0; border-radius: 999px; overflow: hidden;">
                     <div id="cycleProgressBar" data-progress="{{ cycle_progress_percent }}" style="width: 0%; height: 100%; background: linear-gradient(90deg, #f26522, #ea580c); border-radius: 999px; transition: width 0.5s ease;"></div>
                 </div>
-                <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: #64748b; margin-top: 6px;">
-                    <span>Next Renewal: <strong style="color: #0f172a;" id="nextBillingDateText">{{ formatted_next_billing|default:'30 Sept 2026' }}</strong></span>
+                <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: #64748b; margin-top: 8px;">
+                    <span>Next Renewal: <strong style="color: #0f172a;">{{ formatted_next_billing|default:'-' }}</strong></span>
                     <span style="color: #10b981; font-weight: 600;"><i class="fa-solid fa-circle-check"></i> Auto-Renewal Enabled</span>
                 </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button type="button" class="btn" data-plan="{{ current_plan.name|default:'' }}" data-cycle="{{ subscription.billing_cycle|default:'MONTHLY' }}" onclick="openUpgradeModal(this.dataset.plan, this.dataset.cycle)" style="font-size: 13px; padding: 9px 16px;">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Extend / Upgrade Plan
+                </button>
+                {% if invoices %}
+                <button type="button" class="btn secondary" onclick="viewLatestInvoice()" style="font-size: 13px; padding: 9px 16px;">
+                    <i class="fa-solid fa-file-invoice"></i> View Latest Receipt
+                </button>
+                {% endif %}
             </div>
         </div>
 
@@ -261,7 +375,7 @@
                         <span class="pulse-dot pulse-orange"></span>
                         <span style="font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #cbd5e1;">Live Renewal Clock</span>
                     </div>
-                    <span style="font-size: 11px; color: #94a3b8; font-weight: 600;">Auto-syncs via API</span>
+                    <span style="font-size: 11px; color: #94a3b8; font-weight: 600;">Central SaaS Sync</span>
                 </div>
 
                 <!-- 4 Clock Digits Grid -->
@@ -269,118 +383,48 @@
                     <!-- Days -->
                     <div class="countdown-digit-box">
                         <div id="timerDays" class="countdown-num">
-                            {{ subscription.days_remaining|default:'28' }}
+                            {{ subscription.days_remaining|default:'0' }}
                         </div>
                         <div class="countdown-label">Days</div>
                     </div>
                     <!-- Hours -->
                     <div class="countdown-digit-box">
                         <div id="timerHours" class="countdown-num">
-                            {{ subscription.hours_remaining|default:'12' }}
+                            {{ subscription.hours_remaining|default:'0' }}
                         </div>
                         <div class="countdown-label">Hours</div>
                     </div>
                     <!-- Minutes -->
                     <div class="countdown-digit-box">
                         <div id="timerMinutes" class="countdown-num">
-                            {{ subscription.minutes_remaining|default:'00' }}
+                            {{ subscription.minutes_remaining|default:'0' }}
                         </div>
                         <div class="countdown-label">Mins</div>
                     </div>
                     <!-- Seconds -->
                     <div class="countdown-digit-box accent">
                         <div id="timerSeconds" class="countdown-num accent">
-                            {{ subscription.seconds_remaining|default:'00' }}
+                            {{ subscription.seconds_remaining|default:'0' }}
                         </div>
                         <div class="countdown-label" style="color: #fdba74;">Secs</div>
                     </div>
                 </div>
 
-                <p id="timerStatusText" style="font-size: 11.5px; color: #94a3b8; margin: 0 0 14px; text-align: center;">
-                    Subscription is active. Next cycle will renew on <strong>{{ formatted_next_billing|default:'30 Sept 2026' }}</strong>.
+                <p id="timerStatusText" style="font-size: 11.5px; color: #94a3b8; margin: 0; text-align: center;">
+                    Subscription is active. Next cycle will renew on <strong>{{ formatted_next_billing|default:'-' }}</strong>.
                 </p>
-
-                <div style="display: flex; gap: 8px;">
-                    <button type="button" class="btn" data-plan="{{ current_plan.name|default:'Professional Tier' }}" data-cycle="{{ subscription.billing_cycle|default:'MONTHLY' }}" onclick="openUpgradeModal(this.dataset.plan, this.dataset.cycle)" style="flex: 1; padding: 8px 12px; font-size: 12.5px;">
-                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Extend / Upgrade
-                    </button>
-                    <button type="button" class="btn secondary" onclick="viewLatestInvoice()" style="padding: 8px 12px; font-size: 12.5px; background: rgba(255,255,255,0.08); color: white; border-color: rgba(255,255,255,0.15);">
-                        <i class="fa-solid fa-file-invoice"></i> Receipt
-                    </button>
-                </div>
             </div>
         </div>
-    </div>
-</div>
-
-<!-- ── 4 Key Financial & License Stat Cards ───────────────────────────────── -->
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px;">
-    
-    <!-- Card 1: Monthly Recurring Fee -->
-    <div class="card" style="margin: 0; padding: 18px 20px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-            <span style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px;">Monthly Recurring (MRR)</span>
-            <div style="width: 32px; height: 32px; border-radius: 8px; background: #ecfdf5; color: #10b981; display: flex; align-items: center; justify-content: center; font-size: 14px;">
-                <i class="fa-solid fa-credit-card"></i>
-            </div>
-        </div>
-        <div style="font-size: 1.6rem; font-weight: 800; color: #0f172a;" id="statMRR">
-            {{ subscription.currency|default:'₹' }}{{ subscription.monthly_fee|default:2999 }}
-        </div>
-        <p style="font-size: 11.5px; color: #64748b; margin: 4px 0 0;">Active recurring SaaS contract</p>
-    </div>
-
-    <!-- Card 2: One-Time Setup Fee -->
-    <div class="card" style="margin: 0; padding: 18px 20px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-            <span style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px;">One-Time Setup</span>
-            <div style="width: 32px; height: 32px; border-radius: 8px; background: #eff6ff; color: #3b82f6; display: flex; align-items: center; justify-content: center; font-size: 14px;">
-                <i class="fa-solid fa-shield-halved"></i>
-            </div>
-        </div>
-        <div style="font-size: 1.6rem; font-weight: 800; color: #0f172a;" id="statSetup">
-            {{ subscription.currency|default:'₹' }}{{ subscription.setup_fee|default:25999 }}
-        </div>
-        <p style="font-size: 11.5px; color: #64748b; margin: 4px 0 0;">Cloud onboarding & setup</p>
-    </div>
-
-    <!-- Card 3: Branch Outlets Allowed -->
-    <div class="card" style="margin: 0; padding: 18px 20px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-            <span style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px;">Branch Outlets Quota</span>
-            <div style="width: 32px; height: 32px; border-radius: 8px; background: #faf5ff; color: #a855f7; display: flex; align-items: center; justify-content: center; font-size: 14px;">
-                <i class="fa-solid fa-store"></i>
-            </div>
-        </div>
-        <div style="font-size: 1.6rem; font-weight: 800; color: #0f172a;" id="statBranches">
-            {{ branch_count }} / {{ max_branches }} <span style="font-size: 13px; font-weight: 600; color: #64748b;">Outlets</span>
-        </div>
-        <p style="font-size: 11.5px; color: #64748b; margin: 4px 0 0;">{{ branch_usage_percent }}% quota utilized</p>
-    </div>
-
-    <!-- Card 4: Master License Key -->
-    <div class="card" style="margin: 0; padding: 18px 20px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-            <span style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px;">License Key</span>
-            <div style="width: 32px; height: 32px; border-radius: 8px; background: #fff7ed; color: #f26522; display: flex; align-items: center; justify-content: center; font-size: 14px;">
-                <i class="fa-solid fa-key"></i>
-            </div>
-        </div>
-        <div style="font-size: 1.15rem; font-weight: 800; color: #0f172a; font-family: monospace;" id="statLicense">
-            {{ client_info.license_key|default:restaurant.master_license_key|default:'LIC-SHA-13831' }}
-        </div>
-        <p style="font-size: 11.5px; color: #10b981; margin: 4px 0 0; font-weight: 600;">
-            <i class="fa-solid fa-circle-check"></i> Cryptographically Verified
-        </p>
     </div>
 </div>
 
 <!-- ── Included Features & Entitlements Grid ──────────────────────────────── -->
+{% if current_plan.features %}
 <div class="card" style="margin-bottom: 24px;">
     <div class="hd">
         <div style="display: flex; align-items: center; gap: 8px;">
             <i class="fa-solid fa-list-check" style="color: var(--primary);"></i>
-            <span>Active Entitlements in {{ current_plan.name|default:'Professional Tier' }}</span>
+            <span>Active Entitlements in {{ current_plan.name|default:subscription.plan_name }}</span>
         </div>
         <span class="badge" style="background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; font-size: 11.5px; font-weight: 700;">
             <i class="fa-solid fa-check"></i> All Features Unlocked
@@ -395,25 +439,14 @@
                 </div>
                 <span style="font-size: 13px; font-weight: 600; color: #334155;">{{ feature }}</span>
             </div>
-            {% empty %}
-            <div style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
-                <div style="width: 22px; height: 22px; border-radius: 50%; background: #ecfdf5; color: #10b981; display: flex; align-items: center; justify-content: center; font-size: 11px;"><i class="fa-solid fa-check"></i></div>
-                <span style="font-size: 13px; font-weight: 600; color: #334155;">Multi-counter KDS & POS Terminal</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
-                <div style="width: 22px; height: 22px; border-radius: 50%; background: #ecfdf5; color: #10b981; display: flex; align-items: center; justify-content: center; font-size: 11px;"><i class="fa-solid fa-check"></i></div>
-                <span style="font-size: 13px; font-weight: 600; color: #334155;">Inventory & Bar Stock Control</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
-                <div style="width: 22px; height: 22px; border-radius: 50%; background: #ecfdf5; color: #10b981; display: flex; align-items: center; justify-content: center; font-size: 11px;"><i class="fa-solid fa-check"></i></div>
-                <span style="font-size: 13px; font-weight: 600; color: #334155;">Multi-Branch Super Analytics</span>
-            </div>
             {% endfor %}
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- ── Available Plans Matrix & Upgrade Comparison ────────────────────────── -->
+{% if available_plans %}
 <div class="card" style="margin-bottom: 24px;">
     <div class="hd">
         <div style="display: flex; align-items: center; gap: 8px;">
@@ -487,21 +520,12 @@
                     {% endif %}
                 </div>
             </div>
-            {% empty %}
-            <!-- Fallback Tiers -->
-            <div class="plan-pricing-card current">
-                <div>
-                    <h3 style="font-size: 1.25rem; font-weight: 800; color: #0f172a; margin-bottom: 8px;">Professional Tier</h3>
-                    <div style="font-size: 1.75rem; font-weight: 800; color: #0f172a; margin-bottom: 8px;">₹2,999 <span style="font-size: 13px; color: #64748b;">/ mo</span></div>
-                    <p style="font-size: 12.5px; color: #64748b;">Active Tier with up to 3 outlets included.</p>
-                </div>
-                <button type="button" class="btn secondary" disabled style="width: 100%;">Active Plan</button>
-            </div>
             {% endfor %}
 
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- ── Invoices & Billing Ledger ──────────────────────────────────────────── -->
 <div class="card" style="margin-bottom: 24px;">
@@ -572,6 +596,69 @@
     </div>
 </div>
 
+{% else %}
+<!-- ── Master Admin Cloud Disconnected Clean State ────────────────────────── -->
+<div class="billing-hero-card" style="padding: 40px 32px; text-align: center;">
+    <div style="width: 68px; height: 68px; border-radius: 50%; background: #fffbeb; color: #d97706; display: flex; align-items: center; justify-content: center; font-size: 30px; margin: 0 auto 20px; border: 1px solid #fde68a; box-shadow: 0 4px 12px rgba(217, 119, 6, 0.1);">
+        <i class="fa-solid fa-cloud-slash"></i>
+    </div>
+    <h2 style="font-size: 1.55rem; font-weight: 800; color: #0f172a; margin: 0 0 10px;">Master Admin Cloud Not Connected</h2>
+    <p style="font-size: 14px; color: #64748b; max-width: 640px; margin: 0 auto 24px; line-height: 1.6;">
+        This Super Admin instance is currently not connected to the Master Admin cloud.
+        Active subscription plans, tier entitlements, renewal countdowns, and official tax invoices are managed directly on the Master Admin and will automatically appear here once synchronized.
+    </p>
+
+    <div style="display: inline-flex; gap: 12px; margin-bottom: 36px; flex-wrap: wrap; justify-content: center;">
+        <button type="button" class="btn" onclick="syncMasterBilling()" style="font-size: 13.5px; padding: 10px 20px;">
+            <i class="fa-solid fa-rotate"></i> Sync / Check Master Admin Connection
+        </button>
+        <button type="button" class="btn secondary" onclick="openUpgradeModal('', 'MONTHLY')" style="font-size: 13.5px; padding: 10px 20px;">
+            <i class="fa-solid fa-paper-plane"></i> Submit Plan Enquiry / Activation Request
+        </button>
+    </div>
+
+    <!-- Local Business Information Summary (Pure Live DB) -->
+    <div style="max-width: 820px; margin: 0 auto; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 22px 26px; text-align: left;">
+        <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 18px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-building" style="color: var(--primary);"></i>
+                <span style="font-size: 14px; font-weight: 700; color: #0f172a;">Local Registered Business Profile</span>
+            </div>
+            <span style="font-size: 11.5px; font-weight: 700; color: #059669; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 2px 10px; border-radius: 12px;">
+                Local Database Active
+            </span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px;">
+            <div>
+                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Business / Trade Name</div>
+                <div style="font-size: 15px; font-weight: 800; color: #0f172a;">{{ restaurant.trade_name|default:restaurant.name|default:'No Business Registered' }}</div>
+            </div>
+            <div>
+                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Legal Registered Entity</div>
+                <div style="font-size: 13.5px; font-weight: 600; color: #334155;">{{ restaurant.legal_name|default:'-' }}</div>
+            </div>
+            <div>
+                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Configured Outlets</div>
+                <div style="font-size: 13.5px; font-weight: 700; color: #334155;">{{ branch_count }} Active Outlet(s)</div>
+            </div>
+            <div>
+                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Domain Identifier / Slug</div>
+                <div style="font-size: 13.5px; font-family: monospace; font-weight: 700; color: #334155;">{{ restaurant.slug|default:'-' }}</div>
+            </div>
+            <div>
+                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Master License Key</div>
+                <div style="font-size: 13px; font-family: monospace; font-weight: 600; color: #64748b;">{{ restaurant.master_license_key|default:'Not Assigned (Offline)' }}</div>
+            </div>
+            <div>
+                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Contact Email & Phone</div>
+                <div style="font-size: 13px; color: #334155;">{{ restaurant.email|default:'-' }} &bull; {{ restaurant.phone|default:'-' }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- ── Upgrade / Plan Request Modal ───────────────────────────────────────── -->
 <div id="upgradeModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 9999; align-items: center; justify-content: center; padding: 20px;">
     <div style="background: #ffffff; width: 100%; max-width: 520px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2); overflow: hidden; animation: modalFadeIn 0.2s ease;">
@@ -579,7 +666,7 @@
         <div style="padding: 20px 24px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between;">
             <div style="display: flex; align-items: center; gap: 8px;">
                 <i class="fa-solid fa-wand-magic-sparkles" style="color: var(--primary);"></i>
-                <h3 style="margin: 0; font-size: 1.15rem; font-weight: 800; color: #0f172a;">Request Plan Upgrade</h3>
+                <h3 style="margin: 0; font-size: 1.15rem; font-weight: 800; color: #0f172a;">Plan Upgrade / Activation Request</h3>
             </div>
             <button type="button" onclick="closeUpgradeModal()" style="background: none; border: none; font-size: 18px; color: #94a3b8; cursor: pointer;">
                 <i class="fa-solid fa-xmark"></i>
@@ -590,9 +677,9 @@
             <div style="margin-bottom: 18px;">
                 <label style="display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 6px;">Select Requested Plan:</label>
                 <select id="modalPlanSelect" required style="width: 100%; padding: 10px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 14px; color: #0f172a;">
-                    <option value="Starter Essential">Starter Essential (₹1,499/mo &bull; 1 Outlet)</option>
-                    <option value="Professional Tier" selected>Professional Tier (₹2,999/mo &bull; 3 Outlets)</option>
-                    <option value="Enterprise Suite">Enterprise Suite (₹6,999/mo &bull; 10 Outlets)</option>
+                    <option value="Starter Essential">Starter Essential (1 Outlet)</option>
+                    <option value="Professional Tier" selected>Professional Tier (Up to 3 Outlets)</option>
+                    <option value="Enterprise Suite">Enterprise Suite (Unlimited / Multi-Branch)</option>
                 </select>
             </div>
 
@@ -605,25 +692,25 @@
                     </label>
                     <label style="display: flex; align-items: center; gap: 8px; padding: 10px; border: 1.5px solid #cbd5e1; border-radius: 8px; cursor: pointer; font-size: 13px;">
                         <input type="radio" name="modalBillingCycle" value="YEARLY">
-                        <span>Yearly (15% Off)</span>
+                        <span>Yearly Cycle</span>
                     </label>
                 </div>
             </div>
 
             <div style="margin-bottom: 18px;">
                 <label style="display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 6px;">Contact Phone for Verification:</label>
-                <input type="text" id="modalContactPhone" value="{{ restaurant.phone|default:'8118898247' }}" required style="width: 100%; padding: 10px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 14px;">
+                <input type="text" id="modalContactPhone" value="{{ restaurant.phone|default:'' }}" required style="width: 100%; padding: 10px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 14px;">
             </div>
 
             <div style="margin-bottom: 24px;">
-                <label style="display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 6px;">Special Notes / Additional Outlets Request:</label>
-                <textarea id="modalNotes" rows="2" placeholder="e.g. Need 2 additional counter terminals and bar VAT support..." style="width: 100%; padding: 10px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 13px;"></textarea>
+                <label style="display: block; font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 6px;">Special Notes / Requirements:</label>
+                <textarea id="modalNotes" rows="2" placeholder="e.g. Additional counter terminals or multi-outlet configuration..." style="width: 100%; padding: 10px 12px; border: 1.5px solid #cbd5e1; border-radius: 8px; font-size: 13px;"></textarea>
             </div>
 
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
                 <button type="button" class="btn secondary" onclick="closeUpgradeModal()">Cancel</button>
                 <button type="submit" id="btnSubmitUpgrade" class="btn">
-                    <i class="fa-solid fa-paper-plane"></i> Submit to Master Admin
+                    <i class="fa-solid fa-paper-plane"></i> Submit Request
                 </button>
             </div>
         </form>
@@ -645,19 +732,19 @@
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
                 <div>
                     <h2 style="font-size: 1.3rem; font-weight: 800; color: var(--primary); margin: 0;">MasterRestro Cloud</h2>
-                    <p style="font-size: 11.5px; color: #64748b; margin: 2px 0 0;">Hospitality Cloud Technologies Ltd.<br>GSTIN: 08AAACR9821K1Z4</p>
+                    <p style="font-size: 11.5px; color: #64748b; margin: 2px 0 0;">Hospitality Cloud Technologies Ltd.<br>Enterprise Central Billing</p>
                 </div>
                 <div style="text-align: right;">
                     <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b;">INVOICE NUMBER</div>
-                    <div id="modalInvId" style="font-family: monospace; font-weight: 800; font-size: 14px; color: #0f172a;">INV-2026-001</div>
-                    <div id="modalInvDate" style="font-size: 12px; color: #64748b; margin-top: 2px;">30 Sept 2026</div>
+                    <div id="modalInvId" style="font-family: monospace; font-weight: 800; font-size: 14px; color: #0f172a;">-</div>
+                    <div id="modalInvDate" style="font-size: 12px; color: #64748b; margin-top: 2px;">-</div>
                 </div>
             </div>
 
             <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
                 <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 2px;">BILLED TO:</div>
-                <div style="font-weight: 700; font-size: 13.5px; color: #0f172a;">{{ restaurant.name }}</div>
-                <div style="font-size: 12px; color: #64748b;">{{ restaurant.address_line_1|default:restaurant.city }}, {{ restaurant.state }} &bull; License: {{ client_info.license_key|default:restaurant.master_license_key|default:'LIC-SHA-13831' }}</div>
+                <div style="font-weight: 700; font-size: 13.5px; color: #0f172a;">{{ restaurant.trade_name|default:restaurant.name }}</div>
+                <div style="font-size: 12px; color: #64748b;">{{ restaurant.address_line_1|default:restaurant.city }}, {{ restaurant.state }} &bull; License: {{ client_info.license_key|default:restaurant.master_license_key|default:'Not Assigned' }}</div>
             </div>
 
             <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px;">
@@ -670,11 +757,11 @@
                 <tbody>
                     <tr style="border-bottom: 1px solid #f1f5f9;">
                         <td style="padding: 10px 0;">
-                            <strong id="modalInvTitle">Professional Tier Cloud Subscription</strong><br>
-                            <span style="font-size: 11.5px; color: #94a3b8;">Includes 3 outlets, live telemetry, and KDS multi-counter</span>
+                            <strong id="modalInvTitle">-</strong><br>
+                            <span style="font-size: 11.5px; color: #94a3b8;">Central SaaS Cloud Infrastructure Subscription</span>
                         </td>
                         <td id="modalInvAmount" style="padding: 10px 0; text-align: right; font-weight: 800; color: #0f172a;">
-                            ₹2,999
+                            -
                         </td>
                     </tr>
                 </tbody>
@@ -682,14 +769,14 @@
                     <tr>
                         <td style="padding: 12px 0; font-weight: 800; font-size: 14px;">Total Paid:</td>
                         <td id="modalInvTotal" style="padding: 12px 0; text-align: right; font-weight: 800; font-size: 16px; color: #10b981;">
-                            ₹2,999
+                            -
                         </td>
                     </tr>
                 </tfoot>
             </table>
 
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 12px;">
-                <span>Payment Mode: <strong id="modalInvMethod" style="color: #0f172a;">Direct Auto-Debit</strong></span>
+                <span>Payment Mode: <strong id="modalInvMethod" style="color: #0f172a;">Central Cloud Settlement</strong></span>
                 <span id="modalInvBadge" style="font-weight: 700; color: #10b981;">PAID &bull; VERIFIED</span>
             </div>
         </div>
@@ -705,19 +792,21 @@
 
 <!-- ── Real-Time Clock & AJAX Logic ──────────────────────────────────────── -->
 <script>
-    let totalSecondsRemaining = parseInt('{{ total_seconds_remaining|default:2419200 }}', 10) || 2419200;
+    let totalSecondsRemaining = parseInt('{{ total_seconds_remaining|default:0 }}', 10) || 0;
     let timerInterval = null;
 
     function startLiveCountdown() {
         if (timerInterval) clearInterval(timerInterval);
+        const daysElem = document.getElementById('timerDays');
+        if (!daysElem) return;
 
         function updateDisplay() {
             if (totalSecondsRemaining <= 0) {
-                document.getElementById('timerDays').textContent = '00';
-                document.getElementById('timerHours').textContent = '00';
-                document.getElementById('timerMinutes').textContent = '00';
-                document.getElementById('timerSeconds').textContent = '00';
-                document.getElementById('timerStatusText').innerHTML = '<span style="color:#ef4444;font-weight:700;">Subscription renewal due. Please extend or renew.</span>';
+                if (document.getElementById('timerDays')) document.getElementById('timerDays').textContent = '00';
+                if (document.getElementById('timerHours')) document.getElementById('timerHours').textContent = '00';
+                if (document.getElementById('timerMinutes')) document.getElementById('timerMinutes').textContent = '00';
+                if (document.getElementById('timerSeconds')) document.getElementById('timerSeconds').textContent = '00';
+                if (document.getElementById('timerStatusText')) document.getElementById('timerStatusText').innerHTML = '<span style="color:#ef4444;font-weight:700;">Subscription renewal due. Please extend or renew.</span>';
                 return;
             }
 
@@ -726,10 +815,10 @@
             const minutes = Math.floor((totalSecondsRemaining % 3600) / 60);
             const seconds = Math.floor(totalSecondsRemaining % 60);
 
-            document.getElementById('timerDays').textContent = String(days).padStart(2, '0');
-            document.getElementById('timerHours').textContent = String(hours).padStart(2, '0');
-            document.getElementById('timerMinutes').textContent = String(minutes).padStart(2, '0');
-            document.getElementById('timerSeconds').textContent = String(seconds).padStart(2, '0');
+            if (document.getElementById('timerDays')) document.getElementById('timerDays').textContent = String(days).padStart(2, '0');
+            if (document.getElementById('timerHours')) document.getElementById('timerHours').textContent = String(hours).padStart(2, '0');
+            if (document.getElementById('timerMinutes')) document.getElementById('timerMinutes').textContent = String(minutes).padStart(2, '0');
+            if (document.getElementById('timerSeconds')) document.getElementById('timerSeconds').textContent = String(seconds).padStart(2, '0');
 
             totalSecondsRemaining--;
         }
@@ -739,53 +828,37 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-        startLiveCountdown();
-        const cycleBar = document.getElementById('cycleProgressBar');
-        if (cycleBar) {
-            cycleBar.style.width = (cycleBar.getAttribute('data-progress') || '0') + '%';
+        if (document.getElementById('timerDays')) {
+            startLiveCountdown();
         }
+        document.querySelectorAll('[data-progress]').forEach(function(bar) {
+            bar.style.width = (bar.getAttribute('data-progress') || '0') + '%';
+        });
     });
 
     async function syncMasterBilling() {
         const btn = document.getElementById('btnSyncMaster');
         const icon = document.getElementById('syncIcon');
         
-        btn.disabled = true;
-        icon.classList.add('fa-spin');
+        if (btn) btn.disabled = true;
+        if (icon) icon.classList.add('fa-spin');
 
         try {
             const resp = await fetch("{% url 'super_admin:api_billing_sync' %}");
             const data = await resp.json();
 
-            if (data.status === 'success') {
-                if (data.subscription && data.subscription.total_seconds_remaining !== undefined) {
-                    totalSecondsRemaining = data.subscription.total_seconds_remaining;
-                    startLiveCountdown();
-                }
-
-                if (data.subscription) {
-                    document.getElementById('statMRR').textContent = (data.subscription.currency || '₹') + data.subscription.monthly_fee;
-                    document.getElementById('statSetup').textContent = (data.subscription.currency || '₹') + data.subscription.setup_fee;
-                    document.getElementById('currentPlanPrice').textContent = data.subscription.monthly_fee;
-                    document.getElementById('currentPlanName').textContent = data.subscription.plan_name;
-                    document.getElementById('nextBillingDateText').textContent = data.subscription.formatted_next_billing || '30 Sept 2026';
-                }
-
-                if (data.client) {
-                    document.getElementById('statLicense').textContent = data.client.license_key;
-                }
-
-                document.getElementById('syncTimestamp').textContent = new Date().toLocaleTimeString();
+            if (data.status === 'success' || data.connection_status === 'CONNECTED') {
                 showToast('Master Admin Synchronized Successfully!', 'success');
+                setTimeout(() => window.location.reload(), 800);
             } else {
-                showToast(data.message || 'Sync completed with fallback data.', 'warning');
+                showToast(data.message || 'Master Admin is offline or unreachable.', 'warning');
             }
         } catch (err) {
             console.error('Sync error:', err);
             showToast('Could not reach Master Admin: ' + err.message, 'error');
         } finally {
-            btn.disabled = false;
-            icon.classList.remove('fa-spin');
+            if (btn) btn.disabled = false;
+            if (icon) icon.classList.remove('fa-spin');
         }
     }
 
@@ -836,7 +909,7 @@
 
             if (data.status === 'success') {
                 closeUpgradeModal();
-                showToast(data.message || 'Upgrade request registered on MasterPanel!', 'success');
+                showToast(data.message || 'Upgrade request registered on Master Admin!', 'success');
             } else {
                 showToast(data.message || 'Error submitting request.', 'error');
             }
@@ -844,7 +917,7 @@
             showToast('Network error contacting Master Admin: ' + err.message, 'error');
         } finally {
             btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit to Master Admin';
+            btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Request';
         }
     }
 
@@ -864,15 +937,12 @@
     }
 
     function viewLatestInvoice() {
-        openInvoiceReceiptModal(
-            'INV-LICSHA13831-002',
-            '{{ current_plan.name|default:"Professional Tier" }} - Monthly Cloud Subscription',
-            '{{ subscription.monthly_fee|default:2999 }}',
-            '{{ subscription.currency|default:"₹" }}',
-            '{{ formatted_next_billing|default:"30 Sept 2026" }}',
-            'PAID',
-            'MasterRestro Auto-Debit'
-        );
+        const invRow = document.querySelector('tr[onmouseover]');
+        if (!invRow) return;
+        const viewBtn = invRow.querySelector('button[onclick*="openInvoiceReceiptModal"]');
+        if (viewBtn) {
+            viewBtn.click();
+        }
     }
 
     function printInvoiceArea() {

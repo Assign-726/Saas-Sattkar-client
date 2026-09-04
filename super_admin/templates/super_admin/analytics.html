@@ -145,6 +145,27 @@
         border-radius: 999px;
         transition: width 0.4s ease;
     }
+
+    /* 2-Column Responsive Grid for Side-by-Side Analytics Charts & Cards */
+    .analytics-grid-2col {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 20px !important;
+        margin-bottom: 24px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .analytics-grid-2col > .card {
+        grid-column: auto !important;
+        width: 100% !important;
+        margin: 0 !important;
+        box-sizing: border-box !important;
+    }
+    @media (max-width: 992px) {
+        .analytics-grid-2col {
+            grid-template-columns: 1fr !important;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -192,7 +213,7 @@
                 <a href="?branch_id={{ b.id }}&range={{ range_preset }}&start_date={{ start_date_str }}&end_date={{ end_date_str }}" class="branch-tab {% if selected_branch and selected_branch.id == b.id %}active{% endif %}">
                     <i class="fa-solid fa-shop"></i>
                     <span>{{ b.name }}</span>
-                    {% if b.serves_alcohol %}
+                    {% if ENABLE_ALCOHOL_VAT and b.serves_alcohol %}
                     <span style="font-size: 10px; color: #fbbf24;" title="Serves Alcohol / State VAT"><i class="fa-solid fa-martini-glass"></i></span>
                     {% endif %}
                 </a>
@@ -380,7 +401,7 @@
                         <div style="font-size: 12px; color: #64748b;">
                             {{ bp.branch.city|default:restaurant.city }}, {{ bp.branch.state|default:restaurant.state }} &bull; {{ bp.branch.phone|default:restaurant.phone }}
                         </div>
-                        {% if bp.branch.serves_alcohol %}
+                        {% if ENABLE_ALCOHOL_VAT and bp.branch.serves_alcohol %}
                         <span style="font-size: 10px; font-weight: 700; color: #d97706; background: #fef3c7; padding: 1px 6px; border-radius: 4px; display: inline-block; margin-top: 3px;">
                             <i class="fa-solid fa-martini-glass"></i> Alcohol & State VAT
                         </span>
@@ -448,10 +469,9 @@
 </div>
 
 <!-- ── Visual Analytics Grid (Interactive Chart.js) ───────────────────────── -->
+<!-- Chart 1: Daily Revenue Trend (Line Chart - Full Width Hero) -->
 <div style="display: grid; grid-template-columns: repeat(12, 1fr); gap: 20px; margin-bottom: 24px;">
-    
-    <!-- Chart 1: Daily Revenue Trend (Line Chart) -->
-    <div class="card" style="grid-column: span 12 / span 8; margin: 0;">
+    <div class="card" style="grid-column: span 12; margin: 0;">
         <div class="hd">
             <div style="display: flex; align-items: center; gap: 8px;">
                 <i class="fa-solid fa-chart-area" style="color: var(--primary);"></i>
@@ -463,38 +483,43 @@
             <canvas id="trendChart"></canvas>
         </div>
     </div>
+</div>
 
+<!-- ── Donut Distribution Charts Side-by-Side (2 Equal Columns) ───────────── -->
+<div class="analytics-grid-2col">
+    
     <!-- Chart 2: Branch Contribution Donut Chart -->
-    <div class="card" style="grid-column: span 12 / span 4; margin: 0;">
+    <div class="card" style="margin: 0;">
         <div class="hd">
             <div style="display: flex; align-items: center; gap: 8px;">
                 <i class="fa-solid fa-chart-pie" style="color: var(--primary);"></i>
                 <span>Revenue Share by Branch</span>
             </div>
+            <span style="font-size: 12px; color: #64748b;">Contribution Split</span>
         </div>
         <div style="padding: 20px; height: 320px; position: relative; display: flex; align-items: center; justify-content: center;">
             <canvas id="branchDonutChart"></canvas>
         </div>
     </div>
-</div>
 
-<div style="display: grid; grid-template-columns: repeat(12, 1fr); gap: 20px; margin-bottom: 24px;">
-    
     <!-- Chart 3: Payment Modes Donut -->
-    <div class="card" style="grid-column: span 12 / span 4; margin: 0;">
+    <div class="card" style="margin: 0;">
         <div class="hd">
             <div style="display: flex; align-items: center; gap: 8px;">
                 <i class="fa-solid fa-credit-card" style="color: var(--primary);"></i>
                 <span>Payment Mode Distribution</span>
             </div>
+            <span style="font-size: 12px; color: #64748b;">Settlement Split</span>
         </div>
-        <div style="padding: 20px; height: 280px; position: relative; display: flex; align-items: center; justify-content: center;">
+        <div style="padding: 20px; height: 320px; position: relative; display: flex; align-items: center; justify-content: center;">
             <canvas id="paymentChart"></canvas>
         </div>
     </div>
+</div>
 
-    <!-- Chart 4: 24-Hour Peak Rush Traffic -->
-    <div class="card" style="grid-column: span 12 / span 8; margin: 0;">
+<!-- Chart 4: 24-Hour Peak Rush Traffic (Full Width) -->
+<div style="display: grid; grid-template-columns: repeat(12, 1fr); gap: 20px; margin-bottom: 24px;">
+    <div class="card" style="grid-column: span 12; margin: 0;">
         <div class="hd">
             <div style="display: flex; align-items: center; gap: 8px;">
                 <i class="fa-solid fa-clock" style="color: var(--primary);"></i>
@@ -509,10 +534,10 @@
 </div>
 
 <!-- ── Top 10 Selling Menu Items & Branch Admin Staff Activity ────────────── -->
-<div style="display: grid; grid-template-columns: repeat(12, 1fr); gap: 20px; margin-bottom: 24px;">
+<div class="analytics-grid-2col">
     
     <!-- Top Items -->
-    <div class="card" style="grid-column: span 12 / span 6; margin: 0;">
+    <div class="card" style="margin: 0;">
         <div class="hd">
             <div style="display: flex; align-items: center; gap: 8px;">
                 <i class="fa-solid fa-fire-flame-curved" style="color: #ea580c;"></i>
@@ -548,7 +573,7 @@
     </div>
 
     <!-- Branch Admins Roster -->
-    <div class="card" style="grid-column: span 12 / span 6; margin: 0;">
+    <div class="card" style="margin: 0;">
         <div class="hd">
             <div style="display: flex; align-items: center; gap: 8px;">
                 <i class="fa-solid fa-users-gear" style="color: var(--primary);"></i>

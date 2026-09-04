@@ -8,10 +8,16 @@
 {% endblock %}
 
 {% block header_actions %}
-<a class="btn secondary small" href="{% url 'super_admin:dashboard' %}">
-  <i class="fa-solid fa-arrow-left"></i>
-  <span>Back to Dashboard</span>
-</a>
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+  <button type="button" class="btn primary small" onclick="triggerQuickSave(event)" style="display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(242, 108, 13, 0.3);">
+    <i class="fa-solid fa-floppy-disk"></i>
+    <span>{% if is_edit %}Save Changes{% else %}Save Progress{% endif %}</span>
+  </button>
+  <a class="btn secondary small" href="{% url 'super_admin:dashboard' %}">
+    <i class="fa-solid fa-arrow-left"></i>
+    <span>Back to Dashboard</span>
+  </a>
+</div>
 {% endblock %}
 
 {% block content %}
@@ -462,6 +468,28 @@
     background-color: var(--brand-primary-hover);
   }
 
+  .btn-save-step {
+    background: #0f172a;
+    color: #ffffff;
+    border: 1px solid #0f172a;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.15s ease;
+  }
+
+  .btn-save-step:hover {
+    background: #1e293b;
+    border-color: #1e293b;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);
+  }
+
   .btn-back {
     background: transparent;
     border: 1px solid #cbd5e1;
@@ -551,7 +579,7 @@
 
   <!-- Main Content Card -->
   <div class="onboard-card">
-    <form method="post" id="onboard-form" action="{% if is_edit and restaurant %}{% url 'super_admin:restaurant_edit' restaurant.id %}{% else %}{% url 'super_admin:onboard' %}{% endif %}">
+    <form method="post" id="onboard-form" onsubmit="return handleFormSubmit(event)" action="{% if is_edit and restaurant %}{% url 'super_admin:restaurant_edit' restaurant.id %}{% else %}{% url 'super_admin:onboard' %}{% endif %}">
       {% csrf_token %}
       <input type="hidden" name="branches_json" id="branches_json" value="[]">
 
@@ -604,7 +632,7 @@
           <!-- Legal Name -->
           <div class="form-group">
             <label class="form-label">Legal Name <span class="req">*</span></label>
-            <input type="text" class="form-input" name="legal_name" id="id_legal_name" placeholder="Sharma Hospitality Pvt Ltd" value="{{ form.legal_name.value|default:'' }}">
+            <input type="text" class="form-input" name="legal_name" id="id_legal_name" placeholder="e.g. Food Haven Private Limited" value="{{ form.legal_name.value|default:'' }}">
             <span class="form-hint">As per PAN</span>
             {% if form.legal_name.errors %}
               <span class="form-error">{{ form.legal_name.errors.0 }}</span>
@@ -648,22 +676,18 @@
 
           <!-- CIN / LLPIN (Conditional field based on Business Type) -->
           <div class="form-group hidden" id="cin_container">
-            <label class="form-label" id="cin_label">CIN <span class="req">*</span></label>
+            <label class="form-label" id="cin_label">CIN / LLPIN</label>
             <input type="text" class="form-input" name="cin_llpin" id="id_cin_llpin" placeholder="U15400RJ2020PTC000000" style="text-transform: uppercase;" value="{{ form.cin_llpin.value|default:'' }}">
-            <span class="form-hint" id="cin_hint">Corporate Identification Number (required)</span>
+            <span class="form-hint" id="cin_hint">Corporate Identification Number</span>
             {% if form.cin_llpin.errors %}
-              <span class="form-error" id="id_cin_error">{{ form.cin_llpin.errors.0 }}</span>
-            {% else %}
-              <span class="form-error hidden" id="id_cin_error"></span>
+              <span class="form-error">{{ form.cin_llpin.errors.0 }}</span>
             {% endif %}
           </div>
-
 
           <!-- Address Line 1 -->
           <div class="form-group">
             <label class="form-label">Address Line 1 <span class="req">*</span></label>
-            <input type="text" class="form-input" name="restaurant_address_line_1" id="id_restaurant_address_line_1" placeholder="12, MI Road" value="{{ form.restaurant_address_line_1.value|default:'' }}">
-            <span class="form-hint">Building / shop no., street</span>
+            <input type="text" class="form-input" name="restaurant_address_line_1" id="id_restaurant_address_line_1" placeholder="Building no., street" value="{{ form.restaurant_address_line_1.value|default:'' }}">
             {% if form.restaurant_address_line_1.errors %}
               <span class="form-error">{{ form.restaurant_address_line_1.errors.0 }}</span>
             {% endif %}
@@ -672,8 +696,7 @@
           <!-- Address Line 2 -->
           <div class="form-group">
             <label class="form-label">Address Line 2</label>
-            <input type="text" class="form-input" name="restaurant_address_line_2" id="id_restaurant_address_line_2" placeholder="Near Panch Batti" value="{{ form.restaurant_address_line_2.value|default:'' }}">
-            <span class="form-hint">Area / landmark (optional)</span>
+            <input type="text" class="form-input" name="restaurant_address_line_2" id="id_restaurant_address_line_2" placeholder="Area / Landmark" value="{{ form.restaurant_address_line_2.value|default:'' }}">
             {% if form.restaurant_address_line_2.errors %}
               <span class="form-error">{{ form.restaurant_address_line_2.errors.0 }}</span>
             {% endif %}
@@ -751,9 +774,14 @@
           </div>
         </div>
 
-        <div class="step-actions">
-          <a href="{% url 'super_admin:dashboard' %}" class="btn-back">Cancel</a>
-          <button type="button" class="btn-next" onclick="validateAndGoToStep(2)">Next <i class="fa-solid fa-arrow-right"></i></button>
+        <div class="step-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <a href="{% url 'super_admin:dashboard' %}" class="btn-back"><i class="fa-solid fa-xmark"></i> Cancel</a>
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <button type="button" class="btn-save-step" onclick="triggerQuickSave(event)">
+              <i class="fa-solid fa-floppy-disk"></i> {% if is_edit %}Save Changes{% else %}Save Progress{% endif %}
+            </button>
+            <button type="button" class="btn-next" onclick="validateAndGoToStep(2)">Next <i class="fa-solid fa-arrow-right"></i></button>
+          </div>
         </div>
       </div>
 
@@ -780,9 +808,14 @@
           <i class="fa-solid fa-plus"></i> Add Branch
         </button>
 
-        <div class="step-actions">
+        <div class="step-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
           <button type="button" class="btn-back" onclick="goToStep(1)"><i class="fa-solid fa-arrow-left"></i> Back</button>
-          <button type="button" class="btn-next" onclick="validateAndGoToStep(3)">Next <i class="fa-solid fa-arrow-right"></i></button>
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <button type="button" class="btn-save-step" onclick="triggerQuickSave(event)">
+              <i class="fa-solid fa-floppy-disk"></i> {% if is_edit %}Save Changes{% else %}Save Outlets{% endif %}
+            </button>
+            <button type="button" class="btn-next" onclick="validateAndGoToStep(3)">Next <i class="fa-solid fa-arrow-right"></i></button>
+          </div>
         </div>
       </div>
 
@@ -835,8 +868,8 @@
             <span style="background: #e6f4ea; color: #137333; font-size: 11px; padding: 2px 8px; border-radius: 10px; font-family: sans-serif; font-weight: 600;">Production Document Series Preview</span>
           </div>
           <div style="text-align: center; margin-bottom: 12px;">
-            <div id="preview-trade-name" style="font-size: 18px; font-weight: bold; text-transform: uppercase;">SPICE VILLA</div>
-            <div id="preview-legal-name" style="font-size: 12px; color: #475569;">(Sharma Hospitality Pvt Ltd)</div>
+            <div id="preview-trade-name" style="font-size: 18px; font-weight: bold; text-transform: uppercase;">{{ form.trade_name.value|default:'FOOD HAVEN' }}</div>
+            <div id="preview-legal-name" style="font-size: 12px; color: #475569;">({{ form.legal_name.value|default:'Legal Entity Name' }})</div>
             <div id="preview-address" style="font-size: 11px; color: #64748b; margin-top: 2px;">12, MI Road, Jaipur, Rajasthan - 302001</div>
             <div style="font-size: 11px; margin-top: 4px;">
               <span id="preview-gstin">GSTIN: 08CEXPJ7241H1Z5</span> | <span id="preview-fssai">FSSAI: 12224026000123</span>
@@ -878,9 +911,9 @@
         </div>
 
 
-        <div class="step-actions">
+        <div class="step-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
           <button type="button" class="btn-back" onclick="goToStep(2)"><i class="fa-solid fa-arrow-left"></i> Back</button>
-          <button type="submit" class="btn-submit-final" onclick="prepareSubmit(event)">
+          <button type="submit" class="btn-submit-final" onclick="triggerQuickSave(event)">
             <i class="fa-solid fa-circle-check"></i> {% if is_edit %}Save Changes{% else %}Complete & Create{% endif %}
           </button>
         </div>
@@ -1202,6 +1235,11 @@
       pincode: "",
       fssai_license_no: "",
       serves_alcohol: false,
+      vat_tin: "",
+      excise_license_no: "",
+      vat_beer_rate: "60.00",
+      vat_imfl_rate: "65.00",
+      vat_wine_rate: "60.00",
       gstin: "",
       gst_registration_type: "R5",
       is_hotel_tariff_7500_plus: false,
@@ -1214,17 +1252,25 @@
   }
 
   function removeBranch(idx, event) {
-    if (event) event.stopPropagation();
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
     if (branches.length <= 1) {
-      alert("At least one branch outlet is required.");
+      alert("At least one branch outlet is required. You cannot delete the only outlet.");
       return;
     }
     syncBranchesFromDOM();
+    const branchName = branches[idx]?.name || `Outlet ${idx + 1}`;
+    if (!confirm(`Are you sure you want to remove '${branchName}'? Click 'Save Changes' to permanently save this to the database.`)) {
+      return;
+    }
     branches.splice(idx, 1);
     if (activeBranchIndex >= branches.length) {
       activeBranchIndex = branches.length - 1;
     }
     renderBranchCards();
+    document.getElementById("branches_json").value = JSON.stringify(branches);
   }
 
   function toggleBranchAccordion(idx, event) {
@@ -1273,6 +1319,9 @@
               ${state || 'State'}
             </span>
             ${b.use_company_address ? `<span style="font-size: 11px; color: #059669; font-weight: 600; background: #f0fdf4; padding: 2px 7px; border-radius: 6px; border: 1px solid #bbf7d0;"><i class="fa-solid fa-link"></i> HQ Address</span>` : ''}
+            {% if ENABLE_ALCOHOL_VAT %}
+            ${b.serves_alcohol ? `<span style="font-size: 11px; color: #b45309; font-weight: 600; background: #fffbeb; padding: 2px 7px; border-radius: 6px; border: 1px solid #fde68a;"><i class="fa-solid fa-martini-glass-citrus"></i> Bar / VAT</span>` : ''}
+            {% endif %}
           </div>
 
           <div style="display: flex; align-items: center; gap: 10px; margin-left: auto;">
@@ -1349,6 +1398,7 @@
               <span class="form-hint">Required before printing bills</span>
             </div>
 
+            {% if ENABLE_ALCOHOL_VAT %}
             <!-- Alcohol Service Toggle -->
             <div class="form-group full-width" style="margin-top: 4px;">
               <label class="form-label">Does this outlet serve alcohol?</label>
@@ -1356,9 +1406,49 @@
                 <button type="button" class="toggle-btn ${b.serves_alcohol ? 'active' : ''}" style="flex: 1;" onclick="setBranchAlcohol(${idx}, true)">Yes</button>
                 <button type="button" class="toggle-btn ${!b.serves_alcohol ? 'active' : ''}" style="flex: 1;" onclick="setBranchAlcohol(${idx}, false)">No</button>
               </div>
-              <span class="form-hint">Liquor is billed under state VAT, outside GST</span>
+              <span class="form-hint">${b.serves_alcohol ? 'Liquor is billed under state VAT, outside GST' : 'Pure food service — standard GST applies, State VAT disabled'}</span>
+            </div>
+            {% endif %}
+          </div>
+
+          {% if ENABLE_ALCOHOL_VAT %}
+          <!-- Nested State VAT & Liquor Compliance Box (Only shown when serves_alcohol is True) -->
+          ${b.serves_alcohol ? `
+          <div class="vat-branch-box" style="border: 1.5px dashed #f59e0b; background: #fffbeb; border-radius: 12px; padding: 18px 16px; margin-top: 20px;">
+            <h4 style="margin: 0 0 14px 0; font-size: 15px; font-weight: 700; color: #92400e; display: flex; align-items: center; gap: 6px;">
+              <i class="fa-solid fa-martini-glass-citrus" style="color: #d97706;"></i> Liquor & State VAT Compliance
+            </h4>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label" style="color: #92400e;">State VAT TIN <span class="req">*</span></label>
+                <input type="text" class="form-input" id="branch-vattin-${idx}" placeholder="e.g. 08123456789V" style="text-transform: uppercase; background: #ffffff;" value="${escapeHtml(b.vat_tin || '')}" oninput="branches[${idx}].vat_tin = this.value">
+                <span class="form-hint" style="color: #b45309;">State VAT Registration TIN for Liquor</span>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" style="color: #92400e;">Excise License No. <span class="req">*</span></label>
+                <input type="text" class="form-input" id="branch-excise-${idx}" placeholder="e.g. EX-RAJ-2024-00123" style="text-transform: uppercase; background: #ffffff;" value="${escapeHtml(b.excise_license_no || '')}" oninput="branches[${idx}].excise_license_no = this.value">
+                <span class="form-hint" style="color: #b45309;">Required before billing alcohol</span>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" style="color: #92400e;">Beer VAT Rate (%)</label>
+                <input type="number" step="0.01" class="form-input" id="branch-vatbeer-${idx}" placeholder="60.00" style="background: #ffffff;" value="${escapeHtml(b.vat_beer_rate != null && b.vat_beer_rate !== '' ? b.vat_beer_rate : '60.00')}" oninput="branches[${idx}].vat_beer_rate = this.value">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" style="color: #92400e;">IMFL VAT Rate (%)</label>
+                <input type="number" step="0.01" class="form-input" id="branch-vatimfl-${idx}" placeholder="65.00" style="background: #ffffff;" value="${escapeHtml(b.vat_imfl_rate != null && b.vat_imfl_rate !== '' ? b.vat_imfl_rate : '65.00')}" oninput="branches[${idx}].vat_imfl_rate = this.value">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" style="color: #92400e;">Wine VAT Rate (%)</label>
+                <input type="number" step="0.01" class="form-input" id="branch-vatwine-${idx}" placeholder="60.00" style="background: #ffffff;" value="${escapeHtml(b.vat_wine_rate != null && b.vat_wine_rate !== '' ? b.vat_wine_rate : '60.00')}" oninput="branches[${idx}].vat_wine_rate = this.value">
+              </div>
             </div>
           </div>
+          ` : ''}
+          {% endif %}
 
           <!-- Nested GST Box -->
           <div class="gst-branch-box" style="border: 1.5px dashed #86efac; background: #f0fdf4; border-radius: 12px; padding: 18px 16px; margin-top: 20px;">
@@ -1413,7 +1503,13 @@
   }
 
   function setBranchAlcohol(idx, val) {
+    syncBranchesFromDOM();
     branches[idx].serves_alcohol = val;
+    if (val) {
+      if (!branches[idx].vat_beer_rate) branches[idx].vat_beer_rate = "60.00";
+      if (!branches[idx].vat_imfl_rate) branches[idx].vat_imfl_rate = "65.00";
+      if (!branches[idx].vat_wine_rate) branches[idx].vat_wine_rate = "60.00";
+    }
     renderBranchCards();
   }
 
@@ -1478,6 +1574,21 @@
 
       const fssai = document.getElementById(`branch-fssai-${idx}`);
       if (fssai) b.fssai_license_no = fssai.value;
+
+      const vattin = document.getElementById(`branch-vattin-${idx}`);
+      if (vattin) b.vat_tin = vattin.value;
+
+      const excise = document.getElementById(`branch-excise-${idx}`);
+      if (excise) b.excise_license_no = excise.value;
+
+      const vatbeer = document.getElementById(`branch-vatbeer-${idx}`);
+      if (vatbeer) b.vat_beer_rate = vatbeer.value;
+
+      const vatimfl = document.getElementById(`branch-vatimfl-${idx}`);
+      if (vatimfl) b.vat_imfl_rate = vatimfl.value;
+
+      const vatwine = document.getElementById(`branch-vatwine-${idx}`);
+      if (vatwine) b.vat_wine_rate = vatwine.value;
 
       const gstin = document.getElementById(`branch-gstin-${idx}`);
       if (gstin) b.gstin = gstin.value;
@@ -1564,6 +1675,69 @@
   function prepareSubmit(e) {
     syncBranchesFromDOM();
     document.getElementById("branches_json").value = JSON.stringify(branches);
+  }
+
+  function handleFormSubmit(e) {
+    prepareSubmit(e);
+    return true;
+  }
+
+  function triggerQuickSave(e) {
+    if (e) e.preventDefault();
+    syncBranchesFromDOM();
+    document.getElementById("branches_json").value = JSON.stringify(branches);
+
+    const legal = document.getElementById("id_legal_name") ? document.getElementById("id_legal_name").value.trim() : "";
+    if (!legal) {
+      goToStep(1);
+      alert("Legal Name is required.");
+      document.getElementById("id_legal_name")?.focus();
+      return;
+    }
+
+    const trade = document.getElementById("id_trade_name") ? document.getElementById("id_trade_name").value.trim() : "";
+    if (!trade) {
+      goToStep(1);
+      alert("Trade / Brand Name is required.");
+      document.getElementById("id_trade_name")?.focus();
+      return;
+    }
+
+    const btype = document.getElementById("id_business_type") ? document.getElementById("id_business_type").value : "";
+    if (!btype) {
+      goToStep(1);
+      alert("Please select a Business Type.");
+      document.getElementById("id_business_type")?.focus();
+      return;
+    }
+
+    const pan = document.getElementById("id_pan") ? document.getElementById("id_pan").value.toUpperCase().trim() : "";
+    if (!pan || !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+      goToStep(1);
+      alert("Please enter a valid 10-character PAN (e.g. AAACS1234F).");
+      document.getElementById("id_pan")?.focus();
+      return;
+    }
+
+    if (branches.length === 0) {
+      goToStep(2);
+      alert("At least one branch outlet is required.");
+      return;
+    }
+
+    for (let i = 0; i < branches.length; i++) {
+      if (!branches[i].name) {
+        goToStep(2);
+        activeBranchIndex = i;
+        renderBranchCards();
+        alert(`Outlet ${i + 1} requires a Branch Name.`);
+        const input = document.getElementById(`branch-name-${i}`);
+        if (input) input.focus();
+        return;
+      }
+    }
+
+    document.getElementById("onboard-form").submit();
   }
 
   function escapeHtml(str) {

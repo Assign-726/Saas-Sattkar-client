@@ -19,5 +19,7 @@ def app_constants(request):
         'DEFAULT_STATE': constants.DEFAULT_STATE,
         'SHOW_WEBSITE_PAGES': constants.SHOW_WEBSITE_PAGES,
         'ENABLE_WEBSITE_CMS': constants.SHOW_WEBSITE_PAGES,
+        'ENABLE_ALCOHOL_VAT': constants.ENABLE_ALCOHOL_VAT,
+        'SHOW_ALCOHOL_MODULE': constants.ENABLE_ALCOHOL_VAT,
     }
 
