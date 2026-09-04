@@ -586,7 +586,11 @@ def blog_delete(request, blog_id):
 @superuser_required
 def setup_view(request):
     user = request.user
-    sec_setting, _ = UserSecuritySetting.objects.get_or_create(user=user, defaults={'is_2fa_enabled': True})
+    sec_setting = None
+    try:
+        sec_setting, _ = UserSecuritySetting.objects.get_or_create(user=user, defaults={'is_2fa_enabled': True})
+    except Exception:
+        sec_setting = None
 
     if request.method == 'POST':
         form = AdminSetupForm(request.POST, instance_user=user, request=request)
@@ -801,20 +805,31 @@ def billing_view(request):
     Fetches real-time contract details, plan entitlements, renewal countdown,
     available upgrade plans, and invoice records from MasterRestro Master Admin.
     """
-    restaurant = Restaurant.objects.first()
-    billing_data = MasterBillingService.fetch_subscription_details(restaurant)
+    try:
+        restaurant = Restaurant.objects.first()
+    except Exception:
+        restaurant = None
 
-    client_info = billing_data.get('client', {})
-    subscription = billing_data.get('subscription', {})
-    current_plan = billing_data.get('current_plan', {})
-    available_plans = billing_data.get('available_plans', [])
-    invoices = billing_data.get('invoices', [])
+    try:
+        billing_data = MasterBillingService.fetch_subscription_details(restaurant)
+    except Exception:
+        billing_data = MasterBillingService._build_local_fallback(restaurant)
+
+    client_info = billing_data.get('client') or {}
+    subscription = billing_data.get('subscription') or {}
+    current_plan = billing_data.get('current_plan') or {}
+    available_plans = billing_data.get('available_plans') or []
+    invoices = billing_data.get('invoices') or []
     connection_status = billing_data.get('connection_status', 'OFFLINE')
     master_url = billing_data.get('master_url', 'http://localhost:3000')
 
     # Calculate outlet quota
-    branch_count = restaurant.branches.count() if restaurant else 0
-    max_branches = current_plan.get('max_branches', 3) if current_plan else 3
+    try:
+        branch_count = restaurant.branches.count() if restaurant else 0
+    except Exception:
+        branch_count = 0
+
+    max_branches = current_plan.get('max_branches', 3) or 3
     branch_usage_percent = min(100, int((branch_count / max(1, max_branches)) * 100))
 
     # Calculate 30-day cycle progress
@@ -851,8 +866,16 @@ def api_billing_sync(request):
     """
     Live AJAX refresh endpoint for instant billing telemetry and countdown sync.
     """
-    restaurant = Restaurant.objects.first()
-    billing_data = MasterBillingService.fetch_subscription_details(restaurant)
+    try:
+        restaurant = Restaurant.objects.first()
+    except Exception:
+        restaurant = None
+
+    try:
+        billing_data = MasterBillingService.fetch_subscription_details(restaurant)
+    except Exception:
+        billing_data = MasterBillingService._build_local_fallback(restaurant)
+
     return JsonResponse(billing_data)
 
 
@@ -875,7 +898,11 @@ def api_request_plan_upgrade(request):
     contact_phone = body.get('contact_phone', '')
     contact_email = body.get('contact_email', '')
 
-    restaurant = Restaurant.objects.first()
+    try:
+        restaurant = Restaurant.objects.first()
+    except Exception:
+        restaurant = None
+
     result = MasterBillingService.submit_upgrade_request(
         restaurant=restaurant,
         requested_plan_name=plan_name,
@@ -892,8 +919,16 @@ def billing_invoice_view(request, invoice_id):
     """
     Renders a dedicated, printable SaaS invoice receipt.
     """
-    restaurant = Restaurant.objects.first()
-    billing_data = MasterBillingService.fetch_subscription_details(restaurant)
+    try:
+        restaurant = Restaurant.objects.first()
+    except Exception:
+        restaurant = None
+
+    try:
+        billing_data = MasterBillingService.fetch_subscription_details(restaurant)
+    except Exception:
+        billing_data = MasterBillingService._build_local_fallback(restaurant)
+
     invoices = billing_data.get('invoices', [])
     invoice = next((inv for inv in invoices if inv.get('id') == invoice_id), None)
 
