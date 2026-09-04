@@ -209,6 +209,11 @@ def restaurant_edit(request, pk):
             'pincode': b.pincode,
             'fssai_license_no': b.fssai_license_no,
             'serves_alcohol': b.serves_alcohol,
+            'vat_tin': b.vat_tin or '',
+            'excise_license_no': b.excise_license_no or '',
+            'vat_beer_rate': float(b.vat_beer_rate) if b.vat_beer_rate is not None else 60.0,
+            'vat_imfl_rate': float(b.vat_imfl_rate) if b.vat_imfl_rate is not None else 65.0,
+            'vat_wine_rate': float(b.vat_wine_rate) if b.vat_wine_rate is not None else 60.0,
             'gstin': b.gst_registration.gstin if b.gst_registration else b.gstin,
             'gst_registration_type': b.gst_registration_type,
             'is_hotel_tariff_7500_plus': b.is_hotel_tariff_7500_plus,
@@ -527,6 +532,11 @@ def api_branches_by_restaurant(request):
                     'pincode': b.pincode,
                     'fssai_license_no': b.fssai_license_no,
                     'serves_alcohol': b.serves_alcohol,
+                    'vat_tin': b.vat_tin or '',
+                    'excise_license_no': b.excise_license_no or '',
+                    'vat_beer_rate': float(b.vat_beer_rate) if b.vat_beer_rate is not None else 60.0,
+                    'vat_imfl_rate': float(b.vat_imfl_rate) if b.vat_imfl_rate is not None else 65.0,
+                    'vat_wine_rate': float(b.vat_wine_rate) if b.vat_wine_rate is not None else 60.0,
                     'gstin': b.gst_registration.gstin if b.gst_registration else b.gstin,
                     'gst_registration_type': b.gst_registration_type,
                     'is_hotel_tariff_7500_plus': b.is_hotel_tariff_7500_plus,
@@ -586,11 +596,6 @@ def blog_delete(request, blog_id):
 @superuser_required
 def setup_view(request):
     user = request.user
-    sec_setting = None
-    try:
-        sec_setting, _ = UserSecuritySetting.objects.get_or_create(user=user, defaults={'is_2fa_enabled': True})
-    except Exception:
-        sec_setting = None
 
     if request.method == 'POST':
         form = AdminSetupForm(request.POST, instance_user=user, request=request)
@@ -602,6 +607,8 @@ def setup_view(request):
             messages.error(request, "Please correct the form errors below.")
     else:
         form = AdminSetupForm(instance_user=user, request=request)
+
+    sec_setting = UserSecuritySetting.objects.filter(user=user).first()
 
     return render(request, 'super_admin/setup.html', {
         'form': form,
@@ -816,11 +823,12 @@ def billing_view(request):
         billing_data = MasterBillingService._build_local_fallback(restaurant)
 
     client_info = billing_data.get('client') or {}
-    subscription = billing_data.get('subscription') or {}
-    current_plan = billing_data.get('current_plan') or {}
+    subscription = billing_data.get('subscription') or None
+    current_plan = billing_data.get('current_plan') or None
     available_plans = billing_data.get('available_plans') or []
     invoices = billing_data.get('invoices') or []
     connection_status = billing_data.get('connection_status', 'OFFLINE')
+    is_connected = bool(connection_status == 'CONNECTED' and subscription and subscription.get('plan_name'))
     master_url = billing_data.get('master_url', 'http://localhost:3000')
 
     # Calculate outlet quota
@@ -829,13 +837,13 @@ def billing_view(request):
     except Exception:
         branch_count = 0
 
-    max_branches = current_plan.get('max_branches', 3) or 3
+    max_branches = current_plan.get('max_branches', 3) if current_plan else 3
     branch_usage_percent = min(100, int((branch_count / max(1, max_branches)) * 100))
 
     # Calculate 30-day cycle progress
-    days_left = subscription.get('days_remaining', 28)
+    days_left = subscription.get('days_remaining', 30) if subscription else 30
     if days_left is None:
-        days_left = 28
+        days_left = 30
     cycle_days = 30
     days_passed = max(0, cycle_days - days_left)
     cycle_progress_percent = min(100, int((days_passed / cycle_days) * 100))
@@ -849,14 +857,15 @@ def billing_view(request):
         'available_plans': available_plans,
         'invoices': invoices,
         'connection_status': connection_status,
+        'is_connected': is_connected,
         'master_url': master_url,
         'branch_count': branch_count,
         'max_branches': max_branches,
         'branch_usage_percent': branch_usage_percent,
         'cycle_progress_percent': cycle_progress_percent,
-        'total_seconds_remaining': subscription.get('total_seconds_remaining', 28 * 86400),
-        'next_billing_date': subscription.get('next_billing_date', ''),
-        'formatted_next_billing': subscription.get('formatted_next_billing', '30 Sept 2026'),
+        'total_seconds_remaining': subscription.get('total_seconds_remaining', 0) if subscription else 0,
+        'next_billing_date': subscription.get('next_billing_date', '') if subscription else '',
+        'formatted_next_billing': subscription.get('formatted_next_billing', '') if subscription else '',
     }
     return render(request, 'super_admin/billing.html', context)
 
@@ -933,17 +942,8 @@ def billing_invoice_view(request, invoice_id):
     invoice = next((inv for inv in invoices if inv.get('id') == invoice_id), None)
 
     if not invoice:
-        invoice = {
-            'id': invoice_id,
-            'title': 'SaaS Platform Subscription Invoice',
-            'amount': 2999,
-            'currency': '₹',
-            'formatted_date': '30 Sept 2026',
-            'status': 'PAID',
-            'payment_method': 'MasterRestro Direct IMPS / UPI',
-            'plan_name': 'Professional Tier',
-            'period': 'Current Active Cycle'
-        }
+        messages.warning(request, f"Invoice {invoice_id} not found or not synced from Master Admin.")
+        return redirect('super_admin:billing')
 
     return render(request, 'super_admin/invoice_receipt.html', {
         'restaurant': restaurant,

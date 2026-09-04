@@ -120,7 +120,8 @@ class MasterBillingService:
     @classmethod
     def _build_local_fallback(cls, restaurant=None) -> dict:
         """
-        Builds a safe offline fallback data structure using local DB models.
+        Builds local data structure using actual local DB models when Master Admin is unreachable.
+        Does NOT inject fake subscriptions, mock plans, or hardcoded test license keys.
         """
         branch_count = 0
         try:
@@ -129,130 +130,37 @@ class MasterBillingService:
         except Exception:
             branch_count = 0
 
-        business_name = "Restaurant Business"
-        if restaurant:
-            business_name = getattr(restaurant, 'trade_name', '') or getattr(restaurant, 'name', '') or "Restaurant Business"
+        business_name = ""
+        legal_name = ""
+        domain = ""
+        license_key = ""
+        email = ""
+        phone = ""
 
-        license_key = "LIC-SHA-13831"
         if restaurant:
-            license_key = getattr(restaurant, 'master_license_key', '') or "LIC-SHA-13831"
+            business_name = getattr(restaurant, 'trade_name', '') or getattr(restaurant, 'name', '') or ""
+            legal_name = getattr(restaurant, 'legal_name', '') or ""
+            domain = getattr(restaurant, 'slug', '') or ""
+            license_key = getattr(restaurant, 'master_license_key', '') or ""
+            email = getattr(restaurant, 'email', '') or ""
+            phone = getattr(restaurant, 'phone', '') or ""
 
         return {
-            "status": "success",
+            "status": "offline",
             "connection_status": "OFFLINE",
+            "message": "Master Admin is currently not connected or unreachable.",
             "client": {
-                "business_name": business_name,
-                "legal_name": getattr(restaurant, 'legal_name', '') if restaurant else "",
-                "domain": getattr(restaurant, 'slug', '') if restaurant else "",
-                "license_key": license_key,
-                "subscription_status": "ACTIVE",
-                "email": getattr(restaurant, 'email', '') if restaurant else "",
-                "phone": getattr(restaurant, 'phone', '') if restaurant else "",
+                "business_name": business_name or "Registered Business",
+                "legal_name": legal_name,
+                "domain": domain,
+                "license_key": license_key or "Not Assigned",
+                "subscription_status": "NOT_CONNECTED",
+                "email": email,
+                "phone": phone,
                 "branch_count": branch_count,
             },
-            "subscription": {
-                "plan_name": "Professional Tier",
-                "plan_code": "pro",
-                "billing_cycle": "MONTHLY",
-                "monthly_fee": 2999,
-                "setup_fee": 25999,
-                "currency": "₹",
-                "days_remaining": 28,
-                "hours_remaining": 0,
-                "minutes_remaining": 0,
-                "seconds_remaining": 0,
-                "total_seconds_remaining": 28 * 86400,
-                "is_overdue": False,
-                "is_due_48h": False,
-                "is_due_7d": False,
-                "status": "ACTIVE",
-                "next_billing_date": "2026-09-30",
-                "formatted_next_billing": "30 Sept 2026",
-            },
-            "current_plan": {
-                "name": "Professional Tier",
-                "code": "pro",
-                "price": 2999,
-                "monthly_fee": 2999,
-                "setup_fee": 25999,
-                "billing_cycle": "MONTHLY",
-                "description": "Comprehensive package for multi-counter dine-ins, takeaway, KDS, bar operations, and multi-outlet inventory.",
-                "max_branches": 3,
-                "features": [
-                    "Up to 3 Branch Outlets",
-                    "Kitchen Display System (KDS)",
-                    "Inventory & Recipe Stock Tracking",
-                    "Multi-counter Billing & Tax Invoices",
-                    "Live Telemetry & Status Monitoring",
-                    "Priority WhatsApp & Phone Support",
-                ],
-                "is_active": True,
-            },
-            "available_plans": [
-                {
-                    "name": "Starter Essential",
-                    "code": "starter",
-                    "price": 1499,
-                    "monthly_fee": 1499,
-                    "setup_fee": 9999,
-                    "billing_cycle": "MONTHLY",
-                    "description": "Best for single-outlet cafes & quick-service restaurants.",
-                    "max_branches": 1,
-                    "features": ["1 Active POS Terminal Outlet", "Digital Menu & QR Ordering", "GST Tax Invoicing & KOT"],
-                    "is_current": False,
-                    "is_popular": False,
-                },
-                {
-                    "name": "Professional Tier",
-                    "code": "pro",
-                    "price": 2999,
-                    "monthly_fee": 2999,
-                    "setup_fee": 25999,
-                    "billing_cycle": "MONTHLY",
-                    "description": "Comprehensive package for busy dine-ins & growing bar bistros.",
-                    "max_branches": 3,
-                    "features": ["Up to 3 Branch Outlets", "Kitchen Display System (KDS)", "Inventory & Recipe Stock Tracking", "Multi-counter Billing"],
-                    "is_current": True,
-                    "is_popular": True,
-                },
-                {
-                    "name": "Enterprise Suite",
-                    "code": "enterprise",
-                    "price": 6999,
-                    "monthly_fee": 6999,
-                    "setup_fee": 49999,
-                    "billing_cycle": "MONTHLY",
-                    "description": "Full-scale multi-chain operations with unlimited capabilities.",
-                    "max_branches": 10,
-                    "features": ["Up to 10 Branch Outlets", "Unlimited KOT & POS Terminals", "Dedicated 24/7 Account Manager", "Custom ERP & API Integrations"],
-                    "is_current": False,
-                    "is_popular": False,
-                },
-            ],
-            "invoices": [
-                {
-                    "id": "INV-2026-0891",
-                    "title": "Professional Plan - Monthly SaaS Subscription",
-                    "plan_name": "Professional Tier",
-                    "period": "01 Sep 2026 - 30 Sep 2026",
-                    "date": "2026-09-01",
-                    "formatted_date": "01 Sep 2026",
-                    "amount": 2999,
-                    "currency": "₹",
-                    "status": "PAID",
-                    "payment_method": "Auto-Debit / UPI",
-                },
-                {
-                    "id": "INV-2026-0742",
-                    "title": "Professional Plan - Monthly SaaS Subscription",
-                    "plan_name": "Professional Tier",
-                    "period": "01 Aug 2026 - 31 Aug 2026",
-                    "date": "2026-08-01",
-                    "formatted_date": "01 Aug 2026",
-                    "amount": 2999,
-                    "currency": "₹",
-                    "status": "PAID",
-                    "payment_method": "Auto-Debit / UPI",
-                }
-            ],
+            "subscription": None,
+            "current_plan": None,
+            "available_plans": [],
+            "invoices": [],
         }

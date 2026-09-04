@@ -135,8 +135,8 @@ class RestaurantAdminCreateForm(forms.Form):
         password = self.cleaned_data["password"]
         restaurant = self.cleaned_data["restaurant"]
         branch = self.cleaned_data.get("branch")
-        is_primary = self.cleaned_data.get("is_primary_admin", False)
-        is_2fa = self.cleaned_data.get("is_2fa_enabled", True)
+        is_primary = bool(self.cleaned_data.get("is_primary_admin", False))
+        is_2fa = bool(self.cleaned_data.get("is_2fa_enabled", False))
 
         user = User.objects.create_user(username=username, email=email)
         user.is_staff = True
@@ -244,7 +244,7 @@ class OnboardRestaurantForm(forms.Form):
                     f"Branch limit reached. Your license allows a maximum of {constants.MAX_ALLOWED_BRANCHES} branch outlets (attempted {len(valid_branches)})."
                 )
 
-        target_restaurant = instance or self.instance or Restaurant.objects.filter(name__iexact=t_name).first()
+        target_restaurant = instance or (self.instance if (self.instance and self.instance.pk) else None)
         if target_restaurant:
             restaurant = target_restaurant
             restaurant.legal_name = legal_name
@@ -317,8 +317,22 @@ class OnboardRestaurantForm(forms.Form):
                 gst_reg_type = bdata.get("gst_registration_type", RestaurantBranch.GSTRegType.REGULAR_5)
                 if is_hotel_tariff:
                     gst_reg_type = RestaurantBranch.GSTRegType.REGULAR_18
-                elif gst_reg_type == RestaurantBranch.GSTRegType.REGULAR_18:
-                    is_hotel_tariff = True
+                serves_alcohol_val = bool(bdata.get("serves_alcohol", False))
+                vat_tin_val = str(bdata.get("vat_tin", "")).strip() if serves_alcohol_val else ""
+                excise_license_val = str(bdata.get("excise_license_no", "")).strip() if serves_alcohol_val else ""
+                
+                try:
+                    vat_beer_val = float(bdata.get("vat_beer_rate", 60.00))
+                except (ValueError, TypeError):
+                    vat_beer_val = 60.00
+                try:
+                    vat_imfl_val = float(bdata.get("vat_imfl_rate", 65.00))
+                except (ValueError, TypeError):
+                    vat_imfl_val = 65.00
+                try:
+                    vat_wine_val = float(bdata.get("vat_wine_rate", 60.00))
+                except (ValueError, TypeError):
+                    vat_wine_val = 60.00
 
                 if branch:
                     branch.name = bdata.get("name", "")
@@ -330,7 +344,12 @@ class OnboardRestaurantForm(forms.Form):
                     branch.state = b_state
                     branch.pincode = bdata.get("pincode", "")
                     branch.fssai_license_no = bdata.get("fssai_license_no", "")
-                    branch.serves_alcohol = bdata.get("serves_alcohol", False)
+                    branch.serves_alcohol = serves_alcohol_val
+                    branch.vat_tin = vat_tin_val
+                    branch.excise_license_no = excise_license_val
+                    branch.vat_beer_rate = vat_beer_val
+                    branch.vat_imfl_rate = vat_imfl_val
+                    branch.vat_wine_rate = vat_wine_val
                     branch.gstin = gstin_val
                     branch.gst_registration = gst_reg_obj
                     branch.gst_registration_type = gst_reg_type
@@ -350,7 +369,12 @@ class OnboardRestaurantForm(forms.Form):
                         state=b_state,
                         pincode=bdata.get("pincode", ""),
                         fssai_license_no=bdata.get("fssai_license_no", ""),
-                        serves_alcohol=bdata.get("serves_alcohol", False),
+                        serves_alcohol=serves_alcohol_val,
+                        vat_tin=vat_tin_val,
+                        excise_license_no=excise_license_val,
+                        vat_beer_rate=vat_beer_val,
+                        vat_imfl_rate=vat_imfl_val,
+                        vat_wine_rate=vat_wine_val,
                         gstin=gstin_val,
                         gst_registration_type=gst_reg_type,
                         is_hotel_tariff_7500_plus=is_hotel_tariff,
@@ -394,7 +418,9 @@ class OnboardRestaurantForm(forms.Form):
                     )
 
             if target_restaurant and kept_branch_ids:
-                RestaurantBranch.objects.filter(restaurant=restaurant).exclude(id__in=kept_branch_ids).delete()
+                branches_to_delete = list(RestaurantBranch.objects.filter(restaurant=restaurant).exclude(id__in=kept_branch_ids))
+                for b_del in branches_to_delete:
+                    safe_delete_branch(b_del)
 
         # Initialize RestaurantSettings with onboarded GST rates
         first_b = restaurant.branches.first()
@@ -419,6 +445,157 @@ class OnboardRestaurantForm(forms.Form):
         return restaurant
 
 
+def safe_delete_branch(branch):
+    """
+    Safely deletes a RestaurantBranch instance and all associated records,
+    clearing or removing protected child relations (OrderItems, Tables, ChallanItems, PurchaseOrderItems)
+    so that ProtectedError is never raised.
+    """
+    if not branch or not branch.pk:
+        return
+
+    from django.db import models, transaction
+    from django.apps import apps
+
+    branch_id = branch.id
+
+    try:
+        with transaction.atomic():
+            def get_m(app_label, model_name):
+                try:
+                    return apps.get_model(app_label, model_name)
+                except Exception:
+                    return None
+
+            # 1. Unlink branch admins
+            RestaurantUser = get_m('super_admin', 'RestaurantUser')
+            if RestaurantUser:
+                RestaurantUser.objects.filter(branch_id=branch_id).update(branch=None)
+
+            # 2. Delete Order items and Orders (OrderItem has PROTECT on MenuItem)
+            OrderItem = get_m('core', 'OrderItem')
+            Order = get_m('core', 'Order')
+            if OrderItem:
+                OrderItem.objects.filter(
+                    models.Q(order__branch_id=branch_id) |
+                    models.Q(menu_item__branch_id=branch_id)
+                ).delete()
+            if Order:
+                Order.objects.filter(branch_id=branch_id).delete()
+
+            # 3. Delete Challan items & Challans (DeliveryChallanItem has PROTECT on InventoryItem)
+            DeliveryChallanItem = get_m('core', 'DeliveryChallanItem')
+            DeliveryChallan = get_m('core', 'DeliveryChallan')
+            if DeliveryChallanItem:
+                DeliveryChallanItem.objects.filter(
+                    models.Q(inventory_item__branch_id=branch_id) |
+                    models.Q(menu_item__branch_id=branch_id) |
+                    models.Q(challan__from_branch_id=branch_id) |
+                    models.Q(challan__to_branch_id=branch_id)
+                ).delete()
+            if DeliveryChallan:
+                DeliveryChallan.objects.filter(
+                    models.Q(from_branch_id=branch_id) |
+                    models.Q(to_branch_id=branch_id)
+                ).delete()
+
+            # 4. Delete Purchase Order items & Purchase Orders (PurchaseOrderItem has PROTECT on InventoryItem)
+            PurchaseOrderItem = get_m('core', 'PurchaseOrderItem')
+            PurchaseOrder = get_m('core', 'PurchaseOrder')
+            if PurchaseOrderItem:
+                PurchaseOrderItem.objects.filter(
+                    models.Q(purchase_order__branch_id=branch_id) |
+                    models.Q(inventory_item__branch_id=branch_id)
+                ).delete()
+            if PurchaseOrder:
+                PurchaseOrder.objects.filter(branch_id=branch_id).delete()
+
+            # 5. Delete Inventory Transactions and Ingredients
+            InventoryTransaction = get_m('core', 'InventoryTransaction')
+            if InventoryTransaction:
+                InventoryTransaction.objects.filter(
+                    models.Q(branch_id=branch_id) |
+                    models.Q(inventory_item__branch_id=branch_id)
+                ).delete()
+
+            MenuItemIngredient = get_m('core', 'MenuItemIngredient')
+            if MenuItemIngredient:
+                MenuItemIngredient.objects.filter(
+                    models.Q(menu_item__branch_id=branch_id) |
+                    models.Q(inventory_item__branch_id=branch_id)
+                ).delete()
+
+            # 6. Delete Tables (Table has PROTECT on Zone)
+            Table = get_m('core', 'Table')
+            if Table:
+                Table.objects.filter(
+                    models.Q(branch_id=branch_id) |
+                    models.Q(zone__branch_id=branch_id)
+                ).delete()
+
+            # 7. Delete Menu Items and Categories
+            MenuItem = get_m('core', 'MenuItem')
+            if MenuItem:
+                MenuItem.objects.filter(branch_id=branch_id).delete()
+
+            SubCategory = get_m('core', 'SubCategory')
+            if SubCategory:
+                try:
+                    SubCategory.objects.filter(category__branch_id=branch_id).delete()
+                except Exception:
+                    pass
+
+            Category = get_m('core', 'Category')
+            if Category:
+                Category.objects.filter(branch_id=branch_id).delete()
+
+            # 8. Delete Inventory Items & Categories
+            InventoryItem = get_m('core', 'InventoryItem')
+            if InventoryItem:
+                InventoryItem.objects.filter(branch_id=branch_id).delete()
+
+            InventoryCategory = get_m('core', 'InventoryCategory')
+            if InventoryCategory:
+                InventoryCategory.objects.filter(branch_id=branch_id).delete()
+
+            # 9. Delete Zones
+            Zone = get_m('core', 'Zone')
+            if Zone:
+                Zone.objects.filter(branch_id=branch_id).delete()
+
+            # 10. Delete auxiliary branch configurations & documents
+            for app_name, mname in [
+                ('core', 'Party'),
+                ('core', 'Supplier'),
+                ('core', 'AdvanceReceipt'),
+                ('core', 'Coupon'),
+                ('core', 'CustomCharge'),
+                ('core', 'RestaurantSettings'),
+                ('core', 'DocumentSequenceSetting'),
+                ('super_admin', 'DocumentSeries'),
+                ('reservations', 'Reservation'),
+            ]:
+                mod = get_m(app_name, mname)
+                if mod:
+                    try:
+                        mod.objects.filter(branch_id=branch_id).delete()
+                    except Exception:
+                        pass
+
+            # 11. Finally, delete the branch itself
+            RestaurantBranch = get_m('super_admin', 'RestaurantBranch')
+            if RestaurantBranch:
+                RestaurantBranch.objects.filter(id=branch_id).delete()
+
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).exception("Failed safe deletion of branch %s: %s", branch_id, e)
+        # Fallback: force delete branch directly
+        try:
+            RestaurantBranch = apps.get_model('super_admin', 'RestaurantBranch')
+            RestaurantBranch.objects.filter(id=branch_id).delete()
+        except Exception:
+            pass
 
 
 class RestaurantAdminUpdateForm(forms.Form):
@@ -440,14 +617,20 @@ class RestaurantAdminUpdateForm(forms.Form):
             self.fields['branch'].initial = self.instance.branch
             self.fields['is_primary_admin'].initial = self.instance.is_primary_admin
 
+            self.initial['username'] = self.instance.user.username
+            self.initial['email'] = self.instance.user.email
+            self.initial['restaurant'] = self.instance.restaurant
+            self.initial['branch'] = self.instance.branch
+            self.initial['is_primary_admin'] = self.instance.is_primary_admin
+
             try:
-                sec_setting = getattr(self.instance.user, 'security_setting', None)
-                if sec_setting is not None:
-                    self.fields['is_2fa_enabled'].initial = sec_setting.is_2fa_enabled
-                else:
-                    self.fields['is_2fa_enabled'].initial = True
+                sec_setting = UserSecuritySetting.objects.filter(user=self.instance.user).first()
+                is_enabled = sec_setting.is_2fa_enabled if sec_setting is not None else True
             except Exception:
-                self.fields['is_2fa_enabled'].initial = True
+                is_enabled = True
+
+            self.fields['is_2fa_enabled'].initial = is_enabled
+            self.initial['is_2fa_enabled'] = is_enabled
 
     def clean_username(self):
         username = self.cleaned_data.get('username')
@@ -480,12 +663,14 @@ class RestaurantAdminUpdateForm(forms.Form):
         self.instance.is_primary_admin = self.cleaned_data.get('is_primary_admin', False)
         self.instance.save()
 
-        is_2fa = self.cleaned_data.get('is_2fa_enabled', True)
+        is_2fa = bool(self.cleaned_data.get('is_2fa_enabled', False))
         try:
-            UserSecuritySetting.objects.update_or_create(
+            sec_setting, _ = UserSecuritySetting.objects.update_or_create(
                 user=user,
                 defaults={'is_2fa_enabled': is_2fa}
             )
+            if hasattr(user, '_security_setting_cache'):
+                user._security_setting_cache = sec_setting
         except Exception:
             pass
 
@@ -574,14 +759,19 @@ class AdminSetupForm(forms.Form):
             self.fields['username'].initial = self.user.username
             self.fields['email'].initial = self.user.email
 
+            self.initial['first_name'] = self.user.first_name
+            self.initial['last_name'] = self.user.last_name
+            self.initial['username'] = self.user.username
+            self.initial['email'] = self.user.email
+
             try:
-                sec_setting = getattr(self.user, 'security_setting', None)
-                if sec_setting is not None:
-                    self.fields['is_2fa_enabled'].initial = sec_setting.is_2fa_enabled
-                else:
-                    self.fields['is_2fa_enabled'].initial = True
+                sec_setting = UserSecuritySetting.objects.filter(user=self.user).first()
+                is_enabled = sec_setting.is_2fa_enabled if sec_setting is not None else True
             except Exception:
-                self.fields['is_2fa_enabled'].initial = True
+                is_enabled = True
+
+            self.fields['is_2fa_enabled'].initial = is_enabled
+            self.initial['is_2fa_enabled'] = is_enabled
 
     def clean_username(self):
         username = self.cleaned_data.get('username')
@@ -632,12 +822,14 @@ class AdminSetupForm(forms.Form):
         self.user.save()
 
         # Update or create 2FA setting
-        is_2fa = self.cleaned_data.get('is_2fa_enabled', True)
+        is_2fa = bool(self.cleaned_data.get('is_2fa_enabled', False))
         try:
-            UserSecuritySetting.objects.update_or_create(
+            sec_setting, _ = UserSecuritySetting.objects.update_or_create(
                 user=self.user,
                 defaults={'is_2fa_enabled': is_2fa}
             )
+            if hasattr(self.user, '_security_setting_cache'):
+                self.user._security_setting_cache = sec_setting
         except Exception:
             pass
 

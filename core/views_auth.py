@@ -85,9 +85,12 @@ class CustomLoginView(BaseLoginView):
         # Check user's 2FA preference (ON by default)
         user_2fa_active = True
         try:
-            sec_setting = getattr(user, 'security_setting', None)
+            from super_admin.models import UserSecuritySetting
+            sec_setting = UserSecuritySetting.objects.filter(user=user).first()
             if sec_setting is not None:
                 user_2fa_active = sec_setting.is_2fa_enabled
+            else:
+                user_2fa_active = True
         except Exception:
             user_2fa_active = True
 
