@@ -31,7 +31,23 @@ class Migration(migrations.Migration):
                     field=models.BooleanField(default=True, help_text='Enable pay at counter for this branch'),
                 ),
             ],
-            database_operations=[]
+            database_operations=[
+                migrations.AddField(
+                    model_name='restaurantbranch',
+                    name='enable_customer_ordering',
+                    field=models.BooleanField(default=True, help_text='Allow customers to place orders directly from the digital menu for this branch'),
+                ),
+                migrations.AddField(
+                    model_name='restaurantbranch',
+                    name='enable_online_payment',
+                    field=models.BooleanField(default=False, help_text='Enable online payment for this branch'),
+                ),
+                migrations.AddField(
+                    model_name='restaurantbranch',
+                    name='enable_pay_at_counter',
+                    field=models.BooleanField(default=True, help_text='Enable pay at counter for this branch'),
+                ),
+            ]
         ),
         migrations.CreateModel(
             name='UserSecuritySetting',

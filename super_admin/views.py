@@ -200,6 +200,7 @@ def restaurant_edit(request, pk):
         existing_branches.append({
             'id': b.id,
             'name': b.name,
+            'outlet_type': getattr(b, 'outlet_type', 'dine_in') or 'dine_in',
             'phone': b.phone,
             'use_company_address': b.use_company_address,
             'address_line_1': b.address_line_1,
@@ -523,6 +524,7 @@ def api_branches_by_restaurant(request):
                 branches.append({
                     'id': b.id,
                     'name': b.name,
+                    'outlet_type': getattr(b, 'outlet_type', 'dine_in') or 'dine_in',
                     'phone': b.phone,
                     'use_company_address': b.use_company_address,
                     'address_line_1': b.address_line_1,

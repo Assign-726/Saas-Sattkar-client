@@ -510,19 +510,29 @@ class Order(models.Model):
         settings_obj = RestaurantSettings.get_settings(self.restaurant)
         branch_obj = self.branch or (self.restaurant.branches.first() if self.restaurant else None)
 
-        if branch_obj:
+        if settings_obj and settings_obj.cgst_percentage is not None:
+            cgst_pct = Decimal(str(settings_obj.cgst_percentage)) if bill_type != 'liquor' else Decimal('0.00')
+        elif branch_obj:
             if branch_obj.gst_registration_type == 'R18' or branch_obj.is_hotel_tariff_7500_plus:
                 cgst_pct = Decimal('9.00') if bill_type != 'liquor' else Decimal('0.00')
-                sgst_pct = Decimal('9.00') if bill_type != 'liquor' else Decimal('0.00')
             elif branch_obj.gst_registration_type in ['C', 'U']:
                 cgst_pct = Decimal('0.00')
+            else:
+                cgst_pct = Decimal('2.50') if bill_type != 'liquor' else Decimal('0.00')
+        else:
+            cgst_pct = Decimal('2.50') if bill_type != 'liquor' else Decimal('0.00')
+
+        if settings_obj and settings_obj.sgst_percentage is not None:
+            sgst_pct = Decimal(str(settings_obj.sgst_percentage)) if bill_type != 'liquor' else Decimal('0.00')
+        elif branch_obj:
+            if branch_obj.gst_registration_type == 'R18' or branch_obj.is_hotel_tariff_7500_plus:
+                sgst_pct = Decimal('9.00') if bill_type != 'liquor' else Decimal('0.00')
+            elif branch_obj.gst_registration_type in ['C', 'U']:
                 sgst_pct = Decimal('0.00')
             else:
-                cgst_pct = Decimal(str(settings_obj.cgst_percentage or 2.50)) if bill_type != 'liquor' else Decimal('0.00')
-                sgst_pct = Decimal(str(settings_obj.sgst_percentage or 2.50)) if bill_type != 'liquor' else Decimal('0.00')
+                sgst_pct = Decimal('2.50') if bill_type != 'liquor' else Decimal('0.00')
         else:
-            cgst_pct = Decimal(str(settings_obj.cgst_percentage or 2.50)) if bill_type != 'liquor' else Decimal('0.00')
-            sgst_pct = Decimal(str(settings_obj.sgst_percentage or 2.50)) if bill_type != 'liquor' else Decimal('0.00')
+            sgst_pct = Decimal('2.50') if bill_type != 'liquor' else Decimal('0.00')
 
         if branch_obj and branch_obj.service_charge_percentage is not None:
             service_pct = Decimal(str(branch_obj.service_charge_percentage)) if bill_type != 'liquor' else Decimal('0.00')

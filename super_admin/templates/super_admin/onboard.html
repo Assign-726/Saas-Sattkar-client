@@ -632,8 +632,8 @@
           <!-- Legal Name -->
           <div class="form-group">
             <label class="form-label">Legal Name <span class="req">*</span></label>
-            <input type="text" class="form-input" name="legal_name" id="id_legal_name" placeholder="e.g. Food Haven Private Limited" value="{{ form.legal_name.value|default:'' }}">
-            <span class="form-hint">As per PAN</span>
+            <input type="text" class="form-input" name="legal_name" id="id_legal_name" maxlength="100" placeholder="e.g. Food Haven Private Limited" value="{{ form.legal_name.value|default:'' }}" oninput="updateLegalNameRules()" onblur="this.value = normalizeTextSpaces(this.value); updateLegalNameRules();">
+            <span class="form-hint" id="id_legal_name_hint">As per PAN and official business records (3–100 characters)</span>
             {% if form.legal_name.errors %}
               <span class="form-error">{{ form.legal_name.errors.0 }}</span>
             {% endif %}
@@ -641,9 +641,9 @@
 
           <!-- Trade / Brand Name -->
           <div class="form-group">
-            <label class="form-label">Trade / Brand Name <span class="req">*</span></label>
-            <input type="text" class="form-input" name="trade_name" id="id_trade_name" placeholder="Spice Villa" value="{{ form.trade_name.value|default:'' }}">
-            <span class="form-hint">The name on your signboard</span>
+            <label class="form-label">Trade / Brand Name</label>
+            <input type="text" class="form-input" name="trade_name" id="id_trade_name" maxlength="60" placeholder="Spice Villa" value="{{ form.trade_name.value|default:'' }}" onblur="this.value = normalizeTextSpaces(this.value)">
+            <span class="form-hint">The customer-facing brand name on your signboard (2–60 characters)</span>
             {% if form.trade_name.errors %}
               <span class="form-error">{{ form.trade_name.errors.0 }}</span>
             {% endif %}
@@ -665,8 +665,8 @@
           <!-- PAN -->
           <div class="form-group">
             <label class="form-label">PAN <span class="req">*</span></label>
-            <input type="text" class="form-input" name="pan" id="id_pan" maxlength="10" placeholder="AAACS1234F" style="text-transform: uppercase;" value="{{ form.pan.value|default:'' }}" oninput="updatePanRules()">
-            <span class="form-hint" id="id_pan_hint">As per PAN</span>
+            <input type="text" class="form-input" name="pan" id="id_pan" maxlength="10" placeholder="AAACS1234F" style="text-transform: uppercase;" value="{{ form.pan.value|default:'' }}" oninput="this.value = normalizePanOrGstin(this.value); updatePanRules(); updateLegalNameRules();">
+            <span class="form-hint" id="id_pan_hint">10-character Permanent Account Number</span>
             {% if form.pan.errors %}
               <span class="form-error" id="id_pan_error">{{ form.pan.errors.0 }}</span>
             {% else %}
@@ -677,7 +677,7 @@
           <!-- CIN / LLPIN (Conditional field based on Business Type) -->
           <div class="form-group hidden" id="cin_container">
             <label class="form-label" id="cin_label">CIN / LLPIN</label>
-            <input type="text" class="form-input" name="cin_llpin" id="id_cin_llpin" placeholder="U15400RJ2020PTC000000" style="text-transform: uppercase;" value="{{ form.cin_llpin.value|default:'' }}">
+            <input type="text" class="form-input" name="cin_llpin" id="id_cin_llpin" maxlength="50" placeholder="U15400RJ2020PTC000000" style="text-transform: uppercase;" value="{{ form.cin_llpin.value|default:'' }}" oninput="this.value = normalizePanOrGstin(this.value)">
             <span class="form-hint" id="cin_hint">Corporate Identification Number</span>
             {% if form.cin_llpin.errors %}
               <span class="form-error">{{ form.cin_llpin.errors.0 }}</span>
@@ -687,7 +687,7 @@
           <!-- Address Line 1 -->
           <div class="form-group">
             <label class="form-label">Address Line 1 <span class="req">*</span></label>
-            <input type="text" class="form-input" name="restaurant_address_line_1" id="id_restaurant_address_line_1" placeholder="Building no., street" value="{{ form.restaurant_address_line_1.value|default:'' }}">
+            <input type="text" class="form-input" name="restaurant_address_line_1" id="id_restaurant_address_line_1" maxlength="100" placeholder="Building no., street (5–100 characters)" value="{{ form.restaurant_address_line_1.value|default:'' }}" onblur="this.value = normalizeTextSpaces(this.value)">
             {% if form.restaurant_address_line_1.errors %}
               <span class="form-error">{{ form.restaurant_address_line_1.errors.0 }}</span>
             {% endif %}
@@ -696,7 +696,7 @@
           <!-- Address Line 2 -->
           <div class="form-group">
             <label class="form-label">Address Line 2</label>
-            <input type="text" class="form-input" name="restaurant_address_line_2" id="id_restaurant_address_line_2" placeholder="Area / Landmark" value="{{ form.restaurant_address_line_2.value|default:'' }}">
+            <input type="text" class="form-input" name="restaurant_address_line_2" id="id_restaurant_address_line_2" maxlength="100" placeholder="Area / Landmark (optional)" value="{{ form.restaurant_address_line_2.value|default:'' }}" onblur="this.value = normalizeTextSpaces(this.value)">
             {% if form.restaurant_address_line_2.errors %}
               <span class="form-error">{{ form.restaurant_address_line_2.errors.0 }}</span>
             {% endif %}
@@ -705,7 +705,7 @@
           <!-- City -->
           <div class="form-group">
             <label class="form-label">City <span class="req">*</span></label>
-            <input type="text" class="form-input" name="restaurant_city" id="id_restaurant_city" placeholder="Jaipur" value="{{ form.restaurant_city.value|default:'' }}">
+            <input type="text" class="form-input" name="restaurant_city" id="id_restaurant_city" maxlength="50" placeholder="e.g. Jaipur (2–50 characters)" value="{{ form.restaurant_city.value|default:'' }}" onblur="this.value = normalizeCity(this.value)">
             {% if form.restaurant_city.errors %}
               <span class="form-error">{{ form.restaurant_city.errors.0 }}</span>
             {% endif %}
@@ -714,7 +714,7 @@
           <!-- State -->
           <div class="form-group">
             <label class="form-label">State <span class="req">*</span></label>
-            <select class="form-select" name="restaurant_state" id="id_restaurant_state">
+            <select class="form-select" name="restaurant_state" id="id_restaurant_state" onchange="syncCompanyStateToBranches()">
               {% for val, label in form.fields.restaurant_state.choices %}
                 <option value="{{ val }}" {% if form.restaurant_state.value == val %}selected{% endif %}>{{ label }}</option>
               {% endfor %}
@@ -727,7 +727,8 @@
           <!-- Pincode -->
           <div class="form-group">
             <label class="form-label">Pincode <span class="req">*</span></label>
-            <input type="text" class="form-input" name="restaurant_pincode" id="id_restaurant_pincode" placeholder="302001" value="{{ form.restaurant_pincode.value|default:'' }}">
+            <input type="text" class="form-input" name="restaurant_pincode" id="id_restaurant_pincode" maxlength="6" placeholder="302001" value="{{ form.restaurant_pincode.value|default:'' }}" oninput="this.value = normalizeDigitsOnly(this.value); updatePincodeRules();">
+            <span class="form-hint" id="id_pincode_hint">6-digit Postal Index Number (cannot start with 0)</span>
             {% if form.restaurant_pincode.errors %}
               <span class="form-error">{{ form.restaurant_pincode.errors.0 }}</span>
             {% endif %}
@@ -736,7 +737,7 @@
           <!-- Email -->
           <div class="form-group">
             <label class="form-label">Email <span class="req">*</span></label>
-            <input type="email" class="form-input" name="restaurant_email" id="id_restaurant_email" placeholder="owner@spicevilla.in" value="{{ form.restaurant_email.value|default:'' }}">
+            <input type="email" class="form-input" name="restaurant_email" id="id_restaurant_email" placeholder="owner@spicevilla.in" value="{{ form.restaurant_email.value|default:'' }}" onblur="this.value = normalizeEmail(this.value)">
             {% if form.restaurant_email.errors %}
               <span class="form-error">{{ form.restaurant_email.errors.0 }}</span>
             {% endif %}
@@ -745,7 +746,8 @@
           <!-- Phone -->
           <div class="form-group">
             <label class="form-label">Phone <span class="req">*</span></label>
-            <input type="text" class="form-input" name="restaurant_phone" id="id_restaurant_phone" placeholder="9876543210" value="{{ form.restaurant_phone.value|default:'' }}">
+            <input type="text" class="form-input" name="restaurant_phone" id="id_restaurant_phone" maxlength="20" placeholder="9876543210" value="{{ form.restaurant_phone.value|default:'' }}" oninput="this.value = normalizePhone(this.value)">
+            <span class="form-hint" id="id_phone_hint">10-digit mobile number (starts with 6, 7, 8, or 9)</span>
             {% if form.restaurant_phone.errors %}
               <span class="form-error">{{ form.restaurant_phone.errors.0 }}</span>
             {% endif %}
@@ -791,7 +793,7 @@
         <div class="step-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
           <div>
             <h2>Add your outlets</h2>
-            <p>Configure outlet locations, contact information, and state-level GSTINs.</p>
+            <p>Configure outlet locations, contact information, outlet types, and state-level GSTINs.</p>
           </div>
           {% if MAX_ALLOWED_BRANCHES > 0 %}
           <span class="badge neutral" style="font-size: 0.8rem; padding: 6px 12px; border-radius: 6px; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;">
@@ -928,14 +930,131 @@
   let branches = JSON.parse('{{ initial_branches_json|escapejs|default:"[]" }}');
   let activeBranchIndex = 0;
 
+  // 5.3 Valid GST State Codes Table
+  const GST_STATE_CODES = {
+    "01": "Jammu & Kashmir",
+    "02": "Himachal Pradesh",
+    "03": "Punjab",
+    "04": "Chandigarh",
+    "05": "Uttarakhand",
+    "06": "Haryana",
+    "07": "Delhi",
+    "08": "Rajasthan",
+    "09": "Uttar Pradesh",
+    "10": "Bihar",
+    "11": "Sikkim",
+    "12": "Arunachal Pradesh",
+    "13": "Nagaland",
+    "14": "Manipur",
+    "15": "Mizoram",
+    "16": "Tripura",
+    "17": "Meghalaya",
+    "18": "Assam",
+    "19": "West Bengal",
+    "20": "Jharkhand",
+    "21": "Odisha",
+    "22": "Chhattisgarh",
+    "23": "Madhya Pradesh",
+    "24": "Gujarat",
+    "26": "Dadra & Nagar Haveli and Daman & Diu",
+    "27": "Maharashtra",
+    "29": "Karnataka",
+    "30": "Goa",
+    "31": "Lakshadweep",
+    "32": "Kerala",
+    "33": "Tamil Nadu",
+    "34": "Puducherry",
+    "35": "Andaman & Nicobar Islands",
+    "36": "Telangana",
+    "37": "Andhra Pradesh",
+    "38": "Ladakh"
+  };
+
+  const REJECTED_STATE_CODES = ["25", "28", "97", "99"];
+
+  function getGstStateCode(stateName) {
+    if (!stateName) return "";
+    const sLower = stateName.trim().toLowerCase();
+    for (const [code, name] of Object.entries(GST_STATE_CODES)) {
+      if (name.toLowerCase() === sLower) return code;
+    }
+    if (sLower === "jammu and kashmir") return "01";
+    if (sLower === "andaman and nicobar islands") return "35";
+    if (sLower === "dadra and nagar haveli and daman and diu") return "26";
+    if (sLower === "orissa") return "21";
+    if (sLower === "pondicherry") return "34";
+    return "";
+  }
+
+  // 1. Normalisation helper functions
+  function normalizePanOrGstin(str) {
+    return (str || '').replace(/\s+/g, '').toUpperCase().trim();
+  }
+
+  function normalizePhone(str) {
+    let val = (str || '').replace(/[\s\-\(\)\+]/g, '').trim();
+    if (val.startsWith('91') && val.length === 12) val = val.substring(2);
+    else if (val.startsWith('0') && val.length === 11) val = val.substring(1);
+    return val;
+  }
+
+  function normalizeDigitsOnly(str) {
+    return (str || '').replace(/\D/g, '').trim();
+  }
+
+  function normalizeTextSpaces(str) {
+    return (str || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function normalizeEmail(str) {
+    return (str || '').trim().toLowerCase();
+  }
+
+  function normalizeCity(str) {
+    const clean = normalizeTextSpaces(str);
+    return clean.split(' ').map(word => 
+      word.split('-').map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()).join('-')
+    ).join(' ');
+  }
+
+  // 5.7 Mod-36 Checksum
+  const CHARS_MOD36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+  function gstinCheckChar(first14) {
+    let sum = 0;
+    for (let i = 0; i < 14; i++) {
+      const cp = CHARS_MOD36.indexOf(first14[i]);
+      if (cp < 0) return null;
+      const factor = (i % 2 === 0) ? 1 : 2;   // alternate 1,2 from the LEFT
+      let addend = factor * cp;
+      addend = Math.floor(addend / 36) + (addend % 36);
+      sum += addend;
+    }
+    return CHARS_MOD36[(36 - (sum % 36)) % 36];
+  }
+
+  function compute_gstin_check_char(first14) {
+    return gstinCheckChar(first14);
+  }
+
+  function isValidGstinChecksum(gstin) {
+    return gstin.length === 15 && gstinCheckChar(gstin.slice(0, 14)) === gstin[14];
+  }
+
+  // 5.1 Business Rules & PAN 4th Character
   const BUSINESS_RULES = {
     "Sole Proprietorship": { panChar: "P", label: null },
+    "Partnership Firm": { panChar: "F", label: null },
     "Partnership": { panChar: "F", label: null },
     "LLP": { panChar: "F", label: "LLPIN", placeholder: "AAB-1234", hint: "LLP Identification Number (required)" },
     "Private Limited": { panChar: "C", label: "CIN", placeholder: "U15400RJ2020PTC000000", hint: "Corporate Identification Number (required)" },
     "Public Limited": { panChar: "C", label: "CIN", placeholder: "L15400RJ2020PLC000000", hint: "Corporate Identification Number (required)" },
-    "OPC": { panChar: "C", label: "CIN", placeholder: "U15400RJ2020OPC000000", hint: "Corporate Identification Number (required)" },
-    "Trust/Society": { panChar: "T or A", label: null },
+    "HUF": { panChar: "H", label: null },
+    "Trust": { panChar: "T", label: null },
+    "AOP": { panChar: "A", label: null },
+    "BOI": { panChar: "B", label: null },
+    "Society": { panChar: "J", label: null },
+    "Government": { panChar: "L or G", label: null },
   };
 
   // Initialize page and branch cards
@@ -946,6 +1065,8 @@
       renderBranchCards();
     }
     updateBusinessTypeRules();
+    updateLegalNameRules();
+    updatePincodeRules();
 
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get("step") === "2") {
@@ -976,6 +1097,8 @@
         if (typeof setMainActive === "function") setMainActive(r.is_active !== undefined ? r.is_active : true);
 
         updateBusinessTypeRules();
+        updateLegalNameRules();
+        updatePincodeRules();
 
         if (data.branches && data.branches.length > 0) {
           branches = data.branches;
@@ -987,7 +1110,6 @@
       })
       .catch(err => console.error("Error loading existing business:", err));
   }
-
 
   function updateBusinessTypeRules() {
     const bTypeElem = document.getElementById("id_business_type");
@@ -1002,7 +1124,7 @@
 
     if (panHint) {
       if (rule && rule.panChar) {
-        panHint.innerText = `As per PAN (4th character should be '${rule.panChar}')`;
+        panHint.innerHTML = `As per PAN (4th character for <strong>${bType}</strong> must be <strong>'${rule.panChar}'</strong>)`;
       } else {
         panHint.innerText = "As per PAN";
       }
@@ -1018,12 +1140,13 @@
       if (cinInput) cinInput.value = "";
     }
     updatePanRules();
+    updateLegalNameRules();
   }
 
   function updatePanRules() {
     const panInput = document.getElementById("id_pan");
     if (!panInput) return;
-    const panVal = panInput.value.toUpperCase().trim();
+    const panVal = normalizePanOrGstin(panInput.value);
     panInput.value = panVal;
 
     const bType = document.getElementById("id_business_type") ? document.getElementById("id_business_type").value : "";
@@ -1056,6 +1179,62 @@
 
     errorElem.classList.add("hidden");
     errorElem.innerText = "";
+  }
+
+  function updateLegalNameRules() {
+    const legalInput = document.getElementById("id_legal_name");
+    const panInput = document.getElementById("id_pan");
+    const hintElem = document.getElementById("id_legal_name_hint");
+    if (!legalInput || !panInput) return;
+
+    const legalVal = legalInput.value.trim().toUpperCase();
+    const panVal = normalizePanOrGstin(panInput.value);
+
+    if (legalVal) {
+      if (/\b(PVT\s*LTD|PRIVATE\s+LIMITED|LIMITED|LTD)\b/.test(legalVal)) {
+        if (panVal.length >= 4 && panVal[3] !== 'C') {
+          if (hintElem) {
+            hintElem.innerHTML = "<span style='color: #dc2626; font-weight: 600;'><i class='fa-solid fa-triangle-exclamation'></i> Legal Name indicates Corporate Entity, but PAN 4th char is not 'C'</span>";
+          }
+          return;
+        }
+      } else if (/\bLLP\b/.test(legalVal)) {
+        if (panVal.length >= 4 && panVal[3] !== 'F') {
+          if (hintElem) {
+            hintElem.innerHTML = "<span style='color: #dc2626; font-weight: 600;'><i class='fa-solid fa-triangle-exclamation'></i> Legal Name indicates LLP, but PAN 4th char is not 'F'</span>";
+          }
+          return;
+        }
+      }
+    }
+    if (hintElem) hintElem.innerText = "As per PAN and official business records (3–100 characters)";
+  }
+
+  function updatePincodeRules() {
+    const pinInput = document.getElementById("id_restaurant_pincode");
+    const hintElem = document.getElementById("id_pincode_hint");
+    if (!pinInput) return;
+    const pinVal = normalizeDigitsOnly(pinInput.value);
+    pinInput.value = pinVal;
+    if (pinVal.length === 6 && pinVal.startsWith('9')) {
+      if (hintElem) {
+        hintElem.innerHTML = "<span style='color: #d97706; font-weight: 600;'><i class='fa-solid fa-triangle-exclamation'></i> Note: PIN starts with '9' (Army Postal Service zone). Verify if not typo.</span>";
+      }
+    } else if (hintElem) {
+      hintElem.innerText = "6-digit Postal Index Number (cannot start with 0)";
+    }
+  }
+
+  function syncCompanyStateToBranches() {
+    const coState = document.getElementById("id_restaurant_state").value;
+    branches.forEach((b, idx) => {
+      if (b.use_company_address) {
+        b.state = coState;
+        const stSelect = document.getElementById(`branch-state-${idx}`);
+        if (stSelect) stSelect.value = coState;
+        validateBranchGstinLive(idx);
+      }
+    });
   }
 
   function setMainGst(val) {
@@ -1093,16 +1272,24 @@
 
   function validateAndGoToStep(targetStep) {
     if (targetStep === 2) {
-      const legal = document.getElementById("id_legal_name").value.trim();
-      if (!legal) {
-        alert("Legal Name is required.");
+      // Step 1 Validations
+      const legal = normalizeTextSpaces(document.getElementById("id_legal_name").value);
+      document.getElementById("id_legal_name").value = legal;
+      if (!legal || legal.length < 3 || legal.length > 100) {
+        alert("Legal Name must be between 3 and 100 characters.");
+        document.getElementById("id_legal_name").focus();
+        return;
+      }
+      if (!/[A-Za-z]/.test(legal)) {
+        alert("Legal Name must contain at least one letter.");
         document.getElementById("id_legal_name").focus();
         return;
       }
 
-      const trade = document.getElementById("id_trade_name").value.trim();
-      if (!trade) {
-        alert("Trade / Brand Name is required.");
+      const trade = normalizeTextSpaces(document.getElementById("id_trade_name").value);
+      document.getElementById("id_trade_name").value = trade;
+      if (trade && (trade.length < 2 || trade.length > 60)) {
+        alert("Trade / Brand Name must be between 2 and 60 characters.");
         document.getElementById("id_trade_name").focus();
         return;
       }
@@ -1114,15 +1301,10 @@
         return;
       }
 
-      const pan = document.getElementById("id_pan").value.toUpperCase().trim();
-      if (!pan) {
-        alert("PAN is required.");
-        document.getElementById("id_pan").focus();
-        return;
-      }
-
-      if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
-        alert("Invalid PAN format (e.g. AAACS1234F).");
+      const pan = normalizePanOrGstin(document.getElementById("id_pan").value);
+      document.getElementById("id_pan").value = pan;
+      if (!pan || !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+        alert("Please enter a valid 10-character PAN (e.g. AAACS1234F).");
         document.getElementById("id_pan").focus();
         return;
       }
@@ -1138,8 +1320,21 @@
         }
       }
 
+      // Legal name suffix check
+      const legalUpper = legal.toUpperCase();
+      if (/\b(PVT\s*LTD|PRIVATE\s+LIMITED|LIMITED|LTD)\b/.test(legalUpper) && pan[3] !== 'C') {
+        alert("Legal Name indicates a Corporate Entity (Private Limited / Limited), but PAN 4th character is not 'C'.");
+        document.getElementById("id_legal_name").focus();
+        return;
+      }
+      if (/\bLLP\b/.test(legalUpper) && pan[3] !== 'F') {
+        alert("Legal Name indicates an LLP, but PAN 4th character is not 'F'.");
+        document.getElementById("id_legal_name").focus();
+        return;
+      }
+
       if (rule && rule.label) {
-        const cin = document.getElementById("id_cin_llpin").value.trim();
+        const cin = normalizeTextSpaces(document.getElementById("id_cin_llpin").value);
         if (!cin) {
           alert(`${rule.label} is required for ${btype}.`);
           document.getElementById("id_cin_llpin").focus();
@@ -1147,61 +1342,193 @@
         }
       }
 
-      const addr1 = document.getElementById("id_restaurant_address_line_1").value.trim();
-      if (!addr1) {
-        alert("Address Line 1 is required.");
+      const addr1 = normalizeTextSpaces(document.getElementById("id_restaurant_address_line_1").value);
+      document.getElementById("id_restaurant_address_line_1").value = addr1;
+      if (!addr1 || addr1.length < 5 || addr1.length > 100) {
+        alert("Address Line 1 must be between 5 and 100 characters.");
         document.getElementById("id_restaurant_address_line_1").focus();
         return;
       }
 
-      const city = document.getElementById("id_restaurant_city").value.trim();
-      if (!city) {
-        alert("City is required.");
+      const city = normalizeCity(document.getElementById("id_restaurant_city").value);
+      document.getElementById("id_restaurant_city").value = city;
+      if (!city || city.length < 2 || city.length > 50 || !/^[A-Za-z\s\-']+$/.test(city)) {
+        alert("City must be 2–50 characters (letters, spaces, hyphens, and apostrophes only).");
         document.getElementById("id_restaurant_city").focus();
         return;
       }
 
       const state = document.getElementById("id_restaurant_state").value;
-      if (!state) {
-        alert("Please select a State.");
+      if (!state || getGstStateCode(state) === "") {
+        alert("Please select a valid State from the list.");
         document.getElementById("id_restaurant_state").focus();
         return;
       }
 
-      const pincode = document.getElementById("id_restaurant_pincode").value.trim();
-      if (!/^[1-9][0-9]{5}$/.test(pincode)) {
-        alert("Enter a valid 6-digit Pincode.");
+      const pincode = normalizeDigitsOnly(document.getElementById("id_restaurant_pincode").value);
+      document.getElementById("id_restaurant_pincode").value = pincode;
+      if (pincode.length !== 6 || pincode.startsWith('0')) {
+        alert("Enter a valid 6-digit Pincode (cannot start with 0).");
         document.getElementById("id_restaurant_pincode").focus();
         return;
       }
 
-      const email = document.getElementById("id_restaurant_email").value.trim();
+      const email = normalizeEmail(document.getElementById("id_restaurant_email").value);
+      document.getElementById("id_restaurant_email").value = email;
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         alert("Enter a valid Email address.");
         document.getElementById("id_restaurant_email").focus();
         return;
       }
 
-      const phone = document.getElementById("id_restaurant_phone").value.trim();
-      if (!/^[6-9][0-9]{9}$/.test(phone)) {
-        alert("Enter a valid 10-digit mobile number.");
+      const phone = normalizePhone(document.getElementById("id_restaurant_phone").value);
+      document.getElementById("id_restaurant_phone").value = phone;
+      if (phone.length !== 10 || !/^[6-9][0-9]{9}$/.test(phone)) {
+        alert("Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.");
         document.getElementById("id_restaurant_phone").focus();
         return;
       }
     } else if (targetStep === 3) {
+      // Step 2 Validations
       syncBranchesFromDOM();
       if (branches.length === 0) {
         alert("Please add at least one branch outlet.");
         return;
       }
+
+      const companyPan = normalizePanOrGstin(document.getElementById("id_pan").value);
+      const isGstReg = document.getElementById("id_is_gst_registered").value === "on";
+      const seenNames = new Set();
+      const gstinRegTypes = {};
+
       for (let i = 0; i < branches.length; i++) {
-        if (!branches[i].name) {
+        const b = branches[i];
+        const bName = normalizeTextSpaces(b.name);
+        if (!bName || bName.length < 2 || bName.length > 60) {
           activeBranchIndex = i;
           renderBranchCards();
-          alert(`Outlet ${i + 1} requires a Branch Name.`);
-          const input = document.getElementById(`branch-name-${i}`);
-          if (input) input.focus();
+          alert(`Outlet ${i + 1} requires a Branch Name between 2 and 60 characters.`);
+          document.getElementById(`branch-name-${i}`)?.focus();
           return;
+        }
+
+        if (seenNames.has(bName.toLowerCase())) {
+          activeBranchIndex = i;
+          renderBranchCards();
+          alert(`Duplicate outlet name '${bName}'. Each outlet must have a unique name.`);
+          document.getElementById(`branch-name-${i}`)?.focus();
+          return;
+        }
+        seenNames.add(bName.toLowerCase());
+
+        if (b.phone) {
+          const bPhone = normalizePhone(b.phone);
+          if (bPhone.length !== 10 || !/^[6-9][0-9]{9}$/.test(bPhone)) {
+            activeBranchIndex = i;
+            renderBranchCards();
+            alert(`Outlet '${bName}' phone must be a valid 10-digit number starting with 6-9.`);
+            document.getElementById(`branch-phone-${i}`)?.focus();
+            return;
+          }
+        }
+
+        if (!b.use_company_address) {
+          if (!b.address_line_1 || b.address_line_1.length < 5 || b.address_line_1.length > 100) {
+            activeBranchIndex = i;
+            renderBranchCards();
+            alert(`Outlet '${bName}' Address Line 1 must be between 5 and 100 characters.`);
+            document.getElementById(`branch-addr1-${i}`)?.focus();
+            return;
+          }
+          if (!b.city || b.city.length < 2 || b.city.length > 50 || !/^[A-Za-z\s\-']+$/.test(b.city)) {
+            activeBranchIndex = i;
+            renderBranchCards();
+            alert(`Outlet '${bName}' City must be 2–50 characters (letters, spaces, hyphens, and apostrophes only).`);
+            document.getElementById(`branch-city-${i}`)?.focus();
+            return;
+          }
+          if (!b.state || getGstStateCode(b.state) === "") {
+            activeBranchIndex = i;
+            renderBranchCards();
+            alert(`Outlet '${bName}' requires a valid State from the list.`);
+            document.getElementById(`branch-state-${i}`)?.focus();
+            return;
+          }
+          if (!b.pincode || b.pincode.length !== 6 || b.pincode.startsWith('0')) {
+            activeBranchIndex = i;
+            renderBranchCards();
+            alert(`Outlet '${bName}' Pincode must be 6 digits and cannot start with 0.`);
+            document.getElementById(`branch-pincode-${i}`)?.focus();
+            return;
+          }
+        }
+
+        if (b.fssai_license_no) {
+          const fssai = normalizeDigitsOnly(b.fssai_license_no);
+          if (fssai.length !== 14 || !['1', '2'].includes(fssai[0])) {
+            activeBranchIndex = i;
+            renderBranchCards();
+            alert(`Outlet '${bName}' FSSAI must be 14 digits starting with 1 (Licence) or 2 (Registration).`);
+            document.getElementById(`branch-fssai-${i}`)?.focus();
+            return;
+          }
+        }
+
+        if (isGstReg && b.gstin) {
+          const gstin = normalizePanOrGstin(b.gstin);
+          if (gstin.length !== 15 || !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/.test(gstin)) {
+            activeBranchIndex = i;
+            renderBranchCards();
+            alert(`Outlet '${bName}' GSTIN '${gstin}' is invalid. Must be 15 characters with 14th character 'Z'.`);
+            document.getElementById(`branch-gstin-${i}`)?.focus();
+            return;
+          }
+
+          const embeddedPan = gstin.substring(2, 12);
+          if (companyPan && embeddedPan !== companyPan) {
+            activeBranchIndex = i;
+            renderBranchCards();
+            alert(`Outlet '${bName}' GSTIN embedded PAN '${embeddedPan}' does not match Company PAN '${companyPan}'.`);
+            document.getElementById(`branch-gstin-${i}`)?.focus();
+            return;
+          }
+
+          const branchState = b.use_company_address ? document.getElementById("id_restaurant_state").value : b.state;
+          const expectedCode = getGstStateCode(branchState);
+          const gstinCode = gstin.substring(0, 2);
+          if (expectedCode && gstinCode !== expectedCode) {
+            activeBranchIndex = i;
+            renderBranchCards();
+            alert(`Outlet '${bName}' GSTIN state code '${gstinCode}' does not match outlet state '${branchState}' (Code ${expectedCode}).`);
+            document.getElementById(`branch-gstin-${i}`)?.focus();
+            return;
+          }
+
+          // Uniformity per GSTIN (§5.9)
+          if (gstin in gstinRegTypes && gstinRegTypes[gstin] !== b.gst_registration_type) {
+            activeBranchIndex = i;
+            renderBranchCards();
+            alert(`GSTIN '${gstin}' is used across multiple outlets with different Registration Types. All outlets sharing a GSTIN must have the exact same Registration Type.`);
+            return;
+          }
+          gstinRegTypes[gstin] = b.gst_registration_type;
+        }
+
+        if (b.serves_alcohol) {
+          if (!b.vat_tin) {
+            activeBranchIndex = i;
+            renderBranchCards();
+            alert(`Outlet '${bName}' serves alcohol: State VAT TIN is required.`);
+            document.getElementById(`branch-vattin-${i}`)?.focus();
+            return;
+          }
+          if (!b.excise_license_no) {
+            activeBranchIndex = i;
+            renderBranchCards();
+            alert(`Outlet '${bName}' serves alcohol: Excise License No. is required.`);
+            document.getElementById(`branch-excise-${i}`)?.focus();
+            return;
+          }
         }
       }
     }
@@ -1226,6 +1553,7 @@
     const newBranch = {
       id: null,
       name: branchName,
+      outlet_type: "dine_in",
       phone: "",
       use_company_address: true,
       address_line_1: "",
@@ -1303,8 +1631,15 @@
       const addr1 = b.use_company_address ? companyAddr1 : (b.address_line_1 || "");
       const addr2 = b.use_company_address ? companyAddr2 : (b.address_line_2 || "");
       const city = b.use_company_address ? companyCity : (b.city || "");
-      const state = b.use_company_address ? companyState : (b.state || "");
+      const state = b.use_company_address ? companyState : (b.state || companyState || "Rajasthan");
       const pincode = b.use_company_address ? companyPincode : (b.pincode || "");
+      const outletType = b.outlet_type || "dine_in";
+
+      let stateOptionsHtml = `<option value="">Select State...</option>`;
+      for (const [code, sName] of Object.entries(GST_STATE_CODES)) {
+        const isSel = (sName.toLowerCase() === state.toLowerCase() || code === state);
+        stateOptionsHtml += `<option value="${escapeHtml(sName)}" ${isSel ? 'selected' : ''}>${code} - ${escapeHtml(sName)}</option>`;
+      }
 
       card.innerHTML = `
         <div class="branch-card-header" onclick="toggleBranchAccordion(${idx}, event)">
@@ -1317,6 +1652,9 @@
             </span>
             <span class="badge-tag state" style="background: #fef3c7; color: #92400e; padding: 3px 8px; border-radius: 6px; font-weight: 600; font-size: 11px;">
               ${state || 'State'}
+            </span>
+            <span class="badge-tag" style="background: #e0f2fe; color: #0369a1; padding: 3px 8px; border-radius: 6px; font-weight: 600; font-size: 11px;">
+              ${outletType === 'dine_in' ? 'Dine-in' : (outletType === 'takeaway_qsr' ? 'Takeaway/QSR' : 'Cloud Kitchen')}
             </span>
             ${b.use_company_address ? `<span style="font-size: 11px; color: #059669; font-weight: 600; background: #f0fdf4; padding: 2px 7px; border-radius: 6px; border: 1px solid #bbf7d0;"><i class="fa-solid fa-link"></i> HQ Address</span>` : ''}
             {% if ENABLE_ALCOHOL_VAT %}
@@ -1342,14 +1680,31 @@
             <!-- Branch Name -->
             <div class="form-group">
               <label class="form-label">Branch Name <span class="req">*</span></label>
-              <input type="text" class="form-input" id="branch-name-${idx}" placeholder="e.g. Spice Villa — Main Branch" value="${escapeHtml(b.name)}" oninput="branches[${idx}].name = this.value">
+              <input type="text" class="form-input" id="branch-name-${idx}" maxlength="60" placeholder="e.g. Spice Villa — Main Branch (2–60 chars)" value="${escapeHtml(b.name)}" oninput="branches[${idx}].name = this.value" onblur="this.value = normalizeTextSpaces(this.value); branches[${idx}].name = this.value">
+            </div>
+
+            <!-- Outlet Type (§4) -->
+            <div class="form-group">
+              <label class="form-label">Outlet Type <span class="req">*</span></label>
+              <select class="form-select" id="branch-outlettype-${idx}" onchange="branches[${idx}].outlet_type = this.value; renderBranchCards();">
+                <option value="dine_in" ${outletType === 'dine_in' ? 'selected' : ''}>Dine-in</option>
+                <option value="takeaway_qsr" ${outletType === 'takeaway_qsr' ? 'selected' : ''}>Takeaway / QSR</option>
+                <option value="cloud_kitchen" ${outletType === 'cloud_kitchen' ? 'selected' : ''}>Cloud Kitchen</option>
+              </select>
             </div>
 
             <!-- Branch Phone -->
             <div class="form-group">
               <label class="form-label">Branch Phone</label>
-              <input type="text" class="form-input" id="branch-phone-${idx}" placeholder="9876543210" value="${escapeHtml(b.phone)}" oninput="branches[${idx}].phone = this.value">
-              <span class="form-hint">Leave blank to use the company number</span>
+              <input type="text" class="form-input" id="branch-phone-${idx}" maxlength="20" placeholder="9876543210 (10-digit mobile)" value="${escapeHtml(b.phone)}" oninput="this.value = normalizePhone(this.value); branches[${idx}].phone = this.value">
+              <span class="form-hint">Leave blank to inherit the company phone number</span>
+            </div>
+
+            <!-- FSSAI License No. (§4) -->
+            <div class="form-group">
+              <label class="form-label">FSSAI Licence / Registration No.</label>
+              <input type="text" class="form-input" id="branch-fssai-${idx}" maxlength="14" placeholder="14-digit FSSAI (starts with 1 or 2)" value="${escapeHtml(b.fssai_license_no)}" oninput="this.value = normalizeDigitsOnly(this.value); branches[${idx}].fssai_license_no = this.value; validateBranchFssaiLive(${idx});">
+              <span class="form-hint" id="branch-fssai-hint-${idx}">Starts with '1' (Licence) or '2' (Registration). Required on bills.</span>
             </div>
 
             <!-- Use Registered Company Address -->
@@ -1363,39 +1718,36 @@
             <!-- Address Line 1 -->
             <div class="form-group">
               <label class="form-label">Address Line 1 <span class="req">*</span></label>
-              <input type="text" class="form-input" id="branch-addr1-${idx}" placeholder="Building no., street" value="${escapeHtml(addr1)}" ${b.use_company_address ? 'disabled style="background: #f1f5f9; color: #64748b;"' : ''} oninput="branches[${idx}].address_line_1 = this.value">
+              <input type="text" class="form-input" id="branch-addr1-${idx}" maxlength="100" placeholder="Building no., street (5–100 characters)" value="${escapeHtml(addr1)}" ${b.use_company_address ? 'disabled style="background: #f1f5f9; color: #64748b;"' : ''} oninput="branches[${idx}].address_line_1 = this.value" onblur="this.value = normalizeTextSpaces(this.value); branches[${idx}].address_line_1 = this.value">
             </div>
 
             <!-- Address Line 2 -->
             <div class="form-group">
               <label class="form-label">Address Line 2</label>
-              <input type="text" class="form-input" id="branch-addr2-${idx}" placeholder="Area / Landmark (optional)" value="${escapeHtml(addr2)}" ${b.use_company_address ? 'disabled style="background: #f1f5f9; color: #64748b;"' : ''} oninput="branches[${idx}].address_line_2 = this.value">
+              <input type="text" class="form-input" id="branch-addr2-${idx}" maxlength="100" placeholder="Area / Landmark (optional)" value="${escapeHtml(addr2)}" ${b.use_company_address ? 'disabled style="background: #f1f5f9; color: #64748b;"' : ''} oninput="branches[${idx}].address_line_2 = this.value" onblur="this.value = normalizeTextSpaces(this.value); branches[${idx}].address_line_2 = this.value">
               <span class="form-hint">Optional</span>
             </div>
 
             <!-- City -->
             <div class="form-group">
               <label class="form-label">City <span class="req">*</span></label>
-              <input type="text" class="form-input" id="branch-city-${idx}" placeholder="City" value="${escapeHtml(city)}" ${b.use_company_address ? 'disabled style="background: #f1f5f9; color: #64748b;"' : ''} oninput="branches[${idx}].city = this.value">
+              <input type="text" class="form-input" id="branch-city-${idx}" maxlength="50" placeholder="e.g. Jaipur (2–50 characters)" value="${escapeHtml(city)}" ${b.use_company_address ? 'disabled style="background: #f1f5f9; color: #64748b;"' : ''} oninput="branches[${idx}].city = this.value" onblur="this.value = normalizeCity(this.value); branches[${idx}].city = this.value">
             </div>
 
-            <!-- State -->
+            <!-- State (§4, §5.3, §5.5 - Structured Dropdown) -->
             <div class="form-group">
               <label class="form-label">State <span class="req">*</span></label>
-              <input type="text" class="form-input" id="branch-state-${idx}" placeholder="State" value="${escapeHtml(state)}" ${b.use_company_address ? 'disabled style="background: #f1f5f9; color: #64748b;"' : ''} oninput="branches[${idx}].state = this.value">
+              <select class="form-select" id="branch-state-${idx}" ${b.use_company_address ? 'disabled style="background: #f1f5f9; color: #64748b;"' : ''} onchange="setBranchState(${idx}, this.value)">
+                ${stateOptionsHtml}
+              </select>
+              <span class="form-hint">State code is matched against GSTIN</span>
             </div>
 
             <!-- Pincode -->
             <div class="form-group">
               <label class="form-label">Pincode <span class="req">*</span></label>
-              <input type="text" class="form-input" id="branch-pincode-${idx}" placeholder="6-digit Pincode" value="${escapeHtml(pincode)}" ${b.use_company_address ? 'disabled style="background: #f1f5f9; color: #64748b;"' : ''} oninput="branches[${idx}].pincode = this.value">
-            </div>
-
-            <!-- FSSAI License No. -->
-            <div class="form-group">
-              <label class="form-label">FSSAI License No.</label>
-              <input type="text" class="form-input" id="branch-fssai-${idx}" placeholder="14-digit FSSAI License" value="${escapeHtml(b.fssai_license_no)}" oninput="branches[${idx}].fssai_license_no = this.value">
-              <span class="form-hint">Required before printing bills</span>
+              <input type="text" class="form-input" id="branch-pincode-${idx}" maxlength="6" placeholder="6-digit Pincode" value="${escapeHtml(pincode)}" ${b.use_company_address ? 'disabled style="background: #f1f5f9; color: #64748b;"' : ''} oninput="this.value = normalizeDigitsOnly(this.value); branches[${idx}].pincode = this.value; updateBranchPincodeHint(${idx});">
+              <span class="form-hint" id="branch-pincode-hint-${idx}">6-digit PIN (cannot start with 0)</span>
             </div>
 
             {% if ENABLE_ALCOHOL_VAT %}
@@ -1421,13 +1773,13 @@
             <div class="form-grid">
               <div class="form-group">
                 <label class="form-label" style="color: #92400e;">State VAT TIN <span class="req">*</span></label>
-                <input type="text" class="form-input" id="branch-vattin-${idx}" placeholder="e.g. 08123456789V" style="text-transform: uppercase; background: #ffffff;" value="${escapeHtml(b.vat_tin || '')}" oninput="branches[${idx}].vat_tin = this.value">
+                <input type="text" class="form-input" id="branch-vattin-${idx}" maxlength="50" placeholder="e.g. 08123456789V" style="text-transform: uppercase; background: #ffffff;" value="${escapeHtml(b.vat_tin || '')}" oninput="this.value = normalizePanOrGstin(this.value); branches[${idx}].vat_tin = this.value">
                 <span class="form-hint" style="color: #b45309;">State VAT Registration TIN for Liquor</span>
               </div>
 
               <div class="form-group">
                 <label class="form-label" style="color: #92400e;">Excise License No. <span class="req">*</span></label>
-                <input type="text" class="form-input" id="branch-excise-${idx}" placeholder="e.g. EX-RAJ-2024-00123" style="text-transform: uppercase; background: #ffffff;" value="${escapeHtml(b.excise_license_no || '')}" oninput="branches[${idx}].excise_license_no = this.value">
+                <input type="text" class="form-input" id="branch-excise-${idx}" maxlength="50" placeholder="e.g. EX-RAJ-2024-00123" style="text-transform: uppercase; background: #ffffff;" value="${escapeHtml(b.excise_license_no || '')}" oninput="this.value = normalizeTextSpaces(this.value).toUpperCase(); branches[${idx}].excise_license_no = this.value">
                 <span class="form-hint" style="color: #b45309;">Required before billing alcohol</span>
               </div>
 
@@ -1450,7 +1802,7 @@
           ` : ''}
           {% endif %}
 
-          <!-- Nested GST Box -->
+          <!-- Nested GST Box (§3, §5.2–§5.9) -->
           <div class="gst-branch-box" style="border: 1.5px dashed #86efac; background: #f0fdf4; border-radius: 12px; padding: 18px 16px; margin-top: 20px;">
             <h4 style="margin: 0 0 14px 0; font-size: 15px; font-weight: 700; color: #14532d; display: flex; align-items: center; gap: 6px;">
               <i class="fa-solid fa-file-invoice-dollar" style="color: #16a34a;"></i> GST for this branch outlet
@@ -1458,8 +1810,8 @@
             <div class="form-grid">
               <div class="form-group full-width">
                 <label class="form-label" style="color: #14532d;">GSTIN <span class="req">*</span></label>
-                <input type="text" class="form-input" id="branch-gstin-${idx}" placeholder="08CEXPJ7241H1Z5" style="text-transform: uppercase; background: #ffffff;" value="${escapeHtml(b.gstin)}" oninput="branches[${idx}].gstin = this.value">
-                <span class="form-hint" style="color: #15803d;">Saved at company level — other branches in this state will reuse it</span>
+                <input type="text" class="form-input" id="branch-gstin-${idx}" maxlength="15" placeholder="08CEXPJ7241H1Z5" style="text-transform: uppercase; background: #ffffff;" value="${escapeHtml(b.gstin)}" oninput="this.value = normalizePanOrGstin(this.value); branches[${idx}].gstin = this.value; validateBranchGstinLive(${idx});">
+                <span class="form-hint" id="branch-gstin-hint-${idx}" style="color: #15803d;">15 characters: 2-digit State Code + 10-char PAN + Entity No + 'Z' + Checksum</span>
               </div>
 
               <div class="form-group">
@@ -1470,6 +1822,7 @@
                   <option value="C" ${b.gst_registration_type === 'C' ? 'selected' : ''}>Composition</option>
                   <option value="U" ${b.gst_registration_type === 'U' ? 'selected' : ''}>Unregistered</option>
                 </select>
+                <span class="form-hint" style="color: #15803d;" id="branch-gsttype-hint-${idx}">Must be uniform for all outlets sharing this GSTIN</span>
               </div>
 
               <div class="form-group">
@@ -1494,11 +1847,25 @@
         </div>
       `;
       container.appendChild(card);
+      try {
+        validateBranchGstinLive(idx);
+      } catch (e) {
+        console.warn("Validation error for branch", idx, e);
+      }
     });
+  }
+
+  function setBranchState(idx, val) {
+    syncBranchesFromDOM();
+    branches[idx].state = val;
+    validateBranchGstinLive(idx);
   }
 
   function toggleUseCompanyAddr(idx, isChecked) {
     branches[idx].use_company_address = isChecked;
+    if (isChecked) {
+      branches[idx].state = document.getElementById("id_restaurant_state").value;
+    }
     renderBranchCards();
   }
 
@@ -1534,6 +1901,17 @@
     } else {
       branches[idx].is_hotel_tariff_7500_plus = false;
     }
+
+    // 5.9 Enforce registration type uniformity across branches sharing same GSTIN
+    const currentGstin = normalizePanOrGstin(branches[idx].gstin);
+    if (currentGstin) {
+      branches.forEach((otherB, otherIdx) => {
+        if (otherIdx !== idx && normalizePanOrGstin(otherB.gstin) === currentGstin) {
+          otherB.gst_registration_type = val;
+          otherB.is_hotel_tariff_7500_plus = (val === 'R18');
+        }
+      });
+    }
     renderBranchCards();
   }
 
@@ -1542,28 +1920,144 @@
     renderBranchCards();
   }
 
+  function validateBranchGstinLive(idx) {
+    try {
+      const hintElem = document.getElementById(`branch-gstin-hint-${idx}`);
+      if (!hintElem) return;
+
+      const gstinInput = document.getElementById(`branch-gstin-${idx}`);
+      if (!gstinInput) return;
+
+      const gstin = normalizePanOrGstin(gstinInput.value);
+      if (!gstin) {
+        hintElem.innerHTML = `<span style="color: #15803d;">15 characters: 2-digit State Code + 10-char PAN + Entity No + 'Z' + Checksum</span>`;
+        return;
+      }
+
+      const panInput = document.getElementById("id_pan");
+      const companyPan = panInput ? normalizePanOrGstin(panInput.value) : "";
+      const stateInput = document.getElementById("id_restaurant_state");
+      const bState = branches[idx]?.use_company_address ? (stateInput ? stateInput.value : "") : (branches[idx]?.state || "");
+      const expectedStateCode = getGstStateCode(bState);
+
+      let messages = [];
+
+      // Length check
+      if (gstin.length === 15) {
+        // 5.2 Structure check
+        if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/.test(gstin)) {
+          messages.push(`<span style="color: #dc2626; font-weight: 600;"><i class="fa-solid fa-circle-xmark"></i> Invalid structure (14th char must be 'Z').</span>`);
+        }
+
+        // 5.4 Embedded PAN check
+        const embeddedPan = gstin.substring(2, 12);
+        if (companyPan && embeddedPan !== companyPan) {
+          messages.push(`<span style="color: #dc2626; font-weight: 600;"><i class="fa-solid fa-circle-xmark"></i> Embedded PAN (${embeddedPan}) does not match Company PAN (${companyPan}).</span>`);
+        }
+
+        // 5.5 State code check
+        const gstinStateCode = gstin.substring(0, 2);
+        if (REJECTED_STATE_CODES.includes(gstinStateCode) || !GST_STATE_CODES[gstinStateCode]) {
+          messages.push(`<span style="color: #dc2626; font-weight: 600;"><i class="fa-solid fa-circle-xmark"></i> Invalid GST State code '${gstinStateCode}'.</span>`);
+        } else if (expectedStateCode && gstinStateCode !== expectedStateCode) {
+          const actualStateName = GST_STATE_CODES[gstinStateCode] || gstinStateCode;
+          messages.push(`<span style="color: #dc2626; font-weight: 600;"><i class="fa-solid fa-circle-xmark"></i> State code '${gstinStateCode}' (${actualStateName}) does not match branch State '${bState}' (${expectedStateCode}).</span>`);
+        }
+
+        // 5.7 Mod-36 Checksum
+        if (!isValidGstinChecksum(gstin)) {
+          const expectedCheck = gstinCheckChar(gstin.slice(0, 14));
+          if (expectedCheck) {
+            messages.push(`<span style="color: #d97706; font-weight: 600;"><i class="fa-solid fa-triangle-exclamation"></i> Checksum notice (expected '${expectedCheck}', got '${gstin[14]}'). Verify GST certificate.</span>`);
+          }
+        }
+
+        // 5.9 Check uniformity with other branches sharing same GSTIN
+        branches.forEach((otherB, otherIdx) => {
+          if (otherIdx !== idx && normalizePanOrGstin(otherB.gstin) === gstin) {
+            if (branches[idx].gst_registration_type !== otherB.gst_registration_type) {
+              branches[idx].gst_registration_type = otherB.gst_registration_type;
+              const gstTypeSelect = document.getElementById(`branch-gsttype-${idx}`);
+              if (gstTypeSelect) gstTypeSelect.value = otherB.gst_registration_type;
+            }
+            messages.push(`<span style="color: #059669; font-weight: 600;"><i class="fa-solid fa-link"></i> Reusing GSTIN from Outlet ${otherIdx + 1} — Registration Type synchronized.</span>`);
+          }
+        });
+
+        if (messages.length === 0) {
+          hintElem.innerHTML = `<span style="color: #16a34a; font-weight: 700;"><i class="fa-solid fa-circle-check"></i> GSTIN format, embedded PAN, and state code verified.</span>`;
+        } else {
+          hintElem.innerHTML = messages.join("<br>");
+        }
+      } else {
+        hintElem.innerHTML = `<span style="color: #475569;">Entered ${gstin.length}/15 characters</span>`;
+      }
+    } catch (err) {
+      console.warn("validateBranchGstinLive error:", err);
+    }
+  }
+
+  function validateBranchFssaiLive(idx) {
+    const hintElem = document.getElementById(`branch-fssai-hint-${idx}`);
+    if (!hintElem) return;
+    const fssaiInput = document.getElementById(`branch-fssai-${idx}`);
+    if (!fssaiInput) return;
+    const val = normalizeDigitsOnly(fssaiInput.value);
+    if (!val) {
+      hintElem.innerText = "Starts with '1' (Licence) or '2' (Registration). Required on bills.";
+      return;
+    }
+    if (val.length === 14) {
+      if (val[0] === '1') {
+        hintElem.innerHTML = `<span style="color: #16a34a; font-weight: 600;"><i class="fa-solid fa-circle-check"></i> Valid FSSAI State / Central Licence</span>`;
+      } else if (val[0] === '2') {
+        hintElem.innerHTML = `<span style="color: #16a34a; font-weight: 600;"><i class="fa-solid fa-circle-check"></i> Valid FSSAI Food Registration</span>`;
+      } else {
+        hintElem.innerHTML = `<span style="color: #dc2626; font-weight: 600;"><i class="fa-solid fa-circle-xmark"></i> First digit must be '1' (Licence) or '2' (Registration)</span>`;
+      }
+    } else {
+      hintElem.innerText = `Entered ${val.length}/14 digits. Starts with '1' or '2'.`;
+    }
+  }
+
+  function updateBranchPincodeHint(idx) {
+    const hintElem = document.getElementById(`branch-pincode-hint-${idx}`);
+    if (!hintElem) return;
+    const pinInput = document.getElementById(`branch-pincode-${idx}`);
+    if (!pinInput) return;
+    const val = normalizeDigitsOnly(pinInput.value);
+    if (val.length === 6 && val.startsWith('9')) {
+      hintElem.innerHTML = `<span style="color: #d97706; font-weight: 600;"><i class="fa-solid fa-triangle-exclamation"></i> Army Postal Service zone PIN (Starts with 9).</span>`;
+    } else {
+      hintElem.innerText = "6-digit PIN (cannot start with 0)";
+    }
+  }
+
   function syncBranchesFromDOM() {
     branches.forEach((b, idx) => {
       const nameElem = document.getElementById(`branch-name-${idx}`);
-      if (nameElem) b.name = nameElem.value;
+      if (nameElem) b.name = normalizeTextSpaces(nameElem.value);
+
+      const outletTypeElem = document.getElementById(`branch-outlettype-${idx}`);
+      if (outletTypeElem) b.outlet_type = outletTypeElem.value;
 
       const phoneElem = document.getElementById(`branch-phone-${idx}`);
-      if (phoneElem) b.phone = phoneElem.value;
+      if (phoneElem) b.phone = normalizePhone(phoneElem.value);
 
       const useAddrElem = document.getElementById(`branch-use-addr-${idx}`);
       if (useAddrElem) b.use_company_address = useAddrElem.checked;
 
       if (!b.use_company_address) {
         const a1 = document.getElementById(`branch-addr1-${idx}`);
-        if (a1) b.address_line_1 = a1.value;
+        if (a1) b.address_line_1 = normalizeTextSpaces(a1.value);
         const a2 = document.getElementById(`branch-addr2-${idx}`);
-        if (a2) b.address_line_2 = a2.value;
+        if (a2) b.address_line_2 = normalizeTextSpaces(a2.value);
         const city = document.getElementById(`branch-city-${idx}`);
-        if (city) b.city = city.value;
+        if (city) b.city = normalizeCity(city.value);
         const st = document.getElementById(`branch-state-${idx}`);
         if (st) b.state = st.value;
         const pin = document.getElementById(`branch-pincode-${idx}`);
-        if (pin) b.pincode = pin.value;
+        if (pin) b.pincode = normalizeDigitsOnly(pin.value);
       } else {
         b.address_line_1 = document.getElementById("id_restaurant_address_line_1").value;
         b.address_line_2 = document.getElementById("id_restaurant_address_line_2").value;
@@ -1573,13 +2067,13 @@
       }
 
       const fssai = document.getElementById(`branch-fssai-${idx}`);
-      if (fssai) b.fssai_license_no = fssai.value;
+      if (fssai) b.fssai_license_no = normalizeDigitsOnly(fssai.value);
 
       const vattin = document.getElementById(`branch-vattin-${idx}`);
-      if (vattin) b.vat_tin = vattin.value;
+      if (vattin) b.vat_tin = normalizePanOrGstin(vattin.value);
 
       const excise = document.getElementById(`branch-excise-${idx}`);
-      if (excise) b.excise_license_no = excise.value;
+      if (excise) b.excise_license_no = normalizeTextSpaces(excise.value).toUpperCase();
 
       const vatbeer = document.getElementById(`branch-vatbeer-${idx}`);
       if (vatbeer) b.vat_beer_rate = vatbeer.value;
@@ -1591,7 +2085,7 @@
       if (vatwine) b.vat_wine_rate = vatwine.value;
 
       const gstin = document.getElementById(`branch-gstin-${idx}`);
-      if (gstin) b.gstin = gstin.value;
+      if (gstin) b.gstin = normalizePanOrGstin(gstin.value);
 
       const gsttype = document.getElementById(`branch-gsttype-${idx}`);
       if (gsttype) b.gst_registration_type = gsttype.value;
@@ -1621,9 +2115,9 @@
     document.getElementById("sum-address").innerText = addrParts.join(", ") || "-";
     document.getElementById("sum-outlets-count").innerText = branches.length;
 
-    // Update Live Sample Bill Preview
+    // Update Live Sample Bill Preview (§5.10)
     const mainBranch = branches[0] || {};
-    document.getElementById("preview-trade-name").innerText = tradeName || "TRADE NAME";
+    document.getElementById("preview-trade-name").innerText = tradeName || legalName || "TRADE NAME";
     document.getElementById("preview-legal-name").innerText = `(${legalName})`;
     document.getElementById("preview-address").innerText = addrParts.join(", ") || "Branch Address";
 
@@ -1647,10 +2141,11 @@
       decElem.innerText = "Plain Receipt — Non-GST Invoice";
       if (grandTotalElem) grandTotalElem.innerText = "Grand Total: ₹760.00";
     } else if (gstType === "C") {
+      // 5.10 Composition consequence: Bill of supply with exact declaration
       titleElem.innerText = "BILL OF SUPPLY";
       cgstElem.style.display = "none";
       sgstElem.style.display = "none";
-      decElem.innerText = "Composition taxable person, not eligible to collect tax on supplies";
+      decElem.innerText = "composition taxable person, not eligible to collect tax on supplies";
       if (grandTotalElem) grandTotalElem.innerText = "Grand Total: ₹760.00";
     } else if (gstType === "R18" || mainBranch.is_hotel_tariff_7500_plus) {
       titleElem.innerText = "TAX INVOICE";
@@ -1671,7 +2166,6 @@
     }
   }
 
-
   function prepareSubmit(e) {
     syncBranchesFromDOM();
     document.getElementById("branches_json").value = JSON.stringify(branches);
@@ -1687,23 +2181,30 @@
     syncBranchesFromDOM();
     document.getElementById("branches_json").value = JSON.stringify(branches);
 
-    const legal = document.getElementById("id_legal_name") ? document.getElementById("id_legal_name").value.trim() : "";
-    if (!legal) {
+    // Run full validation suite before submitting
+    const legal = normalizeTextSpaces(document.getElementById("id_legal_name")?.value || "");
+    if (!legal || legal.length < 3 || legal.length > 100) {
       goToStep(1);
-      alert("Legal Name is required.");
+      alert("Legal Name must be between 3 and 100 characters.");
+      document.getElementById("id_legal_name")?.focus();
+      return;
+    }
+    if (!/[A-Za-z]/.test(legal)) {
+      goToStep(1);
+      alert("Legal Name must contain at least one letter.");
       document.getElementById("id_legal_name")?.focus();
       return;
     }
 
-    const trade = document.getElementById("id_trade_name") ? document.getElementById("id_trade_name").value.trim() : "";
-    if (!trade) {
+    const trade = normalizeTextSpaces(document.getElementById("id_trade_name")?.value || "");
+    if (trade && (trade.length < 2 || trade.length > 60)) {
       goToStep(1);
-      alert("Trade / Brand Name is required.");
+      alert("Trade / Brand Name must be between 2 and 60 characters.");
       document.getElementById("id_trade_name")?.focus();
       return;
     }
 
-    const btype = document.getElementById("id_business_type") ? document.getElementById("id_business_type").value : "";
+    const btype = document.getElementById("id_business_type")?.value || "";
     if (!btype) {
       goToStep(1);
       alert("Please select a Business Type.");
@@ -1711,11 +2212,96 @@
       return;
     }
 
-    const pan = document.getElementById("id_pan") ? document.getElementById("id_pan").value.toUpperCase().trim() : "";
+    const pan = normalizePanOrGstin(document.getElementById("id_pan")?.value || "");
     if (!pan || !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
       goToStep(1);
       alert("Please enter a valid 10-character PAN (e.g. AAACS1234F).");
       document.getElementById("id_pan")?.focus();
+      return;
+    }
+
+    const rule = BUSINESS_RULES[btype];
+    if (rule && rule.panChar) {
+      const char4 = pan[3];
+      const expected = rule.panChar.split(" or ");
+      if (!expected.includes(char4)) {
+        goToStep(1);
+        alert(`PAN 4th character '${char4}' does not match Business Type '${btype}' (Expected '${rule.panChar}').`);
+        document.getElementById("id_pan")?.focus();
+        return;
+      }
+    }
+
+    // Legal Name suffix check
+    const legalUpper = legal.toUpperCase();
+    if (/\b(PVT\s*LTD|PRIVATE\s+LIMITED|LIMITED|LTD)\b/.test(legalUpper) && pan[3] !== 'C') {
+      goToStep(1);
+      alert("Legal Name indicates a Corporate Entity (Private Limited / Limited), but PAN 4th character is not 'C'.");
+      document.getElementById("id_legal_name")?.focus();
+      return;
+    }
+    if (/\bLLP\b/.test(legalUpper) && pan[3] !== 'F') {
+      goToStep(1);
+      alert("Legal Name indicates an LLP, but PAN 4th character is not 'F'.");
+      document.getElementById("id_legal_name")?.focus();
+      return;
+    }
+
+    if (rule && rule.label) {
+      const cin = normalizeTextSpaces(document.getElementById("id_cin_llpin")?.value || "");
+      if (!cin) {
+        goToStep(1);
+        alert(`${rule.label} is required for ${btype}.`);
+        document.getElementById("id_cin_llpin")?.focus();
+        return;
+      }
+    }
+
+    const addr1 = normalizeTextSpaces(document.getElementById("id_restaurant_address_line_1")?.value || "");
+    if (!addr1 || addr1.length < 5 || addr1.length > 100) {
+      goToStep(1);
+      alert("Address Line 1 must be between 5 and 100 characters.");
+      document.getElementById("id_restaurant_address_line_1")?.focus();
+      return;
+    }
+
+    const city = normalizeCity(document.getElementById("id_restaurant_city")?.value || "");
+    if (!city || city.length < 2 || city.length > 50 || !/^[A-Za-z\s\-']+$/.test(city)) {
+      goToStep(1);
+      alert("City must be 2–50 characters (letters, spaces, hyphens, and apostrophes only).");
+      document.getElementById("id_restaurant_city")?.focus();
+      return;
+    }
+
+    const state = document.getElementById("id_restaurant_state")?.value || "";
+    if (!state || getGstStateCode(state) === "") {
+      goToStep(1);
+      alert("Please select a valid State from the list.");
+      document.getElementById("id_restaurant_state")?.focus();
+      return;
+    }
+
+    const pincode = normalizeDigitsOnly(document.getElementById("id_restaurant_pincode")?.value || "");
+    if (pincode.length !== 6 || pincode.startsWith('0')) {
+      goToStep(1);
+      alert("Enter a valid 6-digit Pincode (cannot start with 0).");
+      document.getElementById("id_restaurant_pincode")?.focus();
+      return;
+    }
+
+    const email = normalizeEmail(document.getElementById("id_restaurant_email")?.value || "");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      goToStep(1);
+      alert("Enter a valid Email address.");
+      document.getElementById("id_restaurant_email")?.focus();
+      return;
+    }
+
+    const phone = normalizePhone(document.getElementById("id_restaurant_phone")?.value || "");
+    if (phone.length !== 10 || !/^[6-9][0-9]{9}$/.test(phone)) {
+      goToStep(1);
+      alert("Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.");
+      document.getElementById("id_restaurant_phone")?.focus();
       return;
     }
 
@@ -1725,15 +2311,151 @@
       return;
     }
 
+    const isGstReg = document.getElementById("id_is_gst_registered")?.value === "on";
+    const seenNames = new Set();
+    const gstinRegTypes = {};
+
     for (let i = 0; i < branches.length; i++) {
-      if (!branches[i].name) {
+      const b = branches[i];
+      const bName = normalizeTextSpaces(b.name);
+      if (!bName || bName.length < 2 || bName.length > 60) {
         goToStep(2);
         activeBranchIndex = i;
         renderBranchCards();
-        alert(`Outlet ${i + 1} requires a Branch Name.`);
-        const input = document.getElementById(`branch-name-${i}`);
-        if (input) input.focus();
+        alert(`Outlet ${i + 1} requires a Branch Name between 2 and 60 characters.`);
+        document.getElementById(`branch-name-${i}`)?.focus();
         return;
+      }
+
+      if (seenNames.has(bName.toLowerCase())) {
+        goToStep(2);
+        activeBranchIndex = i;
+        renderBranchCards();
+        alert(`Duplicate outlet name '${bName}'. Each outlet must have a unique name.`);
+        document.getElementById(`branch-name-${i}`)?.focus();
+        return;
+      }
+      seenNames.add(bName.toLowerCase());
+
+      if (b.phone) {
+        const bPhone = normalizePhone(b.phone);
+        if (bPhone.length !== 10 || !/^[6-9][0-9]{9}$/.test(bPhone)) {
+          goToStep(2);
+          activeBranchIndex = i;
+          renderBranchCards();
+          alert(`Outlet '${bName}' phone must be a valid 10-digit number starting with 6-9.`);
+          document.getElementById(`branch-phone-${i}`)?.focus();
+          return;
+        }
+      }
+
+      if (!b.use_company_address) {
+        if (!b.address_line_1 || b.address_line_1.length < 5 || b.address_line_1.length > 100) {
+          goToStep(2);
+          activeBranchIndex = i;
+          renderBranchCards();
+          alert(`Outlet '${bName}' Address Line 1 must be between 5 and 100 characters.`);
+          document.getElementById(`branch-addr1-${i}`)?.focus();
+          return;
+        }
+        if (!b.city || b.city.length < 2 || b.city.length > 50 || !/^[A-Za-z\s\-']+$/.test(b.city)) {
+          goToStep(2);
+          activeBranchIndex = i;
+          renderBranchCards();
+          alert(`Outlet '${bName}' City must be 2–50 characters (letters, spaces, hyphens, and apostrophes only).`);
+          document.getElementById(`branch-city-${i}`)?.focus();
+          return;
+        }
+        if (!b.state || getGstStateCode(b.state) === "") {
+          goToStep(2);
+          activeBranchIndex = i;
+          renderBranchCards();
+          alert(`Outlet '${bName}' requires a valid State from the list.`);
+          document.getElementById(`branch-state-${i}`)?.focus();
+          return;
+        }
+        if (!b.pincode || b.pincode.length !== 6 || b.pincode.startsWith('0')) {
+          goToStep(2);
+          activeBranchIndex = i;
+          renderBranchCards();
+          alert(`Outlet '${bName}' Pincode must be 6 digits and cannot start with 0.`);
+          document.getElementById(`branch-pincode-${i}`)?.focus();
+          return;
+        }
+      }
+
+      if (b.fssai_license_no) {
+        const fssai = normalizeDigitsOnly(b.fssai_license_no);
+        if (fssai.length !== 14 || !['1', '2'].includes(fssai[0])) {
+          goToStep(2);
+          activeBranchIndex = i;
+          renderBranchCards();
+          alert(`Outlet '${bName}' FSSAI must be 14 digits starting with 1 (Licence) or 2 (Registration).`);
+          document.getElementById(`branch-fssai-${i}`)?.focus();
+          return;
+        }
+      }
+
+      if (isGstReg && b.gstin) {
+        const gstin = normalizePanOrGstin(b.gstin);
+        if (gstin.length !== 15 || !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/.test(gstin)) {
+          goToStep(2);
+          activeBranchIndex = i;
+          renderBranchCards();
+          alert(`Outlet '${bName}' GSTIN '${gstin}' is invalid. Must be 15 characters with 14th character 'Z'.`);
+          document.getElementById(`branch-gstin-${i}`)?.focus();
+          return;
+        }
+
+        const embeddedPan = gstin.substring(2, 12);
+        if (pan && embeddedPan !== pan) {
+          goToStep(2);
+          activeBranchIndex = i;
+          renderBranchCards();
+          alert(`Outlet '${bName}' GSTIN embedded PAN '${embeddedPan}' does not match Company PAN '${pan}'.`);
+          document.getElementById(`branch-gstin-${i}`)?.focus();
+          return;
+        }
+
+        const branchState = b.use_company_address ? state : b.state;
+        const expectedCode = getGstStateCode(branchState);
+        const gstinCode = gstin.substring(0, 2);
+        if (expectedCode && gstinCode !== expectedCode) {
+          goToStep(2);
+          activeBranchIndex = i;
+          renderBranchCards();
+          alert(`Outlet '${bName}' GSTIN state code '${gstinCode}' does not match outlet state '${branchState}' (Code ${expectedCode}).`);
+          document.getElementById(`branch-gstin-${i}`)?.focus();
+          return;
+        }
+
+        if (gstin in gstinRegTypes && gstinRegTypes[gstin] !== b.gst_registration_type) {
+          goToStep(2);
+          activeBranchIndex = i;
+          renderBranchCards();
+          alert(`GSTIN '${gstin}' is assigned to multiple outlets with conflicting Registration Types. All outlets sharing a GSTIN must have the exact same Registration Type.`);
+          return;
+        }
+        gstinRegTypes[gstin] = b.gst_registration_type;
+      }
+
+      if (b.serves_alcohol) {
+        if (!b.vat_tin) {
+          goToStep(2);
+          activeBranchIndex = i;
+          renderBranchCards();
+          alert(`Outlet '${bName}' serves alcohol: State VAT TIN is required.`);
+          document.getElementById(`branch-vattin-${i}`)?.focus();
+          return;
+        }
+        if (!b.excise_license_no) {
+          goToStep(2);
+          activeBranchIndex = i;
+          renderBranchCards();
+          alert(`Outlet '${bName}' serves alcohol: Excise License No. is required.`);
+          document.getElementById(`branch-excise-${i}`)?.focus();
+          return;
+        }
       }
     }
 
@@ -1742,7 +2464,7 @@
 
   function escapeHtml(str) {
     if (!str) return '';
-    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 </script>
 {% endblock %}

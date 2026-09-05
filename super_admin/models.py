@@ -145,6 +145,7 @@ class Restaurant(models.Model):
                     "serves_alcohol": b.serves_alcohol,
                     "gstin": b.gstin or (b.gst_registration.gstin if b.gst_registration else ""),
                     "gst_registration_type": b.gst_registration_type,
+                    "outlet_type": getattr(b, 'outlet_type', 'dine_in'),
                     "vat_tin": b.vat_tin,
                     "excise_license_no": b.excise_license_no,
                 })
@@ -265,6 +266,11 @@ class RestaurantBranch(models.Model):
         COMPOSITION = 'C', 'Composition'
         UNREGISTERED = 'U', 'Unregistered'
 
+    class OutletType(models.TextChoices):
+        DINE_IN = 'dine_in', 'Dine-in'
+        TAKEAWAY_QSR = 'takeaway_qsr', 'Takeaway / QSR'
+        CLOUD_KITCHEN = 'cloud_kitchen', 'Cloud Kitchen'
+
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='branches')
     gst_registration = models.ForeignKey(
         GstRegistration,
@@ -274,6 +280,12 @@ class RestaurantBranch(models.Model):
         related_name='branches'
     )
     name = models.CharField(max_length=200)
+    outlet_type = models.CharField(
+        max_length=20,
+        choices=OutletType.choices,
+        default=OutletType.DINE_IN,
+        verbose_name="Outlet Type"
+    )
     slug = models.SlugField(max_length=220, unique=True, blank=True, null=True)
     phone = models.CharField(max_length=20, blank=True)
     use_company_address = models.BooleanField(default=True)
