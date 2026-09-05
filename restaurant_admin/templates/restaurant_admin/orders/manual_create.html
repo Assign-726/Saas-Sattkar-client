@@ -2,7 +2,6 @@
 {% load static %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'restaurant_admin/css/tally-engine.css' %}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -179,9 +178,15 @@
   .fld input::selection,.covInput::selection,.in::selection{background:var(--brand);color:var(--brand-on)}
   .fld input:focus{border-color:var(--brand);background:var(--surface);
                    box-shadow:0 0 0 3px var(--brand-glow)}
-  .fld input:disabled{background:var(--raised);color:var(--ink3);cursor:pointer;border-style:dashed}
-  /* Tally's landed-field cursor */
-  input.landed{caret-color:transparent}
+  /* Tally's landed-field cursor: Hide default thin caret when armed / blinking block cursor is active */
+  input.landed,
+  .fld input[data-armed="1"],
+  input[data-armed="1"],
+  .covInput[data-armed="1"],
+  .tally-input[data-is-editing="false"],
+  input.tally-input[data-is-editing="false"] {
+    caret-color: transparent !important;
+  }
   .fld input.num{text-align:right}
   .fld.lk label::after{content:" · locked";color:var(--warn);letter-spacing:.04em}
   .lineamt{border:1px solid var(--line);border-radius:7px;padding:10px 12px;text-align:right;
@@ -1006,13 +1011,19 @@ document.addEventListener("DOMContentLoaded", function() {
     let blinkTimer = null;
     function startBlink(el) {
         if(blinkTimer) clearInterval(blinkTimer);
-        if(el.value === "") { el.dataset.armed = "0"; return; }
+        if(!el || el.value === "") { 
+            if(el) el.dataset.armed = "0"; 
+            return; 
+        }
         el.dataset.armed = "1";
         let on = true;
         try { el.setSelectionRange(0, 1); } catch(e){}
         blinkTimer = setInterval(function(){
             if(document.activeElement !== el || el.dataset.armed !== "1") {
-                if(blinkTimer) clearInterval(blinkTimer);
+                if(blinkTimer) {
+                    clearInterval(blinkTimer);
+                    blinkTimer = null;
+                }
                 return;
             }
             try { el.setSelectionRange(0, on ? 1 : 0); } catch(e){}
@@ -1021,10 +1032,13 @@ document.addEventListener("DOMContentLoaded", function() {
     }
     
     function disarm(id) {
-        let el = document.getElementById(id);
+        let el = typeof id === 'string' ? document.getElementById(id) : id;
         if(!el) return;
         el.dataset.armed = "0";
-        if(blinkTimer) clearInterval(blinkTimer);
+        if(blinkTimer) {
+            clearInterval(blinkTimer);
+            blinkTimer = null;
+        }
     }
 
     const inputs = ['fItem', 'fQty', 'fRate'];
@@ -1033,10 +1047,17 @@ document.addEventListener("DOMContentLoaded", function() {
         if(!el) return;
         
         el.addEventListener("focus", function() {
+            if (el.value.length > 0) {
+                el.dataset.armed = "1";
+            }
             setTimeout(() => startBlink(el), 10);
         });
         
         el.addEventListener("blur", function() {
+            disarm(id);
+        });
+
+        el.addEventListener("mousedown", function() {
             disarm(id);
         });
         
@@ -3195,7 +3216,7 @@ document.addEventListener("DOMContentLoaded", function() {
         if (posCartMode && state.cart.length > 0) {
           cbar.hidden = false;
           cbar.innerHTML = 'Fixing the order &nbsp;<kbd>&uarr;&darr;</kbd> pick &nbsp;' +
-                           '<kbd>+ &minus;</kbd> qty &nbsp;<kbd>D</kbd> discount &nbsp;' +
+                           '<kbd>+ &minus;</kbd> qty &nbsp;<kbd>N</kbd> note &nbsp;<kbd>D</kbd> discount &nbsp;' +
                            '<kbd>&#8629;</kbd> open &nbsp;<kbd>Del</kbd> remove / void sent &nbsp;<kbd>Esc</kbd> back';
         } else {
           cbar.hidden = true;
@@ -6850,13 +6871,8 @@ document.addEventListener("DOMContentLoaded", function() {
     }, 20);
   };
 </script>
-<script src="{% static 'restaurant_admin/js/tally-engine.js' %}"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    let posTallyEngine = new TallyFormEngine({
-      container: '.pos-container'
-    });
-
     if (typeof renderTopOrderDropdown === 'function') {
       renderTopOrderDropdown();
     }

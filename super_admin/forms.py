@@ -7,57 +7,164 @@ from core.models import RestaurantLanding, GalleryImage, TeamMember, Review, Eve
 from restaurant_project import constants
 
 
-STATE_CHOICES = [
-    ("", "Select..."),
-    ("Andhra Pradesh", "Andhra Pradesh"),
-    ("Arunachal Pradesh", "Arunachal Pradesh"),
-    ("Assam", "Assam"),
-    ("Bihar", "Bihar"),
-    ("Chhattisgarh", "Chhattisgarh"),
-    ("Goa", "Goa"),
-    ("Gujarat", "Gujarat"),
-    ("Haryana", "Haryana"),
-    ("Himachal Pradesh", "Himachal Pradesh"),
-    ("Jharkhand", "Jharkhand"),
-    ("Karnataka", "Karnataka"),
-    ("Kerala", "Kerala"),
-    ("Madhya Pradesh", "Madhya Pradesh"),
-    ("Maharashtra", "Maharashtra"),
-    ("Manipur", "Manipur"),
-    ("Meghalaya", "Meghalaya"),
-    ("Mizoram", "Mizoram"),
-    ("Nagaland", "Nagaland"),
-    ("Odisha", "Odisha"),
-    ("Punjab", "Punjab"),
-    ("Rajasthan", "Rajasthan"),
-    ("Sikkim", "Sikkim"),
-    ("Tamil Nadu", "Tamil Nadu"),
-    ("Telangana", "Telangana"),
-    ("Tripura", "Tripura"),
-    ("Uttar Pradesh", "Uttar Pradesh"),
-    ("Uttarakhand", "Uttarakhand"),
-    ("West Bengal", "West Bengal"),
-    ("Andaman and Nicobar Islands", "Andaman and Nicobar Islands"),
-    ("Chandigarh", "Chandigarh"),
-    ("Dadra and Nagar Haveli and Daman and Diu", "Dadra and Nagar Haveli and Daman and Diu"),
-    ("Delhi", "Delhi"),
-    ("Jammu and Kashmir", "Jammu and Kashmir"),
-    ("Ladakh", "Ladakh"),
-    ("Lakshadweep", "Lakshadweep"),
-    ("Puducherry", "Puducherry"),
+GST_STATE_CODE_MAP = {
+    "01": "Jammu & Kashmir",
+    "02": "Himachal Pradesh",
+    "03": "Punjab",
+    "04": "Chandigarh",
+    "05": "Uttarakhand",
+    "06": "Haryana",
+    "07": "Delhi",
+    "08": "Rajasthan",
+    "09": "Uttar Pradesh",
+    "10": "Bihar",
+    "11": "Sikkim",
+    "12": "Arunachal Pradesh",
+    "13": "Nagaland",
+    "14": "Manipur",
+    "15": "Mizoram",
+    "16": "Tripura",
+    "17": "Meghalaya",
+    "18": "Assam",
+    "19": "West Bengal",
+    "20": "Jharkhand",
+    "21": "Odisha",
+    "22": "Chhattisgarh",
+    "23": "Madhya Pradesh",
+    "24": "Gujarat",
+    "26": "Dadra & Nagar Haveli and Daman & Diu",
+    "27": "Maharashtra",
+    "29": "Karnataka",
+    "30": "Goa",
+    "31": "Lakshadweep",
+    "32": "Kerala",
+    "33": "Tamil Nadu",
+    "34": "Puducherry",
+    "35": "Andaman & Nicobar Islands",
+    "36": "Telangana",
+    "37": "Andhra Pradesh",
+    "38": "Ladakh",
+}
+
+REJECTED_STATE_CODES = {"25", "28", "97", "99"}
+
+STATE_CHOICES = [("", "Select State...")] + [
+    (name, f"{code} - {name}") for code, name in sorted(GST_STATE_CODE_MAP.items())
 ]
 
+STATE_NAME_TO_CODE = {name.lower(): code for code, name in GST_STATE_CODE_MAP.items()}
+# Add common variations
+STATE_NAME_TO_CODE["jammu and kashmir"] = "01"
+STATE_NAME_TO_CODE["andaman and nicobar islands"] = "35"
+STATE_NAME_TO_CODE["dadra and nagar haveli and daman and diu"] = "26"
+STATE_NAME_TO_CODE["orissa"] = "21"
+STATE_NAME_TO_CODE["pondicherry"] = "34"
+
 BUSINESS_TYPE_CHOICES = [
-    ("", "Select..."),
+    ("", "Select Business Type..."),
     ("Sole Proprietorship", "Sole Proprietorship"),
-    ("Partnership", "Partnership"),
+    ("Partnership Firm", "Partnership Firm"),
+    ("LLP", "Limited Liability Partnership (LLP)"),
     ("Private Limited", "Private Limited Company (Pvt Ltd)"),
     ("Public Limited", "Public Limited Company"),
-    ("LLP", "Limited Liability Partnership (LLP)"),
-    ("OPC", "One Person Company (OPC)"),
-    ("Trust/Society", "Trust / Society / NGO"),
-    ("Other", "Other"),
+    ("HUF", "Hindu Undivided Family (HUF)"),
+    ("Trust", "Trust"),
+    ("AOP", "Association of Persons (AOP)"),
+    ("BOI", "Body of Individuals (BOI)"),
+    ("Society", "Society / Artificial Juridical Person"),
+    ("Government", "Government / Local Authority"),
 ]
+
+BUSINESS_TYPE_PAN_MAP = {
+    "Sole Proprietorship": ["P"],
+    "Private Limited": ["C"],
+    "Public Limited": ["C"],
+    "Partnership Firm": ["F"],
+    "Partnership": ["F"],
+    "LLP": ["F"],
+    "HUF": ["H"],
+    "Trust": ["T"],
+    "AOP": ["A"],
+    "BOI": ["B"],
+    "Society": ["J"],
+    "Government": ["L", "G"],
+}
+
+CHARS_MOD36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
+
+def normalize_pan_or_gstin(value: str) -> str:
+    if not value:
+        return ""
+    return re.sub(r'\s+', '', str(value)).strip().upper()
+
+
+def normalize_phone(value: str) -> str:
+    if not value:
+        return ""
+    val = re.sub(r'[\s\-\(\)\+]', '', str(value)).strip()
+    if val.startswith('91') and len(val) == 12:
+        val = val[2:]
+    elif val.startswith('0') and len(val) == 11:
+        val = val[1:]
+    return val
+
+
+def normalize_digits_only(value: str) -> str:
+    if not value:
+        return ""
+    return re.sub(r'\D', '', str(value)).strip()
+
+
+def normalize_email(value: str) -> str:
+    if not value:
+        return ""
+    return str(value).strip().lower()
+
+
+def normalize_text_spaces(value: str) -> str:
+    if not value:
+        return ""
+    return re.sub(r'\s+', ' ', str(value)).strip()
+
+
+def normalize_city(value: str) -> str:
+    if not value:
+        return ""
+    val = normalize_text_spaces(value)
+    return " ".join(
+        "-".join(part.capitalize() for part in word.split("-"))
+        for word in val.split(" ")
+    )
+
+
+def compute_gstin_check_char(first14: str) -> str:
+    if not first14 or len(first14) != 14:
+        return None
+    total_sum = 0
+    for i in range(14):
+        cp = CHARS_MOD36.find(first14[i])
+        if cp < 0:
+            return None
+        factor = 1 if (i % 2 == 0) else 2
+        addend = factor * cp
+        addend = (addend // 36) + (addend % 36)
+        total_sum += addend
+    return CHARS_MOD36[(36 - (total_sum % 36)) % 36]
+
+
+def is_valid_gstin_checksum(gstin: str) -> bool:
+    if not gstin or len(gstin) != 15:
+        return False
+    expected = compute_gstin_check_char(gstin[:14])
+    return expected == gstin[14]
+
+
+def get_gst_state_code(state_name: str) -> str:
+    if not state_name:
+        return ""
+    clean_name = state_name.strip().lower()
+    return STATE_NAME_TO_CODE.get(clean_name, "")
 
 
 def get_state_3char(state_name):
@@ -94,7 +201,6 @@ class RestaurantForm(forms.ModelForm):
             "gst_type",
             "is_active",
         ]
-
 
     def clean(self):
         cleaned_data = super().clean()
@@ -167,17 +273,17 @@ class RestaurantAdminCreateForm(forms.Form):
 
 
 class OnboardRestaurantForm(forms.Form):
-    # Restaurant / Business fields
-    legal_name = forms.CharField(max_length=255, label="Legal Name*")
-    trade_name = forms.CharField(max_length=255, label="Trade / Brand Name*")
+    # Restaurant / Business fields (§2 Company fields)
+    legal_name = forms.CharField(max_length=100, label="Legal Name*")
+    trade_name = forms.CharField(max_length=60, required=False, label="Trade / Brand Name")
     business_type = forms.ChoiceField(choices=BUSINESS_TYPE_CHOICES, label="Business Type*")
-    pan = forms.CharField(max_length=20, label="PAN*")
+    pan = forms.CharField(max_length=10, label="PAN*")
     cin_llpin = forms.CharField(max_length=50, required=False, label="CIN / LLPIN")
-    restaurant_address_line_1 = forms.CharField(max_length=255, label="Address Line 1*")
-    restaurant_address_line_2 = forms.CharField(max_length=255, required=False, label="Address Line 2")
-    restaurant_city = forms.CharField(max_length=100, label="City*")
+    restaurant_address_line_1 = forms.CharField(max_length=100, label="Address Line 1*")
+    restaurant_address_line_2 = forms.CharField(max_length=100, required=False, label="Address Line 2")
+    restaurant_city = forms.CharField(max_length=50, label="City*")
     restaurant_state = forms.ChoiceField(choices=STATE_CHOICES, label="State*")
-    restaurant_pincode = forms.CharField(max_length=20, label="Pincode*")
+    restaurant_pincode = forms.CharField(max_length=6, label="Pincode*")
     restaurant_email = forms.EmailField(label="Email*")
     restaurant_phone = forms.CharField(max_length=20, label="Phone*")
     is_gst_registered = forms.BooleanField(required=False, initial=True, label="Is your business GST registered?")
@@ -187,39 +293,114 @@ class OnboardRestaurantForm(forms.Form):
         self.instance = instance
         super().__init__(*args, **kwargs)
 
+    def clean_legal_name(self):
+        val = normalize_text_spaces(self.cleaned_data.get("legal_name", ""))
+        if not val or len(val) < 3 or len(val) > 100:
+            raise forms.ValidationError("Legal Name must be between 3 and 100 characters.")
+        if not re.search(r'[A-Za-z]', val):
+            raise forms.ValidationError("Legal Name must contain at least one letter.")
+        return val
+
+    def clean_trade_name(self):
+        val = normalize_text_spaces(self.cleaned_data.get("trade_name", ""))
+        if val and (len(val) < 2 or len(val) > 60):
+            raise forms.ValidationError("Trade / Brand Name must be between 2 and 60 characters.")
+        return val
+
     def clean_pan(self):
-        pan = (self.cleaned_data.get("pan") or "").strip().upper()
-        if not pan:
-            return pan
-        if not re.match(r'^[A-Z]{5}[0-9]{4}[A-Z]$', pan):
-            raise forms.ValidationError("Invalid PAN format (expected e.g. AAACS1234F)")
+        val = normalize_pan_or_gstin(self.cleaned_data.get("pan", ""))
+        if not val:
+            raise forms.ValidationError("PAN is required.")
+        if not re.match(r'^[A-Z]{5}[0-9]{4}[A-Z]$', val):
+            raise forms.ValidationError("Invalid PAN format (expected e.g. AAACS1234F).")
+        return val
 
-        btype = self.cleaned_data.get("business_type", "")
-        fourth_char = pan[3]
-        expected = []
-        if btype == "Sole Proprietorship":
-            expected = ["P"]
-        elif btype in ["Partnership", "LLP"]:
-            expected = ["F"]
-        elif btype in ["Private Limited", "Public Limited", "OPC"]:
-            expected = ["C"]
-        elif btype == "Trust/Society":
-            expected = ["T", "A"]
+    def clean_restaurant_address_line_1(self):
+        val = normalize_text_spaces(self.cleaned_data.get("restaurant_address_line_1", ""))
+        if not val or len(val) < 5 or len(val) > 100:
+            raise forms.ValidationError("Address Line 1 must be between 5 and 100 characters.")
+        return val
 
-        if expected and fourth_char not in expected:
-            raise forms.ValidationError(
-                f"PAN 4th character '{fourth_char}' does not match Business Type '{btype}' (Expected '{'/'.join(expected)}')"
-            )
-        return pan
+    def clean_restaurant_address_line_2(self):
+        val = normalize_text_spaces(self.cleaned_data.get("restaurant_address_line_2", ""))
+        if val and len(val) > 100:
+            raise forms.ValidationError("Address Line 2 cannot exceed 100 characters.")
+        return val
+
+    def clean_restaurant_city(self):
+        val = normalize_city(self.cleaned_data.get("restaurant_city", ""))
+        if not val or len(val) < 2 or len(val) > 50:
+            raise forms.ValidationError("City must be between 2 and 50 characters.")
+        if not re.match(r"^[A-Za-z\s\-']+$", val):
+            raise forms.ValidationError("City may only contain letters, spaces, hyphens, and apostrophes.")
+        return val
+
+    def clean_restaurant_pincode(self):
+        val = normalize_digits_only(self.cleaned_data.get("restaurant_pincode", ""))
+        if not val or len(val) != 6:
+            raise forms.ValidationError("Pincode must be exactly 6 digits.")
+        if val.startswith('0'):
+            raise forms.ValidationError("Pincode cannot start with '0'.")
+        return val
+
+    def clean_restaurant_phone(self):
+        val = normalize_phone(self.cleaned_data.get("restaurant_phone", ""))
+        if not val or len(val) != 10 or not re.match(r'^[6-9][0-9]{9}$', val):
+            raise forms.ValidationError("Phone number must be a valid 10-digit mobile number starting with 6, 7, 8, or 9.")
+        return val
+
+    def clean_restaurant_email(self):
+        val = normalize_email(self.cleaned_data.get("restaurant_email", ""))
+        if not val:
+            raise forms.ValidationError("Email address is required.")
+        return val
 
     def clean(self):
         cleaned = super().clean()
         btype = cleaned.get("business_type")
-        cin = (cleaned.get("cin_llpin") or "").strip()
-        if btype in ["Private Limited", "Public Limited", "OPC"] and not cin:
+        pan = cleaned.get("pan") or ""
+        legal_name = cleaned.get("legal_name") or ""
+        cin = normalize_text_spaces(cleaned.get("cin_llpin") or "").upper()
+
+        if btype and pan and len(pan) == 10:
+            # 5.1 PAN 4th character must match Business Type
+            fourth_char = pan[3]
+            expected_chars = BUSINESS_TYPE_PAN_MAP.get(btype, [])
+            if expected_chars and fourth_char not in expected_chars:
+                self.add_error(
+                    "pan",
+                    f"PAN 4th character '{fourth_char}' does not match Business Type '{btype}' (Expected '{'/'.join(expected_chars)}')."
+                )
+
+        # 5.6 Legal Name suffix check vs Business Type / PAN
+        if legal_name and pan and len(pan) == 10:
+            legal_upper = legal_name.upper().strip()
+            if re.search(r'\b(PVT\s*LTD|PRIVATE\s+LIMITED|LIMITED|LTD)\b', legal_upper):
+                if pan[3] != 'C':
+                    self.add_error(
+                        "legal_name",
+                        "Legal Name indicates a Corporate Entity (Private Limited / Limited), but PAN 4th character is not 'C'."
+                    )
+            elif re.search(r'\bLLP\b', legal_upper):
+                if pan[3] != 'F':
+                    self.add_error(
+                        "legal_name",
+                        "Legal Name indicates an LLP, but PAN 4th character is not 'F'."
+                    )
+
+        # Corporate Entities / LLP CIN requirement
+        if btype in ["Private Limited", "Public Limited"] and not cin:
             self.add_error("cin_llpin", "CIN is required for Corporate Entities.")
         elif btype == "LLP" and not cin:
             self.add_error("cin_llpin", "LLPIN is required for Limited Liability Partnerships.")
+
+        # 5.11 PAN Uniqueness
+        if pan:
+            pan_qs = Restaurant.objects.filter(pan__iexact=pan)
+            if self.instance and self.instance.pk:
+                pan_qs = pan_qs.exclude(pk=self.instance.pk)
+            if pan_qs.exists():
+                self.add_error("pan", f"Another business is already registered with PAN '{pan}'.")
 
         # Enforce business limit restriction
         if not self.instance and constants.MAX_ALLOWED_BUSINESSES > 0:
@@ -232,17 +413,204 @@ class OnboardRestaurantForm(forms.Form):
                     )
         return cleaned
 
-    def save(self, instance=None, branches_data=None):
-        trade_name = self.cleaned_data["trade_name"]
-        legal_name = self.cleaned_data["legal_name"]
-        t_name = trade_name or legal_name
+    def clean_branches_data(self, branches_data, company_pan, is_gst_registered, company_defaults):
+        """
+        Comprehensive server-side validation for branches JSON according to validation-spec.md
+        """
+        if not branches_data or not isinstance(branches_data, list):
+            raise forms.ValidationError("At least one branch outlet is required.")
 
-        if branches_data and isinstance(branches_data, list) and constants.MAX_ALLOWED_BRANCHES > 0:
-            valid_branches = [b for b in branches_data if b.get("name")]
-            if len(valid_branches) > constants.MAX_ALLOWED_BRANCHES:
-                raise forms.ValidationError(
-                    f"Branch limit reached. Your license allows a maximum of {constants.MAX_ALLOWED_BRANCHES} branch outlets (attempted {len(valid_branches)})."
-                )
+        valid_branches = [b for b in branches_data if isinstance(b, dict) and b.get("name")]
+        if not valid_branches:
+            raise forms.ValidationError("Please provide details for at least one branch outlet.")
+
+        if constants.MAX_ALLOWED_BRANCHES > 0 and len(valid_branches) > constants.MAX_ALLOWED_BRANCHES:
+            raise forms.ValidationError(
+                f"Branch limit reached. Your license allows a maximum of {constants.MAX_ALLOWED_BRANCHES} branch outlets (attempted {len(valid_branches)})."
+            )
+
+        cleaned_branches = []
+        gstin_to_reg_type = {}
+        seen_branch_names = set()
+
+        for idx, bdata in enumerate(valid_branches):
+            b_name = normalize_text_spaces(bdata.get("name", ""))
+            if len(b_name) < 2 or len(b_name) > 60:
+                raise forms.ValidationError(f"Outlet #{idx+1} name '{b_name}' must be between 2 and 60 characters.")
+
+            if b_name.lower() in seen_branch_names:
+                raise forms.ValidationError(f"Duplicate outlet name '{b_name}'. Each branch must have a unique name.")
+            seen_branch_names.add(b_name.lower())
+
+            outlet_type = bdata.get("outlet_type", "dine_in")
+            if outlet_type not in ["dine_in", "takeaway_qsr", "cloud_kitchen"]:
+                outlet_type = "dine_in"
+
+            # Phone validation
+            b_phone_raw = bdata.get("phone", "")
+            b_phone = normalize_phone(b_phone_raw)
+            if b_phone:
+                if len(b_phone) != 10 or not re.match(r'^[6-9][0-9]{9}$', b_phone):
+                    raise forms.ValidationError(
+                        f"Outlet '{b_name}' has invalid phone '{b_phone_raw}'. Must be a 10-digit number starting with 6-9."
+                    )
+
+            use_co_addr = bool(bdata.get("use_company_address", True))
+            if use_co_addr:
+                b_addr1 = company_defaults.get("address_line_1", "")
+                b_addr2 = company_defaults.get("address_line_2", "")
+                b_city = company_defaults.get("city", "")
+                b_state = company_defaults.get("state", "")
+                b_pincode = company_defaults.get("pincode", "")
+            else:
+                b_addr1 = normalize_text_spaces(bdata.get("address_line_1", ""))
+                if len(b_addr1) < 5 or len(b_addr1) > 100:
+                    raise forms.ValidationError(f"Outlet '{b_name}' Address Line 1 must be between 5 and 100 characters.")
+
+                b_addr2 = normalize_text_spaces(bdata.get("address_line_2", ""))
+                if len(b_addr2) > 100:
+                    raise forms.ValidationError(f"Outlet '{b_name}' Address Line 2 cannot exceed 100 characters.")
+
+                b_city = normalize_city(bdata.get("city", ""))
+                if len(b_city) < 2 or len(b_city) > 50 or not re.match(r"^[A-Za-z\s\-']+$", b_city):
+                    raise forms.ValidationError(f"Outlet '{b_name}' City '{b_city}' is invalid.")
+
+                b_state = normalize_text_spaces(bdata.get("state", ""))
+                if not b_state or get_gst_state_code(b_state) == "":
+                    raise forms.ValidationError(f"Outlet '{b_name}' has invalid State '{b_state}'. Must be selected from the valid GST State table.")
+
+                b_pincode = normalize_digits_only(bdata.get("pincode", ""))
+                if len(b_pincode) != 6 or b_pincode.startswith('0'):
+                    raise forms.ValidationError(f"Outlet '{b_name}' Pincode must be 6 digits and cannot start with '0'.")
+
+            # FSSAI validation (§4)
+            fssai_raw = bdata.get("fssai_license_no", "")
+            b_fssai = normalize_digits_only(fssai_raw)
+            if b_fssai:
+                if len(b_fssai) != 14:
+                    raise forms.ValidationError(f"Outlet '{b_name}' FSSAI number must be exactly 14 digits.")
+                if b_fssai[0] not in ['1', '2']:
+                    raise forms.ValidationError(f"Outlet '{b_name}' FSSAI number must start with '1' (Licence) or '2' (Registration).")
+
+            # GSTIN & Registration Type Validations (§3, §5.2–§5.5, §5.9)
+            gstin_val = normalize_pan_or_gstin(bdata.get("gstin", ""))
+            reg_type_val = bdata.get("gst_registration_type", "R5")
+            is_hotel_tariff = bool(bdata.get("is_hotel_tariff_7500_plus", False))
+            if is_hotel_tariff:
+                reg_type_val = "R18"
+
+            if is_gst_registered and gstin_val:
+                # 5.2 Format check (15 chars, position 14 must be 'Z')
+                if len(gstin_val) != 15:
+                    raise forms.ValidationError(f"Outlet '{b_name}' GSTIN '{gstin_val}' must be exactly 15 characters.")
+
+                if not re.match(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$', gstin_val):
+                    raise forms.ValidationError(
+                        f"Outlet '{b_name}' GSTIN '{gstin_val}' format is invalid (14th character must be 'Z')."
+                    )
+
+                gstin_state_code = gstin_val[:2]
+                if gstin_state_code in REJECTED_STATE_CODES or gstin_state_code not in GST_STATE_CODE_MAP:
+                    raise forms.ValidationError(
+                        f"Outlet '{b_name}' GSTIN '{gstin_val}' starts with invalid state code '{gstin_state_code}'."
+                    )
+
+                # 5.4 Embedded PAN check
+                embedded_pan = gstin_val[2:12]
+                if company_pan and embedded_pan != company_pan:
+                    raise forms.ValidationError(
+                        f"Outlet '{b_name}' GSTIN '{gstin_val}' embedded PAN '{embedded_pan}' does not match Company PAN '{company_pan}'."
+                    )
+
+                # 5.5 State code match check
+                expected_state_code = get_gst_state_code(b_state)
+                if expected_state_code and gstin_state_code != expected_state_code:
+                    expected_state_name = GST_STATE_CODE_MAP.get(gstin_state_code, gstin_state_code)
+                    raise forms.ValidationError(
+                        f"Outlet '{b_name}' GSTIN state code '{gstin_state_code}' ({expected_state_name}) does not match outlet state '{b_state}' (Code {expected_state_code})."
+                    )
+
+                # 5.9 Registration Type uniformity per GSTIN
+                if gstin_val in gstin_to_reg_type:
+                    if gstin_to_reg_type[gstin_val] != reg_type_val:
+                        raise forms.ValidationError(
+                            f"GSTIN '{gstin_val}' is assigned to multiple outlets with conflicting Registration Types. All outlets sharing a GSTIN must have the exact same Registration Type."
+                        )
+                else:
+                    gstin_to_reg_type[gstin_val] = reg_type_val
+
+            # Alcohol / State VAT validations
+            serves_alcohol_val = bool(bdata.get("serves_alcohol", False))
+            vat_tin_val = normalize_text_spaces(bdata.get("vat_tin", "")).upper() if serves_alcohol_val else ""
+            excise_license_val = normalize_text_spaces(bdata.get("excise_license_no", "")).upper() if serves_alcohol_val else ""
+
+            if serves_alcohol_val:
+                if not vat_tin_val:
+                    raise forms.ValidationError(f"Outlet '{b_name}' serves alcohol: State VAT TIN is required.")
+                if not excise_license_val:
+                    raise forms.ValidationError(f"Outlet '{b_name}' serves alcohol: Excise License No. is required.")
+
+            try:
+                vat_beer_val = float(bdata.get("vat_beer_rate", 60.00))
+            except (ValueError, TypeError):
+                vat_beer_val = 60.00
+            try:
+                vat_imfl_val = float(bdata.get("vat_imfl_rate", 65.00))
+            except (ValueError, TypeError):
+                vat_imfl_val = 65.00
+            try:
+                vat_wine_val = float(bdata.get("vat_wine_rate", 60.00))
+            except (ValueError, TypeError):
+                vat_wine_val = 60.00
+
+            cleaned_branches.append({
+                'id': bdata.get("id"),
+                'name': b_name,
+                'outlet_type': outlet_type,
+                'phone': b_phone,
+                'use_company_address': use_co_addr,
+                'address_line_1': b_addr1,
+                'address_line_2': b_addr2,
+                'city': b_city,
+                'state': b_state,
+                'pincode': b_pincode,
+                'fssai_license_no': b_fssai,
+                'serves_alcohol': serves_alcohol_val,
+                'vat_tin': vat_tin_val,
+                'excise_license_no': excise_license_val,
+                'vat_beer_rate': vat_beer_val,
+                'vat_imfl_rate': vat_imfl_val,
+                'vat_wine_rate': vat_wine_val,
+                'gstin': gstin_val,
+                'gst_registration_type': reg_type_val,
+                'is_hotel_tariff_7500_plus': is_hotel_tariff,
+                'e_invoicing_enabled': bool(bdata.get("e_invoicing_enabled", False)),
+            })
+
+        return cleaned_branches
+
+    def save(self, instance=None, branches_data=None):
+        trade_name = self.cleaned_data.get("trade_name", "").strip()
+        legal_name = self.cleaned_data["legal_name"].strip()
+        t_name = trade_name or legal_name
+        company_pan = self.cleaned_data.get("pan", "").strip().upper()
+        is_gst_reg = self.cleaned_data.get("is_gst_registered", False)
+
+        company_defaults = {
+            "address_line_1": self.cleaned_data.get("restaurant_address_line_1", ""),
+            "address_line_2": self.cleaned_data.get("restaurant_address_line_2", ""),
+            "city": self.cleaned_data.get("restaurant_city", ""),
+            "state": self.cleaned_data.get("restaurant_state", ""),
+            "pincode": self.cleaned_data.get("restaurant_pincode", ""),
+        }
+
+        # Clean & validate branches
+        validated_branches = self.clean_branches_data(
+            branches_data=branches_data,
+            company_pan=company_pan,
+            is_gst_registered=is_gst_reg,
+            company_defaults=company_defaults,
+        )
 
         target_restaurant = instance or (self.instance if (self.instance and self.instance.pk) else None)
         if target_restaurant:
@@ -251,17 +619,17 @@ class OnboardRestaurantForm(forms.Form):
             restaurant.trade_name = trade_name
             restaurant.name = t_name
             restaurant.business_type = self.cleaned_data.get("business_type", "")
-            restaurant.pan = self.cleaned_data.get("pan", "")
-            restaurant.cin_llpin = self.cleaned_data.get("cin_llpin", "")
-            restaurant.address_line_1 = self.cleaned_data.get("restaurant_address_line_1", "")
-            restaurant.address_line_2 = self.cleaned_data.get("restaurant_address_line_2", "")
-            restaurant.city = self.cleaned_data.get("restaurant_city", "")
-            restaurant.state = self.cleaned_data.get("restaurant_state", "")
-            restaurant.pincode = self.cleaned_data.get("restaurant_pincode", "")
+            restaurant.pan = company_pan
+            restaurant.cin_llpin = (self.cleaned_data.get("cin_llpin") or "").strip().upper()
+            restaurant.address_line_1 = company_defaults["address_line_1"]
+            restaurant.address_line_2 = company_defaults["address_line_2"]
+            restaurant.city = company_defaults["city"]
+            restaurant.state = company_defaults["state"]
+            restaurant.pincode = company_defaults["pincode"]
             restaurant.email = self.cleaned_data.get("restaurant_email", "")
             restaurant.phone = self.cleaned_data.get("restaurant_phone", "")
-            restaurant.is_gst_registered = self.cleaned_data.get("is_gst_registered", False)
-            restaurant.gst_type = Restaurant.GSTType.REGULAR if self.cleaned_data.get("is_gst_registered") else Restaurant.GSTType.UNREGISTERED
+            restaurant.is_gst_registered = is_gst_reg
+            restaurant.gst_type = Restaurant.GSTType.REGULAR if is_gst_reg else Restaurant.GSTType.UNREGISTERED
             restaurant.is_active = self.cleaned_data.get("restaurant_is_active", True)
             restaurant.save()
         else:
@@ -270,157 +638,134 @@ class OnboardRestaurantForm(forms.Form):
                 trade_name=trade_name,
                 name=t_name,
                 business_type=self.cleaned_data.get("business_type", ""),
-                pan=self.cleaned_data.get("pan", ""),
-                cin_llpin=self.cleaned_data.get("cin_llpin", ""),
-                address_line_1=self.cleaned_data.get("restaurant_address_line_1", ""),
-                address_line_2=self.cleaned_data.get("restaurant_address_line_2", ""),
-                city=self.cleaned_data.get("restaurant_city", ""),
-                state=self.cleaned_data.get("restaurant_state", ""),
-                pincode=self.cleaned_data.get("restaurant_pincode", ""),
+                pan=company_pan,
+                cin_llpin=(self.cleaned_data.get("cin_llpin") or "").strip().upper(),
+                address_line_1=company_defaults["address_line_1"],
+                address_line_2=company_defaults["address_line_2"],
+                city=company_defaults["city"],
+                state=company_defaults["state"],
+                pincode=company_defaults["pincode"],
                 email=self.cleaned_data.get("restaurant_email", ""),
                 phone=self.cleaned_data.get("restaurant_phone", ""),
-                is_gst_registered=self.cleaned_data.get("is_gst_registered", False),
-                gst_type=Restaurant.GSTType.REGULAR if self.cleaned_data.get("is_gst_registered") else Restaurant.GSTType.UNREGISTERED,
+                is_gst_registered=is_gst_reg,
+                gst_type=Restaurant.GSTType.REGULAR if is_gst_reg else Restaurant.GSTType.UNREGISTERED,
                 is_active=self.cleaned_data.get("restaurant_is_active", True),
             )
 
         state_branch_counts = {}
+        kept_branch_ids = []
 
-        if branches_data and isinstance(branches_data, list):
-            kept_branch_ids = []
-            for bdata in branches_data:
-                if not bdata.get("name"):
-                    continue
+        for bdata in validated_branches:
+            b_state = bdata.get("state") or restaurant.state
+            gstin_val = bdata.get("gstin", "")
+            gst_reg_obj = None
 
-                b_state = bdata.get("state") or restaurant.state
-                gstin_val = (bdata.get("gstin") or "").strip().upper()
-                gst_reg_obj = None
+            if restaurant.is_gst_registered and gstin_val:
+                reg_type_str = 'composition' if bdata.get("gst_registration_type") == 'C' else 'regular'
+                gst_reg_obj, _ = GstRegistration.objects.get_or_create(
+                    restaurant=restaurant,
+                    gstin=gstin_val,
+                    defaults={
+                        'reg_type': reg_type_str,
+                        'specified_premises': bdata.get("is_hotel_tariff_7500_plus", False),
+                        'einvoice_enabled': bdata.get("e_invoicing_enabled", False),
+                    }
+                )
 
-                if restaurant.is_gst_registered and gstin_val:
-                    reg_type_str = 'composition' if bdata.get("gst_registration_type") == 'C' else 'regular'
-                    gst_reg_obj, _ = GstRegistration.objects.get_or_create(
-                        restaurant=restaurant,
-                        gstin=gstin_val,
-                        defaults={
-                            'reg_type': reg_type_str,
-                            'specified_premises': bdata.get("is_hotel_tariff_7500_plus", False),
-                            'einvoice_enabled': bdata.get("e_invoicing_enabled", False),
-                        }
-                    )
+            branch_id = bdata.get("id")
+            branch = None
+            if target_restaurant and branch_id and str(branch_id).isdigit():
+                branch = RestaurantBranch.objects.filter(id=int(branch_id), restaurant=restaurant).first()
 
-                branch_id = bdata.get("id")
-                branch = None
-                if target_restaurant and branch_id and str(branch_id).isdigit():
-                    branch = RestaurantBranch.objects.filter(id=int(branch_id), restaurant=restaurant).first()
+            if branch:
+                branch.name = bdata.get("name", "")
+                branch.outlet_type = bdata.get("outlet_type", "dine_in")
+                branch.phone = bdata.get("phone", "")
+                branch.use_company_address = bdata.get("use_company_address", True)
+                branch.address_line_1 = bdata.get("address_line_1", "")
+                branch.address_line_2 = bdata.get("address_line_2", "")
+                branch.city = bdata.get("city", "")
+                branch.state = b_state
+                branch.pincode = bdata.get("pincode", "")
+                branch.fssai_license_no = bdata.get("fssai_license_no", "")
+                branch.serves_alcohol = bdata.get("serves_alcohol", False)
+                branch.vat_tin = bdata.get("vat_tin", "")
+                branch.excise_license_no = bdata.get("excise_license_no", "")
+                branch.vat_beer_rate = bdata.get("vat_beer_rate", 60.00)
+                branch.vat_imfl_rate = bdata.get("vat_imfl_rate", 65.00)
+                branch.vat_wine_rate = bdata.get("vat_wine_rate", 60.00)
+                branch.gstin = gstin_val
+                branch.gst_registration = gst_reg_obj
+                branch.gst_registration_type = bdata.get("gst_registration_type", "R5")
+                branch.is_hotel_tariff_7500_plus = bdata.get("is_hotel_tariff_7500_plus", False)
+                branch.e_invoicing_enabled = bdata.get("e_invoicing_enabled", False)
+                branch.save()
+            else:
+                branch = RestaurantBranch.objects.create(
+                    restaurant=restaurant,
+                    gst_registration=gst_reg_obj,
+                    name=bdata.get("name", ""),
+                    outlet_type=bdata.get("outlet_type", "dine_in"),
+                    phone=bdata.get("phone", ""),
+                    use_company_address=bdata.get("use_company_address", True),
+                    address_line_1=bdata.get("address_line_1", ""),
+                    address_line_2=bdata.get("address_line_2", ""),
+                    city=bdata.get("city", ""),
+                    state=b_state,
+                    pincode=bdata.get("pincode", ""),
+                    fssai_license_no=bdata.get("fssai_license_no", ""),
+                    serves_alcohol=bdata.get("serves_alcohol", False),
+                    vat_tin=bdata.get("vat_tin", ""),
+                    excise_license_no=bdata.get("excise_license_no", ""),
+                    vat_beer_rate=bdata.get("vat_beer_rate", 60.00),
+                    vat_imfl_rate=bdata.get("vat_imfl_rate", 65.00),
+                    vat_wine_rate=bdata.get("vat_wine_rate", 60.00),
+                    gstin=gstin_val,
+                    gst_registration_type=bdata.get("gst_registration_type", "R5"),
+                    is_hotel_tariff_7500_plus=bdata.get("is_hotel_tariff_7500_plus", False),
+                    e_invoicing_enabled=bdata.get("e_invoicing_enabled", False),
+                )
 
-                is_hotel_tariff = bool(bdata.get("is_hotel_tariff_7500_plus", False))
-                gst_reg_type = bdata.get("gst_registration_type", RestaurantBranch.GSTRegType.REGULAR_5)
-                if is_hotel_tariff:
-                    gst_reg_type = RestaurantBranch.GSTRegType.REGULAR_18
-                serves_alcohol_val = bool(bdata.get("serves_alcohol", False))
-                vat_tin_val = str(bdata.get("vat_tin", "")).strip() if serves_alcohol_val else ""
-                excise_license_val = str(bdata.get("excise_license_no", "")).strip() if serves_alcohol_val else ""
-                
-                try:
-                    vat_beer_val = float(bdata.get("vat_beer_rate", 60.00))
-                except (ValueError, TypeError):
-                    vat_beer_val = 60.00
-                try:
-                    vat_imfl_val = float(bdata.get("vat_imfl_rate", 65.00))
-                except (ValueError, TypeError):
-                    vat_imfl_val = 65.00
-                try:
-                    vat_wine_val = float(bdata.get("vat_wine_rate", 60.00))
-                except (ValueError, TypeError):
-                    vat_wine_val = 60.00
+            kept_branch_ids.append(branch.id)
 
-                if branch:
-                    branch.name = bdata.get("name", "")
-                    branch.phone = bdata.get("phone", "")
-                    branch.use_company_address = bdata.get("use_company_address", True)
-                    branch.address_line_1 = bdata.get("address_line_1", "")
-                    branch.address_line_2 = bdata.get("address_line_2", "")
-                    branch.city = bdata.get("city", "")
-                    branch.state = b_state
-                    branch.pincode = bdata.get("pincode", "")
-                    branch.fssai_license_no = bdata.get("fssai_license_no", "")
-                    branch.serves_alcohol = serves_alcohol_val
-                    branch.vat_tin = vat_tin_val
-                    branch.excise_license_no = excise_license_val
-                    branch.vat_beer_rate = vat_beer_val
-                    branch.vat_imfl_rate = vat_imfl_val
-                    branch.vat_wine_rate = vat_wine_val
-                    branch.gstin = gstin_val
-                    branch.gst_registration = gst_reg_obj
-                    branch.gst_registration_type = gst_reg_type
-                    branch.is_hotel_tariff_7500_plus = is_hotel_tariff
-                    branch.e_invoicing_enabled = bdata.get("e_invoicing_enabled", False)
-                    branch.save()
-                else:
-                    branch = RestaurantBranch.objects.create(
-                        restaurant=restaurant,
-                        gst_registration=gst_reg_obj,
-                        name=bdata.get("name", ""),
-                        phone=bdata.get("phone", ""),
-                        use_company_address=bdata.get("use_company_address", True),
-                        address_line_1=bdata.get("address_line_1", ""),
-                        address_line_2=bdata.get("address_line_2", ""),
-                        city=bdata.get("city", ""),
-                        state=b_state,
-                        pincode=bdata.get("pincode", ""),
-                        fssai_license_no=bdata.get("fssai_license_no", ""),
-                        serves_alcohol=serves_alcohol_val,
-                        vat_tin=vat_tin_val,
-                        excise_license_no=excise_license_val,
-                        vat_beer_rate=vat_beer_val,
-                        vat_imfl_rate=vat_imfl_val,
-                        vat_wine_rate=vat_wine_val,
-                        gstin=gstin_val,
-                        gst_registration_type=gst_reg_type,
-                        is_hotel_tariff_7500_plus=is_hotel_tariff,
-                        e_invoicing_enabled=bdata.get("e_invoicing_enabled", False),
-                    )
+            state_code_3 = get_state_3char(b_state)
+            state_branch_counts[b_state] = state_branch_counts.get(b_state, 0) + 1
+            seq_num = f"{state_branch_counts[b_state]:02d}"
+            base_branch_prefix = f"{state_code_3}-{seq_num}"
 
-                kept_branch_ids.append(branch.id)
+            voucher_prefix_map = {
+                DocumentSeries.VoucherType.SALE: f"{base_branch_prefix}",
+                DocumentSeries.VoucherType.CN: f"CN-{base_branch_prefix}",
+                DocumentSeries.VoucherType.RCPT: f"RC-{base_branch_prefix}",
+                DocumentSeries.VoucherType.ADV: f"ADV-{base_branch_prefix}",
+                DocumentSeries.VoucherType.PO: f"PO-{base_branch_prefix}",
+                DocumentSeries.VoucherType.GRN: f"GRN-{base_branch_prefix}",
+                DocumentSeries.VoucherType.PBILL: f"PB-{base_branch_prefix}",
+                DocumentSeries.VoucherType.DN: f"DN-{base_branch_prefix}",
+                DocumentSeries.VoucherType.PAY: f"PV-{base_branch_prefix}",
+                DocumentSeries.VoucherType.STN: f"STN-{base_branch_prefix}",
+                DocumentSeries.VoucherType.ADJ: f"ADJ-{base_branch_prefix}",
+                DocumentSeries.VoucherType.VAT_SALE: f"VAT-{base_branch_prefix}",
+                DocumentSeries.VoucherType.VAT_CN: f"VCN-{base_branch_prefix}",
+            }
 
-                state_code_3 = get_state_3char(b_state)
-                state_branch_counts[b_state] = state_branch_counts.get(b_state, 0) + 1
-                seq_num = f"{state_branch_counts[b_state]:02d}"
-                base_branch_prefix = f"{state_code_3}-{seq_num}"
+            for vtype, pfx in voucher_prefix_map.items():
+                DocumentSeries.objects.get_or_create(
+                    branch=branch,
+                    voucher_type=vtype,
+                    defaults={
+                        'prefix': pfx,
+                        'digits': 4,
+                        'next_no': 1,
+                        'fy_reset': True,
+                        'method': DocumentSeries.Method.AUTO
+                    }
+                )
 
-                voucher_prefix_map = {
-                    DocumentSeries.VoucherType.SALE: f"{base_branch_prefix}",
-                    DocumentSeries.VoucherType.CN: f"CN-{base_branch_prefix}",
-                    DocumentSeries.VoucherType.RCPT: f"RC-{base_branch_prefix}",
-                    DocumentSeries.VoucherType.ADV: f"ADV-{base_branch_prefix}",
-                    DocumentSeries.VoucherType.PO: f"PO-{base_branch_prefix}",
-                    DocumentSeries.VoucherType.GRN: f"GRN-{base_branch_prefix}",
-                    DocumentSeries.VoucherType.PBILL: f"PB-{base_branch_prefix}",
-                    DocumentSeries.VoucherType.DN: f"DN-{base_branch_prefix}",
-                    DocumentSeries.VoucherType.PAY: f"PV-{base_branch_prefix}",
-                    DocumentSeries.VoucherType.STN: f"STN-{base_branch_prefix}",
-                    DocumentSeries.VoucherType.ADJ: f"ADJ-{base_branch_prefix}",
-                    DocumentSeries.VoucherType.VAT_SALE: f"VAT-{base_branch_prefix}",
-                    DocumentSeries.VoucherType.VAT_CN: f"VCN-{base_branch_prefix}",
-                }
-
-                for vtype, pfx in voucher_prefix_map.items():
-                    DocumentSeries.objects.get_or_create(
-                        branch=branch,
-                        voucher_type=vtype,
-                        defaults={
-                            'prefix': pfx,
-                            'digits': 4,
-                            'next_no': 1,
-                            'fy_reset': True,
-                            'method': DocumentSeries.Method.AUTO
-                        }
-                    )
-
-            if target_restaurant and kept_branch_ids:
-                branches_to_delete = list(RestaurantBranch.objects.filter(restaurant=restaurant).exclude(id__in=kept_branch_ids))
-                for b_del in branches_to_delete:
-                    safe_delete_branch(b_del)
+        if target_restaurant and kept_branch_ids:
+            branches_to_delete = list(RestaurantBranch.objects.filter(restaurant=restaurant).exclude(id__in=kept_branch_ids))
+            for b_del in branches_to_delete:
+                safe_delete_branch(b_del)
 
         # Initialize RestaurantSettings with onboarded GST rates
         first_b = restaurant.branches.first()
@@ -514,8 +859,9 @@ def safe_delete_branch(branch):
             InventoryTransaction = get_m('core', 'InventoryTransaction')
             if InventoryTransaction:
                 InventoryTransaction.objects.filter(
-                    models.Q(branch_id=branch_id) |
-                    models.Q(inventory_item__branch_id=branch_id)
+                    models.Q(inventory_item__branch_id=branch_id) |
+                    models.Q(order__branch_id=branch_id) |
+                    models.Q(purchase_order__branch_id=branch_id)
                 ).delete()
 
             MenuItemIngredient = get_m('core', 'MenuItemIngredient')

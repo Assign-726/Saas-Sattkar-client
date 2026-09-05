@@ -2,6 +2,7 @@
 {% load static %}
 
 {% block content %}
+<link rel="stylesheet" href="{% static 'restaurant_admin/css/tally-engine.css' %}">
 <style>
   /* Branch Admin Settings Tabs */
   .settings-tabs-nav {
@@ -163,12 +164,13 @@
                 {% if branch %}
                 <div class="form-text small text-muted">
                   {% if branch.gst_registration_type == 'R18' or branch.is_hotel_tariff_7500_plus %}
-                    <span class="text-primary fw-semibold"><i class="bi bi-info-circle"></i> 9.00% (18% Scheme with ITC)</span>
+                    <span class="text-primary fw-semibold"><i class="bi bi-info-circle"></i> Scheme Default: 9.00% (18% Scheme with ITC)</span>
                   {% elif branch.gst_registration_type == 'C' or branch.gst_registration_type == 'U' %}
-                    <span class="text-secondary fw-semibold"><i class="bi bi-info-circle"></i> 0.00% ({{ branch.get_gst_registration_type_display }})</span>
+                    <span class="text-secondary fw-semibold"><i class="bi bi-info-circle"></i> Scheme Default: 0.00% ({{ branch.get_gst_registration_type_display }})</span>
                   {% else %}
-                    <span class="text-success fw-semibold"><i class="bi bi-info-circle"></i> 2.50% (5% Standard Scheme)</span>
+                    <span class="text-success fw-semibold"><i class="bi bi-info-circle"></i> Scheme Default: 2.50% (5% Standard Scheme)</span>
                   {% endif %}
+                  <div class="text-muted mt-1" style="font-size: 0.75rem;">Auto-calculated default; change this value anytime to overwrite.</div>
                 </div>
                 {% endif %}
                 {% if form.cgst_percentage.errors %}
@@ -181,12 +183,13 @@
                 {% if branch %}
                 <div class="form-text small text-muted">
                   {% if branch.gst_registration_type == 'R18' or branch.is_hotel_tariff_7500_plus %}
-                    <span class="text-primary fw-semibold"><i class="bi bi-info-circle"></i> 9.00% (18% Scheme with ITC)</span>
+                    <span class="text-primary fw-semibold"><i class="bi bi-info-circle"></i> Scheme Default: 9.00% (18% Scheme with ITC)</span>
                   {% elif branch.gst_registration_type == 'C' or branch.gst_registration_type == 'U' %}
-                    <span class="text-secondary fw-semibold"><i class="bi bi-info-circle"></i> 0.00% ({{ branch.get_gst_registration_type_display }})</span>
+                    <span class="text-secondary fw-semibold"><i class="bi bi-info-circle"></i> Scheme Default: 0.00% ({{ branch.get_gst_registration_type_display }})</span>
                   {% else %}
-                    <span class="text-success fw-semibold"><i class="bi bi-info-circle"></i> 2.50% (5% Standard Scheme)</span>
+                    <span class="text-success fw-semibold"><i class="bi bi-info-circle"></i> Scheme Default: 2.50% (5% Standard Scheme)</span>
                   {% endif %}
+                  <div class="text-muted mt-1" style="font-size: 0.75rem;">Auto-calculated default; change this value anytime to overwrite.</div>
                 </div>
                 {% endif %}
                 {% if form.sgst_percentage.errors %}
@@ -1048,6 +1051,18 @@
 
     // Save preference
     localStorage.setItem('activeBranchSettingsTab', tabName);
+
+    // Tally auto-focus first input in active settings tab
+    setTimeout(() => {
+      const pane = document.getElementById('pane-' + tabName);
+      if (pane) {
+        const firstInput = pane.querySelector('select:not([disabled]), input:not([type="hidden"]):not([readonly]):not([disabled]), textarea:not([readonly]):not([disabled])');
+        if (firstInput) {
+          firstInput.focus();
+          try { firstInput.select(); } catch(e){}
+        }
+      }
+    }, 60);
   }
 
   function submitDeleteChargeFromBtn(btn) {
@@ -1064,11 +1079,48 @@
 
   const initialErrorTab = "{% if form.bill_template.errors or form.kot_template.errors %}printing{% elif form.enable_customer_ordering.errors or form.enable_pay_at_counter.errors or form.enable_online_payment.errors or form.razorpay_key_id.errors or form.razorpay_key_secret.errors or form.notification_sound.errors %}ordering{% elif form.cgst_percentage.errors or form.sgst_percentage.errors or form.service_charge_percentage.errors or branch_form.fssai_license_no.errors or branch_form.vat_tin.errors or branch_form.excise_license_no.errors %}tax{% endif %}";
 
+  let settingsTallyEngine = null;
+  let chargeModalTallyEngine = null;
+
   document.addEventListener('DOMContentLoaded', function() {
     var modalEl = document.getElementById('customChargeModal');
     if (modalEl && typeof bootstrap !== 'undefined') {
       customChargeModalInstance = new bootstrap.Modal(modalEl);
+
+      modalEl.addEventListener('shown.bs.modal', function() {
+        const nameInp = document.getElementById('modalChargeName');
+        if (nameInp) {
+          nameInp.focus();
+          try { nameInp.select(); } catch(e){}
+        }
+      });
     }
+
+    // Initialize Tally Navigation Engine for settings forms
+    settingsTallyEngine = new TallyFormEngine({
+      container: '#branchSettingsForm'
+    });
+
+    if (document.getElementById('customChargeModal')) {
+      chargeModalTallyEngine = new TallyFormEngine({
+        container: '#customChargeModal'
+      });
+    }
+
+    // Document sequence sub-tab auto-focus
+    document.querySelectorAll('#docSeqTabs button').forEach(btn => {
+      btn.addEventListener('shown.bs.tab', function(e) {
+        const targetId = this.getAttribute('data-bs-target');
+        const targetPane = document.querySelector(targetId);
+        if (targetPane) {
+          const firstInput = targetPane.querySelector('select:not([disabled]), input:not([type="hidden"]):not([readonly]):not([disabled])');
+          if (firstInput) {
+            firstInput.focus();
+            try { firstInput.select(); } catch(err){}
+          }
+        }
+      });
+    });
 
     // Initialize document sequence conditional fields & previews
     const servesAlcohol = '{{ branch.serves_alcohol|yesno:"1,0" }}' === '1';
@@ -1103,6 +1155,18 @@
       var savedTab = localStorage.getItem('activeBranchSettingsTab');
       if (savedTab && document.getElementById('pane-' + savedTab)) {
         switchBranchSettingsTab(savedTab);
+      } else {
+        // Auto-focus first input on initial load
+        setTimeout(() => {
+          const activePane = document.querySelector('.settings-tab-pane.active');
+          if (activePane) {
+            const firstInput = activePane.querySelector('select:not([disabled]), input:not([type="hidden"]):not([readonly]):not([disabled]), textarea:not([readonly]):not([disabled])');
+            if (firstInput) {
+              firstInput.focus();
+              try { firstInput.select(); } catch(e){}
+            }
+          }
+        }, 100);
       }
     }
   });
@@ -1194,4 +1258,5 @@
     }
   }
 </script>
+<script src="{% static 'restaurant_admin/js/tally-engine.js' %}"></script>
 {% endblock %}

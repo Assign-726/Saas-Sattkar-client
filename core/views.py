@@ -138,21 +138,29 @@ class RestaurantCartView(TemplateView):
 
         settings_obj = RestaurantSettings.get_settings(restaurant)
         active_b = branch or (restaurant.branches.first() if restaurant else None)
-        cgst_p = Decimal('2.50')
-        sgst_p = Decimal('2.50')
-        if active_b:
+        if settings_obj and settings_obj.cgst_percentage is not None:
+            cgst_p = Decimal(str(settings_obj.cgst_percentage))
+        elif active_b:
             if active_b.gst_registration_type == 'R18' or active_b.is_hotel_tariff_7500_plus:
                 cgst_p = Decimal('9.00')
-                sgst_p = Decimal('9.00')
             elif active_b.gst_registration_type in ['C', 'U']:
                 cgst_p = Decimal('0.00')
+            else:
+                cgst_p = Decimal('2.50')
+        else:
+            cgst_p = Decimal('2.50')
+
+        if settings_obj and settings_obj.sgst_percentage is not None:
+            sgst_p = Decimal(str(settings_obj.sgst_percentage))
+        elif active_b:
+            if active_b.gst_registration_type == 'R18' or active_b.is_hotel_tariff_7500_plus:
+                sgst_p = Decimal('9.00')
+            elif active_b.gst_registration_type in ['C', 'U']:
                 sgst_p = Decimal('0.00')
             else:
-                cgst_p = Decimal(str(settings_obj.cgst_percentage or 2.50))
-                sgst_p = Decimal(str(settings_obj.sgst_percentage or 2.50))
+                sgst_p = Decimal('2.50')
         else:
-            cgst_p = Decimal(str(settings_obj.cgst_percentage or 2.50))
-            sgst_p = Decimal(str(settings_obj.sgst_percentage or 2.50))
+            sgst_p = Decimal('2.50')
 
         context.update({
             'cgst_percentage': cgst_p,
@@ -181,21 +189,29 @@ class CartView(TemplateView):
 
         settings_obj = RestaurantSettings.get_settings(restaurant)
         active_b = branch or (restaurant.branches.first() if restaurant else None)
-        cgst_p = Decimal('2.50')
-        sgst_p = Decimal('2.50')
-        if active_b:
+        if settings_obj and settings_obj.cgst_percentage is not None:
+            cgst_p = Decimal(str(settings_obj.cgst_percentage))
+        elif active_b:
             if active_b.gst_registration_type == 'R18' or active_b.is_hotel_tariff_7500_plus:
                 cgst_p = Decimal('9.00')
-                sgst_p = Decimal('9.00')
             elif active_b.gst_registration_type in ['C', 'U']:
                 cgst_p = Decimal('0.00')
+            else:
+                cgst_p = Decimal('2.50')
+        else:
+            cgst_p = Decimal('2.50')
+
+        if settings_obj and settings_obj.sgst_percentage is not None:
+            sgst_p = Decimal(str(settings_obj.sgst_percentage))
+        elif active_b:
+            if active_b.gst_registration_type == 'R18' or active_b.is_hotel_tariff_7500_plus:
+                sgst_p = Decimal('9.00')
+            elif active_b.gst_registration_type in ['C', 'U']:
                 sgst_p = Decimal('0.00')
             else:
-                cgst_p = Decimal(str(settings_obj.cgst_percentage or 2.50))
-                sgst_p = Decimal(str(settings_obj.sgst_percentage or 2.50))
+                sgst_p = Decimal('2.50')
         else:
-            cgst_p = Decimal(str(settings_obj.cgst_percentage or 2.50))
-            sgst_p = Decimal(str(settings_obj.sgst_percentage or 2.50))
+            sgst_p = Decimal('2.50')
 
         context.update({
             'cgst_percentage': cgst_p,
@@ -238,21 +254,29 @@ class OrderDetailView(TemplateView):
 
         settings_obj = RestaurantSettings.get_settings(restaurant)
         active_b = branch or (restaurant.branches.first() if restaurant else None)
-        cgst_p = Decimal('2.50')
-        sgst_p = Decimal('2.50')
-        if active_b:
+        if settings_obj and settings_obj.cgst_percentage is not None:
+            cgst_p = Decimal(str(settings_obj.cgst_percentage))
+        elif active_b:
             if active_b.gst_registration_type == 'R18' or active_b.is_hotel_tariff_7500_plus:
                 cgst_p = Decimal('9.00')
-                sgst_p = Decimal('9.00')
             elif active_b.gst_registration_type in ['C', 'U']:
                 cgst_p = Decimal('0.00')
+            else:
+                cgst_p = Decimal('2.50')
+        else:
+            cgst_p = Decimal('2.50')
+
+        if settings_obj and settings_obj.sgst_percentage is not None:
+            sgst_p = Decimal(str(settings_obj.sgst_percentage))
+        elif active_b:
+            if active_b.gst_registration_type == 'R18' or active_b.is_hotel_tariff_7500_plus:
+                sgst_p = Decimal('9.00')
+            elif active_b.gst_registration_type in ['C', 'U']:
                 sgst_p = Decimal('0.00')
             else:
-                cgst_p = Decimal(str(settings_obj.cgst_percentage or 2.50))
-                sgst_p = Decimal(str(settings_obj.sgst_percentage or 2.50))
+                sgst_p = Decimal('2.50')
         else:
-            cgst_p = Decimal(str(settings_obj.cgst_percentage or 2.50))
-            sgst_p = Decimal(str(settings_obj.sgst_percentage or 2.50))
+            sgst_p = Decimal('2.50')
 
         context.update({
             'cgst_percentage': cgst_p,
@@ -423,21 +447,29 @@ class OrderViewSet(viewsets.ModelViewSet):
             branch = restaurant.branches.first()
 
         # Compute taxes & service charges
-        cgst_pct = Decimal('2.50')
-        sgst_pct = Decimal('2.50')
-        if branch:
+        if settings_obj and settings_obj.cgst_percentage is not None:
+            cgst_pct = Decimal(str(settings_obj.cgst_percentage))
+        elif branch:
             if branch.gst_registration_type == 'R18' or branch.is_hotel_tariff_7500_plus:
                 cgst_pct = Decimal('9.00')
-                sgst_pct = Decimal('9.00')
             elif branch.gst_registration_type in ['C', 'U']:
                 cgst_pct = Decimal('0.00')
+            else:
+                cgst_pct = Decimal('2.50')
+        else:
+            cgst_pct = Decimal('2.50')
+
+        if settings_obj and settings_obj.sgst_percentage is not None:
+            sgst_pct = Decimal(str(settings_obj.sgst_percentage))
+        elif branch:
+            if branch.gst_registration_type == 'R18' or branch.is_hotel_tariff_7500_plus:
+                sgst_pct = Decimal('9.00')
+            elif branch.gst_registration_type in ['C', 'U']:
                 sgst_pct = Decimal('0.00')
             else:
-                cgst_pct = Decimal(str(settings_obj.cgst_percentage or 2.50))
-                sgst_pct = Decimal(str(settings_obj.sgst_percentage or 2.50))
+                sgst_pct = Decimal('2.50')
         else:
-            cgst_pct = Decimal(str(settings_obj.cgst_percentage or 2.50))
-            sgst_pct = Decimal(str(settings_obj.sgst_percentage or 2.50))
+            sgst_pct = Decimal('2.50')
 
         service_pct = Decimal(str(settings_obj.service_charge_percentage or 0))
 
