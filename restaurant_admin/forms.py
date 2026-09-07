@@ -1,4 +1,5 @@
 from django import forms
+from django.db.models import Q
 from core.models import MenuItem, Category, Order, SubCategory, RestaurantSettings, InventoryItem, InventoryCategory, Coupon
 from super_admin.models import RestaurantBranch
 
@@ -37,7 +38,7 @@ class MenuItemForm(forms.ModelForm):
         if self.restaurant is not None:
             cat_qs = Category.objects.filter(restaurant=self.restaurant)
             if self.branch:
-                cat_qs = cat_qs.filter(branch=self.branch)
+                cat_qs = cat_qs.filter(Q(branch=self.branch) | Q(branch__isnull=True))
             self.fields['category'].queryset = cat_qs.order_by('name')
         self.fields['category'].required = False
         self.fields['category'].label = 'Category (optional)'
@@ -450,13 +451,14 @@ class ZoneForm(forms.ModelForm):
         model = Zone
         fields = ['name']
         widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. VIP Lounge', 'id': 'zone_name_input'}),
         }
     
     def __init__(self, *args, **kwargs):
         self.restaurant = kwargs.pop('restaurant', None)
         self.branch = kwargs.pop('branch', None)
         super().__init__(*args, **kwargs)
+        self.fields['name'].label = "Zone Name"
 
     def save(self, commit=True):
         instance = super().save(commit=False)
@@ -471,11 +473,12 @@ class ZoneForm(forms.ModelForm):
 class TableForm(forms.ModelForm):
     class Meta:
         model = Table
-        fields = ['name', 'table_number', 'capacity', 'zone', 'is_active']
+        fields = ['name', 'table_number', 'capacity', 'shape', 'zone', 'is_active']
         widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'table_number': forms.NumberInput(attrs={'class': 'form-control'}),
-            'capacity': forms.NumberInput(attrs={'class': 'form-control'}),
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. A-01'}),
+            'table_number': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Auto or e.g. 1', 'min': '1'}),
+            'capacity': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'e.g. 4', 'min': '1'}),
+            'shape': forms.Select(attrs={'class': 'form-select'}),
             'zone': forms.Select(attrs={'class': 'form-select'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
@@ -484,6 +487,7 @@ class TableForm(forms.ModelForm):
         self.restaurant = kwargs.pop('restaurant', None)
         self.branch = kwargs.pop('branch', None)
         super().__init__(*args, **kwargs)
+        self.fields['table_number'].required = False
         # Scope zone choices to current restaurant / branch
         if self.restaurant is not None:
             from django.db.models import Q
@@ -491,6 +495,27 @@ class TableForm(forms.ModelForm):
             if self.branch:
                 zone_qs = zone_qs.filter(Q(branch=self.branch) | Q(branch__isnull=True))
             self.fields['zone'].queryset = zone_qs.order_by('name')
+            self.fields['zone'].empty_label = "-- Select Zone (Optional) --"
+        if not self.initial.get('shape') and not getattr(self.instance, 'pk', None):
+            self.initial['shape'] = 'round'
+
+    def clean(self):
+        cleaned_data = super().clean()
+        name = cleaned_data.get('name')
+        table_number = cleaned_data.get('table_number')
+
+        if not table_number and name:
+            import re
+            digits = re.findall(r'\d+', str(name))
+            if digits:
+                cleaned_data['table_number'] = int(digits[0])
+            elif self.restaurant:
+                from django.db.models import Max
+                max_num = Table.objects.filter(restaurant=self.restaurant).aggregate(Max('table_number'))['table_number__max'] or 0
+                cleaned_data['table_number'] = max_num + 1
+            else:
+                cleaned_data['table_number'] = 1
+        return cleaned_data
 
     def save(self, commit=True):
         instance = super().save(commit=False)
@@ -501,6 +526,56 @@ class TableForm(forms.ModelForm):
         if commit:
             instance.save()
         return instance
+
+
+class BulkTableForm(forms.Form):
+    zone = forms.ModelChoiceField(
+        queryset=Zone.objects.none(),
+        required=False,
+        empty_label="-- Select Zone (Optional) --",
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'bulk_zone'})
+    )
+    prefix = forms.CharField(
+        max_length=20,
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. R-', 'id': 'bulk_prefix'})
+    )
+    start_number = forms.IntegerField(
+        min_value=1,
+        initial=1,
+        required=True,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '1', 'min': '1', 'id': 'bulk_start_number'})
+    )
+    count = forms.IntegerField(
+        min_value=1,
+        max_value=100,
+        initial=10,
+        required=True,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Max 50', 'min': '1', 'max': '100', 'id': 'bulk_count'})
+    )
+    capacity = forms.IntegerField(
+        min_value=1,
+        initial=4,
+        required=True,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'e.g. 4', 'min': '1', 'id': 'bulk_capacity'})
+    )
+    shape = forms.ChoiceField(
+        choices=Table.TableShape.choices,
+        initial=Table.TableShape.ROUND,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'bulk_shape'})
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.restaurant = kwargs.pop('restaurant', None)
+        self.branch = kwargs.pop('branch', None)
+        super().__init__(*args, **kwargs)
+        if self.restaurant is not None:
+            from django.db.models import Q
+            zone_qs = Zone.objects.filter(restaurant=self.restaurant)
+            if self.branch:
+                zone_qs = zone_qs.filter(Q(branch=self.branch) | Q(branch__isnull=True))
+            self.fields['zone'].queryset = zone_qs.order_by('name')
 
 
 class RestaurantBranchComplianceForm(forms.ModelForm):

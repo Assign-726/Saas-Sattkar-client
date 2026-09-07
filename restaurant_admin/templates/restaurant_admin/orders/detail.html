@@ -44,6 +44,7 @@
     vertical-align: middle;
 }
 .osb-pending   { background: #fff8eb; color: #b45309; border: 1.5px solid #fde68a; }
+.osb-ready     { background: #eff6ff; color: #1d4ed8; border: 1.5px solid #bfdbfe; }
 .osb-served    { background: #ecfdf5; color: #059669; border: 1.5px solid #a7f3d0; }
 .osb-cancelled { background: #fef2f2; color: #dc2626; border: 1.5px solid #fecaca; }
 
@@ -223,8 +224,8 @@
     <div class="od-identity">
         <div>
             <span class="od-number">{{ order.order_number }}</span>
-            <span class="od-status-badge {% if order.status == 'P' %}osb-pending{% elif order.status == 'S' %}osb-served{% elif order.status == 'C' %}osb-cancelled{% endif %}">
-                {{ order.get_status_display }}
+            <span class="od-status-badge {% if order.status == 'READY' or order.is_ready %}osb-ready{% elif order.status == 'P' %}osb-pending{% elif order.status == 'S' %}osb-served{% elif order.status == 'C' %}osb-cancelled{% endif %}">
+                {% if order.status == 'READY' or order.is_ready %}Ready{% else %}{{ order.get_status_display }}{% endif %}
             </span>
         </div>
         <div class="od-datetime">
@@ -321,11 +322,18 @@
             <div class="od-item-info">
                 <div class="od-item-name">{{ item.menu_item.name }}</div>
                 <div class="od-item-qty">Quantity: {{ item.quantity }} &times; &#8377;{{ item.unit_price|floatformat:2 }}</div>
+                {% if item.calc_discount_amount > 0 %}
+                <div style="font-size: 0.75rem; color: #b45309; background: #fef3c7; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px; font-weight: 600;">
+                    <i class="bi bi-tag-fill me-1"></i> -&#8377;{{ item.calc_discount_amount|floatformat:2 }}{% if item.discount_type == 'percentage' %} ({{ item.discount_value|floatformat:0 }}% off){% endif %}
+                </div>
+                {% endif %}
                 {% if item.notes %}
-                <div style="font-size: 0.75rem; color: #b45309; background: #fef3c7; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px;"><i class="fas fa-sticky-note me-1"></i> {{ item.notes }}</div>
+                <div style="font-size: 0.75rem; color: #57524A; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px; font-weight: 500;">
+                    <i class="bi bi-chat-left-text me-1 text-primary"></i> {{ item.notes }}
+                </div>
                 {% endif %}
                 {% if item.discount_reason %}
-                <div style="font-size: 0.75rem; color: #4338ca; background: #e0e7ff; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px;"><i class="fas fa-tag me-1"></i> Discount Reason: {{ item.discount_reason }}</div>
+                <div style="font-size: 0.75rem; color: #4338ca; background: #e0e7ff; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px;"><i class="bi bi-info-circle me-1"></i> Discount Reason: {{ item.discount_reason }}</div>
                 {% endif %}
             </div>
             <div class="od-item-price">&#8377;{{ item.subtotal|floatformat:2 }}</div>
@@ -348,7 +356,7 @@
 
             {% if discount_amount > 0 %}
             <div class="od-total-row discount" style="color: #dc2626; font-weight: 600;">
-                <span><i class="bi bi-tag-fill me-1"></i> Bill Discount {% if order.discount_reason %}<span style="font-size:0.75rem; color:#4338ca; background:#e0e7ff; padding:2px 6px; border-radius:4px; margin-left:8px; font-weight:500;">Reason: {{ order.discount_reason }}</span>{% endif %}</span>
+                <span><i class="bi bi-tag-fill me-1"></i> Bill Discount {% if order.discount_type == 'percentage' %}({{ order.discount_value|floatformat:0 }}%){% endif %}{% if order.discount_reason %}<span style="font-size:0.75rem; color:#4338ca; background:#e0e7ff; padding:2px 6px; border-radius:4px; margin-left:8px; font-weight:500;">{{ order.discount_reason }}</span>{% endif %}</span>
                 <span>-&#8377;{{ discount_amount|floatformat:2 }}</span>
             </div>
             {% endif %}
@@ -707,6 +715,11 @@
             }
             if (remain <= 0) {
                 if (statusEl) statusEl.textContent = 'STATUS: READY';
+                const badgeEl = document.querySelector('.od-status-badge');
+                if (badgeEl && (badgeEl.classList.contains('osb-pending') || badgeEl.textContent.trim() === 'Pending')) {
+                    badgeEl.textContent = 'Ready';
+                    badgeEl.className = 'od-status-badge osb-ready';
+                }
                 clearInterval(timer);
             }
         }

@@ -57,48 +57,238 @@
         }
         a:hover { color: var(--primary-hover); }
 
-        /* Global Messages Styling */
-        .msg-alert {
-            padding: 12px 16px;
+        /* Floating Pop-up Toast Notifications System */
+        .super-toast-container {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 999999;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            pointer-events: none;
+            max-width: 420px;
+            width: calc(100% - 48px);
+        }
+
+        .super-toast {
+            pointer-events: auto;
+            background: #ffffff;
+            border-radius: 14px;
+            box-shadow: 0 20px 35px -5px rgba(15, 23, 42, 0.18), 0 0 1px 1px rgba(15, 23, 42, 0.05);
+            border: 1px solid #e2e8f0;
+            border-left: 5px solid #10b981;
+            display: flex;
+            align-items: flex-start;
+            padding: 16px;
+            gap: 14px;
+            position: relative;
+            overflow: hidden;
+            animation: toastSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .super-toast.super-toast-success {
+            border-left-color: #10b981;
+        }
+        .super-toast.super-toast-success .super-toast-icon {
+            background: #ecfdf5;
+            color: #059669;
+            border: 1px solid #a7f3d0;
+        }
+        .super-toast.super-toast-success .super-toast-progress-bar {
+            background: #10b981;
+        }
+
+        .super-toast.super-toast-error {
+            border-left-color: #ef4444;
+        }
+        .super-toast.super-toast-error .super-toast-icon {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+        .super-toast.super-toast-error .super-toast-progress-bar {
+            background: #ef4444;
+        }
+
+        .super-toast.super-toast-warning {
+            border-left-color: #f59e0b;
+        }
+        .super-toast.super-toast-warning .super-toast-icon {
+            background: #fffbeb;
+            color: #d97706;
+            border: 1px solid #fde68a;
+        }
+        .super-toast.super-toast-warning .super-toast-progress-bar {
+            background: #f59e0b;
+        }
+
+        .super-toast.super-toast-info {
+            border-left-color: #3b82f6;
+        }
+        .super-toast.super-toast-info .super-toast-icon {
+            background: #eff6ff;
+            color: #2563eb;
+            border: 1px solid #bfdbfe;
+        }
+        .super-toast.super-toast-info .super-toast-progress-bar {
+            background: #3b82f6;
+        }
+
+        .super-toast-icon {
+            width: 38px;
+            height: 38px;
             border-radius: 10px;
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            font-size: 0.9rem;
-            font-weight: 600;
-            animation: fadeInMsg 0.3s ease-in-out;
+            justify-content: center;
+            font-size: 1.15rem;
+            flex-shrink: 0;
         }
-        .msg-alert-success {
-            background: #ecfdf5;
-            border: 1px solid #a7f3d0;
-            color: #047857;
+
+        .super-toast-content {
+            flex: 1;
+            min-width: 0;
+            padding-top: 1px;
         }
-        .msg-alert-error {
-            background: #fef2f2;
-            border: 1px solid #fecaca;
-            color: #b91c1c;
+
+        .super-toast-title {
+            font-size: 0.92rem;
+            font-weight: 800;
+            color: #0f172a;
+            line-height: 1.25;
+            margin-bottom: 3px;
+            letter-spacing: -0.2px;
         }
-        .msg-alert-warning {
-            background: #fffbeb;
-            border: 1px solid #fde68a;
-            color: #b45309;
+
+        .super-toast-message {
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #475569;
+            line-height: 1.45;
+            word-break: break-word;
         }
-        .msg-alert-close {
-            background: none;
+
+        .super-toast-close {
+            background: transparent;
             border: none;
             cursor: pointer;
-            color: inherit;
-            opacity: 0.6;
-            font-size: 1.2rem;
-            line-height: 1;
-            padding: 0 4px;
+            color: #94a3b8;
+            font-size: 0.95rem;
+            padding: 4px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+            flex-shrink: 0;
+            margin: -4px -4px 0 0;
         }
-        .msg-alert-close:hover {
-            opacity: 1;
+        .super-toast-close:hover {
+            color: #0f172a;
+            background: #f1f5f9;
         }
-        @keyframes fadeInMsg {
-            from { opacity: 0; transform: translateY(-6px); }
-            to { opacity: 1; transform: translateY(0); }
+
+        .super-toast-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3.5px;
+            background: rgba(226, 232, 240, 0.6);
+        }
+
+        .super-toast-progress-bar {
+            height: 100%;
+            width: 100%;
+            transform-origin: left;
+            animation: toastProgressBar 4.5s linear forwards;
+        }
+
+        .super-toast:hover .super-toast-progress-bar {
+            animation-play-state: paused;
+        }
+
+        @keyframes toastSlideIn {
+            0% {
+                opacity: 0;
+                transform: translateY(-16px) scale(0.92);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .super-toast.toast-hiding {
+            animation: toastSlideOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+        }
+
+        @keyframes toastSlideOut {
+            0% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+                max-height: 140px;
+                margin-bottom: 0;
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-20px) scale(0.9);
+                max-height: 0;
+                padding-top: 0;
+                padding-bottom: 0;
+                margin-bottom: -12px;
+            }
+        }
+
+        @keyframes toastProgressBar {
+            0% {
+                transform: scaleX(1);
+            }
+            100% {
+                transform: scaleX(0);
+            }
+        }
+
+        @media (max-width: 640px) {
+            .super-toast-container {
+                top: 16px;
+                right: 16px;
+                left: 16px;
+                width: auto;
+                max-width: none;
+            }
+        }
+
+        /* Button Loading & Spinner States */
+        .btn.is-loading, .btn-seo-save.is-loading, .action-btn-primary.is-loading, button.is-loading {
+            position: relative !important;
+            pointer-events: none !important;
+            opacity: 0.88 !important;
+            cursor: wait !important;
+        }
+
+        .btn-spinner {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            border: 2.2px solid rgba(255, 255, 255, 0.35);
+            border-radius: 50%;
+            border-top-color: #ffffff;
+            animation: btnSpin 0.75s cubic-bezier(0.4, 0.1, 0.2, 1) infinite;
+            flex-shrink: 0;
+            vertical-align: middle;
+        }
+
+        .btn.secondary .btn-spinner, button.btn-secondary .btn-spinner {
+            border-color: rgba(15, 23, 42, 0.2);
+            border-top-color: #0f172a;
+        }
+
+        @keyframes btnSpin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         /* Layout Structure */
@@ -759,23 +949,48 @@
                 </div>
                 {% endblock %}
 
-                {% if messages %}
-                <div class="global-messages-container" style="margin-bottom: 20px; display: flex; flex-direction: column; gap: 8px;">
-                    {% for message in messages %}
-                    <div class="msg-alert {% if message.tags == 'success' %}msg-alert-success{% elif message.tags == 'error' %}msg-alert-error{% else %}msg-alert-warning{% endif %}">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <i class="fa-solid {% if message.tags == 'success' %}fa-circle-check{% elif message.tags == 'error' %}fa-triangle-exclamation{% else %}fa-circle-info{% endif %}"></i>
-                            <span>{{ message }}</span>
-                        </div>
-                        <button type="button" class="msg-alert-close" onclick="this.parentElement.remove()" title="Dismiss">&times;</button>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-
                 {% block content %}{% endblock %}
             </div>
         </main>
+    </div>
+
+    <!-- Floating Pop-up Toast Container -->
+    <div id="superToastContainer" class="super-toast-container" aria-live="polite" aria-atomic="true">
+        {% if messages %}
+            {% for message in messages %}
+            <div class="super-toast super-toast-{{ message.tags|default:'info' }}" data-autodismiss="4500" role="alert">
+                <div class="super-toast-icon">
+                    {% if message.tags == 'success' %}
+                        <i class="fa-solid fa-circle-check"></i>
+                    {% elif message.tags == 'error' %}
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    {% elif message.tags == 'warning' %}
+                        <i class="fa-solid fa-circle-exclamation"></i>
+                    {% else %}
+                        <i class="fa-solid fa-circle-info"></i>
+                    {% endif %}
+                </div>
+                <div class="super-toast-content">
+                    <div class="super-toast-title">
+                        {% if message.tags == 'success' %}
+                            Saved Successfully
+                        {% elif message.tags == 'error' %}
+                            Action Failed
+                        {% elif message.tags == 'warning' %}
+                            Attention Needed
+                        {% else %}
+                            Notification
+                        {% endif %}
+                    </div>
+                    <div class="super-toast-message">{{ message }}</div>
+                </div>
+                <button type="button" class="super-toast-close" onclick="closeSuperToast(this.closest('.super-toast'))" title="Dismiss">&times;</button>
+                <div class="super-toast-progress">
+                    <div class="super-toast-progress-bar"></div>
+                </div>
+            </div>
+            {% endfor %}
+        {% endif %}
     </div>
 
     <!-- Super Admin Logout Confirmation Modal -->
@@ -796,7 +1011,146 @@
     </div>
 
     <script>
+        // Global Toast Notification Manager
+        function closeSuperToast(toastEl) {
+            if (!toastEl || toastEl.classList.contains('toast-hiding')) return;
+            toastEl.classList.add('toast-hiding');
+            setTimeout(function () {
+                if (toastEl.parentNode) {
+                    toastEl.parentNode.removeChild(toastEl);
+                }
+            }, 320);
+        }
+
+        function initSuperToast(toastEl, duration = 4500) {
+            let timeoutId = null;
+            let remaining = duration;
+            let startTime = Date.now();
+
+            function startTimer() {
+                startTime = Date.now();
+                timeoutId = setTimeout(function () {
+                    closeSuperToast(toastEl);
+                }, remaining);
+            }
+
+            function pauseTimer() {
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                    remaining -= (Date.now() - startTime);
+                }
+            }
+
+            toastEl.addEventListener('mouseenter', pauseTimer);
+            toastEl.addEventListener('mouseleave', function () {
+                if (remaining > 0) startTimer();
+            });
+
+            startTimer();
+        }
+
+        window.showToast = function (message, type = 'success', title = null, duration = 4500) {
+            var container = document.getElementById('superToastContainer');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'superToastContainer';
+                container.className = 'super-toast-container';
+                document.body.appendChild(container);
+            }
+
+            var iconClass = 'fa-circle-check';
+            var defaultTitle = 'Saved Successfully';
+            if (type === 'error') {
+                iconClass = 'fa-triangle-exclamation';
+                defaultTitle = 'Action Failed';
+            } else if (type === 'warning') {
+                iconClass = 'fa-circle-exclamation';
+                defaultTitle = 'Attention Needed';
+            } else if (type === 'info') {
+                iconClass = 'fa-circle-info';
+                defaultTitle = 'Notification';
+            }
+
+            var toast = document.createElement('div');
+            toast.className = 'super-toast super-toast-' + type;
+            toast.setAttribute('role', 'alert');
+            toast.innerHTML = `
+                <div class="super-toast-icon">
+                    <i class="fa-solid ${iconClass}"></i>
+                </div>
+                <div class="super-toast-content">
+                    <div class="super-toast-title">${title || defaultTitle}</div>
+                    <div class="super-toast-message">${message}</div>
+                </div>
+                <button type="button" class="super-toast-close" title="Dismiss">&times;</button>
+                <div class="super-toast-progress">
+                    <div class="super-toast-progress-bar"></div>
+                </div>
+            `;
+
+            var closeBtn = toast.querySelector('.super-toast-close');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function () {
+                    closeSuperToast(toast);
+                });
+            }
+
+            container.appendChild(toast);
+            initSuperToast(toast, duration);
+        };
+
         document.addEventListener('DOMContentLoaded', function () {
+            // Initialize existing server-rendered toasts
+            var toasts = document.querySelectorAll('.super-toast');
+            toasts.forEach(function (toast) {
+                var dismissTime = parseInt(toast.getAttribute('data-autodismiss'), 10) || 4500;
+                initSuperToast(toast, dismissTime);
+            });
+
+            // Global Form Submit Button Loading State Handler
+            document.addEventListener('submit', function (e) {
+                var form = e.target;
+                if (!form || !(form instanceof HTMLFormElement)) return;
+
+                // Validate form if HTML5 validation is supported
+                if (form.checkValidity && !form.checkValidity()) {
+                    return; // Let native validation show without entering loading state
+                }
+
+                var submitBtn = e.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
+                if (!submitBtn) return;
+
+                // Avoid re-triggering if already in loading state
+                if (submitBtn.classList.contains('is-loading')) return;
+
+                // Lock button width to prevent layout jump
+                var currentWidth = submitBtn.offsetWidth;
+                if (currentWidth > 0) {
+                    submitBtn.style.minWidth = currentWidth + 'px';
+                }
+
+                submitBtn.classList.add('is-loading');
+
+                // Determine appropriate loading text
+                var originalText = submitBtn.innerText.trim();
+                var hasFileInput = !!form.querySelector('input[type="file"]');
+                var loadingLabel = 'Saving...';
+
+                if (hasFileInput && form.enctype === 'multipart/form-data') {
+                    loadingLabel = 'Saving & Uploading...';
+                } else if (originalText.toLowerCase().includes('delete') || originalText.toLowerCase().includes('remove')) {
+                    loadingLabel = 'Deleting...';
+                } else if (originalText.toLowerCase().includes('create') || originalText.toLowerCase().includes('add') || originalText.toLowerCase().includes('upload')) {
+                    loadingLabel = 'Processing...';
+                } else if (originalText.toLowerCase().includes('update')) {
+                    loadingLabel = 'Updating...';
+                }
+
+                submitBtn.innerHTML = '<span class="btn-spinner" style="margin-right: 6px;"></span> <span>' + loadingLabel + '</span>';
+            });
+
+            // Sidebar Controls
             var sidebar = document.querySelector('.sidebar');
             var backdrop = document.getElementById('superSidebarBackdrop');
             var toggleBtn = document.getElementById('superSidebarToggle');

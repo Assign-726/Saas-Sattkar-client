@@ -5,7 +5,7 @@ from django.contrib.sessions.middleware import SessionMiddleware
 from super_admin.models import Restaurant, RestaurantBranch, RestaurantUser
 from core.models import Category, MenuItem, InventoryItem, InventoryCategory, Order, Table, Zone
 from restaurant_admin.middleware import BranchContextMiddleware
-from restaurant_admin.forms import MenuItemForm, CategoryForm, InventoryItemForm, InventoryCategoryForm, TableForm, ZoneForm
+from restaurant_admin.forms import MenuItemForm, CategoryForm, InventoryItemForm, InventoryCategoryForm, TableForm, ZoneForm, BulkTableForm
 
 
 class BranchIsolationTests(TestCase):
@@ -407,5 +407,133 @@ class MultiLevelInheritanceTests(TestCase):
         self.assertEqual(self.item_inherited.get_effective_value('default_gst_rate'), 28.00)
         po_item.refresh_from_db()
         self.assertEqual(po_item.gst_rate, 18.00)
+
+
+class TableBulkAddTests(TestCase):
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name="Taj Dining", slug="taj-dining")
+        self.branch = RestaurantBranch.objects.create(restaurant=self.restaurant, name="Main Outlet", slug="main-outlet")
+        self.user = User.objects.create_user(username="taj_admin", password="password123", is_staff=True)
+        self.profile = RestaurantUser.objects.create(user=self.user, restaurant=self.restaurant, branch=self.branch, is_primary_admin=True)
+        self.zone = Zone.objects.create(restaurant=self.restaurant, branch=self.branch, name="First Floor")
+        self.client.login(username="taj_admin", password="password123")
+
+    def test_single_table_form_with_shape(self):
+        form = TableForm(
+            data={
+                'name': 'F-101',
+                'table_number': 101,
+                'capacity': 6,
+                'shape': 'square',
+                'zone': self.zone.id,
+                'is_active': True,
+            },
+            restaurant=self.restaurant,
+            branch=self.branch
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+        table = form.save()
+        self.assertEqual(table.name, 'F-101')
+        self.assertEqual(table.shape, 'square')
+        self.assertEqual(table.branch, self.branch)
+        self.assertEqual(table.zone, self.zone)
+
+    def test_bulk_table_creation_view(self):
+        from django.urls import reverse
+        url = reverse('restaurant_admin:table_add', kwargs={'restaurant_slug': self.restaurant.slug})
+
+        # Post 5 tables with prefix "T-"
+        response = self.client.post(url, {
+            'form_type': 'bulk',
+            'zone': self.zone.id,
+            'prefix': 'T-',
+            'start_number': 1,
+            'count': 5,
+            'capacity': 4,
+            'shape': 'round',
+        })
+        self.assertEqual(response.status_code, 302)
+
+        # Verify tables created
+        created_tables = Table.objects.filter(restaurant=self.restaurant, zone=self.zone).order_by('table_number')
+        self.assertEqual(created_tables.count(), 5)
+        self.assertEqual(list(created_tables.values_list('name', flat=True)), ['T-1', 'T-2', 'T-3', 'T-4', 'T-5'])
+        self.assertEqual(list(created_tables.values_list('table_number', flat=True)), [1, 2, 3, 4, 5])
+        self.assertTrue(all(t.shape == 'round' for t in created_tables))
+        self.assertTrue(all(t.branch == self.branch for t in created_tables))
+
+    def test_bulk_table_duplicate_handling(self):
+        from django.urls import reverse
+        # Pre-create table 1
+        Table.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            zone=self.zone,
+            name='T-1',
+            table_number=1,
+            capacity=4
+        )
+
+        url = reverse('restaurant_admin:table_add', kwargs={'restaurant_slug': self.restaurant.slug})
+        # Attempt to create tables 1, 2, 3 (1 should be skipped)
+        response = self.client.post(url, {
+            'form_type': 'bulk',
+            'zone': self.zone.id,
+            'prefix': 'T-',
+            'start_number': 1,
+            'count': 3,
+            'capacity': 4,
+            'shape': 'rectangle',
+        })
+        self.assertEqual(response.status_code, 302)
+
+        # Total tables should be 3 (1 pre-existing + 2 newly created)
+        tables = Table.objects.filter(restaurant=self.restaurant, zone=self.zone).order_by('table_number')
+        self.assertEqual(tables.count(), 3)
+        self.assertEqual(list(tables.values_list('table_number', flat=True)), [1, 2, 3])
+
+    def test_floor_plan_dashboard_active_menu(self):
+        from django.urls import reverse
+        url = reverse('restaurant_admin:floor_plan_dashboard', kwargs={'restaurant_slug': self.restaurant.slug})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['active_menu'], 'floor_plan')
+        self.assertIn('zones', response.context)
+
+    def test_floor_plan_save_position_api(self):
+        import json
+        from django.urls import reverse
+        table = Table.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            zone=self.zone,
+            name='T-99',
+            table_number=99,
+            capacity=4,
+            is_placed=False
+        )
+
+        url = reverse('restaurant_admin:floor_plan_save_position_api', kwargs={'restaurant_slug': self.restaurant.slug})
+        response = self.client.post(
+            url,
+            data=json.dumps({
+                'table_id': table.id,
+                'is_placed': True,
+                'position_x': 144,
+                'position_y': 240,
+                'rotation': 90
+            }),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['status'], 'success')
+
+        table.refresh_from_db()
+        self.assertTrue(table.is_placed)
+        self.assertEqual(table.position_x, 144)
+        self.assertEqual(table.position_y, 240)
+        self.assertEqual(table.rotation, 90)
+
 
 

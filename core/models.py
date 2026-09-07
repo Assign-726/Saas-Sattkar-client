@@ -20,14 +20,30 @@ class Zone(models.Model):
 
 
 class Table(models.Model):
+    class TableShape(models.TextChoices):
+        ROUND = 'round', _('Round')
+        SQUARE = 'square', _('Square')
+        RECTANGLE = 'rectangle', _('Rectangle')
+
     name = models.CharField(max_length=100)
     table_number = models.PositiveIntegerField(default=1)
     capacity = models.PositiveIntegerField(default=4)
+    shape = models.CharField(
+        max_length=20,
+        choices=TableShape.choices,
+        default=TableShape.ROUND,
+        blank=True,
+        null=True
+    )
     qr_code = models.ImageField(upload_to='table_qrs', blank=True, null=True)
     zone = models.ForeignKey(Zone, on_delete=models.PROTECT, related_name='tables', null=True, blank=True)
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='tables', null=True, blank=True)
     branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='tables')
     is_active = models.BooleanField(default=True)
+    is_placed = models.BooleanField(default=False, help_text="Whether table is placed on visual floor plan")
+    position_x = models.IntegerField(default=0, null=True, blank=True)
+    position_y = models.IntegerField(default=0, null=True, blank=True)
+    rotation = models.IntegerField(default=0, help_text="Rotation in degrees (0, 90, 180, 270)")
 
     class Meta:
         unique_together = (
@@ -73,23 +89,31 @@ class Table(models.Model):
 
     @property
     def current_status(self):
-        # Active orders that are NOT cancelled, NOT failed, and NOT fully paid
-        active_orders = self.orders.exclude(status='C').exclude(payment_status__in=['F', 'paid', 'P'])
+        # Active orders that are NOT cancelled, NOT draft, NOT failed, and NOT fully paid
+        active_orders = self.orders.exclude(status__in=['C', 'DRAFT']).exclude(payment_status__in=['F', 'paid', 'P'])
         if not active_orders.exists():
             return 'BLANK'
-
-        # Check if any active order is PENDING (Running KOT)
-        if active_orders.filter(status='P').exists():
-            return 'RUNNING_KOT'
-
-        # Check if any active order is PREPARING (Running)
-        if active_orders.filter(status='PR').exists():
-            return 'RUNNING'
 
         # Check if any active order is SERVED (Billed / Waiting for payment)
         if active_orders.filter(status='S').exists():
             return 'PRINTED'
 
+        from django.utils import timezone
+        now = timezone.now()
+
+        # Check if any active order is still being prepared in kitchen (Pending and not ready)
+        has_running_kot = False
+        for ord in active_orders:
+            # Order is ready if status is 'READY' or 'PR' or ready_at is reached
+            is_ready = (ord.status in ['READY', 'PR']) or (ord.ready_at is not None and ord.ready_at <= now)
+            if ord.status == 'P' and not is_ready:
+                has_running_kot = True
+                break
+
+        if has_running_kot:
+            return 'RUNNING_KOT'
+
+        # Active order is ready (out from kitchen, on the way to table / running)
         return 'RUNNING'
 
 class Category(models.Model):
@@ -158,6 +182,7 @@ class Order(models.Model):
         DRAFT = 'DRAFT', _('Draft / Scheduled')
         PENDING = 'P', _('Pending')
         PREPARING = 'PR', _('Preparing')
+        READY = 'READY', _('Ready')
         SERVED = 'S', _('Served')
         COMPLETED = 'COMPLETED', _('Completed')
         CANCELLED = 'C', _('Cancelled')
@@ -251,6 +276,17 @@ class Order(models.Model):
         from decimal import Decimal
         tot = self.total_amount if (self.total_amount is not None and self.total_amount > Decimal('0.00')) else self.calculate_bill_breakdown()['final_total']
         return max(Decimal('0.00'), tot - (self.advance_amount_paid or Decimal('0.00')))
+
+    @property
+    def is_ready(self):
+        from django.utils import timezone
+        if self.status == self.OrderStatus.READY:
+            return True
+        if self.status in [self.OrderStatus.SERVED, self.OrderStatus.COMPLETED]:
+            return True
+        if self.ready_at and self.ready_at <= timezone.now():
+            return True
+        return False
 
     @property
     def order_number(self):
@@ -593,7 +629,12 @@ class Order(models.Model):
         gross_subtotal = food_subtotal + total_liquor_subtotal
 
         discount = Decimal('0.00')
-        if self.discount_amount and self.discount_amount > Decimal('0.00'):
+        if self.discount_value and Decimal(str(self.discount_value)) > Decimal('0.00'):
+            if self.discount_type == 'percentage':
+                discount = (gross_subtotal * (Decimal(str(self.discount_value)) / Decimal('100.00'))).quantize(Decimal('0.01'))
+            else:
+                discount = min(gross_subtotal, Decimal(str(self.discount_value)))
+        elif self.discount_amount and self.discount_amount > Decimal('0.00'):
             discount = Decimal(str(self.discount_amount))
         elif self.coupon:
             try:

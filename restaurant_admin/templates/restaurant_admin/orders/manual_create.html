@@ -1192,69 +1192,146 @@ document.addEventListener("DOMContentLoaded", function() {
 
 
 
-<!-- Modal for Quick Add Menu Item -->
-<div class="modal fade" id="quickAddItemModal" tabindex="-1" aria-labelledby="quickAddItemModalLabel"
-  aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content rounded-3 shadow">
-      <div class="modal-header bg-light py-2 px-3">
-        <h6 class="modal-title fw-bold text-dark d-flex align-items-center gap-2" id="quickAddItemModalLabel">
-          <i class="bi bi-plus-circle-fill text-primary fs-5"></i> Add New Menu Item
-        </h6>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<!-- POS Quick Add Menu Item Modal -->
+<div id="quickAddItemModal" class="veil" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.65); backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px); z-index:9999; align-items:center; justify-content:center; padding:16px; animation:fade .15s ease-out;" onclick="if(event.target===this) window.closeQuickAddItemModal()">
+  <div class="card wide" style="background:#FFFFFF; border:1px solid #E2E8F0; border-radius:18px; max-width:540px; width:100%; max-height:92vh; display:flex; flex-direction:column; box-shadow:0 25px 60px -12px rgba(15,23,42,0.35), 0 0 0 1px rgba(0,0,0,0.04); overflow:hidden; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Inter',sans-serif; animation:modalPop .18s cubic-bezier(0.16, 1, 0.3, 1);">
+    
+    <!-- Modal Header -->
+    <div style="padding:18px 24px 16px; border-bottom:1px solid #F1F5F9; display:flex; justify-content:space-between; align-items:center; background:#FFFFFF;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="width:40px; height:40px; border-radius:12px; background:linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%); display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-size:18px; box-shadow:0 4px 12px rgba(37,99,235,0.28); flex-shrink:0;">
+          <i class="bi bi-plus-circle-fill"></i>
+        </div>
+        <div>
+          <h3 style="font-family:'Bricolage Grotesque',-apple-system,sans-serif; font-size:18px; font-weight:800; margin:0; color:#0F172A; letter-spacing:-0.01em;">Quick Add Menu Item</h3>
+          <p style="font-size:12px; color:#64748B; margin:2px 0 0 0; font-weight:500;">Register instantly and add directly to your active order</p>
+        </div>
       </div>
-      <form id="quick-add-item-form">
-        <div class="modal-body p-3">
-          <div class="mb-2">
-            <label class="form-label small fw-semibold text-muted mb-1">Item Name *</label>
-            <input type="text" name="name" class="form-control form-control-sm" placeholder="e.g. Chicken Biryani"
-              required>
-          </div>
-          <div class="row g-2 mb-2">
-            <div class="col-6">
-              <label class="form-label small fw-semibold text-muted mb-1">Category *</label>
-              <select name="category" class="form-select form-select-sm" required>
-                <option value="">Select Category</option>
+      <button type="button" onclick="window.closeQuickAddItemModal()" style="background:#F1F5F9; border:none; width:32px; height:32px; border-radius:8px; font-size:18px; color:#64748B; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1; transition:all .15s ease;" onmouseover="this.style.background='#E2E8F0';this.style.color='#0F172A'" onmouseout="this.style.background='#F1F5F9';this.style.color='#64748B'" title="Close (Esc)">&times;</button>
+    </div>
+
+    <!-- Modal Form -->
+    <form id="quick-add-item-form" style="display:flex; flex-direction:column; margin:0; overflow:hidden;">
+      <div style="padding:18px 24px; overflow-y:auto; display:flex; flex-direction:column; gap:14px; background:#FAFAFA; max-height:calc(92vh - 145px);">
+        
+        <!-- Error Alert Container -->
+        <div id="quick-add-error" style="display:none; background:#FEF2F2; border:1px solid #FCA5A5; border-radius:10px; padding:10px 14px; font-size:12.5px; color:#B91C1C; align-items:center; gap:8px;">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          <span id="quick-add-error-msg"></span>
+        </div>
+
+        <!-- Item Name (Full Width) -->
+        <div>
+          <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569; margin-bottom:6px;">
+            Item Name <span style="color:#EF4444;">*</span>
+          </label>
+          <input type="text" name="name" id="quick-item-name" required placeholder="e.g. Butter Chicken, Paneer Tikka" style="width:100%; height:40px; padding:0 14px; font-size:13.5px; font-weight:600; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; transition:border-color .15s, box-shadow .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#2563EB';this.style.boxShadow='0 0 0 3px rgba(37,99,235,0.15)'" onblur="this.style.borderColor='#CBD5E1';this.style.boxShadow='none'">
+        </div>
+
+        <!-- 2-Col Grid: Category & Price -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <!-- Category -->
+          <div>
+            <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569; margin-bottom:6px;">
+              Category
+            </label>
+            <div style="position:relative;">
+              <select name="category" id="quick-item-category" style="width:100%; height:40px; padding:0 30px 0 12px; font-size:13px; font-weight:500; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; appearance:none; -webkit-appearance:none; cursor:pointer; transition:border-color .15s, box-shadow .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#2563EB';this.style.boxShadow='0 0 0 3px rgba(37,99,235,0.15)'" onblur="this.style.borderColor='#CBD5E1';this.style.boxShadow='none'">
+                <option value="">-- Select Category --</option>
                 {% for cat in categories %}
                 <option value="{{ cat.id }}">{{ cat.name }}</option>
                 {% endfor %}
               </select>
-            </div>
-            <div class="col-6">
-              <label class="form-label small fw-semibold text-muted mb-1">Price (₹) *</label>
-              <input type="number" step="0.01" min="0" name="price" class="form-control form-control-sm"
-                placeholder="0.00" required>
+              <div style="position:absolute; right:12px; top:50%; transform:translateY(-50%); pointer-events:none; color:#64748B; font-size:11px;">
+                <i class="bi bi-chevron-down"></i>
+              </div>
             </div>
           </div>
-          <div class="mb-2">
-            <label class="form-label small fw-semibold text-muted mb-1">Tax Type / Rate *</label>
-            <select name="tax_type" class="form-select form-select-sm" required>
-              <option value="GST_FOOD" selected>GST Food (Meals / Soft Drinks)</option>
-              <option value="VAT_BEER">Beer VAT (State Rate)</option>
-              <option value="VAT_IMFL">IMFL / Spirits VAT</option>
-              <option value="VAT_WINE">Wine VAT</option>
-              <option value="VAT_LIQUOR">General Liquor VAT</option>
-            </select>
-          </div>
-          <div class="mb-2">
-            <label class="form-label small fw-semibold text-muted mb-1">Description (optional)</label>
-            <textarea name="description" class="form-control form-control-sm" rows="2"
-              placeholder="Item description or ingredients..."></textarea>
-          </div>
-          <div class="form-check form-switch mb-1">
-            <input class="form-check-input" type="checkbox" name="availability" id="quick-item-available" checked>
-            <label class="form-check-label small fw-semibold text-muted" for="quick-item-available">Available for
-              ordering</label>
+
+          <!-- Price -->
+          <div>
+            <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569; margin-bottom:6px;">
+              Price (₹) <span style="color:#EF4444;">*</span>
+            </label>
+            <div style="position:relative; display:flex; align-items:center;">
+              <span style="position:absolute; left:12px; font-size:14px; font-weight:700; color:#64748B; pointer-events:none;">₹</span>
+              <input type="number" step="0.01" min="0" name="price" id="quick-item-price" required placeholder="0.00" style="width:100%; height:40px; padding:0 12px 0 28px; font-size:14.5px; font-weight:700; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; transition:border-color .15s, box-shadow .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#2563EB';this.style.boxShadow='0 0 0 3px rgba(37,99,235,0.15)'" onblur="this.style.borderColor='#CBD5E1';this.style.boxShadow='none'">
+            </div>
           </div>
         </div>
-        <div class="modal-footer bg-light py-2 px-3 d-flex justify-content-between">
-          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-sm btn-primary fw-bold" id="btn-save-quick-item">
-            <i class="bi bi-check-lg me-1"></i> Save & Add to Cart
+
+        <!-- 2-Col Grid: Fast Shortcode & Tax Type -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <!-- Fast Code -->
+          <div>
+            <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569; margin-bottom:6px;">
+              Fast POS Code <span style="font-size:10px; color:#94A3B8; font-weight:500;">(Optional)</span>
+            </label>
+            <input type="text" name="short_code" id="quick-item-code" placeholder="e.g. 101, NAAN" style="width:100%; height:40px; padding:0 12px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; font-weight:600; text-transform:uppercase; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; transition:border-color .15s, box-shadow .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#2563EB';this.style.boxShadow='0 0 0 3px rgba(37,99,235,0.15)'" onblur="this.style.borderColor='#CBD5E1';this.style.boxShadow='none'">
+          </div>
+
+          <!-- Tax Type -->
+          <div>
+            <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569; margin-bottom:6px;">
+              Tax Type / Rate <span style="color:#EF4444;">*</span>
+            </label>
+            <div style="position:relative;">
+              <select name="tax_type" id="quick-item-tax" required style="width:100%; height:40px; padding:0 30px 0 12px; font-size:12px; font-weight:600; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; appearance:none; -webkit-appearance:none; cursor:pointer; transition:border-color .15s, box-shadow .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#2563EB';this.style.boxShadow='0 0 0 3px rgba(37,99,235,0.15)'" onblur="this.style.borderColor='#CBD5E1';this.style.boxShadow='none'">
+                <option value="GST_FOOD" selected>GST 5% (Meals / Beverages)</option>
+                <option value="VAT_BEER">Beer VAT (State Rate)</option>
+                <option value="VAT_IMFL">IMFL / Spirits VAT</option>
+                <option value="VAT_WINE">Wine VAT</option>
+                <option value="VAT_LIQUOR">General Liquor VAT</option>
+              </select>
+              <div style="position:absolute; right:12px; top:50%; transform:translateY(-50%); pointer-events:none; color:#64748B; font-size:11px;">
+                <i class="bi bi-chevron-down"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Description (Optional) -->
+        <div>
+          <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569; margin-bottom:6px;">
+            Description / Kitchen Note <span style="font-size:10px; color:#94A3B8; font-weight:500;">(Optional)</span>
+          </label>
+          <textarea name="description" id="quick-item-desc" rows="2" placeholder="Item description, spice notes or ingredients..." style="width:100%; padding:9px 12px; font-size:12.5px; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; resize:none; transition:border-color .15s, box-shadow .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#2563EB';this.style.boxShadow='0 0 0 3px rgba(37,99,235,0.15)'" onblur="this.style.borderColor='#CBD5E1';this.style.boxShadow='none'"></textarea>
+        </div>
+
+        <!-- Toggles Section: Available & Tax Inclusive -->
+        <div style="display:flex; flex-wrap:wrap; gap:12px; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:12px; padding:10px 14px;">
+          <!-- Available Toggle -->
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; flex:1; min-width:180px; margin:0; user-select:none;">
+            <input type="checkbox" name="availability" id="quick-item-available" checked style="width:17px; height:17px; accent-color:#2563EB; cursor:pointer;">
+            <span style="font-size:12.5px; font-weight:600; color:#1E293B;">Available for Ordering</span>
+          </label>
+
+          <!-- Tax Inclusive Toggle -->
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; flex:1; min-width:180px; margin:0; user-select:none;">
+            <input type="checkbox" name="is_tax_inclusive" id="quick-item-tax-inc" style="width:17px; height:17px; accent-color:#2563EB; cursor:pointer;">
+            <span style="font-size:12.5px; font-weight:600; color:#1E293B;">Price is Tax-Inclusive</span>
+          </label>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div style="padding:14px 24px; border-top:1px solid #E2E8F0; display:flex; justify-content:space-between; align-items:center; background:#FFFFFF;">
+        <div style="font-size:11.5px; color:#64748B; display:flex; align-items:center; gap:6px;">
+          <kbd style="font-size:10px; background:#F1F5F9; border:1px solid #CBD5E1; padding:2px 6px; border-radius:4px; font-weight:700; color:#475569;">↵ Enter</kbd>
+          <span>to save &amp; add</span>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button type="button" onclick="window.closeQuickAddItemModal()" style="padding:9px 18px; border-radius:10px; border:1.5px solid #E2E8F0; background:#FFFFFF; font-weight:600; font-size:12.5px; cursor:pointer; color:#64748B; transition:all .15s ease;" onmouseover="this.style.background='#F8FAFC';this.style.color='#0F172A'" onmouseout="this.style.background='#FFFFFF';this.style.color='#64748B'">
+            Cancel
+          </button>
+          <button type="submit" id="btn-save-quick-item" style="display:inline-flex; align-items:center; gap:8px; padding:9px 20px; border-radius:10px; border:none; background:linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%); color:#FFFFFF; font-weight:700; font-size:12.5px; cursor:pointer; box-shadow:0 4px 12px rgba(37,99,235,0.3); transition:all .15s ease;" onmouseover="this.style.opacity='0.92';this.style.transform='translateY(-1px)'" onmouseout="this.style.opacity='1';this.style.transform='none'">
+            <i class="bi bi-plus-circle-fill"></i>
+            <span>Save &amp; Add to Cart</span>
           </button>
         </div>
-      </form>
-    </div>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -2473,14 +2550,15 @@ document.addEventListener("DOMContentLoaded", function() {
       state.guestCount = existingOrder.guest_count || 2;
 
       const exDiscAmt = parseFloat(existingOrder.discount_amount) || 0;
+      const exDiscVal = parseFloat(existingOrder.discount_value) || 0;
       if (existingOrder.order_discount) {
         state.orderDiscount = existingOrder.order_discount;
-      } else if (exDiscAmt > 0) {
+      } else if (exDiscAmt > 0 || exDiscVal > 0) {
         state.orderDiscount = {
           amount: exDiscAmt,
-          type: 'flat',
-          value: exDiscAmt,
-          reason: 'Bill discount'
+          type: existingOrder.discount_type || 'flat',
+          value: exDiscVal > 0 ? exDiscVal : exDiscAmt,
+          reason: existingOrder.discount_reason || 'Bill discount'
         };
       } else {
         state.orderDiscount = null;
@@ -2491,13 +2569,16 @@ document.addEventListener("DOMContentLoaded", function() {
         name: i.name,
         quantity: i.quantity,
         unit_price: parseFloat(i.unit_price) || 0,
+        price: parseFloat(i.unit_price) || 0,
         tax_type: i.tax_type,
         category_name: i.category_name,
+        is_tax_inclusive: !!i.is_tax_inclusive,
         discount_type: i.discount_type || 'flat',
         discount_value: parseFloat(i.discount_value) || 0,
         discount_amount: parseFloat(i.discount_amount) || 0,
         discount_reason: i.discount_reason || '',
-        note: i.notes || '',
+        note: i.notes || i.note || '',
+        notes: i.notes || i.note || '',
         sent: !!i.sent
       }));
 
@@ -2570,10 +2651,36 @@ document.addEventListener("DOMContentLoaded", function() {
     if (quickAddForm) {
       quickAddForm.addEventListener('submit', function (e) {
         e.preventDefault();
+        const errBox = document.getElementById('quick-add-error');
+        const errMsg = document.getElementById('quick-add-error-msg');
+        if (errBox) errBox.style.display = 'none';
+
         const formData = new FormData(quickAddForm);
+        const nameVal = (formData.get('name') || '').trim();
+        const priceVal = parseFloat(formData.get('price'));
+
+        if (!nameVal) {
+          if (errBox && errMsg) {
+            errMsg.textContent = 'Please provide a valid item name.';
+            errBox.style.display = 'flex';
+          }
+          return;
+        }
+
+        if (isNaN(priceVal) || priceVal < 0) {
+          if (errBox && errMsg) {
+            errMsg.textContent = 'Please enter a valid selling price.';
+            errBox.style.display = 'flex';
+          }
+          return;
+        }
+
         const csrfToken = getCookie('csrftoken') || '{{ csrf_token }}';
         const btnSave = document.getElementById('btn-save-quick-item');
-        btnSave.disabled = true;
+        if (btnSave) {
+          btnSave.disabled = true;
+          btnSave.innerHTML = '<i class="bi bi-arrow-repeat spin me-1"></i> Saving...';
+        }
 
         fetch('{% url "restaurant_admin:menu_quick_add_api" restaurant_slug=restaurant.slug %}', {
           method: 'POST',
@@ -2585,25 +2692,63 @@ document.addEventListener("DOMContentLoaded", function() {
         })
           .then(res => res.json())
           .then(data => {
-            btnSave.disabled = false;
+            if (btnSave) {
+              btnSave.disabled = false;
+              btnSave.innerHTML = '<i class="bi bi-plus-circle-fill"></i> <span>Save &amp; Add to Cart</span>';
+            }
             if (data.success && data.item) {
               const newItem = data.item;
-              menuItems.push(newItem);
-              renderMenu();
-              addToCart(newItem);
+              if (Array.isArray(window.posMenuItems)) {
+                window.posMenuItems.push(newItem);
+              }
+              if (typeof menuItems !== 'undefined' && Array.isArray(menuItems)) {
+                menuItems.push(newItem);
+              }
 
-              const modalEl = document.getElementById('quickAddItemModal');
-              const bsModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-              bsModal.hide();
+              // Clear search bar & state
+              const searchInput = document.getElementById('menu-search');
+              if (searchInput) searchInput.value = '';
+              if (window.posState) window.posState.searchQuery = '';
+              if (window.state) window.state.searchQuery = '';
+
+              if (typeof window.renderMenuGlobal === 'function') {
+                window.renderMenuGlobal();
+              } else if (typeof renderMenu === 'function') {
+                renderMenu();
+              }
+
+              // Immediately add new item to cart
+              if (typeof window.addToCartGlobal === 'function') {
+                window.addToCartGlobal(newItem, 1);
+              } else if (typeof addToCart === 'function') {
+                addToCart(newItem, 1);
+              }
+
+              if (typeof window.closeQuickAddItemModal === 'function') {
+                window.closeQuickAddItemModal();
+              }
               quickAddForm.reset();
             } else {
-              alert(data.error || 'Failed to add menu item.');
+              if (errBox && errMsg) {
+                errMsg.textContent = data.error || 'Failed to register menu item.';
+                errBox.style.display = 'flex';
+              } else {
+                alert(data.error || 'Failed to add menu item.');
+              }
             }
           })
           .catch(err => {
-            console.error(err);
-            btnSave.disabled = false;
-            alert('Error adding menu item. Please check inputs.');
+            console.error('Quick Add Item Error:', err);
+            if (btnSave) {
+              btnSave.disabled = false;
+              btnSave.innerHTML = '<i class="bi bi-plus-circle-fill"></i> <span>Save &amp; Add to Cart</span>';
+            }
+            if (errBox && errMsg) {
+              errMsg.textContent = 'Server or network error adding menu item. Please check fields.';
+              errBox.style.display = 'flex';
+            } else {
+              alert('Error adding menu item. Please check inputs.');
+            }
           });
       });
     }
@@ -3850,14 +3995,15 @@ document.addEventListener("DOMContentLoaded", function() {
       state.guestCount = ord.guest_count || 2;
       
       const loadedDiscAmt = parseFloat(ord.discount_amount) || 0;
+      const loadedDiscVal = parseFloat(ord.discount_value) || 0;
       if (ord.order_discount) {
         state.orderDiscount = ord.order_discount;
-      } else if (loadedDiscAmt > 0) {
+      } else if (loadedDiscAmt > 0 || loadedDiscVal > 0) {
         state.orderDiscount = {
           amount: loadedDiscAmt,
-          type: 'flat',
-          value: loadedDiscAmt,
-          reason: 'Bill discount'
+          type: ord.discount_type || 'flat',
+          value: loadedDiscVal > 0 ? loadedDiscVal : loadedDiscAmt,
+          reason: ord.discount_reason || 'Bill discount'
         };
       } else {
         state.orderDiscount = null;
@@ -3868,13 +4014,16 @@ document.addEventListener("DOMContentLoaded", function() {
         name: i.name,
         quantity: i.quantity,
         unit_price: parseFloat(i.unit_price) || 0,
+        price: parseFloat(i.unit_price) || 0,
         tax_type: i.tax_type,
         category_name: i.category_name,
+        is_tax_inclusive: !!i.is_tax_inclusive,
         discount_type: i.discount_type || 'flat',
         discount_value: parseFloat(i.discount_value) || 0,
         discount_amount: parseFloat(i.discount_amount) || 0,
         discount_reason: i.discount_reason || '',
-        note: i.notes || '',
+        note: i.notes || i.note || '',
+        notes: i.notes || i.note || '',
         sent: !!i.sent
       }));
 
@@ -3988,7 +4137,10 @@ document.addEventListener("DOMContentLoaded", function() {
         table_id: state.tableId || null,
         order_type: state.orderType || 'dine_in',
         guest_count: document.getElementById('vCov')?.value ? parseInt(document.getElementById('vCov').value) : (state.guestCount || 2),
-        discount_amount: state.orderDiscount ? (state.orderDiscount.amount || 0) : 0,
+        discount_amount: state.orderDiscount ? (parseFloat(state.orderDiscount.amount) || 0) : 0,
+        discount_type: state.orderDiscount ? (state.orderDiscount.type || 'flat') : 'flat',
+        discount_value: state.orderDiscount ? (parseFloat(state.orderDiscount.value) || 0) : 0,
+        discount_reason: state.orderDiscount ? (state.orderDiscount.reason || '') : '',
         subtotal: state.subtotal || 0,
         tax_amount: state.taxAmount || 0,
         round_off_amount: state.roundOffAmount || 0,
@@ -4001,7 +4153,7 @@ document.addEventListener("DOMContentLoaded", function() {
           discount_value: i.discount_value || 0,
           discount_amount: i.discount_amount || 0,
           discount_reason: i.discount_reason || '',
-          notes: i.note || ''
+          notes: i.note || i.notes || ''
         }))
       };
 
@@ -4996,67 +5148,14 @@ document.addEventListener("DOMContentLoaded", function() {
           <span style="color:${isSelected ? '#FFF' : '#1A1815'}; font-weight:700;">₹${Number(ord.total_amount || 0).toFixed(2)}</span>
         `;
         chip.addEventListener('click', () => {
-          loadActiveOrder(ord);
+          if (typeof window.loadActiveOrder === 'function') {
+            window.loadActiveOrder(ord.id);
+          } else if (typeof applyLoadedOrder === 'function') {
+            applyLoadedOrder(ord);
+          }
         });
         chipsContainer.appendChild(chip);
       });
-    }
-
-    function loadActiveOrder(ord) {
-      state.activeOrderId = ord.id;
-      state.activeOrderNumber = ord.order_number;
-      state.customerName = ord.customer_name || '';
-      state.phone = ord.phone || '';
-      state.notes = ord.notes || '';
-      state.tableId = ord.table_id || '';
-      state.orderType = ord.order_type || 'dine_in';
-      state.cart = ord.items.map(i => ({
-        id: i.id,
-        name: i.name,
-        unit_price: i.unit_price,
-        price: i.unit_price,
-        quantity: i.quantity,
-        discount_type: 'flat',
-        discount_value: 0,
-        discount_amount: 0,
-        tax_type: i.tax_type || 'GST_FOOD',
-        sent: true
-      }));
-
-      const custNameEl = document.getElementById('cust-name');
-      const custPhoneEl = document.getElementById('cust-phone');
-      const orderNotesEl = document.getElementById('order-notes');
-      const tableSelectEl = document.getElementById('table-id');
-      if (custNameEl) custNameEl.value = state.customerName;
-      if (custPhoneEl) custPhoneEl.value = state.phone;
-      if (orderNotesEl) orderNotesEl.value = state.notes;
-      if (tableSelectEl) {
-        if (state.tableId) {
-          tableSelectEl.value = state.tableId;
-        } else if (ord.table_number) {
-          const matchedOpt = Array.from(tableSelectEl.options).find(o => String(o.dataset.number) === String(ord.table_number));
-          if (matchedOpt) {
-            tableSelectEl.value = matchedOpt.value;
-            state.tableId = matchedOpt.value;
-          }
-        }
-      }
-
-      document.querySelectorAll('.fulfillment-btn').forEach(b => {
-        const isActive = b.dataset.type === state.orderType;
-        b.classList.toggle('active', isActive);
-        if (isActive) {
-          b.classList.add('btn-primary', 'text-white');
-          b.classList.remove('btn-outline-primary');
-        } else {
-          b.classList.remove('btn-primary', 'text-white');
-          b.classList.add('btn-outline-primary');
-        }
-      });
-
-      if (window.posCtxRefresh) window.posCtxRefresh();
-      renderActiveOrders();
-      renderCart();
     }
 
     // Initial setup
@@ -6485,6 +6584,26 @@ document.addEventListener("DOMContentLoaded", function() {
       }
     }
 
+    const quickAddVeil = document.getElementById('quickAddItemModal');
+    if (quickAddVeil && quickAddVeil.style.display !== 'none') {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        window.closeQuickAddItemModal();
+        return;
+      }
+      if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        const form = document.getElementById('quick-add-item-form');
+        if (form) {
+          const btnSave = document.getElementById('btn-save-quick-item');
+          if (btnSave && !btnSave.disabled) {
+            btnSave.click();
+          }
+        }
+        return;
+      }
+    }
+
     if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z") && !anyModalOpen) {
       e.preventDefault();
       e.stopPropagation();
@@ -6544,20 +6663,29 @@ document.addEventListener("DOMContentLoaded", function() {
     const modalEl = document.getElementById('quickAddItemModal');
     if (!modalEl) return;
 
-    let cleanName = (prefillName || '').replace(/^create\s*/i, '').trim();
+    let cleanName = (prefillName || '').replace(/^create\s*/i, '').replace(/^"\s*/, '').replace(/\s*"$/, '').trim();
 
-    const nameInp = modalEl.querySelector('[name="name"]');
-    const priceInp = modalEl.querySelector('[name="price"]');
+    const nameInp = document.getElementById('quick-item-name');
+    const priceInp = document.getElementById('quick-item-price');
+    const codeInp = document.getElementById('quick-item-code');
+    const descInp = document.getElementById('quick-item-desc');
+    const catInp = document.getElementById('quick-item-category');
+    const taxInp = document.getElementById('quick-item-tax');
+    const availInp = document.getElementById('quick-item-available');
+    const taxIncInp = document.getElementById('quick-item-tax-inc');
+    const errBox = document.getElementById('quick-add-error');
+    if (errBox) errBox.style.display = 'none';
+
     if (nameInp) nameInp.value = cleanName;
+    if (priceInp) priceInp.value = '';
+    if (codeInp) codeInp.value = '';
+    if (descInp) descInp.value = '';
+    if (catInp) catInp.value = '';
+    if (taxInp) taxInp.value = 'GST_FOOD';
+    if (availInp) availInp.checked = true;
+    if (taxIncInp) taxIncInp.checked = false;
 
-    if (window.bootstrap && window.bootstrap.Modal) {
-      const bsModal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-      bsModal.show();
-    } else {
-      modalEl.classList.add('show');
-      modalEl.style.display = 'block';
-      document.body.classList.add('modal-open');
-    }
+    modalEl.style.display = 'flex';
 
     setTimeout(() => {
       if (cleanName && priceInp) {
@@ -6565,8 +6693,22 @@ document.addEventListener("DOMContentLoaded", function() {
         try { priceInp.select(); } catch(e){}
       } else if (nameInp) {
         nameInp.focus();
+        try { nameInp.select(); } catch(e){}
       }
-    }, 300);
+    }, 120);
+  };
+
+  window.closeQuickAddItemModal = function() {
+    const modalEl = document.getElementById('quickAddItemModal');
+    if (modalEl) {
+      modalEl.style.display = 'none';
+    }
+    const searchInput = document.getElementById('menu-search');
+    if (searchInput) {
+      setTimeout(() => {
+        searchInput.focus();
+      }, 50);
+    }
   };
 
   window.handleCartQtyNav = function(event, itemId) {

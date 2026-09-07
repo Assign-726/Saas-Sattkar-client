@@ -2428,7 +2428,14 @@
     }
   }
 
-  // Restore active tab on load and init SEO counters
+  // Save scroll position before submitting any form
+  document.addEventListener('submit', function () {
+    try {
+      sessionStorage.setItem('landingScrollY', window.scrollY.toString());
+    } catch (e) {}
+  });
+
+  // Restore active tab and scroll position on load, and init SEO counters
   document.addEventListener('DOMContentLoaded', function () {
     const activeTab = localStorage.getItem('activeLandingTab');
     if (activeTab) {
@@ -2437,6 +2444,18 @@
         btn.click();
       }
     }
+
+    // Restore scroll position smoothly
+    try {
+      const savedScrollY = sessionStorage.getItem('landingScrollY');
+      if (savedScrollY !== null) {
+        sessionStorage.removeItem('landingScrollY');
+        window.scrollTo({
+          top: parseInt(savedScrollY, 10) || 0,
+          behavior: 'instant'
+        });
+      }
+    } catch (e) {}
 
     // Initialize Home SEO Preview & Counters
     updateHomeSeoLive();

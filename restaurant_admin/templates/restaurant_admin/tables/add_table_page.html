@@ -1,0 +1,211 @@
+{% extends 'restaurant_admin/base.html' %}
+{% block title %}{{ title }} - Admin Panel{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4 d-flex justify-content-center">
+    <div class="w-100" style="max-width: 540px;">
+        <div class="card border-0 shadow-sm" style="border-radius: 16px; overflow: hidden;">
+            <!-- Header -->
+            <div class="d-flex align-items-center justify-content-between pt-4 px-4 pb-0">
+                <h1 class="h4 fw-bold text-gray-900 mb-0">{{ title }}</h1>
+                <a href="{% url 'restaurant_admin:table_list' restaurant_slug=restaurant_slug %}" class="btn-close shadow-none" aria-label="Close" style="font-size: 0.85rem;"></a>
+            </div>
+
+            <!-- Nav Tabs -->
+            <div class="px-4 pt-3">
+                <ul class="nav nav-tabs border-bottom" id="addTableTabs" role="tablist" style="border-color: #E5E7EB;">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link py-2 px-3 fw-semibold border-0 text-secondary bg-transparent {% if active_tab != 'bulk' %}active{% endif %}" 
+                                id="single-table-tab" data-bs-toggle="tab" data-bs-target="#single-table-pane" type="button" role="tab" 
+                                aria-controls="single-table-pane" aria-selected="{% if active_tab != 'bulk' %}true{% else %}false{% endif %}">
+                            Single Table
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link py-2 px-3 fw-semibold border-0 text-secondary bg-transparent {% if active_tab == 'bulk' %}active{% endif %}" 
+                                id="bulk-table-tab" data-bs-toggle="tab" data-bs-target="#bulk-table-pane" type="button" role="tab" 
+                                aria-controls="bulk-table-pane" aria-selected="{% if active_tab == 'bulk' %}true{% else %}false{% endif %}">
+                            Bulk Add
+                        </button>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Tab Contents -->
+            <div class="tab-content" id="addTableTabsContent">
+                <!-- SINGLE TABLE FORM -->
+                <div class="tab-pane fade {% if active_tab != 'bulk' %}show active{% endif %}" id="single-table-pane" role="tabpanel" aria-labelledby="single-table-tab">
+                    <form method="POST" action="{% url 'restaurant_admin:table_add' restaurant_slug=restaurant_slug %}" id="singleTableForm">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_type" value="single">
+
+                        <div class="px-4 py-3">
+                            {% if single_form.errors %}
+                            <div class="alert alert-danger py-2 px-3 small mb-3">
+                                Please correct the errors below.
+                            </div>
+                            {% endif %}
+
+                            <!-- Zone -->
+                            <div class="mb-3">
+                                <label for="{{ single_form.zone.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">Zone</label>
+                                {{ single_form.zone }}
+                                {% for err in single_form.zone.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                            </div>
+
+                            <!-- Name & Number -->
+                            <div class="row g-3 mb-3">
+                                <div class="col-6">
+                                    <label for="{{ single_form.name.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">
+                                        Table Name <span class="text-danger">*</span>
+                                    </label>
+                                    {{ single_form.name }}
+                                    {% for err in single_form.name.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                                </div>
+                                <div class="col-6">
+                                    <label for="{{ single_form.table_number.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">
+                                        Table Number <span class="text-danger">*</span>
+                                    </label>
+                                    {{ single_form.table_number }}
+                                    {% for err in single_form.table_number.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Capacity & Shape -->
+                            <div class="row g-3 mb-3">
+                                <div class="col-6">
+                                    <label for="{{ single_form.capacity.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">
+                                        Capacity <span class="text-danger">*</span>
+                                    </label>
+                                    {{ single_form.capacity }}
+                                    {% for err in single_form.capacity.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                                </div>
+                                <div class="col-6">
+                                    <label for="{{ single_form.shape.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">Shape</label>
+                                    {{ single_form.shape }}
+                                    {% for err in single_form.shape.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                                </div>
+                            </div>
+
+                            <div class="form-check mt-2">
+                                {{ single_form.is_active }}
+                                <label class="form-check-label text-gray-700 small fw-medium" for="{{ single_form.is_active.id_for_label }}">
+                                    Active for Dining & QR Orders
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Card Footer -->
+                        <div class="card-footer border-top px-4 py-3 bg-light d-flex justify-content-end gap-2" style="border-color: #F3F4F6 !important;">
+                            <a href="{% url 'restaurant_admin:table_list' restaurant_slug=restaurant_slug %}" class="btn btn-outline-secondary px-3 py-2 fw-medium rounded-3">Cancel</a>
+                            <button type="submit" class="btn btn-primary px-4 py-2 fw-semibold rounded-3" style="background-color: #4F46E5; border-color: #4F46E5;">
+                                Save Table(s)
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- BULK ADD FORM -->
+                <div class="tab-pane fade {% if active_tab == 'bulk' %}show active{% endif %}" id="bulk-table-pane" role="tabpanel" aria-labelledby="bulk-table-tab">
+                    <form method="POST" action="{% url 'restaurant_admin:table_add' restaurant_slug=restaurant_slug %}" id="bulkTableForm">
+                        {% csrf_token %}
+                        <input type="hidden" name="form_type" value="bulk">
+
+                        <div class="px-4 py-3">
+                            {% if bulk_form.errors %}
+                            <div class="alert alert-danger py-2 px-3 small mb-3">
+                                Please correct the errors below.
+                            </div>
+                            {% endif %}
+
+                            <!-- Tip Alert Box -->
+                            <div class="p-3 mb-3 d-flex align-items-center rounded-3" style="background-color: #EEF2FF; border: 1px solid #E0E7FF;">
+                                <i class="fas fa-bolt me-2" style="color: #4F46E5; font-size: 1rem;"></i>
+                                <span class="fw-medium small" style="color: #4338CA;">Create multiple tables at once!</span>
+                            </div>
+
+                            <!-- Zone -->
+                            <div class="mb-3">
+                                <label for="{{ bulk_form.zone.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">Zone</label>
+                                {{ bulk_form.zone }}
+                                {% for err in bulk_form.zone.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                            </div>
+
+                            <!-- Prefix, Start, Count Row -->
+                            <div class="row g-2 mb-3">
+                                <div class="col-4">
+                                    <label for="{{ bulk_form.prefix.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">Prefix</label>
+                                    {{ bulk_form.prefix }}
+                                    {% for err in bulk_form.prefix.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                                </div>
+                                <div class="col-4">
+                                    <label for="{{ bulk_form.start_number.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">
+                                        Start <span class="text-danger">*</span>
+                                    </label>
+                                    {{ bulk_form.start_number }}
+                                    {% for err in bulk_form.start_number.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                                </div>
+                                <div class="col-4">
+                                    <label for="{{ bulk_form.count.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">
+                                        Count <span class="text-danger">*</span>
+                                    </label>
+                                    {{ bulk_form.count }}
+                                    {% for err in bulk_form.count.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Capacity & Shape Row -->
+                            <div class="row g-3 mb-2">
+                                <div class="col-6">
+                                    <label for="{{ bulk_form.capacity.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">
+                                        Capacity <span class="text-danger">*</span>
+                                    </label>
+                                    {{ bulk_form.capacity }}
+                                    {% for err in bulk_form.capacity.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                                </div>
+                                <div class="col-6">
+                                    <label for="{{ bulk_form.shape.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">Shape</label>
+                                    {{ bulk_form.shape }}
+                                    {% for err in bulk_form.shape.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card Footer -->
+                        <div class="card-footer border-top px-4 py-3 bg-light d-flex justify-content-end gap-2" style="border-color: #F3F4F6 !important;">
+                            <a href="{% url 'restaurant_admin:table_list' restaurant_slug=restaurant_slug %}" class="btn btn-outline-secondary px-3 py-2 fw-medium rounded-3">Cancel</a>
+                            <button type="submit" class="btn btn-primary px-4 py-2 fw-semibold rounded-3" style="background-color: #4F46E5; border-color: #4F46E5;">
+                                Save Table(s)
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    #addTableTabs .nav-link {
+        color: #6B7280;
+        position: relative;
+        font-size: 0.95rem;
+        cursor: pointer;
+    }
+    #addTableTabs .nav-link.active {
+        color: #4F46E5 !important;
+        font-weight: 700 !important;
+        border-bottom: 2.5px solid #4F46E5 !important;
+    }
+    .form-control, .form-select {
+        border-radius: 8px;
+        border: 1px solid #D1D5DB;
+        padding: 0.55rem 0.75rem;
+        font-size: 0.9rem;
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: #4F46E5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+    }
+</style>
+{% endblock %}
