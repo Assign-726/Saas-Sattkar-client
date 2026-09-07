@@ -1,0 +1,197 @@
+<!-- Add New Table(s) Slide-Out Drawer (Offcanvas) -->
+<div class="offcanvas offcanvas-end border-0 shadow-lg" tabindex="-1" id="addTableOffcanvas" aria-labelledby="addTableOffcanvasLabel" style="width: 450px; z-index: 1060;">
+    <!-- Offcanvas Header -->
+    <div class="offcanvas-header border-0 pb-0 pt-4 px-4 align-items-center justify-content-between">
+        <h5 class="offcanvas-title fw-bold text-gray-900 fs-5 mb-0" id="addTableOffcanvasLabel">Add New Table(s)</h5>
+        <button type="button" class="btn-close shadow-none" data-bs-dismiss="offcanvas" aria-label="Close" style="font-size: 0.85rem;"></button>
+    </div>
+
+    <!-- Nav Tabs -->
+    <div class="px-4 pt-3">
+        <ul class="nav nav-tabs border-bottom" id="addTableDrawerTabs" role="tablist" style="border-color: #E5E7EB;">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link py-2 px-3 fw-semibold border-0 text-secondary bg-transparent drawer-tab-btn active" 
+                        id="drawer-single-table-tab" data-bs-toggle="tab" data-bs-target="#drawer-single-table-pane" type="button" role="tab" 
+                        aria-controls="drawer-single-table-pane" aria-selected="true">
+                    Single Table
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link py-2 px-3 fw-semibold border-0 text-secondary bg-transparent drawer-tab-btn" 
+                        id="drawer-bulk-table-tab" data-bs-toggle="tab" data-bs-target="#drawer-bulk-table-pane" type="button" role="tab" 
+                        aria-controls="drawer-bulk-table-pane" aria-selected="false">
+                    Bulk Add
+                </button>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Offcanvas Body -->
+    <div class="offcanvas-body p-0 d-flex flex-column" style="overflow-y: auto;">
+        <div class="tab-content flex-grow-1" id="addTableDrawerTabsContent">
+            <!-- SINGLE TABLE FORM -->
+            <div class="tab-pane fade show active h-100" id="drawer-single-table-pane" role="tabpanel" aria-labelledby="drawer-single-table-tab">
+                <form method="POST" action="{% url 'restaurant_admin:table_add' restaurant_slug=restaurant_slug %}" id="drawerSingleTableForm" class="d-flex flex-column h-100">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="single">
+
+                    <div class="px-4 py-3 flex-grow-1">
+                        {% if single_form.errors %}
+                        <div class="alert alert-danger py-2 px-3 small mb-3">
+                            Please correct the errors below.
+                        </div>
+                        {% endif %}
+
+                        <!-- Zone -->
+                        <div class="mb-3">
+                            <label for="drawer_{{ single_form.zone.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">Zone</label>
+                            {{ single_form.zone }}
+                            {% for err in single_form.zone.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                        </div>
+
+                        <!-- Name -->
+                        <div class="mb-3">
+                            <label for="drawer_{{ single_form.name.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">
+                                Name <span class="text-danger">*</span>
+                            </label>
+                            {{ single_form.name }}
+                            {% for err in single_form.name.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                        </div>
+
+                        <!-- Capacity & Shape -->
+                        <div class="row g-3 mb-3">
+                            <div class="col-6">
+                                <label for="drawer_{{ single_form.capacity.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">
+                                    Capacity <span class="text-danger">*</span>
+                                </label>
+                                {{ single_form.capacity }}
+                                {% for err in single_form.capacity.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                            </div>
+                            <div class="col-6">
+                                <label for="drawer_{{ single_form.shape.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">Shape</label>
+                                {{ single_form.shape }}
+                                {% for err in single_form.shape.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="form-check mt-2">
+                            {{ single_form.is_active }}
+                            <label class="form-check-label text-gray-700 small fw-medium" for="{{ single_form.is_active.id_for_label }}">
+                                Active for Dining & QR Orders
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Offcanvas Footer -->
+                    <div class="border-top px-4 py-3 bg-light d-flex justify-content-end gap-2 mt-auto" style="border-color: #F3F4F6 !important;">
+                        <button type="button" class="btn btn-outline-secondary px-3 py-2 fw-medium rounded-3" data-bs-dismiss="offcanvas">Cancel</button>
+                        <button type="submit" class="btn btn-primary px-4 py-2 fw-semibold rounded-3" style="background-color: #4F46E5; border-color: #4F46E5;">
+                            Save Table(s)
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- BULK ADD FORM -->
+            <div class="tab-pane fade h-100" id="drawer-bulk-table-pane" role="tabpanel" aria-labelledby="drawer-bulk-table-tab">
+                <form method="POST" action="{% url 'restaurant_admin:table_add' restaurant_slug=restaurant_slug %}" id="drawerBulkTableForm" class="d-flex flex-column h-100">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="bulk">
+
+                    <div class="px-4 py-3 flex-grow-1">
+                        {% if bulk_form.errors %}
+                        <div class="alert alert-danger py-2 px-3 small mb-3">
+                            Please correct the errors below.
+                        </div>
+                        {% endif %}
+
+                        <!-- Tip Alert Box -->
+                        <div class="p-3 mb-3 d-flex align-items-center rounded-3" style="background-color: #EEF2FF; border: 1px solid #E0E7FF;">
+                            <i class="fas fa-bolt me-2" style="color: #4F46E5; font-size: 1rem;"></i>
+                            <span class="fw-medium small" style="color: #4338CA;">Create multiple tables at once!</span>
+                        </div>
+
+                        <!-- Zone -->
+                        <div class="mb-3">
+                            <label for="drawer_{{ bulk_form.zone.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">Zone</label>
+                            {{ bulk_form.zone }}
+                            {% for err in bulk_form.zone.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                        </div>
+
+                        <!-- Prefix, Start, Count Row -->
+                        <div class="row g-2 mb-3">
+                            <div class="col-4">
+                                <label for="drawer_{{ bulk_form.prefix.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">Prefix</label>
+                                {{ bulk_form.prefix }}
+                                {% for err in bulk_form.prefix.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                            </div>
+                            <div class="col-4">
+                                <label for="drawer_{{ bulk_form.start_number.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">
+                                    Start <span class="text-danger">*</span>
+                                </label>
+                                {{ bulk_form.start_number }}
+                                {% for err in bulk_form.start_number.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                            </div>
+                            <div class="col-4">
+                                <label for="drawer_{{ bulk_form.count.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">
+                                    Count <span class="text-danger">*</span>
+                                </label>
+                                {{ bulk_form.count }}
+                                {% for err in bulk_form.count.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                            </div>
+                        </div>
+
+                        <!-- Capacity & Shape Row -->
+                        <div class="row g-3 mb-2">
+                            <div class="col-6">
+                                <label for="drawer_{{ bulk_form.capacity.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">
+                                    Capacity <span class="text-danger">*</span>
+                                </label>
+                                {{ bulk_form.capacity }}
+                                {% for err in bulk_form.capacity.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                            </div>
+                            <div class="col-6">
+                                <label for="drawer_{{ bulk_form.shape.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">Shape</label>
+                                {{ bulk_form.shape }}
+                                {% for err in bulk_form.shape.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Offcanvas Footer -->
+                    <div class="border-top px-4 py-3 bg-light d-flex justify-content-end gap-2 mt-auto" style="border-color: #F3F4F6 !important;">
+                        <button type="button" class="btn btn-outline-secondary px-3 py-2 fw-medium rounded-3" data-bs-dismiss="offcanvas">Cancel</button>
+                        <button type="submit" class="btn btn-primary px-4 py-2 fw-semibold rounded-3" style="background-color: #4F46E5; border-color: #4F46E5;">
+                            Save Table(s)
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Styling for Drawer Tabs */
+    #addTableDrawerTabs .nav-link {
+        color: #6B7280;
+        position: relative;
+        font-size: 0.95rem;
+        cursor: pointer;
+    }
+    #addTableDrawerTabs .nav-link.active {
+        color: #4F46E5 !important;
+        font-weight: 700 !important;
+        border-bottom: 2.5px solid #4F46E5 !important;
+    }
+    #addTableOffcanvas .form-control, #addTableOffcanvas .form-select {
+        border-radius: 8px;
+        border: 1px solid #D1D5DB;
+        padding: 0.55rem 0.75rem;
+        font-size: 0.9rem;
+    }
+    #addTableOffcanvas .form-control:focus, #addTableOffcanvas .form-select:focus {
+        border-color: #4F46E5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+    }
+</style>

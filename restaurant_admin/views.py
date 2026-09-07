@@ -221,8 +221,25 @@ def order_mark_ready(request, pk, restaurant_slug=None):
     # If no prep_minutes or it's longer than elapsed, set to elapsed so countdown ends
     if not order.prep_minutes or order.prep_minutes < elapsed_minutes:
         order.prep_minutes = elapsed_minutes
-    # Do not change status here; keep it Pending so customer sees "Ready" state
-    order.save(update_fields=['prep_start', 'ready_at', 'prep_minutes'])
+    if order.status in [Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING]:
+        order.status = Order.OrderStatus.READY
+    order.save(update_fields=['prep_start', 'ready_at', 'prep_minutes', 'status'])
+
+    # Publish SSE table update for real-time floor plan update
+    table = order.table
+    if not table and order.table_number:
+        table = Table.objects.filter(restaurant=restaurant, table_number=order.table_number).first()
+    if table:
+        try:
+            from core.sse import publish
+            publish(restaurant.slug, {
+                'type': 'table_status_update',
+                'order_id': order.id,
+                'table_id': table.id,
+                'status': table.current_status
+            })
+        except Exception:
+            pass
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return JsonResponse({
@@ -232,10 +249,14 @@ def order_mark_ready(request, pk, restaurant_slug=None):
             'prep_start': order.prep_start,
             'ready_at': order.ready_at,
             'status': order.status,
+            'status_display': order.get_status_display(),
         })
 
     messages.success(request, f'Order #{order.branch_order_number or order.id} marked ready now.')
-    return redirect('restaurant_admin:order_list', restaurant_slug=restaurant.slug)
+    referer = request.META.get('HTTP_REFERER')
+    if referer:
+        return redirect(referer)
+    return redirect('restaurant_admin:order_detail', restaurant_slug=restaurant.slug, pk=order.id)
 
 # Inventory Category Management Views
 @login_required
@@ -517,6 +538,7 @@ def serialize_pos_order(order):
             elif any(k in c_name_lower for k in ['liquor', 'bar', 'spirit', 'whiskey', 'vodka', 'rum', 'cocktail']):
                 tax_type = 'VAT_IMFL'
 
+        disc_amt = float(item.discount_amount or item.calc_discount_amount or 0)
         items.append({
             'id': mi.id if mi else 0,
             'name': mi.name if mi else 'Item',
@@ -524,12 +546,14 @@ def serialize_pos_order(order):
             'unit_price': float(item.unit_price or (mi.price if mi else 0)),
             'tax_type': tax_type,
             'category_name': cat_name,
+            'is_tax_inclusive': mi.is_tax_inclusive if mi else False,
             'discount_type': item.discount_type or 'flat',
             'discount_value': float(item.discount_value or 0),
-            'discount_amount': float(item.discount_amount or 0),
+            'discount_amount': disc_amt,
             'discount_reason': item.discount_reason or '',
             'notes': item.notes or '',
-            'sent': True if order.status in [Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING, Order.OrderStatus.SERVED, Order.OrderStatus.COMPLETED] else False
+            'note': item.notes or '',
+            'sent': True if order.status in [Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING, Order.OrderStatus.READY, Order.OrderStatus.SERVED, Order.OrderStatus.COMPLETED] else False
         })
 
     table_name = ''
@@ -539,12 +563,13 @@ def serialize_pos_order(order):
         table_name = f"Table {order.table_number}"
 
     disc_amt = float(order.discount_amount or 0)
+    disc_val = float(order.discount_value or 0)
     order_discount = None
-    if disc_amt > 0:
+    if disc_amt > 0 or disc_val > 0:
         order_discount = {
             'amount': disc_amt,
             'type': order.discount_type or 'flat',
-            'value': float(order.discount_value or disc_amt),
+            'value': disc_val if disc_val > 0 else disc_amt,
             'reason': order.discount_reason or (order.coupon.code if order.coupon else '') or 'Bill discount'
         }
 
@@ -565,6 +590,9 @@ def serialize_pos_order(order):
         'subtotal': float(order.subtotal or 0),
         'tax_amount': float(order.tax_amount or 0),
         'discount_amount': disc_amt,
+        'discount_type': order.discount_type or 'flat',
+        'discount_value': disc_val,
+        'discount_reason': order.discount_reason or '',
         'order_discount': order_discount,
         'round_off_amount': float(order.round_off_amount or 0),
         'total_amount': float(order.total_amount or 0),
@@ -582,7 +610,7 @@ def get_pos_active_orders(restaurant, active_branch=None):
     ).exclude(
         status=Order.OrderStatus.CANCELLED
     ).filter(
-        Q(status__in=[Order.OrderStatus.DRAFT, Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING]) |
+        Q(status__in=[Order.OrderStatus.DRAFT, Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING, Order.OrderStatus.READY]) |
         Q(payment_status__in=['unpaid', 'partially_paid', 'advance_paid', 'failed'])
     )
     if active_branch:
@@ -638,6 +666,15 @@ def get_pos_active_orders(restaurant, active_branch=None):
             'subtotal': float(ord_obj.subtotal or 0),
             'tax_amount': float(ord_obj.tax_amount or 0),
             'discount_amount': float(ord_obj.discount_amount or 0),
+            'discount_type': ord_obj.discount_type or 'flat',
+            'discount_value': float(ord_obj.discount_value or 0),
+            'discount_reason': ord_obj.discount_reason or '',
+            'order_discount': {
+                'amount': float(ord_obj.discount_amount or 0),
+                'type': ord_obj.discount_type or 'flat',
+                'value': float(ord_obj.discount_value or ord_obj.discount_amount or 0),
+                'reason': ord_obj.discount_reason or 'Bill discount'
+            } if (ord_obj.discount_amount or ord_obj.discount_value) else None,
             'total_amount': float(ord_obj.total_amount or 0),
             'order_time': ord_obj.order_time.strftime('%I:%M %p') if ord_obj.order_time else '',
             'elapsed': elapsed_str,
@@ -650,7 +687,12 @@ def get_pos_active_orders(restaurant, active_branch=None):
                     'unit_price': float(it.unit_price or 0),
                     'line_total': float(it.subtotal or 0),
                     'tax_type': it.menu_item.tax_type if it.menu_item else 'GST_FOOD',
-                    'discount_amount': float(it.discount_amount or 0),
+                    'discount_type': it.discount_type or 'flat',
+                    'discount_value': float(it.discount_value or 0),
+                    'discount_amount': float(it.discount_amount or it.calc_discount_amount or 0),
+                    'discount_reason': it.discount_reason or '',
+                    'notes': it.notes or '',
+                    'note': it.notes or '',
                 }
                 for it in ord_obj.items.all()
             ]
@@ -1069,6 +1111,10 @@ def order_create_manual(request, restaurant_slug=None):
         if grand_total_val > 0:
             order.subtotal = subtotal_val
             order.tax_amount = tax_amount_val
+            order.discount_amount = discount_amount_val
+            order.discount_type = discount_type_val
+            order.discount_value = discount_value_val
+            order.discount_reason = discount_reason_val
             order.round_off_amount = round_off_amount_val
             order.total_amount = grand_total_val
             order.save()
@@ -1118,7 +1164,7 @@ def order_create_manual(request, restaurant_slug=None):
             # Query updated active orders list
             active_orders_qs = Order.objects.filter(
                 restaurant=restaurant,
-                status__in=[Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING]
+                status__in=[Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING, Order.OrderStatus.READY]
             )
             if active_branch:
                 active_orders_qs = active_orders_qs.filter(branch=active_branch)
@@ -1747,6 +1793,11 @@ def order_edit_manual(request, pk, restaurant_slug=None):
                 arc.order = order
                 arc.save(update_fields=['status', 'order'])
 
+        discount_amount_val = safe_decimal(data.get('discount_amount'))
+        discount_type_val = (data.get('discount_type') or 'flat').strip()
+        discount_value_val = safe_decimal(data.get('discount_value'))
+        discount_reason_val = (data.get('discount_reason') or '').strip() or None
+
         if isinstance(items_data, list):
             order.items.all().delete()
             for item in items_data:
@@ -1773,16 +1824,28 @@ def order_edit_manual(request, pk, restaurant_slug=None):
                 if u_price <= 0:
                     u_price = menu_item.price
 
+                disc_type = item.get('discount_type', 'flat') or 'flat'
+                disc_val = safe_decimal(item.get('discount_value'))
+                disc_amt = safe_decimal(item.get('discount_amount'))
+                disc_reason = (item.get('discount_reason') or '').strip() or None
+                item_notes = (item.get('notes') or item.get('note') or '').strip()
+
                 OrderItem.objects.create(
                     order=order,
                     menu_item=menu_item,
                     quantity=qty,
                     unit_price=u_price,
+                    notes=item_notes,
+                    discount_type=disc_type,
+                    discount_value=disc_val,
+                    discount_amount=disc_amt,
+                    discount_reason=disc_reason,
                 )
 
-        discount_amount_val = safe_decimal(data.get('discount_amount'))
-        if discount_amount_val > 0:
-            order.discount_amount = discount_amount_val
+        order.discount_amount = discount_amount_val
+        order.discount_type = discount_type_val
+        order.discount_value = discount_value_val
+        order.discount_reason = discount_reason_val
 
         if grand_total_val > 0:
             order.subtotal = subtotal_val
@@ -1793,7 +1856,7 @@ def order_edit_manual(request, pk, restaurant_slug=None):
         else:
             order.update_total()
 
-        if order.payment_status == Order.PaymentStatus.PAID or order.status in [Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING, Order.OrderStatus.SERVED]:
+        if order.payment_status == Order.PaymentStatus.PAID or order.status in [Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING, Order.OrderStatus.READY, Order.OrderStatus.SERVED]:
             order.deduct_inventory()
 
         kot_url = reverse('restaurant_admin:order_kot', kwargs={'restaurant_slug': restaurant.slug, 'pk': order.id})
@@ -2008,7 +2071,7 @@ def order_edit_manual(request, pk, restaurant_slug=None):
         'active_branch_gstin': active_branch_gstin_manual,
         'active_branch_gstin_json': json.dumps(active_branch_gstin_manual),
         'custom_charges_json': json.dumps(custom_charges_list),
-        'existing_order_json': json.dumps(existing_order_dict),
+        'existing_order_json': json.dumps(serialize_pos_order(order)),
         'is_edit_mode': True,
         'order': order,
         'active_menu': 'order_list',
@@ -2034,11 +2097,13 @@ def menu_quick_add_api(request, restaurant_slug=None):
                 'item': {
                     'id': menu_item.id,
                     'name': menu_item.name,
+                    'short_code': menu_item.short_code or '',
                     'price': float(menu_item.price),
                     'tax_type': menu_item.tax_type or 'GST_FOOD',
                     'category_id': menu_item.category.id if menu_item.category else None,
                     'category_name': menu_item.category.name if menu_item.category else 'General',
-                    'is_tax_inclusive': menu_item.is_tax_inclusive
+                    'is_tax_inclusive': menu_item.is_tax_inclusive,
+                    'availability': menu_item.availability
                 }
             })
         else:
@@ -3949,7 +4014,25 @@ def order_set_prep_time(request, pk, restaurant_slug=None):
     order.prep_minutes = minutes
     order.prep_start = now
     order.ready_at = now + timezone.timedelta(minutes=minutes)
-    order.save(update_fields=['prep_minutes', 'prep_start', 'ready_at'])
+    if order.status == Order.OrderStatus.READY:
+        order.status = Order.OrderStatus.PENDING
+    order.save(update_fields=['prep_minutes', 'prep_start', 'ready_at', 'status'])
+
+    # Publish SSE table update
+    table = order.table
+    if not table and order.table_number:
+        table = Table.objects.filter(restaurant=restaurant, table_number=order.table_number).first()
+    if table:
+        try:
+            from core.sse import publish
+            publish(restaurant.slug, {
+                'type': 'table_status_update',
+                'order_id': order.id,
+                'table_id': table.id,
+                'status': table.current_status
+            })
+        except Exception:
+            pass
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return JsonResponse({
@@ -4054,7 +4137,7 @@ def order_settle_api(request, pk, restaurant_slug=None):
 
     order.payments = valid_payments
     order.payment_method = payment_method
-    if order.status == Order.OrderStatus.PENDING:
+    if order.status in [Order.OrderStatus.PENDING, Order.OrderStatus.READY, Order.OrderStatus.PREPARING]:
         order.status = Order.OrderStatus.SERVED
 
     gstin_no = (data.get('gstin_no') or '').strip()
@@ -4397,8 +4480,26 @@ def order_update_status(request, pk, restaurant_slug=None):
             
             if new_status in status_choices:
                 order.status = new_status
+                if new_status == Order.OrderStatus.READY and not order.ready_at:
+                    order.ready_at = timezone.now()
                 order.save()
                 
+                # Publish SSE table update
+                table = order.table
+                if not table and order.table_number:
+                    table = Table.objects.filter(restaurant=restaurant, table_number=order.table_number).first()
+                if table:
+                    try:
+                        from core.sse import publish
+                        publish(restaurant.slug, {
+                            'type': 'table_status_update',
+                            'order_id': order.id,
+                            'table_id': table.id,
+                            'status': table.current_status
+                        })
+                    except Exception:
+                        pass
+
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                     return JsonResponse({
                         'success': True,
@@ -4406,6 +4507,8 @@ def order_update_status(request, pk, restaurant_slug=None):
                         'status': order.get_status_display(),
                         'status_class': {
                             'P': 'warning',
+                            'READY': 'primary',
+                            'PR': 'info',
                             'S': 'success',
                             'C': 'danger'
                         }.get(order.status, 'secondary')
@@ -6378,7 +6481,7 @@ def transaction_desk_create(request, restaurant_slug=None):
 
     active_orders_qs = Order.objects.filter(
         restaurant=restaurant,
-        status__in=[Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING]
+        status__in=[Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING, Order.OrderStatus.READY]
     )
     if branch_obj:
         active_orders_qs = active_orders_qs.filter(branch=branch_obj)
@@ -6466,28 +6569,7 @@ def transaction_desk_create(request, restaurant_slug=None):
     else:
         attached_receipt_json = 'null'
 
-    existing_order_json = 'null'
-    if draft_order:
-        existing_order_json = json.dumps({
-            'id': draft_order.id,
-            'order_number': draft_order.order_number or f"ORD-{draft_order.id:04d}",
-            'customer_name': draft_order.customer_name,
-            'phone': draft_order.phone or '',
-            'notes': draft_order.notes or '',
-            'table_id': draft_order.table.id if draft_order.table else None,
-            'order_type': draft_order.order_type,
-            'items': [
-                {
-                    'id': it.menu_item.id if it.menu_item else 0,
-                    'name': it.menu_item.name if it.menu_item else 'Item',
-                    'quantity': it.quantity,
-                    'unit_price': float(it.unit_price),
-                    'line_total': float(it.subtotal),
-                    'tax_type': it.menu_item.tax_type if it.menu_item else 'GST_FOOD'
-                }
-                for it in draft_order.items.all()
-            ]
-        })
+    existing_order_json = json.dumps(serialize_pos_order(draft_order)) if draft_order else 'null'
 
     customer_parties = Party.objects.filter(restaurant=restaurant, party_type__in=['customer', 'both'])
     if branch_obj:

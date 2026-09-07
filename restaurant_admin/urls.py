@@ -34,6 +34,7 @@ urlpatterns = [
     # Floor Plan & Table Management
     path('floor-plan/', floor_plan_views.floor_plan_dashboard, name='floor_plan_dashboard'),
     path('api/floor-plan/', floor_plan_views.floor_plan_api, name='floor_plan_api'),
+    path('api/floor-plan/save-position/', floor_plan_views.floor_plan_save_position_api, name='floor_plan_save_position_api'),
     path('zones/', floor_plan_views.zone_list, name='zone_list'),
     path('zones/add/', floor_plan_views.zone_add, name='zone_add'),
     path('zones/<int:pk>/edit/', floor_plan_views.zone_edit, name='zone_edit'),

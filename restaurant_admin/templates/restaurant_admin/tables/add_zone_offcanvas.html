@@ -1,0 +1,53 @@
+<!-- Add New Zone Slide-Out Drawer (Offcanvas) -->
+<div class="offcanvas offcanvas-end border-0 shadow-lg" tabindex="-1" id="addZoneOffcanvas" aria-labelledby="addZoneOffcanvasLabel" style="width: 420px; z-index: 1060;">
+    <!-- Offcanvas Header -->
+    <div class="offcanvas-header border-0 pb-0 pt-4 px-4 align-items-center justify-content-between">
+        <h5 class="offcanvas-title fw-bold text-gray-900 fs-5 mb-0" id="addZoneOffcanvasLabel">Add New Zone</h5>
+        <button type="button" class="btn-close shadow-none" data-bs-dismiss="offcanvas" aria-label="Close" style="font-size: 0.85rem;"></button>
+    </div>
+
+    <!-- Offcanvas Body -->
+    <div class="offcanvas-body p-0 d-flex flex-column pt-3">
+        <form method="POST" action="{% url 'restaurant_admin:zone_add' restaurant_slug=restaurant_slug %}" id="drawerAddZoneForm" class="d-flex flex-column h-100">
+            {% csrf_token %}
+
+            <div class="px-4 py-3 flex-grow-1">
+                {% if zone_form.errors %}
+                <div class="alert alert-danger py-2 px-3 small mb-3">
+                    Please correct the errors below.
+                </div>
+                {% endif %}
+
+                <!-- Zone Name -->
+                <div class="mb-3">
+                    <label for="{{ zone_form.name.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">
+                        Zone Name <span class="text-danger">*</span>
+                    </label>
+                    {{ zone_form.name }}
+                    {% for err in zone_form.name.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
+                </div>
+            </div>
+
+            <!-- Offcanvas Footer -->
+            <div class="border-top px-4 py-3 bg-light d-flex justify-content-end gap-2 mt-auto" style="border-color: #F3F4F6 !important;">
+                <button type="button" class="btn btn-outline-secondary px-3 py-2 fw-medium rounded-3" data-bs-dismiss="offcanvas">Cancel</button>
+                <button type="submit" class="btn btn-primary px-4 py-2 fw-semibold rounded-3" style="background-color: #4F46E5; border-color: #4F46E5;">
+                    Save Zone
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    #addZoneOffcanvas .form-control {
+        border-radius: 8px;
+        border: 1px solid #D1D5DB;
+        padding: 0.55rem 0.75rem;
+        font-size: 0.9rem;
+    }
+    #addZoneOffcanvas .form-control:focus {
+        border-color: #4F46E5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+    }
+</style>

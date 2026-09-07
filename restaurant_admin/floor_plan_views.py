@@ -62,7 +62,7 @@ def floor_plan_api(request, restaurant_slug=None):
                     'customer_name': latest_order.customer_name,
                     'total_amount': str(latest_order.total_amount),
                     'status': latest_order.status,
-                    'status_display': latest_order.get_status_display(),
+                    'status_display': 'Ready' if latest_order.is_ready else latest_order.get_status_display(),
                     'payment_status': latest_order.payment_status,
                     'payment_status_display': latest_order.get_payment_status_display(),
                 }
@@ -72,6 +72,13 @@ def floor_plan_api(request, restaurant_slug=None):
                 'name': table.name,
                 'table_number': table.table_number,
                 'capacity': table.capacity,
+                'shape': table.shape or 'round',
+                'is_placed': table.is_placed,
+                'position_x': table.position_x or 0,
+                'position_y': table.position_y or 0,
+                'rotation': table.rotation or 0,
+                'zone_id': zone.id,
+                'zone_name': zone.name,
                 'status': table.current_status,
                 'active_order': active_order_data,
             })
@@ -81,20 +88,93 @@ def floor_plan_api(request, restaurant_slug=None):
 
 @login_required
 def floor_plan_dashboard(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant
-    except Exception:
-        restaurant = getattr(request.user, 'restaurant', None)
-        
-    restaurant_slug = restaurant.slug if restaurant else 'default'
+    from super_admin.models import Restaurant
+    restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+    active_branch = get_view_active_branch(request, restaurant)
+    
+    from django.db.models import Q
+    zones = Zone.objects.filter(restaurant=restaurant)
+    if active_branch:
+        zones = zones.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    zones = zones.order_by('name')
+
+    single_form = TableForm(restaurant=restaurant, branch=active_branch)
+    bulk_form = BulkTableForm(restaurant=restaurant, branch=active_branch)
+    zone_form = ZoneForm(restaurant=restaurant, branch=active_branch)
+
     return render(request, 'restaurant_admin/tables/live_floor_plan.html', {
-        'restaurant_slug': restaurant_slug
+        'restaurant_slug': restaurant_slug,
+        'restaurant': restaurant,
+        'active_menu': 'floor_plan',
+        'zones': zones,
+        'single_form': single_form,
+        'bulk_form': bulk_form,
+        'zone_form': zone_form,
     })
+
+@login_required
+def floor_plan_save_position_api(request, restaurant_slug=None):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required.'}, status=405)
+    
+    from super_admin.models import Restaurant
+    restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+    active_branch = get_view_active_branch(request, restaurant)
+
+    try:
+        payload = json.loads(request.body)
+    except Exception:
+        return JsonResponse({'error': 'Invalid JSON payload.'}, status=400)
+
+    items = payload.get('positions')
+    if not items and 'table_id' in payload:
+        items = [payload]
+
+    if not items:
+        return JsonResponse({'error': 'No position data provided.'}, status=400)
+
+    from django.db.models import Q
+    updated_count = 0
+    for item in items:
+        t_id = item.get('table_id')
+        if not t_id:
+            continue
+        
+        table_qs = Table.objects.filter(id=t_id, restaurant=restaurant)
+        if active_branch:
+            table_qs = table_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+        table = table_qs.first()
+        
+        if table:
+            fields_to_update = []
+            if 'is_placed' in item:
+                table.is_placed = bool(item.get('is_placed'))
+                fields_to_update.append('is_placed')
+            if 'position_x' in item:
+                table.position_x = max(0, int(item.get('position_x') or 0))
+                fields_to_update.append('position_x')
+            if 'position_y' in item:
+                table.position_y = max(0, int(item.get('position_y') or 0))
+                fields_to_update.append('position_y')
+            if 'rotation' in item:
+                table.rotation = int(item.get('rotation') or 0) % 360
+                fields_to_update.append('rotation')
+            if 'zone_id' in item and item.get('zone_id'):
+                new_zone = Zone.objects.filter(id=item.get('zone_id'), restaurant=restaurant).first()
+                if new_zone:
+                    table.zone = new_zone
+                    fields_to_update.append('zone')
+            
+            if fields_to_update:
+                table.save(update_fields=fields_to_update)
+            updated_count += 1
+
+    return JsonResponse({'status': 'success', 'updated': updated_count})
 
 from django.shortcuts import get_object_or_404, redirect
 from django.contrib import messages
 from super_admin.models import Restaurant
-from restaurant_admin.forms import ZoneForm, TableForm
+from restaurant_admin.forms import ZoneForm, TableForm, BulkTableForm
 from core.models import Zone, Table
 
 def get_view_active_branch(request, restaurant):
@@ -172,31 +252,125 @@ def table_list(request, restaurant_slug=None):
     page_number = request.GET.get('page')
     tables = paginator.get_page(page_number)
     
+    single_form = TableForm(restaurant=restaurant, branch=active_branch)
+    bulk_form = BulkTableForm(restaurant=restaurant, branch=active_branch)
+    zone_form = ZoneForm(restaurant=restaurant, branch=active_branch)
+
     return render(request, 'restaurant_admin/tables/table_list.html', {
         'tables': tables,
         'zones': zones,
         'restaurant_slug': restaurant_slug,
         'active_menu': 'tables',
-        'restaurant': restaurant
+        'restaurant': restaurant,
+        'single_form': single_form,
+        'bulk_form': bulk_form,
+        'zone_form': zone_form,
     })
 
 @login_required
 def table_add(request, restaurant_slug=None):
+    from django.db.models import Q
     restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
     active_branch = get_view_active_branch(request, restaurant)
     initial_data = {}
     if 'zone' in request.GET:
         initial_data['zone'] = request.GET.get('zone')
 
+    form_type = request.POST.get('form_type', 'bulk' if request.POST.get('count') else 'single')
+
     if request.method == 'POST':
-        form = TableForm(request.POST, restaurant=restaurant, branch=active_branch)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Table added successfully.')
-            return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)
+        if form_type == 'bulk':
+            bulk_form = BulkTableForm(request.POST, restaurant=restaurant, branch=active_branch)
+            single_form = TableForm(restaurant=restaurant, branch=active_branch, initial=initial_data)
+            if bulk_form.is_valid():
+                zone = bulk_form.cleaned_data.get('zone')
+                prefix = (bulk_form.cleaned_data.get('prefix') or '').strip()
+                start_number = bulk_form.cleaned_data['start_number']
+                count = bulk_form.cleaned_data['count']
+                capacity = bulk_form.cleaned_data['capacity']
+                shape = bulk_form.cleaned_data.get('shape') or 'round'
+
+                created_count = 0
+                skipped_count = 0
+
+                for i in range(start_number, start_number + count):
+                    t_num = i
+                    t_name = f"{prefix}{i}" if prefix else f"{i}"
+
+                    # Check collision for same restaurant, branch, and zone
+                    existing = Table.objects.filter(
+                        restaurant=restaurant,
+                        zone=zone,
+                    )
+                    if active_branch:
+                        existing = existing.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+                    
+                    if existing.filter(Q(table_number=t_num) | Q(name__iexact=t_name)).exists():
+                        skipped_count += 1
+                        continue
+
+                    table_obj = Table(
+                        name=t_name,
+                        table_number=t_num,
+                        capacity=capacity,
+                        shape=shape,
+                        zone=zone,
+                        restaurant=restaurant,
+                        branch=active_branch,
+                        is_active=True
+                    )
+                    table_obj.save()
+                    created_count += 1
+
+                if created_count > 0:
+                    if skipped_count > 0:
+                        messages.success(request, f"Successfully created {created_count} table(s). {skipped_count} table(s) skipped because they already exist.")
+                    else:
+                        messages.success(request, f"Successfully created {created_count} table(s) in bulk.")
+                    return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)
+                else:
+                    messages.error(request, f"No tables were created. All {skipped_count} requested table(s) already exist.")
+            
+            # If invalid, render page with bulk form active
+            return render(request, 'restaurant_admin/tables/add_table_page.html', {
+                'single_form': single_form,
+                'bulk_form': bulk_form,
+                'active_tab': 'bulk',
+                'title': 'Add New Table(s)',
+                'restaurant_slug': restaurant_slug,
+                'restaurant': restaurant
+            })
+
+        else:
+            # Single table creation
+            single_form = TableForm(request.POST, restaurant=restaurant, branch=active_branch)
+            bulk_form = BulkTableForm(restaurant=restaurant, branch=active_branch, initial=initial_data)
+            if single_form.is_valid():
+                single_form.save()
+                messages.success(request, 'Table added successfully.')
+                return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)
+            
+            return render(request, 'restaurant_admin/tables/add_table_page.html', {
+                'single_form': single_form,
+                'bulk_form': bulk_form,
+                'active_tab': 'single',
+                'title': 'Add New Table(s)',
+                'restaurant_slug': restaurant_slug,
+                'restaurant': restaurant
+            })
     else:
-        form = TableForm(restaurant=restaurant, branch=active_branch, initial=initial_data)
-    return render(request, 'restaurant_admin/tables/form.html', {'form': form, 'title': 'Add Table', 'restaurant_slug': restaurant_slug})
+        single_form = TableForm(restaurant=restaurant, branch=active_branch, initial=initial_data)
+        bulk_form = BulkTableForm(restaurant=restaurant, branch=active_branch, initial=initial_data)
+        active_tab = request.GET.get('tab', 'bulk' if 'bulk' in request.GET else 'single')
+
+    return render(request, 'restaurant_admin/tables/add_table_page.html', {
+        'single_form': single_form,
+        'bulk_form': bulk_form,
+        'active_tab': active_tab,
+        'title': 'Add New Table(s)',
+        'restaurant_slug': restaurant_slug,
+        'restaurant': restaurant
+    })
 
 @login_required
 def table_edit(request, restaurant_slug=None, pk=None):
