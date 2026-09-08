@@ -10,6 +10,12 @@
             <p class="text-muted small mb-0">Manage floor plan zones and restaurant dining tables</p>
         </div>
         <div class="d-flex gap-2">
+            <a href="{% url 'restaurant_admin:regenerate_table_qrs' restaurant_slug=restaurant_slug %}" 
+               class="btn btn-outline-secondary" 
+               onclick="return confirm('Regenerate QR codes for all tables with the current frontend URL and branch/floor zone?');"
+               title="Regenerate all Table QR codes using current .env frontend URL">
+                <i class="fas fa-sync-alt me-1"></i> Regenerate QRs
+            </a>
             <button type="button" class="btn btn-outline-primary" data-bs-toggle="offcanvas" data-bs-target="#addZoneOffcanvas">
                 <i class="fas fa-plus me-1"></i> Add Zone
             </button>
@@ -86,10 +92,17 @@
                                         <span class="text-muted">-</span>
                                         {% endif %}
                                     </td>
-                                    <td class="text-end pe-4">
-                                        <a href="{% url 'restaurant_admin:table_edit' restaurant_slug=restaurant_slug pk=table.pk %}" class="btn btn-sm btn-outline-primary me-1" title="Edit Table">
+                                     <td class="text-end pe-4">
+                                        <button type="button" class="btn btn-sm btn-outline-primary me-1 edit-table-btn" 
+                                                data-table-id="{{ table.id }}"
+                                                data-name="{{ table.name }}"
+                                                data-zone-id="{{ table.zone.id|default:'' }}"
+                                                data-capacity="{{ table.capacity }}"
+                                                data-shape="{{ table.shape|default:'round' }}"
+                                                data-is-active="{% if table.is_active %}1{% else %}0{% endif %}"
+                                                title="Edit Table">
                                             <i class="fas fa-edit"></i> Edit
-                                        </a>
+                                        </button>
                                         <a href="{% url 'restaurant_admin:table_delete' restaurant_slug=restaurant_slug pk=table.pk %}" class="btn btn-sm btn-outline-danger" title="Delete Table">
                                             <i class="fas fa-trash"></i> Delete
                                         </a>
@@ -129,15 +142,26 @@
                             <tbody>
                                 {% for zone in zones %}
                                 <tr>
-                                    <td class="ps-4 fw-semibold">{{ zone.name }}</td>
+                                    <td class="ps-4 fw-semibold">
+                                        {{ zone.name }}
+                                        {% if zone.name|lower in "main area,main floor,default,general" %}
+                                        <span class="badge bg-light text-muted border ms-1" style="font-size: 10px;">Default</span>
+                                        {% endif %}
+                                    </td>
                                     <td><span class="badge bg-light text-dark border">{{ zone.tables.count }} Tables</span></td>
                                     <td class="text-end pe-4">
                                         <a href="{% url 'restaurant_admin:zone_edit' restaurant_slug=restaurant_slug pk=zone.pk %}" class="btn btn-sm btn-outline-primary me-1" title="Edit Zone">
                                             <i class="fas fa-edit"></i> Edit
                                         </a>
+                                        {% if zone.name|lower in "main area,main floor,default,general" %}
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled title="Default zone cannot be deleted">
+                                            <i class="fas fa-lock"></i>
+                                        </button>
+                                        {% else %}
                                         <a href="{% url 'restaurant_admin:zone_delete' restaurant_slug=restaurant_slug pk=zone.pk %}" class="btn btn-sm btn-outline-danger" title="Delete Zone">
                                             <i class="fas fa-trash"></i> Delete
                                         </a>
+                                        {% endif %}
                                     </td>
                                 </tr>
                                 {% empty %}
@@ -157,6 +181,33 @@
     </div>
 </div>
 
+<script type="application/json" id="appTablesData">{{ all_tables_json|default:'[]'|safe }}</script>
+<script type="application/json" id="appZonesData">{{ zones_json|default:'[]'|safe }}</script>
+<script>
+    window.APP_TABLES_DATA = JSON.parse(document.getElementById('appTablesData')?.textContent || '[]');
+    window.APP_ZONES_DATA = JSON.parse(document.getElementById('appZonesData')?.textContent || '[]');
+
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.edit-table-btn').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                const tableData = {
+                    id: this.dataset.tableId,
+                    name: this.dataset.name,
+                    zone_id: this.dataset.zoneId,
+                    capacity: this.dataset.capacity,
+                    shape: this.dataset.shape,
+                    is_active: this.dataset.isActive === '1'
+                };
+                if (window.openEditTableDrawer) {
+                    window.openEditTableDrawer(tableData);
+                }
+            });
+        });
+    });
+</script>
+
 {% include 'restaurant_admin/tables/add_table_offcanvas.html' %}
+{% include 'restaurant_admin/tables/edit_table_offcanvas.html' %}
 {% include 'restaurant_admin/tables/add_zone_offcanvas.html' %}
 {% endblock %}

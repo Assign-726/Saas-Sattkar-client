@@ -35,23 +35,68 @@ class TallyFormEngine {
         return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
     }
 
-    getFocusableElements() {
-        if (!this.container) return [];
+    getCaretStatus(el) {
+        if (!el) {
+            return { start: null, end: null, hasSelection: false, allSelected: false, atStart: true };
+        }
+        try {
+            if (typeof el.selectionStart === 'number' && typeof el.selectionEnd === 'number') {
+                const val = el.value || '';
+                return {
+                    start: el.selectionStart,
+                    end: el.selectionEnd,
+                    hasSelection: el.selectionStart !== el.selectionEnd,
+                    allSelected: (el.selectionStart === 0 && el.selectionEnd === val.length),
+                    atStart: (el.selectionStart === 0)
+                };
+            }
+        } catch (e) {
+            // HTML5 input type="number", "email", etc. throw DOMException on selectionStart
+        }
+        return { start: null, end: null, hasSelection: false, allSelected: false, atStart: true };
+    }
+
+    safeSelect(el) {
+        if (!el) return;
+        try {
+            if (typeof el.select === 'function') {
+                el.select();
+            }
+        } catch(e) {}
+    }
+
+    getActiveContainer(contextElement) {
+        if (contextElement && typeof contextElement.closest === 'function') {
+            const activeTabPane = contextElement.closest('.settings-tab-pane.active, .tab-pane.active');
+            if (activeTabPane) return activeTabPane;
+        }
+        if (this.container) {
+            const activeTabPane = this.container.querySelector('.settings-tab-pane.active, .tab-pane.active');
+            if (activeTabPane) return activeTabPane;
+        }
+        return this.container || document.body;
+    }
+
+    getFocusableElements(contextElement) {
+        const root = this.getActiveContainer(contextElement);
+        if (!root) return [];
         
         let selector = this.fieldSelector;
         if (!selector) {
-            // Check if container uses explicit .tally-input
-            const hasExplicitTally = this.container.querySelectorAll('.tally-input').length > 0;
+            const hasExplicitTally = root.querySelectorAll('.tally-input').length > 0;
             if (hasExplicitTally) {
                 selector = '.tally-input:not([readonly]):not([disabled])';
             } else {
-                selector = 'input:not([type="hidden"]):not([readonly]):not([disabled]), select:not([readonly]):not([disabled]), textarea:not([readonly]):not([disabled]), button[type="submit"]:not([disabled])';
+                selector = 'input:not([type="hidden"]):not([readonly]):not([disabled]), select:not([readonly]):not([disabled]), textarea:not([readonly]):not([disabled]), button[type="submit"]:not([disabled]), button.btn-primary:not([disabled])';
             }
         }
 
-        const candidates = Array.from(this.container.querySelectorAll(selector));
+        const candidates = Array.from(root.querySelectorAll(selector));
         return candidates.filter(el => {
             if (el.disabled || el.readOnly || el.type === 'hidden') return false;
+            // Exclude elements that are inside inactive sub-tabs within the container
+            const inactivePane = el.closest('.settings-tab-pane:not(.active), .tab-pane:not(.active)');
+            if (inactivePane && inactivePane !== root) return false;
             return this.isElementVisible(el);
         });
     }
@@ -67,7 +112,13 @@ class TallyFormEngine {
         this.stopBlinking();
         if (!inputElement || inputElement.readOnly || inputElement.disabled) return;
 
-        const isTextInput = ['text', 'number', 'tel', 'email', 'search', 'url', 'password'].includes(inputElement.type || 'text');
+        // Number inputs and unsupported types don't support setSelectionRange in modern browsers
+        if (inputElement.type === 'number') {
+            this.safeSelect(inputElement);
+            return;
+        }
+
+        const isTextInput = ['text', 'tel', 'email', 'search', 'url', 'password'].includes(inputElement.type || 'text');
         if (!isTextInput || typeof inputElement.setSelectionRange !== 'function') {
             inputElement.dataset.isEditing = 'true';
             return;
@@ -100,26 +151,26 @@ class TallyFormEngine {
     }
 
     moveToNextField(currentElement) {
-        const elements = this.getFocusableElements();
+        const elements = this.getFocusableElements(currentElement);
         const currentIndex = elements.indexOf(currentElement);
 
         if (currentIndex > -1 && currentIndex < elements.length - 1) {
             const nextEl = elements[currentIndex + 1];
             nextEl.focus();
-            if (typeof nextEl.select === 'function' && nextEl.tagName === 'INPUT' && !['checkbox', 'radio', 'button'].includes(nextEl.type)) {
-                try { nextEl.select(); } catch(e){}
+            if (nextEl.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'submit'].includes(nextEl.type)) {
+                this.safeSelect(nextEl);
             }
         }
     }
 
     moveToPrevField(currentElement) {
-        const elements = this.getFocusableElements();
+        const elements = this.getFocusableElements(currentElement);
         const currentIndex = elements.indexOf(currentElement);
         if (currentIndex > 0) {
             const prevEl = elements[currentIndex - 1];
             prevEl.focus();
-            if (typeof prevEl.select === 'function' && prevEl.tagName === 'INPUT' && !['checkbox', 'radio', 'button'].includes(prevEl.type)) {
-                try { prevEl.select(); } catch(e){}
+            if (prevEl.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'submit'].includes(prevEl.type)) {
+                this.safeSelect(prevEl);
             }
         }
     }
@@ -133,7 +184,7 @@ class TallyFormEngine {
             if (hasExplicitTally) {
                 selector = '.tally-input';
             } else {
-                selector = 'input:not([type="hidden"]), select, textarea';
+                selector = 'input:not([type="hidden"]), select, textarea, button[type="submit"]';
             }
         }
 
@@ -150,14 +201,14 @@ class TallyFormEngine {
 
         input.addEventListener('focus', function () {
             if (!self.isMouseDown) {
-                if (isTextInput && this.value.length > 0) {
+                if (isTextInput && this.value && this.value.length > 0) {
                     this.dataset.isEditing = 'false';
-                    try { this.select(); } catch(e){}
+                    self.safeSelect(this);
                     setTimeout(() => { self.startBlinking(this); }, 10);
                 } else {
                     this.dataset.isEditing = 'true';
                     if (isTextInput) {
-                        try { this.select(); } catch(e){}
+                        self.safeSelect(this);
                     }
                 }
             } else {
@@ -188,10 +239,16 @@ class TallyFormEngine {
                 return;
             }
 
-            // 1. FIELD NAVIGATION (ENTER & ARROWS)
+            // 1. FIELD NAVIGATION (ENTER / SHIFT+ENTER / ARROWS)
             if (e.key === 'Enter') {
+                if (e.shiftKey) {
+                    // Shift + Enter navigates backward
+                    e.preventDefault();
+                    self.moveToPrevField(this);
+                    return;
+                }
                 if (this.tagName === 'BUTTON' || this.type === 'submit') {
-                    return; // Let standard button click happen
+                    return; // Let standard button click / form submission happen
                 }
                 if (this.tagName === 'TEXTAREA' && !e.ctrlKey) {
                     return; // Allow newlines in textarea unless ctrl+enter
@@ -207,13 +264,28 @@ class TallyFormEngine {
                 e.preventDefault();
                 self.moveToPrevField(this);
             }
+            else if (e.key === 'ArrowDown') {
+                if (this.tagName === 'SELECT') {
+                    // Let select change options
+                    return;
+                }
+                e.preventDefault();
+                self.moveToNextField(this);
+            }
             else if (e.key === 'Backspace') {
-                if (this.tagName === 'SELECT' || this.type === 'checkbox' || this.type === 'radio') {
+                // Non-text elements (select, button, checkbox, radio) always stroll backward
+                if (this.tagName === 'SELECT' || this.tagName === 'BUTTON' || this.type === 'submit' || this.type === 'checkbox' || this.type === 'radio') {
                     e.preventDefault();
                     self.moveToPrevField(this);
                     return;
                 }
-                if (!isEditing || this.value === '' || (this.selectionStart === 0 && this.selectionEnd === this.value.length) || (this.selectionStart === 0 && this.selectionEnd === 0)) {
+
+                // Text / number inputs:
+                const caret = self.getCaretStatus(this);
+                const val = (this.value !== null && typeof this.value !== 'undefined') ? String(this.value) : '';
+                const isEmpty = (val === '');
+
+                if (!isEditing || isEmpty || caret.allSelected || (caret.start === 0 && caret.end === 0)) {
                     e.preventDefault();
                     self.moveToPrevField(this);
                 }
@@ -235,17 +307,17 @@ class TallyFormEngine {
                     } catch(ex) {}
                 }
             }
-            // 3. OVERWRITE TYPING MODE
+            // 3. TYPING IN FIELD
             else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey && this.tagName !== 'SELECT' && isTextInput) {
                 if (!isEditing) {
                     self.stopBlinking();
-                    this.value = '';
                     this.dataset.isEditing = 'true';
                 }
             }
         });
 
         input.addEventListener('input', () => {
+            input.dataset.isEditing = 'true';
             if (typeof self.onCalculate === 'function') {
                 self.onCalculate(self.container);
             }

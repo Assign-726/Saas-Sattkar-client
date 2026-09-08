@@ -6,6 +6,33 @@ let currentOrder = {
     table_number: 1
 };
 
+// LocalStorage helpers for the cart page format (array of items)
+function getSavedCartArray() {
+    try {
+        return JSON.parse(localStorage.getItem('restaurant_cart')) || [];
+    } catch {
+        return [];
+    }
+}
+function setSavedCartArray(arr) {
+    localStorage.setItem('restaurant_cart', JSON.stringify(arr));
+}
+
+// Prime sidebar order summary from saved cart array
+// cart.html expects: [{ id, name, price, quantity, image? }]
+// sidebar expects:   [{ menu_item, menu_item_name, quantity, unit_price }]
+(() => {
+    const arr = getSavedCartArray();
+    if (Array.isArray(arr) && arr.length) {
+        currentOrder.items = arr.map(it => ({
+            menu_item: it.id,
+            menu_item_name: it.name,
+            quantity: it.quantity || 1,
+            unit_price: parseFloat(it.price) || 0,
+        }));
+    }
+})();
+
 // DOM Elements
 const menuItemsContainer = document.getElementById('menu-items-container');
 const orderItemsContainer = document.getElementById('order-items');
@@ -16,6 +43,7 @@ const checkoutBtn = document.getElementById('checkout-btn');
 document.addEventListener('DOMContentLoaded', () => {
     loadCategories();
     loadMenuItems();
+    updateOrderSummary(); // Update cart display on page load
 });
 
 // API Functions
@@ -59,11 +87,11 @@ async function loadSubcategories(categoryId) {
     }
 }
 
-async function loadMenuItems(subcategoryId = null) {
+async function loadMenuItems(categoryId = null) {
     try {
         let url = '/api/menu-items/';
-        if (subcategoryId) {
-            url += `?subcategory=${subcategoryId}`;
+        if (categoryId) {
+            url += `?category=${categoryId}`;
         }
         
         const response = await axios.get(url);
@@ -76,7 +104,7 @@ async function loadMenuItems(subcategoryId = null) {
                         <div class="d-flex justify-content-between align-items-center">
                             <span class="h5 mb-0">$${parseFloat(item.price).toFixed(2)}</span>
                             <button class="btn btn-primary btn-sm" 
-                                    onclick="addToOrder(${item.id}, '${item.name}', ${item.price})">
+                                    onclick="addToOrder(${item.id}, ${JSON.stringify(item.name)}, ${item.price})">
                                 Add to Order
                             </button>
                         </div>
@@ -92,8 +120,18 @@ async function loadMenuItems(subcategoryId = null) {
 
 // Order Management
 function addToOrder(itemId, itemName, price) {
+    // Update saved cart array (format used by cart.html)
+    const cartArr = getSavedCartArray();
+    const existing = cartArr.find(i => i.id === itemId);
+    if (existing) {
+        existing.quantity = (existing.quantity || 1) + 1;
+    } else {
+        cartArr.push({ id: itemId, name: itemName, price: parseFloat(price) || 0, quantity: 1 });
+    }
+    setSavedCartArray(cartArr);
+
+    // Keep sidebar summary in sync
     const existingItem = currentOrder.items.find(item => item.menu_item === itemId);
-    
     if (existingItem) {
         existingItem.quantity += 1;
     } else {
@@ -101,36 +139,83 @@ function addToOrder(itemId, itemName, price) {
             menu_item: itemId,
             menu_item_name: itemName,
             quantity: 1,
-            unit_price: parseFloat(price)
+            unit_price: parseFloat(price) || 0,
         });
     }
-    
+
     updateOrderSummary();
+    
+    // Show feedback to user
+    const toast = document.createElement('div');
+    toast.className = 'position-fixed bottom-0 end-0 m-3 p-3 bg-success text-white rounded';
+    toast.style.zIndex = '1100';
+    toast.textContent = `${itemName} added to cart!`;
+    document.body.appendChild(toast);
+    
+    // Remove toast after 2 seconds
+    setTimeout(() => {
+        toast.remove();
+    }, 2000);
 }
 
 function updateOrderSummary() {
-    orderItemsContainer.innerHTML = currentOrder.items.map(item => `
-        <div class="d-flex justify-content-between mb-2">
-            <div>
-                ${item.quantity}x ${item.menu_item_name}
-                <button class="btn btn-sm btn-outline-danger ms-2" 
-                        onclick="removeFromOrder(${item.menu_item})">
-                    ×
-                </button>
+    if (!orderItemsContainer) return; // Skip if not on a page with order summary
+    
+    if (currentOrder.items.length === 0) {
+        orderItemsContainer.innerHTML = '<p class="text-muted">Your cart is empty</p>';
+    } else {
+        orderItemsContainer.innerHTML = currentOrder.items.map(item => `
+            <div class="d-flex justify-content-between mb-2">
+                <div>
+                    ${item.quantity}x ${item.menu_item_name}
+                    <button class="btn btn-sm btn-outline-danger ms-2" 
+                            onclick="removeFromOrder(${item.menu_item})">
+                        ×
+                    </button>
+                </div>
+                <div>$${(item.quantity * item.unit_price).toFixed(2)}</div>
             </div>
-            <div>$${(item.quantity * item.unit_price).toFixed(2)}</div>
-        </div>
-    `).join('');
+        `).join('');
+    }
 
     const total = currentOrder.items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
-    orderTotalElement.textContent = `$${total.toFixed(2)}`;
+    if (orderTotalElement) {
+        orderTotalElement.textContent = `$${total.toFixed(2)}`;
+    }
     
-    checkoutBtn.disabled = currentOrder.items.length === 0;
+    if (checkoutBtn) {
+        checkoutBtn.disabled = currentOrder.items.length === 0;
+    }
+    
+    // Update cart count in navbar if it exists
+    const cartCount = document.getElementById('cart-count');
+    if (cartCount) {
+        const totalItems = currentOrder.items.reduce((sum, item) => sum + item.quantity, 0);
+        cartCount.textContent = totalItems;
+        cartCount.style.display = totalItems > 0 ? 'inline-block' : 'none';
+    }
 }
 
 function removeFromOrder(itemId) {
+    // Remove from saved cart array
+    const cartArr = getSavedCartArray().filter(i => i.id !== itemId);
+    setSavedCartArray(cartArr);
+
+    // Remove from sidebar order summary
     currentOrder.items = currentOrder.items.filter(item => item.menu_item !== itemId);
     updateOrderSummary();
+    
+    // Show feedback to user
+    const toast = document.createElement('div');
+    toast.className = 'position-fixed bottom-0 end-0 m-3 p-3 bg-danger text-white rounded';
+    toast.style.zIndex = '1100';
+    toast.textContent = 'Item removed from cart';
+    document.body.appendChild(toast);
+    
+    // Remove toast after 2 seconds
+    setTimeout(() => {
+        toast.remove();
+    }, 2000);
 }
 
 // Checkout

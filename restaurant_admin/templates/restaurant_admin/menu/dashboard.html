@@ -1,217 +1,934 @@
 {% extends 'restaurant_admin/base.html' %}
 {% load static %}
 
+{% block extra_css %}
+<style>
+    /* Metric Overview Strip */
+    .metric-card {
+        background: #ffffff;
+        border-radius: 12px;
+        border: 1px solid #E2E8F0;
+        padding: 1rem 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    }
+    .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    }
+    .metric-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        flex-shrink: 0;
+    }
+    .metric-value {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #1E293B;
+        line-height: 1.1;
+    }
+    .metric-label {
+        font-size: 0.78rem;
+        color: #64748B;
+        font-weight: 500;
+        margin-bottom: 2px;
+    }
+
+    /* Filter & Controls Toolbar */
+    .menu-toolbar {
+        background: #ffffff;
+        border-radius: 12px;
+        border: 1px solid #E2E8F0;
+        padding: 0.85rem 1rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    }
+    .search-box {
+        position: relative;
+    }
+    .search-box i {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #94A3B8;
+        font-size: 0.9rem;
+    }
+    .search-box .form-control {
+        padding-left: 2.3rem;
+        border-radius: 8px;
+        font-size: 0.88rem;
+        border: 1px solid #CBD5E1;
+    }
+    .search-box .form-control:focus {
+        border-color: #5E72E4;
+        box-shadow: 0 0 0 3px rgba(94, 114, 228, 0.15);
+    }
+
+    /* Compact Menu Card */
+    .menu-item-card {
+        background: #ffffff;
+        border-radius: 12px;
+        border: 1px solid #E2E8F0;
+        overflow: hidden;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        position: relative;
+    }
+    .menu-item-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.07);
+        border-color: #CBD5E1;
+    }
+    .menu-item-card.is-unavailable {
+        background: #F8FAFC;
+    }
+    .menu-item-card.is-unavailable .menu-card-banner img {
+        filter: grayscale(85%) opacity(0.85);
+    }
+
+    /* Card Banner & Image */
+    .menu-card-banner {
+        height: 115px;
+        position: relative;
+        background: linear-gradient(135deg, #EEF2F6 0%, #E2E8F0 100%);
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .menu-card-banner img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.3s ease;
+    }
+    .menu-item-card:hover .menu-card-banner img {
+        transform: scale(1.04);
+    }
+    .no-img-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        color: #94A3B8;
+    }
+    .no-img-circle {
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.85);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #5E72E4;
+        font-size: 1.25rem;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    }
+
+    /* Banner Overlays */
+    .banner-badge-left {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        z-index: 2;
+    }
+    .banner-badge-right {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 2;
+    }
+    .banner-badge-pos {
+        position: absolute;
+        bottom: 8px;
+        left: 8px;
+        z-index: 2;
+    }
+    .pill-tag {
+        background: rgba(255, 255, 255, 0.94);
+        backdrop-filter: blur(4px);
+        color: #334155;
+        font-size: 0.72rem;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 20px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+        display: inline-flex;
+        align-items: center;
+    }
+    .pill-tag-primary {
+        background: rgba(255, 255, 255, 0.94);
+        color: #5E72E4;
+    }
+
+    /* Card Content Body */
+    .menu-card-content {
+        padding: 0.85rem 1rem 0.75rem 1rem;
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+    }
+    .menu-item-title {
+        font-size: 0.96rem;
+        font-weight: 600;
+        color: #1E293B;
+        line-height: 1.25;
+        margin-bottom: 0.35rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .menu-item-desc {
+        font-size: 0.79rem;
+        color: #64748B;
+        line-height: 1.35;
+        margin-bottom: 0.65rem;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        min-height: 2.15rem;
+        max-height: 2.15rem;
+    }
+
+    /* Card Bottom Bar */
+    .menu-card-footer {
+        padding: 0.65rem 1rem;
+        border-top: 1px solid #F1F5F9;
+        background: #FAFAFC;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: auto;
+    }
+    .price-amount {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #0F172A;
+        letter-spacing: -0.2px;
+    }
+    .price-currency {
+        font-size: 0.95rem;
+        font-weight: 600;
+        margin-right: 1px;
+    }
+
+    /* Modern Icon Action Buttons */
+    .btn-action-icon {
+        width: 30px;
+        height: 30px;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        border: 1px solid #E2E8F0;
+        background: #ffffff;
+        color: #475569;
+        transition: all 0.15s ease;
+        padding: 0;
+    }
+    .btn-action-icon:hover {
+        background: #F1F5F9;
+        color: #0F172A;
+        border-color: #CBD5E1;
+        transform: translateY(-1px);
+    }
+    .btn-action-icon.text-primary:hover {
+        background: #EEF2FF;
+        color: #4F46E5 !important;
+        border-color: #C7D2FE;
+    }
+    .btn-action-icon.text-warning:hover {
+        background: #FFFBEB;
+        color: #D97706 !important;
+        border-color: #FDE68A;
+    }
+    .btn-action-icon.text-danger:hover {
+        background: #FEF2F2;
+        color: #DC2626 !important;
+        border-color: #FECACA;
+    }
+
+    /* Quick Availability Switch */
+    .stock-switch-wrap {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .form-check-input.stock-toggle {
+        cursor: pointer;
+        width: 32px;
+        height: 18px;
+        margin: 0;
+    }
+    .form-check-input.stock-toggle:checked {
+        background-color: #10B981;
+        border-color: #10B981;
+    }
+    .text-stock-available {
+        color: #059669 !important;
+    }
+    .text-stock-unavailable {
+        color: #DC2626 !important;
+    }
+
+    /* Table List View Styling */
+    .menu-table {
+        border-collapse: separate;
+        border-spacing: 0;
+        width: 100%;
+    }
+    .menu-table th {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #64748B;
+        font-weight: 600;
+        background: #F8FAFC;
+        border-bottom: 1px solid #E2E8F0;
+        padding: 0.75rem 1rem;
+    }
+    .menu-table td {
+        padding: 0.75rem 1rem;
+        vertical-align: middle;
+        border-bottom: 1px solid #F1F5F9;
+        font-size: 0.86rem;
+    }
+    .menu-table tbody tr:hover {
+        background-color: #F8FAFC;
+    }
+    .table-thumb {
+        width: 44px;
+        height: 44px;
+        border-radius: 8px;
+        object-fit: cover;
+        background: #EEF2F6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        color: #5E72E4;
+        flex-shrink: 0;
+    }
+
+    /* Floating Toast */
+    #menuToastContainer {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 1090;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid px-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="mt-4">Menu Management</h1>
+<div class="container-fluid px-4 py-3">
+
+    <!-- Header Section -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
         <div>
-            <a href="{% url 'restaurant_admin:menu_bulk_add' restaurant_slug=rslug %}" class="btn btn-outline-primary me-2">
+            <h1 class="h2 fw-bold text-dark mb-0">Menu Management</h1>
+            <p class="text-muted small mb-0">Organize dishes, set prices in Rupees (₹), and manage instant stock availability.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'restaurant_admin:menu_bulk_add' restaurant_slug=rslug %}" class="btn btn-outline-primary btn-sm rounded-pill px-3 shadow-xs">
                 <i class="bi bi-file-earmark-code me-1"></i>Bulk Import (JSON)
             </a>
-            <a href="{% url 'restaurant_admin:menu_add' restaurant_slug=rslug %}" class="btn btn-primary">
+            <a href="{% url 'restaurant_admin:menu_add' restaurant_slug=rslug %}" class="btn btn-primary btn-sm rounded-pill px-3 shadow-xs" style="background: linear-gradient(135deg, #5E72E4 0%, #4338CA 100%); border: none;">
                 <i class="fas fa-plus me-1"></i>Add New Item
             </a>
         </div>
     </div>
 
-    <!-- Search and Filter Card -->
-    <div class="card mb-4">
-        <div class="card-body">
-            <form method="get" id="searchForm">
-                <div class="row g-3">
-                    <div class="col-md-8">
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-search"></i></span>
-                            <input type="text" 
-                                   class="form-control" 
-                                   name="q" 
-                                   id="searchInput" 
-                                   placeholder="Search menu items..." 
-                                   value="{{ request.GET.q|default:'' }}">
-                            <button class="btn btn-primary" type="submit">
-                                <i class="fas fa-search me-1"></i> Search
-                            </button>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <select class="form-select" name="category" id="categoryFilter" onchange="this.form.submit()">
-                            <option value="" {% if not request.GET.category %}selected{% endif %}>All Categories</option>
-                            {% for category in categories %}
-                            <option value="{{ category.id }}" 
-                                    {% if request.GET.category|stringformat:'s' == category.id|stringformat:'s' %}selected{% endif %}>
-                                {{ category.name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
+    <!-- Metric Overview Strip -->
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="metric-card">
+                <div class="metric-icon" style="background: rgba(94, 114, 228, 0.1); color: #5E72E4;">
+                    <i class="fas fa-utensils"></i>
                 </div>
-                {% if request.GET.q or request.GET.category %}
-                <div class="mt-3">
-                    <a href="{% url 'restaurant_admin:menu_list' restaurant_slug=rslug %}" class="btn btn-sm btn-outline-secondary">
-                        <i class="fas fa-times me-1"></i> Clear filters
-                    </a>
+                <div>
+                    <div class="metric-label">Total Items</div>
+                    <div class="metric-value" id="kpiTotal">{{ total_items_count|default:0 }}</div>
                 </div>
-                {% endif %}
-            </form>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="metric-card">
+                <div class="metric-icon" style="background: rgba(16, 185, 129, 0.1); color: #10B981;">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div>
+                    <div class="metric-label">In Stock</div>
+                    <div class="metric-value text-success" id="kpiAvailable">{{ available_count|default:0 }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="metric-card">
+                <div class="metric-icon" style="background: rgba(239, 68, 68, 0.1); color: #EF4444;">
+                    <i class="fas fa-times-circle"></i>
+                </div>
+                <div>
+                    <div class="metric-label">Out of Stock</div>
+                    <div class="metric-value text-danger" id="kpiUnavailable">{{ unavailable_count|default:0 }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="metric-card">
+                <div class="metric-icon" style="background: rgba(168, 85, 247, 0.1); color: #A855F7;">
+                    <i class="fas fa-layer-group"></i>
+                </div>
+                <div>
+                    <div class="metric-label">Categories</div>
+                    <div class="metric-value" style="color: #7E22CE;">{{ total_categories_count|default:0 }}</div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Menu Items Grid -->
-    <div class="row">
-        {% for item in menu_items %}
-        <div class="col-xl-3 col-md-4 col-sm-6 mb-4">
-            <div class="card h-100">
-                <div class="position-relative">
-                    {% if item.image %}
-                    <img src="{{ item.image.url }}" class="card-img-top" alt="{{ item.name }}" style="height: 180px; object-fit: cover;">
-                    {% else %}
-                    <div class="bg-light d-flex align-items-center justify-content-center" style="height: 180px;">
-                        <i class="fas fa-utensils fa-3x text-muted"></i>
-                    </div>
-                    {% endif %}
-                    
+    <!-- Search, Filters, and View Switcher Toolbar -->
+    <div class="menu-toolbar mb-4">
+        <form method="get" id="filterForm" class="row g-2 align-items-center">
+            <!-- Search Input -->
+            <div class="col-12 col-md-4 col-lg-4">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" 
+                           class="form-control" 
+                           name="q" 
+                           id="searchInput" 
+                           placeholder="Search by name, code, description..." 
+                           value="{{ search_query|default:'' }}"
+                           autocomplete="off">
                 </div>
-                <div class="card-body d-flex flex-column">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                        <h5 class="card-title mb-0">{{ item.name }}</h5>
-                        <span class="badge bg-primary">
-                            {% if item.category %}
-                                {{ item.category.name }}
-                            {% elif item.subcategory and item.subcategory.category %}
-                                {{ item.subcategory.category.name }}
-                            {% else %}
-                                Uncategorized
-                            {% endif %}
-                        </span>
+            </div>
+
+            <!-- Category Filter -->
+            <div class="col-6 col-md-3 col-lg-3">
+                <select class="form-select form-select-sm py-2" name="category" id="categoryFilter" onchange="document.getElementById('filterForm').submit()">
+                    <option value="" {% if not selected_category %}selected{% endif %}>All Categories</option>
+                    {% for category in categories %}
+                    <option value="{{ category.id }}" {% if selected_category|stringformat:'s' == category.id|stringformat:'s' %}selected{% endif %}>
+                        {{ category.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Stock Availability Filter -->
+            <div class="col-6 col-md-2 col-lg-2">
+                <select class="form-select form-select-sm py-2" name="status" id="statusFilter" onchange="document.getElementById('filterForm').submit()">
+                    <option value="" {% if not status_filter %}selected{% endif %}>All Status</option>
+                    <option value="available" {% if status_filter == 'available' %}selected{% endif %}>In Stock Only</option>
+                    <option value="unavailable" {% if status_filter == 'unavailable' %}selected{% endif %}>Out of Stock</option>
+                </select>
+            </div>
+
+            <!-- Sort By Filter -->
+            <div class="col-6 col-md-2 col-lg-2">
+                <select class="form-select form-select-sm py-2" name="sort" id="sortFilter" onchange="document.getElementById('filterForm').submit()">
+                    <option value="" {% if not sort_by %}selected{% endif %}>Sort: Category</option>
+                    <option value="price_asc" {% if sort_by == 'price_asc' %}selected{% endif %}>Price: Low to High</option>
+                    <option value="price_desc" {% if sort_by == 'price_desc' %}selected{% endif %}>Price: High to Low</option>
+                    <option value="name_asc" {% if sort_by == 'name_asc' %}selected{% endif %}>Name: A to Z</option>
+                    <option value="name_desc" {% if sort_by == 'name_desc' %}selected{% endif %}>Name: Z to A</option>
+                </select>
+            </div>
+
+            <!-- View Toggle & Clear Filters -->
+            <div class="col-6 col-md-1 col-lg-1 d-flex justify-content-end align-items-center gap-1">
+                {% if search_query or selected_category or status_filter or sort_by %}
+                <a href="{% url 'restaurant_admin:menu_list' restaurant_slug=rslug %}" class="btn btn-sm btn-outline-secondary py-1.5 px-2" title="Clear all filters">
+                    <i class="fas fa-times"></i>
+                </a>
+                {% endif %}
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-primary active py-1.5 px-2" id="btnViewGrid" title="Grid View" onclick="switchView('grid')">
+                        <i class="fas fa-th-large"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-primary py-1.5 px-2" id="btnViewTable" title="List View" onclick="switchView('table')">
+                        <i class="fas fa-list"></i>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- GRID VIEW: Compact, sleek cards -->
+    <div id="gridContainer">
+        <div class="row g-3" id="menuCardsRow">
+            {% for item in menu_items %}
+            <div class="col-xl-3 col-lg-4 col-md-6 col-sm-6 menu-item-col" 
+                 id="menu-card-col-{{ item.id }}"
+                 data-item-name="{{ item.name|lower }}"
+                 data-item-code="{{ item.short_code|default:''|lower }}"
+                 data-item-desc="{{ item.description|lower }}"
+                 data-item-category="{% if item.category %}{{ item.category.name|lower }}{% elif item.subcategory %}{{ item.subcategory.category.name|lower }}{% endif %}">
+                
+                <div class="menu-item-card {% if not item.availability %}is-unavailable{% endif %}" id="item-card-{{ item.id }}">
+                    <!-- Card Banner (115px compact height) -->
+                    <div class="menu-card-banner">
+                        {% if item.image %}
+                        <img src="{{ item.image.url }}" alt="{{ item.name }}" loading="lazy">
+                        {% else %}
+                        <div class="no-img-placeholder">
+                            <div class="no-img-circle">
+                                <i class="fas fa-utensils"></i>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Category Pill (Top-Left) -->
+                        <div class="banner-badge-left">
+                            <span class="pill-tag pill-tag-primary">
+                                {% if item.category %}
+                                    {{ item.category.name }}
+                                {% elif item.subcategory and item.subcategory.category %}
+                                    {{ item.subcategory.category.name }}
+                                {% else %}
+                                    General
+                                {% endif %}
+                            </span>
+                        </div>
+
+                        <!-- Stock Status Badge (Top-Right) -->
+                        <div class="banner-badge-right">
+                            <span class="pill-tag status-pill-{{ item.id }} {% if item.availability %}text-stock-available{% else %}text-stock-unavailable{% endif %}" style="font-size: 0.7rem;">
+                                <i class="fas fa-circle me-1" style="font-size: 6px;"></i>
+                                <span class="status-pill-text-{{ item.id }}">{% if item.availability %}In Stock{% else %}Out of Stock{% endif %}</span>
+                            </span>
+                        </div>
+
+                        <!-- POS Code Badge (Bottom-Left if present) -->
+                        {% if item.short_code %}
+                        <div class="banner-badge-pos">
+                            <span class="badge bg-dark bg-opacity-75 text-white font-monospace px-1.5 py-1" style="font-size: 10px;">
+                                #{{ item.short_code }}
+                            </span>
+                        </div>
+                        {% endif %}
                     </div>
-                    <p class="card-text text-muted small flex-grow-1">
-                        {{ item.description|truncatechars:80 }}
-                    </p>
-                    <div class="d-flex justify-content-between align-items-center mt-3">
-                        <h5 class="mb-0 text-primary">${{ item.price }}</h5>
-                        <div class="btn-group">
-                            <a href="{% url 'restaurant_admin:menu_recipe' restaurant_slug=rslug pk=item.id %}" class="btn btn-sm btn-outline-warning" title="Recipe/Ingredients">
+
+                    <!-- Card Body -->
+                    <div class="menu-card-content">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <h6 class="menu-item-title mb-0" title="{{ item.name }}">{{ item.name }}</h6>
+                        </div>
+                        <p class="menu-item-desc mb-0" title="{{ item.description }}">
+                            {{ item.description|default:"No description provided." }}
+                        </p>
+                    </div>
+
+                    <!-- Card Footer: Price in Rupees (₹) & Actions -->
+                    <div class="menu-card-footer">
+                        <div>
+                            <span class="price-amount text-dark"><span class="price-currency">₹</span>{{ item.price|floatformat:2 }}</span>
+                            <span class="badge bg-light text-muted border px-1 py-0.5 ms-1" style="font-size: 9.5px;">
+                                {% if item.is_tax_inclusive %}Tax incl.{% else %}+Tax{% endif %}
+                            </span>
+                        </div>
+                        <div class="d-flex align-items-center gap-1.5">
+                            <!-- Stock Toggle Switch -->
+                            <div class="form-check form-switch mb-0 me-1" title="Toggle Stock Availability">
+                                <input class="form-check-input stock-toggle" 
+                                       type="checkbox" 
+                                       role="switch"
+                                       id="toggleSwitch{{ item.id }}"
+                                       data-item-id="{{ item.id }}"
+                                       {% if item.availability %}checked{% endif %}>
+                            </div>
+
+                            <!-- Recipe/Ingredients -->
+                            <a href="{% url 'restaurant_admin:menu_recipe' restaurant_slug=rslug pk=item.id %}" 
+                               class="btn-action-icon text-warning" 
+                               title="Recipe / Ingredients"
+                               data-bs-toggle="tooltip">
                                 <i class="fas fa-egg"></i>
                             </a>
-                            <a href="{% url 'restaurant_admin:menu_edit' restaurant_slug=rslug pk=item.id %}" class="btn btn-sm btn-outline-primary" title="Edit">
+
+                            <!-- Edit -->
+                            <a href="{% url 'restaurant_admin:menu_edit' restaurant_slug=rslug pk=item.id %}" 
+                               class="btn-action-icon text-primary" 
+                               title="Edit Menu Item"
+                               data-bs-toggle="tooltip">
                                 <i class="fas fa-edit"></i>
                             </a>
-                            <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ item.id }}" title="Delete">
-                                <i class="fas fa-trash"></i>
+
+                            <!-- Delete -->
+                            <button type="button" 
+                                    class="btn-action-icon text-danger" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#deleteModal{{ item.id }}" 
+                                    title="Delete Item">
+                                <i class="fas fa-trash-alt"></i>
                             </button>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- Delete Confirmation Modal -->
-        <div class="modal fade" id="deleteModal{{ item.id }}" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Confirm Delete</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        Are you sure you want to delete "{{ item.name }}"? This action cannot be undone.
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <form action="{% url 'restaurant_admin:menu_delete' restaurant_slug=rslug pk=item.id %}" method="post" class="d-inline">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-danger">Delete</button>
-                        </form>
+            </div>
+
+            <!-- Delete Confirmation Modal -->
+            <div class="modal fade" id="deleteModal{{ item.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered modal-sm">
+                    <div class="modal-content border-0 shadow-lg rounded-3">
+                        <div class="modal-body text-center p-4">
+                            <div class="mb-3 text-danger">
+                                <i class="fas fa-exclamation-triangle fa-3x"></i>
+                            </div>
+                            <h6 class="fw-bold mb-2">Delete Menu Item?</h6>
+                            <p class="text-muted small mb-4">Are you sure you want to delete <strong>"{{ item.name }}"</strong>? This action cannot be undone.</p>
+                            <div class="d-flex justify-content-center gap-2">
+                                <button type="button" class="btn btn-sm btn-light border px-3" data-bs-dismiss="modal">Cancel</button>
+                                <form action="{% url 'restaurant_admin:menu_delete' restaurant_slug=rslug pk=item.id %}" method="post" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-danger px-3">Delete</button>
+                                </form>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
+            {% empty %}
+            <div class="col-12">
+                <div class="text-center py-5 bg-white rounded-3 border">
+                    <div class="text-muted mb-3">
+                        <i class="fas fa-utensils fa-3x opacity-50"></i>
+                    </div>
+                    <h5 class="fw-bold text-dark">No menu items found</h5>
+                    <p class="text-muted small mb-3">Try adjusting your search or category filter, or add a new dish to your menu.</p>
+                    <div class="d-flex justify-content-center gap-2">
+                        {% if search_query or selected_category or status_filter %}
+                        <a href="{% url 'restaurant_admin:menu_list' restaurant_slug=rslug %}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+                            <i class="fas fa-times me-1"></i>Clear Filters
+                        </a>
+                        {% endif %}
+                        <a href="{% url 'restaurant_admin:menu_add' restaurant_slug=rslug %}" class="btn btn-primary btn-sm rounded-pill px-3">
+                            <i class="fas fa-plus me-1"></i>Add Menu Item
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
         </div>
-        {% empty %}
-        <div class="col-12">
-            <div class="text-center py-5">
-                <i class="fas fa-utensils fa-4x text-muted mb-3"></i>
-                <h4>No menu items found</h4>
-                <p class="text-muted">Get started by adding your first menu item</p>
-                <a href="{% url 'restaurant_admin:menu_add' restaurant_slug=rslug %}" class="btn btn-primary">
-                    <i class="fas fa-plus me-2"></i>Add Menu Item
-                </a>
+    </div>
+
+    <!-- TABLE / LIST VIEW: Ultra-compact table for quick scanning -->
+    <div id="tableContainer" class="d-none">
+        <div class="card border-0 shadow-sm rounded-3 overflow-hidden">
+            <div class="table-responsive">
+                <table class="menu-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;">Item</th>
+                            <th>Details</th>
+                            <th>Category</th>
+                            <th>Price (₹)</th>
+                            <th>Stock Status</th>
+                            <th class="text-end" style="width: 140px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="menuTableBody">
+                        {% for item in menu_items %}
+                        <tr id="table-row-{{ item.id }}" 
+                            class="menu-table-row {% if not item.availability %}bg-light opacity-75{% endif %}"
+                            data-item-name="{{ item.name|lower }}"
+                            data-item-code="{{ item.short_code|default:''|lower }}"
+                            data-item-desc="{{ item.description|lower }}"
+                            data-item-category="{% if item.category %}{{ item.category.name|lower }}{% elif item.subcategory %}{{ item.subcategory.category.name|lower }}{% endif %}">
+                            <td>
+                                {% if item.image %}
+                                <img src="{{ item.image.url }}" alt="{{ item.name }}" class="table-thumb" loading="lazy">
+                                {% else %}
+                                <div class="table-thumb">
+                                    <i class="fas fa-utensils"></i>
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="fw-bold text-dark">{{ item.name }}</div>
+                                <div class="text-muted small text-truncate" style="max-width: 280px;">{{ item.description|default:"No description" }}</div>
+                                {% if item.short_code %}
+                                <span class="badge bg-light text-secondary border font-monospace mt-1" style="font-size: 10px;">#{{ item.short_code }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-primary border rounded-pill px-2.5 py-1">
+                                    {% if item.category %}
+                                        {{ item.category.name }}
+                                    {% elif item.subcategory and item.subcategory.category %}
+                                        {{ item.subcategory.category.name }}
+                                    {% else %}
+                                        General
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="fw-bold text-dark fs-6">₹{{ item.price|floatformat:2 }}</span>
+                                <div class="text-muted" style="font-size: 10px;">
+                                    {% if item.is_tax_inclusive %}Tax incl.{% else %}+Tax{% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input stock-toggle" 
+                                               type="checkbox" 
+                                               role="switch"
+                                               id="tableToggleSwitch{{ item.id }}"
+                                               data-item-id="{{ item.id }}"
+                                               {% if item.availability %}checked{% endif %}>
+                                    </div>
+                                    <span class="small fw-semibold status-pill-text-{{ item.id }} {% if item.availability %}text-stock-available{% else %}text-stock-unavailable{% endif %}">
+                                        {% if item.availability %}In Stock{% else %}Out of Stock{% endif %}
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="text-end">
+                                <div class="d-inline-flex gap-1">
+                                    <a href="{% url 'restaurant_admin:menu_recipe' restaurant_slug=rslug pk=item.id %}" 
+                                       class="btn-action-icon text-warning" 
+                                       title="Recipe">
+                                        <i class="fas fa-egg"></i>
+                                    </a>
+                                    <a href="{% url 'restaurant_admin:menu_edit' restaurant_slug=rslug pk=item.id %}" 
+                                       class="btn-action-icon text-primary" 
+                                       title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button type="button" 
+                                            class="btn-action-icon text-danger" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#deleteModal{{ item.id }}" 
+                                            title="Delete">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-4 text-muted">No menu items found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
-        {% endfor %}
     </div>
 
     <!-- Pagination -->
     {% include 'restaurant_admin/includes/pagination.html' with page_obj=menu_items %}
+
 </div>
 
-<!-- Add Font Awesome for icons -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-
-<style>
-    .card {
-        transition: transform 0.2s, box-shadow 0.2s;
-        border: none;
-        border-radius: 10px;
-        overflow: hidden;
-        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
-    }
-    .card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 0.5rem 1.5rem 0 rgba(58, 59, 69, 0.2);
-    }
-    .card-img-top {
-        border-top-left-radius: 10px;
-        border-top-right-radius: 10px;
-    }
-    .badge {
-        font-weight: 500;
-        padding: 0.4em 0.8em;
-    }
-    .btn-sm {
-        padding: 0.25rem 0.5rem;
-    }
-    .page-link {
-        color: #4e73df;
-    }
-    .page-item.active .page-link {
-        background-color: #4e73df;
-        border-color: #4e73df;
-    }
-</style>
+<!-- Floating Toast Notification for Instant Feedback -->
+<div id="menuToastContainer">
+    <div id="menuToast" class="toast align-items-center text-white bg-dark border-0 shadow-lg rounded-3" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body d-flex align-items-center gap-2 py-2 px-3">
+                <i class="fas fa-check-circle text-success fs-6" id="toastIcon"></i>
+                <span id="toastMessage" class="small fw-medium">Action completed successfully.</span>
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    </div>
+</div>
 
 <script>
-    // Search functionality
-    document.getElementById('searchInput').addEventListener('keyup', function() {
-        const searchTerm = this.value.toLowerCase();
-        const items = document.querySelectorAll('.card');
-        
-        items.forEach(item => {
-            const name = item.querySelector('.card-title').textContent.toLowerCase();
-            const description = item.querySelector('.card-text').textContent.toLowerCase();
-            
-            if (name.includes(searchTerm) || description.includes(searchTerm)) {
-                item.closest('.col-xl-3').style.display = 'block';
-            } else {
-                item.closest('.col-xl-3').style.display = 'none';
-            }
+    // View Switcher (Grid vs Table List) with localStorage persistence
+    function switchView(view) {
+        const grid = document.getElementById('gridContainer');
+        const table = document.getElementById('tableContainer');
+        const btnGrid = document.getElementById('btnViewGrid');
+        const btnTable = document.getElementById('btnViewTable');
+
+        if (view === 'table') {
+            grid.classList.add('d-none');
+            table.classList.remove('d-none');
+            btnTable.classList.add('active');
+            btnGrid.classList.remove('active');
+            localStorage.setItem('menu_view_mode', 'table');
+        } else {
+            table.classList.add('d-none');
+            grid.classList.remove('d-none');
+            btnGrid.classList.add('active');
+            btnTable.classList.remove('active');
+            localStorage.setItem('menu_view_mode', 'grid');
+        }
+    }
+
+    // Initialize View Mode from localStorage
+    document.addEventListener('DOMContentLoaded', function() {
+        const savedView = localStorage.getItem('menu_view_mode') || 'grid';
+        switchView(savedView);
+
+        // Initialize Bootstrap tooltips
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
         });
     });
-    
-    // Category filter
-    document.getElementById('categoryFilter').addEventListener('change', function() {
-        const categoryId = this.value;
-        const items = document.querySelectorAll('.card');
-        
-        items.forEach(item => {
-            const itemCategory = item.querySelector('.badge.bg-primary').textContent.trim();
-            
-            if (categoryId === 'All Categories' || itemCategory === categoryId) {
-                item.closest('.col-xl-3').style.display = 'block';
-            } else {
-                item.closest('.col-xl-3').style.display = 'none';
-            }
+
+    // Client-side Instant Filter on Keyup (complements server search)
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const query = this.value.toLowerCase().trim();
+            const cardCols = document.querySelectorAll('.menu-item-col');
+            const tableRows = document.querySelectorAll('.menu-table-row');
+
+            cardCols.forEach(col => {
+                const name = col.getAttribute('data-item-name') || '';
+                const code = col.getAttribute('data-item-code') || '';
+                const desc = col.getAttribute('data-item-desc') || '';
+                const cat = col.getAttribute('data-item-category') || '';
+                const match = name.includes(query) || code.includes(query) || desc.includes(query) || cat.includes(query);
+                col.style.display = match ? '' : 'none';
+            });
+
+            tableRows.forEach(row => {
+                const name = row.getAttribute('data-item-name') || '';
+                const code = row.getAttribute('data-item-code') || '';
+                const desc = row.getAttribute('data-item-desc') || '';
+                const cat = row.getAttribute('data-item-category') || '';
+                const match = name.includes(query) || code.includes(query) || desc.includes(query) || cat.includes(query);
+                row.style.display = match ? '' : 'none';
+            });
         });
+    }
+
+    // Listen for toggle changes using data-item-id
+    document.addEventListener('change', function(e) {
+        if (e.target && e.target.classList.contains('stock-toggle')) {
+            const itemId = e.target.getAttribute('data-item-id');
+            if (itemId) {
+                toggleStockAvailability(itemId);
+            }
+        }
     });
+
+    // Instant Stock Availability Toggle via AJAX
+    function toggleStockAvailability(itemId) {
+        const cardSwitch = document.getElementById('toggleSwitch' + itemId);
+        const tableSwitch = document.getElementById('tableToggleSwitch' + itemId);
+        const card = document.getElementById('item-card-' + itemId);
+        const tableRow = document.getElementById('table-row-' + itemId);
+
+        const url = "{% url 'restaurant_admin:menu_toggle_availability' restaurant_slug=rslug pk=0 %}".replace('/0/', '/' + itemId + '/');
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const isAvail = data.availability;
+                
+                // Synchronize both switches
+                if (cardSwitch) cardSwitch.checked = isAvail;
+                if (tableSwitch) tableSwitch.checked = isAvail;
+
+                // Update Status text and pills
+                const pillTexts = document.querySelectorAll('.status-pill-text-' + itemId);
+                pillTexts.forEach(el => {
+                    el.textContent = isAvail ? 'In Stock' : 'Out of Stock';
+                    el.classList.toggle('text-stock-available', isAvail);
+                    el.classList.toggle('text-stock-unavailable', !isAvail);
+                });
+
+                const pills = document.querySelectorAll('.status-pill-' + itemId);
+                pills.forEach(el => {
+                    el.classList.toggle('text-stock-available', isAvail);
+                    el.classList.toggle('text-stock-unavailable', !isAvail);
+                });
+
+                // Update Card styling
+                if (card) {
+                    if (isAvail) {
+                        card.classList.remove('is-unavailable');
+                    } else {
+                        card.classList.add('is-unavailable');
+                    }
+                }
+
+                // Update Table Row styling
+                if (tableRow) {
+                    if (isAvail) {
+                        tableRow.classList.remove('bg-light', 'opacity-75');
+                    } else {
+                        tableRow.classList.add('bg-light', 'opacity-75');
+                    }
+                }
+
+                // Update KPI counters dynamically
+                const kpiAvail = document.getElementById('kpiAvailable');
+                const kpiUnavail = document.getElementById('kpiUnavailable');
+                if (kpiAvail && kpiUnavail) {
+                    let availNum = parseInt(kpiAvail.textContent) || 0;
+                    let unavailNum = parseInt(kpiUnavail.textContent) || 0;
+                    if (isAvail) {
+                        kpiAvail.textContent = availNum + 1;
+                        kpiUnavail.textContent = Math.max(0, unavailNum - 1);
+                    } else {
+                        kpiAvail.textContent = Math.max(0, availNum - 1);
+                        kpiUnavail.textContent = unavailNum + 1;
+                    }
+                }
+
+                // Show toast message
+                showToast(data.message, true);
+            } else {
+                showToast(data.error || 'Failed to update stock status.', false);
+                // Revert switches
+                if (cardSwitch) cardSwitch.checked = !cardSwitch.checked;
+                if (tableSwitch) tableSwitch.checked = !tableSwitch.checked;
+            }
+        })
+        .catch(err => {
+            console.error('Error toggling availability:', err);
+            showToast('Network error while toggling stock.', false);
+            // Revert switches
+            if (cardSwitch) cardSwitch.checked = !cardSwitch.checked;
+            if (tableSwitch) tableSwitch.checked = !tableSwitch.checked;
+        });
+    }
+
+    // Helper: Floating Toast Notification
+    function showToast(message, isSuccess) {
+        const toastEl = document.getElementById('menuToast');
+        const toastMessage = document.getElementById('toastMessage');
+        const toastIcon = document.getElementById('toastIcon');
+
+        toastMessage.textContent = message;
+        if (isSuccess) {
+            toastIcon.className = 'fas fa-check-circle text-success fs-6';
+        } else {
+            toastIcon.className = 'fas fa-exclamation-circle text-danger fs-6';
+        }
+
+        const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+        toast.show();
+    }
 </script>
 {% endblock %}

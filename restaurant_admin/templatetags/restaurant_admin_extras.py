@@ -10,8 +10,8 @@ def query_transform(request, **kwargs):
     """
     updated = request.GET.copy()
     for k, v in kwargs.items():
-        if v is not None:
+        if v is not None and v != '':
             updated[k] = v
         else:
-            updated.pop(k, 0)
+            updated.pop(k, None)
     return updated.urlencode()

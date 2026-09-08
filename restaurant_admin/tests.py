@@ -475,7 +475,7 @@ class TableBulkAddTests(TestCase):
         )
 
         url = reverse('restaurant_admin:table_add', kwargs={'restaurant_slug': self.restaurant.slug})
-        # Attempt to create tables 1, 2, 3 (1 should be skipped)
+        # Attempt to create tables 1, 2, 3 (collision should abort entire batch)
         response = self.client.post(url, {
             'form_type': 'bulk',
             'zone': self.zone.id,
@@ -487,10 +487,69 @@ class TableBulkAddTests(TestCase):
         })
         self.assertEqual(response.status_code, 302)
 
-        # Total tables should be 3 (1 pre-existing + 2 newly created)
+        # Batch aborted: only the pre-existing table remains
         tables = Table.objects.filter(restaurant=self.restaurant, zone=self.zone).order_by('table_number')
-        self.assertEqual(tables.count(), 3)
-        self.assertEqual(list(tables.values_list('table_number', flat=True)), [1, 2, 3])
+        self.assertEqual(tables.count(), 1)
+        self.assertEqual(list(tables.values_list('table_number', flat=True)), [1])
+
+    def test_zone_delete_protection_with_tables(self):
+        from django.urls import reverse
+        Table.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            zone=self.zone,
+            name='T-50',
+            table_number=50,
+            capacity=4
+        )
+        url = reverse('restaurant_admin:zone_delete', kwargs={'restaurant_slug': self.restaurant.slug, 'pk': self.zone.pk})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+        # Zone must not be deleted because it has assigned tables
+        self.assertTrue(Zone.objects.filter(pk=self.zone.pk).exists())
+
+    def test_default_zone_delete_blocked(self):
+        from django.urls import reverse
+        default_zone = Zone.objects.create(restaurant=self.restaurant, branch=self.branch, name="Main Area")
+        url = reverse('restaurant_admin:zone_delete', kwargs={'restaurant_slug': self.restaurant.slug, 'pk': default_zone.pk})
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+        # Default zone must not be deleted
+        self.assertTrue(Zone.objects.filter(pk=default_zone.pk).exists())
+
+    def test_table_name_validation(self):
+        # 1. Test max 8 characters enforcement
+        form_too_long = TableForm(
+            data={
+                'name': 'LONGTABLE123',
+                'capacity': 4,
+                'zone': self.zone.id,
+            },
+            restaurant=self.restaurant,
+            branch=self.branch
+        )
+        self.assertFalse(form_too_long.is_valid())
+        self.assertIn('name', form_too_long.errors)
+
+        # 2. Test case-insensitive duplicate check
+        Table.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            zone=self.zone,
+            name='VIP-1',
+            table_number=10
+        )
+        form_dup = TableForm(
+            data={
+                'name': 'vip-1',
+                'capacity': 4,
+                'zone': self.zone.id,
+            },
+            restaurant=self.restaurant,
+            branch=self.branch
+        )
+        self.assertFalse(form_dup.is_valid())
+        self.assertIn('name', form_dup.errors)
 
     def test_floor_plan_dashboard_active_menu(self):
         from django.urls import reverse

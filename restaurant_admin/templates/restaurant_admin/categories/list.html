@@ -1,102 +1,746 @@
 {% extends 'restaurant_admin/base.html' %}
 {% load static %}
 
+{% block extra_css %}
+<style>
+    /* Metric Overview Strip */
+    .metric-card {
+        background: #ffffff;
+        border-radius: 12px;
+        border: 1px solid #E2E8F0;
+        padding: 1rem 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    }
+    .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    }
+    .metric-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        flex-shrink: 0;
+    }
+    .metric-value {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #1E293B;
+        line-height: 1.1;
+    }
+    .metric-label {
+        font-size: 0.78rem;
+        color: #64748B;
+        font-weight: 500;
+        margin-bottom: 2px;
+    }
+
+    /* Filter & Controls Toolbar */
+    .category-toolbar {
+        background: #ffffff;
+        border-radius: 12px;
+        border: 1px solid #E2E8F0;
+        padding: 0.85rem 1rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    }
+    .search-box {
+        position: relative;
+    }
+    .search-box i {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #94A3B8;
+        font-size: 0.9rem;
+    }
+    .search-box .form-control {
+        padding-left: 2.3rem;
+        border-radius: 8px;
+        font-size: 0.88rem;
+        border: 1px solid #CBD5E1;
+    }
+    .search-box .form-control:focus {
+        border-color: #5E72E4;
+        box-shadow: 0 0 0 3px rgba(94, 114, 228, 0.15);
+    }
+
+    /* Category Card */
+    .category-card {
+        background: #ffffff;
+        border-radius: 12px;
+        border: 1px solid #E2E8F0;
+        overflow: hidden;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+    .category-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.07);
+        border-color: #CBD5E1;
+    }
+
+    /* Card Banner */
+    .category-banner {
+        height: 115px;
+        position: relative;
+        background: linear-gradient(135deg, #EEF2F6 0%, #E2E8F0 100%);
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .category-banner img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.3s ease;
+    }
+    .category-card:hover .category-banner img {
+        transform: scale(1.04);
+    }
+    .no-img-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        color: #94A3B8;
+    }
+    .no-img-circle {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.85);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #5E72E4;
+        font-size: 1.25rem;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    }
+
+    /* Floating Badges */
+    .banner-badge-left {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        z-index: 2;
+    }
+    .banner-badge-right {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 2;
+        display: flex;
+        gap: 5px;
+    }
+    .pill-tag {
+        background: rgba(255, 255, 255, 0.94);
+        backdrop-filter: blur(4px);
+        color: #334155;
+        font-size: 0.72rem;
+        font-weight: 600;
+        padding: 3px 9px;
+        border-radius: 20px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+        display: inline-flex;
+        align-items: center;
+    }
+    .pill-tag-primary {
+        background: rgba(255, 255, 255, 0.94);
+        color: #5E72E4;
+    }
+
+    /* Modern Icon Action Buttons */
+    .btn-action-icon {
+        width: 30px;
+        height: 30px;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8rem;
+        border: 1px solid #E2E8F0;
+        background: #ffffff;
+        color: #475569;
+        transition: all 0.15s ease;
+        padding: 0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .btn-action-icon:hover {
+        background: #F1F5F9;
+        color: #0F172A;
+        border-color: #CBD5E1;
+        transform: translateY(-1px);
+    }
+    .btn-action-icon.text-primary:hover {
+        background: #EEF2FF;
+        color: #4F46E5 !important;
+        border-color: #C7D2FE;
+    }
+    .btn-action-icon.text-danger:hover {
+        background: #FEF2F2;
+        color: #DC2626 !important;
+        border-color: #FECACA;
+    }
+
+    /* Card Content */
+    .category-content {
+        padding: 0.9rem 1rem 0.75rem 1rem;
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+    }
+    .category-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #1E293B;
+        margin-bottom: 0.25rem;
+    }
+    .category-desc {
+        font-size: 0.8rem;
+        color: #64748B;
+        line-height: 1.35;
+        margin-bottom: 0.75rem;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        min-height: 2.15rem;
+    }
+
+    /* Subcategories Chips Section */
+    .subcat-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    .subcat-header-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #64748B;
+    }
+    .subcat-chips-wrap {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        min-height: 38px;
+        margin-bottom: 0.5rem;
+    }
+    .subcat-chip {
+        background: #F8FAFC;
+        border: 1px solid #E2E8F0;
+        border-radius: 20px;
+        padding: 3px 8px 3px 10px;
+        font-size: 0.76rem;
+        color: #334155;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        transition: all 0.15s ease;
+    }
+    .subcat-chip:hover {
+        background: #F1F5F9;
+        border-color: #CBD5E1;
+    }
+    .subcat-chip-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: 2px;
+        opacity: 0.6;
+        transition: opacity 0.15s ease;
+    }
+    .subcat-chip:hover .subcat-chip-actions {
+        opacity: 1;
+    }
+    .subcat-chip-actions a {
+        font-size: 0.7rem;
+        color: #64748B;
+        line-height: 1;
+        padding: 2px;
+        text-decoration: none;
+    }
+    .subcat-chip-actions a:hover {
+        color: #0F172A;
+    }
+    .subcat-chip-actions a.action-del:hover {
+        color: #DC2626;
+    }
+
+    /* Card Footer Link */
+    .category-card-footer {
+        padding: 0.65rem 1rem;
+        border-top: 1px solid #F1F5F9;
+        background: #FAFAFC;
+        margin-top: auto;
+    }
+    .btn-view-dishes {
+        background: #ffffff;
+        border: 1px solid #E2E8F0;
+        border-radius: 8px;
+        color: #5E72E4;
+        font-weight: 600;
+        font-size: 0.82rem;
+        padding: 0.45rem 0.85rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        text-decoration: none;
+        transition: all 0.15s ease;
+    }
+    .btn-view-dishes:hover {
+        background: #EEF2FF;
+        border-color: #C7D2FE;
+        color: #4F46E5;
+        transform: translateY(-1px);
+    }
+
+    /* Table List View */
+    .category-table {
+        border-collapse: separate;
+        border-spacing: 0;
+        width: 100%;
+    }
+    .category-table th {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #64748B;
+        font-weight: 600;
+        background: #F8FAFC;
+        border-bottom: 1px solid #E2E8F0;
+        padding: 0.75rem 1rem;
+    }
+    .category-table td {
+        padding: 0.75rem 1rem;
+        vertical-align: middle;
+        border-bottom: 1px solid #F1F5F9;
+        font-size: 0.86rem;
+    }
+    .category-table tbody tr:hover {
+        background-color: #F8FAFC;
+    }
+    .cat-table-thumb {
+        width: 44px;
+        height: 44px;
+        border-radius: 8px;
+        object-fit: cover;
+        background: #EEF2F6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        color: #5E72E4;
+        flex-shrink: 0;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>Categories</h2>
-    <div>
-        <a href="{% url 'restaurant_admin:category_add' restaurant_slug=rslug %}" class="btn btn-primary">
-            <i class="bi bi-plus-lg"></i> Add Category
-        </a>
-    </div>
-</div>
+<div class="container-fluid px-4 py-3">
 
-{% if messages %}
-<div class="mb-4">
-    {% for message in messages %}
-    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-        {{ message }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    <!-- Page Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h1 class="h2 fw-bold text-dark mb-0">Menu Categories</h1>
+            <p class="text-muted small mb-0">Organize your restaurant menu into main categories and subcategories.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'restaurant_admin:category_add' restaurant_slug=rslug %}" class="btn btn-primary btn-sm rounded-pill px-3 shadow-xs" style="background: linear-gradient(135deg, #5E72E4 0%, #4338CA 100%); border: none;">
+                <i class="fas fa-plus me-1"></i>Add Category
+            </a>
+        </div>
     </div>
-    {% endfor %}
-</div>
-{% endif %}
 
-<div class="row">
-    {% for category in categories %}
-    <div class="col-md-4 mb-4">
-        <div class="card h-100">
-            {% if category.image %}
-            <img src="{{ category.image.url }}" class="card-img-top" alt="{{ category.name }}" style="height: 200px; object-fit: cover;">
-            {% else %}
-            <div class="bg-light d-flex align-items-center justify-content-center" style="height: 200px;">
-                <i class="bi bi-image text-muted" style="font-size: 3rem;"></i>
-            </div>
-            {% endif %}
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <h5 class="card-title mb-1">{{ category.name }}</h5>
-                        <p class="text-muted mb-2">{{ category.menu_items_count }} items</p>
-                    </div>
-                    <div class="btn-group">
-                        <a href="{% url 'restaurant_admin:category_edit' restaurant_slug=rslug pk=category.id %}" class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-pencil"></i>
-                        </a>
-                        <a href="{% url 'restaurant_admin:category_delete' restaurant_slug=rslug pk=category.id %}" class="btn btn-sm btn-outline-danger">
-                            <i class="bi bi-trash"></i>
-                        </a>
-                    </div>
+    <!-- Messages -->
+    {% if messages %}
+    <div class="mb-3">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show rounded-3 border-0 shadow-sm" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Metric Overview Strip -->
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-md-4">
+            <div class="metric-card">
+                <div class="metric-icon" style="background: rgba(94, 114, 228, 0.1); color: #5E72E4;">
+                    <i class="fas fa-layer-group"></i>
                 </div>
-                {% if category.description %}
-                <p class="card-text text-muted small mt-2">{{ category.description|truncatewords:20 }}</p>
+                <div>
+                    <div class="metric-label">Total Categories</div>
+                    <div class="metric-value">{{ total_categories_count|default:0 }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="metric-card">
+                <div class="metric-icon" style="background: rgba(16, 185, 129, 0.1); color: #10B981;">
+                    <i class="fas fa-tags"></i>
+                </div>
+                <div>
+                    <div class="metric-label">Total Subcategories</div>
+                    <div class="metric-value text-success">{{ total_subcategories_count|default:0 }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="metric-card">
+                <div class="metric-icon" style="background: rgba(245, 158, 11, 0.1); color: #F59E0B;">
+                    <i class="fas fa-utensils"></i>
+                </div>
+                <div>
+                    <div class="metric-label">Total Menu Dishes</div>
+                    <div class="metric-value" style="color: #D97706;">{{ total_menu_items_count|default:0 }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search & View Controls Toolbar -->
+    <div class="category-toolbar mb-4">
+        <form method="get" id="searchCategoryForm" class="row g-2 align-items-center">
+            <div class="col-12 col-md-8 col-lg-9">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" 
+                           class="form-control" 
+                           name="q" 
+                           id="categorySearchInput" 
+                           placeholder="Search categories or subcategories..." 
+                           value="{{ search_query|default:'' }}"
+                           autocomplete="off">
+                </div>
+            </div>
+            <div class="col-12 col-md-4 col-lg-3 d-flex justify-content-end align-items-center gap-2">
+                {% if search_query %}
+                <a href="{% url 'restaurant_admin:category_list' restaurant_slug=rslug %}" class="btn btn-sm btn-outline-secondary py-1.5 px-3 rounded-pill" title="Clear search">
+                    <i class="fas fa-times me-1"></i>Clear
+                </a>
                 {% endif %}
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-primary active py-1.5 px-3" id="btnCatViewGrid" title="Grid View" onclick="switchCategoryView('grid')">
+                        <i class="fas fa-th-large me-1"></i>Cards
+                    </button>
+                    <button type="button" class="btn btn-outline-primary py-1.5 px-3" id="btnCatViewTable" title="List View" onclick="switchCategoryView('table')">
+                        <i class="fas fa-list me-1"></i>List
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- GRID VIEW: Compact, Modern Category Cards -->
+    <div id="catGridContainer">
+        <div class="row g-3" id="categoryCardsRow">
+            {% for category in categories %}
+            <div class="col-xl-4 col-md-6 col-sm-12 cat-card-col"
+                 id="cat-card-col-{{ category.id }}"
+                 data-cat-name="{{ category.name|lower }}"
+                 data-cat-desc="{{ category.description|default:''|lower }}"
+                 data-subcats="{% for sub in category.subcategories.all %}{{ sub.name|lower }} {% endfor %}">
                 
-                <div class="mt-3">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h6 class="mb-0">Subcategories</h6>
-                        <a href="{% url 'restaurant_admin:subcategory_add' restaurant_slug=rslug category_id=category.id %}" class="btn btn-sm btn-outline-success">
-                            <i class="bi bi-plus"></i> Add Subcategory
-                        </a>
+                <div class="category-card">
+                    <!-- Banner (115px compact height) -->
+                    <div class="category-banner">
+                        {% if category.image %}
+                        <img src="{{ category.image.url }}" alt="{{ category.name }}" loading="lazy">
+                        {% else %}
+                        <div class="no-img-placeholder">
+                            <div class="no-img-circle">
+                                <i class="fas fa-layer-group"></i>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Dishes Count Badge (Top-Left) -->
+                        <div class="banner-badge-left">
+                            <span class="pill-tag pill-tag-primary">
+                                <i class="fas fa-utensils me-1"></i>{{ category.menu_items_count|default:0 }} Dishes
+                            </span>
+                        </div>
+
+                        <!-- Action Buttons (Top-Right) -->
+                        <div class="banner-badge-right">
+                            <a href="{% url 'restaurant_admin:category_edit' restaurant_slug=rslug pk=category.id %}" 
+                               class="btn-action-icon text-primary" 
+                               title="Edit Category">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            <button type="button" 
+                                    class="btn-action-icon text-danger" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#deleteCatModal{{ category.id }}" 
+                                    title="Delete Category">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
                     </div>
-                    <ul class="list-group list-group-flush mb-3">
-                        {% for subcategory in category.subcategories.all %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                            <div class="d-flex align-items-center">
+
+                    <!-- Card Body -->
+                    <div class="category-content">
+                        <h5 class="category-title" title="{{ category.name }}">{{ category.name }}</h5>
+                        <p class="category-desc" title="{{ category.description }}">
+                            {{ category.description|default:"Organized collection of menu items." }}
+                        </p>
+
+                        <!-- Subcategories Header -->
+                        <div class="subcat-header">
+                            <span class="subcat-header-label">Subcategories ({{ category.subcategories.all|length }})</span>
+                            <a href="{% url 'restaurant_admin:subcategory_add' restaurant_slug=rslug category_id=category.id %}" 
+                               class="btn btn-xs btn-outline-primary rounded-pill py-0.5 px-2.5" 
+                               style="font-size: 0.72rem; text-decoration: none;">
+                                <i class="fas fa-plus me-1"></i>Add Subcategory
+                            </a>
+                        </div>
+
+                        <!-- Subcategories Chips Cloud -->
+                        <div class="subcat-chips-wrap">
+                            {% for subcategory in category.subcategories.all %}
+                            <div class="subcat-chip">
                                 {% if subcategory.image %}
-                                <img src="{{ subcategory.image.url }}" alt="{{ subcategory.name }}" class="rounded me-2" style="width: 30px; height: 30px; object-fit: cover;">
+                                <img src="{{ subcategory.image.url }}" alt="{{ subcategory.name }}" style="width: 14px; height: 14px; border-radius: 50%; object-fit: cover;">
                                 {% endif %}
                                 <span>{{ subcategory.name }}</span>
+                                <div class="subcat-chip-actions">
+                                    <a href="{% url 'restaurant_admin:subcategory_edit' restaurant_slug=rslug pk=subcategory.id %}" title="Edit subcategory">
+                                        <i class="fas fa-pencil-alt"></i>
+                                    </a>
+                                    <a href="{% url 'restaurant_admin:subcategory_delete' restaurant_slug=rslug pk=subcategory.id %}" class="action-del" title="Delete subcategory">
+                                        <i class="fas fa-times"></i>
+                                    </a>
+                                </div>
                             </div>
-                            <div class="btn-group">
-                                <a href="{% url 'restaurant_admin:subcategory_edit' restaurant_slug=rslug pk=subcategory.id %}" class="btn btn-sm btn-outline-secondary">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
-                                <a href="{% url 'restaurant_admin:subcategory_delete' restaurant_slug=rslug pk=subcategory.id %}" class="btn btn-sm btn-outline-danger">
-                                    <i class="bi bi-trash"></i>
-                                </a>
+                            {% empty %}
+                            <div class="text-muted small py-1">
+                                <i class="fas fa-info-circle me-1 text-secondary"></i>No subcategories yet. 
+                                <a href="{% url 'restaurant_admin:subcategory_add' restaurant_slug=rslug category_id=category.id %}" class="text-primary text-decoration-none fw-medium">+ Add one</a>
                             </div>
-                        </li>
-                        {% empty %}
-                        <li class="list-group-item text-muted">No subcategories</li>
-                        {% endfor %}
-                    </ul>
-                    
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Card Footer: Direct Link to Dishes in this category -->
+                    <div class="category-card-footer">
+                        <a href="{% url 'restaurant_admin:menu_list' restaurant_slug=rslug %}?category={{ category.id }}" class="btn-view-dishes">
+                            <span><i class="fas fa-book-open me-1.5"></i>View Dishes in this Category ({{ category.menu_items_count|default:0 }})</span>
+                            <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </div>
                 </div>
+
+            </div>
+
+            <!-- Delete Confirmation Modal -->
+            <div class="modal fade" id="deleteCatModal{{ category.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered modal-sm">
+                    <div class="modal-content border-0 shadow-lg rounded-3">
+                        <div class="modal-body text-center p-4">
+                            <div class="mb-3 text-danger">
+                                <i class="fas fa-exclamation-triangle fa-3x"></i>
+                            </div>
+                            <h6 class="fw-bold mb-2">Delete Category?</h6>
+                            <p class="text-muted small mb-4">Are you sure you want to delete <strong>"{{ category.name }}"</strong>? Any connected subcategories may also be affected.</p>
+                            <div class="d-flex justify-content-center gap-2">
+                                <button type="button" class="btn btn-sm btn-light border px-3" data-bs-dismiss="modal">Cancel</button>
+                                <form action="{% url 'restaurant_admin:category_delete' restaurant_slug=rslug pk=category.id %}" method="post" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-danger px-3">Delete</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12">
+                <div class="text-center py-5 bg-white rounded-3 border">
+                    <div class="text-muted mb-3">
+                        <i class="fas fa-layer-group fa-3x opacity-50"></i>
+                    </div>
+                    <h5 class="fw-bold text-dark">No categories found</h5>
+                    <p class="text-muted small mb-3">Start by creating your first food category to organize menu items.</p>
+                    <div class="d-flex justify-content-center gap-2">
+                        {% if search_query %}
+                        <a href="{% url 'restaurant_admin:category_list' restaurant_slug=rslug %}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+                            <i class="fas fa-times me-1"></i>Clear Search
+                        </a>
+                        {% endif %}
+                        <a href="{% url 'restaurant_admin:category_add' restaurant_slug=rslug %}" class="btn btn-primary btn-sm rounded-pill px-3">
+                            <i class="fas fa-plus me-1"></i>Add Category
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- TABLE / LIST VIEW: Ultra-compact table for quick scanning -->
+    <div id="catTableContainer" class="d-none">
+        <div class="card border-0 shadow-sm rounded-3 overflow-hidden">
+            <div class="table-responsive">
+                <table class="category-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;">Image</th>
+                            <th>Category</th>
+                            <th>Subcategories</th>
+                            <th>Total Dishes</th>
+                            <th class="text-end" style="width: 180px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="categoryTableBody">
+                        {% for category in categories %}
+                        <tr class="cat-table-row"
+                            data-cat-name="{{ category.name|lower }}"
+                            data-cat-desc="{{ category.description|default:''|lower }}"
+                            data-subcats="{% for sub in category.subcategories.all %}{{ sub.name|lower }} {% endfor %}">
+                            <td>
+                                {% if category.image %}
+                                <img src="{{ category.image.url }}" alt="{{ category.name }}" class="cat-table-thumb" loading="lazy">
+                                {% else %}
+                                <div class="cat-table-thumb">
+                                    <i class="fas fa-layer-group"></i>
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="fw-bold text-dark">{{ category.name }}</div>
+                                <div class="text-muted small text-truncate" style="max-width: 250px;">{{ category.description|default:"No description" }}</div>
+                            </td>
+                            <td>
+                                <div class="d-flex flex-wrap gap-1 align-items-center">
+                                    {% for sub in category.subcategories.all %}
+                                    <span class="badge bg-light text-dark border" style="font-size: 0.75rem;">
+                                        {{ sub.name }}
+                                    </span>
+                                    {% empty %}
+                                    <span class="text-muted small fst-italic">None</span>
+                                    {% endfor %}
+                                    <a href="{% url 'restaurant_admin:subcategory_add' restaurant_slug=rslug category_id=category.id %}" class="badge bg-primary-subtle text-primary border border-primary-subtle text-decoration-none" title="Add Subcategory">
+                                        <i class="fas fa-plus"></i>
+                                    </a>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-primary border rounded-pill px-2.5 py-1 fw-bold" style="font-size: 0.8rem;">
+                                    {{ category.menu_items_count|default:0 }} Items
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                <div class="d-inline-flex gap-1.5">
+                                    <a href="{% url 'restaurant_admin:menu_list' restaurant_slug=rslug %}?category={{ category.id }}" 
+                                       class="btn btn-sm btn-light border" 
+                                       title="View Dishes"
+                                       style="font-size: 0.8rem;">
+                                        <i class="fas fa-book-open text-primary me-1"></i>Dishes
+                                    </a>
+                                    <a href="{% url 'restaurant_admin:category_edit' restaurant_slug=rslug pk=category.id %}" 
+                                       class="btn-action-icon text-primary" 
+                                       title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button type="button" 
+                                            class="btn-action-icon text-danger" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#deleteCatModal{{ category.id }}" 
+                                            title="Delete">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-4 text-muted">No categories found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
-    {% empty %}
-    <div class="col-12">
-        <div class="alert alert-info">
-            <i class="bi bi-info-circle me-2"></i> No categories found. 
-            <a href="{% url 'restaurant_admin:category_add' restaurant_slug=rslug %}" class="alert-link">Add your first category</a>.
-        </div>
-    </div>
-    {% endfor %}
+
+    <!-- Pagination -->
+    {% include 'restaurant_admin/includes/pagination.html' with page_obj=categories %}
+
 </div>
 
-<!-- Pagination -->
-{% include 'restaurant_admin/includes/pagination.html' with page_obj=categories %}
+<script>
+    // View Switcher (Grid vs Table List) with localStorage persistence
+    function switchCategoryView(view) {
+        const grid = document.getElementById('catGridContainer');
+        const table = document.getElementById('catTableContainer');
+        const btnGrid = document.getElementById('btnCatViewGrid');
+        const btnTable = document.getElementById('btnCatViewTable');
 
+        if (view === 'table') {
+            grid.classList.add('d-none');
+            table.classList.remove('d-none');
+            btnTable.classList.add('active');
+            btnGrid.classList.remove('active');
+            localStorage.setItem('category_view_mode', 'table');
+        } else {
+            table.classList.add('d-none');
+            grid.classList.remove('d-none');
+            btnGrid.classList.add('active');
+            btnTable.classList.remove('active');
+            localStorage.setItem('category_view_mode', 'grid');
+        }
+    }
+
+    // Initialize View Mode
+    document.addEventListener('DOMContentLoaded', function() {
+        const savedView = localStorage.getItem('category_view_mode') || 'grid';
+        switchCategoryView(savedView);
+    });
+
+    // Client-side Instant Filter on Keyup
+    const searchInput = document.getElementById('categorySearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const query = this.value.toLowerCase().trim();
+            const cardCols = document.querySelectorAll('.cat-card-col');
+            const tableRows = document.querySelectorAll('.cat-table-row');
+
+            cardCols.forEach(col => {
+                const name = col.getAttribute('data-cat-name') || '';
+                const desc = col.getAttribute('data-cat-desc') || '';
+                const subcats = col.getAttribute('data-subcats') || '';
+                const match = name.includes(query) || desc.includes(query) || subcats.includes(query);
+                col.style.display = match ? '' : 'none';
+            });
+
+            tableRows.forEach(row => {
+                const name = row.getAttribute('data-cat-name') || '';
+                const desc = row.getAttribute('data-cat-desc') || '';
+                const subcats = row.getAttribute('data-subcats') || '';
+                const match = name.includes(query) || desc.includes(query) || subcats.includes(query);
+                row.style.display = match ? '' : 'none';
+            });
+        });
+    }
+</script>
 {% endblock %}

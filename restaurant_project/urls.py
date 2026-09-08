@@ -10,6 +10,7 @@ from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.static import serve
+from django.contrib.staticfiles.views import serve as staticfiles_serve
 from django.views.generic import RedirectView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.contrib.auth import views as auth_views
@@ -87,5 +88,5 @@ static_prefix = settings.STATIC_URL.lstrip('/')
 
 urlpatterns += [
     re_path(rf'^{media_prefix}(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
-    re_path(rf'^{static_prefix}(?P<path>.*)$', serve, {'document_root': settings.STATIC_ROOT}),
+    re_path(rf'^{static_prefix}(?P<path>.*)$', staticfiles_serve, {'insecure': True}),
 ]

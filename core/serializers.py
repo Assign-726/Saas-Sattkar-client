@@ -127,11 +127,14 @@ class OrderSerializer(serializers.ModelSerializer):
     discount_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     order_number = serializers.CharField(read_only=True)
     branch_order_number = serializers.IntegerField(read_only=True)
+    table_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    zone = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    floor = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
 
     class Meta:
         model = Order
         fields = [
-            'id', 'order_number', 'branch_order_number', 'customer_name', 'phone', 'table_number', 'order_time',
+            'id', 'order_number', 'branch_order_number', 'customer_name', 'phone', 'table_number', 'table_id', 'zone', 'floor', 'order_time',
             'status', 'status_display', 'total_amount', 'discount_amount', 'notes', 'items',
             'coupon_code', 'applied_coupon_code', 'payment_method', 'payment_method_display', 'payment_status', 'payment_status_display',
             'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature', 'restaurant_slug', 'branch_slug', 'branch_id', 'branch_name', 'branch_slug_display', 'order_restaurant_slug', 'security_token',
@@ -220,14 +223,29 @@ class OrderSerializer(serializers.ModelSerializer):
             validated_data['payment_status'] = 'C'
 
         table_number = validated_data.get('table_number')
+        table_id = validated_data.pop('table_id', None)
+        zone_param = validated_data.pop('zone', None) or validated_data.pop('floor', None)
         table_obj = None
-        if table_number and restaurant:
+
+        if table_id and restaurant:
+            table_obj = Table.objects.filter(id=table_id, restaurant=restaurant).first()
+
+        if not table_obj and table_number and restaurant:
             try:
                 t_num = int(table_number)
                 t_filter = {'restaurant': restaurant, 'table_number': t_num}
                 if branch:
                     t_filter['branch'] = branch
+                if zone_param:
+                    t_filter['zone__name__iexact'] = str(zone_param).strip()
+
                 table_obj = Table.objects.filter(**t_filter).first()
+
+                # If no match with zone, fallback without zone filter
+                if not table_obj and zone_param:
+                    t_filter.pop('zone__name__iexact', None)
+                    table_obj = Table.objects.filter(**t_filter).first()
+
                 if not table_obj and branch:
                     table_obj = Table.objects.filter(restaurant=restaurant, table_number=t_num).first()
             except Exception:
