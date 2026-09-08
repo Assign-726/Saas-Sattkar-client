@@ -1278,15 +1278,22 @@ document.addEventListener("DOMContentLoaded", function() {
             <div style="position:relative;">
               <select name="tax_type" id="quick-item-tax" required style="width:100%; height:40px; padding:0 30px 0 12px; font-size:12px; font-weight:600; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; appearance:none; -webkit-appearance:none; cursor:pointer; transition:border-color .15s, box-shadow .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#2563EB';this.style.boxShadow='0 0 0 3px rgba(37,99,235,0.15)'" onblur="this.style.borderColor='#CBD5E1';this.style.boxShadow='none'">
                 <option value="GST_FOOD" selected>GST 5% (Meals / Beverages)</option>
+                {% if current_branch and current_branch.serves_alcohol %}
                 <option value="VAT_BEER">Beer VAT (State Rate)</option>
                 <option value="VAT_IMFL">IMFL / Spirits VAT</option>
                 <option value="VAT_WINE">Wine VAT</option>
                 <option value="VAT_LIQUOR">General Liquor VAT</option>
+                {% endif %}
               </select>
               <div style="position:absolute; right:12px; top:50%; transform:translateY(-50%); pointer-events:none; color:#64748B; font-size:11px;">
                 <i class="bi bi-chevron-down"></i>
               </div>
             </div>
+            {% if not current_branch or not current_branch.serves_alcohol %}
+            <div style="font-size:11px; color:#64748B; margin-top:4px;">
+              <i class="bi bi-shield-check text-success me-1"></i>No Alcohol branch (State VAT options disabled)
+            </div>
+            {% endif %}
           </div>
         </div>
 
@@ -5430,7 +5437,7 @@ document.addEventListener("DOMContentLoaded", function() {
     if (itemInput) itemInput.focus();
   };
 
-  // Table picker (F3) — opens interactive table selection grid modal showing created tables with occupied table locking
+  // Table picker (F3) — opens interactive table selection grid modal showing created tables with quick jump and direct open
   window.posPickTable = function(thenCallback) {
     const sel = document.getElementById('table-id');
     if (!sel) return;
@@ -5459,6 +5466,7 @@ document.addEventListener("DOMContentLoaded", function() {
         index: idx,
         val: o.value,
         name: o.dataset.name || o.text.split('(')[0].trim() || `Table ${o.dataset.number || idx+1}`,
+        number: o.dataset.number || '',
         capacity: o.dataset.capacity || '4',
         status: rawStatus,
         isOccupied: isBusy
@@ -5483,16 +5491,23 @@ document.addEventListener("DOMContentLoaded", function() {
 
     card.innerHTML = `
       <div class="ch" style="padding:16px 20px; border-bottom:1px solid var(--line,#E3DFD7);">
-        <h3 style="font-family:'Bricolage Grotesque',sans-serif; font-size:17px; margin:0;">Table Selection</h3>
-        <p style="font-size:11.5px; color:var(--ink3,#6E675C); margin-top:3px; margin-bottom:0;">
-          Select an available table for Dine-In. Dimmed tables with <b>OPEN</b> badge are occupied and cannot be re-selected.
+        <h3 style="font-family:'Bricolage Grotesque',sans-serif; font-size:17px; font-weight:700; margin:0; color:var(--ink,#1A1815);">Table Selection</h3>
+        <p style="font-size:11.5px; color:var(--ink3,#6E675C); margin-top:3px; margin-bottom:0; line-height:1.4;">
+          Arrow keys move, Enter picks &mdash; or type table number below. Tables with <b style="color:#B45309; background:#FEF3C7; padding:1px 5px; border-radius:4px; font-size:10px;">OPEN</b> badge directly switch to that table's active order.
         </p>
       </div>
       <div class="cb" style="padding:18px 20px; max-height:60vh; overflow-y:auto;" id="tmodal-body">
       </div>
-      <div class="cf" style="padding:13px 20px; border-top:1px solid var(--line,#E3DFD7); display:flex; gap:8px; justify-content:flex-end; background:var(--canvas,#F7F6F3);">
-        <button type="button" class="mini btn-cancel" style="padding:8px 16px; border-radius:7px; border:1px solid var(--line,#E3DFD7); background:#FFF; font-weight:600; font-size:12.5px; cursor:pointer;">Close <kbd>Esc</kbd></button>
-        <button type="button" class="mini p btn-pick" style="padding:8px 18px; border-radius:7px; border:none; background:var(--brand,#2F3E9E); color:#FFF; font-weight:700; font-size:12.5px; cursor:pointer;">Pick <kbd>↵</kbd></button>
+      <div class="cf" style="padding:12px 20px; border-top:1px solid var(--line,#E3DFD7); display:flex; align-items:center; justify-content:space-between; gap:12px; background:var(--canvas,#F7F6F3);">
+        <div style="display:flex; flex-direction:column; gap:4px; min-width:130px;">
+          <label for="tmodal-jump-input" style="font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--ink3,#6E675C); line-height:1;">JUMP STRAIGHT TO</label>
+          <input type="text" id="tmodal-jump-input" placeholder="e.g. 7, G-1..." autocomplete="off" spellcheck="false"
+                 style="padding:6px 10px; font-size:14px; font-weight:700; border-radius:7px; border:1.5px solid var(--line,#E3DFD7); outline:none; width:130px; background:#FFF; color:#1A1815; font-family:'IBM Plex Mono',monospace; box-shadow:inset 0 1px 2px rgba(0,0,0,.04); transition:all .15s ease;">
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button type="button" class="mini btn-cancel" style="padding:8px 16px; border-radius:7px; border:1px solid var(--line,#E3DFD7); background:#FFF; font-weight:600; font-size:12.5px; cursor:pointer;">Close <kbd>Esc</kbd></button>
+          <button type="button" class="mini p btn-pick" style="padding:8px 18px; border-radius:7px; border:none; background:var(--brand,#2F3E9E); color:#FFF; font-weight:700; font-size:12.5px; cursor:pointer; min-width:90px; display:inline-flex; align-items:center; justify-content:center; gap:6px;">Pick <kbd>↵</kbd></button>
+        </div>
       </div>
     `;
 
@@ -5513,7 +5528,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
           html += `
             <button type="button" class="tcell ${isSelected ? 'on' : ''}" 
-                    ${isOccupied ? 'disabled data-busy="1" style="opacity:0.55; cursor:not-allowed; background:#FEF3C7 !important; border-color:#F59E0B !important;"' : ''} 
+                    ${isOccupied ? 'data-busy="1" style="cursor:pointer; background:#FEF3C7 !important; border-color:#F59E0B !important;" title="Table Occupied - Click to open active order"' : 'title="Available Table"'} 
                     data-index="${tbl.index}">
               <span style="display:block; font-size:15px; font-weight:700;">${escapeHtml(tbl.name)}</span>
               <span style="display:block; font-size:9.5px; font-weight:500; opacity:.75;">Cap: ${tbl.capacity}</span>
@@ -5526,74 +5541,258 @@ document.addEventListener("DOMContentLoaded", function() {
 
       bodyEl.innerHTML = html;
 
-      bodyEl.querySelectorAll('.tcell:not([disabled])').forEach(btn => {
+      bodyEl.querySelectorAll('.tcell').forEach(btn => {
         btn.addEventListener('click', () => {
-          selectedIndex = parseInt(btn.dataset.index);
+          selectedIndex = parseInt(btn.dataset.index, 10);
           confirmSelection();
         });
       });
     }
 
+    function updateSelectionHighlight(shouldScroll) {
+      const allBtns = card.querySelectorAll('.tcell');
+      allBtns.forEach(btn => {
+        const idx = parseInt(btn.dataset.index, 10);
+        const isSel = (idx === selectedIndex);
+        btn.classList.toggle('on', isSel);
+        if (isSel) {
+          if (btn.dataset.busy === '1') {
+            btn.style.boxShadow = '0 0 0 3px rgba(217,119,6,.45)';
+            btn.style.borderColor = '#B45309';
+          } else {
+            btn.style.boxShadow = '';
+            btn.style.borderColor = '';
+          }
+          if (shouldScroll) {
+            try { btn.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch(e){}
+          }
+        } else {
+          if (btn.dataset.busy === '1') {
+            btn.style.boxShadow = '';
+            btn.style.borderColor = '#F59E0B';
+          } else {
+            btn.style.boxShadow = '';
+            btn.style.borderColor = '';
+          }
+        }
+      });
+
+      const pickBtn = card.querySelector('.btn-pick');
+      if (pickBtn && selectedIndex >= 0 && selectedIndex < opts.length) {
+        const opt = opts[selectedIndex];
+        const rawStatus = (opt.dataset.status || 'BLANK').toUpperCase();
+        const isBusy = (rawStatus !== 'BLANK' && rawStatus !== 'AVAILABLE') || window.posOccupiedTables.has(String(opt.value));
+        const tblName = opt.dataset.name || opt.text.split('(')[0].trim();
+        if (isBusy) {
+          pickBtn.innerHTML = `Open ${escapeHtml(tblName)} <kbd style="background:rgba(0,0,0,0.2);color:#FFF;">↵</kbd>`;
+          pickBtn.style.background = '#D97706';
+        } else {
+          pickBtn.innerHTML = `Pick ${escapeHtml(tblName)} <kbd style="background:rgba(255,255,255,0.25);color:#FFF;">↵</kbd>`;
+          pickBtn.style.background = 'var(--brand,#2F3E9E)';
+        }
+      }
+    }
+
+    function findMatchingTableIndex(query) {
+      if (!query || !query.trim()) return -1;
+      const q = query.trim().toLowerCase();
+      const digitsOnly = q.replace(/\D/g, '');
+      const qNum = digitsOnly ? parseInt(digitsOnly, 10) : NaN;
+      const qClean = q.replace(/[^a-z0-9]/g, '');
+
+      // 1. Exact match on table_number attribute
+      if (!isNaN(qNum)) {
+        const exactNumIdx = opts.findIndex(o => {
+          const num = parseInt(o.dataset.number, 10);
+          return !isNaN(num) && num === qNum;
+        });
+        if (exactNumIdx !== -1) return exactNumIdx;
+      }
+
+      // 2. Exact match on normalized table name (e.g. "g-1" / "g1" matches "G-1", "t7" matches "T-7")
+      if (qClean) {
+        const exactNameIdx = opts.findIndex(o => {
+          const nameClean = (o.dataset.name || o.text).toLowerCase().replace(/[^a-z0-9]/g, '');
+          return nameClean === qClean;
+        });
+        if (exactNameIdx !== -1) return exactNameIdx;
+      }
+
+      // 3. Name ending with the typed number (e.g. "7" matches "T-07", "F-7", "Table 7")
+      if (!isNaN(qNum)) {
+        const endsWithNumIdx = opts.findIndex(o => {
+          const name = (o.dataset.name || o.text).toLowerCase();
+          const match = name.match(/(\d+)\s*$/);
+          if (match && parseInt(match[1], 10) === qNum) return true;
+          const match2 = name.match(/[-_#\s](\d+)/);
+          if (match2 && parseInt(match2[1], 10) === qNum) return true;
+          return false;
+        });
+        if (endsWithNumIdx !== -1) return endsWithNumIdx;
+      }
+
+      // 4. Starts with query (e.g. "f" or "f1" or "g")
+      if (qClean) {
+        const startsWithIdx = opts.findIndex(o => {
+          const nameClean = (o.dataset.name || o.text).toLowerCase().replace(/[^a-z0-9]/g, '');
+          return nameClean.startsWith(qClean);
+        });
+        if (startsWithIdx !== -1) return startsWithIdx;
+      }
+
+      // 5. Contains query
+      const containsIdx = opts.findIndex(o => {
+        const name = (o.dataset.name || o.text).toLowerCase();
+        return name.includes(q);
+      });
+      if (containsIdx !== -1) return containsIdx;
+
+      return -1;
+    }
+
     let pickedVal = null;
     function confirmSelection() {
-      if (selectedIndex >= 0 && selectedIndex < opts.length) {
-        const pickedOpt = opts[selectedIndex];
-        const isOcc = (pickedOpt.dataset.status && pickedOpt.dataset.status !== 'BLANK') || (window.posOccupiedTables && window.posOccupiedTables.has(String(pickedOpt.value)));
-        if (isOcc) {
-          alert('This table already has an active order open. Please select an available table.');
-          return;
-        }
-        pickedVal = pickedOpt.value;
-        sel.value = pickedVal;
-        if (window.posState) {
-          window.posState.tableId = pickedVal;
-          window.posState.orderType = 'dine_in';
-        }
-        sel.dispatchEvent(new Event('change'));
-        window.posCtxRefresh && window.posCtxRefresh();
+      if (selectedIndex < 0 || selectedIndex >= opts.length) {
+        closeModal();
+        return;
       }
+      const pickedOpt = opts[selectedIndex];
+      const isOcc = (pickedOpt.dataset.status && pickedOpt.dataset.status !== 'BLANK' && pickedOpt.dataset.status !== 'AVAILABLE') || 
+                    (window.posOccupiedTables && window.posOccupiedTables.has(String(pickedOpt.value)));
+
+      if (isOcc) {
+        // Direct jump to open occupied table's active order
+        const tid = String(pickedOpt.value);
+        const tnum = pickedOpt.dataset.number;
+        const activeOrders = window.posState?.activeOrders || window.activeOrders || [];
+        const matchOrder = activeOrders.find(o => {
+          return String(o.table_id) === tid || 
+                 (o.table && String(o.table.id) === tid) || 
+                 (tnum && String(o.table_number) === String(tnum));
+        });
+
+        closeModal();
+
+        if (matchOrder) {
+          if (typeof window.loadActiveOrder === 'function') {
+            window.loadActiveOrder(matchOrder.id);
+          } else {
+            window.location.href = `?order_id=${matchOrder.id}`;
+          }
+        } else {
+          // Fallback if order object not directly in local array
+          window.location.href = `?table_id=${tid}`;
+        }
+        return;
+      }
+
+      // Available table selection
+      pickedVal = pickedOpt.value;
+      sel.value = pickedVal;
+      if (window.posState) {
+        window.posState.tableId = pickedVal;
+        window.posState.orderType = 'dine_in';
+      }
+      sel.dispatchEvent(new Event('change'));
+      window.posCtxRefresh && window.posCtxRefresh();
       closeModal();
       if (typeof thenCallback === 'function') thenCallback(pickedVal);
+
+      // Focus item search so user can immediately type items
+      const itemInput = document.getElementById('fItem');
+      if (itemInput) itemInput.focus();
     }
 
     function closeModal() {
+      document.removeEventListener('keydown', keyListener, true);
       veil.remove();
     }
 
     drawGrid();
+    updateSelectionHighlight(false);
 
     card.querySelector('.btn-cancel').onclick = closeModal;
     card.querySelector('.btn-pick').onclick = confirmSelection;
+
+    const jumpInput = card.querySelector('#tmodal-jump-input');
+    if (jumpInput) {
+      jumpInput.addEventListener('input', () => {
+        const val = jumpInput.value;
+        const matchIdx = findMatchingTableIndex(val);
+        if (matchIdx !== -1) {
+          selectedIndex = matchIdx;
+          updateSelectionHighlight(true);
+        }
+      });
+
+      jumpInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.stopPropagation();
+          confirmSelection();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          closeModal();
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          selectedIndex = Math.min(opts.length - 1, selectedIndex + 1);
+          updateSelectionHighlight(true);
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          selectedIndex = Math.max(0, selectedIndex - 1);
+          updateSelectionHighlight(true);
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          selectedIndex = Math.min(opts.length - 1, selectedIndex + 4);
+          updateSelectionHighlight(true);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          selectedIndex = Math.max(0, selectedIndex - 4);
+          updateSelectionHighlight(true);
+        }
+      });
+
+      setTimeout(() => {
+        jumpInput.focus();
+        try { jumpInput.select(); } catch(ex){}
+      }, 50);
+    }
 
     const keyListener = function(e) {
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
         closeModal();
-        document.removeEventListener('keydown', keyListener, true);
+        return;
+      }
+      if (document.activeElement === jumpInput) {
         return;
       }
       if (e.key === 'ArrowRight') {
         e.preventDefault();
         selectedIndex = Math.min(opts.length - 1, selectedIndex + 1);
-        drawGrid();
+        updateSelectionHighlight(true);
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
         selectedIndex = Math.max(0, selectedIndex - 1);
-        drawGrid();
+        updateSelectionHighlight(true);
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
         selectedIndex = Math.min(opts.length - 1, selectedIndex + 4);
-        drawGrid();
+        updateSelectionHighlight(true);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         selectedIndex = Math.max(0, selectedIndex - 4);
-        drawGrid();
+        updateSelectionHighlight(true);
       } else if (e.key === 'Enter') {
         e.preventDefault();
         e.stopPropagation();
-        document.removeEventListener('keydown', keyListener, true);
         confirmSelection();
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        if (jumpInput) {
+          jumpInput.focus();
+        }
       }
     };
     document.addEventListener('keydown', keyListener, true);

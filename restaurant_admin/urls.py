@@ -41,6 +41,7 @@ urlpatterns = [
     path('zones/<int:pk>/delete/', floor_plan_views.zone_delete, name='zone_delete'),
     path('tables/', floor_plan_views.table_list, name='table_list'),
     path('tables/add/', floor_plan_views.table_add, name='table_add'),
+    path('tables/regenerate-qrs/', floor_plan_views.regenerate_table_qrs, name='regenerate_table_qrs'),
     path('tables/<int:pk>/edit/', floor_plan_views.table_edit, name='table_edit'),
     path('tables/<int:pk>/delete/', floor_plan_views.table_delete, name='table_delete'),
     
@@ -51,6 +52,7 @@ urlpatterns = [
     path('menu/bulk-add/', views.menu_bulk_add, name='menu_bulk_add'),
     path('menu/<int:pk>/edit/', views.menu_edit, name='menu_edit'),
     path('menu/<int:pk>/delete/', views.menu_delete, name='menu_delete'),
+    path('menu/<int:pk>/toggle-availability/', views.menu_toggle_availability, name='menu_toggle_availability'),
     
     # Order Management
     path('orders/', views.order_list, name='order_list'),
@@ -59,6 +61,7 @@ urlpatterns = [
     path('orders/create/', views.order_create_manual, name='order_create_manual'),
     path('orders/<int:pk>/edit/', views.order_edit_manual, name='order_edit_manual'),
     path('orders/stream/', views.orders_stream, name='orders_stream'),
+    path('api/notifications/poll/', views.order_notifications_poll, name='order_notifications_poll'),
     path('orders/<int:pk>/', views.order_detail, name='order_detail'),
     path('orders/<int:pk>/update-status/', views.order_update_status, name='order_update_status'),
     path('orders/<int:pk>/invoice/', views.order_invoice, name='order_invoice'),

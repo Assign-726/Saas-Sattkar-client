@@ -56,35 +56,129 @@ class Table(models.Model):
         zone_name = self.zone.name if self.zone else "No Zone"
         return f"{self.name} (Zone: {zone_name})"
 
-    def save(self, *args, **kwargs):
-        import uuid
+    @classmethod
+    def get_frontend_base_url(cls):
+        """
+        Dynamically fetch the frontend base URL from .env or settings.
+        Ensures any port/host changes in .env are picked up immediately.
+        """
         import os
         from django.conf import settings
-        
-        # Only try QR generation if qrcode library is available
-        if not self.qr_code:
+
+        base_domain = None
+        try:
+            env_file = os.path.join(settings.BASE_DIR, '.env')
+            if os.path.exists(env_file):
+                with open(env_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith('FRONTEND_URL=') and not line.startswith('#'):
+                            val = line.split('=', 1)[1].strip().strip('"').strip("'")
+                            if val:
+                                base_domain = val
+                                break
+        except Exception:
+            pass
+
+        if not base_domain:
+            base_domain = getattr(settings, 'FRONTEND_URL', None) or os.environ.get('FRONTEND_URL') or os.environ.get('CUSTOM_FRONTEND_URL') or 'http://localhost:3000'
+
+        return str(base_domain).rstrip('/')
+
+    def get_target_menu_url(self):
+        """
+        Builds the target frontend menu URL for this specific table, including:
+        - Base URL from .env (FRONTEND_URL)
+        - Restaurant slug
+        - Table number
+        - Branch slug
+        - Floor/Zone name
+        Format: http://<domain>/r/<restaurant-slug>/menu?table=<table_number>&zone=<zone_name>&branch=<branch_slug>
+        """
+        from urllib.parse import urlencode
+
+        base_domain = self.get_frontend_base_url()
+        restaurant_slug = self.restaurant.slug if (self.restaurant and self.restaurant.slug) else 'default'
+
+        params = {
+            'table': str(self.table_number)
+        }
+
+        # Resolve Floor / Zone name
+        if self.zone and self.zone.name:
+            params['zone'] = self.zone.name
+
+        # Resolve Branch (table branch -> zone branch -> restaurant branch)
+        branch_obj = self.branch or (self.zone.branch if self.zone else None)
+        if not branch_obj and self.restaurant:
+            branch_obj = self.restaurant.branches.first()
+
+        if branch_obj:
+            if branch_obj.slug:
+                params['branch'] = branch_obj.slug
+            elif branch_obj.name:
+                params['branch'] = branch_obj.name
+        elif self.restaurant and self.restaurant.slug:
+            params['branch'] = self.restaurant.slug
+
+        query_string = urlencode(params)
+        return f"{base_domain}/r/{restaurant_slug}/menu?{query_string}"
+
+    def generate_qr_code(self, force=False):
+        """
+        Generates and assigns a QR code pointing to get_target_menu_url().
+        """
+        if self.qr_code and not force:
+            return
+
+        try:
+            import qrcode
+            import uuid
+            from io import BytesIO
+            from django.core.files import File
+
+            url = self.get_target_menu_url()
+
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_M,
+                box_size=10,
+                border=4,
+            )
+            qr.add_data(url)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+
+            canvas = BytesIO()
+            # pyrefly: ignore [unexpected-keyword]
+            img.save(canvas, format='PNG')
+            rest_id = self.restaurant.id if self.restaurant else 0
+            filename = f"rest_{rest_id}_table_{self.table_number}_{uuid.uuid4().hex[:8]}.png"
+            self.qr_code.save(filename, File(canvas), save=False)
+        except ImportError:
+            pass
+        except Exception:
+            pass
+
+    def save(self, *args, **kwargs):
+        force_qr = kwargs.pop('force_qr', False)
+        # Check if QR code needs regeneration
+        regenerate_qr = force_qr or (not self.qr_code)
+        if not regenerate_qr and self.pk:
             try:
-                import qrcode
-                from io import BytesIO
-                from django.core.files import File
-                
-                # Determine base domain
-                base_domain = getattr(settings, 'FRONTEND_URL', os.environ.get('FRONTEND_URL', 'http://localhost:3000'))
-                restaurant_slug = self.restaurant.slug if self.restaurant else 'default'
-                
-                # e.g. https://domain.com/r/my-restaurant/menu?table=5
-                url = f"{base_domain.rstrip('/')}/r/{restaurant_slug}/menu?table={self.table_number}"
-                
-                qr = qrcode.make(url)
-                canvas = BytesIO()
-                # pyrefly: ignore [unexpected-keyword]
-                qr.save(canvas, format='PNG')
-                filename = f"rest_{self.restaurant.id if self.restaurant else 0}_table_{self.table_number}_{uuid.uuid4().hex[:8]}.png"
-                self.qr_code.save(filename, File(canvas), save=False)
-            except ImportError:
-                # qrcode not installed, skip generation
+                old_instance = Table.objects.filter(pk=self.pk).values('table_number', 'zone_id', 'branch_id', 'restaurant_id').first()
+                if old_instance:
+                    if (old_instance['table_number'] != self.table_number or
+                        old_instance['zone_id'] != self.zone_id or
+                        old_instance['branch_id'] != self.branch_id or
+                        old_instance['restaurant_id'] != self.restaurant_id):
+                        regenerate_qr = True
+            except Exception:
                 pass
-                
+
+        if regenerate_qr:
+            self.generate_qr_code(force=True)
+
         super().save(*args, **kwargs)
 
     @property
@@ -174,7 +268,7 @@ class MenuItem(models.Model):
         ordering = ['name']
 
     def __str__(self):
-        return f"{self.name} (${self.price})"
+        return f"{self.name} (₹{self.price})"
 
 
 class Order(models.Model):

@@ -1,5 +1,5 @@
 <!-- Add New Table(s) Slide-Out Drawer (Offcanvas) -->
-<div class="offcanvas offcanvas-end border-0 shadow-lg" tabindex="-1" id="addTableOffcanvas" aria-labelledby="addTableOffcanvasLabel" style="width: 450px; z-index: 1060;">
+<div class="offcanvas offcanvas-end border-0 shadow-lg" tabindex="-1" id="addTableOffcanvas" aria-labelledby="addTableOffcanvasLabel" data-bs-scroll="false" data-bs-backdrop="true" style="width: 450px; z-index: 1060;">
     <!-- Offcanvas Header -->
     <div class="offcanvas-header border-0 pb-0 pt-4 px-4 align-items-center justify-content-between">
         <h5 class="offcanvas-title fw-bold text-gray-900 fs-5 mb-0" id="addTableOffcanvasLabel">Add New Table(s)</h5>
@@ -36,25 +36,33 @@
                     <input type="hidden" name="form_type" value="single">
 
                     <div class="px-4 py-3 flex-grow-1">
+                        <div id="singleTableAlert" class="alert alert-danger py-2 px-3 small mb-3 d-none"></div>
+
                         {% if single_form.errors %}
                         <div class="alert alert-danger py-2 px-3 small mb-3">
                             Please correct the errors below.
                         </div>
                         {% endif %}
 
-                        <!-- Zone -->
+                        <!-- Zone (Dropdown at top) -->
                         <div class="mb-3">
-                            <label for="drawer_{{ single_form.zone.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">Zone</label>
-                            {{ single_form.zone }}
+                            <label for="drawer_single_zone" class="form-label fw-semibold text-gray-700 small mb-1">Zone</label>
+                            <select name="zone" id="drawer_single_zone" class="form-select">
+                                <option value="">-- Select Zone (Optional) --</option>
+                                {% for z in zones %}
+                                <option value="{{ z.id }}">{{ z.name }}</option>
+                                {% endfor %}
+                            </select>
                             {% for err in single_form.zone.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
                         </div>
 
                         <!-- Name -->
                         <div class="mb-3">
-                            <label for="drawer_{{ single_form.name.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">
+                            <label for="drawer_single_name" class="form-label fw-semibold text-gray-700 small mb-1">
                                 Name <span class="text-danger">*</span>
                             </label>
-                            {{ single_form.name }}
+                            <input type="text" name="name" id="drawer_single_name" class="form-control" maxlength="8" placeholder="e.g. A-01" required>
+                            <div class="form-text text-muted small" style="font-size: 11px;">Auto-filled, fully editable. Max 8 chars.</div>
                             {% for err in single_form.name.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
                         </div>
 
@@ -99,6 +107,8 @@
                     <input type="hidden" name="form_type" value="bulk">
 
                     <div class="px-4 py-3 flex-grow-1">
+                        <div id="bulkTableAlert" class="alert alert-danger py-2 px-3 small mb-3 d-none"></div>
+
                         {% if bulk_form.errors %}
                         <div class="alert alert-danger py-2 px-3 small mb-3">
                             Please correct the errors below.
@@ -108,12 +118,12 @@
                         <!-- Tip Alert Box -->
                         <div class="p-3 mb-3 d-flex align-items-center rounded-3" style="background-color: #EEF2FF; border: 1px solid #E0E7FF;">
                             <i class="fas fa-bolt me-2" style="color: #4F46E5; font-size: 1rem;"></i>
-                            <span class="fw-medium small" style="color: #4338CA;">Create multiple tables at once!</span>
+                            <span class="fw-medium small" style="color: #4338CA;">Create multiple tables at once! (Max 50)</span>
                         </div>
 
                         <!-- Zone -->
                         <div class="mb-3">
-                            <label for="drawer_{{ bulk_form.zone.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">Zone</label>
+                            <label for="bulk_zone" class="form-label fw-semibold text-gray-700 small mb-1">Zone</label>
                             {{ bulk_form.zone }}
                             {% for err in bulk_form.zone.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
                         </div>
@@ -121,19 +131,19 @@
                         <!-- Prefix, Start, Count Row -->
                         <div class="row g-2 mb-3">
                             <div class="col-4">
-                                <label for="drawer_{{ bulk_form.prefix.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">Prefix</label>
+                                <label for="bulk_prefix" class="form-label fw-semibold text-gray-700 small mb-1">Prefix</label>
                                 {{ bulk_form.prefix }}
                                 {% for err in bulk_form.prefix.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
                             </div>
                             <div class="col-4">
-                                <label for="drawer_{{ bulk_form.start_number.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">
+                                <label for="bulk_start_number" class="form-label fw-semibold text-gray-700 small mb-1">
                                     Start <span class="text-danger">*</span>
                                 </label>
                                 {{ bulk_form.start_number }}
                                 {% for err in bulk_form.start_number.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
                             </div>
                             <div class="col-4">
-                                <label for="drawer_{{ bulk_form.count.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">
+                                <label for="bulk_count" class="form-label fw-semibold text-gray-700 small mb-1">
                                     Count <span class="text-danger">*</span>
                                 </label>
                                 {{ bulk_form.count }}
@@ -144,14 +154,14 @@
                         <!-- Capacity & Shape Row -->
                         <div class="row g-3 mb-2">
                             <div class="col-6">
-                                <label for="drawer_{{ bulk_form.capacity.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">
+                                <label for="bulk_capacity" class="form-label fw-semibold text-gray-700 small mb-1">
                                     Capacity <span class="text-danger">*</span>
                                 </label>
                                 {{ bulk_form.capacity }}
                                 {% for err in bulk_form.capacity.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
                             </div>
                             <div class="col-6">
-                                <label for="drawer_{{ bulk_form.shape.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">Shape</label>
+                                <label for="bulk_shape" class="form-label fw-semibold text-gray-700 small mb-1">Shape</label>
                                 {{ bulk_form.shape }}
                                 {% for err in bulk_form.shape.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
                             </div>
@@ -195,3 +205,254 @@
         box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
     }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const offcanvasEl = document.getElementById('addTableOffcanvas');
+    if (!offcanvasEl) return;
+
+    const singleForm = document.getElementById('drawerSingleTableForm');
+    const singleZone = document.getElementById('drawer_single_zone');
+    const singleName = document.getElementById('drawer_single_name');
+    const singleAlert = document.getElementById('singleTableAlert');
+
+    const bulkForm = document.getElementById('drawerBulkTableForm');
+    const bulkZone = document.getElementById('bulk_zone');
+    const bulkPrefix = document.getElementById('bulk_prefix');
+    const bulkStart = document.getElementById('bulk_start_number');
+    const bulkCount = document.getElementById('bulk_count');
+    const bulkAlert = document.getElementById('bulkTableAlert');
+
+    // Helper: get tables for a given zone
+    function getTablesInZone(zoneId) {
+        const all = window.APP_TABLES_DATA || [];
+        if (!zoneId) return all;
+        return all.filter(t => String(t.zone_id) === String(zoneId));
+    }
+
+    // 1. SINGLE TABLE LOGIC: Auto-sequence name on zone change
+    function updateSingleTableSequence() {
+        const zoneId = singleZone.value;
+        const tablesInZone = getTablesInZone(zoneId);
+
+        if (tablesInZone.length === 0) {
+            singleName.value = 'T-1';
+            return;
+        }
+
+        // Scan tables in zone for max sequence
+        let maxNum = 0;
+        let prefixFound = 'T-';
+        tablesInZone.forEach(t => {
+            const nameStr = String(t.name || '').trim();
+            const match = nameStr.match(/^(.*?)(0*)(\d+)$/);
+            if (match) {
+                const num = parseInt(match[3], 10);
+                if (!isNaN(num) && num > maxNum) {
+                    maxNum = num;
+                    prefixFound = match[1] || '';
+                }
+            } else if (t.table_number && t.table_number > maxNum) {
+                maxNum = t.table_number;
+            }
+        });
+
+        const nextNum = maxNum > 0 ? maxNum + 1 : tablesInZone.length + 1;
+        let candidateName = `${prefixFound}${nextNum}`;
+        if (candidateName.length > 8) {
+            candidateName = candidateName.substring(0, 8);
+        }
+        singleName.value = candidateName;
+    }
+
+    if (singleZone) {
+        singleZone.addEventListener('change', updateSingleTableSequence);
+    }
+
+    // Name input: enforce max 8 chars
+    if (singleName) {
+        singleName.addEventListener('input', function() {
+            if (this.value.length > 8) {
+                this.value = this.value.substring(0, 8);
+            }
+        });
+    }
+
+    // Single Form Submit: Case-insensitive duplicate check
+    if (singleForm) {
+        singleForm.addEventListener('submit', function(e) {
+            singleAlert.classList.add('d-none');
+            const nameVal = singleName.value.trim();
+            singleName.value = nameVal.substring(0, 8);
+
+            if (!nameVal) {
+                e.preventDefault();
+                singleAlert.textContent = 'Table name is mandatory.';
+                singleAlert.classList.remove('d-none');
+                return;
+            }
+
+            const zoneId = singleZone.value;
+            const tablesInZone = getTablesInZone(zoneId);
+            const duplicate = tablesInZone.some(t => String(t.name).trim().toLowerCase() === nameVal.toLowerCase());
+
+            if (duplicate) {
+                e.preventDefault();
+                singleAlert.textContent = `A table named "${nameVal}" already exists in this zone.`;
+                singleAlert.classList.remove('d-none');
+                return;
+            }
+        });
+    }
+
+    // 2. BULK ADD LOGIC
+    // Auto-extract last used prefix in zone
+    function updateBulkPrefix() {
+        const zoneId = bulkZone.value;
+        const tablesInZone = getTablesInZone(zoneId);
+
+        let lastPrefix = 'T-';
+        if (tablesInZone.length > 0) {
+            // Find most common or last prefix used
+            for (let i = tablesInZone.length - 1; i >= 0; i--) {
+                const nameStr = String(tablesInZone[i].name || '').trim();
+                const match = nameStr.match(/^(.*?)(\d+)$/);
+                if (match && match[1]) {
+                    lastPrefix = match[1];
+                    break;
+                }
+            }
+        }
+        bulkPrefix.value = lastPrefix;
+        updateBulkStartNumber();
+    }
+
+    // Auto-calculate start number based on current prefix
+    function updateBulkStartNumber() {
+        const zoneId = bulkZone.value;
+        const prefixVal = (bulkPrefix.value || '').trim();
+        const tablesInZone = getTablesInZone(zoneId);
+
+        let maxNum = 0;
+        tablesInZone.forEach(t => {
+            const nameStr = String(t.name || '').trim();
+            if (prefixVal) {
+                if (nameStr.toLowerCase().startsWith(prefixVal.toLowerCase())) {
+                    const remaining = nameStr.slice(prefixVal.length);
+                    const parsed = parseInt(remaining, 10);
+                    if (!isNaN(parsed) && parsed > maxNum) {
+                        maxNum = parsed;
+                    }
+                }
+            } else {
+                const parsed = parseInt(nameStr, 10);
+                if (!isNaN(parsed) && parsed > maxNum) {
+                    maxNum = parsed;
+                }
+            }
+        });
+
+        bulkStart.value = Math.max(1, maxNum + 1);
+    }
+
+    if (bulkZone) {
+        bulkZone.addEventListener('change', updateBulkPrefix);
+    }
+    if (bulkPrefix) {
+        bulkPrefix.addEventListener('input', updateBulkStartNumber);
+    }
+
+    // Count crash protection
+    if (bulkCount) {
+        bulkCount.addEventListener('input', function() {
+            let val = parseInt(this.value, 10);
+            if (val > 50) this.value = 50;
+            if (val < 1 && this.value !== '') this.value = 1;
+        });
+    }
+
+    // Bulk Form Pre-Flight Collision Check
+    if (bulkForm) {
+        bulkForm.addEventListener('submit', function(e) {
+            bulkAlert.classList.add('d-none');
+            const zoneId = bulkZone.value;
+            const prefixVal = (bulkPrefix.value || '').trim();
+            const startNum = parseInt(bulkStart.value, 10);
+            const countVal = parseInt(bulkCount.value, 10);
+
+            if (isNaN(countVal) || countVal < 1) {
+                e.preventDefault();
+                bulkAlert.textContent = 'Count must be at least 1 table.';
+                bulkAlert.classList.remove('d-none');
+                return;
+            }
+            if (countVal > 50) {
+                e.preventDefault();
+                bulkAlert.textContent = 'Batch size cannot exceed 50 tables.';
+                bulkAlert.classList.remove('d-none');
+                return;
+            }
+            if (isNaN(startNum) || startNum < 1) {
+                e.preventDefault();
+                bulkAlert.textContent = 'Start number must be at least 1.';
+                bulkAlert.classList.remove('d-none');
+                return;
+            }
+
+            const tablesInZone = getTablesInZone(zoneId);
+            const existingNamesSet = new Set(tablesInZone.map(t => String(t.name).trim().toLowerCase()));
+            const collisions = [];
+
+            for (let i = startNum; i < startNum + countVal; i++) {
+                const candName = `${prefixVal}${i}`.trim().toLowerCase();
+                if (existingNamesSet.has(candName)) {
+                    collisions.push(`${prefixVal}${i}`);
+                }
+            }
+
+            if (collisions.length > 0) {
+                e.preventDefault();
+                bulkAlert.innerHTML = `<strong>Collision detected!</strong> Table(s) <code>${collisions.slice(0, 5).join(', ')}${collisions.length > 5 ? '...' : ''}</code> already exist in this zone. Entire batch operation was canceled.`;
+                bulkAlert.classList.remove('d-none');
+                return;
+            }
+        });
+    }
+
+    // 3. GENERAL DRAWER MECHANICS
+    // Delayed Form Reset on Drawer Hide
+    offcanvasEl.addEventListener('hidden.bs.offcanvas', function() {
+        singleAlert.classList.add('d-none');
+        singleAlert.textContent = '';
+        bulkAlert.classList.add('d-none');
+        bulkAlert.textContent = '';
+        singleForm.reset();
+        bulkForm.reset();
+    });
+
+    // Tab Switching: Clean errors and re-trigger calculation
+    const drawerTabs = document.getElementById('addTableDrawerTabs');
+    if (drawerTabs) {
+        drawerTabs.addEventListener('shown.bs.tab', function(e) {
+            singleAlert.classList.add('d-none');
+            bulkAlert.classList.add('d-none');
+
+            if (e.target.id === 'drawer-single-table-tab') {
+                updateSingleTableSequence();
+            } else if (e.target.id === 'drawer-bulk-table-tab') {
+                updateBulkPrefix();
+            }
+        });
+    }
+
+    // Initial sequence calculation on drawer show
+    offcanvasEl.addEventListener('show.bs.offcanvas', function() {
+        const activeTab = drawerTabs ? drawerTabs.querySelector('.nav-link.active') : null;
+        if (activeTab && activeTab.id === 'drawer-bulk-table-tab') {
+            updateBulkPrefix();
+        } else {
+            updateSingleTableSequence();
+        }
+    });
+});
+</script>

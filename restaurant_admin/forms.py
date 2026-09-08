@@ -45,8 +45,29 @@ class MenuItemForm(forms.ModelForm):
         self.fields['category'].help_text = 'Select a category (optional)'
         self.fields['subcategory'].required = False
         self.fields['subcategory'].label = 'Subcategory (optional)'
+        # Determine if the active branch/restaurant serves alcohol
+        serves_alcohol = False
+        if self.branch is not None:
+            serves_alcohol = bool(getattr(self.branch, 'serves_alcohol', False))
+        elif self.instance and getattr(self.instance, 'branch', None):
+            serves_alcohol = bool(getattr(self.instance.branch, 'serves_alcohol', False))
+        elif self.restaurant is not None:
+            serves_alcohol = self.restaurant.branches.filter(serves_alcohol=True).exists()
+
+        self.serves_alcohol = serves_alcohol
+
         self.fields['tax_type'].label = 'Tax Type / Rate'
-        self.fields['tax_type'].help_text = 'Select GST Food for meals/soft drinks, or Beer/Spirits/Wine VAT for alcoholic drinks.'
+        if not serves_alcohol:
+            self.fields['tax_type'].choices = [
+                (MenuItem.TaxType.GST_FOOD.value, MenuItem.TaxType.GST_FOOD.label)
+            ]
+            self.fields['tax_type'].initial = MenuItem.TaxType.GST_FOOD.value
+            self.fields['tax_type'].help_text = 'Standard GST Food & Non-Alcoholic. State VAT alcohol taxes are hidden because this branch does not serve alcohol.'
+            if not self.is_bound and self.instance and self.instance.pk and self.instance.tax_type != MenuItem.TaxType.GST_FOOD.value:
+                self.initial['tax_type'] = MenuItem.TaxType.GST_FOOD.value
+        else:
+            self.fields['tax_type'].choices = MenuItem.TaxType.choices
+            self.fields['tax_type'].help_text = 'Select GST Food for meals/soft drinks, or Beer/Spirits/Wine VAT for alcoholic drinks.'
         
         # Set initial category if editing an existing item with a subcategory
         if self.instance and self.instance.subcategory:
@@ -70,6 +91,12 @@ class MenuItemForm(forms.ModelForm):
         self.fields['availability'].widget.attrs.update({'class': 'form-check-input'})
         self.fields['is_tax_inclusive'].widget.attrs.update({'class': 'form-check-input'})
 
+    def clean_tax_type(self):
+        tax_type = self.cleaned_data.get('tax_type')
+        if not getattr(self, 'serves_alcohol', False):
+            return MenuItem.TaxType.GST_FOOD.value
+        return tax_type
+
     def save(self, commit=True):
         instance = super().save(commit=False)
         if self.restaurant is not None:
@@ -77,6 +104,8 @@ class MenuItemForm(forms.ModelForm):
         # Always stamp the active branch so newly created items are branch-scoped
         if self.branch is not None:
             instance.branch = self.branch
+        if not getattr(self, 'serves_alcohol', False):
+            instance.tax_type = MenuItem.TaxType.GST_FOOD.value
         if commit:
             instance.save()
         return instance
@@ -87,6 +116,8 @@ class MenuItemForm(forms.ModelForm):
         subcategory = cleaned.get('subcategory')
         if subcategory and category and subcategory.category_id != category.id:
             self.add_error('subcategory', 'Selected subcategory does not belong to the chosen category.')
+        if not getattr(self, 'serves_alcohol', False):
+            cleaned['tax_type'] = MenuItem.TaxType.GST_FOOD.value
         return cleaned
 
 
@@ -460,6 +491,23 @@ class ZoneForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['name'].label = "Zone Name"
 
+    def clean_name(self):
+        name = (self.cleaned_data.get('name') or '').strip()
+        if not name:
+            raise forms.ValidationError("Zone name is required.")
+        if self.instance and self.instance.pk and self.instance.name and self.instance.name.strip().lower() == 'main area' and name.lower() != 'main area':
+            raise forms.ValidationError("The default zone 'Main Area' cannot be renamed.")
+        if self.restaurant:
+            from django.db.models import Q
+            qs = Zone.objects.filter(restaurant=self.restaurant, name__iexact=name)
+            if self.instance and self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if self.branch:
+                qs = qs.filter(Q(branch=self.branch) | Q(branch__isnull=True))
+            if qs.exists():
+                raise forms.ValidationError(f"A zone named '{name}' already exists.")
+        return name
+
     def save(self, commit=True):
         instance = super().save(commit=False)
         if self.restaurant:
@@ -475,9 +523,9 @@ class TableForm(forms.ModelForm):
         model = Table
         fields = ['name', 'table_number', 'capacity', 'shape', 'zone', 'is_active']
         widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. A-01'}),
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. A-01', 'maxlength': '8'}),
             'table_number': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Auto or e.g. 1', 'min': '1'}),
-            'capacity': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'e.g. 4', 'min': '1'}),
+            'capacity': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'e.g. 1', 'min': '1'}),
             'shape': forms.Select(attrs={'class': 'form-select'}),
             'zone': forms.Select(attrs={'class': 'form-select'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
@@ -501,8 +549,22 @@ class TableForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        name = cleaned_data.get('name')
+        name = (cleaned_data.get('name') or '').strip()
         table_number = cleaned_data.get('table_number')
+        zone = cleaned_data.get('zone')
+
+        if name:
+            if len(name) > 8:
+                self.add_error('name', "Table name cannot exceed 8 characters.")
+            elif self.restaurant:
+                from django.db.models import Q
+                qs = Table.objects.filter(restaurant=self.restaurant, zone=zone, name__iexact=name)
+                if self.instance and self.instance.pk:
+                    qs = qs.exclude(pk=self.instance.pk)
+                if self.branch:
+                    qs = qs.filter(Q(branch=self.branch) | Q(branch__isnull=True))
+                if qs.exists():
+                    self.add_error('name', f"A table named '{name}' already exists in this zone.")
 
         if not table_number and name:
             import re
@@ -548,16 +610,16 @@ class BulkTableForm(forms.Form):
     )
     count = forms.IntegerField(
         min_value=1,
-        max_value=100,
+        max_value=50,
         initial=10,
         required=True,
-        widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Max 50', 'min': '1', 'max': '100', 'id': 'bulk_count'})
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Max 50', 'min': '1', 'max': '50', 'id': 'bulk_count'})
     )
     capacity = forms.IntegerField(
         min_value=1,
-        initial=4,
+        initial=1,
         required=True,
-        widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'e.g. 4', 'min': '1', 'id': 'bulk_capacity'})
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'e.g. 41', 'min': '1', 'id': 'bulk_capacity'})
     )
     shape = forms.ChoiceField(
         choices=Table.TableShape.choices,

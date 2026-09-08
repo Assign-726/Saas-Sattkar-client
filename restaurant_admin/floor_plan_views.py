@@ -5,6 +5,21 @@ from core.models import Zone, Table
 from django.shortcuts import render
 from django.core.paginator import Paginator
 
+def ensure_default_zone(restaurant, active_branch=None):
+    if not restaurant:
+        return None
+    from django.db.models import Q
+    zone_qs = Zone.objects.filter(restaurant=restaurant, name__iexact='Main Area')
+    if active_branch:
+        zone_qs = zone_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    if not zone_qs.exists():
+        return Zone.objects.create(
+            restaurant=restaurant,
+            branch=active_branch,
+            name='Main Area'
+        )
+    return zone_qs.first()
+
 @login_required
 def floor_plan_api(request, restaurant_slug=None):
     try:
@@ -28,6 +43,8 @@ def floor_plan_api(request, restaurant_slug=None):
             active_branch = restaurant.branches.filter(id=int(branch_id)).first()
         if not active_branch:
             active_branch = restaurant.branches.first()
+
+    ensure_default_zone(restaurant, active_branch)
 
     from django.db.models import Q
     zones = Zone.objects.filter(restaurant=restaurant)
@@ -91,12 +108,38 @@ def floor_plan_dashboard(request, restaurant_slug=None):
     from super_admin.models import Restaurant
     restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
     active_branch = get_view_active_branch(request, restaurant)
+    ensure_default_zone(restaurant, active_branch)
     
     from django.db.models import Q
     zones = Zone.objects.filter(restaurant=restaurant)
     if active_branch:
         zones = zones.filter(Q(branch=active_branch) | Q(branch__isnull=True))
     zones = zones.order_by('name')
+
+    tables_all_qs = Table.objects.filter(restaurant=restaurant)
+    if active_branch:
+        tables_all_qs = tables_all_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    tables_qs = tables_all_qs.order_by('zone', 'table_number')
+
+    all_tables_data = []
+    for t in tables_qs:
+        all_tables_data.append({
+            'id': t.id,
+            'name': t.name,
+            'table_number': t.table_number,
+            'capacity': t.capacity,
+            'shape': t.shape or 'round',
+            'is_placed': t.is_placed,
+            'position_x': t.position_x or 0,
+            'position_y': t.position_y or 0,
+            'rotation': t.rotation or 0,
+            'status': t.current_status,
+            'zone_id': t.zone_id,
+            'zone_name': t.zone.name if t.zone else '',
+            'is_active': t.is_active,
+        })
+    all_tables_json = json.dumps(all_tables_data)
+    zones_json = json.dumps([{'id': z.id, 'name': z.name} for z in zones])
 
     single_form = TableForm(restaurant=restaurant, branch=active_branch)
     bulk_form = BulkTableForm(restaurant=restaurant, branch=active_branch)
@@ -110,6 +153,8 @@ def floor_plan_dashboard(request, restaurant_slug=None):
         'single_form': single_form,
         'bulk_form': bulk_form,
         'zone_form': zone_form,
+        'all_tables_json': all_tables_json,
+        'zones_json': zones_json,
     })
 
 @login_required
@@ -223,11 +268,25 @@ def zone_edit(request, restaurant_slug=None, pk=None):
 
 @login_required
 def zone_delete(request, restaurant_slug=None, pk=None):
+    from django.db.models import ProtectedError
     restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
     zone = get_object_or_404(Zone, pk=pk, restaurant=restaurant)
+
+    default_names = ['main area', 'main floor', 'default', 'general']
+    if zone.name.strip().lower() in default_names:
+        messages.error(request, f"The default zone '{zone.name}' cannot be deleted.")
+        return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)
+
     if request.method == 'POST':
-        zone.delete()
-        messages.success(request, 'Zone deleted successfully.')
+        if zone.tables.exists():
+            count = zone.tables.count()
+            messages.error(request, f"Cannot delete zone '{zone.name}' because {count} table(s) are currently assigned to it. Please reassign or delete the tables first.")
+            return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)
+        try:
+            zone.delete()
+            messages.success(request, 'Zone deleted successfully.')
+        except ProtectedError:
+            messages.error(request, f"Cannot delete zone '{zone.name}' because tables are currently assigned to it.")
         return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)
     return render(request, 'restaurant_admin/confirm_delete.html', {'object': zone, 'restaurant': restaurant, 'restaurant_slug': restaurant_slug})
 
@@ -236,13 +295,29 @@ def table_list(request, restaurant_slug=None):
     from django.db.models import Q
     restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
     active_branch = get_view_active_branch(request, restaurant)
-    tables = Table.objects.filter(restaurant=restaurant)
+    ensure_default_zone(restaurant, active_branch)
+    tables_all_qs = Table.objects.filter(restaurant=restaurant)
     zones = Zone.objects.filter(restaurant=restaurant)
     if active_branch:
-        tables = tables.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+        tables_all_qs = tables_all_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
         zones = zones.filter(Q(branch=active_branch) | Q(branch__isnull=True))
-    tables_qs = tables.order_by('zone', 'table_number')
+    tables_qs = tables_all_qs.order_by('zone', 'table_number')
     zones = zones.order_by('name')
+
+    all_tables_data = []
+    for t in tables_qs:
+        all_tables_data.append({
+            'id': t.id,
+            'name': t.name,
+            'table_number': t.table_number,
+            'capacity': t.capacity,
+            'shape': t.shape or 'round',
+            'zone_id': t.zone_id,
+            'zone_name': t.zone.name if t.zone else '',
+            'is_active': t.is_active,
+        })
+    all_tables_json = json.dumps(all_tables_data)
+    zones_json = json.dumps([{'id': z.id, 'name': z.name} for z in zones])
     
     try:
         per_page = int(request.GET.get('per_page', 20))
@@ -265,6 +340,8 @@ def table_list(request, restaurant_slug=None):
         'single_form': single_form,
         'bulk_form': bulk_form,
         'zone_form': zone_form,
+        'all_tables_json': all_tables_json,
+        'zones_json': zones_json,
     })
 
 @login_required
@@ -290,25 +367,28 @@ def table_add(request, restaurant_slug=None):
                 capacity = bulk_form.cleaned_data['capacity']
                 shape = bulk_form.cleaned_data.get('shape') or 'round'
 
-                created_count = 0
-                skipped_count = 0
+                # Pre-flight check: Scan in-memory candidates against existing tables
+                existing = Table.objects.filter(restaurant=restaurant, zone=zone)
+                if active_branch:
+                    existing = existing.filter(Q(branch=active_branch) | Q(branch__isnull=True))
 
+                colliding_tables = []
+                candidates = []
                 for i in range(start_number, start_number + count):
                     t_num = i
                     t_name = f"{prefix}{i}" if prefix else f"{i}"
-
-                    # Check collision for same restaurant, branch, and zone
-                    existing = Table.objects.filter(
-                        restaurant=restaurant,
-                        zone=zone,
-                    )
-                    if active_branch:
-                        existing = existing.filter(Q(branch=active_branch) | Q(branch__isnull=True))
-                    
                     if existing.filter(Q(table_number=t_num) | Q(name__iexact=t_name)).exists():
-                        skipped_count += 1
-                        continue
+                        colliding_tables.append(t_name)
+                    else:
+                        candidates.append((t_num, t_name))
 
+                if colliding_tables:
+                    messages.error(request, f"Collision detected: Table(s) {', '.join(colliding_tables[:5])} already exist. Entire batch operation was canceled.")
+                    return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)
+
+                # Atomically create all candidate tables
+                created_count = 0
+                for t_num, t_name in candidates:
                     table_obj = Table(
                         name=t_name,
                         table_number=t_num,
@@ -322,14 +402,8 @@ def table_add(request, restaurant_slug=None):
                     table_obj.save()
                     created_count += 1
 
-                if created_count > 0:
-                    if skipped_count > 0:
-                        messages.success(request, f"Successfully created {created_count} table(s). {skipped_count} table(s) skipped because they already exist.")
-                    else:
-                        messages.success(request, f"Successfully created {created_count} table(s) in bulk.")
-                    return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)
-                else:
-                    messages.error(request, f"No tables were created. All {skipped_count} requested table(s) already exist.")
+                messages.success(request, f"Successfully created {created_count} table(s) in bulk.")
+                return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)
             
             # If invalid, render page with bulk form active
             return render(request, 'restaurant_admin/tables/add_table_page.html', {
@@ -396,3 +470,28 @@ def table_delete(request, restaurant_slug=None, pk=None):
         messages.success(request, 'Table deleted successfully.')
         return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)
     return render(request, 'restaurant_admin/confirm_delete.html', {'object': table, 'restaurant': restaurant, 'restaurant_slug': restaurant_slug})
+
+
+@login_required
+def regenerate_table_qrs(request, restaurant_slug=None):
+    """
+    Regenerates QR code images for all tables of the active restaurant/branch
+    using the current FRONTEND_URL from .env, branch slug, and floor zone name.
+    """
+    from django.db.models import Q
+    restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+    active_branch = get_view_active_branch(request, restaurant)
+    
+    tables_qs = Table.objects.filter(restaurant=restaurant)
+    if active_branch:
+        tables_qs = tables_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+
+    count = 0
+    for table in tables_qs:
+        table.generate_qr_code(force=True)
+        table.save(update_fields=['qr_code'])
+        count += 1
+
+    base_url = Table.get_frontend_base_url()
+    messages.success(request, f"Successfully regenerated QR codes for {count} table(s) using frontend URL: {base_url}")
+    return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)

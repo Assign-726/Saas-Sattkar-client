@@ -58,6 +58,9 @@
 
                     <div class="d-flex justify-content-between align-items-center mt-4">
                         <div>
+                            <button type="button" class="btn btn-outline-primary btn-sm me-2" onclick="loadSampleJson()" title="Reset textarea with sample JSON template">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>Load Sample JSON
+                            </button>
                             <button type="button" class="btn btn-outline-dark btn-sm me-2" onclick="copySampleJson()">
                                 <i class="bi bi-clipboard me-1"></i>Copy Sample JSON
                             </button>
@@ -90,51 +93,73 @@
                             <tbody>
                                 <tr>
                                     <td><code>name</code></td>
-                                    <td>String</td>
+                                    <td><span class="badge bg-light text-dark border">String</span></td>
                                     <td><span class="badge bg-danger">Required</span></td>
-                                    <td>Name of the dish or beverage. Existing items with same name will be updated.</td>
+                                    <td>Name of the dish or beverage (e.g. <code>Paneer Butter Masala</code>). Existing items with same name in branch will be updated.</td>
+                                </tr>
+                                <tr>
+                                    <td><code>short_code</code></td>
+                                    <td><span class="badge bg-light text-dark border">String</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
+                                    <td>Fast POS item shortcut code (e.g. <code>101</code>, <code>NAAN</code>, <code>PBM01</code>) for quick billing lookup.</td>
                                 </tr>
                                 <tr>
                                     <td><code>price</code></td>
-                                    <td>Number</td>
+                                    <td><span class="badge bg-light text-dark border">Number</span></td>
                                     <td><span class="badge bg-danger">Required</span></td>
-                                    <td>Numeric price in ₹ (e.g. <code>250.00</code>).</td>
+                                    <td>Numeric price in ₹ (e.g. <code>280.00</code>).</td>
+                                </tr>
+                                <tr>
+                                    <td><code>is_tax_inclusive</code></td>
+                                    <td><span class="badge bg-light text-dark border">Boolean</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
+                                    <td><code>true</code> (Price entered includes tax) or <code>false</code> (Tax exclusive base price, tax is added on top). Default: <code>false</code>.</td>
                                 </tr>
                                 <tr>
                                     <td><code>tax_type</code></td>
-                                    <td>String</td>
-                                    <td>Optional</td>
+                                    <td><span class="badge bg-light text-dark border">String</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
                                     <td>
-                                        <code>GST_FOOD</code> (Default) | 
-                                        <code>VAT_BEER</code> | 
+                                        <code>GST_FOOD</code> (Standard GST Food & Non-Alcoholic, Default)
+                                        {% if current_branch and current_branch.serves_alcohol or not current_branch %}
+                                        | <code>VAT_BEER</code> | 
                                         <code>VAT_IMFL</code> | 
                                         <code>VAT_WINE</code> | 
                                         <code>VAT_LIQUOR</code>
+                                        {% else %}
+                                        <div class="mt-1 small text-muted"><i class="bi bi-shield-check text-success me-1"></i>No Alcohol branch: State VAT liquor taxes are disabled. Imported items will default to <code>GST_FOOD</code>.</div>
+                                        {% endif %}
                                     </td>
                                 </tr>
                                 <tr>
                                     <td><code>category</code></td>
-                                    <td>String</td>
-                                    <td>Optional</td>
+                                    <td><span class="badge bg-light text-dark border">String</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
                                     <td>Category name (e.g. <code>Main Course</code>). Auto-created if it doesn't exist.</td>
                                 </tr>
                                 <tr>
                                     <td><code>subcategory</code></td>
-                                    <td>String</td>
-                                    <td>Optional</td>
-                                    <td>Subcategory name (e.g. <code>North Indian</code>). Auto-created if it doesn't exist.</td>
+                                    <td><span class="badge bg-light text-dark border">String</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
+                                    <td>Subcategory name (e.g. <code>North Indian</code>). Auto-created under category if it doesn't exist.</td>
                                 </tr>
                                 <tr>
                                     <td><code>description</code></td>
-                                    <td>String</td>
-                                    <td>Optional</td>
-                                    <td>Short description of ingredients or preparation.</td>
+                                    <td><span class="badge bg-light text-dark border">String</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
+                                    <td>Short description of dish, spices, or kitchen preparation notes.</td>
                                 </tr>
                                 <tr>
                                     <td><code>availability</code></td>
-                                    <td>Boolean</td>
-                                    <td>Optional</td>
-                                    <td><code>true</code> (Available, default) or <code>false</code> (Out of stock).</td>
+                                    <td><span class="badge bg-light text-dark border">Boolean</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
+                                    <td><code>true</code> (Available for ordering, default) or <code>false</code> (Out of stock / 86'd).</td>
+                                </tr>
+                                <tr>
+                                    <td><code>image_url</code></td>
+                                    <td><span class="badge bg-light text-dark border">String</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
+                                    <td>Public image URL (<code>https://...</code>) to automatically download and attach to the menu item.</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -150,6 +175,12 @@
 {% block extra_js %}
 <script>
     const sampleJsonText = `{{ sample_json|escapejs }}`;
+
+    function loadSampleJson() {
+        const textarea = document.getElementById('json_text');
+        textarea.value = sampleJsonText;
+        textarea.focus();
+    }
 
     function copySampleJson() {
         navigator.clipboard.writeText(sampleJsonText).then(() => {

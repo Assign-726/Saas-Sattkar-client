@@ -529,7 +529,8 @@ def serialize_pos_order(order):
         mi = item.menu_item
         cat_name = mi.category.name if mi and mi.category else 'General'
         tax_type = (mi.tax_type if mi else 'GST_FOOD') or 'GST_FOOD'
-        if tax_type == 'GST_FOOD' and cat_name:
+        branch_serves_alcohol = bool(order.branch and order.branch.serves_alcohol)
+        if branch_serves_alcohol and tax_type == 'GST_FOOD' and cat_name:
             c_name_lower = cat_name.lower()
             if 'beer' in c_name_lower:
                 tax_type = 'VAT_BEER'
@@ -1278,7 +1279,8 @@ def order_create_manual(request, restaurant_slug=None):
         img_url = mi.image.url if mi.image else ''
         
         tax_type = mi.tax_type or 'GST_FOOD'
-        if tax_type == 'GST_FOOD' and cat_name:
+        branch_serves_alcohol = bool(branch_obj and branch_obj.serves_alcohol)
+        if branch_serves_alcohol and tax_type == 'GST_FOOD' and cat_name:
             c_name_lower = cat_name.lower()
             if 'beer' in c_name_lower:
                 tax_type = 'VAT_BEER'
@@ -1462,7 +1464,7 @@ def order_create_manual(request, restaurant_slug=None):
         'excise_seq_info': excise_seq_info,
         'gst_seq_info_json': json.dumps(gst_seq_info),
         'excise_seq_info_json': json.dumps(excise_seq_info),
-        'active_menu': 'order_list',
+        'active_menu': 'order_create_manual',
         'restaurant': restaurant,
     })
 
@@ -1950,7 +1952,8 @@ def order_edit_manual(request, pk, restaurant_slug=None):
         img_url = mi.image.url if mi.image else ''
         
         tax_type = mi.tax_type or 'GST_FOOD'
-        if tax_type == 'GST_FOOD' and cat_name:
+        branch_serves_alcohol = bool(branch_obj and branch_obj.serves_alcohol)
+        if branch_serves_alcohol and tax_type == 'GST_FOOD' and cat_name:
             c_name_lower = cat_name.lower()
             if 'beer' in c_name_lower:
                 tax_type = 'VAT_BEER'
@@ -1978,7 +1981,8 @@ def order_edit_manual(request, pk, restaurant_slug=None):
         mi = item.menu_item
         cat_name = mi.category.name if mi and mi.category else 'General'
         tax_type = (mi.tax_type if mi else 'GST_FOOD') or 'GST_FOOD'
-        if tax_type == 'GST_FOOD' and cat_name:
+        order_branch_serves_alcohol = bool(order.branch and order.branch.serves_alcohol) if order.branch else branch_serves_alcohol
+        if order_branch_serves_alcohol and tax_type == 'GST_FOOD' and cat_name:
             c_name_lower = cat_name.lower()
             if 'beer' in c_name_lower:
                 tax_type = 'VAT_BEER'
@@ -2074,7 +2078,7 @@ def order_edit_manual(request, pk, restaurant_slug=None):
         'existing_order_json': json.dumps(serialize_pos_order(order)),
         'is_edit_mode': True,
         'order': order,
-        'active_menu': 'order_list',
+        'active_menu': 'order_create_manual',
         'restaurant': restaurant,
     })
 
@@ -3037,8 +3041,10 @@ def menu_list(request, restaurant_slug=None):
         return restaurant
     
     active_branch = get_active_branch(request, restaurant)
-    search_query = request.GET.get('q', '')
-    category_id = request.GET.get('category')
+    search_query = request.GET.get('q', '').strip()
+    category_id = request.GET.get('category', '').strip()
+    status_filter = request.GET.get('status', '').strip()
+    sort_by = request.GET.get('sort', '').strip()
 
     # Get all categories for the filter dropdown (scoped to branch)
     categories = Category.objects.filter(restaurant=restaurant)
@@ -3047,34 +3053,59 @@ def menu_list(request, restaurant_slug=None):
     categories = categories.order_by('name')
     
     # Base queryset scoped to restaurant & branch
-    menu_items = MenuItem.objects.select_related('category', 'subcategory__category').filter(restaurant=restaurant)
+    base_menu_items = MenuItem.objects.select_related('category', 'subcategory__category').filter(restaurant=restaurant)
     if active_branch:
-        menu_items = menu_items.filter(branch=active_branch)
+        base_menu_items = base_menu_items.filter(branch=active_branch)
     
+    # Summary KPI counts
+    total_items_count = base_menu_items.count()
+    available_count = base_menu_items.filter(availability=True).count()
+    unavailable_count = base_menu_items.filter(availability=False).count()
+    total_categories_count = categories.count()
+
+    menu_items = base_menu_items
+
     # Apply category filter if selected
     if category_id:
         menu_items = menu_items.filter(
             Q(category_id=category_id) | Q(subcategory__category_id=category_id)
         )
     
+    # Apply status filter if selected
+    if status_filter == 'available':
+        menu_items = menu_items.filter(availability=True)
+    elif status_filter == 'unavailable':
+        menu_items = menu_items.filter(availability=False)
+
     # Apply search filter if query exists
     if search_query:
         menu_items = menu_items.filter(
             Q(name__icontains=search_query) |
+            Q(short_code__icontains=search_query) |
             Q(description__icontains=search_query) |
             Q(subcategory__name__icontains=search_query) |
             Q(subcategory__category__name__icontains=search_query) |
             Q(category__name__icontains=search_query)
         )
     
-    # Order by category and name
-    menu_items = menu_items.order_by('category__name', 'subcategory__category__name', 'name')
+    # Apply sorting
+    if sort_by == 'price_asc':
+        menu_items = menu_items.order_by('price')
+    elif sort_by == 'price_desc':
+        menu_items = menu_items.order_by('-price')
+    elif sort_by == 'name_asc':
+        menu_items = menu_items.order_by('name')
+    elif sort_by == 'name_desc':
+        menu_items = menu_items.order_by('-name')
+    else:
+        # Default: category and name
+        menu_items = menu_items.order_by('category__name', 'subcategory__category__name', 'name')
     
     # Paginate the menu items
     try:
-        per_page = int(request.GET.get('per_page', 12))
+        per_page = int(request.GET.get('per_page', 16))
     except ValueError:
-        per_page = 12
+        per_page = 16
     paginator = Paginator(menu_items, per_page)
     page_number = request.GET.get('page')
     
@@ -3085,7 +3116,7 @@ def menu_list(request, restaurant_slug=None):
     except EmptyPage:
         page_obj = paginator.page(paginator.num_pages)
     
-    # Get the current URL parameters for pagination
+    # Get current URL parameters for pagination
     url_params = request.GET.copy()
     if 'page' in url_params:
         del url_params['page']
@@ -3095,6 +3126,13 @@ def menu_list(request, restaurant_slug=None):
         'menu_items': page_obj,
         'categories': categories,
         'search_query': search_query,
+        'selected_category': category_id,
+        'status_filter': status_filter,
+        'sort_by': sort_by,
+        'total_items_count': total_items_count,
+        'available_count': available_count,
+        'unavailable_count': unavailable_count,
+        'total_categories_count': total_categories_count,
         'active_menu': 'menu_list',
         'title': 'Menu Management',
         'url_params': url_params.urlencode() if url_params else '',
@@ -3104,6 +3142,29 @@ def menu_list(request, restaurant_slug=None):
     }
     
     return render(request, 'restaurant_admin/menu/dashboard.html', context)
+
+@login_required
+@user_passes_test(is_admin)
+def menu_toggle_availability(request, pk, restaurant_slug=None):
+    """AJAX endpoint to quickly toggle a menu item between available and out of stock."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST method required.'}, status=405)
+    
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
+    
+    menu_item = get_object_or_404(MenuItem, pk=pk, restaurant=restaurant)
+    menu_item.availability = not menu_item.availability
+    menu_item.save(update_fields=['availability'])
+    
+    return JsonResponse({
+        'success': True,
+        'item_id': menu_item.id,
+        'name': menu_item.name,
+        'availability': menu_item.availability,
+        'message': f"'{menu_item.name}' is now {'In Stock' if menu_item.availability else 'Out of Stock'}."
+    })
 
 @login_required
 @user_passes_test(is_admin)
@@ -3213,20 +3274,27 @@ def menu_bulk_add(request, restaurant_slug=None):
                     category=category
                 )
 
+            raw_short_code = item.get('short_code')
+            short_code = str(raw_short_code).strip() if raw_short_code is not None else ''
+
             description = str(item.get('description', '')).strip()
             tax_type = str(item.get('tax_type', 'GST_FOOD')).strip().upper()
             valid_tax_types = [choice[0] for choice in MenuItem.TaxType.choices]
-            if tax_type not in valid_tax_types:
+            if active_branch and not active_branch.serves_alcohol:
+                tax_type = MenuItem.TaxType.GST_FOOD
+            elif tax_type not in valid_tax_types:
                 tax_type = MenuItem.TaxType.GST_FOOD
 
             availability = bool(item.get('availability', True))
             is_tax_inclusive = bool(item.get('is_tax_inclusive', False))
+            image_url = str(item.get('image_url', '')).strip()
 
             menu_item, created = MenuItem.objects.update_or_create(
                 name=name,
                 restaurant=restaurant,
                 branch=active_branch,
                 defaults={
+                    'short_code': short_code,
                     'description': description,
                     'price': price,
                     'tax_type': tax_type,
@@ -3236,6 +3304,23 @@ def menu_bulk_add(request, restaurant_slug=None):
                     'availability': availability,
                 }
             )
+
+            if image_url and (image_url.startswith('http://') or image_url.startswith('https://')):
+                try:
+                    import urllib.request
+                    from urllib.parse import urlparse
+                    from django.core.files.base import ContentFile
+                    import os
+                    req = urllib.request.Request(image_url, headers={'User-Agent': 'Mozilla/5.0'})
+                    with urllib.request.urlopen(req, timeout=5) as response:
+                        if response.status == 200:
+                            parsed_path = urlparse(image_url).path
+                            filename = os.path.basename(parsed_path) or f"bulk_item_{menu_item.id}.jpg"
+                            if not any(filename.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif']):
+                                filename += '.jpg'
+                            menu_item.image.save(filename, ContentFile(response.read()), save=True)
+                except Exception:
+                    pass
 
             if created:
                 created_count += 1
@@ -3255,35 +3340,92 @@ def menu_bulk_add(request, restaurant_slug=None):
         return redirect('restaurant_admin:menu_list', restaurant_slug=restaurant.slug)
 
     import json
-    sample_json = json.dumps([
-        {
-            "name": "Paneer Butter Masala",
-            "description": "Rich cottage cheese in tomato butter gravy",
-            "price": 280.00,
-            "tax_type": "GST_FOOD",
-            "category": "Main Course",
-            "subcategory": "North Indian",
-            "availability": True
-        },
-        {
-            "name": "Kingfisher Premium Beer 650ml",
-            "description": "Chilled lager beer",
-            "price": 220.00,
-            "tax_type": "VAT_BEER",
-            "category": "Bar",
-            "subcategory": "Beer",
-            "availability": True
-        },
-        {
-            "name": "Single Malt Whiskey 30ml",
-            "description": "Premium aged scotch whiskey",
-            "price": 450.00,
-            "tax_type": "VAT_IMFL",
-            "category": "Bar",
-            "subcategory": "Spirits",
-            "availability": True
-        }
-    ], indent=2)
+    if active_branch is not None:
+        serves_alcohol = bool(getattr(active_branch, 'serves_alcohol', False))
+    elif restaurant:
+        serves_alcohol = restaurant.branches.filter(serves_alcohol=True).exists()
+    else:
+        serves_alcohol = False
+
+    if serves_alcohol:
+        sample_items = [
+            {
+                "name": "Paneer Butter Masala",
+                "short_code": "PBM01",
+                "price": 280.00,
+                "is_tax_inclusive": False,
+                "tax_type": "GST_FOOD",
+                "category": "Main Course",
+                "subcategory": "North Indian",
+                "description": "Rich cottage cheese in creamy tomato butter gravy with aromatic spices",
+                "availability": True,
+                "image_url": ""
+            },
+            {
+                "name": "Kingfisher Premium Beer 650ml",
+                "short_code": "KF650",
+                "price": 220.00,
+                "is_tax_inclusive": True,
+                "tax_type": "VAT_BEER",
+                "category": "Bar",
+                "subcategory": "Beer",
+                "description": "Chilled lager beer",
+                "availability": True,
+                "image_url": ""
+            },
+            {
+                "name": "Single Malt Whiskey 30ml",
+                "short_code": "SMW30",
+                "price": 450.00,
+                "is_tax_inclusive": False,
+                "tax_type": "VAT_IMFL",
+                "category": "Bar",
+                "subcategory": "Spirits",
+                "description": "Premium aged scotch whiskey",
+                "availability": True,
+                "image_url": ""
+            }
+        ]
+    else:
+        sample_items = [
+            {
+                "name": "Paneer Butter Masala",
+                "short_code": "PBM01",
+                "price": 280.00,
+                "is_tax_inclusive": False,
+                "tax_type": "GST_FOOD",
+                "category": "Main Course",
+                "subcategory": "North Indian",
+                "description": "Rich cottage cheese in creamy tomato butter gravy with aromatic spices",
+                "availability": True,
+                "image_url": ""
+            },
+            {
+                "name": "Butter Naan",
+                "short_code": "NAAN",
+                "price": 45.00,
+                "is_tax_inclusive": True,
+                "tax_type": "GST_FOOD",
+                "category": "Breads",
+                "subcategory": "Tandoori Breads",
+                "description": "Crisp and fluffy traditional clay-oven flatbread brushed with butter",
+                "availability": True,
+                "image_url": ""
+            },
+            {
+                "name": "Fresh Lime Soda",
+                "short_code": "FLS",
+                "price": 80.00,
+                "is_tax_inclusive": False,
+                "tax_type": "GST_FOOD",
+                "category": "Beverages",
+                "subcategory": "Mocktails",
+                "description": "Refreshing chilled lime soda with option of sweet or salted",
+                "availability": True,
+                "image_url": ""
+            }
+        ]
+    sample_json = json.dumps(sample_items, indent=2)
 
     rslug = (active_branch.slug if (active_branch and active_branch.slug) else restaurant.slug)
     return render(request, 'restaurant_admin/menu/bulk_add.html', {
@@ -3354,6 +3496,93 @@ def menu_delete(request, pk, restaurant_slug=None):
         'rslug': rslug,
         'current_branch': active_branch,
     })
+@login_required
+@user_passes_test(is_admin)
+def order_notifications_poll(request, restaurant_slug=None):
+    """
+    Lightweight, high-performance polling endpoint for global order notifications.
+    Returns:
+      - total_orders: total count of orders for branch/restaurant
+      - latest_id: the most recent order PK
+      - new_orders: list of any orders created with ID > since_id
+      - recent_orders: latest 5 orders for the dropdown preview
+      - sound_url: custom alert sound URL if configured in RestaurantSettings
+    """
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return JsonResponse({'success': False, 'error': 'Invalid restaurant'}, status=403)
+
+    active_branch = get_active_branch(request, restaurant)
+    orders_qs = Order.objects.filter(restaurant=restaurant)
+    if active_branch:
+        orders_qs = orders_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+
+    latest_order = orders_qs.select_related('table').order_by('-id').first()
+    latest_id = latest_order.id if latest_order else 0
+    total_orders = orders_qs.count()
+
+    since_id_raw = request.GET.get('since_id')
+    since_id = int(since_id_raw) if (since_id_raw and str(since_id_raw).isdigit()) else 0
+
+    new_orders = []
+    if since_id > 0 and latest_id > since_id:
+        new_items = orders_qs.filter(id__gt=since_id).select_related('table').order_by('-id')[:10]
+        for o in new_items:
+            table_name = o.table.name if o.table else (f"Table {o.table_number}" if o.table_number else (o.get_order_type_display() or "Takeaway"))
+            new_orders.append({
+                'id': o.id,
+                'order_number': o.order_number or f"#{o.id}",
+                'order_type': o.get_order_type_display(),
+                'order_type_raw': o.order_type,
+                'table_name': table_name,
+                'customer_name': o.customer_name or 'Customer',
+                'total_amount': float(o.total_amount or 0),
+                'status': o.get_status_display(),
+                'status_raw': o.status,
+                'time_str': o.order_time.strftime('%I:%M %p') if o.order_time else '',
+                'detail_url': reverse('restaurant_admin:order_detail', kwargs={'restaurant_slug': restaurant.slug, 'pk': o.id}),
+            })
+
+    # Recent 5 orders for dropdown preview
+    recent_items = orders_qs.select_related('table').order_by('-id')[:5]
+    recent_orders = []
+    for o in recent_items:
+        table_name = o.table.name if o.table else (f"Table {o.table_number}" if o.table_number else (o.get_order_type_display() or "Takeaway"))
+        recent_orders.append({
+            'id': o.id,
+            'order_number': o.order_number or f"#{o.id}",
+            'order_type': o.get_order_type_display(),
+            'order_type_raw': o.order_type,
+            'table_name': table_name,
+            'customer_name': o.customer_name or 'Customer',
+            'total_amount': float(o.total_amount or 0),
+            'status': o.get_status_display(),
+            'status_raw': o.status,
+            'time_str': o.order_time.strftime('%I:%M %p') if o.order_time else '',
+            'detail_url': reverse('restaurant_admin:order_detail', kwargs={'restaurant_slug': restaurant.slug, 'pk': o.id}),
+        })
+
+    # Sound URL (with cache-busting timestamp so track updates apply instantly)
+    sound_url = ''
+    try:
+        settings_obj = RestaurantSettings.get_settings(restaurant)
+        if settings_obj and settings_obj.notification_sound and settings_obj.notification_sound.name:
+            base_url = request.build_absolute_uri(settings_obj.notification_sound.url)
+            ts = int(settings_obj.updated_at.timestamp()) if getattr(settings_obj, 'updated_at', None) else int(datetime.now().timestamp())
+            sound_url = f"{base_url}?v={ts}"
+    except Exception:
+        sound_url = ''
+
+    return JsonResponse({
+        'success': True,
+        'total_orders': total_orders,
+        'latest_id': latest_id,
+        'new_orders': new_orders,
+        'recent_orders': recent_orders,
+        'sound_url': sound_url,
+    })
+
+
 @login_required
 @user_passes_test(is_admin)
 def order_list(request, restaurant_slug=None):
@@ -3506,7 +3735,7 @@ def order_list(request, restaurant_slug=None):
     )
 
 
-def _filter_order_queryset(request, restaurant):
+def _filter_order_queryset(request, restaurant, ignore_order_type=False):
     profile = getattr(request.user, 'restaurant_profile', None)
     branch = profile.branch if profile else None
     if not branch and restaurant:
@@ -3548,9 +3777,10 @@ def _filter_order_queryset(request, restaurant):
         orders_qs = orders_qs.filter(payment_method=payment_method)
 
     # Order Type filter
-    order_type = request.GET.get('order_type', '').strip()
-    if order_type:
-        orders_qs = orders_qs.filter(order_type=order_type)
+    if not ignore_order_type:
+        order_type = request.GET.get('order_type', '').strip()
+        if order_type:
+            orders_qs = orders_qs.filter(order_type=order_type)
 
     # Date / Period filtering
     period = request.GET.get('period', '').strip()
@@ -3587,13 +3817,25 @@ def _filter_order_queryset(request, restaurant):
 @login_required
 @user_passes_test(is_admin)
 def order_records(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
 
-    orders_qs = _filter_order_queryset(request, restaurant)
+    base_orders_qs = _filter_order_queryset(request, restaurant, ignore_order_type=True)
+
+    # Compute live counts for each Order Type tab
+    order_type_counts = {
+        'all': base_orders_qs.count(),
+        'dine_in': base_orders_qs.filter(order_type='dine_in').count(),
+        'takeaway': base_orders_qs.filter(order_type='takeaway').count(),
+        'delivery': base_orders_qs.filter(order_type='delivery').count(),
+    }
+
+    order_type_filter = request.GET.get('order_type', '').strip()
+    if order_type_filter:
+        orders_qs = base_orders_qs.filter(order_type=order_type_filter)
+    else:
+        orders_qs = base_orders_qs
 
     # Compute Summary Stats
     total_orders = orders_qs.count()
@@ -3617,22 +3859,27 @@ def order_records(request, restaurant_slug=None):
     url_params_qs.pop('page', None)
     url_params = url_params_qs.urlencode()
 
+    active_branch = get_active_branch(request, restaurant)
+    rslug = (active_branch.slug if (active_branch and active_branch.slug) else restaurant.slug)
+
     return render(request, 'restaurant_admin/orders/records.html', {
         'orders': page_obj,
         'active_menu': 'order_records',
         'restaurant': restaurant,
-        'rslug': getattr(restaurant, 'slug', None),
+        'rslug': rslug,
+        'current_branch': active_branch,
         'total_orders': total_orders,
         'total_revenue': total_revenue,
         'paid_revenue': paid_revenue,
         'avg_order_value': avg_order_value,
+        'order_type_counts': order_type_counts,
         'period': request.GET.get('period', ''),
         'start_date': request.GET.get('start_date', ''),
         'end_date': request.GET.get('end_date', ''),
         'status_filter': request.GET.get('status', ''),
         'payment_status_filter': request.GET.get('payment_status', ''),
         'payment_method_filter': request.GET.get('payment_method', ''),
-        'order_type_filter': request.GET.get('order_type', ''),
+        'order_type_filter': order_type_filter,
         'search_query': request.GET.get('q', ''),
         'order_statuses': Order.OrderStatus.choices,
         'payment_statuses': Order.PaymentStatus.choices,
@@ -4537,37 +4784,63 @@ def order_update_status(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def category_list(request, restaurant_slug=None):
-    # Resolve restaurant
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
+
     active_branch = get_active_branch(request, restaurant)
-    # First get the count of subcategories for each category (scoped to branch)
-    categories = Category.objects.filter(restaurant=restaurant)
+    search_query = request.GET.get('q', '').strip()
+
+    # Base categories queryset scoped to branch
+    base_categories = Category.objects.filter(restaurant=restaurant)
     if active_branch:
-        categories = categories.filter(branch=active_branch)
-    categories = categories.annotate(
-        subcategory_count=Count('subcategories', distinct=True)
-    )
+        base_categories = base_categories.filter(branch=active_branch)
+
+    # Summary KPI counts
+    total_categories_count = base_categories.count()
     
-    categories_qs = categories.annotate(
-        menu_item_count=Count('subcategories__menu_items', distinct=True)
-    )
-    
+    subcategories_qs = SubCategory.objects.filter(category__restaurant=restaurant)
+    if active_branch:
+        subcategories_qs = subcategories_qs.filter(category__branch=active_branch)
+    total_subcategories_count = subcategories_qs.count()
+
+    menu_items_qs = MenuItem.objects.filter(restaurant=restaurant)
+    if active_branch:
+        menu_items_qs = menu_items_qs.filter(branch=active_branch)
+    total_menu_items_count = menu_items_qs.count()
+
+    categories_qs = base_categories.annotate(
+        subcategory_count=Count('subcategories', distinct=True),
+        menu_items_count=Count('menu_items', distinct=True)
+    ).prefetch_related('subcategories').order_by('name')
+
+    # Apply search filter
+    if search_query:
+        categories_qs = categories_qs.filter(
+            Q(name__icontains=search_query) |
+            Q(description__icontains=search_query) |
+            Q(subcategories__name__icontains=search_query)
+        ).distinct()
+
     try:
-        per_page = int(request.GET.get('per_page', 20))
+        per_page = int(request.GET.get('per_page', 12))
     except ValueError:
-        per_page = 20
+        per_page = 12
     paginator = Paginator(categories_qs, per_page)
     page_number = request.GET.get('page')
-    categories = paginator.get_page(page_number)
-    
+    page_obj = paginator.get_page(page_number)
+
+    rslug = (active_branch.slug if (active_branch and active_branch.slug) else restaurant.slug)
     return render(request, 'restaurant_admin/categories/list.html', {
-        'categories': categories,
-        'active_menu': 'category_list',  # For highlighting active menu item
+        'categories': page_obj,
+        'search_query': search_query,
+        'total_categories_count': total_categories_count,
+        'total_subcategories_count': total_subcategories_count,
+        'total_menu_items_count': total_menu_items_count,
+        'active_menu': 'category_list',
         'restaurant': restaurant,
+        'rslug': rslug,
+        'current_branch': active_branch,
     })
 
 @login_required
@@ -4816,10 +5089,9 @@ def generate_qr_code(request, menu_id=None, restaurant_slug=None):
     - table: table/room identifier to prefill checkout
     The function also supports a path param menu_id (legacy) to set item.
     """
-    # Compute base URL to the frontend root (strip any /admin suffix)
-    base_url = request.build_absolute_uri('/').rstrip('/')
-    if '/admin' in base_url:
-        base_url = base_url.split('/admin')[0]
+    # Compute base URL to the frontend root from .env / settings
+    from core.models import Table
+    base_url = Table.get_frontend_base_url()
     
     # Resolve restaurant to inject slug into customer URL
     restaurant = resolve_restaurant(request, restaurant_slug)
@@ -4830,14 +5102,22 @@ def generate_qr_code(request, menu_id=None, restaurant_slug=None):
     item_param = request.GET.get('item')
     category_param = request.GET.get('category')
     table_param = request.GET.get('table')
+    branch_param = request.GET.get('branch') or request.GET.get('branch_slug')
+    zone_param = request.GET.get('zone') or request.GET.get('floor')
 
     # Backward-compat: allow path menu_id to behave like item
     if menu_id and not item_param:
         item_param = str(menu_id)
 
-    # Build target URL (support direct-to-cart) with restaurant slug
+    # Build target URL (support direct-to-cart or direct-to-menu) with restaurant slug
     dest = request.GET.get('dest')
-    path = f"/r/{restaurant.slug}/cart/" if dest == 'cart' else f"/r/{restaurant.slug}/"
+    if dest == 'cart':
+        path = f"/r/{restaurant.slug}/cart/"
+    elif dest == 'menu' or table_param:
+        path = f"/r/{restaurant.slug}/menu"
+    else:
+        path = f"/r/{restaurant.slug}/"
+
     url = f"{base_url}{path}"
     params = {}
     if item_param:
@@ -4846,9 +5126,14 @@ def generate_qr_code(request, menu_id=None, restaurant_slug=None):
         params['category'] = category_param
     if table_param:
         params['table'] = table_param
+    if branch_param:
+        params['branch'] = branch_param
+    if zone_param:
+        params['zone'] = zone_param
 
     if params:
-        query = '&'.join([f"{k}={v}" for k, v in params.items()])
+        from urllib.parse import urlencode
+        query = urlencode(params)
         url = f"{url}?{query}"
 
     # Generate QR code
@@ -6446,7 +6731,8 @@ def transaction_desk_create(request, restaurant_slug=None):
         img_url = mi.image.url if mi.image else ''
         
         tax_type = mi.tax_type or 'GST_FOOD'
-        if tax_type == 'GST_FOOD' and cat_name:
+        branch_serves_alcohol = bool(branch_obj and branch_obj.serves_alcohol)
+        if branch_serves_alcohol and tax_type == 'GST_FOOD' and cat_name:
             c_name_lower = cat_name.lower()
             if 'beer' in c_name_lower:
                 tax_type = 'VAT_BEER'

@@ -1,0 +1,162 @@
+<!-- Edit Table Slide-Out Drawer (Offcanvas) -->
+<div class="offcanvas offcanvas-end border-0 shadow-lg" tabindex="-1" id="editTableOffcanvas" aria-labelledby="editTableOffcanvasLabel" data-bs-scroll="false" data-bs-backdrop="true" style="width: 450px; z-index: 1060;">
+    <!-- Header -->
+    <div class="offcanvas-header border-0 pb-0 pt-4 px-4 align-items-center justify-content-between">
+        <h5 class="offcanvas-title fw-bold text-gray-900 fs-5 mb-0" id="editTableOffcanvasLabel">Edit Table</h5>
+        <button type="button" class="btn-close shadow-none" data-bs-dismiss="offcanvas" aria-label="Close" style="font-size: 0.85rem;"></button>
+    </div>
+
+    <!-- Body -->
+    <div class="offcanvas-body p-0 d-flex flex-column pt-3" style="overflow-y: auto;">
+        <form method="POST" action="" id="drawerEditTableForm" class="d-flex flex-column h-100">
+            {% csrf_token %}
+            <input type="hidden" name="table_id" id="edit_table_id" value="">
+
+            <div class="px-4 py-3 flex-grow-1">
+                <div id="editTableAlert" class="alert alert-danger py-2 px-3 small mb-3 d-none"></div>
+
+                <!-- Zone -->
+                <div class="mb-3">
+                    <label for="edit_zone" class="form-label fw-semibold text-gray-700 small mb-1">Zone</label>
+                    <select name="zone" id="edit_zone" class="form-select">
+                        <option value="">-- Select Zone (Optional) --</option>
+                        {% for z in zones %}
+                        <option value="{{ z.id }}">{{ z.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Name -->
+                <div class="mb-3">
+                    <label for="edit_name" class="form-label fw-semibold text-gray-700 small mb-1">
+                        Table Name <span class="text-danger">*</span>
+                    </label>
+                    <input type="text" name="name" id="edit_name" class="form-control" maxlength="8" placeholder="e.g. A-01" required>
+                    <div class="form-text text-muted small" style="font-size: 11px;">Max 8 characters</div>
+                </div>
+
+                <!-- Capacity & Shape -->
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <label for="edit_capacity" class="form-label fw-semibold text-gray-700 small mb-1">
+                            Capacity <span class="text-danger">*</span>
+                        </label>
+                        <input type="number" name="capacity" id="edit_capacity" class="form-control" min="1" placeholder="e.g. 4" required>
+                    </div>
+                    <div class="col-6">
+                        <label for="edit_shape" class="form-label fw-semibold text-gray-700 small mb-1">Shape</label>
+                        <select name="shape" id="edit_shape" class="form-select">
+                            <option value="round">Round</option>
+                            <option value="square">Square</option>
+                            <option value="rectangle">Rectangle</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-check mt-2">
+                    <input type="checkbox" name="is_active" id="edit_is_active" class="form-check-input" checked>
+                    <label class="form-check-label text-gray-700 small fw-medium" for="edit_is_active">
+                        Active for Dining & QR Orders
+                    </label>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="border-top px-4 py-3 bg-light d-flex justify-content-end gap-2 mt-auto" style="border-color: #F3F4F6 !important;">
+                <button type="button" class="btn btn-outline-secondary px-3 py-2 fw-medium rounded-3" data-bs-dismiss="offcanvas">Cancel</button>
+                <button type="submit" class="btn btn-primary px-4 py-2 fw-semibold rounded-3" style="background-color: #4F46E5; border-color: #4F46E5;">
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(function() {
+    const editDrawer = document.getElementById('editTableOffcanvas');
+    if (!editDrawer) return;
+
+    const editForm = document.getElementById('drawerEditTableForm');
+    const editId = document.getElementById('edit_table_id');
+    const editName = document.getElementById('edit_name');
+    const editZone = document.getElementById('edit_zone');
+    const editCapacity = document.getElementById('edit_capacity');
+    const editShape = document.getElementById('edit_shape');
+    const editIsActive = document.getElementById('edit_is_active');
+    const editAlert = document.getElementById('editTableAlert');
+
+    // Strict 8 character enforcement
+    editName.addEventListener('input', function() {
+        if (this.value.length > 8) {
+            this.value = this.value.substring(0, 8);
+        }
+    });
+
+    // Function to populate and open edit drawer
+    window.openEditTableDrawer = function(tableData) {
+        if (!tableData) return;
+        editId.value = tableData.id || '';
+        editName.value = (tableData.name || '').substring(0, 8);
+        editZone.value = tableData.zone_id || '';
+        editCapacity.value = tableData.capacity || 4;
+        editShape.value = tableData.shape || 'round';
+        editIsActive.checked = tableData.is_active !== false;
+
+        editAlert.classList.add('d-none');
+        editAlert.textContent = '';
+
+        editForm.action = `/dashboard/{{ restaurant_slug }}/tables/${tableData.id}/edit/`;
+
+        const bsOffcanvas = bootstrap.Offcanvas.getOrCreateInstance(editDrawer);
+        bsOffcanvas.show();
+    };
+
+    // Client-side validation on submit
+    editForm.addEventListener('submit', function(e) {
+        const nameVal = editName.value.trim();
+        editName.value = nameVal.substring(0, 8);
+
+        if (!nameVal) {
+            e.preventDefault();
+            editAlert.textContent = 'Table name is mandatory.';
+            editAlert.classList.remove('d-none');
+            return;
+        }
+
+        const capVal = parseInt(editCapacity.value, 10);
+        if (isNaN(capVal) || capVal < 1) {
+            e.preventDefault();
+            editAlert.textContent = 'Capacity must be at least 1.';
+            editAlert.classList.remove('d-none');
+            return;
+        }
+
+        // Duplicate check within same zone, ignoring current table's own ID
+        const targetZoneId = editZone.value ? String(editZone.value) : '';
+        const currentTableId = String(editId.value);
+        const tablesList = (window.APP_TABLES_DATA || []);
+
+        const isDuplicate = tablesList.some(t => {
+            if (String(t.id) === currentTableId) return false; // Ignore self ID
+            const tZone = t.zone_id ? String(t.zone_id) : '';
+            return tZone === targetZoneId && String(t.name).trim().toLowerCase() === nameVal.toLowerCase();
+        });
+
+        if (isDuplicate) {
+            e.preventDefault();
+            editAlert.textContent = `A table named "${nameVal}" already exists in this zone.`;
+            editAlert.classList.remove('d-none');
+            return;
+        }
+    });
+
+    // Delayed form reset on drawer close
+    editDrawer.addEventListener('hidden.bs.offcanvas', function() {
+        editAlert.classList.add('d-none');
+        editAlert.textContent = '';
+        editForm.reset();
+        editId.value = '';
+    });
+})();
+</script>

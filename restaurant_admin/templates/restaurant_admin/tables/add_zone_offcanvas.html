@@ -1,5 +1,5 @@
 <!-- Add New Zone Slide-Out Drawer (Offcanvas) -->
-<div class="offcanvas offcanvas-end border-0 shadow-lg" tabindex="-1" id="addZoneOffcanvas" aria-labelledby="addZoneOffcanvasLabel" style="width: 420px; z-index: 1060;">
+<div class="offcanvas offcanvas-end border-0 shadow-lg" tabindex="-1" id="addZoneOffcanvas" aria-labelledby="addZoneOffcanvasLabel" data-bs-scroll="false" data-bs-backdrop="true" style="width: 420px; z-index: 1060;">
     <!-- Offcanvas Header -->
     <div class="offcanvas-header border-0 pb-0 pt-4 px-4 align-items-center justify-content-between">
         <h5 class="offcanvas-title fw-bold text-gray-900 fs-5 mb-0" id="addZoneOffcanvasLabel">Add New Zone</h5>
@@ -12,6 +12,8 @@
             {% csrf_token %}
 
             <div class="px-4 py-3 flex-grow-1">
+                <div id="addZoneAlert" class="alert alert-danger py-2 px-3 small mb-3 d-none"></div>
+
                 {% if zone_form.errors %}
                 <div class="alert alert-danger py-2 px-3 small mb-3">
                     Please correct the errors below.
@@ -20,10 +22,10 @@
 
                 <!-- Zone Name -->
                 <div class="mb-3">
-                    <label for="{{ zone_form.name.id_for_label }}" class="form-label fw-semibold text-gray-700 small mb-1">
+                    <label for="zone_name_input" class="form-label fw-semibold text-gray-700 small mb-1">
                         Zone Name <span class="text-danger">*</span>
                     </label>
-                    {{ zone_form.name }}
+                    <input type="text" name="name" id="zone_name_input" class="form-control" placeholder="e.g. VIP Lounge" required>
                     {% for err in zone_form.name.errors %}<div class="text-danger small mt-1">{{ err }}</div>{% endfor %}
                 </div>
             </div>
@@ -51,3 +53,54 @@
         box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
     }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const zoneDrawer = document.getElementById('addZoneOffcanvas');
+    if (!zoneDrawer) return;
+
+    const zoneForm = document.getElementById('drawerAddZoneForm');
+    const zoneNameInput = document.getElementById('zone_name_input');
+    const zoneAlert = document.getElementById('addZoneAlert');
+
+    // Auto-trim on blur
+    if (zoneNameInput) {
+        zoneNameInput.addEventListener('blur', function() {
+            this.value = this.value.trim();
+        });
+    }
+
+    if (zoneForm) {
+        zoneForm.addEventListener('submit', function(e) {
+            zoneAlert.classList.add('d-none');
+            const trimmedName = (zoneNameInput.value || '').trim();
+            zoneNameInput.value = trimmedName;
+
+            if (!trimmedName) {
+                e.preventDefault();
+                zoneAlert.textContent = 'Zone name is mandatory.';
+                zoneAlert.classList.remove('d-none');
+                return;
+            }
+
+            // Case-insensitive duplicate check
+            const zonesList = window.APP_ZONES_DATA || [];
+            const duplicate = zonesList.some(z => String(z.name || '').trim().toLowerCase() === trimmedName.toLowerCase());
+
+            if (duplicate) {
+                e.preventDefault();
+                zoneAlert.textContent = `A zone named "${trimmedName}" already exists.`;
+                zoneAlert.classList.remove('d-none');
+                return;
+            }
+        });
+    }
+
+    // Delayed form reset on drawer hide
+    zoneDrawer.addEventListener('hidden.bs.offcanvas', function() {
+        zoneAlert.classList.add('d-none');
+        zoneAlert.textContent = '';
+        zoneForm.reset();
+    });
+});
+</script>

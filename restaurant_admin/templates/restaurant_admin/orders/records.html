@@ -1,5 +1,5 @@
 {% extends 'restaurant_admin/base.html' %}
-{% load static %}
+{% load static restaurant_admin_extras %}
 
 {% block title %}Order Records | {{ restaurant.name }}{% endblock %}
 
@@ -16,7 +16,7 @@
         justify-content: space-between;
         margin-bottom: 20px;
         flex-wrap: wrap;
-        gap: 12px;
+        gap: 14px;
     }
     .rec-title {
         font-size: 1.45rem;
@@ -35,6 +35,63 @@
         display: flex;
         align-items: center;
         gap: 10px;
+    }
+
+    /* Modern Order Type Segmented Tabs */
+    .order-type-tabs {
+        display: inline-flex;
+        align-items: center;
+        background: #F1F5F9;
+        padding: 4px;
+        border-radius: 12px;
+        border: 1px solid #E2E8F0;
+        gap: 4px;
+    }
+    .order-type-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 14px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #64748B;
+        text-decoration: none;
+        border-radius: 8px;
+        transition: all 0.18s ease;
+        white-space: nowrap;
+    }
+    .order-type-tab:hover {
+        color: #1E293B;
+        background: rgba(255, 255, 255, 0.7);
+    }
+    .order-type-tab.active {
+        background: #ffffff;
+        color: #4F46E5;
+        font-weight: 700;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+    .order-type-tab.active i {
+        color: #4F46E5;
+    }
+    .order-type-tab .tab-count {
+        font-size: 0.72rem;
+        padding: 2px 7px;
+        border-radius: 12px;
+        background: #E2E8F0;
+        color: #475569;
+        font-weight: 700;
+        transition: all 0.18s ease;
+    }
+    .order-type-tab.active .tab-count {
+        background: #EEF2FF;
+        color: #4F46E5;
+    }
+    @media (max-width: 991px) {
+        .order-type-tabs {
+            width: 100%;
+            overflow-x: auto;
+            justify-content: flex-start;
+        }
     }
 
     /* KPI Summary Cards */
@@ -432,9 +489,40 @@
 <div class="rec-container">
     <!-- Header -->
     <div class="rec-header">
-        <h1 class="rec-title">
-            <i class="fas fa-file-invoice-dollar"></i> Order Records &amp; Analytics
-        </h1>
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <h1 class="rec-title mb-0">
+                <i class="fas fa-file-invoice-dollar"></i> Order Records &amp; Analytics
+            </h1>
+            
+            <!-- Order Type Navigation Tabs -->
+            <div class="order-type-tabs">
+                <a href="?{% query_transform request order_type='' page=1 %}" 
+                   class="order-type-tab {% if not order_type_filter %}active{% endif %}">
+                    <i class="fas fa-border-all"></i>
+                    <span>All Orders</span>
+                    <span class="tab-count">{{ order_type_counts.all|default:0 }}</span>
+                </a>
+                <a href="?{% query_transform request order_type='dine_in' page=1 %}" 
+                   class="order-type-tab {% if order_type_filter == 'dine_in' %}active{% endif %}">
+                    <i class="fas fa-chair"></i>
+                    <span>Dine-In</span>
+                    <span class="tab-count">{{ order_type_counts.dine_in|default:0 }}</span>
+                </a>
+                <a href="?{% query_transform request order_type='takeaway' page=1 %}" 
+                   class="order-type-tab {% if order_type_filter == 'takeaway' %}active{% endif %}">
+                    <i class="fas fa-bag-shopping"></i>
+                    <span>Takeaway</span>
+                    <span class="tab-count">{{ order_type_counts.takeaway|default:0 }}</span>
+                </a>
+                <a href="?{% query_transform request order_type='delivery' page=1 %}" 
+                   class="order-type-tab {% if order_type_filter == 'delivery' %}active{% endif %}">
+                    <i class="fas fa-motorcycle"></i>
+                    <span>Delivery</span>
+                    <span class="tab-count">{{ order_type_counts.delivery|default:0 }}</span>
+                </a>
+            </div>
+        </div>
+
         <div class="rec-actions">
             <a href="{% url 'restaurant_admin:order_records_export' restaurant_slug=rslug %}?{{ url_params }}" class="btn-export">
                 <i class="fas fa-file-excel"></i> Export to Excel
@@ -485,6 +573,7 @@
     <!-- Filter Card -->
     <div class="rec-filter-card">
         <form method="get" action="{% url 'restaurant_admin:order_records' restaurant_slug=rslug %}">
+            <input type="hidden" name="order_type" value="{{ order_type_filter }}">
             <div class="filter-grid">
                 <!-- Row 1: Search Query -->
                 <div class="filter-group">
@@ -499,10 +588,10 @@
                 <div class="filter-group">
                     <label>Quick Period</label>
                     <div class="period-btns">
-                        <a href="?period=today{% if search_query %}&q={{ search_query }}{% endif %}" class="period-btn {% if period == 'today' %}active{% endif %}">Today</a>
-                        <a href="?period=week{% if search_query %}&q={{ search_query }}{% endif %}" class="period-btn {% if period == 'week' %}active{% endif %}">7 Days</a>
-                        <a href="?period=month{% if search_query %}&q={{ search_query }}{% endif %}" class="period-btn {% if period == 'month' %}active{% endif %}">30 Days</a>
-                        <a href="?period=year{% if search_query %}&q={{ search_query }}{% endif %}" class="period-btn {% if period == 'year' %}active{% endif %}">This Year</a>
+                        <a href="?period=today{% if search_query %}&q={{ search_query }}{% endif %}{% if order_type_filter %}&order_type={{ order_type_filter }}{% endif %}" class="period-btn {% if period == 'today' %}active{% endif %}">Today</a>
+                        <a href="?period=week{% if search_query %}&q={{ search_query }}{% endif %}{% if order_type_filter %}&order_type={{ order_type_filter }}{% endif %}" class="period-btn {% if period == 'week' %}active{% endif %}">7 Days</a>
+                        <a href="?period=month{% if search_query %}&q={{ search_query }}{% endif %}{% if order_type_filter %}&order_type={{ order_type_filter }}{% endif %}" class="period-btn {% if period == 'month' %}active{% endif %}">30 Days</a>
+                        <a href="?period=year{% if search_query %}&q={{ search_query }}{% endif %}{% if order_type_filter %}&order_type={{ order_type_filter }}{% endif %}" class="period-btn {% if period == 'year' %}active{% endif %}">This Year</a>
                     </div>
                 </div>
 
@@ -540,13 +629,13 @@
                     </select>
                 </div>
 
-                <!-- Row 2: Order Type -->
+                <!-- Row 2: Payment Method -->
                 <div class="filter-group">
-                    <label for="order_type">Order Type</label>
-                    <select name="order_type" id="order_type" class="filter-control">
-                        <option value="">All Types</option>
-                        {% for val, label in order_types %}
-                            <option value="{{ val }}" {% if order_type_filter == val %}selected{% endif %}>{{ label }}</option>
+                    <label for="payment_method">Payment Method</label>
+                    <select name="payment_method" id="payment_method" class="filter-control">
+                        <option value="">All Payment Methods</option>
+                        {% for val, label in payment_methods %}
+                            <option value="{{ val }}" {% if payment_method_filter == val %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -558,7 +647,7 @@
                         <button type="submit" class="btn-filter-apply">
                             <i class="fas fa-filter"></i> Apply
                         </button>
-                        <a href="{% url 'restaurant_admin:order_records' restaurant_slug=rslug %}" class="btn-filter-reset" title="Reset Filters">
+                        <a href="{% url 'restaurant_admin:order_records' restaurant_slug=rslug %}{% if order_type_filter %}?order_type={{ order_type_filter }}{% endif %}" class="btn-filter-reset" title="Reset Filters">
                             <i class="fas fa-undo"></i>
                         </a>
                     </div>
@@ -1373,6 +1462,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.preventDefault();
                 recSubmitSettlement(true);
             }
+        }
+    });
+
+    // Live Auto-Refresh on New Order Arrival
+    window.addEventListener('new_order_arrived', function(e) {
+        const veil = document.getElementById('recSettleVeil');
+        if (!veil || veil.style.display === 'none') {
+            setTimeout(function() {
+                window.location.reload();
+            }, 1200);
         }
     });
 });
