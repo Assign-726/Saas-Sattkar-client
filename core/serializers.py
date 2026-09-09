@@ -130,11 +130,12 @@ class OrderSerializer(serializers.ModelSerializer):
     table_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     zone = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
     floor = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    table_token = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
 
     class Meta:
         model = Order
         fields = [
-            'id', 'order_number', 'branch_order_number', 'customer_name', 'phone', 'table_number', 'table_id', 'zone', 'floor', 'order_time',
+            'id', 'order_number', 'branch_order_number', 'customer_name', 'phone', 'table_number', 'table_id', 'zone', 'floor', 'table_token', 'order_time',
             'status', 'status_display', 'total_amount', 'discount_amount', 'notes', 'items',
             'coupon_code', 'applied_coupon_code', 'payment_method', 'payment_method_display', 'payment_status', 'payment_status_display',
             'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature', 'restaurant_slug', 'branch_slug', 'branch_id', 'branch_name', 'branch_slug_display', 'order_restaurant_slug', 'security_token',
@@ -228,6 +229,7 @@ class OrderSerializer(serializers.ModelSerializer):
         table_number = validated_data.get('table_number')
         table_id = validated_data.pop('table_id', None)
         zone_param = validated_data.pop('zone', None) or validated_data.pop('floor', None)
+        table_token = validated_data.pop('table_token', None)
         table_obj = None
 
         if table_id and restaurant:
@@ -259,6 +261,23 @@ class OrderSerializer(serializers.ModelSerializer):
                     ).first()
             except Exception:
                 pass
+
+        # Security Verification for Table QR Orders (prevents table tampering & spoofing)
+        request = self.context.get('request')
+        is_staff_user = bool(request and request.user and request.user.is_staff)
+
+        if not is_staff_user:
+            if table_number and not table_obj:
+                raise serializers.ValidationError({
+                    "table_number": f"Table #{table_number} was not found or is inactive for this outlet."
+                })
+            if table_obj:
+                expected_token = table_obj.get_security_token()
+                provided_token = str(table_token or '').strip()
+                if not provided_token or provided_token.lower() != expected_token.lower():
+                    raise serializers.ValidationError({
+                        "table_token": "Invalid or tampered table verification code. Please scan the QR code placed at your dining table."
+                    })
 
         # If table_obj belongs to a branch and order branch was not yet resolved, sync it
         if table_obj and getattr(table_obj, 'branch', None) and not branch:

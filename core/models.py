@@ -85,6 +85,37 @@ class Table(models.Model):
 
         return str(base_domain).rstrip('/')
 
+    @classmethod
+    def generate_table_token(cls, restaurant_slug, branch_slug, table_number, zone_name=""):
+        """
+        Cryptographic HMAC-SHA256 signature for a dining table QR code.
+        Binds restaurant, branch, table number, and zone using TABLE_QR_SECRET_KEY.
+        """
+        import hmac
+        import hashlib
+        from django.conf import settings
+
+        secret = getattr(settings, 'TABLE_QR_SECRET_KEY', 'table_qr_sec_4f9a8b1c7d2e3f5a6b0c8d9e1f2a3b4c')
+        r_slug = str(restaurant_slug or '').strip().lower()
+        b_slug = str(branch_slug or '').strip().lower()
+        t_num = str(table_number or '').strip()
+        z_name = str(zone_name or '').strip().lower()
+
+        raw_payload = f"table:{r_slug}:{b_slug}:{t_num}:{z_name}"
+        return hmac.new(secret.encode('utf-8'), raw_payload.encode('utf-8'), hashlib.sha256).hexdigest()[:16]
+
+    def get_security_token(self):
+        """
+        Returns the signed token for this specific table instance.
+        """
+        r_slug = self.restaurant.slug if (self.restaurant and self.restaurant.slug) else ''
+        b_obj = self.branch or (self.zone.branch if self.zone else None)
+        if not b_obj and self.restaurant:
+            b_obj = self.restaurant.branches.first()
+        b_slug = b_obj.slug if (b_obj and b_obj.slug) else (b_obj.name if (b_obj and b_obj.name) else '')
+        z_name = self.zone.name if self.zone else ''
+        return self.generate_table_token(r_slug, b_slug, self.table_number, z_name)
+
     def get_target_menu_url(self):
         """
         Builds the target frontend menu URL for this specific table, including:
@@ -93,7 +124,8 @@ class Table(models.Model):
         - Table number
         - Branch slug
         - Floor/Zone name
-        Format: http://<domain>/<restaurant-slug>/menu?table=<table_number>&zone=<zone_name>&branch=<branch_slug>
+        - Signed HMAC token (tamper-proof)
+        Format: http://<domain>/<restaurant-slug>/menu?table=<table_number>&zone=<zone_name>&branch=<branch_slug>&token=<token>
         """
         from urllib.parse import urlencode
 
@@ -120,6 +152,9 @@ class Table(models.Model):
                 params['branch'] = branch_obj.name
         elif self.restaurant and self.restaurant.slug:
             params['branch'] = self.restaurant.slug
+
+        # Attach cryptographic tamper-proof token
+        params['token'] = self.get_security_token()
 
         query_string = urlencode(params)
         return f"{base_domain}/{restaurant_slug}/menu?{query_string}"
