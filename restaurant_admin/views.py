@@ -5112,11 +5112,11 @@ def generate_qr_code(request, menu_id=None, restaurant_slug=None):
     # Build target URL (support direct-to-cart or direct-to-menu) with restaurant slug
     dest = request.GET.get('dest')
     if dest == 'cart':
-        path = f"/r/{restaurant.slug}/cart/"
+        path = f"/{restaurant.slug}/cart/"
     elif dest == 'menu' or table_param:
-        path = f"/r/{restaurant.slug}/menu"
+        path = f"/{restaurant.slug}/menu"
     else:
-        path = f"/r/{restaurant.slug}/"
+        path = f"/{restaurant.slug}/"
 
     url = f"{base_url}{path}"
     params = {}

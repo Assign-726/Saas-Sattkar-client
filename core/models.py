@@ -93,7 +93,7 @@ class Table(models.Model):
         - Table number
         - Branch slug
         - Floor/Zone name
-        Format: http://<domain>/r/<restaurant-slug>/menu?table=<table_number>&zone=<zone_name>&branch=<branch_slug>
+        Format: http://<domain>/<restaurant-slug>/menu?table=<table_number>&zone=<zone_name>&branch=<branch_slug>
         """
         from urllib.parse import urlencode
 
@@ -122,7 +122,7 @@ class Table(models.Model):
             params['branch'] = self.restaurant.slug
 
         query_string = urlencode(params)
-        return f"{base_domain}/r/{restaurant_slug}/menu?{query_string}"
+        return f"{base_domain}/{restaurant_slug}/menu?{query_string}"
 
     def generate_qr_code(self, force=False):
         """

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 # pyrefly: ignore [missing-import]
-from .models import Category, SubCategory, MenuItem, Table, Order, OrderItem, RestaurantLanding, GalleryImage, TeamMember, Review, RestaurantSettings, Event, BlogPost, BlogComment
+from core.models import Category, SubCategory, MenuItem, Table, Zone, CustomCharge, Order, OrderItem, RestaurantLanding, GalleryImage, TeamMember, Review, RestaurantSettings, Event, BlogPost, BlogComment
 from super_admin.models import Restaurant, RestaurantBranch
 from django.utils import timezone
 
@@ -580,3 +580,60 @@ class NewsletterSubscriberSerializer(serializers.ModelSerializer):
 
         self._was_created = created
         return obj
+
+
+class TableSerializer(serializers.ModelSerializer):
+    zone_name = serializers.ReadOnlyField(source='zone.name')
+    branch_slug = serializers.ReadOnlyField(source='branch.slug')
+    branch_id = serializers.ReadOnlyField(source='branch.id')
+    status = serializers.ReadOnlyField(source='current_status')
+
+    class Meta:
+        model = Table
+        fields = [
+            'id', 'name', 'table_number', 'capacity', 'shape',
+            'zone', 'zone_name', 'branch', 'branch_id', 'branch_slug',
+            'is_active', 'is_placed', 'status'
+        ]
+
+
+class ZoneSerializer(serializers.ModelSerializer):
+    branch_slug = serializers.ReadOnlyField(source='branch.slug')
+    tables = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Zone
+        fields = ['id', 'name', 'branch', 'branch_slug', 'tables']
+
+    def get_tables(self, obj):
+        tables_qs = obj.tables.filter(is_active=True).order_by('table_number')
+        branch = self.context.get('branch')
+        if branch:
+            from django.db.models import Q
+            tables_qs = tables_qs.filter(Q(branch=branch) | Q(branch__isnull=True))
+        return [
+            {
+                'id': t.id,
+                'name': t.name,
+                'table_number': t.table_number,
+                'capacity': t.capacity,
+                'zone': obj.name,
+                'is_placed': t.is_placed,
+                'status': t.current_status,
+            }
+            for t in tables_qs
+        ]
+
+
+class CustomChargeSerializer(serializers.ModelSerializer):
+    branch_slug = serializers.ReadOnlyField(source='branch.slug')
+    name = serializers.CharField(source='charge_name', read_only=True)
+    type = serializers.CharField(source='charge_type', read_only=True)
+
+    class Meta:
+        model = CustomCharge
+        fields = [
+            'id', 'charge_name', 'name', 'charge_type', 'type',
+            'value', 'is_taxable', 'applied_order_types', 'is_auto_applied',
+            'is_active', 'branch', 'branch_slug'
+        ]

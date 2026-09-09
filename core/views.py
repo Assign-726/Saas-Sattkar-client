@@ -21,7 +21,7 @@ from core.serializers import (
     OrderSerializer,
     RestaurantSerializer,
     RestaurantLandingSerializer,
-    RestaurantSettingsSerializer,
+    RestaurantSettingsSerializer, ZoneSerializer, TableSerializer, CustomChargeSerializer, ZoneSerializer, TableSerializer, CustomChargeSerializer,
     BlogPostSerializer,
     BlogCommentSerializer
 )
@@ -790,13 +790,91 @@ class RestaurantSettingsViewSet(viewsets.ReadOnlyModelViewSet):
         obj = RestaurantSettings.get_settings(restaurant)
         data = self.get_serializer(obj).data
         
+        branch = None
         if restaurant and branch_slug:
             branch = restaurant.branches.filter(slug=branch_slug).first()
             if branch:
                 data['enable_customer_ordering'] = getattr(branch, 'enable_customer_ordering', True)
                 data['enable_online_payment'] = getattr(branch, 'enable_online_payment', False)
                 data['enable_pay_at_counter'] = getattr(branch, 'enable_pay_at_counter', True)
-        
+                if branch.service_charge_percentage is not None:
+                    data['service_charge_percentage'] = str(branch.service_charge_percentage)
+
+        # Dynamic Custom Charges & Dining Zones
+        if restaurant:
+            from django.db.models import Q
+            from core.models import CustomCharge, Zone, Table
+            charges_qs = CustomCharge.objects.filter(restaurant=restaurant, is_active=True)
+            if branch:
+                charges_qs = charges_qs.filter(Q(branch=branch) | Q(branch__isnull=True))
+            data['custom_charges'] = [
+                {
+                    'id': cc.id,
+                    'name': cc.charge_name,
+                    'charge_name': cc.charge_name,
+                    'type': cc.charge_type,
+                    'charge_type': cc.charge_type,
+                    'value': float(cc.value),
+                    'is_taxable': cc.is_taxable,
+                    'applied_order_types': cc.applied_order_types or ['dine_in', 'takeaway', 'delivery'],
+                    'is_auto_applied': cc.is_auto_applied,
+                    'branch_id': cc.branch_id,
+                    'branch_slug': cc.branch.slug if cc.branch else None,
+                }
+                for cc in charges_qs
+            ]
+
+            zones_qs = Zone.objects.filter(restaurant=restaurant)
+            if branch:
+                zones_qs = zones_qs.filter(Q(branch=branch) | Q(branch__isnull=True))
+            
+            zones_data = []
+            for z in zones_qs.order_by('name'):
+                tables_qs = z.tables.filter(is_active=True)
+                if branch:
+                    tables_qs = tables_qs.filter(Q(branch=branch) | Q(branch__isnull=True))
+                tbls = [
+                    {
+                        'id': t.id,
+                        'name': t.name,
+                        'table_number': t.table_number,
+                        'capacity': t.capacity,
+                        'zone': z.name,
+                        'is_placed': t.is_placed,
+                        'status': t.current_status,
+                    }
+                    for t in tables_qs.order_by('table_number')
+                ]
+                if tbls:
+                    zones_data.append({
+                        'id': z.id,
+                        'name': z.name,
+                        'tables': tbls,
+                    })
+            
+            unassigned_tables = Table.objects.filter(restaurant=restaurant, zone__isnull=True, is_active=True)
+            if branch:
+                unassigned_tables = unassigned_tables.filter(Q(branch=branch) | Q(branch__isnull=True))
+            if unassigned_tables.exists():
+                zones_data.append({
+                    'id': 0,
+                    'name': 'Main Area',
+                    'tables': [
+                        {
+                            'id': t.id,
+                            'name': t.name,
+                            'table_number': t.table_number,
+                            'capacity': t.capacity,
+                            'zone': 'Main Area',
+                            'is_placed': t.is_placed,
+                            'status': t.current_status,
+                        }
+                        for t in unassigned_tables.order_by('table_number')
+                    ]
+                })
+
+            data['zones'] = zones_data
+
         return Response(data)
 
 
@@ -906,3 +984,77 @@ class NewsletterSubscriberViewSet(viewsets.ModelViewSet):
                 'message': 'You are already subscribed to our newsletter!',
                 'email': instance.email
             }, status=status.HTTP_200_OK)
+
+
+class ZoneViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = ZoneSerializer
+    permission_classes = [AllowAny]
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        branch_slug = self.request.query_params.get('branch_slug') or self.request.query_params.get('branch')
+        if branch_slug:
+            from super_admin.models import RestaurantBranch
+            ctx['branch'] = RestaurantBranch.objects.filter(slug=branch_slug).first()
+        return ctx
+
+    def get_queryset(self):
+        from core.models import Zone
+        qs = Zone.objects.all()
+        restaurant_id = self.request.query_params.get('restaurant')
+        restaurant_slug = self.request.query_params.get('restaurant_slug')
+        branch_slug = self.request.query_params.get('branch_slug') or self.request.query_params.get('branch')
+        if restaurant_id:
+            qs = qs.filter(restaurant_id=restaurant_id)
+        elif restaurant_slug:
+            qs = qs.filter(restaurant__slug=restaurant_slug)
+        if branch_slug:
+            from django.db.models import Q
+            qs = qs.filter(Q(branch__slug=branch_slug) | Q(branch__isnull=True))
+        return qs.order_by('name')
+
+
+class TableViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = TableSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        from core.models import Table
+        qs = Table.objects.filter(is_active=True)
+        restaurant_id = self.request.query_params.get('restaurant')
+        restaurant_slug = self.request.query_params.get('restaurant_slug')
+        branch_slug = self.request.query_params.get('branch_slug') or self.request.query_params.get('branch')
+        zone_param = self.request.query_params.get('zone')
+        zone_id = self.request.query_params.get('zone_id')
+        if restaurant_id:
+            qs = qs.filter(restaurant_id=restaurant_id)
+        elif restaurant_slug:
+            qs = qs.filter(restaurant__slug=restaurant_slug)
+        if branch_slug:
+            from django.db.models import Q
+            qs = qs.filter(Q(branch__slug=branch_slug) | Q(branch__isnull=True))
+        if zone_id:
+            qs = qs.filter(zone_id=zone_id)
+        elif zone_param:
+            qs = qs.filter(zone__name__iexact=zone_param)
+        return qs.order_by('table_number')
+
+
+class CustomChargeViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = CustomChargeSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        from core.models import CustomCharge
+        qs = CustomCharge.objects.filter(is_active=True)
+        restaurant_id = self.request.query_params.get('restaurant')
+        restaurant_slug = self.request.query_params.get('restaurant_slug')
+        branch_slug = self.request.query_params.get('branch_slug') or self.request.query_params.get('branch')
+        if restaurant_id:
+            qs = qs.filter(restaurant_id=restaurant_id)
+        elif restaurant_slug:
+            qs = qs.filter(restaurant__slug=restaurant_slug)
+        if branch_slug:
+            from django.db.models import Q
+            qs = qs.filter(Q(branch__slug=branch_slug) | Q(branch__isnull=True))
+        return qs.order_by('charge_name')
