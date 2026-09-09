@@ -1,33 +1,143 @@
 {% extends 'restaurant_admin/base.html' %}
 {% load static %}
 
+{% block extra_css %}
+<style>
+    .code-editor-area {
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        font-size: 0.88rem;
+        tab-size: 2;
+        background-color: #fcfdfe;
+        border: 1px solid #ced4da;
+        border-radius: 8px;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .code-editor-area:focus {
+        background-color: #ffffff;
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.15);
+    }
+    .file-dropzone {
+        border: 2px dashed #0d6efd40;
+        border-radius: 12px;
+        background: #f8faff;
+        cursor: pointer;
+        transition: all 0.25s ease;
+    }
+    .file-dropzone:hover, .file-dropzone.dragover {
+        border-color: #0d6efd;
+        background: #eef4ff;
+    }
+    .food-dot {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 1.5px solid;
+        border-radius: 3px;
+        position: relative;
+        vertical-align: middle;
+    }
+    .food-dot::after {
+        content: '';
+        position: absolute;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+    }
+    .food-dot-veg {
+        border-color: #198754;
+    }
+    .food-dot-veg::after {
+        background-color: #198754;
+    }
+    .food-dot-non_veg {
+        border-color: #dc3545;
+    }
+    .food-dot-non_veg::after {
+        background-color: #dc3545;
+        border-radius: 0;
+        clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+        width: 7px;
+        height: 7px;
+    }
+    .food-dot-egg {
+        border-color: #ffc107;
+    }
+    .food-dot-egg::after {
+        background-color: #ffc107;
+    }
+    .preview-card {
+        border-radius: 10px;
+        transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .preview-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    }
+    .badge-code {
+        font-family: 'SFMono-Regular', Consolas, monospace;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-lg-10">
-        <div class="card border-0 shadow-sm rounded-3">
-            <div class="card-header bg-white py-3 border-bottom-0 d-flex justify-content-between align-items-center">
+    <div class="col-xl-11 col-lg-12">
+        <!-- Main Card -->
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-header bg-white py-3 px-4 border-bottom-0 d-flex flex-wrap justify-content-between align-items-center gap-2">
                 <div>
-                    <h4 class="fw-bold mb-0 text-dark">
-                        <i class="bi bi-file-earmark-code text-primary me-2"></i>Bulk Import Menu Items (JSON)
-                    </h4>
-                    <div class="d-flex align-items-center gap-2 mt-1 flex-wrap">
-                        <small class="text-muted">Import multiple menu items at once using JSON file or raw text paste.</small>
-                        {% if current_branch %}
-                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1" style="font-size: 0.78rem;">
-                            <i class="bi bi-shop me-1"></i>Target Branch: <strong>{{ current_branch.name }}</strong>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="p-2 bg-primary-subtle text-primary rounded-3">
+                            <i class="bi bi-file-earmark-code fs-5"></i>
                         </span>
-                        {% endif %}
+                        <div>
+                            <h4 class="fw-bold mb-0 text-dark">Bulk Import Menu Items (JSON)</h4>
+                            <div class="d-flex align-items-center gap-2 mt-1 flex-wrap">
+                                <small class="text-muted">Import entire menus with FSSAI tags, variants, POS codes, and taxes.</small>
+                                {% if current_branch %}
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1" style="font-size: 0.78rem;">
+                                    <i class="bi bi-shop me-1"></i>Target Branch: <strong>{{ current_branch.name }}</strong>
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <a href="{% url 'restaurant_admin:menu_list' restaurant_slug=rslug %}" class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-arrow-left me-1"></i>Back to Menu
-                </a>
+
+                <div class="d-flex align-items-center gap-2">
+                    <a href="{% url 'restaurant_admin:menu_list' restaurant_slug=rslug %}" class="btn btn-outline-secondary btn-sm px-3 rounded-pill">
+                        <i class="bi bi-arrow-left me-1"></i>Back to Menu
+                    </a>
+                </div>
             </div>
 
-            <div class="card-body p-4">
-                <form method="post" enctype="multipart/form-data" id="bulkMenuForm">
+            <div class="card-body px-4 pt-2 pb-4">
+                <!-- Preset Template Quick Loaders -->
+                <div class="d-flex align-items-center gap-2 mb-3 flex-wrap bg-light p-2 rounded-3 border">
+                    <span class="text-muted small fw-semibold ms-2"><i class="bi bi-lightning-charge text-warning me-1"></i>Quick Templates:</span>
+                    <button type="button" class="btn btn-sm btn-white bg-white border shadow-xs text-dark rounded-pill px-3" onclick="loadTemplate('full')">
+                        <i class="bi bi-stars text-primary me-1"></i>Full Menu (FSSAI + Variants)
+                    </button>
+                    <button type="button" class="btn btn-sm btn-white bg-white border shadow-xs text-dark rounded-pill px-3" onclick="loadTemplate('simple')">
+                        <i class="bi bi-receipt text-success me-1"></i>Fast Simple POS
+                    </button>
+                    {% if serves_alcohol %}
+                    <button type="button" class="btn btn-sm btn-white bg-white border shadow-xs text-dark rounded-pill px-3" onclick="loadTemplate('bar')">
+                        <i class="bi bi-cup-straw text-danger me-1"></i>Bar & Beverages (VAT)
+                    </button>
+                    {% endif %}
+                </div>
+
+                <form method="post" enctype="multipart/form-data" id="bulkMenuForm" onsubmit="handleFormSubmit(event)">
                     {% csrf_token %}
                     
+                    <!-- Navigation Pills for Input Mode -->
                     <ul class="nav nav-pills mb-3" id="importTab" role="tablist">
                         <li class="nav-item" role="presentation">
                             <button class="nav-link active fw-semibold" id="paste-tab" data-bs-toggle="pill" data-bs-target="#paste-pane" type="button" role="tab">
@@ -41,119 +151,311 @@
                         </li>
                     </ul>
 
-                    <div class="tab-content border p-3 rounded bg-light" id="importTabContent">
+                    <div class="tab-content border p-3 rounded-3 bg-light" id="importTabContent">
                         <!-- Paste Tab -->
                         <div class="tab-pane fade show active" id="paste-pane" role="tabpanel">
-                            <label for="json_text" class="form-label fw-bold">JSON Array String</label>
-                            <textarea name="json_text" id="json_text" rows="12" class="form-control font-monospace style-code" placeholder="Paste your JSON array here...">{{ sample_json }}</textarea>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label for="json_text" class="form-label fw-bold mb-0 text-dark">JSON Array of Menu Items</label>
+                                <div id="jsonLiveStatus" class="badge bg-secondary-subtle text-secondary border">
+                                    Checking JSON...
+                                </div>
+                            </div>
+                            <textarea name="json_text" id="json_text" rows="14" class="form-control code-editor-area" placeholder="Paste your JSON array here..." oninput="handleJsonInput()">{{ sample_json }}</textarea>
+                            
+                            <!-- Editor Action Toolbar -->
+                            <div class="d-flex justify-content-between align-items-center mt-2 flex-wrap gap-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="prettifyJson()" title="Format indentation">
+                                        <i class="bi bi-magic me-1"></i>Format / Prettify
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyCurrentJson()">
+                                        <i class="bi bi-clipboard me-1"></i>Copy
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearJson()">
+                                        <i class="bi bi-trash me-1"></i>Clear
+                                    </button>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="loadSampleJson()">
+                                        <i class="bi bi-arrow-counterclockwise me-1"></i>Reset Sample
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-dark" onclick="downloadCurrentJson()">
+                                        <i class="bi bi-download me-1"></i>Download .json
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         
                         <!-- Upload Tab -->
                         <div class="tab-pane fade" id="upload-pane" role="tabpanel">
-                            <label for="json_file" class="form-label fw-bold">Select .json File</label>
-                            <input type="file" name="json_file" id="json_file" accept=".json,application/json" class="form-control">
-                            <div class="form-text text-muted mt-2">Upload a valid UTF-8 encoded JSON file containing an array of menu item objects.</div>
+                            <label class="form-label fw-bold text-dark mb-2">Upload Menu File (.json)</label>
+                            
+                            <div class="file-dropzone p-5 text-center" id="dropzoneBox" onclick="document.getElementById('json_file').click()">
+                                <i class="bi bi-cloud-arrow-up text-primary display-4 d-block mb-3"></i>
+                                <h6 class="fw-bold mb-1 text-dark">Drag and drop your .json file here, or browse</h6>
+                                <p class="text-muted small mb-0">UTF-8 encoded JSON array of menu items</p>
+                                <input type="file" name="json_file" id="json_file" accept=".json,application/json" class="d-none" onchange="handleFileUpload(event)">
+                            </div>
+
+                            <div id="fileInfoCard" class="mt-3 p-3 bg-white rounded-3 border d-none">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="bi bi-filetype-json text-primary fs-3"></i>
+                                        <div>
+                                            <strong id="fileName" class="text-dark d-block">menu.json</strong>
+                                            <small id="fileSize" class="text-muted">0 KB</small>
+                                        </div>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeUploadedFile()">
+                                        <i class="bi bi-x-circle me-1"></i>Remove
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="d-flex justify-content-between align-items-center mt-4">
-                        <div>
-                            <button type="button" class="btn btn-outline-primary btn-sm me-2" onclick="loadSampleJson()" title="Reset textarea with sample JSON template">
-                                <i class="bi bi-arrow-counterclockwise me-1"></i>Load Sample JSON
-                            </button>
-                            <button type="button" class="btn btn-outline-dark btn-sm me-2" onclick="copySampleJson()">
-                                <i class="bi bi-clipboard me-1"></i>Copy Sample JSON
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="downloadSampleJson()">
-                                <i class="bi bi-download me-1"></i>Download Sample JSON
-                            </button>
+                    <!-- Live Parsed Items Preview -->
+                    <div class="mt-4" id="livePreviewContainer">
+                        <div class="card border rounded-3 overflow-hidden shadow-xs">
+                            <div class="card-header bg-white py-2 px-3 d-flex justify-content-between align-items-center cursor-pointer" data-bs-toggle="collapse" data-bs-target="#previewCollapse" aria-expanded="true">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="bi bi-eye text-primary"></i>
+                                    <span class="fw-bold text-dark">Live Parsed Items Preview</span>
+                                    <span id="previewCountBadge" class="badge bg-primary rounded-pill">0 Items</span>
+                                </div>
+                                <i class="bi bi-chevron-down text-muted"></i>
+                            </div>
+                            <div class="collapse show" id="previewCollapse">
+                                <div class="card-body bg-light p-3">
+                                    <div id="previewItemsGrid" class="row g-3">
+                                        <!-- Rendered dynamically via JS -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit Actions -->
+                    <div class="d-flex justify-content-between align-items-center mt-4 pt-2">
+                        <div class="text-muted small">
+                            <i class="bi bi-info-circle me-1 text-primary"></i>Existing items with identical names in branch will be updated safely.
                         </div>
 
-                        <button type="submit" class="btn btn-primary px-4 fw-bold">
+                        <button type="submit" id="submitBtn" class="btn btn-primary px-4 py-2 fw-bold shadow-sm rounded-pill">
                             <i class="bi bi-cloud-upload me-2"></i>Import Menu Items
                         </button>
                     </div>
                 </form>
 
-                <hr class="my-4">
+                <hr class="my-5">
 
-                <!-- Reference Guidelines -->
-                <div class="bg-white p-3 rounded border">
-                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-info-circle text-info me-2"></i>Supported JSON Fields Reference</h6>
+                <!-- Reference Documentation -->
+                <div class="bg-white p-4 rounded-4 border shadow-xs">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <div>
+                            <h5 class="fw-bold text-dark mb-0">
+                                <i class="bi bi-book text-primary me-2"></i>Supported JSON Fields Reference
+                            </h5>
+                            <small class="text-muted">All available schema keys, data types, and default values for bulk ingestion.</small>
+                        </div>
+                        <span class="badge bg-light text-dark border px-3 py-2">
+                            <i class="bi bi-check2-circle text-success me-1"></i>FSSAI & Aggregator Compliant
+                        </span>
+                    </div>
+
                     <div class="table-responsive">
-                        <table class="table table-sm table-bordered mb-0 align-middle">
+                        <table class="table table-hover table-bordered mb-0 align-middle">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Field Name</th>
-                                    <th>Type</th>
-                                    <th>Required</th>
-                                    <th>Valid Values / Description</th>
+                                    <th style="width: 180px;">Field Name</th>
+                                    <th style="width: 110px;">Type</th>
+                                    <th style="width: 100px;">Required</th>
+                                    <th>Description, Allowed Values & Examples</th>
                                 </tr>
                             </thead>
                             <tbody>
+                                <!-- Group 1: Core & POS -->
+                                <tr class="table-light">
+                                    <td colspan="4" class="fw-bold text-primary py-2">
+                                        <i class="bi bi-tag me-1"></i>Core Identification & POS
+                                    </td>
+                                </tr>
                                 <tr>
                                     <td><code>name</code></td>
                                     <td><span class="badge bg-light text-dark border">String</span></td>
                                     <td><span class="badge bg-danger">Required</span></td>
-                                    <td>Name of the dish or beverage (e.g. <code>Paneer Butter Masala</code>). Existing items with same name in branch will be updated.</td>
+                                    <td>Name of dish or beverage (e.g. <code>"Paneer Butter Masala"</code>). Items with existing names in this branch will be updated.</td>
                                 </tr>
                                 <tr>
                                     <td><code>short_code</code></td>
+                                    <td><span class="badge bg-light text-dark border">String / Int</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
+                                    <td>
+                                        Fast POS item shortcut code (e.g. <code>"101"</code>, <code>"PBM01"</code>, <code>"NAAN"</code>) used for numeric keypad billing lookup.
+                                        <em>Aliases: <code>code</code>, <code>item_code</code></em>.
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><code>sku</code></td>
                                     <td><span class="badge bg-light text-dark border">String</span></td>
                                     <td><span class="badge bg-secondary">Optional</span></td>
-                                    <td>Fast POS item shortcut code (e.g. <code>101</code>, <code>NAAN</code>, <code>PBM01</code>) for quick billing lookup.</td>
+                                    <td>Inventory tracking SKU (e.g. <code>"PBM-1001"</code>, <code>"SAN-7355"</code>). Auto-generated if omitted.</td>
                                 </tr>
                                 <tr>
                                     <td><code>price</code></td>
                                     <td><span class="badge bg-light text-dark border">Number</span></td>
                                     <td><span class="badge bg-danger">Required</span></td>
-                                    <td>Numeric price in ₹ (e.g. <code>280.00</code>).</td>
+                                    <td>Base menu price in ₹ (e.g. <code>280.00</code>). Must be &ge; 0.</td>
+                                </tr>
+                                <tr>
+                                    <td><code>category</code></td>
+                                    <td><span class="badge bg-light text-dark border">String</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
+                                    <td>Category title (e.g. <code>"Main Course"</code>). Auto-created under the active branch if not existing. Default: <code>"General"</code>.</td>
+                                </tr>
+                                <tr>
+                                    <td><code>subcategory</code></td>
+                                    <td><span class="badge bg-light text-dark border">String</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
+                                    <td>Subcategory title (e.g. <code>"North Indian"</code>, <code>"Tandoori Starters"</code>). Auto-created under category if provided.</td>
+                                </tr>
+                                <tr>
+                                    <td><code>description</code></td>
+                                    <td><span class="badge bg-light text-dark border">String</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
+                                    <td>Short dish notes, preparation details, or kitchen instructions.</td>
+                                </tr>
+                                <tr>
+                                    <td><code>availability</code></td>
+                                    <td><span class="badge bg-light text-dark border">Boolean</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
+                                    <td><code>true</code> (Available for order, default) or <code>false</code> (Out of stock / 86'd).</td>
+                                </tr>
+
+                                <!-- Group 2: Dietary & FSSAI Classification -->
+                                <tr class="table-light">
+                                    <td colspan="4" class="fw-bold text-success py-2">
+                                        <i class="bi bi-shield-check me-1"></i>Dietary & FSSAI Legal Classification
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><code>food_type</code></td>
+                                    <td><span class="badge bg-light text-dark border">String</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
+                                    <td>
+                                        Legal FSSAI food category:
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle ms-1"><code>"veg"</code> (Green Dot)</span>
+                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-1"><code>"non_veg"</code> (Brown Triangle)</span>
+                                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle ms-1"><code>"egg"</code> (Yellow Dot)</span>.
+                                        Default is <code>"veg"</code>. <em>Aliases: <code>type</code>, <code>diet</code>, <code>is_vegetarian</code></em>.
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><code>is_jain</code></td>
+                                    <td><span class="badge bg-light text-dark border">Boolean</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
+                                    <td><code>true</code> if prepared according to Jain dietary requirements (no root vegetables, onions, garlic). <strong>Note:</strong> Only valid for <code>"veg"</code> items; automatically reset to <code>false</code> for Non-Veg or Egg.</td>
+                                </tr>
+                                <tr>
+                                    <td><code>is_vegan</code></td>
+                                    <td><span class="badge bg-light text-dark border">Boolean</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
+                                    <td><code>true</code> if 100% plant-based (no dairy, ghee, butter, paneer, honey). <strong>Note:</strong> Only valid for <code>"veg"</code> items; automatically reset to <code>false</code> for Non-Veg or Egg.</td>
+                                </tr>
+
+                                <!-- Group 3: Nutritional & Allergen Specs -->
+                                <tr class="table-light">
+                                    <td colspan="4" class="fw-bold text-info py-2">
+                                        <i class="bi bi-heart-pulse me-1"></i>FSSAI Nutrition & Allergen Compliance
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><code>calories</code></td>
+                                    <td><span class="badge bg-light text-dark border">String / Int</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
+                                    <td>Caloric value per portion for menu transparency compliance (e.g. <code>"480"</code> or <code>480</code>). <em>Aliases: <code>calorie</code>, <code>kcal</code></em>.</td>
+                                </tr>
+                                <tr>
+                                    <td><code>portion_serves</code></td>
+                                    <td><span class="badge bg-light text-dark border">String</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
+                                    <td>Serving size description (e.g. <code>"1 Person"</code>, <code>"Serves 2-3"</code>, <code>"250g"</code>). Default: <code>"1 Person"</code>. <em>Aliases: <code>portion</code>, <code>serves</code></em>.</td>
+                                </tr>
+                                <tr>
+                                    <td><code>allergens</code></td>
+                                    <td><span class="badge bg-light text-dark border">Array of Strings</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
+                                    <td>
+                                        Declared major allergens list, e.g. <code>["Dairy/Milk", "Gluten", "Nuts", "Soy"]</code>.
+                                        Also accepts comma-separated string: <code>"Dairy/Milk, Gluten"</code>.
+                                    </td>
+                                </tr>
+
+                                <!-- Group 4: Taxes & Pricing -->
+                                <tr class="table-light">
+                                    <td colspan="4" class="fw-bold text-dark py-2">
+                                        <i class="bi bi-cash-coin me-1"></i>Taxes & Pricing Engine
+                                    </td>
                                 </tr>
                                 <tr>
                                     <td><code>is_tax_inclusive</code></td>
                                     <td><span class="badge bg-light text-dark border">Boolean</span></td>
                                     <td><span class="badge bg-secondary">Optional</span></td>
-                                    <td><code>true</code> (Price entered includes tax) or <code>false</code> (Tax exclusive base price, tax is added on top). Default: <code>false</code>.</td>
+                                    <td>
+                                        <code>false</code> (Tax is exclusive, added on top of base price, default) or 
+                                        <code>true</code> (Price entered already includes tax).
+                                    </td>
                                 </tr>
                                 <tr>
                                     <td><code>tax_type</code></td>
                                     <td><span class="badge bg-light text-dark border">String</span></td>
                                     <td><span class="badge bg-secondary">Optional</span></td>
                                     <td>
-                                        <code>GST_FOOD</code> (Standard GST Food & Non-Alcoholic, Default)
-                                        {% if current_branch and current_branch.serves_alcohol or not current_branch %}
-                                        | <code>VAT_BEER</code> | 
-                                        <code>VAT_IMFL</code> | 
-                                        <code>VAT_WINE</code> | 
-                                        <code>VAT_LIQUOR</code>
+                                        <code>"GST_FOOD"</code> (Standard 5% Food GST, Default).
+                                        {% if serves_alcohol or not current_branch %}
+                                        <br><span class="text-muted small">Alcohol VAT types: <code>"VAT_BEER"</code>, <code>"VAT_IMFL"</code>, <code>"VAT_WINE"</code>, <code>"VAT_LIQUOR"</code></span>.
                                         {% else %}
-                                        <div class="mt-1 small text-muted"><i class="bi bi-shield-check text-success me-1"></i>No Alcohol branch: State VAT liquor taxes are disabled. Imported items will default to <code>GST_FOOD</code>.</div>
+                                        <br><span class="text-muted small"><i class="bi bi-shield-check text-success"></i> Branch does not serve alcohol; imported items automatically default to <code>GST_FOOD</code>.</span>
                                         {% endif %}
                                     </td>
                                 </tr>
-                                <tr>
-                                    <td><code>category</code></td>
-                                    <td><span class="badge bg-light text-dark border">String</span></td>
-                                    <td><span class="badge bg-secondary">Optional</span></td>
-                                    <td>Category name (e.g. <code>Main Course</code>). Auto-created if it doesn't exist.</td>
+
+                                <!-- Group 5: Variants & Aggregators -->
+                                <tr class="table-light">
+                                    <td colspan="4" class="fw-bold text-warning-emphasis py-2">
+                                        <i class="bi bi-diagram-3 me-1"></i>Variants, Publishing Channels & Aggregator Overrides
+                                    </td>
                                 </tr>
                                 <tr>
-                                    <td><code>subcategory</code></td>
-                                    <td><span class="badge bg-light text-dark border">String</span></td>
+                                    <td><code>publishing_channels</code></td>
+                                    <td><span class="badge bg-light text-dark border">Array of Strings</span></td>
                                     <td><span class="badge bg-secondary">Optional</span></td>
-                                    <td>Subcategory name (e.g. <code>North Indian</code>). Auto-created under category if it doesn't exist.</td>
+                                    <td>Channels to publish this item on: <code>["pos", "qr", "online"]</code>. Defaults to <code>["pos", "qr"]</code> if not provided.</td>
                                 </tr>
                                 <tr>
-                                    <td><code>description</code></td>
-                                    <td><span class="badge bg-light text-dark border">String</span></td>
+                                    <td><code>variants</code></td>
+                                    <td><span class="badge bg-light text-dark border">Array of Objects</span></td>
                                     <td><span class="badge bg-secondary">Optional</span></td>
-                                    <td>Short description of dish, spices, or kitchen preparation notes.</td>
+                                    <td>
+                                        Portion or flavor variants with dedicated pricing:
+                                        <pre class="mb-0 mt-1 p-2 bg-light rounded text-dark" style="font-size: 0.78rem;"><code>[
+  {"type": "Size", "name": "Half", "price": 160.0},
+  {"type": "Size", "name": "Full", "price": 280.0}
+]</code></pre>
+                                        <em>Alias: <code>variants_json</code></em>.
+                                    </td>
                                 </tr>
                                 <tr>
-                                    <td><code>availability</code></td>
-                                    <td><span class="badge bg-light text-dark border">Boolean</span></td>
+                                    <td><code>markup_price</code></td>
+                                    <td><span class="badge bg-light text-dark border">Number</span></td>
                                     <td><span class="badge bg-secondary">Optional</span></td>
-                                    <td><code>true</code> (Available for ordering, default) or <code>false</code> (Out of stock / 86'd).</td>
+                                    <td>Delivery aggregator markup amount in ₹ added on top of base price for Zomato / Swiggy (e.g. <code>20.00</code>).</td>
+                                </tr>
+                                <tr>
+                                    <td><code>packaging_fee</code></td>
+                                    <td><span class="badge bg-light text-dark border">Number</span></td>
+                                    <td><span class="badge bg-secondary">Optional</span></td>
+                                    <td>Packaging charge in ₹ for delivery orders (e.g. <code>15.00</code>). <em>Alias: <code>packaging</code></em>.</td>
                                 </tr>
                                 <tr>
                                     <td><code>image_url</code></td>
@@ -174,32 +476,469 @@
 
 {% block extra_js %}
 <script>
-    const sampleJsonText = `{{ sample_json|escapejs }}`;
+    // Templates
+    const templates = {
+        full: [
+            {
+                "name": "Paneer Butter Masala",
+                "short_code": "PBM01",
+                "sku": "PBM-1001",
+                "price": 280.0,
+                "food_type": "veg",
+                "is_jain": true,
+                "is_vegan": false,
+                "calories": "480",
+                "portion_serves": "1 Person",
+                "allergens": ["Dairy/Milk"],
+                "category": "Main Course",
+                "subcategory": "North Indian",
+                "description": "Rich cottage cheese in creamy tomato butter gravy with aromatic spices",
+                "is_tax_inclusive": false,
+                "tax_type": "GST_FOOD",
+                "publishing_channels": ["pos", "qr", "online"],
+                "markup_price": 20.0,
+                "packaging_fee": 15.0,
+                "variants": [
+                    { "type": "Size", "name": "Half", "price": 160.0 },
+                    { "type": "Size", "name": "Full", "price": 280.0 }
+                ],
+                "availability": true,
+                "image_url": ""
+            },
+            {
+                "name": "Butter Naan",
+                "short_code": "NAAN",
+                "sku": "NAN-2001",
+                "price": 45.0,
+                "food_type": "veg",
+                "is_jain": true,
+                "is_vegan": false,
+                "calories": "260",
+                "portion_serves": "1 Person",
+                "allergens": ["Gluten", "Dairy/Milk"],
+                "category": "Breads",
+                "subcategory": "Tandoori Breads",
+                "description": "Crisp and fluffy clay-oven flatbread brushed with butter",
+                "is_tax_inclusive": true,
+                "tax_type": "GST_FOOD",
+                "publishing_channels": ["pos", "qr"],
+                "variants": [
+                    { "type": "Extra", "name": "Extra Butter", "price": 10.0 }
+                ],
+                "availability": true,
+                "image_url": ""
+            },
+            {
+                "name": "Chicken Tikka",
+                "short_code": "CHK01",
+                "sku": "CHK-3001",
+                "price": 320.0,
+                "food_type": "non_veg",
+                "is_jain": false,
+                "is_vegan": false,
+                "calories": "390",
+                "portion_serves": "1 Person",
+                "allergens": ["Dairy/Milk"],
+                "category": "Starters",
+                "subcategory": "Tandoori Starters",
+                "description": "Succulent boneless chicken chunks marinated in yogurt and spices",
+                "is_tax_inclusive": false,
+                "tax_type": "GST_FOOD",
+                "publishing_channels": ["pos", "qr", "online"],
+                "markup_price": 25.0,
+                "packaging_fee": 15.0,
+                "variants": [
+                    { "type": "Size", "name": "Half (4 Pcs)", "price": 180.0 },
+                    { "type": "Size", "name": "Full (8 Pcs)", "price": 320.0 }
+                ],
+                "availability": true,
+                "image_url": ""
+            },
+            {
+                "name": "Egg Bhurji (3 Eggs)",
+                "short_code": "EGG03",
+                "sku": "EGG-4001",
+                "price": 150.0,
+                "food_type": "egg",
+                "is_jain": false,
+                "is_vegan": false,
+                "calories": "310",
+                "portion_serves": "1 Person",
+                "allergens": ["Eggs"],
+                "category": "Main Course",
+                "subcategory": "Egg Specialties",
+                "description": "Indian spiced scrambled eggs with chopped onions and chillies",
+                "is_tax_inclusive": false,
+                "tax_type": "GST_FOOD",
+                "publishing_channels": ["pos", "qr"],
+                "availability": true,
+                "image_url": ""
+            }
+        ],
+        simple: [
+            {
+                "name": "Dal Tadka",
+                "short_code": "DAL01",
+                "price": 180.0,
+                "food_type": "veg",
+                "category": "Main Course",
+                "subcategory": "Dals",
+                "description": "Yellow lentils tempered with cumin and garlic"
+            },
+            {
+                "name": "Jeera Rice",
+                "short_code": "JRICE",
+                "price": 140.0,
+                "food_type": "veg",
+                "is_vegan": true,
+                "category": "Rice",
+                "description": "Basmati rice tossed with roasted cumin seeds"
+            },
+            {
+                "name": "Chicken Curry",
+                "short_code": "CCURRY",
+                "price": 310.0,
+                "food_type": "non_veg",
+                "category": "Main Course",
+                "description": "Homestyle chicken cooked in rich onion-tomato gravy"
+            }
+        ],
+        bar: [
+            {
+                "name": "Kingfisher Premium Beer 650ml",
+                "short_code": "KF650",
+                "sku": "KF-6500",
+                "price": 220.0,
+                "food_type": "veg",
+                "is_vegan": true,
+                "calories": "210",
+                "portion_serves": "1 Person",
+                "allergens": ["Gluten"],
+                "category": "Bar",
+                "subcategory": "Beer",
+                "is_tax_inclusive": true,
+                "tax_type": "VAT_BEER",
+                "publishing_channels": ["pos"],
+                "availability": true
+            },
+            {
+                "name": "Single Malt Scotch 30ml",
+                "short_code": "SMW30",
+                "sku": "SMW-3001",
+                "price": 450.0,
+                "food_type": "veg",
+                "is_vegan": true,
+                "calories": "70",
+                "portion_serves": "1 Person",
+                "category": "Bar",
+                "subcategory": "Spirits",
+                "is_tax_inclusive": false,
+                "tax_type": "VAT_IMFL",
+                "publishing_channels": ["pos"],
+                "availability": true
+            }
+        ]
+    };
+
+    const initialSampleText = `{{ sample_json|escapejs }}`;
+
+    function loadTemplate(type) {
+        const data = templates[type] || templates.full;
+        const text = JSON.stringify(data, null, 2);
+        const textarea = document.getElementById('json_text');
+        textarea.value = text;
+        handleJsonInput();
+        // Switch to paste tab if not active
+        const pasteTabBtn = document.getElementById('paste-tab');
+        if (pasteTabBtn) {
+            bootstrap.Tab.getOrCreateInstance(pasteTabBtn).show();
+        }
+    }
 
     function loadSampleJson() {
         const textarea = document.getElementById('json_text');
-        textarea.value = sampleJsonText;
-        textarea.focus();
+        textarea.value = initialSampleText;
+        handleJsonInput();
     }
 
-    function copySampleJson() {
-        navigator.clipboard.writeText(sampleJsonText).then(() => {
-            alert('Sample JSON copied to clipboard!');
+    function clearJson() {
+        if (confirm('Clear the JSON editor?')) {
+            document.getElementById('json_text').value = '[]';
+            handleJsonInput();
+        }
+    }
+
+    function prettifyJson() {
+        const textarea = document.getElementById('json_text');
+        try {
+            const parsed = JSON.parse(textarea.value);
+            textarea.value = JSON.stringify(parsed, null, 2);
+            handleJsonInput();
+        } catch (e) {
+            alert('Cannot format invalid JSON: ' + e.message);
+        }
+    }
+
+    function copyCurrentJson() {
+        const text = document.getElementById('json_text').value;
+        navigator.clipboard.writeText(text).then(() => {
+            showToast('JSON copied to clipboard!');
         }).catch(err => {
-            alert('Failed to copy text: ' + err);
+            alert('Failed to copy: ' + err);
         });
     }
 
-    function downloadSampleJson() {
-        const blob = new Blob([sampleJsonText], { type: 'application/json' });
+    function downloadCurrentJson() {
+        const text = document.getElementById('json_text').value;
+        const blob = new Blob([text], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'menu_sample.json';
+        a.download = 'menu_items_import.json';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }
+
+    // Live JSON input validation & preview builder
+    function handleJsonInput() {
+        const text = document.getElementById('json_text').value.trim();
+        const statusEl = document.getElementById('jsonLiveStatus');
+        const grid = document.getElementById('previewItemsGrid');
+        const countBadge = document.getElementById('previewCountBadge');
+        const submitBtn = document.getElementById('submitBtn');
+
+        if (!text) {
+            statusEl.className = 'badge bg-secondary-subtle text-secondary border';
+            statusEl.innerHTML = '<i class="bi bi-dash-circle me-1"></i>Empty';
+            countBadge.innerText = '0 Items';
+            grid.innerHTML = '<div class="col-12 text-center text-muted py-4"><i class="bi bi-file-earmark-code fs-3 d-block mb-1"></i>Paste JSON above or select a template to preview items</div>';
+            return;
+        }
+
+        try {
+            let data = JSON.parse(text);
+            if (!Array.isArray(data)) {
+                if (typeof data === 'object' && data !== null) {
+                    data = [data];
+                } else {
+                    throw new Error('Root must be an array of objects');
+                }
+            }
+
+            statusEl.className = 'badge bg-success-subtle text-success border border-success-subtle';
+            statusEl.innerHTML = `<i class="bi bi-check-circle me-1"></i>Valid JSON (${data.length} item${data.length === 1 ? '' : 's'})`;
+            countBadge.innerText = `${data.length} Item${data.length === 1 ? '' : 's'}`;
+            if (submitBtn) submitBtn.disabled = false;
+
+            renderLivePreview(data);
+
+        } catch (e) {
+            statusEl.className = 'badge bg-danger-subtle text-danger border border-danger-subtle';
+            statusEl.innerHTML = `<i class="bi bi-exclamation-triangle me-1"></i>Syntax Error`;
+            countBadge.innerText = 'Syntax Error';
+            grid.innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-danger py-2 px-3 mb-0 small rounded-3">
+                        <i class="bi bi-exclamation-octagon-fill me-2"></i><strong>JSON Parse Error:</strong> ${escapeHtml(e.message)}
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    function renderLivePreview(items) {
+        const grid = document.getElementById('previewItemsGrid');
+        if (!items || items.length === 0) {
+            grid.innerHTML = '<div class="col-12 text-center text-muted py-3">No items in array</div>';
+            return;
+        }
+
+        let html = '';
+        items.forEach((item, idx) => {
+            const name = item.name || `<span class="text-danger fw-bold">[Missing Name - Item #${idx+1}]</span>`;
+            const shortCode = item.short_code || item.code || '';
+            const sku = item.sku || '';
+            const price = parseFloat(item.price || 0).toFixed(2);
+            const category = item.category || 'General';
+            const subcategory = item.subcategory || '';
+            
+            // Food Type
+            let rawType = (item.food_type || item.type || item.diet || 'veg').toLowerCase();
+            if (['non-veg', 'nonveg'].includes(rawType)) rawType = 'non_veg';
+            const isVeg = rawType === 'veg';
+            const isNonVeg = rawType === 'non_veg';
+            const isEgg = rawType === 'egg';
+
+            const dotClass = isNonVeg ? 'food-dot-non_veg' : (isEgg ? 'food-dot-egg' : 'food-dot-veg');
+            const typeLabel = isNonVeg ? 'Non-Veg' : (isEgg ? 'Egg' : 'Veg');
+            const typeBadgeBg = isNonVeg ? 'bg-danger-subtle text-danger' : (isEgg ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success');
+
+            const isJain = isVeg && Boolean(item.is_jain);
+            const isVegan = isVeg && Boolean(item.is_vegan);
+
+            const calories = item.calories || item.kcal || '';
+            const portion = item.portion_serves || item.portion || '';
+            
+            // Allergens
+            let allergens = [];
+            if (Array.isArray(item.allergens)) allergens = item.allergens;
+            else if (typeof item.allergens === 'string' && item.allergens.trim()) {
+                allergens = item.allergens.split(',').map(s => s.trim());
+            }
+
+            // Variants
+            let variants = item.variants || item.variants_json || [];
+            if (typeof variants === 'string') {
+                try { variants = JSON.parse(variants); } catch (e) { variants = []; }
+            }
+
+            // Tax
+            const isTaxIncl = Boolean(item.is_tax_inclusive);
+            const taxType = item.tax_type || 'GST_FOOD';
+
+            // Channels
+            let channels = item.publishing_channels || ['pos', 'qr'];
+            if (typeof channels === 'string') channels = channels.split(',').map(c => c.trim());
+
+            html += `
+                <div class="col-lg-4 col-md-6">
+                    <div class="card h-100 bg-white border preview-card p-3 shadow-xs">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="food-dot ${dotClass}" title="${typeLabel}"></span>
+                                <span class="badge ${typeBadgeBg} border" style="font-size: 0.72rem;">${typeLabel}</span>
+                                ${isJain ? '<span class="badge bg-warning-subtle text-warning-emphasis border" style="font-size: 0.7rem;">Jain</span>' : ''}
+                                ${isVegan ? '<span class="badge bg-success-subtle text-success border" style="font-size: 0.7rem;">Vegan</span>' : ''}
+                            </div>
+                            <span class="fs-6 fw-bold text-dark">₹${price}</span>
+                        </div>
+
+                        <h6 class="fw-bold text-dark mb-1 text-truncate" title="${escapeHtml(item.name || '')}">
+                            ${name}
+                        </h6>
+
+                        <div class="d-flex align-items-center gap-1 mb-2 flex-wrap" style="font-size: 0.75rem;">
+                            ${shortCode ? `<span class="badge bg-dark-subtle text-dark border badge-code" title="POS Shortcut Code"><i class="bi bi-upc me-1"></i>${escapeHtml(shortCode)}</span>` : ''}
+                            ${sku ? `<span class="badge bg-secondary-subtle text-secondary border badge-code" title="Inventory SKU">${escapeHtml(sku)}</span>` : ''}
+                            <span class="badge bg-light text-muted border">${escapeHtml(category)}${subcategory ? ' / ' + escapeHtml(subcategory) : ''}</span>
+                        </div>
+
+                        ${item.description ? `<p class="text-muted small mb-2 text-truncate" style="font-size: 0.8rem;" title="${escapeHtml(item.description)}">${escapeHtml(item.description)}</p>` : ''}
+
+                        <!-- Specs -->
+                        <div class="d-flex align-items-center gap-2 mb-2 flex-wrap text-muted" style="font-size: 0.73rem;">
+                            ${calories ? `<span><i class="bi bi-fire text-danger me-1"></i>${escapeHtml(calories)} kcal</span>` : ''}
+                            ${portion ? `<span><i class="bi bi-people text-primary me-1"></i>${escapeHtml(portion)}</span>` : ''}
+                            <span><i class="bi bi-receipt text-info me-1"></i>${taxType} (${isTaxIncl ? 'Incl.' : 'Excl.'})</span>
+                        </div>
+
+                        <!-- Allergens -->
+                        ${allergens.length > 0 ? `
+                            <div class="mb-2">
+                                <small class="text-muted d-block mb-1" style="font-size: 0.7rem;">Allergens:</small>
+                                <div class="d-flex gap-1 flex-wrap">
+                                    ${allergens.map(a => `<span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size: 0.68rem;">${escapeHtml(a)}</span>`).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+
+                        <!-- Variants -->
+                        ${Array.isArray(variants) && variants.length > 0 ? `
+                            <div class="mt-auto pt-2 border-top">
+                                <small class="text-muted d-block mb-1" style="font-size: 0.7rem;">${variants.length} Variant${variants.length === 1 ? '' : 's'}:</small>
+                                <div class="d-flex gap-1 flex-wrap">
+                                    ${variants.slice(0, 3).map(v => `<span class="badge bg-light text-dark border" style="font-size: 0.7rem;">${escapeHtml(v.name || 'Variant')}: ₹${parseFloat(v.price || 0).toFixed(0)}</span>`).join('')}
+                                    ${variants.length > 3 ? `<span class="badge bg-light text-muted border" style="font-size: 0.7rem;">+${variants.length - 3} more</span>` : ''}
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        });
+
+        grid.innerHTML = html;
+    }
+
+    // Drag and drop file upload handling
+    const dropzone = document.getElementById('dropzoneBox');
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropzone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.add('dragover');
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropzone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.remove('dragover');
+        }, false);
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files.length > 0) {
+            document.getElementById('json_file').files = files;
+            processSelectedFile(files[0]);
+        }
+    });
+
+    function handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (file) {
+            processSelectedFile(file);
+        }
+    }
+
+    function processSelectedFile(file) {
+        document.getElementById('fileName').innerText = file.name;
+        document.getElementById('fileSize').innerText = (file.size / 1024).toFixed(1) + ' KB';
+        document.getElementById('fileInfoCard').classList.remove('d-none');
+
+        // Read file content to update preview
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const content = e.target.result;
+            document.getElementById('json_text').value = content;
+            handleJsonInput();
+        };
+        reader.readAsText(file, 'UTF-8');
+    }
+
+    function removeUploadedFile() {
+        document.getElementById('json_file').value = '';
+        document.getElementById('fileInfoCard').classList.add('d-none');
+    }
+
+    function handleFormSubmit(e) {
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Importing Items...';
+    }
+
+    function showToast(message) {
+        alert(message);
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    // Initialize preview on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        handleJsonInput();
+    });
 </script>
 {% endblock %}

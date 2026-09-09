@@ -53,6 +53,9 @@ ALLOWED_HOSTS = env.list('DJANGO_ALLOWED_HOSTS', default=env.list('ALLOWED_HOSTS
 # Frontend application base URL
 FRONTEND_URL = env('FRONTEND_URL', default=env('CUSTOM_FRONTEND_URL', default='http://localhost:3000'))
 
+# Table QR code signing key (independent from DJANGO_SECRET_KEY)
+TABLE_QR_SECRET_KEY = env('TABLE_QR_SECRET_KEY', default='table_qr_sec_4f9a8b1c7d2e3f5a6b0c8d9e1f2a3b4c')
+
 
 # Application definition
 

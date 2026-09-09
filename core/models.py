@@ -12,7 +12,7 @@ class Zone(models.Model):
         verbose_name = 'Zone'
         verbose_name_plural = 'Zones'
         ordering = ['name']
-        unique_together = ['name', 'restaurant']
+        unique_together = ['restaurant', 'branch', 'name']
 
     def __str__(self):
         restaurant_name = self.restaurant.name if self.restaurant else "Unknown"
@@ -85,6 +85,37 @@ class Table(models.Model):
 
         return str(base_domain).rstrip('/')
 
+    @classmethod
+    def generate_table_token(cls, restaurant_slug, branch_slug, table_number, zone_name=""):
+        """
+        Cryptographic HMAC-SHA256 signature for a dining table QR code.
+        Binds restaurant, branch, table number, and zone using TABLE_QR_SECRET_KEY.
+        """
+        import hmac
+        import hashlib
+        from django.conf import settings
+
+        secret = getattr(settings, 'TABLE_QR_SECRET_KEY', 'table_qr_sec_4f9a8b1c7d2e3f5a6b0c8d9e1f2a3b4c')
+        r_slug = str(restaurant_slug or '').strip().lower()
+        b_slug = str(branch_slug or '').strip().lower()
+        t_num = str(table_number or '').strip()
+        z_name = str(zone_name or '').strip().lower()
+
+        raw_payload = f"table:{r_slug}:{b_slug}:{t_num}:{z_name}"
+        return hmac.new(secret.encode('utf-8'), raw_payload.encode('utf-8'), hashlib.sha256).hexdigest()[:16]
+
+    def get_security_token(self):
+        """
+        Returns the signed token for this specific table instance.
+        """
+        r_slug = self.restaurant.slug if (self.restaurant and self.restaurant.slug) else ''
+        b_obj = self.branch or (self.zone.branch if self.zone else None)
+        if not b_obj and self.restaurant:
+            b_obj = self.restaurant.branches.first()
+        b_slug = b_obj.slug if (b_obj and b_obj.slug) else (b_obj.name if (b_obj and b_obj.name) else '')
+        z_name = self.zone.name if self.zone else ''
+        return self.generate_table_token(r_slug, b_slug, self.table_number, z_name)
+
     def get_target_menu_url(self):
         """
         Builds the target frontend menu URL for this specific table, including:
@@ -93,7 +124,8 @@ class Table(models.Model):
         - Table number
         - Branch slug
         - Floor/Zone name
-        Format: http://<domain>/r/<restaurant-slug>/menu?table=<table_number>&zone=<zone_name>&branch=<branch_slug>
+        - Signed HMAC token (tamper-proof)
+        Format: http://<domain>/<restaurant-slug>/menu?table=<table_number>&zone=<zone_name>&branch=<branch_slug>&token=<token>
         """
         from urllib.parse import urlencode
 
@@ -121,8 +153,11 @@ class Table(models.Model):
         elif self.restaurant and self.restaurant.slug:
             params['branch'] = self.restaurant.slug
 
+        # Attach cryptographic tamper-proof token
+        params['token'] = self.get_security_token()
+
         query_string = urlencode(params)
-        return f"{base_domain}/r/{restaurant_slug}/menu?{query_string}"
+        return f"{base_domain}/{restaurant_slug}/menu?{query_string}"
 
     def generate_qr_code(self, force=False):
         """
@@ -245,8 +280,16 @@ class MenuItem(models.Model):
         VAT_WINE = 'VAT_WINE', _('VAT Wine (State Wine VAT Rate)')
         VAT_LIQUOR = 'VAT_LIQUOR', _('VAT General Liquor (State VAT Rate)')
 
+    class FoodType(models.TextChoices):
+        VEG = 'veg', _('Veg')
+        NON_VEG = 'non_veg', _('Non-Veg')
+        EGG = 'egg', _('Egg')
+        JAIN = 'jain', _('Jain')
+        VEGAN = 'vegan', _('Vegan')
+
     name = models.CharField(max_length=200)
     short_code = models.CharField(max_length=50, blank=True, null=True, db_index=True, help_text="Fast POS item code (e.g. 101, 301, NAAN)")
+    sku = models.CharField(max_length=50, blank=True, null=True, help_text="SKU identifier e.g. BUT-4921")
     description = models.TextField(blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     tax_type = models.CharField(
@@ -261,11 +304,37 @@ class MenuItem(models.Model):
     subcategory = models.ForeignKey(SubCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='menu_items')
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='menu_items', null=True, blank=True)
     branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, related_name='menu_items', null=True, blank=True)
+
+    # FSSAI Classification & Lifestyle Preferences
+    food_type = models.CharField(
+        max_length=20,
+        choices=FoodType.choices,
+        default=FoodType.VEG,
+        help_text="FSSAI legal food classification"
+    )
+    is_jain = models.BooleanField(default=False, help_text="Jain friendly")
+    is_vegan = models.BooleanField(default=False, help_text="Vegan friendly")
+
+    # FSSAI Nutritional & Allergen Compliance
+    calories = models.CharField(max_length=50, blank=True, default='', help_text="Calories (Kcal) for FSSAI compliance")
+    portion_serves = models.CharField(max_length=50, blank=True, default='1 Person', help_text="Portion serving size")
+    allergens = models.JSONField(default=list, blank=True, help_text="Declared FSSAI 8 major allergens list")
+
+    # Publishing & Variants
+    publishing_channels = models.JSONField(default=list, blank=True, help_text="Publishing channels e.g. ['pos', 'qr', 'online']")
+    variants_json = models.JSONField(default=list, blank=True, help_text="Variants and add-ons list")
+    markup_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, blank=True, help_text="Zomato / Swiggy markup price override")
+    packaging_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0, blank=True, help_text="Zomato / Swiggy packaging charge")
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['name']
+
+    @property
+    def is_vegetarian(self):
+        return self.food_type == self.FoodType.VEG
 
     def __str__(self):
         return f"{self.name} (₹{self.price})"

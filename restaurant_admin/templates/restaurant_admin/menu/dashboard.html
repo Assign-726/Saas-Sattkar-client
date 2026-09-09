@@ -226,6 +226,50 @@
         margin-right: 1px;
     }
 
+    /* FSSAI Dietary Food Dots */
+    .food-dot {
+        display: inline-block;
+        width: 13px;
+        height: 13px;
+        border: 1.5px solid;
+        border-radius: 2.5px;
+        position: relative;
+        flex-shrink: 0;
+        vertical-align: middle;
+    }
+    .food-dot::after {
+        content: '';
+        position: absolute;
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+    }
+    .food-dot-veg {
+        border-color: #198754;
+    }
+    .food-dot-veg::after {
+        background-color: #198754;
+    }
+    .food-dot-non_veg {
+        border-color: #dc3545;
+    }
+    .food-dot-non_veg::after {
+        background-color: #dc3545;
+        border-radius: 0;
+        clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+        width: 6px;
+        height: 6px;
+    }
+    .food-dot-egg {
+        border-color: #eab308;
+    }
+    .food-dot-egg::after {
+        background-color: #eab308;
+    }
+
     /* Modern Icon Action Buttons */
     .btn-action-icon {
         width: 30px;
@@ -527,7 +571,8 @@
 
                     <!-- Card Body -->
                     <div class="menu-card-content">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
+                        <div class="d-flex align-items-center gap-1.5 mb-1">
+                            <span class="food-dot food-dot-{{ item.food_type|default:'veg' }}" title="{{ item.get_food_type_display|default:'Veg' }}"></span>
                             <h6 class="menu-item-title mb-0" title="{{ item.name }}">{{ item.name }}</h6>
                         </div>
                         <p class="menu-item-desc mb-0" title="{{ item.description }}">
@@ -559,7 +604,7 @@
                                class="btn-action-icon text-warning" 
                                title="Recipe / Ingredients"
                                data-bs-toggle="tooltip">
-                                <i class="fas fa-egg"></i>
+                                <i class="fas fa-book-open"></i>
                             </a>
 
                             <!-- Edit -->
@@ -662,7 +707,10 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <div class="fw-bold text-dark">{{ item.name }}</div>
+                                <div class="fw-bold text-dark d-flex align-items-center gap-1.5">
+                                    <span class="food-dot food-dot-{{ item.food_type|default:'veg' }}" title="{{ item.get_food_type_display|default:'Veg' }}"></span>
+                                    <span>{{ item.name }}</span>
+                                </div>
                                 <div class="text-muted small text-truncate" style="max-width: 280px;">{{ item.description|default:"No description" }}</div>
                                 {% if item.short_code %}
                                 <span class="badge bg-light text-secondary border font-monospace mt-1" style="font-size: 10px;">#{{ item.short_code }}</span>
@@ -704,8 +752,8 @@
                                 <div class="d-inline-flex gap-1">
                                     <a href="{% url 'restaurant_admin:menu_recipe' restaurant_slug=rslug pk=item.id %}" 
                                        class="btn-action-icon text-warning" 
-                                       title="Recipe">
-                                        <i class="fas fa-egg"></i>
+                                       title="Recipe / Ingredients">
+                                        <i class="fas fa-book-open"></i>
                                     </a>
                                     <a href="{% url 'restaurant_admin:menu_edit' restaurant_slug=rslug pk=item.id %}" 
                                        class="btn-action-icon text-primary" 

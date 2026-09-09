@@ -1,185 +1,1757 @@
 {% extends 'restaurant_admin/base.html' %}
 {% load static %}
 
+{% block title %}{{ title }} | {{ restaurant.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Page Layout & Container */
+    .menu-form-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding-bottom: 60px;
+    }
+
+    /* Top Breadcrumb & Actions */
+    .page-header-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    .breadcrumb-nav {
+        font-size: 0.85rem;
+        color: #64748b;
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .breadcrumb-nav a {
+        color: #64748b;
+        text-decoration: none;
+        transition: color 0.15s ease;
+    }
+
+    .breadcrumb-nav a:hover {
+        color: #4f46e5;
+    }
+
+    .page-main-title {
+        font-size: 1.65rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0;
+        letter-spacing: -0.02em;
+    }
+
+    /* Action Buttons */
+    .btn-header-back {
+        background-color: #ffffff;
+        color: #334155;
+        border: 1px solid #cbd5e1;
+        font-weight: 600;
+        font-size: 0.88rem;
+        padding: 8px 18px;
+        border-radius: 10px;
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        text-decoration: none;
+    }
+
+    .btn-header-back:hover {
+        background-color: #f8fafc;
+        border-color: #94a3b8;
+        color: #0f172a;
+    }
+
+    .btn-header-save {
+        background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+        color: #ffffff;
+        border: none;
+        font-weight: 600;
+        font-size: 0.88rem;
+        padding: 9px 22px;
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+    }
+
+    .btn-header-save:hover {
+        background: linear-gradient(135deg, #4338ca 0%, #3730a3 100%);
+        box-shadow: 0 6px 16px rgba(79, 70, 229, 0.35);
+        transform: translateY(-1px);
+        color: #ffffff;
+    }
+
+    /* Cards */
+    .dish-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 22px 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        transition: box-shadow 0.2s ease;
+    }
+
+    .dish-card:hover {
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+    }
+
+    .dish-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 18px;
+    }
+
+    .dish-card-title {
+        font-size: 1.08rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* Form Labels & Inputs */
+    .form-group-custom {
+        margin-bottom: 16px;
+    }
+
+    .form-label-custom {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #334155;
+        margin-bottom: 6px;
+        display: block;
+    }
+
+    .form-label-custom .text-danger {
+        color: #ef4444 !important;
+    }
+
+    .form-control-custom,
+    .form-select-custom {
+        border: 1px solid #cbd5e1;
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 0.9rem;
+        color: #0f172a;
+        background-color: #f8fafc;
+        transition: all 0.2s ease;
+        width: 100%;
+    }
+
+    .form-control-custom:focus,
+    .form-select-custom:focus {
+        background-color: #ffffff;
+        border-color: #6366f1;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+    }
+
+    /* SKU Input Box */
+    .sku-input-wrapper {
+        display: inline-flex;
+        align-items: center;
+        background-color: #f1f5f9;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        padding: 2px 8px;
+        gap: 6px;
+        transition: all 0.2s ease;
+    }
+
+    .sku-input-wrapper.editable {
+        background-color: #ffffff;
+        border-color: #6366f1;
+        box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+    }
+
+    .sku-label-badge {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #64748b;
+        letter-spacing: 0.5px;
+    }
+
+    .sku-input-field {
+        border: none;
+        background: transparent;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #1e293b;
+        width: 95px;
+        outline: none;
+        padding: 3px 0;
+        cursor: pointer;
+    }
+
+    .sku-input-field:not([readonly]) {
+        cursor: text;
+    }
+
+    /* Channel Checkboxes */
+    .channels-grid {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        flex-wrap: wrap;
+    }
+
+    .channel-checkbox-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: #1e293b;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .channel-checkbox-label input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        border-radius: 4px;
+        accent-color: #4f46e5;
+        cursor: pointer;
+    }
+
+    /* FSSAI Legal Classification Pill Buttons */
+    .fssai-pills-container {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+    }
+
+    .fssai-pill-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 18px;
+        border-radius: 10px;
+        border: 1.5px solid #cbd5e1;
+        background: #ffffff;
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: #475569;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        user-select: none;
+    }
+
+    .fssai-pill-btn:hover {
+        border-color: #94a3b8;
+        transform: translateY(-1px);
+    }
+
+    .fssai-pill-btn.type-veg.active {
+        border-color: #22c55e;
+        background-color: #f0fdf4;
+        color: #15803d;
+        box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15);
+    }
+
+    .fssai-pill-btn.type-non_veg.active {
+        border-color: #b91c1c;
+        background-color: #fef2f2;
+        color: #991b1b;
+        box-shadow: 0 0 0 2px rgba(185, 28, 28, 0.15);
+    }
+
+    .fssai-pill-btn.type-egg.active {
+        border-color: #d97706;
+        background-color: #fffbeb;
+        color: #b45309;
+        box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.15);
+    }
+
+    /* Standard Food Classification Icons (FSSAI) */
+    .fssai-icon-box {
+        width: 17px;
+        height: 17px;
+        border-radius: 3px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .fssai-icon-box.veg {
+        border: 1.5px solid #16a34a;
+    }
+
+    .fssai-icon-box.veg .dot {
+        width: 7px;
+        height: 7px;
+        background-color: #16a34a;
+        border-radius: 50%;
+    }
+
+    .fssai-icon-box.non-veg {
+        border: 1.5px solid #b91c1c;
+    }
+
+    .fssai-icon-box.non-veg .triangle {
+        width: 0;
+        height: 0;
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-bottom: 7px solid #b91c1c;
+    }
+
+    .fssai-icon-box.egg {
+        border: 1.5px solid #b45309;
+    }
+
+    .fssai-icon-box.egg .dot {
+        width: 7px;
+        height: 7px;
+        background-color: #b45309;
+        border-radius: 50%;
+    }
+
+    /* Lifestyle Preferences Tag Buttons */
+    .lifestyle-tags-container {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .lifestyle-tag-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: 8px;
+        border: 1.5px solid #cbd5e1;
+        background: #ffffff;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #475569;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        user-select: none;
+    }
+
+    .lifestyle-tag-btn:hover:not(.disabled) {
+        border-color: #94a3b8;
+    }
+
+    .lifestyle-tag-btn.tag-jain.active:not(.disabled) {
+        border-color: #f97316;
+        background-color: #fff7ed;
+        color: #c2410c;
+        box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.15);
+    }
+
+    .lifestyle-tag-btn.tag-vegan.active:not(.disabled) {
+        border-color: #10b981;
+        background-color: #ecfdf5;
+        color: #047857;
+        box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15);
+    }
+
+    /* Disabled state for non-veg / egg */
+    .lifestyle-tag-btn.disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+        background-color: #f1f5f9 !important;
+        border-color: #e2e8f0 !important;
+        color: #94a3b8 !important;
+        box-shadow: none !important;
+    }
+
+    /* Dropzone Styling */
+    .image-dropzone {
+        border: 2px dashed #cbd5e1;
+        border-radius: 14px;
+        padding: 32px 20px;
+        text-align: center;
+        background-color: #f8fafc;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+
+    .image-dropzone:hover,
+    .image-dropzone.dragover {
+        border-color: #6366f1;
+        background-color: #f5f3ff;
+    }
+
+    .dropzone-icon-circle {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background-color: #e0e7ff;
+        color: #4f46e5;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.4rem;
+        margin-bottom: 10px;
+    }
+
+    .dropzone-text {
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: #334155;
+        margin-bottom: 4px;
+    }
+
+    .dropzone-subtext {
+        font-size: 0.75rem;
+        color: #94a3b8;
+    }
+
+    .dropzone-preview-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+    }
+
+    .dropzone-thumb {
+        width: 100px;
+        height: 80px;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+    }
+
+    /* Allergens Grid */
+    .allergens-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+    }
+
+    @media (max-width: 768px) {
+        .allergens-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    .allergen-card {
+        border: 1px solid #e2e8f0;
+        background: #f8fafc;
+        border-radius: 10px;
+        padding: 10px 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        user-select: none;
+    }
+
+    .allergen-card:hover {
+        background-color: #f1f5f9;
+        border-color: #cbd5e1;
+    }
+
+    .allergen-card.active {
+        border-color: #818cf8;
+        background-color: #eef2ff;
+    }
+
+    .allergen-card input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: #4f46e5;
+        cursor: pointer;
+    }
+
+    .allergen-title {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #1e293b;
+    }
+
+    /* Pricing Engine Banner */
+    .price-calculation-bar {
+        background: #eef2ff;
+        border: 1px solid #c7d2fe;
+        border-radius: 10px;
+        padding: 10px 16px;
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: #3730a3;
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        margin-top: 14px;
+        letter-spacing: 0.2px;
+    }
+
+    .price-calc-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .price-calc-sep {
+        color: #a5b4fc;
+    }
+
+    /* Variants Repeater */
+    .variants-container {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .variant-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        padding: 8px 12px;
+        border-radius: 10px;
+    }
+
+    .variant-type-select {
+        width: 110px;
+        flex-shrink: 0;
+    }
+
+    .variant-name-input {
+        flex: 1;
+    }
+
+    .variant-price-input {
+        width: 130px;
+        flex-shrink: 0;
+    }
+
+    .variant-delete-btn {
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        font-size: 1.1rem;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 6px;
+        transition: color 0.15s ease;
+    }
+
+    .variant-delete-btn:hover {
+        color: #ef4444;
+        background-color: #fee2e2;
+    }
+
+    /* Aggregator Overrides Card (Zomato / Swiggy) */
+    .aggregator-card {
+        border-color: #fed7aa;
+        background-color: #fffdfa;
+        transition: all 0.3s ease;
+    }
+
+    .aggregator-card-header {
+        background-color: #fff7ed;
+        margin: -22px -24px 18px -24px;
+        padding: 14px 24px;
+        border-top-left-radius: 15px;
+        border-top-right-radius: 15px;
+        border-bottom: 1px solid #ffedd5;
+    }
+
+    .aggregator-card-title {
+        font-size: 0.98rem;
+        font-weight: 700;
+        color: #9a3412;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* Phone Preview Mockup (Sticky Right Column) */
+    .phone-mockup-wrapper {
+        position: sticky;
+        top: 24px;
+        display: flex;
+        justify-content: center;
+    }
+
+    .phone-device {
+        width: 330px;
+        background-color: #0f172a;
+        border-radius: 42px;
+        padding: 12px;
+        box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(15, 23, 42, 0.1);
+    }
+
+    .phone-screen {
+        background-color: #f8fafc;
+        border-radius: 32px;
+        overflow: hidden;
+        min-height: 520px;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+    }
+
+    /* Phone Speaker Notch */
+    .phone-notch-bar {
+        height: 28px;
+        background-color: transparent;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        z-index: 10;
+    }
+
+    .phone-notch-pill {
+        width: 90px;
+        height: 14px;
+        background-color: #0f172a;
+        border-radius: 10px;
+    }
+
+    .phone-header-title {
+        font-size: 0.92rem;
+        font-weight: 700;
+        color: #0f172a;
+        padding: 6px 18px 12px;
+        text-align: left;
+    }
+
+    /* Preview Card inside Phone */
+    .phone-dish-card {
+        background: #ffffff;
+        border-radius: 18px;
+        margin: 0 14px 14px;
+        padding: 16px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+        display: flex;
+        flex-direction: column;
+    }
+
+    .phone-card-top-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+    }
+
+    /* Preview Badges */
+    .phone-lifestyle-badge {
+        font-size: 0.65rem;
+        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 4px;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+    }
+
+    .phone-lifestyle-badge.jain {
+        background-color: #ffedd5;
+        color: #c2410c;
+        border: 1px solid #fed7aa;
+    }
+
+    .phone-lifestyle-badge.vegan {
+        background-color: #d1fae5;
+        color: #047857;
+        border: 1px solid #a7f3d0;
+    }
+
+    .phone-dish-name {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 3px;
+        line-height: 1.3;
+        word-break: break-word;
+    }
+
+    .phone-dish-price {
+        font-size: 1.12rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 12px;
+    }
+
+    .phone-image-container {
+        width: 100%;
+        height: 155px;
+        background-color: #f1f5f9;
+        border-radius: 12px;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 14px;
+        position: relative;
+    }
+
+    .phone-dish-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .phone-img-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #94a3b8;
+    }
+
+    .phone-add-btn {
+        width: 100%;
+        background-color: #4f46e5;
+        color: #ffffff;
+        border: none;
+        padding: 11px;
+        border-radius: 10px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        cursor: default;
+    }
+
+    .phone-fssai-meta {
+        font-size: 0.72rem;
+        color: #64748b;
+        margin-top: 8px;
+        display: flex;
+        justify-content: space-between;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">{{ title }}</h3>
+<div class="menu-form-container">
+    <form method="post" enctype="multipart/form-data" id="menuItemForm" onsubmit="return validateForm(event);">
+        {% csrf_token %}
+
+        <!-- Top Header & Actions -->
+        <div class="page-header-top">
+            <div>
+                <div class="breadcrumb-nav">
+                    <a href="{% url 'restaurant_admin:menu_list' restaurant_slug=rslug %}">Menu Items</a>
+                    <i class="bi bi-chevron-right" style="font-size: 0.7rem;"></i>
+                    <span>{% if form.instance.pk %}Edit Dish{% else %}Add New{% endif %}</span>
+                </div>
+                <h1 class="page-main-title">
+                    {% if form.instance.pk %}Edit Dish: {{ form.instance.name }}{% else %}Create New Dish{% endif %}
+                </h1>
             </div>
-            <div class="card-body">
-                <form method="post" enctype="multipart/form-data" id="menuItemForm">
-                    {% csrf_token %}
-                    {% for field in form %}
-                        {% if field.name != 'subcategory' and field.name != 'is_tax_inclusive' %}
-                        <div class="mb-3">
-                            <label for="{{ field.id_for_label }}" class="form-label" {% if field.name == 'price' %}id="price-label"{% endif %}>
-                                {{ field.label }}
-                                {% if field.field.required %}<span class="text-danger">*</span>{% endif %}
-                            </label>
-                            {{ field }}
-                            {% if field.name == 'tax_type' and not form.serves_alcohol %}
-                            <div class="mt-2 py-1 px-2.5 rounded-2 border d-inline-flex align-items-center gap-2" style="background-color: #f8fafc; border-color: #e2e8f0 !important; font-size: 0.8rem;">
-                                <span class="badge bg-light text-success border border-success-subtle"><i class="bi bi-shield-check me-1"></i>No Alcohol Branch</span>
-                                <span class="text-muted">Branch compliance: State VAT alcohol taxes are hidden to prevent tax misclassification.</span>
-                            </div>
-                            {% endif %}
-                            {% if field.help_text %}
-                                <div class="form-text">{{ field.help_text }}</div>
-                            {% endif %}
-                            {% for error in field.errors %}
-                                <div class="invalid-feedback d-block">{{ error }}</div>
-                            {% endfor %}
-                        </div>
-
-                        {% if field.name == 'price' %}
-                        <!-- Tax Inclusive Toggle - rendered right after Price -->
-                        <div class="mb-3">
-                            <div class="form-check form-switch" style="padding-left: 2.8em;">
-                                {{ form.is_tax_inclusive }}
-                                <label class="form-check-label fw-medium" for="{{ form.is_tax_inclusive.id_for_label }}" style="cursor: pointer;">
-                                    <i class="bi bi-receipt-cutoff me-1 text-primary"></i> Price is Inclusive of Tax
-                                </label>
-                            </div>
-                            <div class="form-text ms-4 ps-2" id="tax-inclusive-hint" style="font-size: 0.78rem; color: #6b7280;">
-                                When enabled, the entered price includes tax. The system will reverse-calculate the base price.
-                            </div>
-                            {% for error in form.is_tax_inclusive.errors %}
-                                <div class="invalid-feedback d-block">{{ error }}</div>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-
-                        {% endif %}
-                    {% endfor %}
-                    
-                    <!-- Subcategory Field (will be populated by JavaScript) -->
-                    <div class="mb-3" id="subcategory-field">
-                        {{ form.subcategory.label_tag }}
-                        {{ form.subcategory }}
-                        {% if form.subcategory.help_text %}
-                            <div class="form-text">{{ form.subcategory.help_text }}</div>
-                        {% endif %}
-                        {% for error in form.subcategory.errors %}
-                            <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                    
-                    <div class="d-flex justify-content-between mt-4">
-                        <a href="{% url 'restaurant_admin:menu_list' restaurant_slug=rslug %}" class="btn btn-secondary">
-                            <i class="bi bi-arrow-left"></i> Back to List
-                        </a>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-save"></i> Save
-                        </button>
-                    </div>
-                </form>
+            <div class="d-flex align-items-center gap-2">
+                <a href="{% url 'restaurant_admin:menu_list' restaurant_slug=rslug %}" class="btn-header-back">
+                    Cancel & Back
+                </a>
+                <button type="submit" class="btn-header-save">
+                    <i class="bi bi-check-circle-fill"></i> Save & Publish
+                </button>
             </div>
         </div>
-    </div>
+
+        {% if form.errors %}
+        <div class="alert alert-danger alert-dismissible fade show rounded-3 mb-4" role="alert">
+            <strong><i class="bi bi-exclamation-triangle-fill me-2"></i>Please resolve the following errors:</strong>
+            <ul class="mb-0 mt-2 ps-3">
+                {% for field in form %}
+                    {% for error in field.errors %}
+                        <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+                    {% endfor %}
+                {% endfor %}
+                {% for error in form.non_field_errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endif %}
+
+        <div class="row g-4">
+            <!-- Left Column: Form Cards -->
+            <div class="col-lg-7 col-xl-8">
+
+                <!-- 1. Publishing Channels Card -->
+                <div class="dish-card">
+                    <div class="dish-card-header">
+                        <h2 class="dish-card-title">
+                            <i class="bi bi-broadcast text-primary"></i> Publishing Channels
+                        </h2>
+                        <div class="form-check form-switch mb-0">
+                            {{ form.availability }}
+                            <label class="form-check-label fw-semibold small text-muted ms-1" for="{{ form.availability.id_for_label }}">
+                                In Stock / Active
+                            </label>
+                        </div>
+                    </div>
+                    <div class="channels-grid">
+                        <label class="channel-checkbox-label">
+                            <input type="checkbox" name="publishing_channels" value="pos" id="channelPos"
+                                {% if not form.instance.pk or 'pos' in form.publishing_channels.value or 'pos' in form.initial.publishing_channels %}checked{% endif %}>
+                            POS & Billing
+                        </label>
+                        <label class="channel-checkbox-label">
+                            <input type="checkbox" name="publishing_channels" value="qr" id="channelQr"
+                                {% if not form.instance.pk or 'qr' in form.publishing_channels.value or 'qr' in form.initial.publishing_channels %}checked{% endif %}>
+                            QR Menu
+                        </label>
+                        <label class="channel-checkbox-label">
+                            <input type="checkbox" name="publishing_channels" value="online" id="channelOnline"
+                                {% if 'online' in form.publishing_channels.value or 'online' in form.initial.publishing_channels %}checked{% endif %}>
+                            Zomato / Swiggy
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 2. Basic Profile Card -->
+                <div class="dish-card">
+                    <div class="dish-card-header">
+                        <h2 class="dish-card-title">Basic Profile</h2>
+                        <div class="sku-input-wrapper" id="skuWrapper" title="Double click to edit SKU manually">
+                            <span class="sku-label-badge">SKU:</span>
+                            <input type="text" name="sku" id="id_sku"
+                                   value="{{ form.sku.value|default:'' }}"
+                                   class="sku-input-field"
+                                   placeholder="Auto"
+                                   readonly>
+                        </div>
+                    </div>
+
+                    <!-- Item Name & Short Code (Fast POS Code) -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label-custom" for="{{ form.name.id_for_label }}">
+                                Item Name <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" name="name" id="id_name"
+                                   class="form-control-custom"
+                                   placeholder="e.g., Signature Butter Chicken"
+                                   value="{{ form.name.value|default:'' }}" required>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label-custom" for="{{ form.short_code.id_for_label }}">
+                                <i class="bi bi-upc-scan text-primary me-1"></i> Short Code (Fast POS Code)
+                            </label>
+                            <input type="text" name="short_code" id="id_short_code"
+                                   class="form-control-custom font-monospace text-uppercase"
+                                   placeholder="e.g. 101, 301, NAAN"
+                                   value="{{ form.short_code.value|default:'' }}"
+                                   style="font-weight: 600; letter-spacing: 0.5px;">
+                            <div class="form-text" style="font-size: 0.74rem; color: #64748b; margin-top: 4px;">
+                                Quick shortcut code for POS billing (e.g. 101, 301, NAAN)
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Category & Subcategory -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label-custom" for="{{ form.category.id_for_label }}">Category</label>
+                            <select name="category" id="id_category" class="form-select-custom">
+                                <option value="">-- Select Category --</option>
+                                {% for cat in categories %}
+                                    <option value="{{ cat.id }}" {% if form.category.value|stringformat:"s" == cat.id|stringformat:"s" %}selected{% endif %}>
+                                        {{ cat.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6" id="subcategory-field">
+                            <label class="form-label-custom" for="{{ form.subcategory.id_for_label }}">Subcategory (optional)</label>
+                            <select name="subcategory" id="id_subcategory" class="form-select-custom">
+                                <option value="">---------</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Legal FSSAI Classification (Veg, Non-Veg, Egg) -->
+                    <div class="form-group-custom">
+                        <label class="form-label-custom">
+                            LEGAL FSSAI CLASSIFICATION <span class="text-danger">*</span>
+                        </label>
+                        <input type="hidden" name="food_type" id="id_food_type" value="{{ form.food_type.value|default:'veg' }}">
+
+                        <div class="fssai-pills-container">
+                            <button type="button" class="fssai-pill-btn type-veg {% if form.food_type.value == 'veg' or not form.food_type.value %}active{% endif %}" data-val="veg">
+                                <span class="fssai-icon-box veg"><span class="dot"></span></span>
+                                Veg
+                            </button>
+                            <button type="button" class="fssai-pill-btn type-non_veg {% if form.food_type.value == 'non_veg' %}active{% endif %}" data-val="non_veg">
+                                <span class="fssai-icon-box non-veg"><span class="triangle"></span></span>
+                                Non-Veg
+                            </button>
+                            <button type="button" class="fssai-pill-btn type-egg {% if form.food_type.value == 'egg' %}active{% endif %}" data-val="egg">
+                                <span class="fssai-icon-box egg"><span class="dot"></span></span>
+                                Egg
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Lifestyle Preferences (Jain, Vegan) -->
+                    <div class="form-group-custom mb-3">
+                        <label class="form-label-custom">LIFESTYLE PREFERENCES</label>
+                        <div class="d-none">
+                            {{ form.is_jain }}
+                            {{ form.is_vegan }}
+                        </div>
+                        <div class="lifestyle-tags-container">
+                            <button type="button" class="lifestyle-tag-btn tag-jain {% if form.is_jain.value %}active{% endif %}" id="btnJainToggle">
+                                <span>🍂</span> Jain
+                            </button>
+                            <button type="button" class="lifestyle-tag-btn tag-vegan {% if form.is_vegan.value %}active{% endif %}" id="btnVeganToggle">
+                                <span>🌱</span> Vegan
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Description -->
+                    <div class="form-group-custom mb-0">
+                        <textarea name="description" id="id_description" rows="3"
+                                  class="form-control-custom"
+                                  placeholder="Brief description...">{{ form.description.value|default:'' }}</textarea>
+                    </div>
+                </div>
+
+                <!-- 3. Item Image Card -->
+                <div class="dish-card">
+                    <div class="dish-card-header">
+                        <h2 class="dish-card-title">Item Image</h2>
+                    </div>
+
+                    <input type="file" name="image" id="id_image" accept="image/*" class="d-none">
+
+                    <div class="image-dropzone" id="imageDropzone">
+                        <div id="dropzoneEmpty" {% if form.instance.image %}class="d-none"{% endif %}>
+                            <div class="dropzone-icon-circle">
+                                <i class="bi bi-image"></i>
+                            </div>
+                            <div class="dropzone-text">Click or drag image here</div>
+                            <div class="dropzone-subtext">JPG, PNG, WEBP recommended (Max 5MB)</div>
+                        </div>
+
+                        <div id="dropzonePreview" class="{% if not form.instance.image %}d-none{% endif %} dropzone-preview-container">
+                            <img src="{% if form.instance.image %}{{ form.instance.image.url }}{% endif %}"
+                                 id="dropzonePreviewImg" alt="Dish Preview" class="dropzone-thumb">
+                            <div class="text-start">
+                                <div class="fw-bold small text-dark" id="dropzoneFileName">
+                                    {% if form.instance.image %}Current Image{% else %}Selected Image{% endif %}
+                                </div>
+                                <div class="d-flex gap-2 mt-2">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" id="btnChangeImage">
+                                        <i class="bi bi-arrow-repeat"></i> Change
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" id="btnRemoveImage">
+                                        <i class="bi bi-trash"></i> Remove
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. FSSAI Compliance Card -->
+                <div class="dish-card">
+                    <div class="dish-card-header">
+                        <div class="d-flex align-items-center gap-2">
+                            <h2 class="dish-card-title">FSSAI Compliance</h2>
+                            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1"
+                                  style="font-size: 0.72rem; letter-spacing: 0.5px;">MANDATORY</span>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label-custom" for="{{ form.calories.id_for_label }}">Calories (Kcal)</label>
+                            <input type="text" name="calories" id="id_calories"
+                                   class="form-control-custom"
+                                   placeholder="e.g. 450"
+                                   value="{{ form.calories.value|default:'' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-custom" for="{{ form.portion_serves.id_for_label }}">Portion Serves</label>
+                            <select name="portion_serves" id="id_portion_serves" class="form-select-custom">
+                                <option value="1 Person" {% if form.portion_serves.value == '1 Person' or not form.portion_serves.value %}selected{% endif %}>1 Person</option>
+                                <option value="2 Persons" {% if form.portion_serves.value == '2 Persons' %}selected{% endif %}>2 Persons</option>
+                                <option value="3-4 Persons" {% if form.portion_serves.value == '3-4 Persons' %}selected{% endif %}>3-4 Persons</option>
+                                <option value="Family Pack" {% if form.portion_serves.value == 'Family Pack' %}selected{% endif %}>Family Pack</option>
+                                <option value="Per Piece / Single" {% if form.portion_serves.value == 'Per Piece / Single' %}selected{% endif %}>Per Piece / Single</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group-custom mb-0">
+                        <label class="form-label-custom">Select Allergens (The 8 Major FSSAI Allergens)</label>
+                        <div class="allergens-grid mt-2">
+                            {% with active_allergens=form.allergens.value|default:form.initial.allergens %}
+                            <label class="allergen-card {% if 'Dairy/Milk' in active_allergens %}active{% endif %}">
+                                <input type="checkbox" name="allergens" value="Dairy/Milk" {% if 'Dairy/Milk' in active_allergens %}checked{% endif %}>
+                                <span class="allergen-title">Dairy/Milk</span>
+                            </label>
+                            <label class="allergen-card {% if 'Gluten' in active_allergens %}active{% endif %}">
+                                <input type="checkbox" name="allergens" value="Gluten" {% if 'Gluten' in active_allergens %}checked{% endif %}>
+                                <span class="allergen-title">Gluten</span>
+                            </label>
+                            <label class="allergen-card {% if 'Peanuts' in active_allergens %}active{% endif %}">
+                                <input type="checkbox" name="allergens" value="Peanuts" {% if 'Peanuts' in active_allergens %}checked{% endif %}>
+                                <span class="allergen-title">Peanuts</span>
+                            </label>
+                            <label class="allergen-card {% if 'Tree Nuts' in active_allergens %}active{% endif %}">
+                                <input type="checkbox" name="allergens" value="Tree Nuts" {% if 'Tree Nuts' in active_allergens %}checked{% endif %}>
+                                <span class="allergen-title">Tree Nuts</span>
+                            </label>
+                            <label class="allergen-card {% if 'Eggs' in active_allergens %}active{% endif %}">
+                                <input type="checkbox" name="allergens" value="Eggs" {% if 'Eggs' in active_allergens %}checked{% endif %}>
+                                <span class="allergen-title">Eggs</span>
+                            </label>
+                            <label class="allergen-card {% if 'Fish' in active_allergens %}active{% endif %}">
+                                <input type="checkbox" name="allergens" value="Fish" {% if 'Fish' in active_allergens %}checked{% endif %}>
+                                <span class="allergen-title">Fish</span>
+                            </label>
+                            <label class="allergen-card {% if 'Crustaceans' in active_allergens %}active{% endif %}">
+                                <input type="checkbox" name="allergens" value="Crustaceans" {% if 'Crustaceans' in active_allergens %}checked{% endif %}>
+                                <span class="allergen-title">Crustaceans</span>
+                            </label>
+                            <label class="allergen-card {% if 'Soybeans' in active_allergens %}active{% endif %}">
+                                <input type="checkbox" name="allergens" value="Soybeans" {% if 'Soybeans' in active_allergens %}checked{% endif %}>
+                                <span class="allergen-title">Soybeans</span>
+                            </label>
+                            {% endwith %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. Pricing Engine Card -->
+                <div class="dish-card" style="border-top: 3px solid #6366f1;">
+                    <div class="dish-card-header">
+                        <h2 class="dish-card-title">Pricing Engine</h2>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="small fw-semibold text-muted">Tax Inclusive</span>
+                            <div class="form-check form-switch mb-0">
+                                {{ form.is_tax_inclusive }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label-custom" id="priceInputLabel" for="{{ form.price.id_for_label }}">
+                                Base Price (Tax Excl.) <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0" style="border-radius: 10px 0 0 10px; font-weight: 600; color: #475569;">₹</span>
+                                <input type="number" name="price" id="id_price"
+                                       class="form-control form-control-custom border-start-0"
+                                       style="border-radius: 0 10px 10px 0;"
+                                       step="0.01" min="0" placeholder="0.00"
+                                       value="{{ form.price.value|default:'' }}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-custom" for="{{ form.tax_type.id_for_label }}">GST</label>
+                            {{ form.tax_type }}
+                            {% if not form.serves_alcohol %}
+                            <div class="mt-1" style="font-size: 0.74rem; color: #64748b;">
+                                <i class="bi bi-shield-check text-success"></i> 5% GST Food & Non-Alcoholic (Standard F&B rate)
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Real-time calculation bar -->
+                    <div class="price-calculation-bar" id="priceCalculationBar">
+                        <div class="price-calc-item">Base: <strong id="calcBasePrice">₹0.00</strong></div>
+                        <div class="price-calc-sep">|</div>
+                        <div class="price-calc-item">Tax: <strong id="calcTaxAmount">₹0.00</strong></div>
+                        <div class="price-calc-sep">|</div>
+                        <div class="price-calc-item">Final: <strong id="calcFinalPrice">₹0.00</strong></div>
+                    </div>
+                </div>
+
+                <!-- 6. Variants & Add-ons Card -->
+                <div class="dish-card">
+                    <div class="dish-card-header">
+                        <h2 class="dish-card-title">Variants & Add-ons</h2>
+                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" id="btnAddVariantRow">
+                            <i class="bi bi-plus-lg"></i> Add Row
+                        </button>
+                    </div>
+
+                    <input type="hidden" name="variants_json" id="id_variants_json"
+                           value="{{ variants_json_str|default:'[]'|escape }}">
+
+                    <div class="variants-container" id="variantsContainer">
+                        <!-- Rows rendered dynamically via JS -->
+                    </div>
+                </div>
+
+                <!-- 7. Zomato / Swiggy Overrides Card (Expands when Zomato/Swiggy is checked) -->
+                <div class="dish-card aggregator-card" id="aggregatorSettingsCard" style="display: none;">
+                    <div class="aggregator-card-header">
+                        <h3 class="aggregator-card-title">
+                            🚀 Zomato / Swiggy Overrides
+                        </h3>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label-custom" for="{{ form.markup_price.id_for_label }}">Markup Price (₹)</label>
+                            <input type="number" name="markup_price" id="id_markup_price"
+                                   class="form-control-custom"
+                                   step="0.01" min="0" placeholder="0"
+                                   value="{{ form.markup_price.value|default:'' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-custom" for="{{ form.packaging_fee.id_for_label }}">Packaging (₹)</label>
+                            <input type="number" name="packaging_fee" id="id_packaging_fee"
+                                   class="form-control-custom"
+                                   step="0.01" min="0" placeholder="0"
+                                   value="{{ form.packaging_fee.value|default:'' }}">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bottom Actions -->
+                <div class="d-flex justify-content-between align-items-center mt-4">
+                    <a href="{% url 'restaurant_admin:menu_list' restaurant_slug=rslug %}" class="btn-header-back">
+                        <i class="bi bi-arrow-left"></i> Cancel & Back
+                    </a>
+                    <button type="submit" class="btn-header-save">
+                        <i class="bi bi-check-circle-fill"></i> Save & Publish
+                    </button>
+                </div>
+
+            </div>
+
+            <!-- Right Column: Sticky Live Mobile Phone Mockup -->
+            <div class="col-lg-5 col-xl-4">
+                <div class="phone-mockup-wrapper">
+                    <div class="phone-device">
+                        <div class="phone-screen">
+                            <!-- Top speaker notch -->
+                            <div class="phone-notch-bar">
+                                <div class="phone-notch-pill"></div>
+                            </div>
+
+                            <!-- Phone screen header -->
+                            <div class="phone-header-title">
+                                {{ restaurant.name|default:"Food Heaven" }} Menu
+                            </div>
+
+                            <!-- Live Dish Card -->
+                            <div class="phone-dish-card">
+                                <!-- Top Row: FSSAI Icon + JAIN / VEGAN Tags -->
+                                <div class="phone-card-top-row">
+                                    <span id="previewFssaiIcon" class="fssai-icon-box veg">
+                                        <span class="dot"></span>
+                                    </span>
+                                    <span class="phone-lifestyle-badge jain d-none" id="previewJainTag">JAIN</span>
+                                    <span class="phone-lifestyle-badge vegan d-none" id="previewVeganTag">VEGAN</span>
+                                </div>
+
+                                <!-- Dish Name -->
+                                <div class="phone-dish-name" id="previewDishName">
+                                    {{ form.instance.name|default:"Item Name" }}
+                                </div>
+
+                                <!-- Dish Price (Supports 'Starts at ₹' or standard '₹') -->
+                                <div class="phone-dish-price" id="previewDishPrice">
+                                    ₹{{ form.instance.price|default:"0" }}
+                                </div>
+
+                                <!-- Dish Image -->
+                                <div class="phone-image-container" id="previewImageContainer">
+                                    {% if form.instance.image %}
+                                        <img src="{{ form.instance.image.url }}" id="phonePreviewImg" alt="Dish Preview" class="phone-dish-img">
+                                        <div class="phone-img-placeholder d-none" id="phoneImgPlaceholder">
+                                            <i class="bi bi-image" style="font-size: 2.2rem;"></i>
+                                        </div>
+                                    {% else %}
+                                        <img src="" id="phonePreviewImg" alt="Dish Preview" class="phone-dish-img d-none">
+                                        <div class="phone-img-placeholder" id="phoneImgPlaceholder">
+                                            <i class="bi bi-image" style="font-size: 2.2rem;"></i>
+                                        </div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Action Button -->
+                                <button type="button" class="phone-add-btn">
+                                    ADD TO CART
+                                </button>
+
+                                <!-- FSSAI Meta Information -->
+                                <div class="phone-fssai-meta">
+                                    <span id="previewCaloriesMeta">
+                                        {% if form.instance.calories %}🔥 {{ form.instance.calories }} Kcal{% endif %}
+                                    </span>
+                                    <span id="previewPortionMeta">
+                                        {{ form.instance.portion_serves|default:"1 Person" }}
+                                    </span>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </form>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
-    $(document).ready(function() {
-        // Add Bootstrap classes to form elements
-        $('input:not([type="checkbox"]), select, textarea').addClass('form-control');
-        $('input[type="checkbox"]').addClass('form-check-input');
-        // Apply form-switch to checkboxes except is_tax_inclusive (already styled)
-        $('input[type="checkbox"]').not('#id_is_tax_inclusive').parent().addClass('form-check form-switch');
-        $('input[type="checkbox"]').not('#id_is_tax_inclusive').next('label').addClass('form-check-label');
+// ============================================================================
+// 1. Dietary & Lifestyle Classification Logic
+// ============================================================================
+function handleDietChange(selectedDiet) {
+    $('#id_food_type').val(selectedDiet);
+    $('.fssai-pill-btn').removeClass('active');
+    $(`.fssai-pill-btn[data-val="${selectedDiet}"]`).addClass('active');
 
-        // Dynamic label switching for tax-inclusive toggle
-        function updatePriceLabel() {
-            const isInclusive = $('#id_is_tax_inclusive').is(':checked');
-            const priceLabel = $('#price-label');
-            const priceInput = $('#id_price');
-            const hint = $('#tax-inclusive-hint');
-            if (isInclusive) {
-                priceLabel.html('Price (Tax Inclusive) <span class="text-danger">*</span>');
-                priceInput.attr('placeholder', 'e.g. 100 (Customer pays exactly 100)');
-                hint.html('The entered price <strong>includes</strong> tax. The system will reverse-calculate the base taxable value.');
-            } else {
-                priceLabel.html('Base Price (Tax Exclusive) <span class="text-danger">*</span>');
-                priceInput.attr('placeholder', 'e.g. 100 (Tax will be added on top)');
-                hint.html('The entered price is the base price. Tax will be calculated and added on top.');
-            }
+    const $jainBtn = $('#btnJainToggle');
+    const $veganBtn = $('#btnVeganToggle');
+    const $jainCb = $('#id_is_jain');
+    const $veganCb = $('#id_is_vegan');
+
+    if (selectedDiet === 'non_veg' || selectedDiet === 'egg') {
+        // Automatically disable and uncheck Jain & Vegan
+        $jainCb.prop('checked', false);
+        $veganCb.prop('checked', false);
+        $jainBtn.removeClass('active').addClass('disabled');
+        $veganBtn.removeClass('active').addClass('disabled');
+    } else {
+        // Veg enables Jain & Vegan selection
+        $jainBtn.removeClass('disabled');
+        $veganBtn.removeClass('disabled');
+    }
+
+    updateTag();
+}
+
+function updateTag() {
+    const diet = $('#id_food_type').val() || 'veg';
+    const isJain = $('#id_is_jain').is(':checked');
+    const isVegan = $('#id_is_vegan').is(':checked');
+
+    // Update FSSAI symbol on Phone preview
+    const $icon = $('#previewFssaiIcon');
+    $icon.removeClass('veg non-veg egg');
+    if (diet === 'non_veg') {
+        $icon.addClass('non-veg').html('<span class="triangle"></span>');
+    } else if (diet === 'egg') {
+        $icon.addClass('egg').html('<span class="dot"></span>');
+    } else {
+        $icon.addClass('veg').html('<span class="dot"></span>');
+    }
+
+    // Update JAIN & VEGAN badges in preview (only valid for veg)
+    if (diet === 'veg') {
+        $('#previewJainTag').toggleClass('d-none', !isJain);
+        $('#previewVeganTag').toggleClass('d-none', !isVegan);
+    } else {
+        $('#previewJainTag').addClass('d-none');
+        $('#previewVeganTag').addClass('d-none');
+    }
+}
+
+// ============================================================================
+// 2. Smart Pricing & Taxation Logic
+// ============================================================================
+function getTaxRatePercentage() {
+    const taxType = $('#id_tax_type').val() || 'GST_FOOD';
+    if (taxType === 'VAT_BEER') return 60.0;
+    if (taxType === 'VAT_IMFL') return 65.0;
+    if (taxType === 'VAT_WINE') return 60.0;
+    if (taxType === 'VAT_LIQUOR') return 20.0;
+    return 5.0; // Standard 5% GST Food & Non-Alcoholic
+}
+
+function calculateSmartPrice() {
+    const rawPrice = parseFloat($('#id_price').val()) || 0;
+    const isInclusive = $('#id_is_tax_inclusive').is(':checked');
+    const taxRate = getTaxRatePercentage();
+
+    let basePrice = 0;
+    let taxAmount = 0;
+    let finalPrice = 0;
+
+    if (rawPrice > 0) {
+        if (isInclusive) {
+            // Tax Inclusive: Entered price is final customer price
+            finalPrice = rawPrice;
+            basePrice = finalPrice / (1 + (taxRate / 100));
+            taxAmount = finalPrice - basePrice;
+        } else {
+            // Tax Exclusive: Entered price is Base Price
+            basePrice = rawPrice;
+            taxAmount = basePrice * (taxRate / 100);
+            finalPrice = basePrice + taxAmount;
         }
-        $('#id_is_tax_inclusive').on('change', updatePriceLabel);
-        updatePriceLabel(); // Set correct state on page load
-        
-        // Image preview
-        const imageInput = $('input[type="file"]');
-        if (imageInput.length) {
-            const imagePreview = $('<img>', {
-                id: 'image-preview',
-                css: {
-                    'max-width': '200px',
-                    'margin-top': '10px',
-                    'display': 'none'
-                }
-            });
-            imageInput.after(imagePreview);
-            
-            imageInput.on('change', function(e) {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        imagePreview.attr('src', e.target.result).show();
-                    }
-                    reader.readAsDataURL(file);
-                } else {
-                    imagePreview.hide();
-                }
-            });
-        }
-        
-        // Handle category change to load subcategories
-        $('#id_category').on('change', function() {
-            const categoryId = $(this).val();
-            const subcategoryField = $('#id_subcategory');
-            
-            if (categoryId) {
-                // Show loading state
-                subcategoryField.html('<option value="">Loading subcategories...</option>');
-                
-                // Fetch subcategories via AJAX
-                $.ajax({
-                    url: '{% url "restaurant_admin:get_subcategories" restaurant_slug=rslug %}',
-                    data: {
-                        'category_id': categoryId
-                    },
-                    dataType: 'json',
-                    success: function(data) {
-                        let options = '<option value="">---------</option>';
-                        $.each(data, function(index, subcategory) {
-                            options += '<option value="' + subcategory.id + '">' + subcategory.name + '</option>';
-                        });
-                        subcategoryField.html(options);
-                        
-                        // Set the previously selected subcategory if editing
-                        const selectedSubcategory = "{{ form.instance.subcategory_id|default:'' }}";
-                        if (selectedSubcategory) {
-                            subcategoryField.val(selectedSubcategory);
-                        }
-                    },
-                    error: function() {
-                        subcategoryField.html('<option value="">Error loading subcategories</option>');
-                    }
-                });
-            } else {
-                subcategoryField.html('<option value="">---------</option>');
-            }
-        });
-        
-        // Trigger change event to load subcategories if category is already selected
-        if ($('#id_category').val()) {
-            $('#id_category').trigger('change');
+    }
+
+    // Live display banner
+    $('#calcBasePrice').text(`₹${basePrice.toFixed(2)}`);
+    $('#calcTaxAmount').text(`₹${taxAmount.toFixed(2)}`);
+    $('#calcFinalPrice').text(`₹${finalPrice.toFixed(2)}`);
+
+    // Label toggle
+    if (isInclusive) {
+        $('#priceInputLabel').html('Price (Tax Inclusive) <span class="text-danger">*</span>');
+    } else {
+        $('#priceInputLabel').html('Base Price (Tax Excl.) <span class="text-danger">*</span>');
+    }
+
+    syncData();
+}
+
+// ============================================================================
+// 3. SKU (Stock Keeping Unit) Generation & Manual Override
+// ============================================================================
+let userCustomSku = false;
+
+function generateSKU(name) {
+    const $skuInput = $('#id_sku');
+    // If user made manual edits or field is not readonly, don't overwrite
+    if (userCustomSku || !$skuInput.prop('readonly')) {
+        return;
+    }
+
+    const clean = (name || '').trim().toUpperCase();
+    let prefix = 'ITM';
+    const lettersOnly = clean.replace(/[^A-Z]/g, '');
+
+    if (lettersOnly.length >= 3) {
+        prefix = lettersOnly.substring(0, 3);
+    } else if (lettersOnly.length > 0) {
+        prefix = (lettersOnly + 'ITM').substring(0, 3);
+    }
+
+    // Generate random 4-digit number
+    const random4 = Math.floor(1000 + Math.random() * 9000);
+    $skuInput.val(`${prefix}-${random4}`);
+}
+
+// ============================================================================
+// 4. Variant and Live Preview Logic ("Starts At" & Aggregator Sync)
+// ============================================================================
+let variants = [];
+
+function syncData() {
+    // 1. Sync Dish Name
+    const nameVal = $('#id_name').val().trim();
+    $('#previewDishName').text(nameVal || 'Item Name');
+
+    // 2. Compute "Starts At" Price based on standard variants (like "Size")
+    const rawPrice = parseFloat($('#id_price').val()) || 0;
+    const isInclusive = $('#id_is_tax_inclusive').is(':checked');
+    const taxRate = getTaxRatePercentage();
+    const finalBasePrice = isInclusive ? rawPrice : (rawPrice * (1 + (taxRate / 100)));
+
+    let sizePrices = [];
+    variants.forEach(v => {
+        if (v.type === 'Size' && v.price !== '' && !isNaN(parseFloat(v.price))) {
+            const p = parseFloat(v.price);
+            if (p > 0) sizePrices.push(p);
         }
     });
+
+    if (sizePrices.length > 0) {
+        // If "Size" variants exist, find minimum price among them
+        const minVariantPrice = Math.min(...sizePrices);
+        $('#previewDishPrice').text(`Starts at ₹${minVariantPrice}`);
+    } else {
+        const displayPrice = finalBasePrice > 0 ? `₹${finalBasePrice.toFixed(2).replace(/\.00$/, '')}` : `₹${rawPrice}`;
+        $('#previewDishPrice').text(displayPrice);
+    }
+}
+
+function toggleAggregatorSettings() {
+    const isChecked = $('#channelOnline').is(':checked');
+    if (isChecked) {
+        $('#aggregatorSettingsCard').slideDown(200);
+    } else {
+        $('#aggregatorSettingsCard').slideUp(200);
+    }
+}
+
+// ============================================================================
+// 5. Form Validation Logic (validateForm)
+// ============================================================================
+function validateForm(e) {
+    const name = $('#id_name').val().trim();
+    const price = parseFloat($('#id_price').val());
+    const channelsChecked = $('input[name="publishing_channels"]:checked').length;
+
+    // 1. Item Name validation
+    if (!name) {
+        alert('Please enter an Item Name.');
+        $('#id_name').focus();
+        if (e) e.preventDefault();
+        return false;
+    }
+
+    // 2. Base Price validation
+    if (isNaN(price) || price < 0) {
+        alert('Please enter a valid non-negative Base Price.');
+        $('#id_price').focus();
+        if (e) e.preventDefault();
+        return false;
+    }
+
+    // 3. Variant rows validation
+    let variantError = null;
+    variants.forEach((v, idx) => {
+        if (!v.name || !v.name.trim()) {
+            variantError = `Variant row #${idx + 1} must have a valid name.`;
+        } else if (v.price !== '' && (isNaN(parseFloat(v.price)) || parseFloat(v.price) < 0)) {
+            variantError = `Variant '${v.name}' price cannot be negative.`;
+        }
+    });
+    if (variantError) {
+        alert(variantError);
+        if (e) e.preventDefault();
+        return false;
+    }
+
+    // 4. Publishing Channel validation (At least one required)
+    if (channelsChecked === 0) {
+        alert('Please select at least one Publishing Channel (POS & Billing, QR Menu, or Zomato / Swiggy).');
+        $('#channelPos').focus();
+        if (e) e.preventDefault();
+        return false;
+    }
+
+    // Serialize variants before submit
+    syncVariantsJson();
+    return true;
+}
+
+// ============================================================================
+// Variants Repeater Functions
+// ============================================================================
+function renderVariantRows() {
+    const $container = $('#variantsContainer');
+    $container.empty();
+
+    if (variants.length === 0) {
+        $container.html('<div class="text-muted small py-2 fst-italic">No variants or add-ons added yet. Click "+ Add Row" above.</div>');
+        return;
+    }
+
+    variants.forEach((v, index) => {
+        const rowHtml = `
+            <div class="variant-row" data-index="${index}">
+                <select class="form-select form-select-sm variant-type-select">
+                    <option value="Size" ${v.type === 'Size' ? 'selected' : ''}>Size</option>
+                    <option value="Extra" ${v.type === 'Extra' ? 'selected' : ''}>Extra</option>
+                </select>
+                <input type="text" class="form-control form-control-sm variant-name-input"
+                       placeholder="e.g. Large" value="${escapeHtml(v.name || '')}">
+                <div class="input-group input-group-sm variant-price-input">
+                    <span class="input-group-text">₹</span>
+                    <input type="number" step="0.01" min="0" class="form-control variant-price-num"
+                           placeholder="Price" value="${v.price !== undefined ? v.price : ''}">
+                </div>
+                <button type="button" class="variant-delete-btn" title="Delete Row">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        `;
+        $container.append(rowHtml);
+    });
+}
+
+function syncVariantsJson() {
+    const rows = [];
+    $('#variantsContainer .variant-row').each(function() {
+        const type = $(this).find('.variant-type-select').val();
+        const name = $(this).find('.variant-name-input').val().trim();
+        const priceVal = $(this).find('.variant-price-num').val();
+        const price = priceVal !== '' ? parseFloat(priceVal) : '';
+        if (name || price !== '') {
+            rows.push({ type, name, price });
+        }
+    });
+    variants = rows;
+    $('#id_variants_json').val(JSON.stringify(rows));
+    syncData();
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// ============================================================================
+// Initialization & Event Bindings
+// ============================================================================
+$(document).ready(function() {
+    // 1. Initial Diet & Tags Setup
+    const initialDiet = $('#id_food_type').val() || 'veg';
+    handleDietChange(initialDiet);
+
+    $('.fssai-pill-btn').on('click', function(e) {
+        e.preventDefault();
+        const diet = $(this).data('val');
+        handleDietChange(diet);
+    });
+
+    // Jain Toggle
+    $('#btnJainToggle').on('click', function(e) {
+        e.preventDefault();
+        if ($(this).hasClass('disabled')) return;
+        const $cb = $('#id_is_jain');
+        const nextState = !$cb.is(':checked');
+        $cb.prop('checked', nextState);
+        $(this).toggleClass('active', nextState);
+        updateTag();
+    });
+
+    // Vegan Toggle
+    $('#btnVeganToggle').on('click', function(e) {
+        e.preventDefault();
+        if ($(this).hasClass('disabled')) return;
+        const $cb = $('#id_is_vegan');
+        const nextState = !$cb.is(':checked');
+        $cb.prop('checked', nextState);
+        $(this).toggleClass('active', nextState);
+        updateTag();
+    });
+
+    // 2. Item Name change -> generate SKU & sync preview
+    $('#id_name').on('input', function() {
+        const val = $(this).val();
+        generateSKU(val);
+        syncData();
+    });
+
+    // Double-click SKU input to override
+    const $skuInput = $('#id_sku');
+    const $skuWrapper = $('#skuWrapper');
+
+    // If existing item has SKU, mark as custom
+    if ($skuInput.val().trim() !== '' && "{{ form.instance.pk|default:'' }}") {
+        userCustomSku = true;
+    }
+
+    $skuWrapper.on('dblclick', function() {
+        $skuInput.prop('readonly', false).focus();
+        $skuWrapper.addClass('editable');
+        userCustomSku = true;
+    });
+
+    $skuInput.on('blur', function() {
+        if ($(this).val().trim() === '') {
+            $skuInput.prop('readonly', true);
+            $skuWrapper.removeClass('editable');
+            userCustomSku = false;
+            generateSKU($('#id_name').val());
+        }
+    });
+
+    // 3. Pricing & Tax Engine
+    $('#id_price, #id_tax_type').on('input change', calculateSmartPrice);
+    $('#id_is_tax_inclusive').on('change', calculateSmartPrice);
+    calculateSmartPrice();
+
+    // 4. Aggregator Overrides Toggle
+    $('#channelOnline').on('change', toggleAggregatorSettings);
+    toggleAggregatorSettings(); // initial check
+
+    // 5. Variants Repeater Setup
+    try {
+        let raw = ($('#id_variants_json').val() || '').trim();
+        if (raw) {
+            try {
+                variants = JSON.parse(raw);
+            } catch(e) {
+                const fixed = raw.replace(/'/g, '"').replace(/True/g, 'true').replace(/False/g, 'false').replace(/None/g, 'null');
+                variants = JSON.parse(fixed);
+            }
+        } else {
+            variants = [];
+        }
+        if (!Array.isArray(variants)) variants = [];
+    } catch(e) {
+        variants = [];
+    }
+    renderVariantRows();
+
+    $('#btnAddVariantRow').on('click', function(e) {
+        e.preventDefault();
+        variants.push({ type: 'Size', name: '', price: '' });
+        renderVariantRows();
+        syncVariantsJson();
+    });
+
+    $(document).on('click', '.variant-delete-btn', function(e) {
+        e.preventDefault();
+        const idx = $(this).closest('.variant-row').data('index');
+        variants.splice(idx, 1);
+        renderVariantRows();
+        syncVariantsJson();
+    });
+
+    $(document).on('input change', '.variant-row input, .variant-row select', function() {
+        syncVariantsJson();
+    });
+
+    // 6. Calories & Portion Meta
+    $('#id_calories').on('input', function() {
+        const val = $(this).val().trim();
+        $('#previewCaloriesMeta').text(val ? `🔥 ${val} Kcal` : '');
+    });
+
+    $('#id_portion_serves').on('change', function() {
+        $('#previewPortionMeta').text($(this).val());
+    });
+
+    // 7. Allergen Checkbox Cards
+    $('.allergen-card').on('click', function(e) {
+        if (e.target.tagName !== 'INPUT') {
+            const $cb = $(this).find('input[type="checkbox"]');
+            $cb.prop('checked', !$cb.is(':checked')).trigger('change');
+        }
+    });
+
+    $('.allergen-card input[type="checkbox"]').on('change', function() {
+        $(this).closest('.allergen-card').toggleClass('active', $(this).is(':checked'));
+    });
+
+    // 8. Image Upload & Dropzone
+    const $dropzone = $('#imageDropzone');
+    const $fileInput = $('#id_image');
+    const $dropzoneEmpty = $('#dropzoneEmpty');
+    const $dropzonePreview = $('#dropzonePreview');
+    const $previewImg = $('#dropzonePreviewImg');
+    const $fileName = $('#dropzoneFileName');
+    const $phoneImg = $('#phonePreviewImg');
+    const $phonePlaceholder = $('#phoneImgPlaceholder');
+
+    $dropzone.on('click', function(e) {
+        if (!$(e.target).closest('#btnRemoveImage, #btnChangeImage').length) {
+            $fileInput.trigger('click');
+        }
+    });
+
+    $('#btnChangeImage').on('click', function(e) {
+        e.stopPropagation();
+        $fileInput.trigger('click');
+    });
+
+    $('#btnRemoveImage').on('click', function(e) {
+        e.stopPropagation();
+        $fileInput.val('');
+        $dropzonePreview.addClass('d-none');
+        $dropzoneEmpty.removeClass('d-none');
+        $phoneImg.addClass('d-none').attr('src', '');
+        $phonePlaceholder.removeClass('d-none');
+    });
+
+    $dropzone.on('dragover dragenter', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        $(this).addClass('dragover');
+    });
+
+    $dropzone.on('dragleave dragend drop', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        $(this).removeClass('dragover');
+    });
+
+    $dropzone.on('drop', function(e) {
+        const files = e.originalEvent.dataTransfer.files;
+        if (files && files.length > 0) {
+            $fileInput[0].files = files;
+            handleImageSelected(files[0]);
+        }
+    });
+
+    $fileInput.on('change', function(e) {
+        if (this.files && this.files[0]) {
+            handleImageSelected(this.files[0]);
+        }
+    });
+
+    function handleImageSelected(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const dataUrl = e.target.result;
+            $previewImg.attr('src', dataUrl);
+            $fileName.text(file.name);
+            $dropzoneEmpty.addClass('d-none');
+            $dropzonePreview.removeClass('d-none');
+            $phoneImg.attr('src', dataUrl).removeClass('d-none');
+            $phonePlaceholder.addClass('d-none');
+        };
+        reader.readAsDataURL(file);
+    }
+
+    // 9. Dynamic Subcategories AJAX
+    $('#id_category').on('change', function() {
+        const categoryId = $(this).val();
+        const subcategoryField = $('#id_subcategory');
+
+        if (categoryId) {
+            subcategoryField.html('<option value="">Loading subcategories...</option>');
+            $.ajax({
+                url: '{% url "restaurant_admin:get_subcategories" restaurant_slug=rslug %}',
+                data: { 'category_id': categoryId },
+                dataType: 'json',
+                success: function(data) {
+                    let options = '<option value="">---------</option>';
+                    $.each(data, function(index, subcategory) {
+                        options += `<option value="${subcategory.id}">${subcategory.name}</option>`;
+                    });
+                    subcategoryField.html(options);
+
+                    const selectedSubcategory = "{{ form.instance.subcategory_id|default:'' }}";
+                    if (selectedSubcategory) {
+                        subcategoryField.val(selectedSubcategory);
+                    }
+                },
+                error: function() {
+                    subcategoryField.html('<option value="">Error loading subcategories</option>');
+                }
+            });
+        } else {
+            subcategoryField.html('<option value="">---------</option>');
+        }
+    });
+
+    if ($('#id_category').val()) {
+        $('#id_category').trigger('change');
+    }
+
+    // Initial SKU generation for new items
+    if (!$skuInput.val().trim() && $('#id_name').val().trim()) {
+        generateSKU($('#id_name').val());
+    }
+});
 </script>
 {% endblock %}

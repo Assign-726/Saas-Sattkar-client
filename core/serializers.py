@@ -1,6 +1,6 @@
 from rest_framework import serializers
 # pyrefly: ignore [missing-import]
-from .models import Category, SubCategory, MenuItem, Table, Order, OrderItem, RestaurantLanding, GalleryImage, TeamMember, Review, RestaurantSettings, Event, BlogPost, BlogComment
+from core.models import Category, SubCategory, MenuItem, Table, Zone, CustomCharge, Order, OrderItem, RestaurantLanding, GalleryImage, TeamMember, Review, RestaurantSettings, Event, BlogPost, BlogComment
 from super_admin.models import Restaurant, RestaurantBranch
 from django.utils import timezone
 
@@ -65,7 +65,13 @@ class MenuItemSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = MenuItem
-        fields = ['id', 'name', 'short_code', 'description', 'price', 'image', 'image_url', 'availability', 'subcategory', 'category', 'branch_id']
+        fields = [
+            'id', 'name', 'short_code', 'sku', 'description', 'price', 'tax_type', 'is_tax_inclusive',
+            'image', 'image_url', 'availability', 'subcategory', 'category', 'branch_id',
+            'food_type', 'is_jain', 'is_vegan', 'calories', 'portion_serves',
+            'allergens', 'publishing_channels', 'variants_json',
+            'markup_price', 'packaging_fee'
+        ]
         read_only_fields = ['image_url', 'branch_id']
         
     def get_image_url(self, obj):
@@ -130,11 +136,12 @@ class OrderSerializer(serializers.ModelSerializer):
     table_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     zone = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
     floor = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    table_token = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
 
     class Meta:
         model = Order
         fields = [
-            'id', 'order_number', 'branch_order_number', 'customer_name', 'phone', 'table_number', 'table_id', 'zone', 'floor', 'order_time',
+            'id', 'order_number', 'branch_order_number', 'customer_name', 'phone', 'table_number', 'table_id', 'zone', 'floor', 'table_token', 'order_time',
             'status', 'status_display', 'total_amount', 'discount_amount', 'notes', 'items',
             'coupon_code', 'applied_coupon_code', 'payment_method', 'payment_method_display', 'payment_status', 'payment_status_display',
             'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature', 'restaurant_slug', 'branch_slug', 'branch_id', 'branch_name', 'branch_slug_display', 'order_restaurant_slug', 'security_token',
@@ -168,7 +175,10 @@ class OrderSerializer(serializers.ModelSerializer):
 
         branch = None
         if restaurant and branch_slug:
-            branch = restaurant.branches.filter(slug=branch_slug).first()
+            from django.db.models import Q
+            branch = restaurant.branches.filter(
+                Q(slug__iexact=branch_slug) | Q(name__iexact=branch_slug)
+            ).first()
             if not branch and str(branch_slug).isdigit():
                 branch = restaurant.branches.filter(id=int(branch_slug)).first()
         elif restaurant and branch_id:
@@ -225,10 +235,14 @@ class OrderSerializer(serializers.ModelSerializer):
         table_number = validated_data.get('table_number')
         table_id = validated_data.pop('table_id', None)
         zone_param = validated_data.pop('zone', None) or validated_data.pop('floor', None)
+        table_token = validated_data.pop('table_token', None)
         table_obj = None
 
         if table_id and restaurant:
-            table_obj = Table.objects.filter(id=table_id, restaurant=restaurant).first()
+            t_qs = Table.objects.filter(id=table_id, restaurant=restaurant)
+            if branch:
+                t_qs = t_qs.filter(branch=branch)
+            table_obj = t_qs.first()
 
         if not table_obj and table_number and restaurant:
             try:
@@ -241,15 +255,46 @@ class OrderSerializer(serializers.ModelSerializer):
 
                 table_obj = Table.objects.filter(**t_filter).first()
 
-                # If no match with zone, fallback without zone filter
-                if not table_obj and zone_param:
+                # If no match with exact zone name, fallback without zone filter ONLY within the same branch
+                if not table_obj and zone_param and branch:
                     t_filter.pop('zone__name__iexact', None)
                     table_obj = Table.objects.filter(**t_filter).first()
-
-                if not table_obj and branch:
-                    table_obj = Table.objects.filter(restaurant=restaurant, table_number=t_num).first()
+                elif not table_obj and not branch and zone_param:
+                    table_obj = Table.objects.filter(
+                        restaurant=restaurant,
+                        table_number=t_num,
+                        zone__name__iexact=str(zone_param).strip()
+                    ).first()
             except Exception:
                 pass
+
+        # Security Verification for Table QR Orders (prevents table tampering & spoofing)
+        request = self.context.get('request')
+        is_staff_user = bool(request and request.user and request.user.is_staff)
+
+        if not is_staff_user:
+            if table_number and not table_obj:
+                raise serializers.ValidationError({
+                    "table_number": f"Table #{table_number} was not found or is inactive for this outlet."
+                })
+            if table_obj:
+                expected_token = table_obj.get_security_token()
+                provided_token = str(table_token or '').strip()
+                if not provided_token or provided_token.lower() != expected_token.lower():
+                    raise serializers.ValidationError({
+                        "table_token": "Invalid or tampered table verification code. Please scan the QR code placed at your dining table."
+                    })
+
+        # If table_obj belongs to a branch and order branch was not yet resolved, sync it
+        if table_obj and getattr(table_obj, 'branch', None) and not branch:
+            branch = table_obj.branch
+
+        # If branch is still not resolved and restaurant has a single branch, default to it
+        if not branch and restaurant and restaurant.branches.count() == 1:
+            branch = restaurant.branches.first()
+
+        if table_obj:
+            validated_data['table_number'] = table_obj.table_number
 
         if table_obj or table_number:
             validated_data['order_type'] = Order.OrderType.DINE_IN
@@ -560,3 +605,60 @@ class NewsletterSubscriberSerializer(serializers.ModelSerializer):
 
         self._was_created = created
         return obj
+
+
+class TableSerializer(serializers.ModelSerializer):
+    zone_name = serializers.ReadOnlyField(source='zone.name')
+    branch_slug = serializers.ReadOnlyField(source='branch.slug')
+    branch_id = serializers.ReadOnlyField(source='branch.id')
+    status = serializers.ReadOnlyField(source='current_status')
+
+    class Meta:
+        model = Table
+        fields = [
+            'id', 'name', 'table_number', 'capacity', 'shape',
+            'zone', 'zone_name', 'branch', 'branch_id', 'branch_slug',
+            'is_active', 'is_placed', 'status'
+        ]
+
+
+class ZoneSerializer(serializers.ModelSerializer):
+    branch_slug = serializers.ReadOnlyField(source='branch.slug')
+    tables = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Zone
+        fields = ['id', 'name', 'branch', 'branch_slug', 'tables']
+
+    def get_tables(self, obj):
+        tables_qs = obj.tables.filter(is_active=True).order_by('table_number')
+        branch = self.context.get('branch')
+        if branch:
+            from django.db.models import Q
+            tables_qs = tables_qs.filter(Q(branch=branch) | Q(branch__isnull=True))
+        return [
+            {
+                'id': t.id,
+                'name': t.name,
+                'table_number': t.table_number,
+                'capacity': t.capacity,
+                'zone': obj.name,
+                'is_placed': t.is_placed,
+                'status': t.current_status,
+            }
+            for t in tables_qs
+        ]
+
+
+class CustomChargeSerializer(serializers.ModelSerializer):
+    branch_slug = serializers.ReadOnlyField(source='branch.slug')
+    name = serializers.CharField(source='charge_name', read_only=True)
+    type = serializers.CharField(source='charge_type', read_only=True)
+
+    class Meta:
+        model = CustomCharge
+        fields = [
+            'id', 'charge_name', 'name', 'charge_type', 'type',
+            'value', 'is_taxable', 'applied_order_types', 'is_auto_applied',
+            'is_active', 'branch', 'branch_slug'
+        ]
