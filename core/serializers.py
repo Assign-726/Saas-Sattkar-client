@@ -168,7 +168,10 @@ class OrderSerializer(serializers.ModelSerializer):
 
         branch = None
         if restaurant and branch_slug:
-            branch = restaurant.branches.filter(slug=branch_slug).first()
+            from django.db.models import Q
+            branch = restaurant.branches.filter(
+                Q(slug__iexact=branch_slug) | Q(name__iexact=branch_slug)
+            ).first()
             if not branch and str(branch_slug).isdigit():
                 branch = restaurant.branches.filter(id=int(branch_slug)).first()
         elif restaurant and branch_id:
@@ -228,7 +231,10 @@ class OrderSerializer(serializers.ModelSerializer):
         table_obj = None
 
         if table_id and restaurant:
-            table_obj = Table.objects.filter(id=table_id, restaurant=restaurant).first()
+            t_qs = Table.objects.filter(id=table_id, restaurant=restaurant)
+            if branch:
+                t_qs = t_qs.filter(branch=branch)
+            table_obj = t_qs.first()
 
         if not table_obj and table_number and restaurant:
             try:
@@ -241,15 +247,29 @@ class OrderSerializer(serializers.ModelSerializer):
 
                 table_obj = Table.objects.filter(**t_filter).first()
 
-                # If no match with zone, fallback without zone filter
-                if not table_obj and zone_param:
+                # If no match with exact zone name, fallback without zone filter ONLY within the same branch
+                if not table_obj and zone_param and branch:
                     t_filter.pop('zone__name__iexact', None)
                     table_obj = Table.objects.filter(**t_filter).first()
-
-                if not table_obj and branch:
-                    table_obj = Table.objects.filter(restaurant=restaurant, table_number=t_num).first()
+                elif not table_obj and not branch and zone_param:
+                    table_obj = Table.objects.filter(
+                        restaurant=restaurant,
+                        table_number=t_num,
+                        zone__name__iexact=str(zone_param).strip()
+                    ).first()
             except Exception:
                 pass
+
+        # If table_obj belongs to a branch and order branch was not yet resolved, sync it
+        if table_obj and getattr(table_obj, 'branch', None) and not branch:
+            branch = table_obj.branch
+
+        # If branch is still not resolved and restaurant has a single branch, default to it
+        if not branch and restaurant and restaurant.branches.count() == 1:
+            branch = restaurant.branches.first()
+
+        if table_obj:
+            validated_data['table_number'] = table_obj.table_number
 
         if table_obj or table_number:
             validated_data['order_type'] = Order.OrderType.DINE_IN

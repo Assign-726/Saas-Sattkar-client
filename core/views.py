@@ -11,10 +11,9 @@ from super_admin.models import Restaurant, RestaurantBranch
 from django.db.models import Prefetch
 from restaurant_project import constants
 
-# pyrefly: ignore [missing-import]
-from .models import Category, SubCategory, MenuItem, Order, RestaurantSettings, RestaurantLanding, BlogPost, BlogComment
-# pyrefly: ignore [missing-import]
-from .serializers import (
+from core.models import Category, SubCategory, MenuItem, Order, RestaurantSettings, RestaurantLanding, BlogPost, BlogComment
+
+from core.serializers import (
     RestaurantBranchSerializer,
     CategorySerializer, 
     SubCategorySerializer,
@@ -439,11 +438,15 @@ class OrderViewSet(viewsets.ModelViewSet):
         if not settings_obj.enable_online_payment or not settings_obj.razorpay_key_id or not settings_obj.razorpay_key_secret:
             return Response({'error': 'Online payment is not enabled for this restaurant.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        from django.db.models import Q
         branch_id = data.get('branch_id') or data.get('branch')
+        branch_slug = data.get('branch_slug')
         branch = None
-        if branch_id:
+        if branch_id and restaurant:
             branch = RestaurantBranch.objects.filter(id=branch_id, restaurant=restaurant).first()
-        if not branch and restaurant:
+        elif branch_slug and restaurant:
+            branch = RestaurantBranch.objects.filter(Q(slug__iexact=branch_slug) | Q(name__iexact=branch_slug), restaurant=restaurant).first()
+        if not branch and restaurant and restaurant.branches.count() == 1:
             branch = restaurant.branches.first()
 
         # Compute taxes & service charges

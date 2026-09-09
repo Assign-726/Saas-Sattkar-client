@@ -615,7 +615,7 @@ def get_pos_active_orders(restaurant, active_branch=None):
         Q(payment_status__in=['unpaid', 'partially_paid', 'advance_paid', 'failed'])
     )
     if active_branch:
-        orders_qs = orders_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+        orders_qs = orders_qs.filter(branch=active_branch)
 
     orders_qs = orders_qs.select_related('table').prefetch_related('items', 'items__menu_item', 'items__menu_item__category').order_by('-order_time')[:50]
 
@@ -1354,7 +1354,7 @@ def order_create_manual(request, restaurant_slug=None):
         # Check if there is an existing DRAFT order for this user/branch
         draft_qs = Order.objects.filter(restaurant=restaurant, status=Order.OrderStatus.DRAFT)
         if active_branch:
-            draft_qs = draft_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+            draft_qs = draft_qs.filter(branch=active_branch)
         draft_order = draft_qs.order_by('-order_time').first()
 
     if not attached_receipt and receipt_no_param:
@@ -1486,7 +1486,7 @@ def pos_draft_order_api(request, restaurant_slug=None):
         else:
             draft_qs = Order.objects.filter(restaurant=restaurant, status=Order.OrderStatus.DRAFT)
             if active_branch:
-                draft_qs = draft_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+                draft_qs = draft_qs.filter(branch=active_branch)
             order = draft_qs.order_by('-order_time').first()
 
         return JsonResponse({
@@ -2960,7 +2960,7 @@ def dashboard(request, restaurant_slug=None):
     # Base order queryset scoped to active_branch
     base_orders = Order.objects.filter(restaurant=restaurant)
     if active_branch:
-        base_orders = base_orders.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+        base_orders = base_orders.filter(branch=active_branch)
 
     # Get statistics (scoped to branch)
     total_orders = base_orders.exclude(status=Order.OrderStatus.DRAFT).count()
@@ -3515,7 +3515,7 @@ def order_notifications_poll(request, restaurant_slug=None):
     active_branch = get_active_branch(request, restaurant)
     orders_qs = Order.objects.filter(restaurant=restaurant)
     if active_branch:
-        orders_qs = orders_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+        orders_qs = orders_qs.filter(branch=active_branch)
 
     latest_order = orders_qs.select_related('table').order_by('-id').first()
     latest_id = latest_order.id if latest_order else 0
@@ -3749,7 +3749,7 @@ def _filter_order_queryset(request, restaurant, ignore_order_type=False):
 
     orders_qs = Order.objects.filter(restaurant=restaurant)
     if branch:
-        orders_qs = orders_qs.filter(Q(branch=branch) | Q(branch__isnull=True))
+        orders_qs = orders_qs.filter(branch=branch)
 
     # Search filter
     q = request.GET.get('q', '').strip()
@@ -5452,7 +5452,7 @@ def sales_analytics(request, restaurant_slug=None):
 
     orders_qs = Order.objects.filter(restaurant=restaurant).exclude(status__in=['C', Order.OrderStatus.DRAFT])
     if active_branch:
-        orders_qs = orders_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+        orders_qs = orders_qs.filter(branch=active_branch)
     if start_date and end_date:
         orders_qs = orders_qs.filter(order_time__date__range=[start_date, end_date])
 

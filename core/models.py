@@ -12,7 +12,7 @@ class Zone(models.Model):
         verbose_name = 'Zone'
         verbose_name_plural = 'Zones'
         ordering = ['name']
-        unique_together = ['name', 'restaurant']
+        unique_together = ['restaurant', 'branch', 'name']
 
     def __str__(self):
         restaurant_name = self.restaurant.name if self.restaurant else "Unknown"

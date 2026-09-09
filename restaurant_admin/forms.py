@@ -498,12 +498,13 @@ class ZoneForm(forms.ModelForm):
         if self.instance and self.instance.pk and self.instance.name and self.instance.name.strip().lower() == 'main area' and name.lower() != 'main area':
             raise forms.ValidationError("The default zone 'Main Area' cannot be renamed.")
         if self.restaurant:
-            from django.db.models import Q
             qs = Zone.objects.filter(restaurant=self.restaurant, name__iexact=name)
             if self.instance and self.instance.pk:
                 qs = qs.exclude(pk=self.instance.pk)
             if self.branch:
-                qs = qs.filter(Q(branch=self.branch) | Q(branch__isnull=True))
+                qs = qs.filter(branch=self.branch)
+            else:
+                qs = qs.filter(branch__isnull=True)
             if qs.exists():
                 raise forms.ValidationError(f"A zone named '{name}' already exists.")
         return name
@@ -538,10 +539,11 @@ class TableForm(forms.ModelForm):
         self.fields['table_number'].required = False
         # Scope zone choices to current restaurant / branch
         if self.restaurant is not None:
-            from django.db.models import Q
             zone_qs = Zone.objects.filter(restaurant=self.restaurant)
             if self.branch:
-                zone_qs = zone_qs.filter(Q(branch=self.branch) | Q(branch__isnull=True))
+                zone_qs = zone_qs.filter(branch=self.branch)
+            else:
+                zone_qs = zone_qs.filter(branch__isnull=True)
             self.fields['zone'].queryset = zone_qs.order_by('name')
             self.fields['zone'].empty_label = "-- Select Zone (Optional) --"
         if not self.initial.get('shape') and not getattr(self.instance, 'pk', None):
@@ -557,12 +559,13 @@ class TableForm(forms.ModelForm):
             if len(name) > 8:
                 self.add_error('name', "Table name cannot exceed 8 characters.")
             elif self.restaurant:
-                from django.db.models import Q
                 qs = Table.objects.filter(restaurant=self.restaurant, zone=zone, name__iexact=name)
                 if self.instance and self.instance.pk:
                     qs = qs.exclude(pk=self.instance.pk)
                 if self.branch:
-                    qs = qs.filter(Q(branch=self.branch) | Q(branch__isnull=True))
+                    qs = qs.filter(branch=self.branch)
+                else:
+                    qs = qs.filter(branch__isnull=True)
                 if qs.exists():
                     self.add_error('name', f"A table named '{name}' already exists in this zone.")
 
@@ -633,10 +636,11 @@ class BulkTableForm(forms.Form):
         self.branch = kwargs.pop('branch', None)
         super().__init__(*args, **kwargs)
         if self.restaurant is not None:
-            from django.db.models import Q
             zone_qs = Zone.objects.filter(restaurant=self.restaurant)
             if self.branch:
-                zone_qs = zone_qs.filter(Q(branch=self.branch) | Q(branch__isnull=True))
+                zone_qs = zone_qs.filter(branch=self.branch)
+            else:
+                zone_qs = zone_qs.filter(branch__isnull=True)
             self.fields['zone'].queryset = zone_qs.order_by('name')
 
 

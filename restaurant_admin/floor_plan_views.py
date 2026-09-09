@@ -8,17 +8,24 @@ from django.core.paginator import Paginator
 def ensure_default_zone(restaurant, active_branch=None):
     if not restaurant:
         return None
-    from django.db.models import Q
-    zone_qs = Zone.objects.filter(restaurant=restaurant, name__iexact='Main Area')
     if active_branch:
-        zone_qs = zone_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
-    if not zone_qs.exists():
-        return Zone.objects.create(
-            restaurant=restaurant,
-            branch=active_branch,
-            name='Main Area'
-        )
-    return zone_qs.first()
+        zone = Zone.objects.filter(restaurant=restaurant, branch=active_branch, name__iexact='Main Area').first()
+        if not zone:
+            zone, _ = Zone.objects.get_or_create(
+                restaurant=restaurant,
+                branch=active_branch,
+                name='Main Area'
+            )
+        return zone
+    else:
+        zone = Zone.objects.filter(restaurant=restaurant, branch__isnull=True, name__iexact='Main Area').first()
+        if not zone:
+            zone, _ = Zone.objects.get_or_create(
+                restaurant=restaurant,
+                branch=None,
+                name='Main Area'
+            )
+        return zone
 
 @login_required
 def floor_plan_api(request, restaurant_slug=None):
@@ -46,10 +53,9 @@ def floor_plan_api(request, restaurant_slug=None):
 
     ensure_default_zone(restaurant, active_branch)
 
-    from django.db.models import Q
     zones = Zone.objects.filter(restaurant=restaurant)
     if active_branch:
-        zones = zones.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+        zones = zones.filter(branch=active_branch)
     zones = zones.prefetch_related('tables')
     
     from core.models import Order
@@ -68,7 +74,10 @@ def floor_plan_api(request, restaurant_slug=None):
             latest_order = active_orders.order_by('-order_time').first()
             if not latest_order:
                 # If table has a recent order still associated before final clear
-                recent = table.orders.exclude(status='C').exclude(payment_status='F').order_by('-order_time').first()
+                recent_qs = table.orders.exclude(status='C').exclude(payment_status='F')
+                if active_branch:
+                    recent_qs = recent_qs.filter(branch=active_branch)
+                recent = recent_qs.order_by('-order_time').first()
                 if recent and table.current_status != 'BLANK':
                     latest_order = recent
             active_order_data = None
@@ -110,15 +119,14 @@ def floor_plan_dashboard(request, restaurant_slug=None):
     active_branch = get_view_active_branch(request, restaurant)
     ensure_default_zone(restaurant, active_branch)
     
-    from django.db.models import Q
     zones = Zone.objects.filter(restaurant=restaurant)
     if active_branch:
-        zones = zones.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+        zones = zones.filter(branch=active_branch)
     zones = zones.order_by('name')
 
     tables_all_qs = Table.objects.filter(restaurant=restaurant)
     if active_branch:
-        tables_all_qs = tables_all_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+        tables_all_qs = tables_all_qs.filter(branch=active_branch)
     tables_qs = tables_all_qs.order_by('zone', 'table_number')
 
     all_tables_data = []
@@ -187,7 +195,7 @@ def floor_plan_save_position_api(request, restaurant_slug=None):
         
         table_qs = Table.objects.filter(id=t_id, restaurant=restaurant)
         if active_branch:
-            table_qs = table_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+            table_qs = table_qs.filter(branch=active_branch)
         table = table_qs.first()
         
         if table:
@@ -299,8 +307,8 @@ def table_list(request, restaurant_slug=None):
     tables_all_qs = Table.objects.filter(restaurant=restaurant)
     zones = Zone.objects.filter(restaurant=restaurant)
     if active_branch:
-        tables_all_qs = tables_all_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
-        zones = zones.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+        tables_all_qs = tables_all_qs.filter(branch=active_branch)
+        zones = zones.filter(branch=active_branch)
     tables_qs = tables_all_qs.order_by('zone', 'table_number')
     zones = zones.order_by('name')
 
@@ -370,7 +378,7 @@ def table_add(request, restaurant_slug=None):
                 # Pre-flight check: Scan in-memory candidates against existing tables
                 existing = Table.objects.filter(restaurant=restaurant, zone=zone)
                 if active_branch:
-                    existing = existing.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+                    existing = existing.filter(branch=active_branch)
 
                 colliding_tables = []
                 candidates = []
@@ -484,7 +492,7 @@ def regenerate_table_qrs(request, restaurant_slug=None):
     
     tables_qs = Table.objects.filter(restaurant=restaurant)
     if active_branch:
-        tables_qs = tables_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+        tables_qs = tables_qs.filter(branch=active_branch)
 
     count = 0
     for table in tables_qs:
