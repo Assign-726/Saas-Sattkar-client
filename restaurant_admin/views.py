@@ -3199,6 +3199,7 @@ def menu_add(request, restaurant_slug=None):
         'restaurant': restaurant,
         'rslug': rslug,
         'current_branch': active_branch,
+        'variants_json_str': '[]',
         'active_menu': 'menu_list',
     })
 
@@ -3274,20 +3275,126 @@ def menu_bulk_add(request, restaurant_slug=None):
                     category=category
                 )
 
-            raw_short_code = item.get('short_code')
-            short_code = str(raw_short_code).strip() if raw_short_code is not None else ''
+            existing_item = MenuItem.objects.filter(name=name, restaurant=restaurant, branch=active_branch).first()
+
+            raw_short_code = item.get('short_code', item.get('code', item.get('item_code')))
+            if raw_short_code is not None:
+                short_code = str(raw_short_code).strip()
+            elif existing_item and existing_item.short_code:
+                short_code = existing_item.short_code
+            else:
+                short_code = ''
+
+            raw_sku = item.get('sku', item.get('item_sku'))
+            if raw_sku is not None and str(raw_sku).strip():
+                sku = str(raw_sku).strip()
+            elif existing_item and existing_item.sku:
+                sku = existing_item.sku
+            else:
+                import random
+                clean_pfx = ''.join(c for c in name[:3].upper() if c.isalnum()) or 'ITM'
+                sku = f"{clean_pfx}-{random.randint(1000, 9999)}"
 
             description = str(item.get('description', '')).strip()
             tax_type = str(item.get('tax_type', 'GST_FOOD')).strip().upper()
+            if tax_type == 'GST':
+                tax_type = 'GST_FOOD'
             valid_tax_types = [choice[0] for choice in MenuItem.TaxType.choices]
             if active_branch and not active_branch.serves_alcohol:
                 tax_type = MenuItem.TaxType.GST_FOOD
             elif tax_type not in valid_tax_types:
                 tax_type = MenuItem.TaxType.GST_FOOD
 
-            availability = bool(item.get('availability', True))
-            is_tax_inclusive = bool(item.get('is_tax_inclusive', False))
-            image_url = str(item.get('image_url', '')).strip()
+            availability = bool(item.get('availability', item.get('is_available', True)))
+            is_tax_inclusive = bool(item.get('is_tax_inclusive', item.get('tax_inclusive', False)))
+            image_url = str(item.get('image_url', item.get('image', ''))).strip()
+
+            # FSSAI Classification & Lifestyle
+            raw_food_type = str(item.get('food_type', item.get('type', item.get('diet', '')))).strip().lower()
+            if raw_food_type in ['non-veg', 'nonveg', 'non_vegetarian']:
+                raw_food_type = 'non_veg'
+            elif raw_food_type in ['vegetarian', 'vegetable']:
+                raw_food_type = 'veg'
+
+            # Backward compatibility with is_vegetarian boolean
+            if not raw_food_type:
+                if 'is_vegetarian' in item:
+                    raw_food_type = 'veg' if item.get('is_vegetarian') else 'non_veg'
+                elif 'is_veg' in item:
+                    raw_food_type = 'veg' if item.get('is_veg') else 'non_veg'
+                elif existing_item:
+                    raw_food_type = existing_item.food_type
+                else:
+                    raw_food_type = 'veg'
+
+            is_jain = bool(item.get('is_jain', False)) or (raw_food_type == 'jain')
+            is_vegan = bool(item.get('is_vegan', False)) or (raw_food_type == 'vegan')
+
+            if raw_food_type in ['jain', 'vegan']:
+                food_type = 'veg'
+            elif raw_food_type in [c[0] for c in MenuItem.FoodType.choices]:
+                food_type = raw_food_type
+            else:
+                food_type = 'veg'
+
+            # Strict dietary rule: Non-veg and Egg can NEVER be Jain or Vegan
+            if food_type in ['non_veg', 'egg']:
+                is_jain = False
+                is_vegan = False
+
+            # FSSAI Nutritional & Allergen Compliance
+            calories = str(item.get('calories', item.get('calorie', item.get('kcal', '')))).strip()
+            portion_serves = str(item.get('portion_serves', item.get('portion', item.get('serves', '1 Person')))).strip() or '1 Person'
+            allergens_raw = item.get('allergens', item.get('allergen_list', []))
+            if isinstance(allergens_raw, str):
+                allergens = [str(a).strip() for a in allergens_raw.split(',') if str(a).strip()]
+            elif isinstance(allergens_raw, list):
+                allergens = [str(a).strip() for a in allergens_raw if str(a).strip()]
+            else:
+                allergens = []
+
+            # Publishing Channels
+            channels_raw = item.get('publishing_channels', item.get('channels', ['pos', 'qr']))
+            if isinstance(channels_raw, str):
+                publishing_channels = [str(c).strip().lower() for c in channels_raw.split(',') if str(c).strip()]
+            elif isinstance(channels_raw, list) and channels_raw:
+                publishing_channels = [str(c).strip().lower() for c in channels_raw if str(c).strip()]
+            else:
+                publishing_channels = ['pos', 'qr']
+
+            # Variants & Add-ons
+            variants_raw = item.get('variants', item.get('variants_json', item.get('sizes', [])))
+            if isinstance(variants_raw, str):
+                try:
+                    variants_raw = json.loads(variants_raw)
+                except Exception:
+                    variants_raw = []
+            variants_list = []
+            if isinstance(variants_raw, list):
+                for v in variants_raw:
+                    if isinstance(v, dict):
+                        v_name = str(v.get('name') or v.get('size') or v.get('title') or '').strip()
+                        if v_name or v.get('price') is not None:
+                            try:
+                                v_price = float(v.get('price', 0))
+                            except (ValueError, TypeError):
+                                v_price = 0
+                            variants_list.append({
+                                'type': str(v.get('type', 'Size')).strip() or 'Size',
+                                'name': v_name,
+                                'price': v_price
+                            })
+
+            # Aggregator Overrides (Zomato / Swiggy)
+            try:
+                markup_price = float(item.get('markup_price', item.get('zomato_markup', 0)) or 0)
+            except (ValueError, TypeError):
+                markup_price = 0.0
+
+            try:
+                packaging_fee = float(item.get('packaging_fee', item.get('packaging', 0)) or 0)
+            except (ValueError, TypeError):
+                packaging_fee = 0.0
 
             menu_item, created = MenuItem.objects.update_or_create(
                 name=name,
@@ -3295,6 +3402,7 @@ def menu_bulk_add(request, restaurant_slug=None):
                 branch=active_branch,
                 defaults={
                     'short_code': short_code,
+                    'sku': sku,
                     'description': description,
                     'price': price,
                     'tax_type': tax_type,
@@ -3302,6 +3410,16 @@ def menu_bulk_add(request, restaurant_slug=None):
                     'category': category,
                     'subcategory': subcategory,
                     'availability': availability,
+                    'food_type': food_type,
+                    'is_jain': is_jain,
+                    'is_vegan': is_vegan,
+                    'calories': calories,
+                    'portion_serves': portion_serves,
+                    'allergens': allergens,
+                    'publishing_channels': publishing_channels,
+                    'variants_json': variants_list,
+                    'markup_price': markup_price,
+                    'packaging_fee': packaging_fee,
                 }
             )
 
@@ -3352,21 +3470,43 @@ def menu_bulk_add(request, restaurant_slug=None):
             {
                 "name": "Paneer Butter Masala",
                 "short_code": "PBM01",
+                "sku": "PBM-1001",
                 "price": 280.00,
                 "is_tax_inclusive": False,
                 "tax_type": "GST_FOOD",
+                "food_type": "veg",
+                "is_jain": True,
+                "is_vegan": False,
+                "calories": "480",
+                "portion_serves": "1 Person",
+                "allergens": ["Dairy/Milk"],
+                "publishing_channels": ["pos", "qr", "online"],
                 "category": "Main Course",
                 "subcategory": "North Indian",
                 "description": "Rich cottage cheese in creamy tomato butter gravy with aromatic spices",
                 "availability": True,
+                "markup_price": 20.0,
+                "packaging_fee": 15.0,
+                "variants": [
+                    {"type": "Size", "name": "Half", "price": 160.0},
+                    {"type": "Size", "name": "Full", "price": 280.0}
+                ],
                 "image_url": ""
             },
             {
                 "name": "Kingfisher Premium Beer 650ml",
                 "short_code": "KF650",
+                "sku": "KF-6500",
                 "price": 220.00,
                 "is_tax_inclusive": True,
                 "tax_type": "VAT_BEER",
+                "food_type": "veg",
+                "is_jain": False,
+                "is_vegan": True,
+                "calories": "210",
+                "portion_serves": "1 Person",
+                "allergens": ["Gluten"],
+                "publishing_channels": ["pos"],
                 "category": "Bar",
                 "subcategory": "Beer",
                 "description": "Chilled lager beer",
@@ -3376,9 +3516,17 @@ def menu_bulk_add(request, restaurant_slug=None):
             {
                 "name": "Single Malt Whiskey 30ml",
                 "short_code": "SMW30",
+                "sku": "SMW-3001",
                 "price": 450.00,
                 "is_tax_inclusive": False,
                 "tax_type": "VAT_IMFL",
+                "food_type": "veg",
+                "is_jain": False,
+                "is_vegan": True,
+                "calories": "70",
+                "portion_serves": "1 Person",
+                "allergens": [],
+                "publishing_channels": ["pos"],
                 "category": "Bar",
                 "subcategory": "Spirits",
                 "description": "Premium aged scotch whiskey",
@@ -3391,37 +3539,76 @@ def menu_bulk_add(request, restaurant_slug=None):
             {
                 "name": "Paneer Butter Masala",
                 "short_code": "PBM01",
+                "sku": "PBM-1001",
                 "price": 280.00,
                 "is_tax_inclusive": False,
                 "tax_type": "GST_FOOD",
+                "food_type": "veg",
+                "is_jain": True,
+                "is_vegan": False,
+                "calories": "480",
+                "portion_serves": "1 Person",
+                "allergens": ["Dairy/Milk"],
+                "publishing_channels": ["pos", "qr", "online"],
                 "category": "Main Course",
                 "subcategory": "North Indian",
                 "description": "Rich cottage cheese in creamy tomato butter gravy with aromatic spices",
                 "availability": True,
+                "markup_price": 20.0,
+                "packaging_fee": 15.0,
+                "variants": [
+                    {"type": "Size", "name": "Half", "price": 160.0},
+                    {"type": "Size", "name": "Full", "price": 280.0}
+                ],
                 "image_url": ""
             },
             {
                 "name": "Butter Naan",
                 "short_code": "NAAN",
+                "sku": "NAN-2001",
                 "price": 45.00,
                 "is_tax_inclusive": True,
                 "tax_type": "GST_FOOD",
+                "food_type": "veg",
+                "is_jain": True,
+                "is_vegan": False,
+                "calories": "260",
+                "portion_serves": "1 Person",
+                "allergens": ["Gluten", "Dairy/Milk"],
+                "publishing_channels": ["pos", "qr"],
                 "category": "Breads",
                 "subcategory": "Tandoori Breads",
                 "description": "Crisp and fluffy traditional clay-oven flatbread brushed with butter",
                 "availability": True,
+                "variants": [
+                    {"type": "Extra", "name": "Extra Butter", "price": 10.0}
+                ],
                 "image_url": ""
             },
             {
-                "name": "Fresh Lime Soda",
-                "short_code": "FLS",
-                "price": 80.00,
+                "name": "Chicken Tikka",
+                "short_code": "CHK01",
+                "sku": "CHK-3001",
+                "price": 320.00,
                 "is_tax_inclusive": False,
                 "tax_type": "GST_FOOD",
-                "category": "Beverages",
-                "subcategory": "Mocktails",
-                "description": "Refreshing chilled lime soda with option of sweet or salted",
+                "food_type": "non_veg",
+                "is_jain": False,
+                "is_vegan": False,
+                "calories": "390",
+                "portion_serves": "1 Person",
+                "allergens": ["Dairy/Milk"],
+                "publishing_channels": ["pos", "qr", "online"],
+                "category": "Starters",
+                "subcategory": "Tandoori Starters",
+                "description": "Succulent boneless chicken chunks marinated in yogurt and traditional spices",
                 "availability": True,
+                "markup_price": 25.0,
+                "packaging_fee": 15.0,
+                "variants": [
+                    {"type": "Size", "name": "Half (4 Pcs)", "price": 180.0},
+                    {"type": "Size", "name": "Full (8 Pcs)", "price": 320.0}
+                ],
                 "image_url": ""
             }
         ]
@@ -3434,6 +3621,7 @@ def menu_bulk_add(request, restaurant_slug=None):
         'restaurant': restaurant,
         'rslug': rslug,
         'current_branch': active_branch,
+        'serves_alcohol': serves_alcohol,
         'active_menu': 'menu_list',
     })
 
@@ -3464,6 +3652,15 @@ def menu_edit(request, pk, restaurant_slug=None):
     if item_branch:
         categories_qs = categories_qs.filter(branch=item_branch)
 
+    import json
+    v_data = menu_item.variants_json or []
+    if isinstance(v_data, str):
+        try:
+            v_data = json.loads(v_data)
+        except Exception:
+            v_data = []
+    variants_json_str = json.dumps(v_data if isinstance(v_data, list) else [])
+
     rslug = (active_branch.slug if (active_branch and active_branch.slug) else restaurant.slug)
     return render(request, 'restaurant_admin/menu/form.html', {
         'form': form, 
@@ -3472,6 +3669,7 @@ def menu_edit(request, pk, restaurant_slug=None):
         'restaurant': restaurant,
         'rslug': rslug,
         'current_branch': active_branch,
+        'variants_json_str': variants_json_str,
         'active_menu': 'menu_list',
     })
 

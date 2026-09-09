@@ -65,7 +65,13 @@ class MenuItemSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = MenuItem
-        fields = ['id', 'name', 'short_code', 'description', 'price', 'image', 'image_url', 'availability', 'subcategory', 'category', 'branch_id']
+        fields = [
+            'id', 'name', 'short_code', 'sku', 'description', 'price', 'tax_type', 'is_tax_inclusive',
+            'image', 'image_url', 'availability', 'subcategory', 'category', 'branch_id',
+            'food_type', 'is_jain', 'is_vegan', 'calories', 'portion_serves',
+            'allergens', 'publishing_channels', 'variants_json',
+            'markup_price', 'packaging_fee'
+        ]
         read_only_fields = ['image_url', 'branch_id']
         
     def get_image_url(self, obj):

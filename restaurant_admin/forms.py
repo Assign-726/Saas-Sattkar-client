@@ -12,19 +12,36 @@ class MenuItemForm(forms.ModelForm):
         help_text='Select a category (optional)',
         empty_label='-- Select Category --'
     )
+    publishing_channels = forms.CharField(required=False, widget=forms.HiddenInput())
+    allergens = forms.CharField(required=False, widget=forms.HiddenInput())
+    variants_json = forms.CharField(required=False, widget=forms.HiddenInput())
     
     class Meta:
         model = MenuItem
-        fields = ['name', 'short_code', 'description', 'price', 'tax_type', 'is_tax_inclusive', 'category', 'subcategory', 'image', 'availability']
+        fields = [
+            'name', 'short_code', 'sku', 'description', 'price', 'tax_type', 'is_tax_inclusive',
+            'category', 'subcategory', 'image', 'availability',
+            'food_type', 'is_jain', 'is_vegan', 'calories', 'portion_serves',
+            'allergens', 'publishing_channels', 'variants_json',
+            'markup_price', 'packaging_fee'
+        ]
         widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Butter Naan'}),
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Signature Butter Chicken'}),
             'short_code': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. 101, 301, NAAN (Fast POS shortcut code)'}),
-            'description': forms.Textarea(attrs={'rows': 3, 'class': 'form-control'}),
-            'price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'sku': forms.TextInput(attrs={'class': 'sku-input-field', 'placeholder': 'Auto', 'readonly': 'readonly'}),
+            'description': forms.Textarea(attrs={'rows': 3, 'class': 'form-control', 'placeholder': 'Brief description...'}),
+            'price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
             'tax_type': forms.Select(attrs={'class': 'form-select'}),
             'category': forms.Select(attrs={'class': 'form-select'}),
             'subcategory': forms.Select(attrs={'class': 'form-select'}),
             'availability': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'food_type': forms.Select(attrs={'class': 'form-select'}),
+            'is_jain': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'is_vegan': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'calories': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. 450'}),
+            'portion_serves': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '1 Person'}),
+            'markup_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0'}),
+            'packaging_fee': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0'}),
         }
     
     def __init__(self, *args, **kwargs):
@@ -34,6 +51,54 @@ class MenuItemForm(forms.ModelForm):
         self.fields['short_code'].label = 'Short Code (Fast POS Code)'
         self.fields['short_code'].help_text = 'Optional fast item code for quick entry in POS (e.g. 101, 301, NAAN).'
         self.fields['short_code'].required = False
+        self.fields['sku'].required = False
+        self.fields['food_type'].required = False
+        self.fields['allergens'].required = False
+        self.fields['publishing_channels'].required = False
+        self.fields['variants_json'].required = False
+        self.fields['calories'].required = False
+        self.fields['portion_serves'].required = False
+        self.fields['markup_price'].required = False
+        self.fields['packaging_fee'].required = False
+
+        import json
+        if self.instance and self.instance.pk:
+            # Ensure publishing_channels initial is a clean list
+            channels = self.instance.publishing_channels
+            if isinstance(channels, str):
+                try:
+                    channels = json.loads(channels)
+                except Exception:
+                    channels = ['pos', 'qr']
+            self.initial['publishing_channels'] = channels if isinstance(channels, list) and channels else ['pos', 'qr']
+
+            # Ensure allergens initial is a clean list
+            al = self.instance.allergens
+            if isinstance(al, str):
+                try:
+                    al = json.loads(al)
+                except Exception:
+                    al = []
+            self.initial['allergens'] = al if isinstance(al, list) else []
+
+            # Ensure variants_json initial is a clean JSON string with double quotes
+            vj = self.instance.variants_json
+            if isinstance(vj, str):
+                try:
+                    vj_obj = json.loads(vj)
+                except Exception:
+                    vj_obj = []
+            else:
+                vj_obj = vj or []
+            self.initial['variants_json'] = json.dumps(vj_obj)
+        else:
+            self.initial.setdefault('food_type', MenuItem.FoodType.VEG.value)
+            self.initial.setdefault('portion_serves', '1 Person')
+            self.initial.setdefault('publishing_channels', ['pos', 'qr'])
+            self.initial.setdefault('allergens', [])
+            self.initial.setdefault('variants_json', '[]')
+            self.initial.setdefault('availability', True)
+
         # Limit categories to current restaurant (and branch if set)
         if self.restaurant is not None:
             cat_qs = Category.objects.filter(restaurant=self.restaurant)
@@ -87,15 +152,156 @@ class MenuItemForm(forms.ModelForm):
             
         # Add class to style the form fields
         for field in self.fields:
-            self.fields[field].widget.attrs.update({'class': 'form-control'})
+            if field not in ['availability', 'is_tax_inclusive', 'is_jain', 'is_vegan', 'allergens', 'publishing_channels', 'variants_json']:
+                self.fields[field].widget.attrs.update({'class': 'form-control'})
         self.fields['availability'].widget.attrs.update({'class': 'form-check-input'})
         self.fields['is_tax_inclusive'].widget.attrs.update({'class': 'form-check-input'})
+        self.fields['is_jain'].widget.attrs.update({'class': 'form-check-input'})
+        self.fields['is_vegan'].widget.attrs.update({'class': 'form-check-input'})
 
     def clean_tax_type(self):
         tax_type = self.cleaned_data.get('tax_type')
         if not getattr(self, 'serves_alcohol', False):
             return MenuItem.TaxType.GST_FOOD.value
         return tax_type
+
+    def clean_publishing_channels(self):
+        import json
+        if hasattr(self.data, 'getlist') and self.data.getlist('publishing_channels'):
+            raw = self.data.getlist('publishing_channels')
+        else:
+            raw = self.data.get('publishing_channels')
+
+        if not raw:
+            return ['pos', 'qr']
+
+        if isinstance(raw, list):
+            if len(raw) == 1 and isinstance(raw[0], str) and raw[0].strip().startswith('['):
+                try:
+                    parsed = json.loads(raw[0])
+                    if isinstance(parsed, list):
+                        return [str(c).strip().lower() for c in parsed if str(c).strip()]
+                except Exception:
+                    pass
+            channels = [str(c).strip().lower() for c in raw if str(c).strip()]
+            return channels if channels else ['pos', 'qr']
+
+        if isinstance(raw, str):
+            raw = raw.strip()
+            if raw.startswith('['):
+                try:
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, list):
+                        return [str(c).strip().lower() for c in parsed if str(c).strip()]
+                except Exception:
+                    pass
+            elif ',' in raw:
+                return [c.strip().lower() for c in raw.split(',') if c.strip()]
+            return [raw.lower()] if raw else ['pos', 'qr']
+
+        return ['pos', 'qr']
+
+    def clean_allergens(self):
+        import json
+        if hasattr(self.data, 'getlist') and self.data.getlist('allergens'):
+            raw = self.data.getlist('allergens')
+        else:
+            raw = self.data.get('allergens')
+
+        if not raw:
+            return []
+
+        if isinstance(raw, list):
+            if len(raw) == 1 and isinstance(raw[0], str) and raw[0].strip().startswith('['):
+                try:
+                    parsed = json.loads(raw[0])
+                    if isinstance(parsed, list):
+                        return [str(a).strip() for a in parsed if str(a).strip()]
+                except Exception:
+                    pass
+            return [str(a).strip() for a in raw if str(a).strip()]
+
+        if isinstance(raw, str):
+            raw = raw.strip()
+            if raw.startswith('['):
+                try:
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, list):
+                        return [str(a).strip() for a in parsed if str(a).strip()]
+                except Exception:
+                    pass
+            elif ',' in raw:
+                return [a.strip() for a in raw.split(',') if a.strip()]
+            return [raw] if raw else []
+
+        return []
+
+    def clean_variants_json(self):
+        import json
+        raw = self.data.get('variants_json')
+        if not raw:
+            return []
+        if isinstance(raw, list):
+            parsed = raw
+        elif isinstance(raw, str):
+            raw = raw.strip()
+            if not raw or raw == '[]':
+                return []
+            try:
+                parsed = json.loads(raw)
+            except Exception:
+                try:
+                    fixed = raw.replace("'", '"').replace('True', 'true').replace('False', 'false').replace('None', 'null')
+                    parsed = json.loads(fixed)
+                except Exception:
+                    return []
+        else:
+            return []
+
+        cleaned_variants = []
+        if isinstance(parsed, list):
+            for v in parsed:
+                if isinstance(v, dict):
+                    v_name = str(v.get('name') or v.get('size') or v.get('title') or '').strip()
+                    if v_name or v.get('price') is not None:
+                        try:
+                            v_price = float(v.get('price', 0))
+                        except (ValueError, TypeError):
+                            v_price = 0.0
+                        cleaned_variants.append({
+                            'type': str(v.get('type', 'Size')).strip() or 'Size',
+                            'name': v_name,
+                            'price': v_price
+                        })
+        return cleaned_variants
+
+    def clean(self):
+        cleaned = super().clean()
+        category = cleaned.get('category')
+        subcategory = cleaned.get('subcategory')
+        if subcategory and category and subcategory.category_id != category.id:
+            self.add_error('subcategory', 'Selected subcategory does not belong to the chosen category.')
+        if not getattr(self, 'serves_alcohol', False):
+            cleaned['tax_type'] = MenuItem.TaxType.GST_FOOD.value
+
+        # Enforce Dietary & Lifestyle Classification Rules:
+        # If Non-Veg or Egg is selected, Jain and Vegan cannot be checked.
+        food_type = cleaned.get('food_type') or 'veg'
+        if food_type in ['non_veg', 'egg']:
+            cleaned['is_jain'] = False
+            cleaned['is_vegan'] = False
+
+        # Price validation
+        price = cleaned.get('price')
+        if price is not None and price < 0:
+            self.add_error('price', 'Base Price cannot be negative.')
+
+        # Ensure at least one publishing channel is selected
+        channels = cleaned.get('publishing_channels') or []
+        if not channels:
+            self.add_error('publishing_channels', 'Please select at least one Publishing Channel (POS & Billing, QR Menu, or Zomato / Swiggy).')
+
+        return cleaned
 
     def save(self, commit=True):
         instance = super().save(commit=False)
@@ -106,19 +312,17 @@ class MenuItemForm(forms.ModelForm):
             instance.branch = self.branch
         if not getattr(self, 'serves_alcohol', False):
             instance.tax_type = MenuItem.TaxType.GST_FOOD.value
+        instance.is_jain = self.cleaned_data.get('is_jain', False)
+        instance.is_vegan = self.cleaned_data.get('is_vegan', False)
+        instance.allergens = self.cleaned_data.get('allergens', [])
+        instance.publishing_channels = self.cleaned_data.get('publishing_channels', ['pos', 'qr'])
+        instance.variants_json = self.cleaned_data.get('variants_json', [])
+        instance.sku = self.cleaned_data.get('sku', '') or ''
+        instance.markup_price = self.cleaned_data.get('markup_price', 0) or 0
+        instance.packaging_fee = self.cleaned_data.get('packaging_fee', 0) or 0
         if commit:
             instance.save()
         return instance
-
-    def clean(self):
-        cleaned = super().clean()
-        category = cleaned.get('category')
-        subcategory = cleaned.get('subcategory')
-        if subcategory and category and subcategory.category_id != category.id:
-            self.add_error('subcategory', 'Selected subcategory does not belong to the chosen category.')
-        if not getattr(self, 'serves_alcohol', False):
-            cleaned['tax_type'] = MenuItem.TaxType.GST_FOOD.value
-        return cleaned
 
 
 class CouponForm(forms.ModelForm):

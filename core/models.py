@@ -280,8 +280,16 @@ class MenuItem(models.Model):
         VAT_WINE = 'VAT_WINE', _('VAT Wine (State Wine VAT Rate)')
         VAT_LIQUOR = 'VAT_LIQUOR', _('VAT General Liquor (State VAT Rate)')
 
+    class FoodType(models.TextChoices):
+        VEG = 'veg', _('Veg')
+        NON_VEG = 'non_veg', _('Non-Veg')
+        EGG = 'egg', _('Egg')
+        JAIN = 'jain', _('Jain')
+        VEGAN = 'vegan', _('Vegan')
+
     name = models.CharField(max_length=200)
     short_code = models.CharField(max_length=50, blank=True, null=True, db_index=True, help_text="Fast POS item code (e.g. 101, 301, NAAN)")
+    sku = models.CharField(max_length=50, blank=True, null=True, help_text="SKU identifier e.g. BUT-4921")
     description = models.TextField(blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     tax_type = models.CharField(
@@ -296,11 +304,37 @@ class MenuItem(models.Model):
     subcategory = models.ForeignKey(SubCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='menu_items')
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='menu_items', null=True, blank=True)
     branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, related_name='menu_items', null=True, blank=True)
+
+    # FSSAI Classification & Lifestyle Preferences
+    food_type = models.CharField(
+        max_length=20,
+        choices=FoodType.choices,
+        default=FoodType.VEG,
+        help_text="FSSAI legal food classification"
+    )
+    is_jain = models.BooleanField(default=False, help_text="Jain friendly")
+    is_vegan = models.BooleanField(default=False, help_text="Vegan friendly")
+
+    # FSSAI Nutritional & Allergen Compliance
+    calories = models.CharField(max_length=50, blank=True, default='', help_text="Calories (Kcal) for FSSAI compliance")
+    portion_serves = models.CharField(max_length=50, blank=True, default='1 Person', help_text="Portion serving size")
+    allergens = models.JSONField(default=list, blank=True, help_text="Declared FSSAI 8 major allergens list")
+
+    # Publishing & Variants
+    publishing_channels = models.JSONField(default=list, blank=True, help_text="Publishing channels e.g. ['pos', 'qr', 'online']")
+    variants_json = models.JSONField(default=list, blank=True, help_text="Variants and add-ons list")
+    markup_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, blank=True, help_text="Zomato / Swiggy markup price override")
+    packaging_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0, blank=True, help_text="Zomato / Swiggy packaging charge")
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['name']
+
+    @property
+    def is_vegetarian(self):
+        return self.food_type == self.FoodType.VEG
 
     def __str__(self):
         return f"{self.name} (₹{self.price})"
