@@ -1,3 +1,5 @@
+from django.conf import settings
+import os
 import json
 from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render, redirect, get_object_or_404
@@ -127,26 +129,22 @@ def onboard_restaurant(request):
             restaurant = form.save(instance=target_instance, branches_data=branches_data)
 
             # ── Auto-sync to MasterPanel ─────────────────────────────────────
-            master_url = os.environ.get('MASTER_DASHBOARD_URL', '')
-            api_secret = os.environ.get('MASTER_API_SECRET', '')
-            if master_url and not restaurant.master_license_key:
-                sync_result = restaurant.sync_to_master_dashboard(master_url, api_secret)
-                if sync_result.get('license_key'):
-                    messages.success(
-                        request,
-                        f"Restaurant '{restaurant.name}' onboarded. License key: {sync_result['license_key']}"
-                    )
-                else:
-                    messages.warning(
-                        request,
-                        f"Restaurant '{restaurant.name}' saved, but MasterPanel sync failed. Retry from dashboard."
-                    )
-            else:
-                action_word = "updated" if target_instance else "onboarded"
-                messages.success(
-                    request,
-                    f"Business '{restaurant.trade_name or restaurant.name}' {action_word} successfully with {restaurant.branches.count()} branch outlet(s)."
-                )
+            master_url = getattr(settings, 'MASTER_DASHBOARD_URL', None) or os.environ.get('MASTER_DASHBOARD_URL', 'http://localhost:3000')
+            api_secret = getattr(settings, 'MASTER_API_SECRET', None) or os.environ.get('MASTER_API_SECRET', 'T9@fK!xR!!72m$Qv%Lp&6Za!Wc@3Ns')
+            if master_url:
+                try:
+                    sync_result = restaurant.sync_to_master_dashboard(master_url, api_secret)
+                    if sync_result.get('license_key') and not restaurant.master_license_key:
+                        restaurant.master_license_key = sync_result['license_key']
+                        restaurant.save(update_fields=['master_license_key'])
+                except Exception:
+                    pass
+
+            action_word = "updated" if target_instance else "onboarded"
+            messages.success(
+                request,
+                f"Business '{restaurant.trade_name or restaurant.name}' {action_word} successfully with {restaurant.branches.count()} branch outlet(s)."
+            )
 
             return redirect('super_admin:dashboard')
     else:
@@ -174,6 +172,19 @@ def restaurant_edit(request, pk):
 
         if form.is_valid():
             restaurant = form.save(instance=restaurant, branches_data=branches_data)
+
+            # ── Auto-sync to MasterPanel ─────────────────────────────────────
+            master_url = getattr(settings, 'MASTER_DASHBOARD_URL', None) or os.environ.get('MASTER_DASHBOARD_URL', 'http://localhost:3000')
+            api_secret = getattr(settings, 'MASTER_API_SECRET', None) or os.environ.get('MASTER_API_SECRET', 'T9@fK!xR!!72m$Qv%Lp&6Za!Wc@3Ns')
+            if master_url:
+                try:
+                    sync_result = restaurant.sync_to_master_dashboard(master_url, api_secret)
+                    if sync_result.get('license_key') and not restaurant.master_license_key:
+                        restaurant.master_license_key = sync_result['license_key']
+                        restaurant.save(update_fields=['master_license_key'])
+                except Exception:
+                    pass
+
             messages.success(request, f"Business '{restaurant.trade_name or restaurant.name}' updated successfully.")
             return redirect('super_admin:dashboard')
     else:
@@ -828,6 +839,22 @@ def billing_view(request):
     subscription = billing_data.get('subscription') or None
     current_plan = billing_data.get('current_plan') or None
     available_plans = billing_data.get('available_plans') or []
+
+    for p in available_plans:
+        p_price = p.get('price') if p.get('price') is not None else p.get('monthly_fee')
+        if p_price is None:
+            p_price = p.get('monthlyPrice') or p.get('amount') or 0
+        p['price'] = p_price
+        p['monthly_fee'] = p_price
+        if 'setup_fee' not in p or p.get('setup_fee') is None:
+            p['setup_fee'] = p.get('setupFee') or 0
+
+    if current_plan:
+        cp_price = current_plan.get('price') if current_plan.get('price') is not None else current_plan.get('monthly_fee')
+        if cp_price is None:
+            cp_price = current_plan.get('monthlyPrice') or current_plan.get('amount') or 0
+        current_plan['price'] = cp_price
+        current_plan['monthly_fee'] = cp_price
     invoices = billing_data.get('invoices') or []
     connection_status = billing_data.get('connection_status', 'OFFLINE')
     is_connected = bool(connection_status == 'CONNECTED' and subscription and subscription.get('plan_name'))
@@ -881,6 +908,15 @@ def api_billing_sync(request):
         restaurant = Restaurant.objects.first()
     except Exception:
         restaurant = None
+
+    if restaurant:
+        try:
+            master_url = getattr(settings, 'MASTER_DASHBOARD_URL', None) or os.environ.get('MASTER_DASHBOARD_URL', 'http://localhost:3000')
+            api_secret = getattr(settings, 'MASTER_API_SECRET', None) or os.environ.get('MASTER_API_SECRET', 'T9@fK!xR!!72m$Qv%Lp&6Za!Wc@3Ns')
+            if master_url:
+                restaurant.sync_to_master_dashboard(master_url, api_secret)
+        except Exception:
+            pass
 
     try:
         billing_data = MasterBillingService.fetch_subscription_details(restaurant)

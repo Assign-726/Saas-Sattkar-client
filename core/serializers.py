@@ -137,17 +137,24 @@ class OrderSerializer(serializers.ModelSerializer):
     zone = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
     floor = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
     table_token = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    subtotal = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    tax_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    round_off_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    bill_breakdown = serializers.SerializerMethodField()
+    razorpay_order_id = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
+    razorpay_payment_id = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
+    razorpay_signature = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
 
     class Meta:
         model = Order
         fields = [
             'id', 'order_number', 'branch_order_number', 'customer_name', 'phone', 'table_number', 'table_id', 'zone', 'floor', 'table_token', 'order_time',
-            'status', 'status_display', 'total_amount', 'discount_amount', 'notes', 'items',
+            'status', 'status_display', 'subtotal', 'tax_amount', 'round_off_amount', 'total_amount', 'discount_amount', 'bill_breakdown', 'notes', 'items',
             'coupon_code', 'applied_coupon_code', 'payment_method', 'payment_method_display', 'payment_status', 'payment_status_display',
             'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature', 'restaurant_slug', 'branch_slug', 'branch_id', 'branch_name', 'branch_slug_display', 'order_restaurant_slug', 'security_token',
             'prep_minutes', 'prep_start', 'ready_at', 'remaining_seconds', 'progress_pct'
         ]
-        read_only_fields = ['order_time', 'total_amount', 'discount_amount', 'security_token', 'order_number', 'branch_order_number', 'branch_name', 'branch_slug_display', 'order_restaurant_slug']
+        read_only_fields = ['order_time', 'subtotal', 'tax_amount', 'round_off_amount', 'total_amount', 'discount_amount', 'security_token', 'order_number', 'branch_order_number', 'branch_name', 'branch_slug_display', 'order_restaurant_slug']
 
     def create(self, validated_data):
         from core.models import Coupon, RestaurantSettings
@@ -371,6 +378,49 @@ class OrderSerializer(serializers.ModelSerializer):
         except Exception:
             return None
         return None
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['restaurant_slug'] = instance.restaurant.slug if instance.restaurant else None
+        return data
+
+    def get_bill_breakdown(self, obj):
+        try:
+            breakdown = obj.calculate_bill_breakdown()
+            formatted_charges = []
+            for cc in breakdown.get('custom_charges_list', []):
+                formatted_charges.append({
+                    'name': cc.get('name'),
+                    'type': cc.get('type'),
+                    'value': float(cc.get('value', 0)),
+                    'amount': float(cc.get('amount', 0)),
+                    'is_taxable': bool(cc.get('is_taxable', False)),
+                })
+            return {
+                'bill_type': breakdown.get('bill_type', 'combined'),
+                'gross_subtotal': float(breakdown.get('gross_subtotal', 0)),
+                'food_subtotal': float(breakdown.get('food_subtotal', 0)),
+                'liquor_subtotal': float(breakdown.get('liquor_subtotal', 0)),
+                'discount_amount': float(breakdown.get('discount_amount', 0)),
+                'custom_charges_total': float(breakdown.get('custom_charges_total', 0)),
+                'custom_charges_list': formatted_charges,
+                'service_charge': float(breakdown.get('service_charge', 0)),
+                'service_charge_percentage': float(breakdown.get('service_charge_percentage', 0)),
+                'gst_base': float(breakdown.get('gst_base', 0)),
+                'cgst': float(breakdown.get('cgst', 0)),
+                'cgst_percentage': float(breakdown.get('cgst_percentage', 0)),
+                'sgst': float(breakdown.get('sgst', 0)),
+                'sgst_percentage': float(breakdown.get('sgst_percentage', 0)),
+                'beer_vat': float(breakdown.get('beer_vat', 0)),
+                'imfl_vat': float(breakdown.get('imfl_vat', 0)),
+                'wine_vat': float(breakdown.get('wine_vat', 0)),
+                'gen_vat': float(breakdown.get('gen_vat', 0)),
+                'vat': float(breakdown.get('vat', 0)),
+                'round_off_amount': float(breakdown.get('round_off_amount', 0)),
+                'final_total': float(breakdown.get('final_total', 0)),
+            }
+        except Exception:
+            return None
 
 
 class RestaurantSerializer(serializers.ModelSerializer):
