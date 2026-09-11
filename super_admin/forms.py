@@ -1050,6 +1050,45 @@ class RestaurantLandingForm(forms.ModelForm):
             'facebook_url', 'instagram_url', 'twitter_url', 'youtube_url'
         ]
 
+    def clean_hero_video(self):
+        video = self.cleaned_data.get('hero_video')
+        if not video:
+            return video
+
+        import os
+        from django.core.files.uploadedfile import UploadedFile
+
+        # Only validate newly uploaded files
+        if not isinstance(video, UploadedFile):
+            return video
+
+        max_size_mb = 25
+        max_size_bytes = max_size_mb * 1024 * 1024
+
+        # Validate file size
+        if video.size > max_size_bytes:
+            actual_mb = video.size / (1024 * 1024)
+            raise forms.ValidationError(
+                f"Video file is too large ({actual_mb:.1f} MB). "
+                f"Maximum allowed size for hero background video is {max_size_mb} MB to ensure fast page loads."
+            )
+
+        # Validate video format
+        ext = os.path.splitext(video.name)[1].lower()
+        allowed_extensions = ['.mp4', '.webm']
+        if ext not in allowed_extensions:
+            raise forms.ValidationError(
+                f"Unsupported video format '{ext}'. Only web-optimized MP4 (.mp4) and WebM (.webm) files are supported."
+            )
+
+        # Content-type check if available
+        content_type = getattr(video, 'content_type', '')
+        if content_type and not (content_type.startswith('video/') or content_type == 'application/octet-stream'):
+            raise forms.ValidationError("The uploaded file does not appear to be a valid video.")
+
+        return video
+
+
 
 class GalleryImageForm(forms.ModelForm):
     class Meta:
