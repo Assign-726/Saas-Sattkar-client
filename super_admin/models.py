@@ -326,6 +326,17 @@ class RestaurantBranch(models.Model):
     enable_online_payment = models.BooleanField(default=False, help_text="Enable online payment for this branch")
     enable_pay_at_counter = models.BooleanField(default=True, help_text="Enable pay at counter for this branch")
     
+    # Storefront contact, timing & coordinates per branch
+    email = models.EmailField(blank=True, default="")
+    opening_hours = models.CharField(max_length=200, blank=True, default="")
+    map_iframe_url = models.TextField(blank=True, default="")
+
+    # Social media channels per branch
+    facebook_url = models.URLField(blank=True, default="")
+    instagram_url = models.URLField(blank=True, default="")
+    twitter_url = models.URLField(blank=True, default="")
+    youtube_url = models.URLField(blank=True, default="")
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

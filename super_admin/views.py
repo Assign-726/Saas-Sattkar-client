@@ -23,6 +23,8 @@ from super_admin.forms import (
     TeamMemberForm,
     ReviewForm,
     EventForm,
+    WhyChooseUsForm,
+    BranchContactSocialForm,
     BlogPostForm,
     AdminSetupForm,
 )
@@ -36,7 +38,7 @@ from super_admin.models import (
     CustomerInquiry,
     NewsletterSubscriber,
 )
-from core.models import RestaurantLanding, GalleryImage, TeamMember, Review, Event, BlogPost, BlogComment, Order, OrderItem, MenuItem, Table
+from core.models import RestaurantLanding, GalleryImage, TeamMember, Review, Event, BlogPost, BlogComment, Order, OrderItem, MenuItem, Table, WhyChooseUs
 from super_admin.services import MasterBillingService
 from restaurant_project import constants
 
@@ -338,28 +340,56 @@ def landing_edit(request, pk):
                 except Exception as e:
                     print("Error parsing pages_seo JSON:", e)
 
+            # Handle pages_faq JSON
+            pages_faq_raw = request.POST.get('pages_faq')
+            if pages_faq_raw:
+                try:
+                    if isinstance(pages_faq_raw, str):
+                        landing_obj.pages_faq = json.loads(pages_faq_raw)
+                    elif isinstance(pages_faq_raw, dict):
+                        landing_obj.pages_faq = pages_faq_raw
+                except Exception as e:
+                    print("Error parsing pages_faq JSON:", e)
+
             landing_obj.save()
             messages.success(request, 'Landing page saved.')
             return redirect('super_admin:landing_edit', pk=restaurant.pk)
+    elif request.method == 'POST' and 'save_branch_contact' in request.POST:
+        branch_id = request.POST.get('branch_id')
+        target_branch = get_object_or_404(RestaurantBranch, pk=branch_id, restaurant=restaurant)
+        branch_form = BranchContactSocialForm(request.POST, instance=target_branch)
+        if branch_form.is_valid():
+            branch_form.save()
+            messages.success(request, f'Contact & Social coordinates updated for {target_branch.name}.')
+            return redirect('super_admin:landing_edit', pk=restaurant.pk)
+        else:
+            messages.error(request, 'Please correct errors in the branch contact details.')
     else:
         form = RestaurantLandingForm(instance=landing)
 
-    gallery_form = GalleryImageForm()
-    images = landing.gallery_images.all()
-    team_form = TeamMemberForm()
-    members = landing.team_members.all().order_by('display_order', 'id')
-    review_form = ReviewForm()
-    reviews = landing.reviews.all().order_by('display_order', 'id')
-    event_form = EventForm()
-    events = landing.events.all().order_by('display_order', 'id')
+    branches = restaurant.branches.all()
+    gallery_form = GalleryImageForm(restaurant=restaurant)
+    images = landing.gallery_images.select_related('branch').all()
+    team_form = TeamMemberForm(restaurant=restaurant)
+    members = landing.team_members.select_related('branch').all().order_by('display_order', 'id')
+    review_form = ReviewForm(restaurant=restaurant)
+    reviews = landing.reviews.select_related('branch').all().order_by('display_order', 'id')
+    event_form = EventForm(restaurant=restaurant)
+    events = landing.events.select_related('branch').all().order_by('display_order', 'id')
+    why_us_form = WhyChooseUsForm(restaurant=restaurant)
+    why_choose_us_items = landing.why_choose_us_items.select_related('branch').all().order_by('display_order', 'id')
     blog_form = BlogPostForm()
     blog_posts = restaurant.blog_posts.all().order_by('display_order', '-created_at')
     
     pages_seo_dict = landing.pages_seo if isinstance(landing.pages_seo, dict) else {}
     pages_seo_json = json.dumps(pages_seo_dict)
 
+    pages_faq_dict = landing.pages_faq if isinstance(landing.pages_faq, dict) else {}
+    pages_faq_json = json.dumps(pages_faq_dict)
+
     return render(request, 'super_admin/landing_edit.html', {
         'restaurant': restaurant,
+        'branches': branches,
         'landing': landing,
         'form': form,
         'gallery_form': gallery_form,
@@ -370,10 +400,14 @@ def landing_edit(request, pk):
         'reviews': reviews,
         'event_form': event_form,
         'events': events,
+        'why_us_form': why_us_form,
+        'why_choose_us_items': why_choose_us_items,
         'blog_form': blog_form,
         'blog_posts': blog_posts,
         'pages_seo_json': pages_seo_json,
         'pages_seo': pages_seo_dict,
+        'pages_faq_json': pages_faq_json,
+        'pages_faq': pages_faq_dict,
     })
 
 
@@ -382,7 +416,7 @@ def gallery_add(request, pk):
     restaurant = Restaurant.objects.get(pk=pk)
     landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
     if request.method == 'POST':
-        form = GalleryImageForm(request.POST, request.FILES)
+        form = GalleryImageForm(request.POST, request.FILES, restaurant=restaurant)
         if form.is_valid():
             gi: GalleryImage = form.save(commit=False)
             gi.landing = landing
@@ -390,6 +424,25 @@ def gallery_add(request, pk):
             messages.success(request, 'Image added to gallery.')
         else:
             messages.error(request, 'Please correct errors in the image form.')
+    return redirect('super_admin:landing_edit', pk=restaurant.pk)
+
+
+@superuser_required
+def gallery_edit(request, gid):
+    img = get_object_or_404(GalleryImage.objects.select_related('landing__restaurant'), pk=gid)
+    restaurant = img.landing.restaurant
+    if request.method == 'POST':
+        form = GalleryImageForm(request.POST, request.FILES, instance=img, restaurant=restaurant)
+        if not request.FILES.get('image'):
+            form.fields['image'].required = False
+        if form.is_valid():
+            saved_img = form.save(commit=False)
+            if 'image' in request.FILES:
+                saved_img.image = request.FILES['image']
+            saved_img.save()
+            messages.success(request, 'Gallery image updated successfully.')
+        else:
+            messages.error(request, 'Please correct errors in the gallery image form.')
     return redirect('super_admin:landing_edit', pk=restaurant.pk)
 
 
@@ -408,12 +461,31 @@ def team_add(request, pk):
     restaurant = Restaurant.objects.get(pk=pk)
     landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
     if request.method == 'POST':
-        form = TeamMemberForm(request.POST, request.FILES)
+        form = TeamMemberForm(request.POST, request.FILES, restaurant=restaurant)
         if form.is_valid():
             tm: TeamMember = form.save(commit=False)
             tm.landing = landing
             tm.save()
             messages.success(request, 'Team member added.')
+        else:
+            messages.error(request, 'Please correct errors in the team form.')
+    return redirect('super_admin:landing_edit', pk=restaurant.pk)
+
+
+@superuser_required
+def team_edit(request, mid):
+    m = get_object_or_404(TeamMember.objects.select_related('landing__restaurant'), pk=mid)
+    restaurant = m.landing.restaurant
+    if request.method == 'POST':
+        form = TeamMemberForm(request.POST, request.FILES, instance=m, restaurant=restaurant)
+        if not request.FILES.get('photo'):
+            form.fields['photo'].required = False
+        if form.is_valid():
+            saved_m = form.save(commit=False)
+            if 'photo' in request.FILES:
+                saved_m.photo = request.FILES['photo']
+            saved_m.save()
+            messages.success(request, f'Team member "{m.name}" updated successfully.')
         else:
             messages.error(request, 'Please correct errors in the team form.')
     return redirect('super_admin:landing_edit', pk=restaurant.pk)
@@ -434,12 +506,26 @@ def review_add(request, pk):
     restaurant = Restaurant.objects.get(pk=pk)
     landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
     if request.method == 'POST':
-        form = ReviewForm(request.POST)
+        form = ReviewForm(request.POST, restaurant=restaurant)
         if form.is_valid():
             rv: Review = form.save(commit=False)
             rv.landing = landing
             rv.save()
             messages.success(request, 'Review added.')
+        else:
+            messages.error(request, 'Please correct errors in the review form.')
+    return redirect('super_admin:landing_edit', pk=restaurant.pk)
+
+
+@superuser_required
+def review_edit(request, rid):
+    rv = get_object_or_404(Review.objects.select_related('landing__restaurant'), pk=rid)
+    restaurant = rv.landing.restaurant
+    if request.method == 'POST':
+        form = ReviewForm(request.POST, instance=rv, restaurant=restaurant)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Review by "{rv.name}" updated successfully.')
         else:
             messages.error(request, 'Please correct errors in the review form.')
     return redirect('super_admin:landing_edit', pk=restaurant.pk)
@@ -460,12 +546,31 @@ def event_add(request, pk):
     restaurant = Restaurant.objects.get(pk=pk)
     landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
     if request.method == 'POST':
-        form = EventForm(request.POST, request.FILES)
+        form = EventForm(request.POST, request.FILES, restaurant=restaurant)
         if form.is_valid():
             evt = form.save(commit=False)
             evt.landing = landing
             evt.save()
             messages.success(request, 'Event added successfully.')
+        else:
+            messages.error(request, 'Please correct errors in the event form.')
+    return redirect('super_admin:landing_edit', pk=restaurant.pk)
+
+
+@superuser_required
+def event_edit(request, ev_id):
+    evt = get_object_or_404(Event.objects.select_related('landing__restaurant'), pk=ev_id)
+    restaurant = evt.landing.restaurant
+    if request.method == 'POST':
+        form = EventForm(request.POST, request.FILES, instance=evt, restaurant=restaurant)
+        if not request.FILES.get('image'):
+            form.fields['image'].required = False
+        if form.is_valid():
+            saved_evt = form.save(commit=False)
+            if 'image' in request.FILES:
+                saved_evt.image = request.FILES['image']
+            saved_evt.save()
+            messages.success(request, f'Event "{evt.title}" updated successfully.')
         else:
             messages.error(request, 'Please correct errors in the event form.')
     return redirect('super_admin:landing_edit', pk=restaurant.pk)
@@ -478,6 +583,46 @@ def event_delete(request, ev_id):
     if request.method == 'POST':
         evt.delete()
         messages.success(request, 'Event removed successfully.')
+    return redirect('super_admin:landing_edit', pk=restaurant_id)
+
+
+@superuser_required
+def why_us_add(request, pk):
+    restaurant = Restaurant.objects.get(pk=pk)
+    landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
+    if request.method == 'POST':
+        form = WhyChooseUsForm(request.POST, restaurant=restaurant)
+        if form.is_valid():
+            item = form.save(commit=False)
+            item.landing = landing
+            item.save()
+            messages.success(request, 'Why Choose Us / Service card added.')
+        else:
+            messages.error(request, 'Please correct errors in the feature block form.')
+    return redirect('super_admin:landing_edit', pk=restaurant.pk)
+
+
+@superuser_required
+def why_us_edit(request, wid):
+    item = get_object_or_404(WhyChooseUs.objects.select_related('landing__restaurant'), pk=wid)
+    restaurant = item.landing.restaurant
+    if request.method == 'POST':
+        form = WhyChooseUsForm(request.POST, instance=item, restaurant=restaurant)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Service block "{item.title}" updated successfully.')
+        else:
+            messages.error(request, 'Please correct errors in the feature block form.')
+    return redirect('super_admin:landing_edit', pk=restaurant.pk)
+
+
+@superuser_required
+def why_us_delete(request, wid):
+    item = WhyChooseUs.objects.select_related('landing__restaurant').get(pk=wid)
+    restaurant_id = item.landing.restaurant.pk
+    if request.method == 'POST':
+        item.delete()
+        messages.success(request, 'Service block removed.')
     return redirect('super_admin:landing_edit', pk=restaurant_id)
 
 

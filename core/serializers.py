@@ -1,6 +1,6 @@
 from rest_framework import serializers
 # pyrefly: ignore [missing-import]
-from core.models import Category, SubCategory, MenuItem, Table, Zone, CustomCharge, Order, OrderItem, RestaurantLanding, GalleryImage, TeamMember, Review, RestaurantSettings, Event, BlogPost, BlogComment
+from core.models import Category, SubCategory, MenuItem, Table, Zone, CustomCharge, Order, OrderItem, RestaurantLanding, GalleryImage, TeamMember, Review, RestaurantSettings, Event, BlogPost, BlogComment, WhyChooseUs
 from super_admin.models import Restaurant, RestaurantBranch
 from django.utils import timezone
 
@@ -13,9 +13,11 @@ class RestaurantBranchSerializer(serializers.ModelSerializer):
     class Meta:
         model = RestaurantBranch
         fields = [
-            'id', 'name', 'slug', 'phone', 'address_line_1', 'address_line_2',
+            'id', 'name', 'slug', 'phone', 'email', 'opening_hours',
+            'address_line_1', 'address_line_2',
             'city', 'state', 'pincode', 'address', 'serves_alcohol',
             'service_charge_percentage', 'fssai_license_no', 'gstin',
+            'map_iframe_url', 'facebook_url', 'instagram_url', 'twitter_url', 'youtube_url',
             'enable_customer_ordering', 'enable_online_payment', 'enable_pay_at_counter'
         ]
 
@@ -437,27 +439,48 @@ class RestaurantSerializer(serializers.ModelSerializer):
 
 
 class GalleryImageSerializer(serializers.ModelSerializer):
+    branch_name = serializers.ReadOnlyField(source='branch.name')
+    branch_slug = serializers.ReadOnlyField(source='branch.slug')
+
     class Meta:
         model = GalleryImage
-        fields = ['id', 'image', 'caption', 'display_order']
+        fields = ['id', 'image', 'caption', 'branch', 'branch_name', 'branch_slug', 'display_order']
 
 
 class TeamMemberSerializer(serializers.ModelSerializer):
+    branch_name = serializers.ReadOnlyField(source='branch.name')
+    branch_slug = serializers.ReadOnlyField(source='branch.slug')
+
     class Meta:
         model = TeamMember
-        fields = ['id', 'name', 'position', 'photo', 'display_order', 'active']
+        fields = ['id', 'name', 'position', 'photo', 'branch', 'branch_name', 'branch_slug', 'display_order', 'active']
 
 
 class ReviewSerializer(serializers.ModelSerializer):
+    branch_name = serializers.ReadOnlyField(source='branch.name')
+    branch_slug = serializers.ReadOnlyField(source='branch.slug')
+
     class Meta:
         model = Review
-        fields = ['id', 'name', 'stars', 'description', 'display_order', 'active']
+        fields = ['id', 'name', 'stars', 'description', 'branch', 'branch_name', 'branch_slug', 'display_order', 'active']
 
 
 class EventSerializer(serializers.ModelSerializer):
+    branch_name = serializers.ReadOnlyField(source='branch.name')
+    branch_slug = serializers.ReadOnlyField(source='branch.slug')
+
     class Meta:
         model = Event
-        fields = ['id', 'title', 'price', 'image', 'description', 'bullet_1', 'bullet_2', 'bullet_3', 'display_order', 'active']
+        fields = ['id', 'title', 'price', 'image', 'description', 'bullet_1', 'bullet_2', 'bullet_3', 'branch', 'branch_name', 'branch_slug', 'display_order', 'active']
+
+
+class WhyChooseUsSerializer(serializers.ModelSerializer):
+    branch_name = serializers.ReadOnlyField(source='branch.name')
+    branch_slug = serializers.ReadOnlyField(source='branch.slug')
+
+    class Meta:
+        model = WhyChooseUs
+        fields = ['id', 'title', 'description', 'icon', 'branch', 'branch_name', 'branch_slug', 'display_order', 'active']
 
 
 class RestaurantLandingSerializer(serializers.ModelSerializer):
@@ -465,6 +488,7 @@ class RestaurantLandingSerializer(serializers.ModelSerializer):
     team_members = TeamMemberSerializer(many=True, read_only=True)
     reviews = ReviewSerializer(many=True, read_only=True)
     events = EventSerializer(many=True, read_only=True)
+    why_choose_us = WhyChooseUsSerializer(source='why_choose_us_items', many=True, read_only=True)
     branches = RestaurantBranchSerializer(source='restaurant.branches', many=True, read_only=True)
     restaurant_name = serializers.ReadOnlyField(source='restaurant.name')
     restaurant_slug = serializers.ReadOnlyField(source='restaurant.slug')
@@ -482,15 +506,18 @@ class RestaurantLandingSerializer(serializers.ModelSerializer):
             'about_stat_num_3', 'about_stat_label_3', 'about_stat_desc_3',
             'about_stat_num_4', 'about_stat_label_4', 'about_stat_desc_4',
             'address', 'phone', 'email', 'opening_hours',
+            'facebook_url', 'instagram_url', 'twitter_url', 'youtube_url',
             'seo_title', 'seo_description', 'seo_keywords', 'seo_canonical_url',
             'og_title', 'og_description', 'og_url', 'og_site_name', 'og_locale', 'og_type',
-            'twitter_card_type', 'twitter_title', 'twitter_description', 'pages_seo',
+            'twitter_card_type', 'twitter_title', 'twitter_description', 'pages_seo', 'pages_faq',
             'show_hero', 'show_about', 'show_why_us', 'show_specials', 'show_events', 'show_gallery', 'show_team', 'show_reviews',
             'why_us_title_1', 'why_us_description_1',
             'why_us_title_2', 'why_us_description_2',
             'why_us_title_3', 'why_us_description_3',
             'map_iframe_url',
-            'gallery_images', 'team_members', 'reviews', 'events', 'branches'
+            'privacy_policy_title', 'privacy_policy_updated_at', 'privacy_policy_content',
+            'terms_of_service_title', 'terms_of_service_updated_at', 'terms_of_service_content',
+            'gallery_images', 'team_members', 'reviews', 'events', 'why_choose_us', 'branches'
         ]
 
 
