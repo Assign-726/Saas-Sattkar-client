@@ -48,6 +48,16 @@ class MasterBillingService:
 
         params = {}
         if restaurant:
+            # Send email, phone, and business name for seamless matching without strict domain/license checks
+            email = getattr(restaurant, 'email', None)
+            if email:
+                params['email'] = email.strip()
+            phone = getattr(restaurant, 'phone', None)
+            if phone:
+                params['phone'] = phone.strip()
+            trade_name = getattr(restaurant, 'trade_name', '') or getattr(restaurant, 'name', '')
+            if trade_name:
+                params['business_name'] = trade_name.strip()
             license_key = getattr(restaurant, 'master_license_key', None)
             if license_key:
                 params['license_key'] = license_key
@@ -64,6 +74,47 @@ class MasterBillingService:
                 if data.get('status') == 'success':
                     data['connection_status'] = 'CONNECTED'
                     data['master_url'] = master_url
+
+                    # Auto-bind / update local license key when matched from Master Admin
+                    client_payload = data.get('client', {})
+                    master_key = client_payload.get('license_key')
+                    if restaurant and master_key:
+                        current_key = getattr(restaurant, 'master_license_key', '')
+                        current_status = getattr(restaurant, 'master_sync_status', '')
+                        if current_key != master_key or current_status != 'SYNCED':
+                            try:
+                                from super_admin.models import Restaurant
+                                Restaurant.objects.filter(pk=restaurant.pk).update(
+                                    master_license_key=master_key,
+                                    master_sync_status='SYNCED'
+                                )
+                                restaurant.master_license_key = master_key
+                                restaurant.master_sync_status = 'SYNCED'
+                                logger.info(f"[MasterBillingService] Auto-bound license key '{master_key}' to '{restaurant.name}'")
+                            except Exception as db_err:
+                                logger.warning(f"[MasterBillingService] Could not persist license key to local DB: {db_err}")
+
+                    # Normalize plan fields so price and monthly_fee are consistently available
+                    if 'available_plans' in data and isinstance(data['available_plans'], list):
+                        for p in data['available_plans']:
+                            p_price = p.get('price') if p.get('price') is not None else p.get('monthly_fee')
+                            if p_price is None:
+                                p_price = p.get('monthlyPrice') or p.get('amount') or 0
+                            p['price'] = p_price
+                            p['monthly_fee'] = p_price
+                            if 'setup_fee' not in p or p.get('setup_fee') is None:
+                                p['setup_fee'] = p.get('setupFee') or 0
+
+                    if 'current_plan' in data and isinstance(data['current_plan'], dict):
+                        cp = data['current_plan']
+                        cp_price = cp.get('price') if cp.get('price') is not None else cp.get('monthly_fee')
+                        if cp_price is None:
+                            cp_price = cp.get('monthlyPrice') or cp.get('amount') or 0
+                        cp['price'] = cp_price
+                        cp['monthly_fee'] = cp_price
+                        if 'setup_fee' not in cp or cp.get('setup_fee') is None:
+                            cp['setup_fee'] = cp.get('setupFee') or 0
+
                     return data
             logger.warning(f"[MasterBillingService] Server returned status {resp.status_code}: {resp.text[:200]}")
             fallback = cls._build_local_fallback(restaurant)

@@ -37,6 +37,18 @@ def is_admin(user):
     return user.is_authenticated and user.is_staff
 
 
+def format_local_time(dt, fmt='%I:%M %p'):
+    """
+    Safely convert aware UTC datetime to the configured local timezone (Asia/Kolkata)
+    and format it according to fmt. Returns empty string if dt is falsy.
+    """
+    if not dt:
+        return ''
+    if timezone.is_aware(dt):
+        dt = timezone.localtime(dt)
+    return dt.strftime(fmt)
+
+
 @login_required
 @user_passes_test(is_admin)
 def switch_branch(request):
@@ -677,7 +689,7 @@ def get_pos_active_orders(restaurant, active_branch=None):
                 'reason': ord_obj.discount_reason or 'Bill discount'
             } if (ord_obj.discount_amount or ord_obj.discount_value) else None,
             'total_amount': float(ord_obj.total_amount or 0),
-            'order_time': ord_obj.order_time.strftime('%I:%M %p') if ord_obj.order_time else '',
+            'order_time': format_local_time(ord_obj.order_time),
             'elapsed': elapsed_str,
             'lines_count': items_count,
             'items': [
@@ -1185,7 +1197,7 @@ def order_create_manual(request, restaurant_slug=None):
                     'subtotal': float(ao.subtotal),
                     'tax_amount': float(ao.tax_amount),
                     'total_amount': float(ao.total_amount),
-                    'order_time': ao.order_time.strftime('%I:%M %p'),
+                    'order_time': format_local_time(ao.order_time),
                     'items': [
                         {
                             'id': it.menu_item.id if it.menu_item else 0,
@@ -1533,6 +1545,7 @@ def pos_draft_order_api(request, restaurant_slug=None):
                 restaurant=restaurant,
                 branch=active_branch,
                 status=Order.OrderStatus.DRAFT,
+                payment_status=Order.PaymentStatus.UNPAID,
                 customer_name=customer_name,
                 phone=phone,
                 notes=notes,
@@ -1608,6 +1621,7 @@ def pos_sync_draft_items_api(request, restaurant_slug=None):
                     restaurant=restaurant,
                     branch=active_branch,
                     status=Order.OrderStatus.DRAFT,
+                    payment_status=Order.PaymentStatus.UNPAID,
                     customer_name=customer_name,
                     phone=phone,
                     notes=notes,
@@ -1630,6 +1644,7 @@ def pos_sync_draft_items_api(request, restaurant_slug=None):
                 restaurant=restaurant,
                 branch=active_branch,
                 status=Order.OrderStatus.DRAFT,
+                payment_status=Order.PaymentStatus.UNPAID,
                 customer_name=customer_name,
                 phone=phone,
                 notes=notes,
@@ -1686,6 +1701,8 @@ def pos_sync_draft_items_api(request, restaurant_slug=None):
         order.discount_reason = discount_reason_val
         order.round_off_amount = round_off_amount_val
         order.total_amount = grand_total_val
+        if order.status == Order.OrderStatus.DRAFT and (not order.advance_amount_paid or order.advance_amount_paid <= 0):
+            order.payment_status = Order.PaymentStatus.UNPAID
         order.save()
 
     return JsonResponse({
@@ -3737,7 +3754,7 @@ def order_notifications_poll(request, restaurant_slug=None):
                 'total_amount': float(o.total_amount or 0),
                 'status': o.get_status_display(),
                 'status_raw': o.status,
-                'time_str': o.order_time.strftime('%I:%M %p') if o.order_time else '',
+                'time_str': format_local_time(o.order_time),
                 'detail_url': reverse('restaurant_admin:order_detail', kwargs={'restaurant_slug': restaurant.slug, 'pk': o.id}),
             })
 
@@ -3756,7 +3773,7 @@ def order_notifications_poll(request, restaurant_slug=None):
             'total_amount': float(o.total_amount or 0),
             'status': o.get_status_display(),
             'status_raw': o.status,
-            'time_str': o.order_time.strftime('%I:%M %p') if o.order_time else '',
+            'time_str': format_local_time(o.order_time),
             'detail_url': reverse('restaurant_admin:order_detail', kwargs={'restaurant_slug': restaurant.slug, 'pk': o.id}),
         })
 
@@ -4185,7 +4202,7 @@ def order_records_export(request, restaurant_slug=None):
 
             ws.append([
                 o.order_number,
-                o.order_time.strftime('%Y-%m-%d %H:%M'),
+                format_local_time(o.order_time, '%Y-%m-%d %H:%M'),
                 o.customer_name or 'N/A',
                 o.phone or 'N/A',
                 table_str,
@@ -4294,7 +4311,7 @@ def order_records_export(request, restaurant_slug=None):
 
             writer.writerow([
                 o.order_number,
-                o.order_time.strftime('%Y-%m-%d %H:%M'),
+                format_local_time(o.order_time, '%Y-%m-%d %H:%M'),
                 o.customer_name or 'N/A',
                 o.phone or 'N/A',
                 table_str,
@@ -5744,7 +5761,7 @@ def sales_analytics(request, restaurant_slug=None):
         payment_method_counts[pm] = payment_method_counts.get(pm, 0) + 1
         payment_method_totals[pm] = payment_method_totals.get(pm, Decimal('0.00')) + b['final_total']
 
-        date_key = o.order_time.strftime('%Y-%m-%d')
+        date_key = loc_time.strftime('%Y-%m-%d') if loc_time else ''
         if date_key not in daily_data:
             daily_data[date_key] = {'revenue': Decimal('0.00'), 'gst': Decimal('0.00'), 'vat': Decimal('0.00'), 'orders': 0}
         daily_data[date_key]['revenue'] += b['final_total']
@@ -6985,7 +7002,7 @@ def transaction_desk_create(request, restaurant_slug=None):
             'subtotal': float(ao.subtotal),
             'tax_amount': float(ao.tax_amount),
             'total_amount': float(ao.total_amount),
-            'order_time': ao.order_time.strftime('%I:%M %p'),
+            'order_time': format_local_time(ao.order_time),
             'items': [
                 {
                     'id': it.menu_item.id if it.menu_item else 0,

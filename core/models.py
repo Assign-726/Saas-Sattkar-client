@@ -609,6 +609,14 @@ class Order(models.Model):
             if matched_party:
                 self.party = matched_party
 
+        # Ensure draft orders always default to unpaid unless advance paid
+        if (self.status == self.OrderStatus.DRAFT or self.status == 'DRAFT') and (not self.advance_amount_paid or self.advance_amount_paid <= 0):
+            if not self.paid_amount or self.paid_amount <= 0:
+                self.payment_status = self.PaymentStatus.UNPAID
+                update_fields = kwargs.get('update_fields')
+                if update_fields is not None and 'payment_status' not in update_fields:
+                    kwargs['update_fields'] = list(update_fields) + ['payment_status']
+
         super().save(*args, **kwargs)
 
         # Handle automatic inventory deduction or restoration
