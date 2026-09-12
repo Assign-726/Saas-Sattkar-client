@@ -3,7 +3,7 @@ from django.contrib.auth.models import User, Group
 import re
 from decimal import Decimal
 from super_admin.models import Restaurant, RestaurantUser, RestaurantBranch, GstRegistration, DocumentSeries, UserSecuritySetting
-from core.models import RestaurantLanding, GalleryImage, TeamMember, Review, Event, MenuItem, RestaurantSettings, BlogPost
+from core.models import RestaurantLanding, GalleryImage, TeamMember, Review, Event, MenuItem, RestaurantSettings, BlogPost, WhyChooseUs
 from restaurant_project import constants
 
 
@@ -1039,37 +1039,144 @@ class RestaurantLandingForm(forms.ModelForm):
             'address', 'phone', 'email', 'opening_hours',
             'seo_title', 'seo_description', 'seo_keywords', 'seo_canonical_url',
             'og_title', 'og_description', 'og_url', 'og_site_name', 'og_locale', 'og_type',
-            'twitter_card_type', 'twitter_title', 'twitter_description', 'pages_seo',
+            'twitter_card_type', 'twitter_title', 'twitter_description', 'pages_seo', 'pages_faq',
             'show_hero', 'show_about', 'show_why_us', 'show_specials', 'show_events', 'show_gallery', 'show_team', 'show_reviews',
             'why_us_title_1', 'why_us_description_1',
             'why_us_title_2', 'why_us_description_2',
             'why_us_title_3', 'why_us_description_3',
-            'map_iframe_url'
+            'map_iframe_url',
+            'privacy_policy_title', 'privacy_policy_updated_at', 'privacy_policy_content',
+            'terms_of_service_title', 'terms_of_service_updated_at', 'terms_of_service_content',
+            'facebook_url', 'instagram_url', 'twitter_url', 'youtube_url'
         ]
+
+    def clean_hero_video(self):
+        video = self.cleaned_data.get('hero_video')
+        if not video:
+            return video
+
+        import os
+        from django.core.files.uploadedfile import UploadedFile
+
+        # Only validate newly uploaded files
+        if not isinstance(video, UploadedFile):
+            return video
+
+        max_size_mb = 25
+        max_size_bytes = max_size_mb * 1024 * 1024
+
+        # Validate file size
+        if video.size > max_size_bytes:
+            actual_mb = video.size / (1024 * 1024)
+            raise forms.ValidationError(
+                f"Video file is too large ({actual_mb:.1f} MB). "
+                f"Maximum allowed size for hero background video is {max_size_mb} MB to ensure fast page loads."
+            )
+
+        # Validate video format
+        ext = os.path.splitext(video.name)[1].lower()
+        allowed_extensions = ['.mp4', '.webm']
+        if ext not in allowed_extensions:
+            raise forms.ValidationError(
+                f"Unsupported video format '{ext}'. Only web-optimized MP4 (.mp4) and WebM (.webm) files are supported."
+            )
+
+        # Content-type check if available
+        content_type = getattr(video, 'content_type', '')
+        if content_type and not (content_type.startswith('video/') or content_type == 'application/octet-stream'):
+            raise forms.ValidationError("The uploaded file does not appear to be a valid video.")
+
+        return video
+
 
 
 class GalleryImageForm(forms.ModelForm):
     class Meta:
         model = GalleryImage
-        fields = ['image', 'caption', 'display_order']
+        fields = ['image', 'caption', 'branch', 'display_order']
+
+    def __init__(self, *args, **kwargs):
+        restaurant = kwargs.pop('restaurant', None)
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk and 'image' in self.fields:
+            self.fields['image'].required = False
+        if 'branch' in self.fields:
+            self.fields['branch'].required = False
+            self.fields['branch'].empty_label = "All Outlets / Global"
+            if restaurant:
+                self.fields['branch'].queryset = restaurant.branches.all()
 
 
 class TeamMemberForm(forms.ModelForm):
     class Meta:
         model = TeamMember
-        fields = ['photo', 'name', 'position', 'display_order', 'active']
+        fields = ['photo', 'name', 'position', 'branch', 'display_order', 'active']
+
+    def __init__(self, *args, **kwargs):
+        restaurant = kwargs.pop('restaurant', None)
+        super().__init__(*args, **kwargs)
+        if 'branch' in self.fields:
+            self.fields['branch'].required = False
+            self.fields['branch'].empty_label = "All Outlets / Global"
+            if restaurant:
+                self.fields['branch'].queryset = restaurant.branches.all()
 
 
 class ReviewForm(forms.ModelForm):
     class Meta:
         model = Review
-        fields = ['name', 'stars', 'description', 'display_order', 'active']
+        fields = ['name', 'stars', 'description', 'branch', 'display_order', 'active']
+
+    def __init__(self, *args, **kwargs):
+        restaurant = kwargs.pop('restaurant', None)
+        super().__init__(*args, **kwargs)
+        if 'branch' in self.fields:
+            self.fields['branch'].required = False
+            self.fields['branch'].empty_label = "All Outlets / Global"
+            if restaurant:
+                self.fields['branch'].queryset = restaurant.branches.all()
 
 
 class EventForm(forms.ModelForm):
     class Meta:
         model = Event
-        fields = ['title', 'price', 'image', 'description', 'bullet_1', 'bullet_2', 'bullet_3', 'display_order', 'active']
+        fields = ['title', 'price', 'image', 'branch', 'description', 'bullet_1', 'bullet_2', 'bullet_3', 'display_order', 'active']
+
+    def __init__(self, *args, **kwargs):
+        restaurant = kwargs.pop('restaurant', None)
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk and 'image' in self.fields:
+            self.fields['image'].required = False
+        if 'branch' in self.fields:
+            self.fields['branch'].required = False
+            self.fields['branch'].empty_label = "All Outlets / Global"
+            if restaurant:
+                self.fields['branch'].queryset = restaurant.branches.all()
+
+
+class WhyChooseUsForm(forms.ModelForm):
+    class Meta:
+        model = WhyChooseUs
+        fields = ['title', 'description', 'branch', 'icon', 'display_order', 'active']
+
+    def __init__(self, *args, **kwargs):
+        restaurant = kwargs.pop('restaurant', None)
+        super().__init__(*args, **kwargs)
+        if 'branch' in self.fields:
+            self.fields['branch'].required = False
+            self.fields['branch'].empty_label = "All Outlets / Global"
+            if restaurant:
+                self.fields['branch'].queryset = restaurant.branches.all()
+
+
+class BranchContactSocialForm(forms.ModelForm):
+    class Meta:
+        model = RestaurantBranch
+        fields = [
+            'phone', 'email', 'opening_hours', 'address_line_1', 'address_line_2',
+            'city', 'state', 'pincode', 'map_iframe_url',
+            'facebook_url', 'instagram_url', 'twitter_url', 'youtube_url'
+        ]
 
 
 class BlogPostForm(forms.ModelForm):

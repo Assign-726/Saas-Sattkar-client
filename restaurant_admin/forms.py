@@ -679,6 +679,39 @@ class RestaurantSettingsForm(forms.ModelForm):
         
         return cleaned
 
+    def clean_notification_sound(self):
+        sound = self.cleaned_data.get('notification_sound')
+        if not sound:
+            return sound
+
+        import os
+        from django.core.files.uploadedfile import UploadedFile
+
+        # Only validate newly uploaded files
+        if not isinstance(sound, UploadedFile):
+            return sound
+
+        max_size_mb = 5
+        max_size_bytes = max_size_mb * 1024 * 1024
+
+        # Validate file size
+        if sound.size > max_size_bytes:
+            actual_mb = sound.size / (1024 * 1024)
+            raise forms.ValidationError(
+                f"Audio track is too large ({actual_mb:.1f} MB). "
+                f"Notification sounds should be short alert chimes under {max_size_mb} MB."
+            )
+
+        # Validate audio format
+        ext = os.path.splitext(sound.name)[1].lower()
+        allowed_extensions = ['.mp3', '.wav', '.ogg', '.m4a']
+        if ext not in allowed_extensions:
+            raise forms.ValidationError(
+                f"Unsupported audio format '{ext}'. Allowed audio formats: MP3 (.mp3), WAV (.wav), OGG (.ogg), M4A (.m4a)."
+            )
+
+        return sound
+
 from core.models import Zone, Table
 
 class ZoneForm(forms.ModelForm):

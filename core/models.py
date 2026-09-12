@@ -1319,6 +1319,12 @@ class RestaurantLanding(models.Model):
     email = models.EmailField(blank=True, default="")
     opening_hours = models.CharField(max_length=200, blank=True)
     
+    # Social media channels
+    facebook_url = models.URLField(blank=True, default="")
+    instagram_url = models.URLField(blank=True, default="")
+    twitter_url = models.URLField(blank=True, default="")
+    youtube_url = models.URLField(blank=True, default="")
+    
     # Dynamic SEO & Metadata
     seo_title = models.CharField(max_length=255, blank=True)
     seo_description = models.TextField(blank=True)
@@ -1341,6 +1347,10 @@ class RestaurantLanding(models.Model):
     # Sub-pages SEO config JSON
     # e.g. {"about": {"title": "...", "description": "..."}, "menu": {...}}
     pages_seo = models.JSONField(default=dict, blank=True)
+
+    # Page-wise FAQ config JSON
+    # e.g. {"home": [{"id": "...", "question": "...", "answer": "...", "order": 1, "active": true}], ...}
+    pages_faq = models.JSONField(default=dict, blank=True)
     
     show_hero = models.BooleanField(default=True, verbose_name="Show Hero Section")
     show_about = models.BooleanField(default=True, verbose_name="Show About Us Section")
@@ -1357,6 +1367,16 @@ class RestaurantLanding(models.Model):
     why_us_title_3 = models.CharField(max_length=100, blank=True, default="")
     why_us_description_3 = models.TextField(blank=True, default="")
     map_iframe_url = models.TextField(blank=True, default="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3022.617540232549!2d-73.98785312347953!3d40.74844047138902!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x89c259a9b3117469%3A0xd134e199a405a163!2sEmpire%20State%20Building!5e0!3m2!1sen!2sus!4v1700000000000!5m2!1sen!2sus")
+    
+    # Legal & Policies
+    privacy_policy_title = models.CharField(max_length=200, blank=True, default="Privacy Policy")
+    privacy_policy_updated_at = models.CharField(max_length=100, blank=True, default="")
+    privacy_policy_content = models.TextField(blank=True, default="")
+
+    terms_of_service_title = models.CharField(max_length=200, blank=True, default="Terms of Service")
+    terms_of_service_updated_at = models.CharField(max_length=100, blank=True, default="")
+    terms_of_service_content = models.TextField(blank=True, default="")
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1370,6 +1390,7 @@ class RestaurantLanding(models.Model):
 
 class Event(models.Model):
     landing = models.ForeignKey(RestaurantLanding, on_delete=models.CASCADE, related_name='events')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='events')
     title = models.CharField(max_length=150)
     price = models.CharField(max_length=50)  # e.g., "$189"
     image = models.ImageField(upload_to='landing/events/', blank=True, null=True)
@@ -1387,11 +1408,13 @@ class Event(models.Model):
         verbose_name_plural = 'Events'
 
     def __str__(self):
-        return self.title
+        branch_str = f" ({self.branch.name})" if self.branch else " (All Outlets)"
+        return f"{self.title}{branch_str}"
 
 
 class GalleryImage(models.Model):
     landing = models.ForeignKey(RestaurantLanding, on_delete=models.CASCADE, related_name='gallery_images')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='gallery_images')
     image = models.ImageField(upload_to='landing/gallery/')
     caption = models.CharField(max_length=200, blank=True)
     display_order = models.PositiveIntegerField(default=0)
@@ -1401,11 +1424,13 @@ class GalleryImage(models.Model):
         ordering = ['display_order', 'id']
 
     def __str__(self):
-        return self.caption or f"Image {self.id}"
+        branch_str = f" ({self.branch.name})" if self.branch else " (All Outlets)"
+        return f"{self.caption or f'Image {self.id}'}{branch_str}"
 
 
 class TeamMember(models.Model):
     landing = models.ForeignKey(RestaurantLanding, on_delete=models.CASCADE, related_name='team_members')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='team_members')
     name = models.CharField(max_length=150)
     position = models.CharField(max_length=150, blank=True)
     photo = models.ImageField(upload_to='landing/team/', blank=True, null=True)
@@ -1419,11 +1444,13 @@ class TeamMember(models.Model):
         verbose_name_plural = 'Team Members'
 
     def __str__(self):
-        return self.name
+        branch_str = f" ({self.branch.name})" if self.branch else " (All Outlets)"
+        return f"{self.name}{branch_str}"
 
 
 class Review(models.Model):
     landing = models.ForeignKey(RestaurantLanding, on_delete=models.CASCADE, related_name='reviews')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='reviews')
     name = models.CharField(max_length=150)
     stars = models.PositiveSmallIntegerField(default=5, validators=[MinValueValidator(1), MaxValueValidator(5)])
     description = models.TextField()
@@ -1437,7 +1464,28 @@ class Review(models.Model):
         verbose_name_plural = 'Reviews'
 
     def __str__(self):
-        return f"{self.name} ({self.stars}★)"
+        branch_str = f" ({self.branch.name})" if self.branch else " (All Outlets)"
+        return f"{self.name} ({self.stars}★){branch_str}"
+
+
+class WhyChooseUs(models.Model):
+    landing = models.ForeignKey(RestaurantLanding, on_delete=models.CASCADE, related_name='why_choose_us_items')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='why_choose_us_items')
+    title = models.CharField(max_length=150)
+    description = models.TextField()
+    icon = models.CharField(max_length=50, blank=True, default="utensils", help_text="Icon identifier or card style")
+    display_order = models.PositiveIntegerField(default=0)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['display_order', 'id']
+        verbose_name = 'Why Choose Us Item'
+        verbose_name_plural = 'Why Choose Us Items'
+
+    def __str__(self):
+        branch_str = f" ({self.branch.name})" if self.branch else " (All Outlets)"
+        return f"{self.title}{branch_str}"
 
 
 CONFIG_CHOICES = [('inherit', 'Inherit from Parent'), ('override', 'Override Parent')]

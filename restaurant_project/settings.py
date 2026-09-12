@@ -36,7 +36,16 @@ env = environ.Env(
     JWT_ACCESS_TOKEN_LIFETIME_HOURS=(int, 1),
     JWT_REFRESH_TOKEN_LIFETIME_DAYS=(int, 1),
 )
-environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+
+# 1. Base environment file (.env) if present
+base_env = os.path.join(BASE_DIR, '.env')
+if os.path.exists(base_env):
+    environ.Env.read_env(base_env)
+
+# 2. Local environment overrides (.env.local) for local development
+local_env = os.path.join(BASE_DIR, '.env.local')
+if os.path.exists(local_env):
+    environ.Env.read_env(local_env, overwrite=True)
 
 
 # Quick-start development settings - unsuitable for production
