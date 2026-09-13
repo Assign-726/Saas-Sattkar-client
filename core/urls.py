@@ -19,6 +19,8 @@ router.register(r'custom-charges', views.CustomChargeViewSet, basename='custom_c
 router.register(r'blogs', views.BlogPostViewSet, basename='blog')
 router.register(r'contact', views.CustomerInquiryViewSet, basename='contact')
 router.register(r'newsletter/subscribers', views.NewsletterSubscriberViewSet, basename='newsletter_subscribers')
+router.register(r'careers/jobs', views.JobPostingViewSet, basename='careers_jobs')
+router.register(r'careers/applications', views.JobApplicationViewSet, basename='careers_applications')
 
 # API URL patterns
 urlpatterns = [

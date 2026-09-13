@@ -478,3 +478,161 @@ class NewsletterSubscriber(models.Model):
     def __str__(self):
         rest_name = self.restaurant.name if self.restaurant else "General"
         return f"[{rest_name}] {self.email}"
+
+
+class JobPosting(models.Model):
+    class JobType(models.TextChoices):
+        FULL_TIME = 'Full Time', 'Full Time'
+        PART_TIME = 'Part Time', 'Part Time'
+        CONTRACT = 'Contract', 'Contract'
+        INTERNSHIP = 'Internship', 'Internship'
+        FREELANCE = 'Freelance', 'Freelance'
+
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='job_postings')
+    branch = models.ForeignKey(
+        RestaurantBranch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='job_postings',
+        help_text="Specific branch or All Outlets / Global"
+    )
+    title = models.CharField(max_length=200, verbose_name="Job Title / Position")
+    slug = models.SlugField(max_length=220, blank=True)
+    department = models.CharField(max_length=100, default="General", verbose_name="Department / Category")
+    job_type = models.CharField(max_length=50, choices=JobType.choices, default=JobType.FULL_TIME, verbose_name="Job Type")
+    experience_level = models.CharField(max_length=100, default='Freshers', verbose_name="Experience Level", help_text="e.g. Freshers, 1-3 Years, 3-5 Years")
+    location = models.CharField(max_length=200, blank=True, verbose_name="Location", help_text="e.g. Jaipur, Rajasthan (leave blank to inherit branch/restaurant location)")
+    eligibility = models.CharField(max_length=255, blank=True, verbose_name="Eligibility / Requirements", help_text="e.g. Graduation / Certification in UI/UX")
+    salary_range = models.CharField(max_length=100, blank=True, verbose_name="Salary / CTC Range", help_text="e.g. ₹3,00,000 - ₹5,00,000 P.A. or Disclosed on Interview")
+    roles_responsibilities = models.TextField(verbose_name="Roles and Responsibilities", help_text="List key roles and responsibilities (one per line)")
+    requirements = models.TextField(blank=True, verbose_name="Skills & Qualifications", help_text="List required skills and qualifications (one per line)")
+    openings_count = models.PositiveIntegerField(default=1, verbose_name="Open Positions")
+    is_active = models.BooleanField(default=True, verbose_name="Active / Accepting Applications")
+    display_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['display_order', '-created_at']
+        verbose_name = 'Job Posting'
+        verbose_name_plural = 'Job Postings'
+
+    def __str__(self):
+        branch_str = f" - {self.branch.name}" if self.branch else " (All Branches)"
+        return f"{self.title} [{self.restaurant.name}{branch_str}]"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base_slug = slugify(self.title) or 'job'
+            slug = base_slug
+            counter = 1
+            while JobPosting.objects.filter(restaurant=self.restaurant, slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
+
+    @property
+    def location_display(self):
+        if self.location:
+            return self.location
+        if self.branch:
+            parts = [self.branch.city, self.branch.state]
+            loc = ", ".join([p for p in parts if p])
+            if loc:
+                return loc
+        if self.restaurant:
+            parts = [self.restaurant.city, self.restaurant.state]
+            loc = ", ".join([p for p in parts if p])
+            if loc:
+                return loc
+        return "Not Specified"
+
+    def get_roles_list(self):
+        if not self.roles_responsibilities:
+            return []
+        lines = [line.strip().lstrip('•-*1234567890. ') for line in self.roles_responsibilities.splitlines() if line.strip()]
+        return lines
+
+    def get_requirements_list(self):
+        if not self.requirements:
+            return []
+        lines = [line.strip().lstrip('•-*1234567890. ') for line in self.requirements.splitlines() if line.strip()]
+        return lines
+
+    @property
+    def applications_count(self):
+        return self.applications.count()
+
+
+class JobApplication(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending Review'
+        REVIEWED = 'REVIEWED', 'Reviewed'
+        SHORTLISTED = 'SHORTLISTED', 'Shortlisted'
+        INTERVIEWING = 'INTERVIEWING', 'Interviewing'
+        HIRED = 'HIRED', 'Hired'
+        REJECTED = 'REJECTED', 'Rejected'
+
+    job = models.ForeignKey(JobPosting, on_delete=models.CASCADE, related_name='applications')
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='job_applications')
+    branch = models.ForeignKey(
+        RestaurantBranch,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='job_applications'
+    )
+    full_name = models.CharField(max_length=150, verbose_name="Full Name")
+    email = models.EmailField(verbose_name="Email ID")
+    country_code = models.CharField(max_length=10, default="+91", verbose_name="Country Code")
+    phone = models.CharField(max_length=30, verbose_name="Contact Number")
+    has_experience = models.BooleanField(default=False, verbose_name="Do you have any experience?")
+    experience_years = models.PositiveIntegerField(null=True, blank=True, verbose_name="Experience Year")
+    experience_months = models.PositiveIntegerField(null=True, blank=True, verbose_name="Experience Months")
+    current_ctc = models.CharField(max_length=50, blank=True, verbose_name="Current CTC (LPA)")
+    expected_ctc = models.CharField(max_length=50, blank=True, verbose_name="Expected CTC (LPA)")
+    current_organization = models.CharField(max_length=200, blank=True, verbose_name="Current Organisation")
+    notice_period_days = models.PositiveIntegerField(null=True, blank=True, verbose_name="Notice Period (Days)")
+    reason_to_join = models.TextField(verbose_name="Why do you want to join?")
+    resume = models.FileField(upload_to='resumes/%Y/%m/', verbose_name="Upload CV/Resume (PDF only)", null=True, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        verbose_name="Application Status"
+    )
+    is_read = models.BooleanField(default=False, verbose_name="Is Read")
+    admin_notes = models.TextField(blank=True, verbose_name="Internal Admin Notes")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Job Application'
+        verbose_name_plural = 'Job Applications'
+
+    def __str__(self):
+        return f"{self.full_name} - {self.job.title} ({self.get_status_display()})"
+
+    @property
+    def formatted_phone(self):
+        if self.country_code:
+            return f"{self.country_code} {self.phone}"
+        return self.phone
+
+    @property
+    def experience_display(self):
+        if not self.has_experience:
+            return "Fresher"
+        parts = []
+        if self.experience_years:
+            parts.append(f"{self.experience_years} yr{'s' if self.experience_years > 1 else ''}")
+        if self.experience_months:
+            parts.append(f"{self.experience_months} mo{'s' if self.experience_months > 1 else ''}")
+        exp_str = " ".join(parts) if parts else "Experienced"
+        if self.current_organization:
+            return f"{exp_str} @ {self.current_organization}"
+        return exp_str
+

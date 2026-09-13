@@ -12,7 +12,7 @@ from super_admin.models import Restaurant
 
 class ReservationAnonRateThrottle(SimpleRateThrottle):
     scope = 'reservation_anon'
-    rate = '15/min'
+    rate = '10/min'
 
     def get_cache_key(self, request, view):
         if request.user.is_authenticated and request.user.is_staff:

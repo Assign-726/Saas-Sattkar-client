@@ -1058,3 +1058,71 @@ class CustomChargeViewSet(viewsets.ReadOnlyModelViewSet):
             from django.db.models import Q
             qs = qs.filter(Q(branch__slug=branch_slug) | Q(branch__isnull=True))
         return qs.order_by('charge_name')
+
+
+from super_admin.models import JobPosting, JobApplication
+from core.serializers import JobPostingSerializer, JobApplicationSerializer
+
+
+class JobPostingViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = JobPosting.objects.filter(is_active=True)
+    serializer_class = JobPostingSerializer
+    permission_classes = [AllowAny]
+    lookup_field = 'pk'
+
+    def get_queryset(self):
+        from django.db.models import Q
+        qs = JobPosting.objects.filter(is_active=True).select_related('restaurant', 'branch')
+        restaurant_id = self.request.query_params.get('restaurant')
+        restaurant_slug = self.request.query_params.get('restaurant_slug')
+        branch_id = self.request.query_params.get('branch')
+        branch_slug = self.request.query_params.get('branch_slug')
+        department = self.request.query_params.get('department')
+        job_type = self.request.query_params.get('job_type')
+
+        if restaurant_id:
+            qs = qs.filter(restaurant_id=restaurant_id)
+        elif restaurant_slug:
+            qs = qs.filter(restaurant__slug=restaurant_slug)
+
+        if branch_id:
+            qs = qs.filter(Q(branch_id=branch_id) | Q(branch__isnull=True))
+        elif branch_slug:
+            qs = qs.filter(Q(branch__slug=branch_slug) | Q(branch__isnull=True))
+
+        if department:
+            qs = qs.filter(department__iexact=department)
+
+        if job_type:
+            qs = qs.filter(job_type__iexact=job_type)
+
+        return qs.order_by('display_order', '-created_at')
+
+
+class JobApplicationViewSet(viewsets.ModelViewSet):
+    queryset = JobApplication.objects.all()
+    serializer_class = JobApplicationSerializer
+    throttle_classes = [ReservationAnonRateThrottle]
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [AllowAny()]
+        return [IsAdminUser()]
+
+    def get_queryset(self):
+        qs = super().get_queryset().select_related('job', 'restaurant', 'branch')
+        restaurant_slug = self.request.query_params.get('restaurant_slug')
+        if restaurant_slug:
+            qs = qs.filter(restaurant__slug=restaurant_slug)
+        return qs.order_by('-created_at')
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        return Response({
+            'status': 'success',
+            'message': f'Thank you {instance.full_name}! Your application for {instance.job.title} has been submitted successfully.',
+            'application_id': instance.id
+        }, status=status.HTTP_201_CREATED)
+

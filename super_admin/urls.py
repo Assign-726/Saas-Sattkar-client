@@ -49,6 +49,18 @@ urlpatterns = [
     path('billing/invoice/<str:invoice_id>/', views.billing_invoice_view, name='billing_invoice'),
     path('api/gstins-by-state/', views.api_gstins_by_state, name='api_gstins_by_state'),
     path('api/branches-by-restaurant/', views.api_branches_by_restaurant, name='api_branches_by_restaurant'),
+    # Careers & Job Postings
+    path('careers/', views.careers_list, name='careers_list'),
+    path('careers/create/', views.job_posting_create, name='job_posting_create'),
+    path('careers/<int:pk>/edit/', views.job_posting_edit, name='job_posting_edit'),
+    path('careers/<int:pk>/delete/', views.job_posting_delete, name='job_posting_delete'),
+    path('careers/<int:pk>/toggle-active/', views.job_posting_toggle_active, name='job_posting_toggle_active'),
+    # Job Applications / Enquiries
+    path('job-applications/', views.job_applications_list, name='job_applications_list'),
+    path('job-applications/<int:pk>/detail/', views.job_application_detail, name='job_application_detail'),
+    path('job-applications/<int:pk>/status/', views.job_application_status_update, name='job_application_status_update'),
+    path('job-applications/<int:pk>/delete/', views.job_application_delete, name='job_application_delete'),
+    path('job-applications/export/', views.job_applications_export_csv, name='job_applications_export_csv'),
 ]
 
 

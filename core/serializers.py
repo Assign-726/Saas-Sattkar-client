@@ -1,7 +1,7 @@
 from rest_framework import serializers
 # pyrefly: ignore [missing-import]
 from core.models import Category, SubCategory, MenuItem, Table, Zone, CustomCharge, Order, OrderItem, RestaurantLanding, GalleryImage, TeamMember, Review, RestaurantSettings, Event, BlogPost, BlogComment, WhyChooseUs
-from super_admin.models import Restaurant, RestaurantBranch
+from super_admin.models import Restaurant, RestaurantBranch, JobPosting, JobApplication
 from django.utils import timezone
 
 
@@ -511,6 +511,7 @@ class RestaurantLandingSerializer(serializers.ModelSerializer):
             'og_title', 'og_description', 'og_url', 'og_site_name', 'og_locale', 'og_type',
             'twitter_card_type', 'twitter_title', 'twitter_description', 'pages_seo', 'pages_faq',
             'show_hero', 'show_about', 'show_why_us', 'show_specials', 'show_events', 'show_gallery', 'show_team', 'show_reviews',
+            'show_careers', 'careers_title', 'careers_subtitle',
             'why_us_title_1', 'why_us_description_1',
             'why_us_title_2', 'why_us_description_2',
             'why_us_title_3', 'why_us_description_3',
@@ -739,3 +740,103 @@ class CustomChargeSerializer(serializers.ModelSerializer):
             'value', 'is_taxable', 'applied_order_types', 'is_auto_applied',
             'is_active', 'branch', 'branch_slug'
         ]
+
+
+class JobPostingSerializer(serializers.ModelSerializer):
+    restaurant_name = serializers.ReadOnlyField(source='restaurant.name')
+    restaurant_slug = serializers.ReadOnlyField(source='restaurant.slug')
+    branch_name = serializers.SerializerMethodField()
+    branch_slug = serializers.SerializerMethodField()
+    roles_list = serializers.SerializerMethodField()
+    requirements_list = serializers.SerializerMethodField()
+    location_display = serializers.SerializerMethodField()
+    applications_count = serializers.ReadOnlyField()
+
+    class Meta:
+        model = JobPosting
+        fields = [
+            'id', 'restaurant', 'restaurant_name', 'restaurant_slug',
+            'branch', 'branch_name', 'branch_slug',
+            'title', 'slug', 'department', 'job_type',
+            'experience_level', 'location', 'location_display',
+            'eligibility', 'salary_range', 'openings_count',
+            'roles_responsibilities', 'roles_list',
+            'requirements', 'requirements_list',
+            'is_active', 'display_order', 'applications_count',
+            'created_at'
+        ]
+
+    def get_branch_name(self, obj):
+        return obj.branch.name if obj.branch else "All Outlets / Global"
+
+    def get_branch_slug(self, obj):
+        return obj.branch.slug if obj.branch else None
+
+    def get_roles_list(self, obj):
+        return obj.get_roles_list()
+
+    def get_requirements_list(self, obj):
+        return obj.get_requirements_list()
+
+    def get_location_display(self, obj):
+        return obj.location_display
+
+
+class JobApplicationSerializer(serializers.ModelSerializer):
+    restaurant = serializers.PrimaryKeyRelatedField(queryset=Restaurant.objects.all(), required=False)
+    branch = serializers.PrimaryKeyRelatedField(queryset=RestaurantBranch.objects.all(), required=False, allow_null=True)
+
+    class Meta:
+        model = JobApplication
+        fields = [
+            'id', 'job', 'restaurant', 'branch',
+            'full_name', 'email', 'country_code', 'phone',
+            'has_experience', 'experience_years', 'experience_months',
+            'current_ctc', 'expected_ctc', 'current_organization',
+            'notice_period_days', 'reason_to_join', 'resume',
+            'status', 'created_at'
+        ]
+        read_only_fields = ['status', 'is_read', 'admin_notes', 'created_at']
+
+    def validate_resume(self, value):
+        if value:
+            import os
+            # 1. File extension validation
+            ext = os.path.splitext(value.name)[1].lower()
+            if ext != '.pdf':
+                raise serializers.ValidationError("Only PDF format (.pdf) is accepted for resume upload.")
+
+            # 2. File size validation (Max 10MB)
+            if value.size > 10 * 1024 * 1024:
+                raise serializers.ValidationError("Resume file size must not exceed 10 MB.")
+
+            # 3. Magic bytes validation (verifies genuine PDF binary signature %PDF-)
+            try:
+                header = value.read(5)
+                value.seek(0)
+                if not header.startswith(b'%PDF-'):
+                    raise serializers.ValidationError("The uploaded file is not a valid PDF document.")
+            except Exception:
+                raise serializers.ValidationError("Could not verify document integrity. Please upload a valid PDF.")
+
+        return value
+
+    def validate(self, attrs):
+        job = attrs.get('job')
+        if job:
+            # Prevent applying to closed positions
+            if not job.is_active:
+                raise serializers.ValidationError({"job": "This job posting is currently closed and no longer accepting applications."})
+
+            if not attrs.get('restaurant'):
+                attrs['restaurant'] = job.restaurant
+            if not attrs.get('branch') and job.branch:
+                attrs['branch'] = job.branch
+
+        # Clean string inputs
+        for field in ['full_name', 'email', 'phone', 'current_organization', 'reason_to_join']:
+            if field in attrs and isinstance(attrs[field], str):
+                attrs[field] = attrs[field].strip()
+
+        return attrs
+
