@@ -336,6 +336,22 @@ class SubmitEnquiryView(View):
     def post(self, request, *args, **kwargs):
         import requests
         import json
+        from core.throttling import check_view_rate_limit
+
+        # Sliding-window IP rate limiting
+        allowed, wait = check_view_rate_limit(request, 'submit_enquiry', '5/min')
+        if not allowed:
+            return JsonResponse({
+                'success': False,
+                'error': f'Too many submissions. Please wait {wait} seconds before trying again.'
+            }, status=429)
+
+        allowed, wait = check_view_rate_limit(request, 'submit_enquiry', '25/day')
+        if not allowed:
+            return JsonResponse({
+                'success': False,
+                'error': 'Daily submission limit reached. Please try again tomorrow.'
+            }, status=429)
 
         try:
             if request.content_type == 'application/json' and request.body:

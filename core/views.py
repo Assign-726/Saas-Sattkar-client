@@ -894,6 +894,12 @@ class BlogPostViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(restaurant__slug=restaurant_slug)
         return qs
 
+    def get_throttles(self):
+        if self.action == 'add_comment':
+            from core.throttling import BlogCommentAnonRateThrottle, BlogCommentDayRateThrottle
+            return [BlogCommentAnonRateThrottle(), BlogCommentDayRateThrottle()]
+        return super().get_throttles()
+
     @action(detail=True, methods=['post'], permission_classes=[AllowAny])
     def add_comment(self, request, slug=None):
         post = self.get_object()
@@ -932,13 +938,18 @@ class RestaurantBranchViewSet(viewsets.ReadOnlyModelViewSet):
 
 from super_admin.models import CustomerInquiry
 from core.serializers import CustomerInquirySerializer
-from reservations.views import ReservationAnonRateThrottle
+from core.throttling import (
+    ContactAnonRateThrottle, ContactDayRateThrottle,
+    NewsletterAnonRateThrottle, NewsletterDayRateThrottle,
+    JobApplicationAnonRateThrottle, JobApplicationDayRateThrottle,
+    BlogCommentAnonRateThrottle, BlogCommentDayRateThrottle,
+)
 
 
 class CustomerInquiryViewSet(viewsets.ModelViewSet):
     queryset = CustomerInquiry.objects.all()
     serializer_class = CustomerInquirySerializer
-    throttle_classes = [ReservationAnonRateThrottle]
+    throttle_classes = [ContactAnonRateThrottle, ContactDayRateThrottle]
 
     def get_permissions(self):
         if self.action == 'create':
@@ -960,7 +971,7 @@ from core.serializers import NewsletterSubscriberSerializer
 class NewsletterSubscriberViewSet(viewsets.ModelViewSet):
     queryset = NewsletterSubscriber.objects.all()
     serializer_class = NewsletterSubscriberSerializer
-    throttle_classes = [ReservationAnonRateThrottle]
+    throttle_classes = [NewsletterAnonRateThrottle, NewsletterDayRateThrottle]
 
     def get_permissions(self):
         if self.action in ['create', 'subscribe']:
@@ -1102,7 +1113,7 @@ class JobPostingViewSet(viewsets.ReadOnlyModelViewSet):
 class JobApplicationViewSet(viewsets.ModelViewSet):
     queryset = JobApplication.objects.all()
     serializer_class = JobApplicationSerializer
-    throttle_classes = [ReservationAnonRateThrottle]
+    throttle_classes = [JobApplicationAnonRateThrottle, JobApplicationDayRateThrottle]
 
     def get_permissions(self):
         if self.action == 'create':
