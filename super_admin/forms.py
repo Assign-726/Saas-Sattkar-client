@@ -2,7 +2,16 @@ from django import forms
 from django.contrib.auth.models import User, Group
 import re
 from decimal import Decimal
-from super_admin.models import Restaurant, RestaurantUser, RestaurantBranch, GstRegistration, DocumentSeries, UserSecuritySetting
+from super_admin.models import (
+    Restaurant,
+    RestaurantUser,
+    RestaurantBranch,
+    GstRegistration,
+    DocumentSeries,
+    UserSecuritySetting,
+    JobPosting,
+    JobApplication,
+)
 from core.models import RestaurantLanding, GalleryImage, TeamMember, Review, Event, MenuItem, RestaurantSettings, BlogPost, WhyChooseUs
 from restaurant_project import constants
 
@@ -1041,6 +1050,7 @@ class RestaurantLandingForm(forms.ModelForm):
             'og_title', 'og_description', 'og_url', 'og_site_name', 'og_locale', 'og_type',
             'twitter_card_type', 'twitter_title', 'twitter_description', 'pages_seo', 'pages_faq',
             'show_hero', 'show_about', 'show_why_us', 'show_specials', 'show_events', 'show_gallery', 'show_team', 'show_reviews',
+            'show_careers', 'careers_title', 'careers_subtitle',
             'why_us_title_1', 'why_us_description_1',
             'why_us_title_2', 'why_us_description_2',
             'why_us_title_3', 'why_us_description_3',
@@ -1292,5 +1302,58 @@ class AdminSetupForm(forms.Form):
             update_session_auth_hash(self.request, self.user)
 
         return self.user
+
+
+class JobPostingForm(forms.ModelForm):
+    class Meta:
+        model = JobPosting
+        fields = [
+            'restaurant', 'branch', 'title', 'slug', 'department', 'job_type',
+            'experience_level', 'location', 'eligibility', 'salary_range',
+            'openings_count', 'roles_responsibilities', 'requirements',
+            'is_active', 'display_order'
+        ]
+        widgets = {
+            'title': forms.TextInput(attrs={'class': 'shop-input', 'placeholder': 'e.g. Italian Chef, UI/UX Trainee'}),
+            'slug': forms.TextInput(attrs={'class': 'shop-input', 'placeholder': 'Auto-generated if left blank'}),
+            'department': forms.TextInput(attrs={'class': 'shop-input', 'placeholder': 'e.g. Design & Creative, Kitchen & Culinary'}),
+            'job_type': forms.Select(attrs={'class': 'shop-input'}),
+            'experience_level': forms.TextInput(attrs={'class': 'shop-input', 'placeholder': 'e.g. Freshers, 1-3 Years'}),
+            'location': forms.TextInput(attrs={'class': 'shop-input', 'placeholder': 'e.g. Jaipur, Rajasthan (blank for default)'}),
+            'eligibility': forms.TextInput(attrs={'class': 'shop-input', 'placeholder': 'e.g. Graduation / Certification in UI/UX'}),
+            'salary_range': forms.TextInput(attrs={'class': 'shop-input', 'placeholder': 'e.g. ₹3.5L - ₹5L PA or Disclosed on Interview'}),
+            'openings_count': forms.NumberInput(attrs={'class': 'shop-input', 'min': '1'}),
+            'roles_responsibilities': forms.Textarea(attrs={'class': 'shop-input', 'rows': 5, 'placeholder': '• Gather and evaluate user requirements...\n• Illustrate design ideas using storyboards...\n• Develop UI mockups and prototypes...'}),
+            'requirements': forms.Textarea(attrs={'class': 'shop-input', 'rows': 4, 'placeholder': '• Proven experience or certification in the field\n• Familiarity with design / kitchen tools\n• Strong communication skills'}),
+            'display_order': forms.NumberInput(attrs={'class': 'shop-input', 'min': '0'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        restaurant = kwargs.pop('restaurant', None)
+        super().__init__(*args, **kwargs)
+        if 'restaurant' in self.fields:
+            self.fields['restaurant'].widget.attrs.update({'class': 'shop-input', 'id': 'id_job_restaurant'})
+            self.fields['restaurant'].empty_label = "Select Restaurant..."
+        if 'branch' in self.fields:
+            self.fields['branch'].widget.attrs.update({'class': 'shop-input', 'id': 'id_job_branch'})
+            self.fields['branch'].required = False
+            self.fields['branch'].empty_label = "All Outlets / Global (Entire Brand)"
+            if restaurant:
+                self.fields['branch'].queryset = restaurant.branches.all()
+            elif self.instance and self.instance.pk and self.instance.restaurant:
+                self.fields['branch'].queryset = self.instance.restaurant.branches.all()
+            else:
+                self.fields['branch'].queryset = RestaurantBranch.objects.none()
+
+
+class JobApplicationStatusForm(forms.ModelForm):
+    class Meta:
+        model = JobApplication
+        fields = ['status', 'admin_notes', 'is_read']
+        widgets = {
+            'status': forms.Select(attrs={'class': 'shop-input'}),
+            'admin_notes': forms.Textarea(attrs={'class': 'shop-input', 'rows': 4, 'placeholder': 'Add internal notes or interview feedback here...'}),
+        }
+
 
 

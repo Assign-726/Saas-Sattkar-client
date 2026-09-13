@@ -1,0 +1,1049 @@
+{% extends 'super_admin/base.html' %}
+
+{% block title %}Careers & Job Postings | Super Admin{% endblock %}
+
+{% block header_title %}
+<i class="fa-solid fa-briefcase" style="color: var(--primary); margin-right: 6px;"></i> Careers & Job Postings
+{% endblock %}
+
+{% block header_actions %}
+<div style="display: flex; gap: 8px; flex-wrap: wrap;">
+  <a class="btn secondary small" href="{% url 'super_admin:job_applications_list' %}">
+    <i class="fa-solid fa-file-lines"></i>
+    <span>Job Applications</span>
+    {% if pending_applications > 0 %}
+    <span style="background: #ea580c; color: white; border-radius: 999px; padding: 2px 7px; font-size: 10px; font-weight: 800; margin-left: 4px;">{{ pending_applications }}</span>
+    {% endif %}
+  </a>
+  <button type="button" class="btn small" onclick="openCreateModal()">
+    <i class="fa-solid fa-plus"></i>
+    <span>Post New Position</span>
+  </button>
+</div>
+{% endblock %}
+
+{% block head %}
+<style>
+  .careers-container {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Stats Grid */
+  .career-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  @media (max-width: 1100px) {
+    .career-stats-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (max-width: 600px) {
+    .career-stats-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .career-stat-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .career-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+    border-color: #cbd5e1;
+  }
+
+  .career-stat-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .career-stat-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--muted);
+  }
+
+  .career-stat-num {
+    font-size: 1.85rem;
+    font-weight: 800;
+    color: var(--text);
+    line-height: 1.15;
+  }
+
+  .career-stat-sub {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .career-stat-icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+
+  .career-stat-icon-wrap.blue { background: #eff6ff; color: #2563eb; }
+  .career-stat-icon-wrap.emerald { background: #ecfdf5; color: #059669; }
+  .career-stat-icon-wrap.slate { background: #f1f5f9; color: #475569; }
+  .career-stat-icon-wrap.orange { background: #fff7ed; color: #ea580c; }
+
+  /* Filter Toolbar */
+  .filter-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .filter-form-grid {
+    display: grid;
+    grid-template-columns: 2fr 1.5fr 1.5fr 1.2fr 1.2fr auto;
+    gap: 12px;
+    align-items: flex-end;
+  }
+
+  @media (max-width: 1200px) {
+    .filter-form-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+  @media (max-width: 768px) {
+    .filter-form-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .filter-label {
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+  }
+
+  .filter-input, .filter-select {
+    width: 100%;
+    background: #f8fafc;
+    border: 1.5px solid var(--border);
+    border-radius: 9px;
+    padding: 9px 12px;
+    font-size: 0.85rem;
+    color: var(--text);
+    outline: none;
+    transition: all 0.2s;
+    font-family: inherit;
+    box-sizing: border-box;
+  }
+
+  .filter-input:focus, .filter-select:focus {
+    background: #ffffff;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.12);
+  }
+
+  /* Table Card */
+  .careers-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+
+  .careers-card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #fafafa;
+  }
+
+  .careers-card-title {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .careers-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.86rem;
+  }
+
+  .careers-table th {
+    background: #f8fafc;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 12px 18px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .careers-table td {
+    padding: 14px 18px;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+  }
+
+  .careers-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .careers-table tr:hover td {
+    background: #fdfbf7;
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.2;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .badge-dept { background: #eff6ff; color: #1e40af; border: 1px solid #dbeafe; }
+  .badge-type { background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; }
+  .badge-loc { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+  .badge-exp { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+  .badge-active { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+  .badge-closed { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
+
+  .app-counter-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: #fff7ed;
+    color: #c2410c;
+    border: 1px solid #fed7aa;
+    border-radius: 20px;
+    font-weight: 800;
+    font-size: 0.78rem;
+    text-decoration: none;
+    transition: all 0.15s;
+  }
+
+  .app-counter-link:hover {
+    background: #ea580c;
+    color: #ffffff;
+    border-color: #ea580c;
+    transform: translateY(-1px);
+  }
+
+  /* Toggle Switch */
+  .switch-label {
+    position: relative;
+    display: inline-block;
+    width: 38px;
+    height: 22px;
+    margin: 0;
+    cursor: pointer;
+  }
+
+  .switch-label input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .switch-slider {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #cbd5e1;
+    transition: 0.3s;
+    border-radius: 22px;
+  }
+
+  .switch-slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+  }
+
+  input:checked + .switch-slider {
+    background-color: #059669;
+  }
+
+  input:checked + .switch-slider:before {
+    transform: translateX(16px);
+  }
+
+  /* Modal Backdrop & Body */
+  .custom-modal {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+  }
+
+  .custom-modal.show {
+    display: flex;
+  }
+
+  .custom-modal-content {
+    background: #ffffff;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 760px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+    animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes modalPop {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .custom-modal-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #fafafa;
+  }
+
+  .custom-modal-title {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .custom-modal-close {
+    background: transparent;
+    border: none;
+    font-size: 1.2rem;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    line-height: 1;
+  }
+
+  .custom-modal-close:hover {
+    color: #ef4444;
+  }
+
+  .custom-modal-body {
+    padding: 24px;
+    overflow-y: auto;
+    max-height: calc(90vh - 140px);
+  }
+
+  .modal-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  @media (max-width: 650px) {
+    .modal-form-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .modal-form-grid .full-width {
+    grid-column: 1 / -1;
+  }
+
+  .custom-modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    background: #fafafa;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="careers-container">
+
+  <!-- 1. Stats Grid -->
+  <div class="career-stats-grid">
+    <div class="career-stat-card">
+      <div class="career-stat-info">
+        <span class="career-stat-label">Total Postings</span>
+        <span class="career-stat-num">{{ total_jobs }}</span>
+        <span class="career-stat-sub">Across all restaurants & branches</span>
+      </div>
+      <div class="career-stat-icon-wrap blue">
+        <i class="fa-solid fa-briefcase"></i>
+      </div>
+    </div>
+
+    <div class="career-stat-card">
+      <div class="career-stat-info">
+        <span class="career-stat-label">Active / Hiring Now</span>
+        <span class="career-stat-num" style="color: #059669;">{{ active_jobs }}</span>
+        <span class="career-stat-sub">Accepting live candidate applications</span>
+      </div>
+      <div class="career-stat-icon-wrap emerald">
+        <i class="fa-solid fa-circle-check"></i>
+      </div>
+    </div>
+
+    <div class="career-stat-card">
+      <div class="career-stat-info">
+        <span class="career-stat-label">Closed / Paused</span>
+        <span class="career-stat-num">{{ closed_jobs }}</span>
+        <span class="career-stat-sub">Hidden from public careers portal</span>
+      </div>
+      <div class="career-stat-icon-wrap slate">
+        <i class="fa-solid fa-box-archive"></i>
+      </div>
+    </div>
+
+    <div class="career-stat-card">
+      <div class="career-stat-info">
+        <span class="career-stat-label">Candidate Applications</span>
+        <span class="career-stat-num" style="color: #ea580c;">{{ total_applications }}</span>
+        <span class="career-stat-sub">{{ pending_applications }} pending review</span>
+      </div>
+      <div class="career-stat-icon-wrap orange">
+        <i class="fa-solid fa-users"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Filter Bar -->
+  <div class="filter-panel">
+    <form method="get" action="{% url 'super_admin:careers_list' %}" class="filter-form-grid" id="careerFilterForm">
+      <div class="filter-group">
+        <label class="filter-label">Search Positions</label>
+        <input type="text" name="q" value="{{ query }}" placeholder="Search title, department, skills..." class="filter-input" />
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Restaurant</label>
+        <select name="restaurant" class="filter-select" id="filterRestaurantSelect" onchange="onFilterRestaurantChange(this.value)">
+          <option value="">All Restaurants</option>
+          {% for r in restaurants %}
+          <option value="{{ r.id }}" {% if restaurant_filter == r.id|stringformat:"s" %}selected{% endif %}>{{ r.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Branch / Outlet</label>
+        <select name="branch" class="filter-select" id="filterBranchSelect">
+          <option value="">All Outlets / Global</option>
+          {% for b in filter_branches %}
+          <option value="{{ b.id }}" {% if branch_filter == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Department</label>
+        <select name="department" class="filter-select">
+          <option value="">All Departments</option>
+          {% for dept in departments %}
+          {% if dept %}
+          <option value="{{ dept }}" {% if department_filter == dept %}selected{% endif %}>{{ dept }}</option>
+          {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Status</label>
+        <select name="status" class="filter-select">
+          <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Statuses</option>
+          <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active Only</option>
+          <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Closed Only</option>
+        </select>
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <button type="submit" class="btn small" style="height: 38px;">
+          <i class="fa-solid fa-filter"></i> Filter
+        </button>
+        {% if query or restaurant_filter or branch_filter or department_filter or status_filter != 'all' %}
+        <a href="{% url 'super_admin:careers_list' %}" class="btn secondary small" style="height: 38px;" title="Reset filters">
+          <i class="fa-solid fa-xmark"></i>
+        </a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
+  <!-- 3. Job Postings Table Card -->
+  <div class="careers-card">
+    <div class="careers-card-header">
+      <div class="careers-card-title">
+        <span>Job Openings</span>
+        <span style="font-size: 0.8rem; font-weight: 600; color: var(--muted); background: #e2e8f0; padding: 2px 8px; border-radius: 12px;">
+          {{ jobs.paginator.count }} Position{{ jobs.paginator.count|pluralize }}
+        </span>
+      </div>
+      <div>
+        <button type="button" class="btn small" onclick="openCreateModal()">
+          <i class="fa-solid fa-plus"></i>
+          <span>Add Position</span>
+        </button>
+      </div>
+    </div>
+
+    {% if jobs %}
+    <div class="table-responsive">
+      <table class="careers-table">
+        <thead>
+          <tr>
+            <th>Position & Department</th>
+            <th>Restaurant & Outlet</th>
+            <th>Experience & Location</th>
+            <th>Salary & Openings</th>
+            <th>Applications</th>
+            <th>Status</th>
+            <th style="text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in jobs %}
+          <tr id="job-row-{{ job.id }}">
+            <td>
+              <div style="font-weight: 800; color: var(--text); font-size: 0.95rem; margin-bottom: 4px;">
+                {{ job.title }}
+              </div>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <span class="badge badge-dept"><i class="fa-solid fa-layer-group"></i> {{ job.department }}</span>
+                <span class="badge badge-type">{{ job.job_type }}</span>
+              </div>
+            </td>
+
+            <td>
+              <div style="font-weight: 700; color: var(--text);">
+                {{ job.restaurant.trade_name|default:job.restaurant.name }}
+              </div>
+              <div style="font-size: 0.78rem; color: var(--muted); margin-top: 2px;">
+                {% if job.branch %}
+                <i class="fa-solid fa-store" style="color: var(--primary);"></i> {{ job.branch.name }}
+                {% else %}
+                <span style="color: #64748b; font-weight: 600;">Global (All Outlets)</span>
+                {% endif %}
+              </div>
+            </td>
+
+            <td>
+              <div style="margin-bottom: 4px;">
+                <span class="badge badge-exp"><i class="fa-regular fa-clock"></i> {{ job.experience_level }}</span>
+              </div>
+              <div style="font-size: 0.78rem; color: #475569;">
+                <i class="fa-solid fa-location-dot" style="color: #ea580c; margin-right: 3px;"></i>
+                {{ job.location_display }}
+              </div>
+            </td>
+
+            <td>
+              <div style="font-weight: 700; color: var(--text);">
+                {{ job.salary_range|default:"Not Disclosed" }}
+              </div>
+              <div style="font-size: 0.76rem; color: var(--muted); margin-top: 2px;">
+                <strong>{{ job.openings_count }}</strong> Opening{{ job.openings_count|pluralize }}
+              </div>
+            </td>
+
+            <td>
+              <a href="{% url 'super_admin:job_applications_list' %}?job={{ job.id }}" class="app-counter-link" title="View all applications for this job">
+                <i class="fa-solid fa-file-lines"></i>
+                <span>{{ job.applications_count }} Application{{ job.applications_count|pluralize }}</span>
+                <i class="fa-solid fa-arrow-right" style="font-size: 0.65rem;"></i>
+              </a>
+            </td>
+
+            <td>
+              <label class="switch-label" title="Toggle active status">
+                <input type="checkbox" onchange="toggleJobActive({{ job.id }}, this)" {% if job.is_active %}checked{% endif %}>
+                <span class="switch-slider"></span>
+              </label>
+              <div style="font-size: 0.7rem; font-weight: 700; color: {% if job.is_active %}#059669{% else %}#64748b{% endif %}; margin-top: 2px;" id="status-text-{{ job.id }}">
+                {{ job.is_active|yesno:"Active,Closed" }}
+              </div>
+            </td>
+
+            <td style="text-align: right;">
+              <div style="display: inline-flex; gap: 6px;">
+                <button type="button" class="btn secondary small" onclick="openEditModal({{ job.id }})" title="Edit Job Posting" style="padding: 6px 10px;">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button type="button" class="btn danger small" onclick="confirmDeleteJob({{ job.id }}, '{{ job.title|escapejs }}')" title="Delete Job Posting" style="padding: 6px 10px;">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if jobs.has_other_pages %}
+    <div style="padding: 16px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+      <div style="font-size: 0.84rem; color: var(--muted);">
+        Showing <strong>{{ jobs.start_index }}</strong> to <strong>{{ jobs.end_index }}</strong> of <strong>{{ jobs.paginator.count }}</strong> openings
+      </div>
+      <div style="display: flex; gap: 6px;">
+        {% if jobs.has_previous %}
+        <a href="?page={{ jobs.previous_page_number }}&q={{ query }}&restaurant={{ restaurant_filter }}&branch={{ branch_filter }}&department={{ department_filter }}&status={{ status_filter }}" class="btn secondary small">Previous</a>
+        {% endif %}
+        <span class="btn secondary small" style="pointer-events: none; background: #f8fafc;">
+          Page {{ jobs.number }} of {{ jobs.paginator.num_pages }}
+        </span>
+        {% if jobs.has_next %}
+        <a href="?page={{ jobs.next_page_number }}&q={{ query }}&restaurant={{ restaurant_filter }}&branch={{ branch_filter }}&department={{ department_filter }}&status={{ status_filter }}" class="btn secondary small">Next</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <!-- Empty State -->
+    <div style="text-align: center; padding: 60px 20px;">
+      <div style="width: 72px; height: 72px; border-radius: 50%; background: #fff7ed; color: #ea580c; display: flex; align-items: center; justify-content: center; font-size: 2rem; margin: 0 auto 16px;">
+        <i class="fa-solid fa-briefcase"></i>
+      </div>
+      <h3 style="font-size: 1.25rem; font-weight: 800; color: var(--text); margin-bottom: 6px;">No Job Openings Found</h3>
+      <p style="color: var(--muted); font-size: 0.9rem; max-width: 440px; margin: 0 auto 20px;">
+        {% if query or restaurant_filter or branch_filter or department_filter %}
+        No job postings match your current filter parameters. Try clearing your filters or search keywords.
+        {% else %}
+        You haven't posted any career openings yet. Create job postings to attract talent for your restaurants and branches.
+        {% endif %}
+      </p>
+      <button type="button" class="btn" onclick="openCreateModal()">
+        <i class="fa-solid fa-plus"></i> Post New Job Position
+      </button>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- 4. Job Posting Modal (Create / Edit) -->
+<div class="custom-modal" id="jobModal">
+  <div class="custom-modal-content">
+    <div class="custom-modal-header">
+      <div class="custom-modal-title" id="jobModalTitle">
+        <i class="fa-solid fa-briefcase" style="color: var(--primary);"></i>
+        <span>Post New Position</span>
+      </div>
+      <button type="button" class="custom-modal-close" onclick="closeJobModal()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <form method="post" action="{% url 'super_admin:job_posting_create' %}" id="jobForm">
+      {% csrf_token %}
+      <div class="custom-modal-body">
+        <div class="modal-form-grid">
+
+          <!-- Restaurant -->
+          <div class="shop-form-group">
+            <label for="modal_restaurant">Assigned Restaurant *</label>
+            <select name="restaurant" id="modal_restaurant" class="shop-input" required onchange="onModalRestaurantChange(this.value)">
+              <option value="">Select Restaurant...</option>
+              {% for r in restaurants %}
+              <option value="{{ r.id }}">{{ r.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Branch -->
+          <div class="shop-form-group">
+            <label for="modal_branch">Assigned Branch / Outlet</label>
+            <select name="branch" id="modal_branch" class="shop-input">
+              <option value="">All Outlets / Global (Entire Brand)</option>
+            </select>
+            <span style="font-size: 11px; color: #64748b; margin-top: 3px; display: block;">Leave as Global to hire across all locations</span>
+          </div>
+
+          <!-- Job Title -->
+          <div class="shop-form-group full-width">
+            <label for="modal_title">Job Position Title *</label>
+            <input type="text" name="title" id="modal_title" class="shop-input" placeholder="e.g. Italian Chef, UI/UX Trainee, Graphic Designer Trainee" required />
+          </div>
+
+          <!-- Department -->
+          <div class="shop-form-group">
+            <label for="modal_department">Department / Category *</label>
+            <input type="text" name="department" id="modal_department" class="shop-input" placeholder="e.g. Design & Creative, Kitchen & Culinary" list="departmentSuggestions" required />
+            <datalist id="departmentSuggestions">
+              <option value="Design & Creative">
+              <option value="Kitchen & Culinary">
+              <option value="Front of House & Service">
+              <option value="Hospitality & Guest Relations">
+              <option value="Restaurant Operations & Management">
+              <option value="Marketing & Social Media">
+              <option value="Technology & IT">
+            </datalist>
+          </div>
+
+          <!-- Job Type -->
+          <div class="shop-form-group">
+            <label for="modal_job_type">Job Type *</label>
+            <select name="job_type" id="modal_job_type" class="shop-input">
+              <option value="Full Time">Full Time</option>
+              <option value="Part Time">Part Time</option>
+              <option value="Contract">Contract</option>
+              <option value="Internship">Internship</option>
+              <option value="Freelance">Freelance</option>
+            </select>
+          </div>
+
+          <!-- Experience Level -->
+          <div class="shop-form-group">
+            <label for="modal_experience_level">Experience Level *</label>
+            <input type="text" name="experience_level" id="modal_experience_level" class="shop-input" placeholder="e.g. Freshers, 1-3 Years, 3-5 Years" required />
+          </div>
+
+          <!-- Location -->
+          <div class="shop-form-group">
+            <label for="modal_location">Location Display</label>
+            <input type="text" name="location" id="modal_location" class="shop-input" placeholder="e.g. Jaipur, Rajasthan (blank for branch default)" />
+          </div>
+
+          <!-- Eligibility -->
+          <div class="shop-form-group">
+            <label for="modal_eligibility">Eligibility / Education</label>
+            <input type="text" name="eligibility" id="modal_eligibility" class="shop-input" placeholder="e.g. Graduation / Certification in UI/UX or Hotel Management" />
+          </div>
+
+          <!-- Salary Range -->
+          <div class="shop-form-group">
+            <label for="modal_salary_range">Salary / CTC Range</label>
+            <input type="text" name="salary_range" id="modal_salary_range" class="shop-input" placeholder="e.g. ₹3,50,000 - ₹5,00,000 P.A. or Disclosed on Interview" />
+          </div>
+
+          <!-- Openings Count & Display Order -->
+          <div class="shop-form-group">
+            <label for="modal_openings_count">Number of Open Positions</label>
+            <input type="number" name="openings_count" id="modal_openings_count" class="shop-input" value="1" min="1" />
+          </div>
+
+          <div class="shop-form-group">
+            <label for="modal_display_order">Display Priority Order</label>
+            <input type="number" name="display_order" id="modal_display_order" class="shop-input" value="0" min="0" />
+          </div>
+
+          <!-- Roles and Responsibilities -->
+          <div class="shop-form-group full-width">
+            <label for="modal_roles">Roles and Responsibilities * (one bullet per line)</label>
+            <textarea name="roles_responsibilities" id="modal_roles" class="shop-input" rows="5" placeholder="Gather and evaluate user requirements in collaboration with product managers.
+Illustrate design ideas using storyboards, process flows, and sitemaps.
+Develop UI mockups and prototypes that clearly illustrate how sites function.
+Identify and troubleshoot UX problems (e.g., responsiveness)." required></textarea>
+            <span style="font-size: 11px; color: #64748b; margin-top: 3px; display: block;">Each line will be rendered with a checkmark bullet point on the frontend careers modal.</span>
+          </div>
+
+          <!-- Requirements / Skills -->
+          <div class="shop-form-group full-width">
+            <label for="modal_requirements">Key Skills & Qualifications (one bullet per line)</label>
+            <textarea name="requirements" id="modal_requirements" class="shop-input" rows="3" placeholder="Proven work experience or relevant degree/certification
+Strong portfolio / culinary track record
+Excellent communication and teamwork abilities"></textarea>
+          </div>
+
+          <!-- Active Toggle -->
+          <div class="shop-form-group full-width" style="display: flex; align-items: center; gap: 10px; margin-top: 4px;">
+            <input type="checkbox" name="is_active" id="modal_is_active" checked style="width: 18px; height: 18px; accent-color: #ea580c; cursor: pointer;" />
+            <label for="modal_is_active" style="margin: 0; font-size: 13px; font-weight: 700; color: var(--text); cursor: pointer;">
+              Accepting Applications (Position is Active & Visible on Website)
+            </label>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="custom-modal-footer">
+        <button type="button" class="btn secondary" onclick="closeJobModal()">Cancel</button>
+        <button type="submit" class="btn" id="jobSubmitBtn">
+          <i class="fa-solid fa-floppy-disk"></i>
+          <span>Save Job Posting</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 5. Delete Confirmation Modal -->
+<div class="custom-modal" id="deleteJobModal">
+  <div class="custom-modal-content" style="max-width: 440px;">
+    <div class="custom-modal-header" style="background: #fef2f2;">
+      <div class="custom-modal-title" style="color: #dc2626;">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span>Confirm Deletion</span>
+      </div>
+      <button type="button" class="custom-modal-close" onclick="closeDeleteJobModal()">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="custom-modal-body" style="padding: 20px;">
+      <p style="color: var(--text); font-size: 0.95rem; line-height: 1.5; margin: 0 0 12px;">
+        Are you sure you want to permanently delete the job opening:
+        <strong id="deleteJobTitle" style="color: #0f172a; display: block; margin-top: 6px;"></strong>
+      </p>
+      <p style="font-size: 0.8rem; color: #dc2626; margin: 0;">
+        <i class="fa-solid fa-circle-info"></i> All associated candidate applications for this position will also be removed.
+      </p>
+    </div>
+    <div class="custom-modal-footer">
+      <form method="post" id="deleteJobForm" action="">
+        {% csrf_token %}
+        <button type="button" class="btn secondary" onclick="closeDeleteJobModal()">Cancel</button>
+        <button type="submit" class="btn danger">
+          <i class="fa-solid fa-trash-can"></i> Delete Position
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Dynamic Branch Fetching for Filter Bar
+  function onFilterRestaurantChange(restId) {
+    const branchSelect = document.getElementById('filterBranchSelect');
+    branchSelect.innerHTML = '<option value="">All Outlets / Global</option>';
+    if (!restId) return;
+
+    fetch(`/super/api/branches-by-restaurant/?restaurant_id=${restId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.branches && data.branches.length > 0) {
+          data.branches.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b.id;
+            opt.textContent = b.name;
+            branchSelect.appendChild(opt);
+          });
+        }
+      })
+      .catch(err => console.error('Error fetching branches:', err));
+  }
+
+  // Dynamic Branch Fetching for Modal
+  function onModalRestaurantChange(restId, preselectedBranchId = null) {
+    const branchSelect = document.getElementById('modal_branch');
+    branchSelect.innerHTML = '<option value="">All Outlets / Global (Entire Brand)</option>';
+    if (!restId) return;
+
+    fetch(`/super/api/branches-by-restaurant/?restaurant_id=${restId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.branches && data.branches.length > 0) {
+          data.branches.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b.id;
+            opt.textContent = b.name;
+            if (preselectedBranchId && String(preselectedBranchId) === String(b.id)) {
+              opt.selected = true;
+            }
+            branchSelect.appendChild(opt);
+          });
+        }
+      })
+      .catch(err => console.error('Error fetching branches:', err));
+  }
+
+  // Open Create Modal
+  function openCreateModal() {
+    const form = document.getElementById('jobForm');
+    form.action = "{% url 'super_admin:job_posting_create' %}";
+    document.getElementById('jobModalTitle').innerHTML = '<i class="fa-solid fa-briefcase" style="color: var(--primary);"></i> <span>Post New Position</span>';
+    document.getElementById('jobSubmitBtn').innerHTML = '<i class="fa-solid fa-floppy-disk"></i> <span>Create Position</span>';
+    
+    // Reset inputs
+    document.getElementById('modal_restaurant').value = "";
+    document.getElementById('modal_branch').innerHTML = '<option value="">All Outlets / Global (Entire Brand)</option>';
+    document.getElementById('modal_title').value = "";
+    document.getElementById('modal_department').value = "";
+    document.getElementById('modal_job_type').value = "Full Time";
+    document.getElementById('modal_experience_level').value = "Freshers";
+    document.getElementById('modal_location').value = "";
+    document.getElementById('modal_eligibility').value = "";
+    document.getElementById('modal_salary_range').value = "";
+    document.getElementById('modal_openings_count').value = "1";
+    document.getElementById('modal_display_order').value = "0";
+    document.getElementById('modal_roles').value = "";
+    document.getElementById('modal_requirements').value = "";
+    document.getElementById('modal_is_active').checked = true;
+
+    document.getElementById('jobModal').classList.add('show');
+  }
+
+  // Open Edit Modal
+  function openEditModal(jobId) {
+    fetch(`/super/careers/${jobId}/edit/`, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        const form = document.getElementById('jobForm');
+        form.action = `/super/careers/${jobId}/edit/`;
+        document.getElementById('jobModalTitle').innerHTML = '<i class="fa-solid fa-pen-to-square" style="color: var(--primary);"></i> <span>Edit Job Position</span>';
+        document.getElementById('jobSubmitBtn').innerHTML = '<i class="fa-solid fa-floppy-disk"></i> <span>Save Changes</span>';
+
+        document.getElementById('modal_restaurant').value = data.restaurant_id || "";
+        onModalRestaurantChange(data.restaurant_id, data.branch_id);
+
+        document.getElementById('modal_title').value = data.title || "";
+        document.getElementById('modal_department').value = data.department || "";
+        document.getElementById('modal_job_type').value = data.job_type || "Full Time";
+        document.getElementById('modal_experience_level').value = data.experience_level || "Freshers";
+        document.getElementById('modal_location').value = data.location || "";
+        document.getElementById('modal_eligibility').value = data.eligibility || "";
+        document.getElementById('modal_salary_range').value = data.salary_range || "";
+        document.getElementById('modal_openings_count').value = data.openings_count || 1;
+        document.getElementById('modal_display_order').value = data.display_order || 0;
+        document.getElementById('modal_roles').value = data.roles_responsibilities || "";
+        document.getElementById('modal_requirements').value = data.requirements || "";
+        document.getElementById('modal_is_active').checked = !!data.is_active;
+
+        document.getElementById('jobModal').classList.add('show');
+      }
+    })
+    .catch(err => {
+      console.error('Error fetching job details:', err);
+      alert('Could not load job position details.');
+    });
+  }
+
+  function closeJobModal() {
+    document.getElementById('jobModal').classList.remove('show');
+  }
+
+  // Toggle Active Switch via AJAX
+  function toggleJobActive(jobId, checkbox) {
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const statusText = document.getElementById(`status-text-${jobId}`);
+
+    fetch(`/super/careers/${jobId}/toggle-active/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        if (data.is_active) {
+          statusText.textContent = "Active";
+          statusText.style.color = "#059669";
+        } else {
+          statusText.textContent = "Closed";
+          statusText.style.color = "#64748b";
+        }
+      } else {
+        checkbox.checked = !checkbox.checked;
+        alert('Failed to update job status.');
+      }
+    })
+    .catch(err => {
+      console.error('Toggle error:', err);
+      checkbox.checked = !checkbox.checked;
+    });
+  }
+
+  // Delete Modal
+  function confirmDeleteJob(jobId, title) {
+    document.getElementById('deleteJobTitle').textContent = title;
+    document.getElementById('deleteJobForm').action = `/super/careers/${jobId}/delete/`;
+    document.getElementById('deleteJobModal').classList.add('show');
+  }
+
+  function closeDeleteJobModal() {
+    document.getElementById('deleteJobModal').classList.remove('show');
+  }
+
+  // Close modals on escape key or clicking backdrop
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeJobModal();
+      closeDeleteJobModal();
+    }
+  });
+
+  document.getElementById('jobModal').addEventListener('click', (e) => {
+    if (e.target.id === 'jobModal') closeJobModal();
+  });
+  document.getElementById('deleteJobModal').addEventListener('click', (e) => {
+    if (e.target.id === 'deleteJobModal') closeDeleteJobModal();
+  });
+</script>
+{% endblock %}

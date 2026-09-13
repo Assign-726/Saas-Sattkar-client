@@ -1092,6 +1092,10 @@
         <i class="fa-solid fa-scale-balanced"></i>
         <span>Policies & Legal</span>
       </button>
+      <button class="shop-tab-btn" onclick="switchTab(event, 'careers')">
+        <i class="fa-solid fa-briefcase"></i>
+        <span>Careers & Jobs</span>
+      </button>
     </div>
   </div>
 
@@ -3243,6 +3247,129 @@
               </button>
             </div>
           </form>
+        </div>
+      </div>
+
+      <!-- PANE 10: CAREERS & JOBS -->
+      <div id="pane-careers" class="tab-pane">
+        <div class="shop-panel">
+          <div class="shop-panel-header">
+            <div class="shop-panel-icon">
+              <i class="fa-solid fa-briefcase"></i>
+            </div>
+            <div>
+              <div class="shop-panel-title">Careers Page & Job Openings</div>
+              <div class="shop-panel-subtitle">Configure Careers portal visibility, headlines, and manage active positions for {{ restaurant.name }}</div>
+            </div>
+          </div>
+
+          <!-- Section Settings Card -->
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 20px; margin-bottom: 24px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+              <div>
+                <div style="font-weight: 800; color: #0f172a; font-size: 14px;">Careers Page Visibility</div>
+                <div style="font-size: 12px; color: #64748b;">Show or hide the Careers portal link and open positions on your customer website</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" name="show_careers" id="id_show_careers" {% if landing.show_careers %}checked{% endif %} style="width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer;" />
+                <label for="id_show_careers" style="font-weight: 700; font-size: 13px; color: #0f172a; cursor: pointer; margin-bottom: 0;">Enable Careers Section</label>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-6">
+                <div class="shop-form-group" style="margin-bottom: 0;">
+                  <label for="id_careers_title">Careers Section Headline</label>
+                  <input type="text" name="careers_title" id="id_careers_title" class="shop-input" value="{{ landing.careers_title|default:'Open Positions' }}" placeholder="e.g. Open Positions" />
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="shop-form-group" style="margin-bottom: 0;">
+                  <label for="id_careers_subtitle">Careers Section Subtitle</label>
+                  <input type="text" name="careers_subtitle" id="id_careers_subtitle" class="shop-input" value="{{ landing.careers_subtitle|default:'Explore exciting career opportunities and join our dynamic team.' }}" placeholder="e.g. Explore exciting career opportunities..." />
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top: 16px; text-align: right;">
+              <button type="submit" class="btn" style="padding: 8px 18px; font-size: 12px;">
+                <i class="fa-solid fa-floppy-disk"></i> Save Careers Settings
+              </button>
+            </div>
+          </div>
+
+          <!-- Restaurant Job Openings List -->
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+            <div style="font-size: 15px; font-weight: 800; color: #0f172a;">
+              <i class="fa-solid fa-list-check" style="color: var(--primary); margin-right: 6px;"></i> Current Job Positions for {{ restaurant.name }}
+            </div>
+            <a href="{% url 'super_admin:careers_list' %}?restaurant={{ restaurant.id }}" class="btn small">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i> Open in Careers Manager
+            </a>
+          </div>
+
+          {% if job_postings %}
+          <div class="table-responsive">
+            <table class="table align-middle">
+              <thead>
+                <tr>
+                  <th>Job Title & Department</th>
+                  <th>Outlet / Branch</th>
+                  <th>Experience & Location</th>
+                  <th>Salary</th>
+                  <th>Applications</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for jp in job_postings %}
+                <tr>
+                  <td>
+                    <div style="font-weight: 700; color: #0f172a;">{{ jp.title }}</div>
+                    <span style="font-size: 11px; background: #eff6ff; color: #1e40af; padding: 2px 7px; border-radius: 4px; font-weight: 700;">{{ jp.department }}</span>
+                  </td>
+                  <td>
+                    {% if jp.branch %}
+                    <span style="font-size: 12px; color: #334155; font-weight: 600;"><i class="fa-solid fa-store" style="color: var(--primary);"></i> {{ jp.branch.name }}</span>
+                    {% else %}
+                    <span style="font-size: 12px; color: #64748b; font-weight: 600;">Global (All Outlets)</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <div style="font-size: 12px; font-weight: 700; color: #b45309;">{{ jp.experience_level }}</div>
+                    <div style="font-size: 11px; color: #64748b;">{{ jp.location_display }}</div>
+                  </td>
+                  <td>
+                    <span style="font-size: 12px; font-weight: 600; color: #334155;">{{ jp.salary_range|default:"Not Disclosed" }}</span>
+                  </td>
+                  <td>
+                    <a href="{% url 'super_admin:job_applications_list' %}?job={{ jp.id }}" style="font-size: 12px; font-weight: 700; color: #ea580c; text-decoration: none;">
+                      {{ jp.applications_count }} Application{{ jp.applications_count|pluralize }} &rarr;
+                    </a>
+                  </td>
+                  <td>
+                    {% if jp.is_active %}
+                    <span style="background: #ecfdf5; color: #047857; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 6px;">ACTIVE</span>
+                    {% else %}
+                    <span style="background: #f1f5f9; color: #64748b; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 6px;">CLOSED</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div style="text-align: center; padding: 36px 16px; background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 14px;">
+            <i class="fa-solid fa-briefcase" style="font-size: 32px; color: #94a3b8; margin-bottom: 8px;"></i>
+            <div style="font-weight: 700; color: #334155; margin-bottom: 4px;">No Job Openings for this Restaurant Yet</div>
+            <div style="font-size: 12px; color: #64748b; margin-bottom: 14px;">Create job postings in the Careers Manager to display them on this restaurant's website.</div>
+            <a href="{% url 'super_admin:careers_list' %}?restaurant={{ restaurant.id }}" class="btn small">
+              <i class="fa-solid fa-plus"></i> Post New Job Position
+            </a>
+          </div>
+          {% endif %}
+
         </div>
       </div>
     </div>

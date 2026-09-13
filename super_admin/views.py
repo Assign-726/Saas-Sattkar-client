@@ -27,6 +27,8 @@ from super_admin.forms import (
     BranchContactSocialForm,
     BlogPostForm,
     AdminSetupForm,
+    JobPostingForm,
+    JobApplicationStatusForm,
 )
 from super_admin.models import (
     Restaurant,
@@ -37,6 +39,8 @@ from super_admin.models import (
     UserSecuritySetting,
     CustomerInquiry,
     NewsletterSubscriber,
+    JobPosting,
+    JobApplication,
 )
 from core.models import RestaurantLanding, GalleryImage, TeamMember, Review, Event, BlogPost, BlogComment, Order, OrderItem, MenuItem, Table, WhyChooseUs
 from super_admin.services import MasterBillingService
@@ -387,6 +391,9 @@ def landing_edit(request, pk):
     pages_faq_dict = landing.pages_faq if isinstance(landing.pages_faq, dict) else {}
     pages_faq_json = json.dumps(pages_faq_dict)
 
+    job_form = JobPostingForm(restaurant=restaurant)
+    job_postings = restaurant.job_postings.select_related('branch').all().order_by('display_order', '-created_at')
+
     return render(request, 'super_admin/landing_edit.html', {
         'restaurant': restaurant,
         'branches': branches,
@@ -404,6 +411,8 @@ def landing_edit(request, pk):
         'why_choose_us_items': why_choose_us_items,
         'blog_form': blog_form,
         'blog_posts': blog_posts,
+        'job_form': job_form,
+        'job_postings': job_postings,
         'pages_seo_json': pages_seo_json,
         'pages_seo': pages_seo_dict,
         'pages_faq_json': pages_faq_json,
@@ -1592,5 +1601,405 @@ def super_analytics_export_csv(request):
         ])
 
     return response
+
+
+# -------------------------------------------------------------------
+# Careers & Job Postings Views
+# -------------------------------------------------------------------
+
+@superuser_required
+def careers_list(request):
+    restaurant_filter = request.GET.get('restaurant', '')
+    branch_filter = request.GET.get('branch', '')
+    department_filter = request.GET.get('department', '')
+    status_filter = request.GET.get('status', 'all')
+    query = request.GET.get('q', '').strip()
+
+    qs = JobPosting.objects.select_related('restaurant', 'branch').all()
+
+    if restaurant_filter and restaurant_filter.isdigit():
+        qs = qs.filter(restaurant_id=int(restaurant_filter))
+
+    if branch_filter and branch_filter.isdigit():
+        qs = qs.filter(branch_id=int(branch_filter))
+
+    if department_filter:
+        qs = qs.filter(department__iexact=department_filter)
+
+    if status_filter == 'active':
+        qs = qs.filter(is_active=True)
+    elif status_filter == 'inactive':
+        qs = qs.filter(is_active=False)
+
+    if query:
+        qs = qs.filter(
+            Q(title__icontains=query) |
+            Q(department__icontains=query) |
+            Q(location__icontains=query) |
+            Q(roles_responsibilities__icontains=query) |
+            Q(requirements__icontains=query) |
+            Q(restaurant__name__icontains=query)
+        )
+
+    total_jobs = JobPosting.objects.count()
+    active_jobs = JobPosting.objects.filter(is_active=True).count()
+    closed_jobs = max(0, total_jobs - active_jobs)
+    total_applications = JobApplication.objects.count()
+    pending_applications = JobApplication.objects.filter(status='PENDING').count()
+
+    restaurants = Restaurant.objects.filter(is_active=True).order_by('name')
+
+    filter_branches = RestaurantBranch.objects.none()
+    if restaurant_filter and restaurant_filter.isdigit():
+        filter_branches = RestaurantBranch.objects.filter(restaurant_id=int(restaurant_filter)).order_by('name')
+
+    departments = (
+        JobPosting.objects.values_list('department', flat=True)
+        .distinct()
+        .order_by('department')
+    )
+
+    paginator = Paginator(qs.order_by('display_order', '-created_at'), 12)
+    page = request.GET.get('page')
+    try:
+        jobs = paginator.page(page)
+    except PageNotAnInteger:
+        jobs = paginator.page(1)
+    except EmptyPage:
+        jobs = paginator.page(paginator.num_pages)
+
+    form = JobPostingForm()
+
+    return render(request, 'super_admin/careers_list.html', {
+        'jobs': jobs,
+        'form': form,
+        'total_jobs': total_jobs,
+        'active_jobs': active_jobs,
+        'closed_jobs': closed_jobs,
+        'total_applications': total_applications,
+        'pending_applications': pending_applications,
+        'restaurants': restaurants,
+        'filter_branches': filter_branches,
+        'departments': departments,
+        'restaurant_filter': restaurant_filter,
+        'branch_filter': branch_filter,
+        'department_filter': department_filter,
+        'status_filter': status_filter,
+        'query': query,
+    })
+
+
+@superuser_required
+def job_posting_create(request):
+    if request.method == 'POST':
+        restaurant_id = request.POST.get('restaurant')
+        restaurant = get_object_or_404(Restaurant, pk=restaurant_id) if restaurant_id else None
+        form = JobPostingForm(request.POST, restaurant=restaurant)
+        if form.is_valid():
+            job = form.save()
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json':
+                return JsonResponse({'success': True, 'id': job.id, 'title': job.title})
+            messages.success(request, f'Job posting "{job.title}" created successfully!')
+            return redirect('super_admin:careers_list')
+        else:
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json':
+                return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+            messages.error(request, 'Please check the form for errors.')
+    return redirect('super_admin:careers_list')
+
+
+@superuser_required
+def job_posting_edit(request, pk):
+    job = get_object_or_404(JobPosting, pk=pk)
+    if request.method == 'GET' and (request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json'):
+        return JsonResponse({
+            'success': True,
+            'id': job.id,
+            'restaurant_id': job.restaurant_id,
+            'branch_id': job.branch_id or '',
+            'title': job.title,
+            'slug': job.slug,
+            'department': job.department,
+            'job_type': job.job_type,
+            'experience_level': job.experience_level,
+            'location': job.location,
+            'eligibility': job.eligibility,
+            'salary_range': job.salary_range,
+            'openings_count': job.openings_count,
+            'roles_responsibilities': job.roles_responsibilities,
+            'requirements': job.requirements,
+            'is_active': job.is_active,
+            'display_order': job.display_order,
+        })
+
+    if request.method == 'POST':
+        restaurant_id = request.POST.get('restaurant') or job.restaurant_id
+        restaurant = Restaurant.objects.filter(pk=restaurant_id).first() or job.restaurant
+        form = JobPostingForm(request.POST, instance=job, restaurant=restaurant)
+        if form.is_valid():
+            form.save()
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json':
+                return JsonResponse({'success': True, 'id': job.id, 'title': job.title})
+            messages.success(request, f'Job posting "{job.title}" updated successfully.')
+            return redirect('super_admin:careers_list')
+        else:
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json':
+                return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+            messages.error(request, 'Please correct the errors in the form.')
+    return redirect('super_admin:careers_list')
+
+
+@superuser_required
+def job_posting_delete(request, pk):
+    job = get_object_or_404(JobPosting, pk=pk)
+    if request.method == 'POST':
+        title = job.title
+        job.delete()
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json':
+            return JsonResponse({'success': True})
+        messages.success(request, f'Job posting "{title}" deleted.')
+    return redirect('super_admin:careers_list')
+
+
+@superuser_required
+def job_posting_toggle_active(request, pk):
+    job = get_object_or_404(JobPosting, pk=pk)
+    if request.method == 'POST':
+        job.is_active = not job.is_active
+        job.save(update_fields=['is_active', 'updated_at'])
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json':
+            return JsonResponse({'success': True, 'is_active': job.is_active})
+        messages.success(request, f'Job posting "{job.title}" is now {"Active" if job.is_active else "Closed"}.')
+    return redirect('super_admin:careers_list')
+
+
+# -------------------------------------------------------------------
+# Job Applications / Enquiries Views
+# -------------------------------------------------------------------
+
+@superuser_required
+def job_applications_list(request):
+    job_filter = request.GET.get('job', '')
+    restaurant_filter = request.GET.get('restaurant', '')
+    branch_filter = request.GET.get('branch', '')
+    status_filter = request.GET.get('status', 'all')
+    experience_filter = request.GET.get('experience', 'all')
+    query = request.GET.get('q', '').strip()
+
+    qs = JobApplication.objects.select_related('job', 'restaurant', 'branch').all()
+
+    if job_filter and job_filter.isdigit():
+        qs = qs.filter(job_id=int(job_filter))
+
+    if restaurant_filter and restaurant_filter.isdigit():
+        qs = qs.filter(restaurant_id=int(restaurant_filter))
+
+    if branch_filter and branch_filter.isdigit():
+        qs = qs.filter(branch_id=int(branch_filter))
+
+    if status_filter != 'all' and status_filter:
+        qs = qs.filter(status=status_filter.upper())
+
+    if experience_filter == 'yes':
+        qs = qs.filter(has_experience=True)
+    elif experience_filter == 'no':
+        qs = qs.filter(has_experience=False)
+
+    if query:
+        qs = qs.filter(
+            Q(full_name__icontains=query) |
+            Q(email__icontains=query) |
+            Q(phone__icontains=query) |
+            Q(current_organization__icontains=query) |
+            Q(reason_to_join__icontains=query) |
+            Q(job__title__icontains=query)
+        )
+
+    total_count = JobApplication.objects.count()
+    pending_count = JobApplication.objects.filter(status='PENDING').count()
+    shortlisted_count = JobApplication.objects.filter(status__in=['SHORTLISTED', 'INTERVIEWING']).count()
+    hired_count = JobApplication.objects.filter(status='HIRED').count()
+
+    restaurants = Restaurant.objects.filter(is_active=True).order_by('name')
+    jobs = JobPosting.objects.select_related('restaurant').order_by('title')
+
+    paginator = Paginator(qs.order_by('-created_at'), 15)
+    page = request.GET.get('page')
+    try:
+        applications = paginator.page(page)
+    except PageNotAnInteger:
+        applications = paginator.page(1)
+    except EmptyPage:
+        applications = paginator.page(paginator.num_pages)
+
+    return render(request, 'super_admin/job_applications_list.html', {
+        'applications': applications,
+        'total_count': total_count,
+        'pending_count': pending_count,
+        'shortlisted_count': shortlisted_count,
+        'hired_count': hired_count,
+        'restaurants': restaurants,
+        'jobs': jobs,
+        'job_filter': job_filter,
+        'restaurant_filter': restaurant_filter,
+        'branch_filter': branch_filter,
+        'status_filter': status_filter,
+        'experience_filter': experience_filter,
+        'query': query,
+    })
+
+
+@superuser_required
+def job_application_detail(request, pk):
+    app = get_object_or_404(JobApplication.objects.select_related('job', 'restaurant', 'branch'), pk=pk)
+    if not app.is_read:
+        app.is_read = True
+        app.save(update_fields=['is_read', 'updated_at'])
+
+    return JsonResponse({
+        'id': app.id,
+        'full_name': app.full_name,
+        'email': app.email,
+        'country_code': app.country_code,
+        'phone': app.phone,
+        'formatted_phone': app.formatted_phone,
+        'job_title': app.job.title,
+        'department': app.job.department,
+        'job_experience_level': app.job.experience_level,
+        'restaurant_name': app.restaurant.name,
+        'branch_name': app.branch.name if app.branch else 'All Outlets / Global',
+        'has_experience': app.has_experience,
+        'experience_display': app.experience_display,
+        'experience_years': app.experience_years,
+        'experience_months': app.experience_months,
+        'current_ctc': app.current_ctc or 'N/A',
+        'expected_ctc': app.expected_ctc or 'N/A',
+        'current_organization': app.current_organization or 'N/A',
+        'notice_period_days': f"{app.notice_period_days} Days" if app.notice_period_days is not None else 'Immediate / None',
+        'reason_to_join': app.reason_to_join,
+        'resume_url': app.resume.url if app.resume else '',
+        'status': app.status,
+        'status_display': app.get_status_display(),
+        'admin_notes': app.admin_notes,
+        'created_at': app.created_at.strftime('%b %d, %Y at %I:%M %p'),
+    })
+
+
+@superuser_required
+def job_application_status_update(request, pk):
+    app = get_object_or_404(JobApplication, pk=pk)
+    if request.method == 'POST':
+        new_status = request.POST.get('status')
+        admin_notes = request.POST.get('admin_notes')
+        if new_status and new_status in dict(JobApplication.Status.choices):
+            app.status = new_status
+        if admin_notes is not None:
+            app.admin_notes = admin_notes
+        app.is_read = True
+        app.save(update_fields=['status', 'admin_notes', 'is_read', 'updated_at'])
+
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json':
+            return JsonResponse({'success': True, 'status': app.status, 'status_display': app.get_status_display()})
+        messages.success(request, f'Application #{app.id} for {app.full_name} updated to {app.get_status_display()}.')
+    return redirect('super_admin:job_applications_list')
+
+
+@superuser_required
+def job_application_delete(request, pk):
+    app = get_object_or_404(JobApplication, pk=pk)
+    if request.method == 'POST':
+        name = app.full_name
+        app.delete()
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json':
+            return JsonResponse({'success': True})
+        messages.success(request, f'Application for {name} deleted.')
+    return redirect('super_admin:job_applications_list')
+
+
+@superuser_required
+def job_applications_export_csv(request):
+    job_filter = request.GET.get('job', '')
+    restaurant_filter = request.GET.get('restaurant', '')
+    branch_filter = request.GET.get('branch', '')
+    status_filter = request.GET.get('status', 'all')
+    experience_filter = request.GET.get('experience', 'all')
+    query = request.GET.get('q', '').strip()
+
+    qs = JobApplication.objects.select_related('job', 'restaurant', 'branch').all()
+
+    if job_filter and job_filter.isdigit():
+        qs = qs.filter(job_id=int(job_filter))
+    if restaurant_filter and restaurant_filter.isdigit():
+        qs = qs.filter(restaurant_id=int(restaurant_filter))
+    if branch_filter and branch_filter.isdigit():
+        qs = qs.filter(branch_id=int(branch_filter))
+    if status_filter != 'all' and status_filter:
+        qs = qs.filter(status=status_filter.upper())
+    if experience_filter == 'yes':
+        qs = qs.filter(has_experience=True)
+    elif experience_filter == 'no':
+        qs = qs.filter(has_experience=False)
+    if query:
+        qs = qs.filter(
+            Q(full_name__icontains=query) |
+            Q(email__icontains=query) |
+            Q(phone__icontains=query) |
+            Q(current_organization__icontains=query) |
+            Q(reason_to_join__icontains=query) |
+            Q(job__title__icontains=query)
+        )
+
+    timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="job_applications_{timestamp}.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow([
+        'ID',
+        'Candidate Name',
+        'Email',
+        'Phone',
+        'Job Title',
+        'Department',
+        'Restaurant',
+        'Branch',
+        'Has Experience',
+        'Experience Display',
+        'Current Organization',
+        'Current CTC',
+        'Expected CTC',
+        'Notice Period (Days)',
+        'Reason To Join',
+        'Status',
+        'Is Read',
+        'Resume URL',
+        'Applied Date'
+    ])
+
+    for app in qs.order_by('-created_at'):
+        writer.writerow([
+            app.id,
+            app.full_name,
+            app.email,
+            app.formatted_phone,
+            app.job.title,
+            app.job.department,
+            app.restaurant.name,
+            app.branch.name if app.branch else 'All Outlets / Global',
+            'Yes' if app.has_experience else 'No',
+            app.experience_display,
+            app.current_organization,
+            app.current_ctc,
+            app.expected_ctc,
+            app.notice_period_days if app.notice_period_days is not None else '',
+            app.reason_to_join,
+            app.get_status_display(),
+            'Yes' if app.is_read else 'No',
+            app.resume.url if app.resume else '',
+            app.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+        ])
+
+    return response
+
 
 
