@@ -30,10 +30,17 @@ def restaurant_context(request):
     branches = restaurant.branches.all() if restaurant else []
     rslug = active_branch.slug if (active_branch and active_branch.slug) else (restaurant.slug if restaurant else '')
     
+    from core.models import CreditNote, RestaurantSettings
+    settings_obj = RestaurantSettings.get_settings(restaurant) if restaurant else None
+    next_cn_number = CreditNote.generate_credit_note_number(restaurant, branch=active_branch) if restaurant else 'CN-PREVIEW'
+    manager_pin_val = getattr(settings_obj, 'manager_pin', '1234') if settings_obj else '1234'
+
     return {
         'current_restaurant': restaurant,
         'current_branch': active_branch,
         'available_branches': branches,
         'is_primary_admin': profile.is_primary_admin or (profile.branch is None),
         'rslug': rslug,
+        'next_credit_note_number': next_cn_number,
+        'manager_pin': manager_pin_val,
     }

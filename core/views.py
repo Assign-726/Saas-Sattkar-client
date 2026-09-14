@@ -657,18 +657,8 @@ class OrderViewSet(viewsets.ModelViewSet):
         if order.status == Order.OrderStatus.PENDING:
             order.status = Order.OrderStatus.SERVED
 
-        if not order.party and order.customer_name and order.customer_name.lower() not in ['guest', 'walk-in guest'] and order.restaurant:
-            from core.models import Party
-            party_defaults = {
-                'name': order.customer_name,
-                'party_type': Party.PartyType.CUSTOMER,
-                'phone': order.phone,
-            }
-            party_lookup = {'restaurant': order.restaurant, 'name__iexact': order.customer_name}
-            if order.branch:
-                party_lookup['branch'] = order.branch
-            party, _ = Party.objects.get_or_create(**party_lookup, defaults=party_defaults)
-            order.party = party
+        if not order.party and order.restaurant:
+            order.resolve_and_sync_party()
 
         order.save()
         return Response({
