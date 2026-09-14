@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Credit Note {{ credit_note.credit_note_number }} - {{ restaurant.name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: #f1f5f9;
+      font-family: 'Inter', -apple-system, sans-serif;
+      color: #1e293b;
+      padding: 20px 10px;
+    }
+
+    /* Action bar */
+    .top-action-bar {
+      max-width: 80mm;
+      margin: 0 auto 16px;
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .btn-action {
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      color: #334155;
+      transition: all 0.15s ease;
+    }
+    .btn-action:hover {
+      background: #f8fafc;
+      border-color: #94a3b8;
+    }
+    .btn-action.primary {
+      background: #dc2626;
+      color: #ffffff;
+      border-color: #dc2626;
+    }
+    .btn-action.primary:hover {
+      background: #b91c1c;
+    }
+
+    /* 80mm Thermal Receipt */
+    .thermal-receipt {
+      width: 78mm;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 14px 14px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+      font-family: 'IBM Plex Mono', 'Courier New', Courier, monospace;
+      font-size: 11px;
+      line-height: 1.4;
+      color: #000000;
+    }
+
+    .pCenter { text-align: center; }
+    .pRight { text-align: right; }
+    .pBold { font-weight: 700; }
+    .pTitle { font-size: 15px; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 2px; }
+    .pAddress { font-size: 10px; line-height: 1.35; margin-bottom: 2px; }
+    .pRule { border-top: 1px dashed #000000; margin: 6px 0; }
+    .pDblRule { border-top: 2px dashed #000000; margin: 7px 0; }
+
+    .pRow {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 2px;
+    }
+    .pRow span:first-child { color: #333; }
+    .pRow span:last-child { font-weight: 600; text-align: right; }
+
+    table.pTable {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10.5px;
+      margin: 4px 0;
+    }
+    table.pTable th {
+      border-bottom: 1px dashed #000;
+      padding: 3px 0;
+      text-align: left;
+      font-weight: 700;
+    }
+    table.pTable td {
+      padding: 3px 0;
+      vertical-align: top;
+    }
+
+    .badge-refund {
+      display: inline-block;
+      border: 1.5px solid #000;
+      padding: 2px 8px;
+      font-weight: 700;
+      font-size: 12px;
+      margin: 4px 0;
+      letter-spacing: 0.5px;
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+        padding: 0;
+        margin: 0;
+      }
+      .top-action-bar {
+        display: none !important;
+      }
+      .thermal-receipt {
+        width: 100%;
+        max-width: 78mm;
+        border: none;
+        box-shadow: none;
+        padding: 4px 2px;
+        border-radius: 0;
+      }
+      @page {
+        size: 80mm auto;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Action Bar -->
+  <div class="top-action-bar">
+    <button class="btn-action primary" onclick="window.print()">
+      <i class="bi bi-printer-fill"></i> Print Credit Note
+    </button>
+    <button class="btn-action" onclick="window.close()">
+      <i class="bi bi-x-lg"></i> Close
+    </button>
+  </div>
+
+  <!-- Thermal Paper Container -->
+  <div class="thermal-receipt">
+    <!-- Header -->
+    <div class="pCenter">
+      <div class="pTitle">{{ branch.name|default:restaurant.name }}</div>
+      {% if branch.address or restaurant.address %}
+      <div class="pAddress">{{ branch.address|default:restaurant.address }}</div>
+      {% endif %}
+      {% if branch.phone or restaurant.phone %}
+      <div class="pAddress">Ph: {{ branch.phone|default:restaurant.phone }}</div>
+      {% endif %}
+      {% if branch_gstin %}
+      <div class="pAddress">GSTIN: <span class="pBold">{{ branch_gstin }}</span></div>
+      {% elif branch.gstin %}
+      <div class="pAddress">GSTIN: <span class="pBold">{{ branch.gstin }}</span></div>
+      {% endif %}
+      
+      <div class="badge-refund">** CREDIT NOTE / REFUND **</div>
+      <div style="font-size: 9.5px; margin-top: 2px;">(Pursuant to Section 34 of CGST Act)</div>
+    </div>
+
+    <div class="pRule"></div>
+
+    <!-- Voucher Details -->
+    <div class="pRow">
+      <span>Credit Note No:</span>
+      <span class="pBold">{{ credit_note.credit_note_number }}</span>
+    </div>
+    <div class="pRow">
+      <span>CN Date & Time:</span>
+      <span>{{ credit_note.created_at|date:"d/m/Y, h:i A" }}</span>
+    </div>
+    <div class="pRow">
+      <span>Original Invoice:</span>
+      <span class="pBold">{{ credit_note.original_invoice_no }}</span>
+    </div>
+    <div class="pRow">
+      <span>Original Order:</span>
+      <span>#{{ order.branch_order_number|default:order.id }}</span>
+    </div>
+    <div class="pRow">
+      <span>Customer:</span>
+      <span>{{ order.customer_name|default:"Walk-in Guest" }}</span>
+    </div>
+    {% if order.table %}
+    <div class="pRow">
+      <span>Table / Zone:</span>
+      <span>{{ order.table.name }}</span>
+    </div>
+    {% endif %}
+
+    <div class="pRule"></div>
+
+    <!-- Items List -->
+    <table class="pTable">
+      <thead>
+        <tr>
+          <th style="width: 50%;">Item</th>
+          <th style="width: 15%; text-align: center;">Qty</th>
+          <th style="width: 15%; text-align: right;">Rate</th>
+          <th style="width: 20%; text-align: right;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+        <tr>
+          <td>{{ it.menu_item.name|default:"Item" }}</td>
+          <td style="text-align: center;">-{{ it.quantity }}</td>
+          <td style="text-align: right;">{{ it.unit_price|floatformat:2 }}</td>
+          <td style="text-align: right;">-{{ it.subtotal|floatformat:2 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="pRule"></div>
+
+    <!-- Split Tax & Amount Adjustments -->
+    <div class="pRow">
+      <span>Subtotal Adjustment:</span>
+      <span>- ₹{{ credit_note.subtotal_adjusted|floatformat:2 }}</span>
+    </div>
+    {% if credit_note.discount_adjusted > 0 %}
+    <div class="pRow">
+      <span>Discount Reversed:</span>
+      <span>+ ₹{{ credit_note.discount_adjusted|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+    {% if credit_note.cgst_adjusted > 0 %}
+    <div class="pRow">
+      <span>CGST Reversal:</span>
+      <span>- ₹{{ credit_note.cgst_adjusted|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+    {% if credit_note.sgst_adjusted > 0 %}
+    <div class="pRow">
+      <span>SGST Reversal:</span>
+      <span>- ₹{{ credit_note.sgst_adjusted|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+    {% if credit_note.vat_adjusted > 0 %}
+    <div class="pRow">
+      <span>VAT Reversal:</span>
+      <span>- ₹{{ credit_note.vat_adjusted|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+    {% if credit_note.service_charge_adjusted > 0 %}
+    <div class="pRow">
+      <span>Service Charge Rev:</span>
+      <span>- ₹{{ credit_note.service_charge_adjusted|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+    {% if credit_note.round_off_adjusted %}
+    <div class="pRow">
+      <span>Round Off:</span>
+      <span>₹{{ credit_note.round_off_adjusted|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+
+    <div class="pDblRule"></div>
+
+    <!-- Net Total Refund -->
+    <div class="pRow" style="font-size: 13px; font-weight: 700;">
+      <span>TOTAL REFUND:</span>
+      <span>₹{{ credit_note.total_refund_amount|floatformat:2 }}</span>
+    </div>
+
+    <div class="pRule"></div>
+
+    <!-- Reason & Method -->
+    <div class="pRow">
+      <span>Refund Route:</span>
+      <span class="pBold">{{ credit_note.get_refund_route_display|default:"Cash" }}</span>
+    </div>
+    <div class="pRow">
+      <span>Reason:</span>
+      <span>{{ credit_note.get_reason_code_display }}</span>
+    </div>
+    {% if credit_note.reason_description %}
+    <div class="pRow">
+      <span>Note:</span>
+      <span style="font-size: 10px; max-width: 60%; word-break: break-word;">{{ credit_note.reason_description }}</span>
+    </div>
+    {% endif %}
+    <div class="pRow">
+      <span>Authorized By:</span>
+      <span>{{ credit_note.authorized_by }}</span>
+    </div>
+
+    <div class="pRule"></div>
+
+    <!-- Footer Notice -->
+    <div class="pCenter" style="margin-top: 6px; font-size: 9.5px; color: #444;">
+      <div>*** GOODS RESTOCKED TO INVENTORY ***</div>
+      <div style="margin-top: 2px;">Original tax invoice debited. Keep for tax audit.</div>
+      <div style="margin-top: 4px; font-family: monospace;">Printed: {{ credit_note.created_at|date:"d/m/Y H:i:s" }}</div>
+    </div>
+  </div>
+
+  {% if auto_print %}
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        window.print();
+      }, 350);
+    });
+  </script>
+  {% endif %}
+
+</body>
+</html>

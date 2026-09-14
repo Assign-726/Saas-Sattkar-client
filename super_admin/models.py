@@ -74,6 +74,21 @@ class Restaurant(models.Model):
         return ", ".join([p for p in parts if p])
 
     @property
+    def gstin(self):
+        reg = getattr(self, 'gst_registrations', None)
+        if reg and hasattr(reg, 'first'):
+            first_reg = reg.first()
+            if first_reg and getattr(first_reg, 'gstin', None):
+                return first_reg.gstin
+        first_branch = self.branches.first() if hasattr(self, 'branches') else None
+        if first_branch:
+            if getattr(first_branch, 'gst_registration', None) and first_branch.gst_registration.gstin:
+                return first_branch.gst_registration.gstin
+            if getattr(first_branch, 'gstin', None):
+                return first_branch.gstin
+        return ''
+
+    @property
     def invoice_heading(self):
         if self.gst_type == 'R':
             return "Tax Invoice"

@@ -497,6 +497,22 @@
                 <a href="{% url 'restaurant_admin:order_kot' restaurant_slug=rslug pk=order.id %}" target="_blank" class="btn-print-action">
                     <i class="bi bi-printer"></i> Print KOT
                 </a>
+                {% if order.status == 'C' %}
+                <div class="alert alert-danger py-2 px-3 w-100 text-center font-monospace mb-0" style="font-size: 0.82rem; border-radius: 9px;">
+                    <i class="bi bi-x-octagon-fill me-1"></i> ORDER CANCELLED
+                    {% if order.credit_note %}
+                    <div class="mt-1">
+                        <a href="{% url 'restaurant_admin:credit_note_thermal_view' restaurant_slug=rslug pk=order.credit_note.id %}" target="_blank" class="btn btn-sm btn-outline-danger py-0.5 px-2 font-monospace" style="font-size: 0.75rem;">
+                            <i class="bi bi-printer-fill me-1"></i> Print Credit Note #{{ order.credit_note.credit_note_number }}
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+                {% else %}
+                <button type="button" class="btn-cancel-order w-100 justify-content-center" onclick="window.openCreditNoteModal({ orderId: '{{ order.id }}', isLocked: true });">
+                    <i class="bi bi-file-earmark-x"></i> {% if order.payment_status == 'paid' %}Cancel & Refund (Credit Note){% else %}Cancel / Void Order{% endif %}
+                </button>
+                {% endif %}
             </div>
         </div>
     </div>

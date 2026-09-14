@@ -3,7 +3,7 @@ from django.utils.html import format_html
 from django import forms
 from django.core.exceptions import ValidationError
 # pyrefly: ignore [missing-import]
-from .models import Category, SubCategory, MenuItem, Order, OrderItem, RestaurantSettings, RestaurantLanding, GalleryImage, TeamMember, Review, Coupon, InventoryItem, MenuItemIngredient, InventoryTransaction, BlogPost, BlogComment
+from .models import Category, SubCategory, MenuItem, Order, OrderItem, RestaurantSettings, RestaurantLanding, GalleryImage, TeamMember, Review, Coupon, InventoryItem, MenuItemIngredient, InventoryTransaction, BlogPost, BlogComment, CreditNote
 
 
 class SubCategoryInline(admin.TabularInline):
@@ -248,6 +248,14 @@ class MenuItemAdmin(admin.ModelAdmin):
         )
     availability_badge.short_description = 'Status'
     availability_badge.admin_order_field = 'availability'
+
+
+@admin.register(CreditNote)
+class CreditNoteAdmin(admin.ModelAdmin):
+    list_display = ('credit_note_number', 'original_invoice_no', 'order', 'reason_code', 'refund_route', 'total_refund_amount', 'created_at')
+    list_filter = ('reason_code', 'refund_route', 'created_at')
+    search_fields = ('credit_note_number', 'original_invoice_no', 'order__id', 'order__customer_name')
+    readonly_fields = ('created_at',)
 
 
 @admin.register(RestaurantSettings)

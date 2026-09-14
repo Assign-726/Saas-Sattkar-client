@@ -72,6 +72,9 @@ urlpatterns = [
     path('orders/draft/sync-items/', views.pos_sync_draft_items_api, name='pos_sync_draft_items_api'),
     path('orders/draft/finalize/', views.pos_finalize_order_api, name='pos_finalize_order_api'),
     path('orders/<int:pk>/settle/', views.order_settle_api, name='order_settle_api'),
+    path('api/orders/omni-search/', views.order_omni_search_api, name='order_omni_search_api'),
+    path('orders/<int:pk>/credit-note/', views.order_credit_note_api, name='order_credit_note_api'),
+    path('credit-notes/<int:pk>/thermal/', views.credit_note_thermal_view, name='credit_note_thermal_view'),
 
     # Inventory & Purchases Management
     path('inventory/', views.inventory_list, name='inventory_list'),

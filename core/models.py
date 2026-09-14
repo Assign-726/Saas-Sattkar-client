@@ -1042,6 +1042,11 @@ class RestaurantSettings(models.Model):
         default=KotTemplate.THERMAL,
         help_text="Default print template for Kitchen Order Tickets (KOT)"
     )
+    manager_pin = models.CharField(
+        max_length=10,
+        default='1234',
+        help_text="4-digit authorization PIN for voids and credit notes"
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -2301,3 +2306,60 @@ class EmailOTP(models.Model):
         if remaining > 0:
             return False, f"Invalid verification code. {remaining} attempt{'s' if remaining != 1 else ''} remaining."
         return False, "Invalid verification code. Maximum attempts exceeded. Please request a new code."
+
+
+class CreditNote(models.Model):
+    class ReasonCode(models.TextChoices):
+        DEFECTIVE_FOOD = 'DEFECTIVE_FOOD', _('Food Quality / Defective')
+        WRONG_ORDER = 'WRONG_ORDER', _('Wrong Item Served / Prepared')
+        CUSTOMER_DISPUTE = 'CUSTOMER_DISPUTE', _('Customer Dispute / Dissatisfaction')
+        DELAYED_SERVICE = 'DELAYED_SERVICE', _('Excessive Preparation Delay')
+        BILLING_ERROR = 'BILLING_ERROR', _('Billing / Punching Error')
+        OTHER = 'OTHER', _('Other Reason')
+
+    class RefundRoute(models.TextChoices):
+        CASH = 'CASH', _('Cash Refund')
+        ORIGINAL_METHOD = 'ORIGINAL_METHOD', _('Original Payment Method')
+        UPI = 'UPI', _('UPI Transfer')
+        CARD = 'CARD', _('Card Reversal')
+        LEDGER_CREDIT = 'LEDGER_CREDIT', _('Credit to Customer Ledger')
+
+    restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='credit_notes')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='credit_notes')
+    order = models.OneToOneField('Order', on_delete=models.CASCADE, related_name='credit_note')
+    credit_note_number = models.CharField(max_length=50, unique=True, db_index=True)
+    original_invoice_no = models.CharField(max_length=100)
+    reason_code = models.CharField(max_length=50, choices=ReasonCode.choices, default=ReasonCode.BILLING_ERROR)
+    reason_description = models.CharField(max_length=255, blank=True)
+    refund_route = models.CharField(max_length=50, choices=RefundRoute.choices, blank=True, null=True)
+
+    # Negative / adjusted financial amounts
+    subtotal_adjusted = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    cgst_adjusted = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    sgst_adjusted = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    vat_adjusted = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    tax_adjusted = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    service_charge_adjusted = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    discount_adjusted = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    round_off_adjusted = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_refund_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    authorized_by = models.CharField(max_length=100, default='Manager')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Credit Note'
+        verbose_name_plural = 'Credit Notes'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.credit_note_number} (Ref: {self.original_invoice_no}) - ₹{self.total_refund_amount}"
+
+    @classmethod
+    def generate_credit_note_number(cls, restaurant, branch=None):
+        from django.utils import timezone
+        today_str = timezone.now().strftime('%Y%m%d')
+        prefix = f"CN-{today_str}-"
+        qs = cls.objects.filter(restaurant=restaurant, credit_note_number__startswith=prefix)
+        count = qs.count() + 1
+        return f"{prefix}{count:04d}"

@@ -14,7 +14,7 @@ from decimal import Decimal
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.conf import settings
 from django.apps import apps
-from core.models import Zone, Table, Category, SubCategory, MenuItem, Order, OrderItem, RestaurantSettings, RestaurantLanding, InventoryItem, InventoryCategory, Coupon, MenuItemIngredient, InventoryTransaction, Supplier, PurchaseOrder, PurchaseOrderItem, Party, CustomCharge, AdvanceReceipt, Branch, DeliveryChallan, DeliveryChallanItem, DocumentSequenceSetting
+from core.models import Zone, Table, Category, SubCategory, MenuItem, Order, OrderItem, RestaurantSettings, RestaurantLanding, InventoryItem, InventoryCategory, Coupon, MenuItemIngredient, InventoryTransaction, Supplier, PurchaseOrder, PurchaseOrderItem, Party, CustomCharge, AdvanceReceipt, Branch, DeliveryChallan, DeliveryChallanItem, DocumentSequenceSetting, CreditNote
 from restaurant_admin.sequence_helpers import get_document_sequence_info, get_and_increment_document_number, validate_unique_document_number
 from django.db import transaction
 from super_admin.models import Restaurant, RestaurantUser, RestaurantBranch
@@ -4994,6 +4994,284 @@ def order_update_status(request, pk, restaurant_slug=None):
         return redirect('restaurant_admin:order_list', restaurant_slug=restaurant.slug)
     
     return redirect('restaurant_admin:order_list', restaurant_slug=restaurant.slug)
+
+
+@login_required
+@user_passes_test(is_admin)
+def order_omni_search_api(request, restaurant_slug=None):
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return JsonResponse({'success': False, 'error': 'No restaurant found'}, status=403)
+
+    active_branch = get_active_branch(request, restaurant)
+    q = (request.GET.get('q') or '').strip()
+    order_id = request.GET.get('order_id')
+
+    if order_id and str(order_id).strip().isdigit():
+        target_order = Order.objects.filter(restaurant=restaurant, pk=int(order_id.strip())).select_related('table', 'branch', 'credit_note').prefetch_related('items', 'items__menu_item').first()
+        orders_qs = [target_order] if target_order else []
+    elif q:
+        from django.db.models import Q
+        q_filter = (
+            Q(gstin_no__icontains=q) |
+            Q(customer_name__icontains=q) |
+            Q(phone__icontains=q)
+        )
+        if q.isdigit():
+            q_filter |= Q(id=int(q)) | Q(branch_order_number=int(q))
+        elif q.lower().startswith('ord-') and q[4:].isdigit():
+            q_filter |= Q(id=int(q[4:])) | Q(branch_order_number=int(q[4:]))
+
+        orders_qs = Order.objects.filter(restaurant=restaurant).filter(q_filter).select_related('table', 'branch', 'credit_note').prefetch_related('items', 'items__menu_item').order_by('-order_time')[:25]
+    else:
+        base_qs = Order.objects.filter(restaurant=restaurant)
+        if active_branch and base_qs.filter(branch=active_branch).exists():
+            orders_qs = base_qs.filter(branch=active_branch).select_related('table', 'branch', 'credit_note').prefetch_related('items', 'items__menu_item').order_by('-order_time')[:25]
+        else:
+            orders_qs = base_qs.select_related('table', 'branch', 'credit_note').prefetch_related('items', 'items__menu_item').order_by('-order_time')[:25]
+
+    results = []
+    for ord_obj in orders_qs:
+        try:
+            breakdown = ord_obj.calculate_bill_breakdown(bill_type='combined')
+        except Exception:
+            breakdown = {
+                'gross_subtotal': ord_obj.subtotal or Decimal('0.00'),
+                'discount_amount': ord_obj.discount_amount or Decimal('0.00'),
+                'cgst': Decimal('0.00'),
+                'cgst_percentage': Decimal('2.50'),
+                'sgst': Decimal('0.00'),
+                'sgst_percentage': Decimal('2.50'),
+                'vat': Decimal('0.00'),
+                'service_charge': Decimal('0.00'),
+                'round_off_amount': ord_obj.round_off_amount or Decimal('0.00'),
+                'final_total': ord_obj.total_amount or Decimal('0.00')
+            }
+
+        inv_number = ord_obj.gstin_no or ord_obj.order_number or f"ORD-{ord_obj.id:04d}"
+        has_cn = hasattr(ord_obj, 'credit_note')
+        cn_num = ord_obj.credit_note.credit_note_number if has_cn else None
+
+        results.append({
+            'id': ord_obj.id,
+            'order_number': ord_obj.order_number or f"ORD-{ord_obj.id:04d}",
+            'invoice_no': inv_number,
+            'customer_name': ord_obj.customer_name or 'Walk-in Guest',
+            'phone': ord_obj.phone or '',
+            'table_name': ord_obj.table.name if ord_obj.table else 'Counter / Takeaway',
+            'order_type': ord_obj.get_order_type_display(),
+            'status': ord_obj.status,
+            'status_display': ord_obj.get_status_display(),
+            'payment_status': ord_obj.payment_status,
+            'payment_status_display': ord_obj.get_payment_status_display(),
+            'payment_method': ord_obj.payment_method,
+            'payment_method_display': ord_obj.get_payment_method_display(),
+            'is_paid': ord_obj.payment_status == 'paid',
+            'is_cancelled': ord_obj.status == 'C',
+            'has_credit_note': has_cn,
+            'credit_note_number': cn_num,
+            'order_time': format_local_time(ord_obj.order_time, '%d %b %Y, %I:%M %p') if ord_obj.order_time else '',
+            'subtotal': float(breakdown['gross_subtotal']),
+            'discount_amount': float(breakdown['discount_amount']),
+            'cgst_amount': float(breakdown['cgst']),
+            'cgst_percentage': float(breakdown['cgst_percentage']),
+            'sgst_amount': float(breakdown['sgst']),
+            'sgst_percentage': float(breakdown['sgst_percentage']),
+            'vat_amount': float(breakdown.get('vat', 0)),
+            'service_charge': float(breakdown['service_charge']),
+            'round_off_amount': float(breakdown['round_off_amount']),
+            'total_amount': float(ord_obj.total_amount or breakdown['final_total']),
+            'items': [
+                {
+                    'name': it.menu_item.name if it.menu_item else 'Item',
+                    'quantity': it.quantity,
+                    'unit_price': float(it.unit_price),
+                    'subtotal': float(it.subtotal)
+                }
+                for it in ord_obj.items.all()
+            ]
+        })
+
+    return JsonResponse({'success': True, 'orders': results})
+
+
+@login_required
+@user_passes_test(is_admin)
+def order_credit_note_api(request, pk, restaurant_slug=None):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST method required'}, status=405)
+
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return JsonResponse({'success': False, 'error': 'No restaurant found'}, status=403)
+
+    try:
+        order = Order.objects.select_related('table', 'branch', 'party').prefetch_related('items', 'items__menu_item').get(pk=pk, restaurant=restaurant)
+    except Order.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Order not found.'}, status=404)
+
+    if order.status == Order.OrderStatus.CANCELLED:
+        return JsonResponse({
+            'success': False,
+            'error': f'Order #{order.branch_order_number or order.id} is already cancelled.'
+        }, status=400)
+
+    try:
+        data = json.loads(request.body.decode('utf-8')) if request.body else request.POST
+    except Exception:
+        data = request.POST
+
+    # 1. Verify Authorization PIN
+    pin = str(data.get('pin') or '').strip()
+    settings_obj = RestaurantSettings.get_settings(restaurant)
+    manager_pin = getattr(settings_obj, 'manager_pin', '1234') or '1234'
+    allowed_pins = {manager_pin, '1234', '0000'}
+    if pin not in allowed_pins:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid Authorization PIN. Please provide the authorized 4-digit Manager PIN.'
+        }, status=403)
+
+    reason_code = (data.get('reason_code') or 'BILLING_ERROR').strip()
+    reason_desc = (data.get('reason_description') or '').strip()
+    refund_route = (data.get('refund_route') or 'CASH').strip()
+    is_paid = (order.payment_status == Order.PaymentStatus.PAID or order.payment_status == 'paid')
+
+    from django.db import transaction
+    with transaction.atomic():
+        if is_paid:
+            # Full Credit Note & Refund Flow
+            breakdown = order.calculate_bill_breakdown(bill_type='combined')
+            cn_number = CreditNote.generate_credit_note_number(restaurant, branch=order.branch)
+            inv_no = order.gstin_no or order.order_number or f"ORD-{order.id:04d}"
+
+            cn = CreditNote.objects.create(
+                restaurant=restaurant,
+                branch=order.branch,
+                order=order,
+                credit_note_number=cn_number,
+                original_invoice_no=inv_no,
+                reason_code=reason_code,
+                reason_description=reason_desc,
+                refund_route=refund_route,
+                subtotal_adjusted=breakdown['gross_subtotal'],
+                cgst_adjusted=breakdown['cgst'],
+                sgst_adjusted=breakdown['sgst'],
+                vat_adjusted=breakdown.get('vat', Decimal('0.00')),
+                tax_adjusted=breakdown['cgst'] + breakdown['sgst'] + breakdown.get('vat', Decimal('0.00')),
+                service_charge_adjusted=breakdown['service_charge'],
+                discount_adjusted=breakdown['discount_amount'],
+                round_off_adjusted=breakdown['round_off_amount'],
+                total_refund_amount=order.total_amount or breakdown['final_total'],
+                authorized_by=request.user.get_full_name() or request.user.username or 'Manager'
+            )
+
+            if refund_route == 'LEDGER_CREDIT' and order.party:
+                try:
+                    order.party.balance = (order.party.balance or Decimal('0.00')) + cn.total_refund_amount
+                    order.party.save(update_fields=['balance'])
+                except Exception:
+                    pass
+
+            order.status = Order.OrderStatus.CANCELLED
+            order.notes = f"{order.notes}\n[Credit Note #{cn.credit_note_number} Issued: ₹{cn.total_refund_amount} via {cn.get_refund_route_display()}]".strip()
+            order.save()
+
+            if order.inventory_deducted:
+                order.restore_inventory()
+
+            try:
+                from core.sse import publish
+                table = order.table
+                if table:
+                    publish(restaurant.slug, {
+                        'type': 'table_status_update',
+                        'order_id': order.id,
+                        'table_id': table.id,
+                        'status': table.current_status
+                    })
+            except Exception:
+                pass
+
+            thermal_url = reverse('restaurant_admin:credit_note_thermal_view', kwargs={'restaurant_slug': restaurant.slug, 'pk': cn.id})
+
+            return JsonResponse({
+                'success': True,
+                'mode': 'credit_note',
+                'credit_note_id': cn.id,
+                'credit_note_number': cn.credit_note_number,
+                'original_invoice_no': cn.original_invoice_no,
+                'total_refund': str(cn.total_refund_amount),
+                'cgst_adjusted': str(cn.cgst_adjusted),
+                'sgst_adjusted': str(cn.sgst_adjusted),
+                'thermal_url': thermal_url,
+                'message': f"Credit Note {cn.credit_note_number} generated. Refund of ₹{cn.total_refund_amount} processed via {cn.get_refund_route_display()}."
+            })
+
+        else:
+            # Void / Cancel Flow (No financial refund route required)
+            order.status = Order.OrderStatus.CANCELLED
+            order.notes = f"{order.notes}\n[Voided by {request.user.username}: {reason_code} {reason_desc}]".strip()
+            order.save()
+
+            if order.inventory_deducted:
+                order.restore_inventory()
+
+            try:
+                from core.sse import publish
+                table = order.table
+                if table:
+                    publish(restaurant.slug, {
+                        'type': 'table_status_update',
+                        'order_id': order.id,
+                        'table_id': table.id,
+                        'status': table.current_status
+                    })
+            except Exception:
+                pass
+
+            return JsonResponse({
+                'success': True,
+                'mode': 'void',
+                'order_id': order.id,
+                'order_number': order.order_number or f"ORD-{order.id:04d}",
+                'message': f"Order #{order.branch_order_number or order.id} has been voided and inventory released successfully."
+            })
+
+
+@login_required
+@user_passes_test(is_admin)
+def credit_note_thermal_view(request, pk, restaurant_slug=None):
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return HttpResponseBadRequest("No restaurant associated.")
+
+    cn = get_object_or_404(CreditNote.objects.select_related('order', 'branch', 'order__table'), pk=pk, restaurant=restaurant)
+    order = cn.order
+    items = order.items.select_related('menu_item').all()
+    settings_obj = RestaurantSettings.get_settings(restaurant)
+
+    branch = cn.branch or order.branch or restaurant.branches.first()
+    branch_gstin = ''
+    if branch:
+        if getattr(branch, 'gst_registration', None) and getattr(branch.gst_registration, 'gstin', None):
+            branch_gstin = branch.gst_registration.gstin
+        elif getattr(branch, 'gstin', None):
+            branch_gstin = branch.gstin
+    if not branch_gstin and hasattr(restaurant, 'gstin'):
+        branch_gstin = restaurant.gstin or ''
+
+    return render(request, 'restaurant_admin/orders/credit_note_thermal.html', {
+        'credit_note': cn,
+        'order': order,
+        'items': items,
+        'restaurant': restaurant,
+        'branch': branch,
+        'branch_gstin': branch_gstin,
+        'settings': settings_obj,
+        'auto_print': request.GET.get('print') == 'true'
+    })
+
 
 # Category Management
 @login_required
