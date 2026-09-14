@@ -370,6 +370,7 @@ class Order(models.Model):
         ADVANCE_PAID = 'advance_paid', _('Advance Paid')
         FAILED = 'F', _('Failed')
         COUNTER = 'C', _('Pay at Counter')
+        REFUNDED = 'refunded', _('Refunded')
 
     customer_name = models.CharField(max_length=200)
     phone = models.CharField(max_length=20, blank=True, default='')
@@ -582,6 +583,81 @@ class Order(models.Model):
     def __str__(self):
         return f"{self.order_number} - {self.customer_name} - {self.get_status_display()}"
 
+    def resolve_and_sync_party(self):
+        """
+        Phone-first customer party resolver and creator.
+        Prioritizes 10-digit/cleaned phone number matching so customers with identical names do not collide.
+        Falls back to exact name matching only if phone is not provided.
+        Automatically creates a customer Party if none exists.
+        """
+        if not self.restaurant:
+            return None
+
+        import re
+        from core.models import Party
+
+        cust_name = (self.customer_name or '').strip()
+        is_guest = not cust_name or cust_name.lower() in ['guest', 'walk-in', 'walk-in guest', 'walk-in-guest', 'walkin']
+
+        raw_phone = str(self.phone or '').strip()
+        digits = re.sub(r'\D', '', raw_phone)
+        clean_phone = digits[-10:] if len(digits) >= 10 else digits
+
+        # Anonymous walk-in with no phone number: do not create or link a party
+        if is_guest and (not clean_phone or len(clean_phone) < 7):
+            return None
+
+        party = None
+        base_qs = Party.objects.filter(restaurant=self.restaurant)
+
+        # 1. Primary Lookup: By Phone Number (clean 7+ digits)
+        if clean_phone and len(clean_phone) >= 7:
+            phone_matches = base_qs.filter(phone__icontains=clean_phone)
+            if self.branch:
+                party = phone_matches.filter(branch=self.branch).first() or phone_matches.first()
+            else:
+                party = phone_matches.first()
+        elif not is_guest:
+            # 2. Secondary Lookup: By Name (ONLY when phone number was NOT provided)
+            name_matches = base_qs.filter(name__iexact=cust_name)
+            if self.branch:
+                party = name_matches.filter(branch=self.branch).first() or name_matches.first()
+            else:
+                party = name_matches.first()
+
+        # 3. If Party found: update any missing / richer details
+        if party:
+            updated = []
+            if clean_phone and (not party.phone or len(str(party.phone)) < len(clean_phone)):
+                party.phone = clean_phone
+                updated.append('phone')
+            if not is_guest and cust_name and party.name != cust_name:
+                if party.name.lower().startswith('customer') or len(cust_name) > len(party.name):
+                    party.name = cust_name
+                    updated.append('name')
+            if self.branch and not party.branch:
+                party.branch = self.branch
+                updated.append('branch')
+            if updated:
+                party.save(update_fields=updated)
+        else:
+            # 4. Auto-create new customer Party
+            party_name = cust_name if not is_guest else (f"Customer {clean_phone}" if clean_phone else "Customer")
+            gstin_val = (self.gstin_no or '').strip()
+            party = Party.objects.create(
+                restaurant=self.restaurant,
+                branch=self.branch,
+                name=party_name,
+                party_type=Party.PartyType.CUSTOMER,
+                phone=clean_phone or raw_phone,
+                gstin=gstin_val if len(gstin_val) == 15 else '',
+                gst_registration_type='regular' if len(gstin_val) == 15 else Party.GstRegistrationType.UNREGISTERED,
+                balance_type=Party.BalanceType.RECEIVABLE
+            )
+
+        self.party = party
+        return party
+
     def save(self, *args, **kwargs):
         import uuid
         from django.db import transaction
@@ -600,14 +676,15 @@ class Order(models.Model):
         if self.table and not self.table_number:
             self.table_number = self.table.table_number
 
-        # Auto-link Party object if missing but customer_name and restaurant are set
-        if not self.party and self.customer_name and self.customer_name.lower() not in ['guest', 'walk-in guest'] and self.restaurant:
-            party_qs = Party.objects.filter(restaurant=self.restaurant, name__iexact=self.customer_name)
-            if self.branch:
-                party_qs = party_qs.filter(branch=self.branch)
-            matched_party = party_qs.first()
-            if matched_party:
-                self.party = matched_party
+        # Auto-link or auto-create Party object using phone-first identification
+        if not self.party and self.restaurant:
+            self.resolve_and_sync_party()
+        elif self.party and self.phone and not self.party.phone:
+            import re
+            digits = re.sub(r'\D', '', str(self.phone))
+            if digits:
+                self.party.phone = digits[-10:] if len(digits) >= 10 else digits
+                self.party.save(update_fields=['phone'])
 
         # Ensure draft orders always default to unpaid unless advance paid
         if (self.status == self.OrderStatus.DRAFT or self.status == 'DRAFT') and (not self.advance_amount_paid or self.advance_amount_paid <= 0):
@@ -1773,11 +1850,16 @@ class Party(models.Model):
         return f"{self.name} ({self.get_party_type_display()})"
 
     def get_sales_queryset(self):
+        import re
         from django.db.models import Q
         qs = Order.objects.filter(restaurant=self.restaurant) if self.restaurant else Order.objects.all()
-        cond = Q(party=self) | Q(customer_name__iexact=self.name)
         if self.phone:
-            cond |= Q(phone=self.phone)
+            clean_p = re.sub(r'\D', '', str(self.phone))
+            if len(clean_p) >= 10:
+                clean_p = clean_p[-10:]
+            cond = Q(party=self) | (Q(phone__icontains=clean_p) if clean_p else Q(pk=None))
+        else:
+            cond = Q(party=self) | Q(customer_name__iexact=self.name)
         return qs.filter(cond)
 
     @property
@@ -1790,6 +1872,7 @@ class Party(models.Model):
 
     @property
     def total_paid(self):
+        import re
         from decimal import Decimal
         from django.db.models import Sum, Q
         from core.models import AdvanceReceipt
@@ -1802,9 +1885,13 @@ class Party(models.Model):
         sales_paid_legacy = Decimal(str(sales_qs.filter(paid_amount=0, advance_amount_paid=0, payment_status__in=['paid', 'P']).aggregate(s=Sum('total_amount'))['s'] or 0))
 
         arc_qs = AdvanceReceipt.objects.filter(restaurant=self.restaurant) if self.restaurant else AdvanceReceipt.objects.all()
-        cond = Q(party=self) | Q(customer_name__iexact=self.name)
         if self.phone:
-            cond |= Q(phone=self.phone)
+            clean_p = re.sub(r'\D', '', str(self.phone))
+            if len(clean_p) >= 10:
+                clean_p = clean_p[-10:]
+            cond = Q(party=self) | (Q(phone__icontains=clean_p) if clean_p else Q(pk=None))
+        else:
+            cond = Q(party=self) | Q(customer_name__iexact=self.name)
         unlinked_advances = Decimal(str(arc_qs.filter(cond, status=AdvanceReceipt.ReceiptStatus.ACTIVE).aggregate(s=Sum('advance_amount'))['s'] or 0))
 
         sales_paid = sales_paid_direct + sales_paid_advance + sales_paid_legacy + unlinked_advances
@@ -1812,6 +1899,7 @@ class Party(models.Model):
 
     @property
     def current_balance(self):
+        import re
         from decimal import Decimal
         from django.db.models import Sum, Q
         from core.models import AdvanceReceipt
@@ -1824,9 +1912,13 @@ class Party(models.Model):
         unpaid_sales = sales_due_explicit + sales_due_legacy
 
         arc_qs = AdvanceReceipt.objects.filter(restaurant=self.restaurant) if self.restaurant else AdvanceReceipt.objects.all()
-        cond = Q(party=self) | Q(customer_name__iexact=self.name)
         if self.phone:
-            cond |= Q(phone=self.phone)
+            clean_p = re.sub(r'\D', '', str(self.phone))
+            if len(clean_p) >= 10:
+                clean_p = clean_p[-10:]
+            cond = Q(party=self) | (Q(phone__icontains=clean_p) if clean_p else Q(pk=None))
+        else:
+            cond = Q(party=self) | Q(customer_name__iexact=self.name)
         unlinked_advances = Decimal(str(arc_qs.filter(cond, status=AdvanceReceipt.ReceiptStatus.ACTIVE).aggregate(s=Sum('advance_amount'))['s'] or 0))
 
         if self.party_type == Party.PartyType.CUSTOMER:

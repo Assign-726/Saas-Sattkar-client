@@ -1,318 +1,281 @@
 {% load static %}
-<!-- Tally-Inspired Credit Note & Order Cancellation Modal -->
-<div id="tallyCreditNoteModal" class="tally-cn-veil" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="tallyCnTitle">
-  <div class="tally-cn-card">
+<!-- Exact Prototype Replication: Credit Note & Order Cancellation Desk -->
+<div id="tallyCreditNoteModal" class="cn-prototype-veil" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="cnProtoTitle">
+  <div class="cn-prototype-container">
     
-    <!-- Modal Header -->
-    <div class="tally-cn-header">
+    <!-- Top Bar: Header & Voucher Metadata Strip -->
+    <div class="cn-proto-header d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
       <div class="d-flex align-items-center gap-3">
-        <div class="tally-cn-icon">
-          <i class="bi bi-file-earmark-x-fill text-danger fs-5"></i>
-        </div>
         <div>
           <div class="d-flex align-items-center gap-2">
-            <h5 id="tallyCnTitle" class="mb-0 fw-bold text-dark" style="font-size: 1.1rem; letter-spacing: -0.01em;">
-              Order Cancellation & Credit Note Desk
-            </h5>
-            <span id="cnModeBadge" class="badge bg-secondary-subtle text-secondary border px-2 py-0.5 font-monospace" style="font-size: 0.72rem;">
-              DIRECT ENTRY
-            </span>
+            <h3 id="cnProtoTitle" class="cn-proto-title mb-0">Credit Note</h3>
+            <span class="cn-badge-refund">REFUND</span>
           </div>
-          <div class="text-muted small mt-0.5" style="font-size: 0.78rem;">
-            Keyboard-driven POS module · Fast order voiding & GST credit note generator
+          <div class="cn-proto-subtitle mt-0.5">
+            Issue against original sales voucher
           </div>
         </div>
       </div>
-      
-      <!-- Keyboard shortcuts bar in header -->
-      <div class="d-flex align-items-center gap-2">
-        <div class="tally-key-badge-strip d-none d-md-flex">
-          <span class="tally-key-hint"><kbd>↵ Enter</kbd> Next</span>
-          <span class="tally-key-hint"><kbd>⌫ Bksp</kbd> Prev</span>
-          <span class="tally-key-hint"><kbd>Esc</kbd> Close</span>
+
+      <div class="d-flex align-items-center gap-3">
+        <!-- Top-Right Voucher Metadata Box (Divided in 3 Columns) -->
+        <div class="cn-meta-card d-flex align-items-center">
+          <div class="cn-meta-col">
+            <div class="cn-meta-label">VOUCHER SERIES</div>
+            <div class="cn-meta-val text-primary font-monospace fw-bold" id="cnVoucherSeries">{{ next_credit_note_number|default:"CN-PREVIEW" }}</div>
+          </div>
+          <div class="cn-meta-divider"></div>
+          <div class="cn-meta-col">
+            <div class="cn-meta-label">DATE & TIME</div>
+            <div class="cn-meta-val" id="cnDateTime">14 Sep 2026, 04:10 PM</div>
+          </div>
+          <div class="cn-meta-divider"></div>
+          <div class="cn-meta-col">
+            <div class="cn-meta-label">TERMINAL / USER</div>
+            <div class="cn-meta-val">POS-01 • {{ request.user.username|default:"Admin" }}</div>
+          </div>
         </div>
-        <button type="button" class="tally-cn-close" id="cnModalCloseBtn" title="Close Desk (Esc)">
+        
+        <!-- Close Desk Trigger -->
+        <button type="button" class="cn-proto-close" id="cnModalCloseBtn" title="Close Desk (Esc)">
           &times;
         </button>
       </div>
     </div>
 
-    <!-- Modal Body (Two-Column Layout: Form on Left, Thermal Preview on Right) -->
-    <div class="tally-cn-body">
+    <!-- Hidden configuration values passed from backend -->
+    <input type="hidden" id="authManagerPinVal" value="{{ manager_pin|default:'1234' }}">
+    <input type="hidden" id="initialVoucherSeries" value="{{ next_credit_note_number|default:'CN-PREVIEW' }}">
+
+    <!-- Main Workspace Split: Left Form Cards (62%) & Right Physical Receipt (38%) -->
+    <div class="cn-proto-workspace">
       
-      <!-- Left Column: Form & Keyboard Engine -->
-      <div class="tally-cn-form-col">
+      <!-- Left Column: Form Cards & Workflow -->
+      <div class="cn-proto-form-col">
         <form id="tallyCnForm" onsubmit="return false;" autocomplete="off">
           
-          <!-- 1. Omni-Search Box (Unlocked in Direct Entry, Locked in Contextual Entry) -->
-          <div class="mb-3 tally-field-wrap position-relative" id="cnSearchWrap">
-            <label class="tally-label d-flex justify-content-between align-items-center" for="cnOmniSearch">
-              <span>1. SELECT ORDER / INVOICE <span class="text-danger">*</span></span>
-              <span class="tally-field-cue font-monospace text-muted" id="cnSearchStatusCue">Type Inv / Order / Mobile / Name</span>
-            </label>
-            <div class="input-group">
-              <span class="input-group-text bg-light text-secondary border-end-0">
-                <i class="bi bi-search"></i>
-              </span>
+          <!-- Duplicate Credit Note Blocked Warning Banner -->
+          <div id="cnDuplicateWarningBanner" class="alert alert-danger align-items-center mb-3 py-2 px-3 shadow-sm" style="display: none; background: #fef2f2; border: 1.5px solid #fecaca; border-radius: 10px; color: #991b1b; font-size: 13px; font-weight: 500;">
+            <i class="bi bi-exclamation-octagon-fill fs-5 me-2 flex-shrink-0 text-danger"></i>
+            <div id="cnDuplicateWarningText">
+              <!-- Dynamically populated via JS -->
+            </div>
+          </div>
+
+          <!-- Card 1: OMNI-SEARCH REFERENCE -->
+          <div class="cn-card mb-3 position-relative">
+            <div class="cn-card-label">OMNI-SEARCH REFERENCE</div>
+            
+            <div class="mb-3 position-relative">
+              <label class="cn-field-label" for="searchInvoice">
+                Invoice No. / Name / Mobile *
+              </label>
+              <div class="position-relative">
+                <input 
+                  type="text" 
+                  id="searchInvoice" 
+                  class="cn-input tally-input font-monospace" 
+                  placeholder="E.g. 4, TechNova..."
+                  autocomplete="off"
+                  data-tally-index="0"
+                />
+                <button type="button" id="cnUnlockSearchBtn" class="cn-unlock-btn" style="display: none;" title="Unlock to search another invoice (Backspace or Esc)">
+                  <i class="bi bi-pencil-square"></i> Change
+                </button>
+              </div>
+
+              <!-- Instant Omni-Search Live Dropdown -->
+              <div id="searchResultsDropdown" class="cn-search-dropdown shadow-lg" style="display: none;">
+                <!-- Populated via JS -->
+              </div>
+            </div>
+
+            <!-- Party Profile & GSTIN Validation Row (Hidden initially, appears on selection) -->
+            <div id="partyProfileRow" class="row g-3" style="display: none;">
+              <div class="col-md-6">
+                <label class="cn-field-label" for="partyProfile">Party Profile</label>
+                <input 
+                  type="text" 
+                  id="partyProfile" 
+                  class="cn-input cn-input-locked" 
+                  readonly 
+                  value="TechNova Solutions"
+                />
+              </div>
+              <div class="col-md-6">
+                <label class="cn-field-label" for="gstinValidation">GSTIN Validation</label>
+                <div class="cn-gstin-box" id="gstinValidationWrap">
+                  <span id="gstinValidationIcon"><i class="bi bi-building"></i></span>
+                  <span id="gstinValidation" class="font-monospace fw-bold">08AABCT1234E1Z9</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: REFUND PARAMETERS (GST COMPLIANT) -->
+          <div class="cn-card mb-3 cn-card-locked" id="refundParameters">
+            <div class="cn-card-label">REFUND PARAMETERS (GST COMPLIANT)</div>
+            
+            <div class="row g-3 mb-2">
+              <!-- Reason Code with Custom Dropdown -->
+              <div class="col-md-6 position-relative">
+                <label class="cn-field-label" for="reasonCode">Reason Code *</label>
+                <input 
+                  type="text" 
+                  id="reasonCode" 
+                  class="cn-input tally-input" 
+                  placeholder="Press Enter to Select..." 
+                  readonly
+                  data-tally-index="1"
+                />
+                <div id="reasonDropdown" class="cn-custom-dropdown shadow" style="display: none;">
+                  <div class="cn-dd-item" data-value="01 - Sales Return">01 - Sales Return</div>
+                  <div class="cn-dd-item" data-value="02 - Post-sale Discount">02 - Post-sale Discount</div>
+                  <div class="cn-dd-item" data-value="03 - Deficiency in Service">03 - Deficiency in Service</div>
+                  <div class="cn-dd-item" data-value="04 - Correction in Invoice">04 - Correction in Invoice</div>
+                  <div class="cn-dd-item" data-value="07 - Others (Custom)">07 - Others (Custom)</div>
+                </div>
+              </div>
+
+              <!-- Refund Route with Custom Dropdown -->
+              <div class="col-md-6 position-relative" id="refundRouteWrapper">
+                <label class="cn-field-label" for="refundRoute">Refund Route *</label>
+                <input 
+                  type="text" 
+                  id="refundRoute" 
+                  class="cn-input tally-input" 
+                  placeholder="Press Enter to Select..." 
+                  readonly
+                  data-tally-index="2"
+                />
+                <div id="routeDropdown" class="cn-custom-dropdown shadow" style="display: none;">
+                  <div class="cn-dd-item" data-value="Cash Drawer">Cash Drawer</div>
+                  <div class="cn-dd-item" data-value="Original Source (UPI/Card)">Original Source (UPI/Card)</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- "Others" Mandatory Audit Box (Unhidden only if 07 - Others selected) -->
+            <div id="othersBox" class="mt-3" style="display: none;">
+              <label class="cn-field-label" for="specifyReason">
+                Specify Reason <span class="text-danger">*</span>
+              </label>
               <input 
                 type="text" 
-                id="cnOmniSearch" 
-                class="form-control font-monospace border-start-0 tally-input" 
-                placeholder="Search by Invoice No, Order ID, Customer Name, or Phone..."
-                autocomplete="off"
-                data-tally-index="0"
+                id="specifyReason" 
+                class="cn-input tally-input cn-input-audit" 
+                placeholder="Enter reason for audit log..."
+                data-tally-index="3"
               />
-              <button class="btn btn-outline-secondary d-none" type="button" id="cnUnlockSearchBtn" title="Unlock search">
-                <i class="bi bi-lock-fill"></i> Locked
-              </button>
-            </div>
-            
-            <!-- Live Suggestions Dropdown -->
-            <div id="cnSearchResults" class="tally-search-dropdown shadow-lg" style="display: none;">
-              <!-- Dynamically populated -->
-            </div>
-          </div>
-
-          <!-- Order Summary Card (Filled when an order is selected) -->
-          <div id="cnOrderSummaryCard" class="cn-summary-card mb-3" style="display: none;">
-            <div class="d-flex justify-content-between align-items-start mb-2">
-              <div>
-                <div class="fw-bold text-dark font-monospace fs-6" id="cnSumOrderNum">ORD-0001</div>
-                <div class="text-muted small" id="cnSumCustomer">Guest · Table 1</div>
-              </div>
-              <div class="text-end">
-                <div class="fw-bold text-dark fs-6" id="cnSumTotal">₹0.00</div>
-                <span id="cnSumPayBadge" class="badge bg-success-subtle text-success border border-success-subtle px-2 py-0.5" style="font-size: 0.72rem;">PAID</span>
+              <div id="specifyReasonError" class="text-danger small mt-1 font-monospace" style="display: none; font-size: 11.5px;">
+                <i class="bi bi-exclamation-circle-fill me-1"></i> Specify Reason is required when selecting "07 - Others (Custom)".
               </div>
             </div>
-            
-            <!-- Tax & Split Detail Chips -->
-            <div class="cn-tax-chips d-flex flex-wrap gap-2 pt-1 border-top" style="font-size: 0.76rem;">
-              <span class="chip-item">Subtotal: <strong id="cnSumSubtotal">₹0.00</strong></span>
-              <span class="chip-item">CGST: <strong id="cnSumCgst">₹0.00</strong></span>
-              <span class="chip-item">SGST: <strong id="cnSumSgst">₹0.00</strong></span>
-              <span class="chip-item" id="cnSumDiscWrap">Disc: <strong id="cnSumDisc">-₹0.00</strong></span>
+          </div>
+
+          <!-- Card 3: Manager Authorization -->
+          <div class="cn-card-manager cn-card-locked d-flex justify-content-between align-items-center mb-4" id="managerAuth">
+            <div>
+              <div class="cn-manager-title">Manager Authorization</div>
+              <div class="cn-manager-sub">Required to open cash drawer. Default PIN: {{ manager_pin|default:"1234" }}</div>
+              <div id="pinErrorMsg" class="text-danger small mt-1 font-monospace" style="display: none; font-size: 11.5px;">
+                <i class="bi bi-exclamation-triangle-fill me-1"></i> <span id="pinErrorText">Invalid Authorization PIN. Default: {{ manager_pin|default:"1234" }}</span>
+              </div>
             </div>
-          </div>
-
-          <!-- Dynamic Mode Banner -->
-          <div id="cnFlowBanner" class="alert alert-info py-2 px-3 mb-3 d-flex align-items-center gap-2" style="font-size: 0.8rem; border-radius: 8px;">
-            <i class="bi bi-info-circle-fill fs-6" id="cnFlowIcon"></i>
-            <span id="cnFlowText">Please select an invoice or order to begin cancellation.</span>
-          </div>
-
-          <!-- 2. Reason Code Field -->
-          <div class="mb-3 tally-field-wrap">
-            <label class="tally-label" for="cnReasonCode">
-              2. CANCELLATION / CREDIT REASON <span class="text-danger">*</span>
-            </label>
-            <select id="cnReasonCode" class="form-select tally-input" data-tally-index="1">
-              <option value="BILLING_ERROR" selected>Billing / Punching Error</option>
-              <option value="DEFECTIVE_FOOD">Food Quality / Defective Item</option>
-              <option value="WRONG_ORDER">Wrong Item Served / Prepared</option>
-              <option value="CUSTOMER_DISPUTE">Customer Dispute / Dissatisfaction</option>
-              <option value="DELAYED_SERVICE">Excessive Preparation Delay</option>
-              <option value="OTHER">Other Reason</option>
-            </select>
-          </div>
-
-          <!-- Optional Reason Note -->
-          <div class="mb-3 tally-field-wrap" id="cnReasonDescWrap">
-            <label class="tally-label" for="cnReasonDesc">
-              REASON REMARKS / AUDIT NOTE <span class="text-muted small fw-normal">(Optional)</span>
-            </label>
-            <input 
-              type="text" 
-              id="cnReasonDesc" 
-              class="form-control tally-input" 
-              placeholder="e.g., Table 4 punch cancelled by manager on guest request" 
-              data-tally-index="2"
-            />
-          </div>
-
-          <!-- 3. Refund Route Field (Visible ONLY for PAID orders) -->
-          <div class="mb-3 tally-field-wrap" id="cnRefundRouteGroup">
-            <label class="tally-label" for="cnRefundRoute">
-              3. REFUND DISBURSEMENT ROUTE <span class="text-danger">*</span>
-            </label>
-            <select id="cnRefundRoute" class="form-select tally-input" data-tally-index="3">
-              <option value="CASH" selected>Cash Refund (Cash Drawer Payout)</option>
-              <option value="ORIGINAL_METHOD">Original Payment Route (UPI / Card Reversal)</option>
-              <option value="UPI">Instant UPI Transfer</option>
-              <option value="CARD">Card POS Reversal</option>
-              <option value="LEDGER_CREDIT">Customer Credit Ledger Note (Account Balance)</option>
-            </select>
-            <div class="form-text text-muted" style="font-size: 0.74rem;">
-              Select the route through which customer funds will be credited or returned.
-            </div>
-          </div>
-
-          <!-- 4. 4-Digit Authorization PIN Field -->
-          <div class="mb-4 tally-field-wrap">
-            <label class="tally-label d-flex justify-content-between align-items-center" for="cnAuthPin">
-              <span>4. MANAGER AUTHORIZATION PIN <span class="text-danger">*</span></span>
-              <span class="text-muted small">Default: 1234</span>
-            </label>
-            <div class="input-group">
-              <span class="input-group-text bg-light text-secondary">
-                <i class="bi bi-shield-lock-fill"></i>
-              </span>
+            <div>
               <input 
-                type="text" 
-                id="cnAuthPin" 
-                class="form-control text-center font-monospace tally-input tally-pin-input" 
+                type="password" 
+                id="managerPin" 
+                class="cn-pin-box tally-input" 
                 maxlength="4" 
                 placeholder="••••" 
                 autocomplete="off"
                 data-tally-index="4"
               />
             </div>
-            <div id="cnPinError" class="text-danger small mt-1" style="display: none; font-size: 0.75rem;">
-              <i class="bi bi-exclamation-triangle-fill me-1"></i> Invalid PIN. Authorization failed.
-            </div>
           </div>
 
-          <!-- Action Buttons / Submission -->
-          <div class="d-flex align-items-center justify-content-between gap-3 pt-2 border-top">
-            <button type="button" class="btn btn-outline-secondary px-3" id="cnCloseFooterBtn">
-              Cancel (Esc)
+          <!-- Bottom Floating Action Bar -->
+          <div class="cn-action-dock d-flex justify-content-center align-items-center gap-3">
+            <button type="button" class="cn-btn-reset" id="resetBtn">
+              Reset <kbd>Esc</kbd>
             </button>
-            <button 
-              type="button" 
-              class="btn btn-danger fw-bold px-4 shadow-sm tally-input" 
-              id="cnSubmitBtn" 
-              data-tally-index="5"
-            >
-              <i class="bi bi-check2-circle me-1"></i> 
-              <span id="cnSubmitBtnLabel">Cancel & Refund (Credit Note)</span>
+            <button type="button" class="cn-btn-submit tally-input" id="submitBtn" data-tally-index="5">
+              <span id="submitBtnText">Submit Refund</span> <kbd id="submitBtnKbd">Enter</kbd>
             </button>
           </div>
 
         </form>
       </div>
 
-      <!-- Right Column: Live Thermal Receipt Preview (80mm) -->
-      <div class="tally-cn-preview-col">
-        <div class="preview-header d-flex justify-content-between align-items-center mb-2">
-          <span class="fw-bold text-uppercase font-monospace" style="font-size: 0.75rem; letter-spacing: 0.05em; color: #475569;">
-            <i class="bi bi-receipt-cutoff me-1 text-primary"></i> LIVE 80mm THERMAL PREVIEW
-          </span>
-          <span class="badge bg-light text-dark border font-monospace" style="font-size: 0.7rem;">
-            LIVE SYNC
-          </span>
-        </div>
-
-        <!-- Simulated Thermal Receipt Paper -->
-        <div class="thermal-sim-paper" id="cnThermalPaper">
-          <div class="p-center p-bold fs-7 mb-1" id="thBranchName">RESTAURANT POINT OF SALE</div>
-          <div class="p-center text-muted" style="font-size: 9.5px;" id="thGstin">GSTIN: 27AAAAA0000A1Z5</div>
-          <div class="p-center my-1.5">
-            <span class="badge-thermal-title" id="thDocTitle">** CREDIT NOTE / REFUND **</span>
-          </div>
-          <div class="p-rule"></div>
-
-          <div class="p-row">
-            <span>Doc No:</span>
-            <span class="p-bold" id="thDocNo">CN-PREVIEW</span>
-          </div>
-          <div class="p-row">
-            <span>Date:</span>
-            <span id="thDate">--/--/----</span>
-          </div>
-          <div class="p-row">
-            <span>Orig Inv:</span>
-            <span class="p-bold" id="thOrigInv">----</span>
-          </div>
-          <div class="p-row">
-            <span>Customer:</span>
-            <span id="thCustomer">Walk-in Guest</span>
-          </div>
-          <div class="p-row">
-            <span>Table:</span>
-            <span id="thTable">Counter</span>
+      <!-- Right Column: Physical Receipt Panel (Bill Breakdown Preview) -->
+      <div class="cn-proto-receipt-col">
+        <div class="cn-receipt-paper position-relative" id="receiptPaper">
+          
+          <!-- Top Barcode Graphic -->
+          <div class="cn-barcode mb-3">
+            <div class="cn-barcode-lines"></div>
           </div>
 
-          <div class="p-rule"></div>
-
-          <!-- Items Table -->
-          <div class="p-table-head d-flex justify-content-between font-monospace" style="font-size: 9.5px; font-weight: 700;">
-            <span style="width: 50%;">ITEM</span>
-            <span style="width: 15%; text-align: center;">QTY</span>
-            <span style="width: 15%; text-align: right;">RATE</span>
-            <span style="width: 20%; text-align: right;">AMT</span>
-          </div>
-          <div class="p-rule" style="margin: 2px 0;"></div>
-          <div id="thItemsList" class="font-monospace" style="font-size: 9.5px;">
-            <div class="text-center text-muted py-2">No order items loaded</div>
+          <!-- Credit Note Voucher Title & Original Invoice No -->
+          <div class="d-flex justify-content-between align-items-center pb-2 border-bottom">
+            <span class="cn-rcpt-head">CREDIT NOTE VOUCHER</span>
+            <span class="cn-rcpt-inv font-monospace fw-bold" id="rcptInvNo">--</span>
           </div>
 
-          <div class="p-rule"></div>
-
-          <!-- Adjustments Breakdown -->
-          <div class="p-row">
-            <span>Subtotal Adj:</span>
-            <span id="thSubtotalAdj">- ₹0.00</span>
-          </div>
-          <div class="p-row text-success" id="thDiscRow" style="display: none;">
-            <span>Discount Rev:</span>
-            <span id="thDiscAdj">+ ₹0.00</span>
-          </div>
-          <div class="p-row">
-            <span>CGST Rev (<span id="thCgstRate">2.5%</span>):</span>
-            <span id="thCgstAdj">- ₹0.00</span>
-          </div>
-          <div class="p-row">
-            <span>SGST Rev (<span id="thSgstRate">2.5%</span>):</span>
-            <span id="thSgstAdj">- ₹0.00</span>
-          </div>
-          <div class="p-row" id="thVatRow" style="display: none;">
-            <span>VAT Rev:</span>
-            <span id="thVatAdj">- ₹0.00</span>
-          </div>
-          <div class="p-row" id="thServiceRow" style="display: none;">
-            <span>Service Charge:</span>
-            <span id="thServiceAdj">- ₹0.00</span>
+          <!-- Line Items List -->
+          <div class="cn-rcpt-items my-3" id="rcptLineItems">
+            <div class="text-center text-muted fst-italic py-4" style="font-size: 12.5px;">
+              Select invoice to load line items...
+            </div>
           </div>
 
-          <div class="p-dbl-rule"></div>
-
-          <div class="p-row p-bold fs-6">
-            <span id="thTotalLabel">TOTAL REFUND:</span>
-            <span id="thTotalAmount">₹0.00</span>
+          <!-- Reason & Route Live Sync Strip -->
+          <div class="cn-rcpt-params py-2 border-top">
+            <div class="d-flex justify-content-between mb-1">
+              <span class="text-primary fw-semibold" style="font-size: 12px;">Reason:</span>
+              <span class="text-end font-monospace" id="rcptReason" style="font-size: 12px; color: #1e293b;">--</span>
+            </div>
+            <div class="d-flex justify-content-between">
+              <span class="text-primary fw-semibold" style="font-size: 12px;">Route:</span>
+              <span class="text-end font-monospace" id="rcptMode" style="font-size: 12px; color: #1e293b;">--</span>
+            </div>
           </div>
 
-          <div class="p-rule"></div>
-
-          <div class="p-row" id="thRouteRow">
-            <span>Refund Route:</span>
-            <span class="p-bold" id="thRouteVal">Cash Payout</span>
-          </div>
-          <div class="p-row">
-            <span>Reason:</span>
-            <span id="thReasonVal">Billing Error</span>
-          </div>
-          <div class="p-row">
-            <span>Auth By:</span>
-            <span>Manager</span>
+          <!-- The Slanted Watermark Stamp (DRAFT -> Green REFUNDED) -->
+          <div class="cn-watermark-stamp draft-mode" id="rcptWatermark">
+            DRAFT
           </div>
 
-          <div class="p-rule"></div>
-
-          <div class="p-center text-muted" style="font-size: 8.5px; margin-top: 4px;">
-            <div>*** GOODS RESTOCKED TO INVENTORY ***</div>
-            <div id="thFooterNotice">Subject to local jurisdiction. Credit note audit copy.</div>
+          <!-- Taxable & GST Breakdown -->
+          <div class="cn-rcpt-tax-breakdown pt-3 border-top">
+            <div class="d-flex justify-content-between mb-1" style="font-size: 12px;">
+              <span class="text-muted">Taxable Value</span>
+              <span class="font-monospace" id="rcptTaxable">₹ 0.00</span>
+            </div>
+            <div class="d-flex justify-content-between mb-1" style="font-size: 12px;">
+              <span class="text-muted">CGST Amount</span>
+              <span class="font-monospace" id="rcptCgst">₹ 0.00</span>
+            </div>
+            <div class="d-flex justify-content-between mb-1" style="font-size: 12px;">
+              <span class="text-muted">SGST Amount</span>
+              <span class="font-monospace" id="rcptSgst">₹ 0.00</span>
+            </div>
           </div>
-        </div>
 
-        <!-- Post-Execution Print Trigger Bar -->
-        <div id="cnPrintSuccessBar" class="mt-3 text-center" style="display: none;">
-          <div class="alert alert-success py-2 px-3 mb-2 small d-flex align-items-center justify-content-center gap-1">
-            <i class="bi bi-check-circle-fill"></i>
-            <span id="cnSuccessMsg">Success!</span>
+          <!-- Solid Dark Line Separator -->
+          <div class="cn-rcpt-solid-rule my-3"></div>
+
+          <!-- Total Refund Footer -->
+          <div class="d-flex justify-content-between align-items-end pt-1">
+            <div>
+              <div class="cn-rcpt-total-label" id="rcptTotalLabel">TOTAL REFUND</div>
+            </div>
+            <div class="cn-rcpt-total-val font-monospace" id="rcptTotal">
+              ₹ 0.00
+            </div>
           </div>
-          <a id="cnPrintThermalLink" href="#" target="_blank" class="btn btn-dark w-100 py-2 fw-semibold">
-            <i class="bi bi-printer-fill me-1"></i> Print Thermal Credit Note
-          </a>
+
         </div>
       </div>
 
@@ -321,49 +284,93 @@
 </div>
 
 <style>
-/* Tally Credit Note Modal Styling */
-.tally-cn-veil {
+/* ══════════════════════════════════════════════════════════════════
+   EXACT REPLICATION: CREDIT NOTE DESK (creditNote.html PROTOTYPE)
+   ══════════════════════════════════════════════════════════════════ */
+.cn-prototype-veil {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.7);
+  background: rgba(15, 23, 42, 0.65);
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   z-index: 10000;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 16px;
-  animation: tallyFadeIn 0.15s ease-out;
-}
-
-@keyframes tallyFadeIn {
-  from { opacity: 0; transform: scale(0.98); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-.tally-cn-card {
-  background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  border: 1px solid #e2e8f0;
-  max-width: 960px;
-  width: 100%;
-  max-height: 94vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  padding: 24px 16px;
+  overflow-y: auto;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #1e293b;
 }
 
-.tally-cn-header {
-  padding: 14px 20px;
-  border-bottom: 1px solid #e2e8f0;
+.cn-prototype-container {
   background: #f8fafc;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.3);
+  max-width: 1240px;
+  width: 100%;
+  padding: 24px 28px 36px;
+  position: relative;
 }
 
-.tally-cn-close {
+/* Header Styling */
+.cn-proto-title {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.cn-badge-refund {
+  background: #fee2e2;
+  color: #ef4444;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.cn-proto-subtitle {
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+/* Metadata Strip Box */
+.cn-meta-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.cn-meta-col {
+  padding: 2px 10px;
+}
+
+.cn-meta-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cn-meta-val {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.cn-meta-divider {
+  width: 1px;
+  height: 24px;
+  background: #e2e8f0;
+}
+
+.cn-proto-close {
   background: none;
   border: none;
   font-size: 26px;
@@ -371,150 +378,449 @@
   cursor: pointer;
   line-height: 1;
   padding: 0 6px;
-}
-.tally-cn-close:hover { color: #0f172a; }
-
-.tally-key-hint {
-  font-size: 11px;
-  color: #64748b;
-  margin-right: 6px;
-}
-.tally-key-hint kbd {
-  background: #e2e8f0;
-  color: #1e293b;
-  border: 1px solid #cbd5e1;
   border-radius: 4px;
-  padding: 2px 5px;
-  font-family: monospace;
+  transition: all 0.15s;
 }
 
-.tally-cn-body {
+.cn-proto-close:hover {
+  color: #0f172a;
+  background: #e2e8f0;
+}
+
+/* Two-Column Layout */
+.cn-proto-workspace {
   display: flex;
-  flex: 1;
-  overflow: hidden;
+  gap: 24px;
+  align-items: flex-start;
 }
 
-.tally-cn-form-col {
-  flex: 1.15;
-  padding: 20px;
-  overflow-y: auto;
-  border-right: 1px solid #e2e8f0;
+.cn-proto-form-col {
+  flex: 1.35;
 }
 
-.tally-cn-preview-col {
-  flex: 0.85;
-  background: #f1f5f9;
-  padding: 20px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
+.cn-proto-receipt-col {
+  flex: 0.95;
+  position: sticky;
+  top: 10px;
 }
 
-.tally-label {
-  font-size: 0.74rem;
-  font-weight: 700;
+/* Cards on Left */
+.cn-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 18px 22px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: opacity 0.2s ease;
+}
+
+.cn-card-locked {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.cn-card-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #475569;
+  margin-bottom: 14px;
+}
+
+.cn-field-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #334155;
   margin-bottom: 5px;
   display: block;
 }
 
-/* Tally Block Cursor Simulation */
-.tally-input {
-  transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
-  font-size: 0.88rem;
-}
-.tally-input:focus,
-.tally-input.tally-focused {
-  border-color: #0284c7 !important;
-  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.25) !important;
-  outline: none !important;
-}
-
-/* High-contrast block selection style on Tally focus */
-.tally-input.tally-block-cursor {
-  background-color: #f0fdf4 !important;
+/* Inputs */
+.cn-input {
+  width: 100%;
+  height: 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 13.5px;
+  color: #1e293b;
+  outline: none;
+  background: #ffffff;
+  transition: all 0.15s ease;
 }
 
-/* PIN Masking with -webkit-text-security: disc to preserve block cursor selection */
-.tally-pin-input {
-  -webkit-text-security: disc;
-  font-size: 1.3rem;
-  letter-spacing: 0.4em;
-  font-weight: 700;
+.cn-input:focus,
+.cn-input.tally-focused {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18) !important;
 }
 
-/* Search Dropdown */
-.tally-search-dropdown {
+.cn-input-locked {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #1e293b !important;
+  font-weight: 600 !important;
+  cursor: not-allowed;
+}
+
+.cn-unlock-btn {
   position: absolute;
-  top: 100%;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.cn-unlock-btn:hover {
+  background: #cbd5e1;
+  color: #0f172a;
+}
+
+.cn-gstin-box {
+  height: 42px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #0284c7;
+}
+
+.cn-input-audit {
+  background: #fffbeb !important;
+  border-color: #fde68a !important;
+}
+
+.cn-input-audit:focus {
+  border-color: #f59e0b !important;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2) !important;
+}
+
+/* Omni-Search Dropdown */
+.cn-search-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
   left: 0;
   right: 0;
   background: #ffffff;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
-  max-height: 240px;
+  max-height: 260px;
   overflow-y: auto;
-  z-index: 10001;
-  margin-top: 4px;
+  z-index: 10005;
 }
-.tally-search-item {
-  padding: 8px 14px;
+
+.cn-search-row {
+  padding: 10px 14px;
   border-bottom: 1px solid #f1f5f9;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transition: background 0.12s;
-}
-.tally-search-item:last-child { border-bottom: none; }
-.tally-search-item:hover,
-.tally-search-item.tally-selected-row {
-  background: #eff6ff;
+  transition: all 0.12s;
 }
 
-/* Summary Card */
-.cn-summary-card {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 12px 14px;
+.cn-search-row:last-child {
+  border-bottom: none;
 }
 
-/* Thermal Simulator Paper */
-.thermal-sim-paper {
+.cn-search-row:hover,
+.cn-search-row.selected-row {
+  background: #f0f4ff;
+  border-left: 3px solid #4f46e5;
+}
+
+/* Custom Dropdown for Reason Code & Refund Route */
+.cn-custom-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
   background: #ffffff;
   border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  padding: 14px 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-  font-family: 'IBM Plex Mono', 'Courier New', Courier, monospace;
-  font-size: 10.5px;
-  line-height: 1.38;
-  color: #000000;
-  flex: 1;
+  border-radius: 8px;
+  z-index: 10006;
+  overflow: hidden;
 }
 
-.p-center { text-align: center; }
-.p-bold { font-weight: 700; }
-.p-rule { border-top: 1px dashed #000000; margin: 5px 0; }
-.p-dbl-rule { border-top: 2px dashed #000000; margin: 6px 0; }
-.p-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
-.p-row span:first-child { color: #333; }
-.p-row span:last-child { font-weight: 600; text-align: right; }
+.cn-dd-item {
+  padding: 9px 14px;
+  font-size: 13px;
+  color: #1e293b;
+  cursor: pointer;
+  border-bottom: 1px solid #f8fafc;
+  transition: all 0.1s;
+}
 
-.badge-thermal-title {
-  display: inline-block;
-  border: 1.5px solid #000;
-  padding: 1px 6px;
+.cn-dd-item:last-child {
+  border-bottom: none;
+}
+
+.cn-dd-item:hover,
+.cn-dd-item.selected {
+  background: #eef2ff;
+  color: #4338ca;
+  font-weight: 600;
+}
+
+/* Card 3: Manager Authorization */
+.cn-card-manager {
+  background: #fffdf5;
+  border: 1px solid #fef08a;
+  border-radius: 10px;
+  padding: 14px 22px;
+  transition: opacity 0.2s ease;
+}
+
+.cn-manager-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #92400e;
+}
+
+.cn-manager-sub {
+  font-size: 11px;
+  color: #b45309;
+}
+
+.cn-pin-box {
+  width: 140px;
+  height: 40px;
+  text-align: center;
+  font-size: 22px;
+  letter-spacing: 0.35em;
   font-weight: 700;
-  font-size: 10.5px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  outline: none;
+  transition: all 0.15s;
 }
 
-@media (max-width: 768px) {
-  .tally-cn-body { flex-direction: column; }
-  .tally-cn-preview-col { display: none; }
-  .tally-cn-form-col { border-right: none; }
+.cn-pin-box:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.pin-error-flash {
+  border-color: #ef4444 !important;
+  background: #fef2f2 !important;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.3) !important;
+  animation: shake 0.3s ease;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+/* Action Dock */
+.cn-action-dock {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 30px;
+  padding: 6px 14px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.cn-btn-reset {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cn-btn-reset kbd,
+.cn-btn-submit kbd {
+  font-family: monospace;
+  font-size: 10px;
+  padding: 1.5px 5px;
+  border-radius: 4px;
+}
+
+.cn-btn-reset kbd {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.cn-btn-submit {
+  background: #5046e5;
+  color: #ffffff;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 22px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 12px rgba(80, 70, 229, 0.3);
+  transition: all 0.15s;
+}
+
+.cn-btn-submit:hover {
+  background: #4338ca;
+  transform: translateY(-1px);
+}
+
+.cn-btn-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.cn-btn-submit kbd {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+/* ── RIGHT PANEL: PHYSICAL BILL BREAKDOWN RECEIPT ─────────────── */
+.cn-receipt-paper {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 22px 24px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  min-height: 480px;
+}
+
+.cn-barcode {
+  display: flex;
+  justify-content: center;
+}
+
+.cn-barcode-lines {
+  height: 38px;
+  width: 90%;
+  background: repeating-linear-gradient(
+    90deg,
+    #94a3b8,
+    #94a3b8 2px,
+    transparent 2px,
+    transparent 4px,
+    #94a3b8 4px,
+    #94a3b8 7px,
+    transparent 7px,
+    transparent 9px
+  );
+  opacity: 0.65;
+}
+
+.cn-rcpt-head {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 0.05em;
+}
+
+.cn-rcpt-inv {
+  font-size: 12.5px;
+  color: #0f172a;
+}
+
+.cn-rcpt-item-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: #1e293b;
+}
+
+/* Watermark Stamp (Draft vs Refunded) */
+.cn-watermark-stamp {
+  position: absolute;
+  top: 48%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-14deg);
+  pointer-events: none;
+  font-family: 'Inter', sans-serif;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  user-select: none;
+  transition: all 0.3s cubic-bezier(.34, 1.56, .64, 1);
+}
+
+.cn-watermark-stamp.draft-mode {
+  font-size: 52px;
+  color: rgba(203, 213, 225, 0.4);
+  border: none;
+}
+
+.cn-watermark-stamp.refunded-mode {
+  font-size: 42px;
+  color: #15803d;
+  border: 3.5px solid #16a34a;
+  padding: 4px 22px;
+  border-radius: 8px;
+  background: rgba(240, 253, 244, 0.9);
+  transform: translate(-50%, -50%) rotate(-12deg);
+  box-shadow: 0 0 20px rgba(22, 163, 74, 0.25);
+}
+
+.cn-watermark-stamp.already-refunded-mode {
+  font-size: 32px;
+  color: #dc2626;
+  border: 3.5px solid #dc2626;
+  padding: 6px 18px;
+  border-radius: 8px;
+  background: rgba(254, 242, 242, 0.96);
+  transform: translate(-50%, -50%) rotate(-12deg);
+  box-shadow: 0 0 20px rgba(220, 38, 38, 0.25);
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.disabled-cn-row {
+  opacity: 0.88;
+  cursor: pointer;
+}
+.disabled-cn-row:hover {
+  background: #fef2f2 !important;
+}
+
+.cn-rcpt-solid-rule {
+  border-top: 1.5px solid #0f172a;
+}
+
+.cn-rcpt-total-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.cn-rcpt-total-val {
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+@media (max-width: 900px) {
+  .cn-proto-workspace { flex-direction: column; }
+  .cn-proto-receipt-col { width: 100%; position: static; }
 }
 </style>

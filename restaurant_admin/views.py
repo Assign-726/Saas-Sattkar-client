@@ -1005,37 +1005,24 @@ def order_create_manual(request, restaurant_slug=None):
                 excise_bill_no=excise_bill_no or None,
             )
 
-        if customer_name and customer_name.strip().lower() not in ['guest', 'walk-in', 'walk-in guest']:
-            party_lookup = {'restaurant': restaurant, 'name__iexact': customer_name.strip()}
-            if active_branch:
-                party_lookup['branch'] = active_branch
-            existing_party = Party.objects.filter(**party_lookup).first()
-            if not existing_party and phone and len(phone) >= 4:
-                # Also try looking up party by phone (exact or substring)
-                existing_party = Party.objects.filter(restaurant=restaurant, phone__icontains=phone).first()
+        party_gstin_input = (data.get('party_gstin') or data.get('customer_gstin') or '').strip()
+        if party_gstin_input and len(party_gstin_input) == 15 and not order.gstin_no:
+            order.gstin_no = party_gstin_input
 
-            party_gstin_input = (data.get('party_gstin') or data.get('customer_gstin') or '').strip()
-
-            if existing_party:
-                party = existing_party
-                # If order has incomplete or missing phone but party has full phone, auto-populate order.phone
-                if party.phone and (not order.phone or len(str(order.phone)) < len(str(party.phone))):
-                    order.phone = party.phone
-                    order.save(update_fields=['phone'])
-                if party_gstin_input and not party.gstin:
+        # Resolve, link, or auto-create Party using phone-first matching
+        if customer_name or phone:
+            order.customer_name = customer_name or order.customer_name
+            order.phone = phone or order.phone
+            if not order.branch and active_branch:
+                order.branch = active_branch
+            party = order.resolve_and_sync_party()
+            if party:
+                if party_gstin_input and not party.gstin and len(party_gstin_input) == 15:
                     party.gstin = party_gstin_input
-                    party.save(update_fields=['gstin'])
-            else:
-                party = Party.objects.create(
-                    restaurant=restaurant,
-                    branch=active_branch,
-                    name=customer_name.strip(),
-                    party_type=Party.PartyType.CUSTOMER,
-                    phone=phone or '',
-                    gstin=party_gstin_input or ''
-                )
-            order.party = party
-            order.save(update_fields=['party'])
+                    party.gst_registration_type = Party.GstRegistrationType.REGULAR
+                    party.save(update_fields=['gstin', 'gst_registration_type'])
+                order.party = party
+                order.save(update_fields=['party'])
         else:
             if order.party and (not customer_name or customer_name.strip().lower() in ['guest', 'walk-in', 'walk-in guest']):
                 order.party = None
@@ -1426,7 +1413,7 @@ def order_create_manual(request, restaurant_slug=None):
 
     cust_parties_qs = Party.objects.filter(restaurant=restaurant, party_type__in=['customer', 'both'])
     if branch_obj:
-        cust_parties_qs = cust_parties_qs.filter(branch=branch_obj)
+        cust_parties_qs = cust_parties_qs.filter(Q(branch=branch_obj) | Q(branch__isnull=True))
     cust_parties_qs = cust_parties_qs.order_by('name')
     cust_parties_list = [
         {
@@ -1765,6 +1752,20 @@ def order_edit_manual(request, pk, restaurant_slug=None):
         excise_bill_no = (data.get('excise_bill_no') or data.get('excise') or '').strip()
         if gstin_no: order.gstin_no = gstin_no
         if excise_bill_no: order.excise_bill_no = excise_bill_no
+        party_gstin_input = (data.get('party_gstin') or data.get('customer_gstin') or '').strip()
+        if party_gstin_input and len(party_gstin_input) == 15 and not order.gstin_no:
+            order.gstin_no = party_gstin_input
+
+        # Sync party
+        if order.customer_name or order.phone:
+            active_b = get_active_branch(request, restaurant)
+            if not order.branch and active_b:
+                order.branch = active_b
+            party = order.resolve_and_sync_party()
+            if party and party_gstin_input and not party.gstin and len(party_gstin_input) == 15:
+                party.gstin = party_gstin_input
+                party.gst_registration_type = Party.GstRegistrationType.REGULAR
+                party.save(update_fields=['gstin', 'gst_registration_type'])
 
         table_id = data.get('table_id') or data.get('table')
         if table_id:
@@ -2396,7 +2397,7 @@ def party_list(request, restaurant_slug=None):
 
     parties = Party.objects.filter(restaurant=restaurant)
     if active_branch:
-        parties = parties.filter(branch=active_branch)
+        parties = parties.filter(Q(branch=active_branch) | Q(branch__isnull=True))
     if tab == 'vendor':
         parties = parties.filter(party_type__in=['vendor', 'both'])
     elif tab == 'customer':
@@ -2473,16 +2474,22 @@ def party_ledger_detail(request, restaurant_slug, pk):
         purchases = purchases.filter(Q(branch=active_branch) | Q(branch__isnull=True))
     purchases = purchases.order_by('-purchase_date', '-id')
 
-    sales = Order.objects.filter(restaurant=restaurant).filter(
-        Q(party=party) | Q(customer_name__iexact=party.name) | (Q(phone=party.phone) if party.phone else Q(pk=None))
-    ).exclude(status='C')
+    import re
+    if party.phone:
+        digits = re.sub(r'\D', '', str(party.phone))
+        clean_p = digits[-10:] if len(digits) >= 10 else digits
+        sales_cond = Q(party=party) | (Q(phone__icontains=clean_p) if clean_p else Q(pk=None))
+        adv_cond = Q(party=party) | (Q(phone__icontains=clean_p) if clean_p else Q(pk=None))
+    else:
+        sales_cond = Q(party=party) | Q(customer_name__iexact=party.name)
+        adv_cond = Q(party=party) | Q(customer_name__iexact=party.name)
+
+    sales = Order.objects.filter(restaurant=restaurant).filter(sales_cond).exclude(status='C')
     if active_branch:
         sales = sales.filter(Q(branch=active_branch) | Q(branch__isnull=True))
     sales = sales.order_by('-order_time', '-id')
 
-    advance_receipts = AdvanceReceipt.objects.filter(restaurant=restaurant).filter(
-        Q(party=party) | Q(customer_name__iexact=party.name) | (Q(phone=party.phone) if party.phone else Q(pk=None))
-    )
+    advance_receipts = AdvanceReceipt.objects.filter(restaurant=restaurant).filter(adv_cond)
     if active_branch:
         advance_receipts = advance_receipts.filter(Q(branch=active_branch) | Q(branch__isnull=True))
     advance_receipts = advance_receipts.order_by('-created_at', '-id')
@@ -2987,10 +2994,14 @@ def dashboard(request, restaurant_slug=None):
         menu_items_qs_dash = menu_items_qs_dash.filter(branch=active_branch)
     total_menu_items = menu_items_qs_dash.count()
     
-    # Calculate total revenue from completed/served orders only (excluding drafts)
+    # Calculate total revenue from completed/served orders only (excluding drafts, cancelled, and refunded)
     total_revenue = base_orders.filter(
-        status__in=['C', 'S']  # Completed or Served
-    ).exclude(status=Order.OrderStatus.DRAFT).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+        status__in=[Order.OrderStatus.COMPLETED, Order.OrderStatus.SERVED]
+    ).exclude(
+        status__in=[Order.OrderStatus.DRAFT, Order.OrderStatus.CANCELLED]
+    ).exclude(
+        payment_status=Order.PaymentStatus.REFUNDED
+    ).aggregate(Sum('total_amount'))['total_amount__sum'] or Decimal('0.00')
 
     # Today's advance collections (Cashflow for end-of-day drawer balance)
     today_advance_collected = base_orders.filter(
@@ -4026,7 +4037,7 @@ def _filter_order_queryset(request, restaurant, ignore_order_type=False):
             except ValueError:
                 pass
 
-    return orders_qs.select_related('table', 'table__zone', 'restaurant', 'branch').prefetch_related('items', 'items__menu_item').order_by('-order_time')
+    return orders_qs.select_related('table', 'table__zone', 'restaurant', 'branch', 'credit_note').prefetch_related('items', 'items__menu_item').order_by('-order_time')
 
 
 @login_required
@@ -4052,13 +4063,13 @@ def order_records(request, restaurant_slug=None):
     else:
         orders_qs = base_orders_qs
 
-    # Compute Summary Stats
+    # Compute Summary Stats (strictly excluding cancelled and refunded orders from revenue)
     total_orders = orders_qs.count()
-    total_revenue = orders_qs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-
-    paid_revenue = orders_qs.aggregate(total=Sum('paid_amount'))['total'] or Decimal('0.00')
-
-    avg_order_value = (total_revenue / Decimal(total_orders)) if total_orders > 0 else Decimal('0.00')
+    active_orders_qs = orders_qs.exclude(status=Order.OrderStatus.CANCELLED).exclude(payment_status=Order.PaymentStatus.REFUNDED)
+    active_orders_count = active_orders_qs.count()
+    total_revenue = active_orders_qs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    paid_revenue = active_orders_qs.aggregate(total=Sum('paid_amount'))['total'] or Decimal('0.00')
+    avg_order_value = (total_revenue / Decimal(active_orders_count)) if active_orders_count > 0 else Decimal('0.00')
 
     # Paginate
     try:
@@ -4614,25 +4625,22 @@ def order_settle_api(request, pk, restaurant_slug=None):
     if registered_name and registered_name.lower() not in ['guest', 'walk-in', 'walk-in guest']:
         order.customer_name = registered_name
 
-    if order.customer_name and order.customer_name.lower() not in ['guest', 'walk-in', 'walk-in guest']:
-        party = order.party
-        if not party:
-            party, _ = Party.objects.get_or_create(
-                restaurant=restaurant,
-                name__iexact=order.customer_name,
-                defaults={
-                    'name': order.customer_name,
-                    'party_type': Party.PartyType.CUSTOMER,
-                    'phone': order.phone,
-                    'gstin': customer_gstin if len(customer_gstin) == 15 else '',
-                    'gst_registration_type': 'regular' if len(customer_gstin) == 15 else 'unregistered'
-                }
-            )
-            order.party = party
+    phone_input = (data.get('phone_number') or data.get('phone') or '').strip()
+    if phone_input:
+        order.phone = phone_input
+
+    # Ensure branch is set
+    active_b = get_active_branch(request, restaurant)
+    if not order.branch and active_b:
+        order.branch = active_b
+
+    party = order.resolve_and_sync_party()
+    if party:
         if customer_gstin and len(customer_gstin) == 15:
             party.gstin = customer_gstin
-            party.gst_registration_type = 'regular'
+            party.gst_registration_type = Party.GstRegistrationType.REGULAR
             party.save(update_fields=['gstin', 'gst_registration_type'])
+        order.party = party
 
     order.save()
 
@@ -5007,8 +5015,12 @@ def order_omni_search_api(request, restaurant_slug=None):
     q = (request.GET.get('q') or '').strip()
     order_id = request.GET.get('order_id')
 
+    base_qs = Order.objects.filter(restaurant=restaurant)
+    if active_branch:
+        base_qs = base_qs.filter(branch=active_branch)
+
     if order_id and str(order_id).strip().isdigit():
-        target_order = Order.objects.filter(restaurant=restaurant, pk=int(order_id.strip())).select_related('table', 'branch', 'credit_note').prefetch_related('items', 'items__menu_item').first()
+        target_order = base_qs.filter(pk=int(order_id.strip())).select_related('table', 'branch', 'credit_note').prefetch_related('items', 'items__menu_item').first()
         orders_qs = [target_order] if target_order else []
     elif q:
         from django.db.models import Q
@@ -5022,13 +5034,9 @@ def order_omni_search_api(request, restaurant_slug=None):
         elif q.lower().startswith('ord-') and q[4:].isdigit():
             q_filter |= Q(id=int(q[4:])) | Q(branch_order_number=int(q[4:]))
 
-        orders_qs = Order.objects.filter(restaurant=restaurant).filter(q_filter).select_related('table', 'branch', 'credit_note').prefetch_related('items', 'items__menu_item').order_by('-order_time')[:25]
+        orders_qs = base_qs.filter(q_filter).select_related('table', 'branch', 'credit_note').prefetch_related('items', 'items__menu_item').order_by('-order_time')[:25]
     else:
-        base_qs = Order.objects.filter(restaurant=restaurant)
-        if active_branch and base_qs.filter(branch=active_branch).exists():
-            orders_qs = base_qs.filter(branch=active_branch).select_related('table', 'branch', 'credit_note').prefetch_related('items', 'items__menu_item').order_by('-order_time')[:25]
-        else:
-            orders_qs = base_qs.select_related('table', 'branch', 'credit_note').prefetch_related('items', 'items__menu_item').order_by('-order_time')[:25]
+        orders_qs = base_qs.select_related('table', 'branch', 'credit_note').prefetch_related('items', 'items__menu_item').order_by('-order_time')[:25]
 
     results = []
     for ord_obj in orders_qs:
@@ -5050,7 +5058,27 @@ def order_omni_search_api(request, restaurant_slug=None):
 
         inv_number = ord_obj.gstin_no or ord_obj.order_number or f"ORD-{ord_obj.id:04d}"
         has_cn = hasattr(ord_obj, 'credit_note')
-        cn_num = ord_obj.credit_note.credit_note_number if has_cn else None
+        if not has_cn:
+            has_cn = CreditNote.objects.filter(order=ord_obj).exists()
+        cn_num = None
+        if has_cn:
+            try:
+                cn_num = ord_obj.credit_note.credit_note_number
+            except Exception:
+                cn_obj = CreditNote.objects.filter(order=ord_obj).first()
+                cn_num = cn_obj.credit_note_number if cn_obj else None
+
+        is_paid = (ord_obj.payment_status == 'paid' or ord_obj.payment_status == Order.PaymentStatus.PAID)
+        is_refunded = (ord_obj.payment_status == 'refunded' or ord_obj.payment_status == Order.PaymentStatus.REFUNDED or has_cn)
+        is_cancelled = (ord_obj.status == 'C' or ord_obj.status == Order.OrderStatus.CANCELLED)
+        can_issue = (not has_cn) and (not is_cancelled) and (not is_refunded)
+        block_reason = ''
+        if has_cn:
+            block_reason = f"Credit Note #{cn_num} has already been issued for this invoice."
+        elif is_cancelled:
+            block_reason = f"Order #{ord_obj.branch_order_number or ord_obj.id} is already cancelled."
+        elif is_refunded:
+            block_reason = f"Order #{ord_obj.branch_order_number or ord_obj.id} has already been refunded."
 
         results.append({
             'id': ord_obj.id,
@@ -5066,10 +5094,13 @@ def order_omni_search_api(request, restaurant_slug=None):
             'payment_status_display': ord_obj.get_payment_status_display(),
             'payment_method': ord_obj.payment_method,
             'payment_method_display': ord_obj.get_payment_method_display(),
-            'is_paid': ord_obj.payment_status == 'paid',
-            'is_cancelled': ord_obj.status == 'C',
+            'is_paid': is_paid,
+            'is_refunded': is_refunded,
+            'is_cancelled': is_cancelled,
             'has_credit_note': has_cn,
             'credit_note_number': cn_num,
+            'can_issue_credit_note': can_issue,
+            'block_reason': block_reason,
             'order_time': format_local_time(ord_obj.order_time, '%d %b %Y, %I:%M %p') if ord_obj.order_time else '',
             'subtotal': float(breakdown['gross_subtotal']),
             'discount_amount': float(breakdown['discount_amount']),
@@ -5092,7 +5123,16 @@ def order_omni_search_api(request, restaurant_slug=None):
             ]
         })
 
-    return JsonResponse({'success': True, 'orders': results})
+    next_cn_number = CreditNote.generate_credit_note_number(restaurant, branch=active_branch) if restaurant else 'CN-PREVIEW'
+    settings_obj = RestaurantSettings.get_settings(restaurant) if restaurant else None
+    manager_pin_val = getattr(settings_obj, 'manager_pin', '1234') or '1234'
+
+    return JsonResponse({
+        'success': True,
+        'orders': results,
+        'next_voucher_series': next_cn_number,
+        'manager_pin': manager_pin_val,
+    })
 
 
 @login_required
@@ -5110,6 +5150,16 @@ def order_credit_note_api(request, pk, restaurant_slug=None):
     except Order.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Order not found.'}, status=404)
 
+    # 1. Enforce strict single credit note rule per invoice/order
+    existing_cn = getattr(order, 'credit_note', None) or CreditNote.objects.filter(order=order).first()
+    if existing_cn or order.payment_status == Order.PaymentStatus.REFUNDED:
+        cn_num = existing_cn.credit_note_number if existing_cn else 'Existing'
+        inv_no = order.gstin_no or order.order_number or f"ORD-{order.id:04d}"
+        return JsonResponse({
+            'success': False,
+            'error': f'Credit Note #{cn_num} has already been issued for Invoice {inv_no}. Duplicate credit notes are not allowed.'
+        }, status=400)
+
     if order.status == Order.OrderStatus.CANCELLED:
         return JsonResponse({
             'success': False,
@@ -5121,16 +5171,16 @@ def order_credit_note_api(request, pk, restaurant_slug=None):
     except Exception:
         data = request.POST
 
-    # 1. Verify Authorization PIN
+    # 2. Verify Authorization PIN
     pin = str(data.get('pin') or '').strip()
     settings_obj = RestaurantSettings.get_settings(restaurant)
-    manager_pin = getattr(settings_obj, 'manager_pin', '1234') or '1234'
-    allowed_pins = {manager_pin, '1234', '0000'}
+    manager_pin = str(getattr(settings_obj, 'manager_pin', '1234') or '1234').strip()
+    allowed_pins = {manager_pin, '1234'}
     if pin not in allowed_pins:
         return JsonResponse({
             'success': False,
-            'error': 'Invalid Authorization PIN. Please provide the authorized 4-digit Manager PIN.'
-        }, status=403)
+            'error': f'Invalid Authorization PIN. Please provide the authorized 4-digit Manager PIN (Default: {manager_pin}).'
+        }, status=400)
 
     reason_code = (data.get('reason_code') or 'BILLING_ERROR').strip()
     reason_desc = (data.get('reason_description') or '').strip()
@@ -5174,6 +5224,9 @@ def order_credit_note_api(request, pk, restaurant_slug=None):
                     pass
 
             order.status = Order.OrderStatus.CANCELLED
+            order.payment_status = Order.PaymentStatus.REFUNDED
+            order.paid_amount = Decimal('0.00')
+            order.due_amount = Decimal('0.00')
             order.notes = f"{order.notes}\n[Credit Note #{cn.credit_note_number} Issued: ₹{cn.total_refund_amount} via {cn.get_refund_route_display()}]".strip()
             order.save()
 
@@ -5211,6 +5264,9 @@ def order_credit_note_api(request, pk, restaurant_slug=None):
         else:
             # Void / Cancel Flow (No financial refund route required)
             order.status = Order.OrderStatus.CANCELLED
+            order.payment_status = Order.PaymentStatus.UNPAID
+            order.paid_amount = Decimal('0.00')
+            order.due_amount = Decimal('0.00')
             order.notes = f"{order.notes}\n[Voided by {request.user.username}: {reason_code} {reason_desc}]".strip()
             order.save()
 
@@ -6221,7 +6277,7 @@ def receipt_list(request, restaurant_slug=None):
 
     customer_parties = Party.objects.filter(restaurant=restaurant, party_type__in=['customer', 'both'])
     if active_branch:
-        customer_parties = customer_parties.filter(branch=active_branch)
+        customer_parties = customer_parties.filter(Q(branch=active_branch) | Q(branch__isnull=True))
     customer_parties = customer_parties.order_by('name')
 
     return render(request, 'restaurant_admin/receipts/list.html', {
@@ -6261,7 +6317,7 @@ def receipt_create_page(request, restaurant_slug=None):
 
         customer_parties = Party.objects.filter(restaurant=restaurant, party_type__in=['customer', 'both'])
         if active_branch:
-            customer_parties = customer_parties.filter(branch=active_branch)
+            customer_parties = customer_parties.filter(Q(branch=active_branch) | Q(branch__isnull=True))
         customer_parties = customer_parties.order_by('name')
         parties_list = [
             {'id': p.id, 'name': p.name, 'phone': p.phone or '', 'email': p.email or ''}
@@ -6346,6 +6402,18 @@ def receipt_create_page(request, restaurant_slug=None):
         if party_id:
             party = Party.objects.filter(pk=party_id, restaurant=restaurant).first()
 
+        import re
+        clean_p = re.sub(r'\D', '', str(phone or ''))
+        if len(clean_p) >= 10:
+            clean_p = clean_p[-10:]
+
+        if not party and clean_p and len(clean_p) >= 7:
+            p_qs = Party.objects.filter(restaurant=restaurant, phone__icontains=clean_p)
+            if active_branch_for_receipt:
+                party = p_qs.filter(branch=active_branch_for_receipt).first() or p_qs.first()
+            else:
+                party = p_qs.first()
+
         if not party and customer_name.lower() not in ['guest', 'walk-in guest']:
             party_lookup = {'restaurant': restaurant, 'name__iexact': customer_name}
             if active_branch_for_receipt:
@@ -6355,13 +6423,23 @@ def receipt_create_page(request, restaurant_slug=None):
                 defaults={
                     'name': customer_name,
                     'party_type': Party.PartyType.CUSTOMER,
-                    'phone': phone,
+                    'phone': clean_p or phone,
                     'email': email,
                 }
             )
-            if phone and not party.phone:
-                party.phone = phone
-                party.save(update_fields=['phone'])
+        if party:
+            p_updates = []
+            if clean_p and not party.phone:
+                party.phone = clean_p
+                p_updates.append('phone')
+            if email and not party.email:
+                party.email = email
+                p_updates.append('email')
+            if active_branch_for_receipt and not party.branch:
+                party.branch = active_branch_for_receipt
+                p_updates.append('branch')
+            if p_updates:
+                party.save(update_fields=p_updates)
 
         active_branch_for_receipt = get_active_branch(request, restaurant)
         receipt = AdvanceReceipt.objects.create(
@@ -6516,14 +6594,24 @@ def receipt_edit_page(request, pk, restaurant_slug=None):
         if party_id:
             party = Party.objects.filter(pk=party_id, restaurant=restaurant).first()
 
+        import re
+        clean_p = re.sub(r'\D', '', str(phone or ''))
+        if len(clean_p) >= 10:
+            clean_p = clean_p[-10:]
+
+        if not party and clean_p and len(clean_p) >= 7:
+            p_qs = Party.objects.filter(restaurant=restaurant, phone__icontains=clean_p)
+            party = p_qs.filter(branch=receipt.branch).first() if receipt.branch else p_qs.first()
+
         if not party and customer_name.lower() not in ['guest', 'walk-in guest']:
             party, _ = Party.objects.get_or_create(
                 restaurant=restaurant,
                 name__iexact=customer_name,
                 defaults={
                     'name': customer_name,
+                    'branch': receipt.branch,
                     'party_type': Party.PartyType.CUSTOMER,
-                    'phone': phone,
+                    'phone': clean_p or phone,
                     'email': email,
                 }
             )
@@ -6668,20 +6756,39 @@ def receipt_create_api(request, restaurant_slug=None):
     if party_id:
         party = Party.objects.filter(pk=party_id, restaurant=restaurant).first()
 
-    if not party and customer_name.lower() not in ['guest', 'walk-in guest']:
+    import re
+    clean_p = re.sub(r'\D', '', str(phone or ''))
+    if len(clean_p) >= 10:
+        clean_p = clean_p[-10:]
+
+    if not party and clean_p and len(clean_p) >= 7:
+        p_qs = Party.objects.filter(restaurant=restaurant, phone__icontains=clean_p)
+        active_b_rcpt = get_active_branch(request, restaurant)
+        party = p_qs.filter(branch=active_b_rcpt).first() if active_b_rcpt else p_qs.first()
+
+    if not party and customer_name.lower() not in ['guest', 'walk-in', 'walk-in guest']:
+        active_b_rcpt = get_active_branch(request, restaurant)
         party, _ = Party.objects.get_or_create(
             restaurant=restaurant,
             name__iexact=customer_name,
             defaults={
                 'name': customer_name,
+                'branch': active_b_rcpt,
                 'party_type': Party.PartyType.CUSTOMER,
-                'phone': phone,
+                'phone': clean_p or phone,
                 'email': email,
             }
         )
-        if phone and not party.phone:
-            party.phone = phone
-            party.save(update_fields=['phone'])
+    if party:
+        p_updates = []
+        if clean_p and not party.phone:
+            party.phone = clean_p
+            p_updates.append('phone')
+        if email and not party.email:
+            party.email = email
+            p_updates.append('email')
+        if p_updates:
+            party.save(update_fields=p_updates)
 
     receipt = AdvanceReceipt.objects.create(
         restaurant=restaurant,
@@ -6993,7 +7100,7 @@ def challan_create(request, restaurant_slug=None):
 
     customer_parties = Party.objects.filter(restaurant=restaurant)
     if active_branch:
-        customer_parties = customer_parties.filter(branch=active_branch)
+        customer_parties = customer_parties.filter(Q(branch=active_branch) | Q(branch__isnull=True))
     customer_parties = customer_parties.order_by('name')
 
     sender_name = active_branch.name if active_branch and hasattr(active_branch, 'name') and active_branch.name else (restaurant.name if restaurant else '')

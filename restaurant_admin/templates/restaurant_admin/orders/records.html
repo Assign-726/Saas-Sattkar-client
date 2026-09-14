@@ -736,7 +736,9 @@
                             </span>
                         </td>
                         <td>
-                            {% if o.payment_status == 'paid' or o.payment_status == 'P' %}
+                            {% if o.payment_status == 'refunded' %}
+                                <span class="status-pill" style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca;"><i class="fas fa-undo"></i> Refunded</span>
+                            {% elif o.payment_status == 'paid' or o.payment_status == 'P' %}
                                 <span class="status-pill pill-paid"><i class="fas fa-check-circle"></i> Paid</span>
                             {% elif o.payment_status == 'partially_paid' %}
                                 <span class="status-pill" style="background:#fffbe6; color:#d48806; border:1px solid #ffe58f;"><i class="fas fa-hourglass-half"></i> Partial (₹{{ o.paid_amount|floatformat:0 }}/₹{{ o.total_amount|floatformat:0 }})</span>
@@ -767,7 +769,7 @@
                                 <a href="{% url 'restaurant_admin:order_create_manual' restaurant_slug=rslug %}?order_id={{ o.pk }}" class="btn-action-settle" style="background: #4F46E5;" title="Open Draft Order in POS">
                                     <i class="fas fa-cart-plus"></i> Open
                                 </a>
-                                {% elif o.payment_status != 'paid' and o.payment_status != 'P' %}
+                                {% elif o.payment_status != 'paid' and o.payment_status != 'P' and o.payment_status != 'refunded' and o.status != 'C' %}
                                 <button type="button" class="btn-action-settle btn-records-quick-settle" 
                                     data-order-id="{{ o.pk }}" 
                                     data-order-num="{% if o.order_number %}{{ o.order_number }}{% else %}#{{ o.branch_order_number|default:o.pk }}{% endif %}" 
@@ -795,7 +797,11 @@
                                 <a href="{% url 'restaurant_admin:order_kot' pk=o.pk restaurant_slug=rslug %}" class="btn-action-icon btn-action-kot" title="View KOT" target="_blank">
                                     <i class="fas fa-print"></i>
                                 </a>
-                                {% if o.status != 'C' %}
+                                {% if o.credit_note %}
+                                <a href="{% url 'restaurant_admin:credit_note_thermal_view' pk=o.credit_note.pk restaurant_slug=rslug %}" target="_blank" class="btn-action-icon" style="background:#f0fdf4; border: 1px solid #bbf7d0; color:#16a34a;" title="Print Credit Note #{{ o.credit_note.credit_note_number }}">
+                                    <i class="fas fa-file-invoice"></i>
+                                </a>
+                                {% elif o.status != 'C' and o.payment_status != 'refunded' %}
                                 <button type="button" class="btn-action-icon text-danger" style="background:#fef2f2; border: 1px solid #fecaca;" title="Cancel / Credit Note" onclick="window.openCreditNoteModal({ orderId: '{{ o.pk }}', isLocked: true });">
                                     <i class="fas fa-ban"></i>
                                 </button>
