@@ -798,7 +798,7 @@
 
                 <!-- Group 2: Point of Sale -->
                 <div class="sidebar-group">
-                    <div class="sidebar-group-header {% if active_menu == 'order_records' or active_menu == 'order_list' or active_menu == 'receipts' or active_menu == 'order_create_manual' or active_menu == 'transactions_create' %}open active-group{% endif %}"
+                    <div class="sidebar-group-header {% if active_menu == 'order_records' or active_menu == 'order_list' or active_menu == 'receipts' or active_menu == 'order_create_manual' or active_menu == 'transactions_create' or active_menu == 'credit_note' %}open active-group{% endif %}"
                         data-group-target="#group-pos">
                         <div class="group-title">
                             <i class="fas fa-cash-register"></i>
@@ -806,7 +806,7 @@
                         </div>
                         <i class="fas fa-chevron-down group-chevron"></i>
                     </div>
-                    <div class="sidebar-group-content {% if active_menu == 'order_records' or active_menu == 'order_list' or active_menu == 'receipts' or active_menu == 'order_create_manual' or active_menu == 'transactions_create' %}show{% endif %}"
+                    <div class="sidebar-group-content {% if active_menu == 'order_records' or active_menu == 'order_list' or active_menu == 'receipts' or active_menu == 'order_create_manual' or active_menu == 'transactions_create' or active_menu == 'credit_note' %}show{% endif %}"
                         id="group-pos">
                         <ul class="nav flex-column">
                             <li class="nav-item">
@@ -842,11 +842,11 @@
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="#"
-                                    onclick="window.openCreditNoteModal({ isLocked: false }); return false;"
-                                    title="Credit Note & Order Cancel Desk (Alt+C)">
+                                <a class="nav-link {% if active_menu == 'credit_note' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:credit_note_desk' restaurant_slug=rslug %}"
+                                    title="Credit Note & Refund Desk (Alt+C)">
                                     <i class="bi bi-file-earmark-x text-danger"></i>
-                                    <span>Credit Notes / Void</span>
+                                    <span>Issue Credit Note</span>
                                 </a>
                             </li>
                         </ul>
@@ -1626,11 +1626,10 @@
             })();
         </script>
 
-        {% include 'restaurant_admin/orders/cancel_credit_note_modal.html' %}
         <script>
             window.CURRENT_RESTAURANT_SLUG = "{{ rslug|default:'' }}";
         </script>
-        <script src="{% static 'restaurant_admin/js/tally_credit_note.js' %}?v=7.0"></script>
+        <script src="{% static 'restaurant_admin/js/tally_credit_note.js' %}?v=8.0"></script>
 
         {% block extra_js %}{% endblock %}
         {% endwith %}

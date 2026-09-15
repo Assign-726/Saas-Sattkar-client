@@ -74,6 +74,7 @@ urlpatterns = [
     path('orders/<int:pk>/settle/', views.order_settle_api, name='order_settle_api'),
     path('api/orders/omni-search/', views.order_omni_search_api, name='order_omni_search_api'),
     path('orders/<int:pk>/credit-note/', views.order_credit_note_api, name='order_credit_note_api'),
+    path('orders/credit-note/', views.credit_note_desk, name='credit_note_desk'),
     path('credit-notes/<int:pk>/thermal/', views.credit_note_thermal_view, name='credit_note_thermal_view'),
 
     # Inventory & Purchases Management
