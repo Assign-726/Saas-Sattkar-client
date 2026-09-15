@@ -355,6 +355,17 @@ def landing_edit(request, pk):
                 except Exception as e:
                     print("Error parsing pages_faq JSON:", e)
 
+            # Handle theme_config JSON
+            theme_config_raw = request.POST.get('theme_config')
+            if theme_config_raw:
+                try:
+                    if isinstance(theme_config_raw, str):
+                        landing_obj.theme_config = json.loads(theme_config_raw)
+                    elif isinstance(theme_config_raw, dict):
+                        landing_obj.theme_config = theme_config_raw
+                except Exception as e:
+                    print("Error parsing theme_config JSON:", e)
+
             landing_obj.save()
             messages.success(request, 'Landing page saved.')
             return redirect('super_admin:landing_edit', pk=restaurant.pk)
@@ -391,6 +402,9 @@ def landing_edit(request, pk):
     pages_faq_dict = landing.pages_faq if isinstance(landing.pages_faq, dict) else {}
     pages_faq_json = json.dumps(pages_faq_dict)
 
+    theme_config_dict = landing.theme_config if isinstance(landing.theme_config, dict) else {}
+    theme_config_json = json.dumps(theme_config_dict)
+
     job_form = JobPostingForm(restaurant=restaurant)
     job_postings = restaurant.job_postings.select_related('branch').all().order_by('display_order', '-created_at')
 
@@ -417,6 +431,8 @@ def landing_edit(request, pk):
         'pages_seo': pages_seo_dict,
         'pages_faq_json': pages_faq_json,
         'pages_faq': pages_faq_dict,
+        'theme_config_json': theme_config_json,
+        'theme_config': theme_config_dict,
     })
 
 

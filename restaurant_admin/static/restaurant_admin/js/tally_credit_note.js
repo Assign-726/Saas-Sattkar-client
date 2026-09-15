@@ -1003,101 +1003,20 @@
   }
 
   /* ══════════════════════════════════════════════════════════════════
-     5. PUBLIC MODAL API
+     5. PUBLIC MODAL API (FORWARD TO DEDICATED PAGE)
      ══════════════════════════════════════════════════════════════════ */
   window.openCreditNoteModal = function (options = {}) {
-    initDOM();
-    state.isOpen = true;
-    state.isLocked = !!options.isLocked;
-    state.selectedInvoice = null;
-
-    // Reset UI
-    dom.modal.style.display = 'flex';
-    dom.searchInvoice.value = '';
-    dom.searchInvoice.readOnly = false;
-    dom.searchInvoice.classList.remove('cn-input-locked');
-    dom.unlockSearchBtn.style.display = 'none';
-    dom.partyProfileRow.style.display = 'none';
-    if (dom.duplicateWarningBanner) {
-      dom.duplicateWarningBanner.style.display = 'none';
+    const slug = getDashboardSlug();
+    let url = slug ? `/dashboard/${slug}/orders/credit-note/` : `/orders/credit-note/`;
+    if (options && options.orderId) {
+      url += `?order_id=${encodeURIComponent(options.orderId)}`;
     }
-    dom.refundParameters.classList.add('cn-card-locked');
-    dom.managerAuth.classList.add('cn-card-locked');
-    dom.submitBtn.disabled = true;
-    dom.submitBtn.innerHTML = 'Submit Refund <kbd>Enter</kbd>';
-    dom.submitBtn.style.background = '';
-    dom.submitBtn.style.borderColor = '';
-    dom.submitBtn.style.cursor = '';
-
-    dom.reasonCode.value = '';
-    dom.refundRoute.value = '';
-    toggleOthers(false);
-    dom.managerPin.value = '';
-    hidePinError();
-
-    dom.dateTime.textContent = formatDateTimeNow();
-    if (state.nextVoucherSeries) {
-      dom.voucherSeries.textContent = state.nextVoucherSeries;
-    }
-
-    // Reset Receipt
-    dom.rcptInvNo.textContent = '--';
-    dom.rcptLineItems.innerHTML = `
-      <div class="text-center text-muted fst-italic py-4" style="font-size: 12.5px;">
-        Select invoice to load line items...
-      </div>
-    `;
-    dom.rcptReason.textContent = '--';
-    dom.rcptMode.textContent = '--';
-    dom.rcptTaxable.textContent = '₹ 0.00';
-    dom.rcptCgst.textContent = '₹ 0.00';
-    dom.rcptSgst.textContent = '₹ 0.00';
-    dom.rcptTotal.textContent = '₹ 0.00';
-    dom.rcptWatermark.className = 'cn-watermark-stamp draft-mode';
-    dom.rcptWatermark.textContent = 'DRAFT';
-
-    if (options.orderId) {
-      // Contextual pre-fill
-      dom.searchInvoice.value = `Loading Order #${options.orderId}...`;
-      dom.searchInvoice.readOnly = true;
-      dom.searchInvoice.classList.add('cn-input-locked');
-
-      const url = getApiUrl(`api/orders/omni-search/?order_id=${encodeURIComponent(options.orderId)}`);
-      fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.success) {
-            if (data.next_voucher_series) {
-              state.nextVoucherSeries = data.next_voucher_series;
-              dom.voucherSeries.textContent = data.next_voucher_series;
-            }
-            if (data.manager_pin) {
-              state.serverManagerPin = data.manager_pin;
-            }
-            if (data.orders && data.orders.length) {
-              const matched = data.orders.find((o) => o.id === parseInt(options.orderId, 10)) || data.orders[0];
-              selectInvoice(matched);
-            } else {
-              alert(`Could not load order #${options.orderId}`);
-              closeCreditNoteModal();
-            }
-          }
-        })
-        .catch((err) => {
-          console.error(err);
-          alert('Error loading order details.');
-        });
-    } else {
-      fetchOmniSearch('');
-      setTimeout(() => {
-        setTallyFocus(dom.searchInvoice);
-      }, 50);
-    }
+    window.location.href = url;
   };
 
   window.closeCreditNoteModal = function () {
-    if (!dom.modal) initDOM();
-    dom.modal.style.display = 'none';
+    initDOM();
+    if (dom.modal) dom.modal.style.display = 'none';
     state.isOpen = false;
     state.selectedInvoice = null;
     clearTimeout(state.searchDebounceTimer);
@@ -1106,7 +1025,9 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     initDOM();
-    bindKeyboardEngine();
-    startBlinking();
+    if (dom.modal) {
+      bindKeyboardEngine();
+      startBlinking();
+    }
   });
 })(window, document);

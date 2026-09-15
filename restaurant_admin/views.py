@@ -5137,6 +5137,37 @@ def order_omni_search_api(request, restaurant_slug=None):
 
 @login_required
 @user_passes_test(is_admin)
+def credit_note_desk(request, restaurant_slug=None):
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        messages.error(request, 'Restaurant not found.')
+        return redirect('restaurant_admin:dashboard')
+
+    active_branch = get_active_branch(request, restaurant)
+    next_cn_number = CreditNote.generate_credit_note_number(restaurant, branch=active_branch) if restaurant else 'CN-PREVIEW'
+    settings_obj = RestaurantSettings.get_settings(restaurant) if restaurant else None
+    manager_pin_val = getattr(settings_obj, 'manager_pin', '1234') or '1234'
+    prefill_order_id = (request.GET.get('order_id') or '').strip()
+
+    terminal_user = f"POS-01 • {request.user.get_full_name() or request.user.username or 'Admin'}"
+    current_time_str = format_local_time(timezone.now(), '%d %b %Y, %I:%M %p')
+
+    context = {
+        'restaurant': restaurant,
+        'rslug': restaurant.slug,
+        'active_branch': active_branch,
+        'next_credit_note_number': next_cn_number,
+        'manager_pin': manager_pin_val,
+        'prefill_order_id': prefill_order_id,
+        'terminal_user': terminal_user,
+        'current_time_str': current_time_str,
+        'active_menu': 'credit_note',
+    }
+    return render(request, 'restaurant_admin/orders/credit_note_desk.html', context)
+
+
+@login_required
+@user_passes_test(is_admin)
 def order_credit_note_api(request, pk, restaurant_slug=None):
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'POST method required'}, status=405)

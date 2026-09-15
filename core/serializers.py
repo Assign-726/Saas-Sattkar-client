@@ -484,6 +484,7 @@ class WhyChooseUsSerializer(serializers.ModelSerializer):
 
 
 class RestaurantLandingSerializer(serializers.ModelSerializer):
+    website_type = serializers.SerializerMethodField()
     gallery_images = GalleryImageSerializer(many=True, read_only=True)
     team_members = TeamMemberSerializer(many=True, read_only=True)
     reviews = ReviewSerializer(many=True, read_only=True)
@@ -492,6 +493,11 @@ class RestaurantLandingSerializer(serializers.ModelSerializer):
     branches = RestaurantBranchSerializer(source='restaurant.branches', many=True, read_only=True)
     restaurant_name = serializers.ReadOnlyField(source='restaurant.name')
     restaurant_slug = serializers.ReadOnlyField(source='restaurant.slug')
+
+    def get_website_type(self, obj):
+        if obj.theme_config and isinstance(obj.theme_config, dict):
+            return obj.theme_config.get('website_type', 'default')
+        return 'default'
 
     class Meta:
         model = RestaurantLanding
@@ -509,7 +515,7 @@ class RestaurantLandingSerializer(serializers.ModelSerializer):
             'facebook_url', 'instagram_url', 'twitter_url', 'youtube_url',
             'seo_title', 'seo_description', 'seo_keywords', 'seo_canonical_url',
             'og_title', 'og_description', 'og_url', 'og_site_name', 'og_locale', 'og_type',
-            'twitter_card_type', 'twitter_title', 'twitter_description', 'pages_seo', 'pages_faq',
+            'twitter_card_type', 'twitter_title', 'twitter_description', 'pages_seo', 'pages_faq', 'theme_config', 'website_type',
             'show_hero', 'show_about', 'show_why_us', 'show_specials', 'show_events', 'show_gallery', 'show_team', 'show_reviews',
             'show_careers', 'careers_title', 'careers_subtitle',
             'why_us_title_1', 'why_us_description_1',

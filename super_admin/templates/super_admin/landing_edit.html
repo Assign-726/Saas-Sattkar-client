@@ -1038,6 +1038,83 @@
   .border-pulse {
     animation: borderPulse 0.8s ease-out;
   }
+
+  /* Theme Preset Cards & Active States */
+  .theme-preset-card {
+    cursor: pointer;
+    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    position: relative;
+    user-select: none;
+  }
+  .theme-preset-card:hover {
+    transform: translateY(-3px) !important;
+    border-color: #94a3b8 !important;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08) !important;
+  }
+  .theme-preset-card:active {
+    transform: scale(0.98) !important;
+  }
+  .theme-preset-card.active {
+    border-width: 2px !important;
+  }
+  .theme-preset-card.active::after {
+    content: '\2713';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #10b981;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  }
+  .theme-color-picker {
+    cursor: pointer;
+    transition: transform 0.15s ease;
+  }
+  .theme-color-picker:hover {
+    transform: scale(1.06);
+  }
+
+  /* Website Type Options Styling */
+  .website-type-option {
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+  .website-type-option:hover {
+    transform: translateY(-2px) !important;
+    border-color: #94a3b8 !important;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06) !important;
+  }
+  .website-type-option.active {
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.22) !important;
+    background: #ffffff !important;
+  }
+  .website-type-option.active::after {
+    content: '\2713';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #10b981;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  }
 </style>
 
 <div class="grid">
@@ -1183,6 +1260,581 @@
                 </div>
               </div>
               {% endif %}
+            </div>
+          </div>
+        </div>
+
+        
+        <!-- Dynamic Theme & Color Customization Panel -->
+        <div class="shop-panel" style="margin-top: 24px;">
+          <div class="shop-panel-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <div class="shop-panel-icon" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #fff;">
+                <i class="fa-solid fa-palette"></i>
+              </div>
+              <div>
+                <div class="shop-panel-title">Website Theme & Color Palette</div>
+                <div class="shop-panel-subtitle">Completely customize website colors, buttons, backgrounds, surfaces, and gradients</div>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <button type="button" class="btn btn-sm" onclick="resetThemeToDefault()" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; font-size: 12px; font-weight: 600; padding: 8px 14px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; transition: all 0.2s;">
+                <i class="fa-solid fa-arrow-rotate-left"></i> Reset to Default
+              </button>
+            </div>
+          </div>
+
+          <!-- Hidden input storing serialized theme JSON -->
+          {{ theme_config|json_script:"initial-theme-config" }}
+          <input type="hidden" name="theme_config" id="id_theme_config" value="">
+
+          <!-- SECTION 0: Website Type (Geometry / Corner Style) -->
+          <div style="margin-bottom: 24px; padding: 18px 20px; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;">
+              <div>
+                <label style="font-size: 13px; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
+                  <i class="fa-solid fa-shapes" style="color: #6366f1;"></i> Website Type
+                </label>
+                <div style="font-size: 11px; color: #64748b;">
+                  Select button geometry and card styling for your public restaurant website.
+                </div>
+              </div>
+              <span id="website-type-badge" style="font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; background: #e0e7ff; color: #4338ca; text-transform: uppercase; letter-spacing: 0.5px;">
+                Active: Default
+              </span>
+            </div>
+
+            <div style="display: flex; gap: 14px; flex-wrap: wrap;">
+              <!-- Option 1: Default -->
+              <div class="website-type-option active" id="type-option-default" onclick="selectWebsiteType('default')" data-type="default" style="flex: 1; min-width: 200px; max-width: 320px; border: 2px solid #6366f1; background: #ffffff; border-radius: 10px; padding: 14px 16px; cursor: pointer; transition: all 0.2s; position: relative;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 38px; height: 38px; border-radius: 4px; background: #f1f5f9; color: #334155; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 1px solid #cbd5e1;">
+                    <i class="fa-solid fa-square"></i>
+                  </div>
+                  <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 13px; font-weight: 700; color: #0f172a;">Default</span>
+                      <span style="font-size: 10px; background: #fef3c7; color: #92400e; padding: 1px 6px; border-radius: 4px; font-weight: 600;">Standard</span>
+                    </div>
+                    <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Classic sharp corners & square CTA buttons</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Option 2: Rounded -->
+              <div class="website-type-option" id="type-option-rounded" onclick="selectWebsiteType('rounded')" data-type="rounded" style="flex: 1; min-width: 200px; max-width: 320px; border: 2px solid #e2e8f0; background: #ffffff; border-radius: 10px; padding: 14px 16px; cursor: pointer; transition: all 0.2s; position: relative;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 38px; height: 38px; border-radius: 50%; background: #ede9fe; color: #7c3aed; display: flex; align-items: center; justify-content: center; font-size: 16px; border: 1px solid #c7d2fe;">
+                    <i class="fa-solid fa-circle"></i>
+                  </div>
+                  <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 13px; font-weight: 700; color: #0f172a;">Rounded</span>
+                      <span style="font-size: 10px; background: #ede9fe; color: #6d28d9; padding: 1px 6px; border-radius: 4px; font-weight: 600;">Soft</span>
+                    </div>
+                    <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Smooth pill buttons & rounded dish cards</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION 1: 1-Click Luxury Theme Presets -->
+          <div style="margin-bottom: 28px; padding-bottom: 24px; border-bottom: 1px dashed #e2e8f0;">
+            <label style="font-size: 13px; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
+              <i class="fa-solid fa-wand-magic-sparkles" style="color: #f59e0b;"></i> Quick Theme Presets
+            </label>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px;" id="theme-presets-container">
+              
+              <!-- Preset 1: Emerald & Gold (Default) -->
+              <div class="theme-preset-card active" onclick="applyPreset('emerald_gold')" data-preset="emerald_gold" style="border: 2px solid #e6b15f; background: #ffffff; border-radius: 12px; padding: 14px; cursor: pointer; transition: all 0.2s; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                  <span style="font-size: 13px; font-weight: 700; color: #0f172a;">Emerald & Gold</span>
+                  <span class="preset-badge" style="font-size: 10px; background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; font-weight: 600;">Default</span>
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <span style="width: 22px; height: 22px; border-radius: 50%; background: #e6b15f; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Primary: #e6b15f"></span>
+                  <span style="width: 22px; height: 22px; border-radius: 50%; background: #18312e; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Background: #18312e"></span>
+                  <span style="width: 22px; height: 22px; border-radius: 50%; background: #1a3733; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Surface: #1a3733"></span>
+                </div>
+              </div>
+
+              <!-- Preset 2: Midnight Obsidian & Amber -->
+              <div class="theme-preset-card" onclick="applyPreset('midnight_amber')" data-preset="midnight_amber" style="border: 2px solid #e2e8f0; background: #ffffff; border-radius: 12px; padding: 14px; cursor: pointer; transition: all 0.2s; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                  <span style="font-size: 13px; font-weight: 700; color: #0f172a;">Obsidian & Amber</span>
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <span style="width: 22px; height: 22px; border-radius: 50%; background: #f59e0b; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Primary: #f59e0b"></span>
+                  <span style="width: 22px; height: 22px; border-radius: 50%; background: #0b0f19; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Background: #0b0f19"></span>
+                  <span style="width: 22px; height: 22px; border-radius: 50%; background: #151c2c; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Surface: #151c2c"></span>
+                </div>
+              </div>
+
+              <!-- Preset 3: Royal Burgundy & Rose -->
+              <div class="theme-preset-card" onclick="applyPreset('royal_burgundy')" data-preset="royal_burgundy" style="border: 2px solid #e2e8f0; background: #ffffff; border-radius: 12px; padding: 14px; cursor: pointer; transition: all 0.2s; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                  <span style="font-size: 13px; font-weight: 700; color: #0f172a;">Burgundy & Rose</span>
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <span style="width: 22px; height: 22px; border-radius: 50%; background: #e09f87; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Primary: #e09f87"></span>
+                  <span style="width: 22px; height: 22px; border-radius: 50%; background: #260f17; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Background: #260f17"></span>
+                  <span style="width: 22px; height: 22px; border-radius: 50%; background: #381724; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Surface: #381724"></span>
+                </div>
+              </div>
+
+              <!-- Preset 4: Deep Ocean & Champagne -->
+              <div class="theme-preset-card" onclick="applyPreset('deep_ocean')" data-preset="deep_ocean" style="border: 2px solid #e2e8f0; background: #ffffff; border-radius: 12px; padding: 14px; cursor: pointer; transition: all 0.2s; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                  <span style="font-size: 13px; font-weight: 700; color: #0f172a;">Ocean & Champagne</span>
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <span style="width: 22px; height: 22px; border-radius: 50%; background: #d4af37; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Primary: #d4af37"></span>
+                  <span style="width: 22px; height: 22px; border-radius: 50%; background: #0c1a2e; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Background: #0c1a2e"></span>
+                  <span style="width: 22px; height: 22px; border-radius: 50%; background: #142845; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Surface: #142845"></span>
+                </div>
+              </div>
+
+              <!-- Preset 5: Warm Espresso & Terracotta -->
+              <div class="theme-preset-card" onclick="applyPreset('warm_espresso')" data-preset="warm_espresso" style="border: 2px solid #e2e8f0; background: #ffffff; border-radius: 12px; padding: 14px; cursor: pointer; transition: all 0.2s; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                  <span style="font-size: 13px; font-weight: 700; color: #0f172a;">Espresso & Terracotta</span>
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <span style="width: 22px; height: 22px; border-radius: 50%; background: #e07a5f; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Primary: #e07a5f"></span>
+                  <span style="width: 22px; height: 22px; border-radius: 50%; background: #1e1513; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Background: #1e1513"></span>
+                  <span style="width: 22px; height: 22px; border-radius: 50%; background: #2c1f1c; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Surface: #2c1f1c"></span>
+                </div>
+              </div>
+
+              <!-- Preset 6: Pure Noir & Silver -->
+              <div class="theme-preset-card" onclick="applyPreset('pure_noir')" data-preset="pure_noir" style="border: 2px solid #e2e8f0; background: #ffffff; border-radius: 12px; padding: 14px; cursor: pointer; transition: all 0.2s; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                  <span style="font-size: 13px; font-weight: 700; color: #0f172a;">Pure Noir & Silver</span>
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                  <span style="width: 22px; height: 22px; border-radius: 50%; background: #e2e8f0; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Primary: #e2e8f0"></span>
+                  <span style="width: 22px; height: 22px; border-radius: 50%; background: #0a0a0a; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Background: #0a0a0a"></span>
+                  <span style="width: 22px; height: 22px; border-radius: 50%; background: #171717; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" title="Surface: #171717"></span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- SECTION 2: Color Pickers & Live Interactive Preview Grid -->
+          <div class="row" style="margin-bottom: 20px;">
+            
+            <!-- Left Column: Detailed Color Pickers -->
+            <div class="col-7">
+              <label style="font-size: 13px; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                <i class="fa-solid fa-sliders" style="color: #0284c7;"></i> Detailed Color Controls
+              </label>
+
+              <!-- Group A: Brand & Button Colors -->
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+                <div style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                  <i class="fa-solid fa-hand-pointer"></i> Brand Accents & Buttons
+                </div>
+                <div class="row">
+                  <div class="col-6">
+                    <div class="shop-form-group">
+                      <label style="font-size: 12px;">Primary / Button Color</label>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="color" id="picker_primary" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                        <input type="text" id="hex_primary" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#E6B15F" maxlength="9">
+                      </div>
+                      <div class="hint" style="margin-top: 4px; font-size: 11px;">Buttons, active links, badges, key highlights</div>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="shop-form-group">
+                      <label style="font-size: 12px;">Button Hover Color</label>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="color" id="picker_primary_hover" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                        <input type="text" id="hex_primary_hover" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#F0C878" maxlength="9">
+                      </div>
+                      <div class="hint" style="margin-top: 4px; font-size: 11px;">Mouse hover glow on primary buttons</div>
+                    </div>
+                  </div>
+                  <div class="col-6" style="margin-top: 10px;">
+                    <div class="shop-form-group">
+                      <label style="font-size: 12px;">Button Text Color</label>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="color" id="picker_primary_foreground" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                        <input type="text" id="hex_primary_foreground" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#000000" maxlength="9">
+                      </div>
+                      <div class="hint" style="margin-top: 4px; font-size: 11px;">Text color inside primary buttons</div>
+                    </div>
+                  </div>
+                  <div class="col-6" style="margin-top: 10px;">
+                    <div class="shop-form-group">
+                      <label style="font-size: 12px;">Secondary Accent</label>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="color" id="picker_secondary" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                        <input type="text" id="hex_secondary" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#D4AA5F" maxlength="9">
+                      </div>
+                      <div class="hint" style="margin-top: 4px; font-size: 11px;">Sub-headings and secondary icons</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Group B: Backgrounds & Card Surfaces -->
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin-bottom: 16px;">
+                <div style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                  <i class="fa-solid fa-layer-group"></i> Backgrounds & Surfaces
+                </div>
+                <div class="row">
+                  <div class="col-6">
+                    <div class="shop-form-group">
+                      <label style="font-size: 12px;">Main Background</label>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="color" id="picker_background" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                        <input type="text" id="hex_background" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#18312E" maxlength="9">
+                      </div>
+                      <div class="hint" style="margin-top: 4px; font-size: 11px;">Core website canvas background</div>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="shop-form-group">
+                      <label style="font-size: 12px;">Secondary / Darker BG</label>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="color" id="picker_background_secondary" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                        <input type="text" id="hex_background_secondary" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#122623" maxlength="9">
+                      </div>
+                      <div class="hint" style="margin-top: 4px; font-size: 11px;">Alternating sections and footer backdrop</div>
+                    </div>
+                  </div>
+                  <div class="col-6" style="margin-top: 10px;">
+                    <div class="shop-form-group">
+                      <label style="font-size: 12px;">Card Surface Background</label>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="color" id="picker_surface" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                        <input type="text" id="hex_surface" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#1A3733" maxlength="9">
+                      </div>
+                      <div class="hint" style="margin-top: 4px; font-size: 11px;">Menu dish cards, testimonial cards</div>
+                    </div>
+                  </div>
+                  <div class="col-6" style="margin-top: 10px;">
+                    <div class="shop-form-group">
+                      <label style="font-size: 12px;">Surface Hover</label>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="color" id="picker_surface_hover" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                        <input type="text" id="hex_surface_hover" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#1E3D39" maxlength="9">
+                      </div>
+                      <div class="hint" style="margin-top: 4px; font-size: 11px;">Card hover background highlight</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Group C: Typography & Dividers -->
+              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px;">
+                <div style="font-size: 12px; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                  <i class="fa-solid fa-font"></i> Typography & Dividers
+                </div>
+                <div class="row">
+                  <div class="col-6">
+                    <div class="shop-form-group">
+                      <label style="font-size: 12px;">Heading Text (Primary)</label>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="color" id="picker_text_primary" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                        <input type="text" id="hex_text_primary" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#FFFFFF" maxlength="9">
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-6">
+                    <div class="shop-form-group">
+                      <label style="font-size: 12px;">Body Text (Muted)</label>
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="color" id="picker_text_secondary" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                        <input type="text" id="hex_text_secondary" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#B3BDBB" maxlength="9">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Column: Live Interactive Preview Box -->
+            <div class="col-5">
+              <label style="font-size: 13px; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                <i class="fa-solid fa-eye" style="color: #10b981;"></i> Live Website Preview
+              </label>
+
+              <!-- Preview Canvas Frame -->
+              <div id="theme-live-preview-box" style="background: #18312e; border: 1.5px solid rgba(255,255,255,0.12); border-radius: 14px; padding: 20px; color: #ffffff; font-family: 'Urbanist', sans-serif; transition: all 0.3s ease; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+                
+                <!-- Mini Header Preview -->
+                <div id="preview-mini-header" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-radius: 8px 8px 0 0; background: #18312e; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 18px; transition: all 0.3s;">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <div style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></div>
+                    <div style="width: 8px; height: 8px; border-radius: 50%; background: #f59e0b;"></div>
+                    <div style="width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></div>
+                    <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-left: 4px;" id="preview-header-brand">
+                      {{ restaurant.name|default:"Restaurant" }}
+                    </span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 10px; font-weight: 600;" id="preview-header-link">Menu</span>
+                    <span style="font-size: 9px; font-weight: 700; padding: 3px 8px; border-radius: 4px;" id="preview-header-btn">Book</span>
+                  </div>
+                </div>
+
+                <!-- Mini Hero Banner -->
+                <div style="text-align: center; padding: 16px 10px 22px;">
+                  <div style="font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; color: #e6b15f; display: inline-flex; align-items: center; gap: 6px;" id="preview-hero-tag">
+                    <span>✦</span> LUXURY DINING EXPERIENCE
+                  </div>
+                  <h4 style="font-size: 20px; font-weight: 300; margin: 0 0 6px; font-family: 'Fraunces', serif; color: #ffffff; line-height: 1.2;" id="preview-hero-heading">
+                    Authentic Flavours, <br><span style="font-style: italic; color: #e6b15f;" id="preview-hero-italic">Unforgettable Moments</span>
+                  </h4>
+                  <p style="font-size: 11px; margin: 0 auto 16px; color: rgba(255,255,255,0.7); max-width: 240px; line-height: 1.5;" id="preview-hero-desc">
+                    Handcrafted recipes created with passion and fresh seasonal ingredients.
+                  </p>
+
+                  <!-- Mini Interactive Buttons -->
+                  <div style="display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;">
+                    <button type="button" id="preview-btn-filled" style="background: #e6b15f; color: #000000; border: 1px solid #e6b15f; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 8px 18px; border-radius: 0; cursor: pointer; transition: all 0.3s;">
+                      Reservation
+                    </button>
+                    <button type="button" id="preview-btn-outline" style="background: transparent; color: #e6b15f; border: 1px solid #e6b15f; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 8px 18px; border-radius: 0; cursor: pointer; transition: all 0.3s;">
+                      Explore Menu
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Mini Menu Dish Card Preview -->
+                <div id="preview-card" style="background: #1a3733; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 14px; transition: all 0.3s;">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
+                    <div>
+                      <div style="font-size: 13px; font-weight: 600; color: #ffffff;" id="preview-card-title">Truffle Tagliatelle</div>
+                      <div style="font-size: 11px; color: rgba(255,255,255,0.6); margin-top: 2px;" id="preview-card-desc">Handmade pasta, shaved black summer truffles</div>
+                    </div>
+                    <div id="preview-card-price" style="font-size: 13px; font-weight: 700; color: #e6b15f; white-space: nowrap; margin-left: 10px;">
+                      $28.00
+                    </div>
+                  </div>
+                  <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+                    <span id="preview-card-badge" style="font-size: 9px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; background: rgba(230,177,95,0.15); color: #e6b15f; padding: 2px 8px; border-radius: 4px;">
+                      Chef Special
+                    </span>
+                    <span style="font-size: 11px; color: #e6b15f; font-weight: 600; cursor: pointer;" id="preview-card-add">
+                      + Add to Cart
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Mini Footer Preview -->
+                <div id="preview-mini-footer" style="margin-top: 16px; padding: 12px 14px; border-radius: 0 0 8px 8px; background: #0a1a16; border-top: 1px solid rgba(255,255,255,0.08); transition: all 0.3s;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span style="font-size: 11px; font-weight: 700; display: flex; align-items: center; gap: 4px;" id="preview-footer-heading">
+                      <span id="preview-footer-accent" style="color: #e6b15f;">✦</span> {{ restaurant.name|default:"Restaurant" }}
+                    </span>
+                    <span style="font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 3px;" id="preview-footer-btn">Subscribe</span>
+                  </div>
+                  <div style="font-size: 10px; line-height: 1.4;" id="preview-footer-desc">
+                    Artisanal hospitality & culinary excellence.
+                  </div>
+                </div>
+
+                <!-- Color summary info below preview -->
+                <div style="margin-top: 14px; text-align: center; font-size: 11px; color: rgba(255,255,255,0.5);">
+                  Live visual simulation across your public website (including Navbar & Footer)
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- SECTION 3: Dedicated Header (Navbar) & Footer Styling -->
+          <div style="margin-top: 28px; margin-bottom: 24px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+              <div>
+                <h4 style="margin: 0; font-size: 15px; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                  <i class="fa-solid fa-sliders" style="color: #0284c7;"></i> Header & Footer Dedicated Styling
+                </h4>
+                <p style="margin: 2px 0 0; font-size: 12px; color: #64748b;">
+                  Fine-tune the top navigation bar and bottom footer colors, text, action buttons, and background texture.
+                </p>
+              </div>
+            </div>
+
+            <div class="row">
+              <!-- Left Column: Header (Navbar) Styling -->
+              <div class="col-6">
+                <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); height: 100%;">
+                  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                    <div style="width: 34px; height: 34px; border-radius: 8px; background: #e0e7ff; color: #4338ca; display: flex; align-items: center; justify-content: center; font-size: 15px;">
+                      <i class="fa-solid fa-compass"></i>
+                    </div>
+                    <div>
+                      <h5 style="margin: 0; font-size: 13px; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px;">Navigation Bar (Header)</h5>
+                      <span style="font-size: 11px; color: #64748b;">Colors for top fixed/scrolled header</span>
+                    </div>
+                  </div>
+
+                  <div class="row">
+                    <div class="col-6">
+                      <div class="shop-form-group">
+                        <label style="font-size: 12px; font-weight: 600;">Navbar Background (Solid)</label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <input type="color" id="picker_header_bg" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                          <input type="text" id="hex_header_bg" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#18312E" maxlength="9">
+                        </div>
+                        <div class="hint" style="margin-top: 4px; font-size: 11px;">Scrolled navbar background</div>
+                      </div>
+                    </div>
+                    <div class="col-6">
+                      <div class="shop-form-group">
+                        <label style="font-size: 12px; font-weight: 600;">Text & Logo Color</label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <input type="color" id="picker_header_text" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                          <input type="text" id="hex_header_text" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#FFFFFF" maxlength="9">
+                        </div>
+                        <div class="hint" style="margin-top: 4px; font-size: 11px;">Brand name and menu link text</div>
+                      </div>
+                    </div>
+                    <div class="col-6" style="margin-top: 10px;">
+                      <div class="shop-form-group">
+                        <label style="font-size: 12px; font-weight: 600;">Active Link & Accent</label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <input type="color" id="picker_header_nav_active" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                          <input type="text" id="hex_header_nav_active" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#E6B15F" maxlength="9">
+                        </div>
+                        <div class="hint" style="margin-top: 4px; font-size: 11px;">Active link dot and hover state</div>
+                      </div>
+                    </div>
+                    <div class="col-6" style="margin-top: 10px;">
+                      <div class="shop-form-group">
+                        <label style="font-size: 12px; font-weight: 600;">Navbar Border Color</label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <input type="color" id="picker_header_border" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                          <input type="text" id="hex_header_border" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#2A4A45" maxlength="9">
+                        </div>
+                        <div class="hint" style="margin-top: 4px; font-size: 11px;">Divider line below sticky header</div>
+                      </div>
+                    </div>
+                    <div class="col-6" style="margin-top: 10px;">
+                      <div class="shop-form-group">
+                        <label style="font-size: 12px; font-weight: 600;">Reservation Button BG</label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <input type="color" id="picker_header_btn_bg" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                          <input type="text" id="hex_header_btn_bg" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#E6B15F" maxlength="9">
+                        </div>
+                        <div class="hint" style="margin-top: 4px; font-size: 11px;">Table booking CTA in header</div>
+                      </div>
+                    </div>
+                    <div class="col-6" style="margin-top: 10px;">
+                      <div class="shop-form-group">
+                        <label style="font-size: 12px; font-weight: 600;">Reservation Button Text</label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <input type="color" id="picker_header_btn_text" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                          <input type="text" id="hex_header_btn_text" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#000000" maxlength="9">
+                        </div>
+                        <div class="hint" style="margin-top: 4px; font-size: 11px;">Button label text color</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right Column: Footer Styling -->
+              <div class="col-6">
+                <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); height: 100%;">
+                  <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                    <div style="width: 34px; height: 34px; border-radius: 8px; background: #fce7f3; color: #be185d; display: flex; align-items: center; justify-content: center; font-size: 15px;">
+                      <i class="fa-solid fa-shoe-prints"></i>
+                    </div>
+                    <div>
+                      <h5 style="margin: 0; font-size: 13px; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px;">Footer Styling & Atmosphere</h5>
+                      <span style="font-size: 11px; color: #64748b;">Colors and backdrop texture for page bottom</span>
+                    </div>
+                  </div>
+
+                  <div class="row">
+                    <div class="col-6">
+                      <div class="shop-form-group">
+                        <label style="font-size: 12px; font-weight: 600;">Footer Base Background</label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <input type="color" id="picker_footer_bg" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                          <input type="text" id="hex_footer_bg" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#0A1A16" maxlength="9">
+                        </div>
+                        <div class="hint" style="margin-top: 4px; font-size: 11px;">Dark overlay / base canvas</div>
+                      </div>
+                    </div>
+                    <div class="col-6">
+                      <div class="shop-form-group">
+                        <label style="font-size: 12px; font-weight: 600;">Footer Headings & Title</label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <input type="color" id="picker_footer_heading_color" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                          <input type="text" id="hex_footer_heading_color" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#FFFFFF" maxlength="9">
+                        </div>
+                        <div class="hint" style="margin-top: 4px; font-size: 11px;">Brand name and column headers</div>
+                      </div>
+                    </div>
+                    <div class="col-6" style="margin-top: 10px;">
+                      <div class="shop-form-group">
+                        <label style="font-size: 12px; font-weight: 600;">Footer Text Color</label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <input type="color" id="picker_footer_text" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                          <input type="text" id="hex_footer_text" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#CBD5E1" maxlength="9">
+                        </div>
+                        <div class="hint" style="margin-top: 4px; font-size: 11px;">Description, address & copyright</div>
+                      </div>
+                    </div>
+                    <div class="col-6" style="margin-top: 10px;">
+                      <div class="shop-form-group">
+                        <label style="font-size: 12px; font-weight: 600;">Footer Accent & Stars</label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <input type="color" id="picker_footer_accent" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                          <input type="text" id="hex_footer_accent" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#E6B15F" maxlength="9">
+                        </div>
+                        <div class="hint" style="margin-top: 4px; font-size: 11px;">✦ stars and link hover accents</div>
+                      </div>
+                    </div>
+                    <div class="col-6" style="margin-top: 10px;">
+                      <div class="shop-form-group">
+                        <label style="font-size: 12px; font-weight: 600;">Newsletter Button BG</label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <input type="color" id="picker_footer_btn_bg" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                          <input type="text" id="hex_footer_btn_bg" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#E6B15F" maxlength="9">
+                        </div>
+                        <div class="hint" style="margin-top: 4px; font-size: 11px;">Newsletter subscribe button</div>
+                      </div>
+                    </div>
+                    <div class="col-6" style="margin-top: 10px;">
+                      <div class="shop-form-group">
+                        <label style="font-size: 12px; font-weight: 600;">Newsletter Button Text</label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                          <input type="color" id="picker_footer_btn_text" class="theme-color-picker" style="width: 36px; height: 36px; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; padding: 2px;">
+                          <input type="text" id="hex_footer_btn_text" class="shop-input" style="flex: 1; font-family: monospace; font-size: 12px; height: 36px; text-transform: uppercase;" placeholder="#000000" maxlength="9">
+                        </div>
+                        <div class="hint" style="margin-top: 4px; font-size: 11px;">Button label text color</div>
+                      </div>
+                    </div>
+
+                    <!-- Footer Background Image Controls -->
+                    <div class="col-12" style="margin-top: 14px;">
+                      <div class="shop-form-group">
+                        <label style="font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+                          <span><i class="fa-regular fa-image" style="color: #6366f1;"></i> Footer Background Image URL</span>
+                          <span style="font-size: 11px; font-weight: normal; color: #64748b;">(Optional texture overlay)</span>
+                        </label>
+                        <input type="text" id="theme_footer_bg_image_url" class="shop-input" style="font-size: 12px; width: 100%;" placeholder="https://images.unsplash.com/... (or leave blank for solid)">
+                        <div style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+                          <span style="font-size: 11px; color: #64748b; font-weight: 600;">Presets:</span>
+                          <button type="button" class="btn btn-sm" style="padding: 3px 9px; font-size: 11px; background: #f1f5f9; color: #334155; border-radius: 6px; border: 1px solid #cbd5e1; cursor: pointer;" onclick="setFooterBgPreset('ambient')">🍷 Ambient Dining</button>
+                          <button type="button" class="btn btn-sm" style="padding: 3px 9px; font-size: 11px; background: #f1f5f9; color: #334155; border-radius: 6px; border: 1px solid #cbd5e1; cursor: pointer;" onclick="setFooterBgPreset('cellar')">🍾 Wine Cellar</button>
+                          <button type="button" class="btn btn-sm" style="padding: 3px 9px; font-size: 11px; background: #f1f5f9; color: #334155; border-radius: 6px; border: 1px solid #cbd5e1; cursor: pointer;" onclick="setFooterBgPreset('marble')">🏛️ Dark Marble</button>
+                          <button type="button" class="btn btn-sm" style="padding: 3px 9px; font-size: 11px; background: #fee2e2; color: #991b1b; border-radius: 6px; border: 1px solid #fca5a5; cursor: pointer;" onclick="setFooterBgPreset('')">🚫 None (Solid)</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -4918,6 +5570,13 @@ ${rName} reserves the right to modify or update these Terms of Service at any ti
 
     // Initialize FAQs rendering
     renderFaqList();
+
+    // Initialize Website Theme customizer
+    try {
+      initThemeCustomizer();
+    } catch (e) {
+      console.error('Error initializing theme customizer:', e);
+    }
   });
 
   function validateHeroVideo(input) {
@@ -4953,5 +5612,696 @@ ${rName} reserves the right to modify or update these Terms of Service at any ti
       feedback.innerHTML = `<i class="fa-solid fa-circle-check"></i> Selected: <strong>${file.name}</strong> (${sizeMb.toFixed(1)} MB) — Ready to upload`;
     }
   }
+
+  /* ══════════════════════════════════════════════════════════════════
+     THEME & COLOR PALETTE CUSTOMIZER CONTROLLER
+     ══════════════════════════════════════════════════════════════════ */
+  const THEME_PRESETS = {
+    emerald_gold: {
+      name: 'Emerald & Gold (Signature Luxury)',
+      primary: '#e6b15f',
+      primary_hover: '#f0c878',
+      primary_foreground: '#000000',
+      secondary: '#d4aa5f',
+      background: '#18312e',
+      background_secondary: '#122623',
+      surface: '#1a3733',
+      surface_hover: '#1e3d39',
+      text_primary: '#ffffff',
+      text_secondary: '#b3bdbb',
+      header_bg: '#18312e',
+      header_text: '#ffffff',
+      header_nav_active: '#e6b15f',
+      header_btn_bg: '#e6b15f',
+      header_btn_text: '#000000',
+      header_border: 'rgba(255,255,255,0.1)',
+      footer_bg: '#0a1a16',
+      footer_heading_color: '#ffffff',
+      footer_text: 'rgba(255,255,255,0.7)',
+      footer_accent: '#e6b15f',
+      footer_btn_bg: '#e6b15f',
+      footer_btn_text: '#000000',
+      footer_bg_image_url: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1920&q=80'
+    },
+    midnight_amber: {
+      name: 'Obsidian & Amber',
+      primary: '#f59e0b',
+      primary_hover: '#fbbf24',
+      primary_foreground: '#000000',
+      secondary: '#d97706',
+      background: '#0b0f19',
+      background_secondary: '#070a10',
+      surface: '#151c2c',
+      surface_hover: '#1e283d',
+      text_primary: '#ffffff',
+      text_secondary: '#94a3b8',
+      header_bg: '#0b0f19',
+      header_text: '#ffffff',
+      header_nav_active: '#f59e0b',
+      header_btn_bg: '#f59e0b',
+      header_btn_text: '#000000',
+      header_border: 'rgba(245,158,11,0.2)',
+      footer_bg: '#05070c',
+      footer_heading_color: '#ffffff',
+      footer_text: '#94a3b8',
+      footer_accent: '#f59e0b',
+      footer_btn_bg: '#f59e0b',
+      footer_btn_text: '#000000',
+      footer_bg_image_url: 'https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?auto=format&fit=crop&w=1920&q=80'
+    },
+    royal_burgundy: {
+      name: 'Burgundy & Rose',
+      primary: '#e09f87',
+      primary_hover: '#ecc0b1',
+      primary_foreground: '#000000',
+      secondary: '#c88069',
+      background: '#260f17',
+      background_secondary: '#19080e',
+      surface: '#381724',
+      surface_hover: '#481f2f',
+      text_primary: '#ffffff',
+      text_secondary: '#d1b2bb',
+      header_bg: '#260f17',
+      header_text: '#ffffff',
+      header_nav_active: '#e09f87',
+      header_btn_bg: '#e09f87',
+      header_btn_text: '#000000',
+      header_border: 'rgba(224,159,135,0.15)',
+      footer_bg: '#15060b',
+      footer_heading_color: '#ffffff',
+      footer_text: '#d1b2bb',
+      footer_accent: '#e09f87',
+      footer_btn_bg: '#e09f87',
+      footer_btn_text: '#000000',
+      footer_bg_image_url: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&w=1920&q=80'
+    },
+    deep_ocean: {
+      name: 'Deep Ocean & Champagne',
+      primary: '#d4af37',
+      primary_hover: '#e5c453',
+      primary_foreground: '#000000',
+      secondary: '#b89628',
+      background: '#0c1a2e',
+      background_secondary: '#060e1a',
+      surface: '#142845',
+      surface_hover: '#1d3860',
+      text_primary: '#ffffff',
+      text_secondary: '#9fb3cd',
+      header_bg: '#0c1a2e',
+      header_text: '#ffffff',
+      header_nav_active: '#d4af37',
+      header_btn_bg: '#d4af37',
+      header_btn_text: '#000000',
+      header_border: 'rgba(212,175,55,0.15)',
+      footer_bg: '#050b14',
+      footer_heading_color: '#ffffff',
+      footer_text: '#9fb3cd',
+      footer_accent: '#d4af37',
+      footer_btn_bg: '#d4af37',
+      footer_btn_text: '#000000',
+      footer_bg_image_url: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1920&q=80'
+    },
+    warm_espresso: {
+      name: 'Warm Espresso & Terracotta',
+      primary: '#e07a5f',
+      primary_hover: '#eb927a',
+      primary_foreground: '#ffffff',
+      secondary: '#c9654b',
+      background: '#1e1513',
+      background_secondary: '#130c0a',
+      surface: '#2c1f1c',
+      surface_hover: '#3a2b27',
+      text_primary: '#ffffff',
+      text_secondary: '#c8b6b2',
+      header_bg: '#1e1513',
+      header_text: '#ffffff',
+      header_nav_active: '#e07a5f',
+      header_btn_bg: '#e07a5f',
+      header_btn_text: '#ffffff',
+      header_border: 'rgba(224,122,95,0.15)',
+      footer_bg: '#100908',
+      footer_heading_color: '#ffffff',
+      footer_text: '#c8b6b2',
+      footer_accent: '#e07a5f',
+      footer_btn_bg: '#e07a5f',
+      footer_btn_text: '#ffffff',
+      footer_bg_image_url: 'https://images.unsplash.com/photo-1442512595331-e89e73853f31?auto=format&fit=crop&w=1920&q=80'
+    },
+    pure_noir: {
+      name: 'Pure Noir & Silver',
+      primary: '#e2e8f0',
+      primary_hover: '#ffffff',
+      primary_foreground: '#0a0a0a',
+      secondary: '#94a3b8',
+      background: '#0a0a0a',
+      background_secondary: '#000000',
+      surface: '#171717',
+      surface_hover: '#262626',
+      text_primary: '#ffffff',
+      text_secondary: '#a3a3a3',
+      header_bg: '#0a0a0a',
+      header_text: '#ffffff',
+      header_nav_active: '#e2e8f0',
+      header_btn_bg: '#e2e8f0',
+      header_btn_text: '#0a0a0a',
+      header_border: 'rgba(255,255,255,0.12)',
+      footer_bg: '#000000',
+      footer_heading_color: '#ffffff',
+      footer_text: '#a3a3a3',
+      footer_accent: '#e2e8f0',
+      footer_btn_bg: '#e2e8f0',
+      footer_btn_text: '#0a0a0a',
+      footer_bg_image_url: 'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?auto=format&fit=crop&w=1920&q=80'
+    }
+  };
+
+  // Aliases for backwards compatibility and variant keys
+  THEME_PRESETS.midnight_amethyst = THEME_PRESETS.midnight_amber;
+  THEME_PRESETS.crimson_rose = THEME_PRESETS.royal_burgundy;
+
+  const PRESET_ALIASES = {
+    'midnight_amber': 'midnight_amber',
+    'midnight_amethyst': 'midnight_amber',
+    'obsidian_amber': 'midnight_amber',
+    'royal_burgundy': 'royal_burgundy',
+    'crimson_rose': 'royal_burgundy',
+    'burgundy_rose': 'royal_burgundy',
+    'deep_ocean': 'deep_ocean',
+    'ocean_champagne': 'deep_ocean',
+    'warm_espresso': 'warm_espresso',
+    'espresso_terracotta': 'warm_espresso',
+    'emerald_gold': 'emerald_gold',
+    'pure_noir': 'pure_noir',
+    'pure_noir_silver': 'pure_noir'
+  };
+
+  const THEME_KEYS = [
+    // General Brand & Page
+    'primary', 'primary_hover', 'primary_foreground', 'secondary',
+    'background', 'background_secondary', 'surface', 'surface_hover',
+    'text_primary', 'text_secondary',
+    // Header
+    'header_bg', 'header_text', 'header_nav_active', 'header_btn_bg', 'header_btn_text', 'header_border',
+    // Footer
+    'footer_bg', 'footer_heading_color', 'footer_text', 'footer_accent', 'footer_btn_bg', 'footer_btn_text'
+  ];
+
+  let currentThemeConfig = {};
+
+  function normalizeHex(color) {
+    if (!color || typeof color !== 'string') return '#ffffff';
+    color = color.trim();
+    if (color.startsWith('#')) {
+      if (/^#[0-9a-fA-F]{6}$/.test(color)) return color.toLowerCase();
+      if (/^#[0-9a-fA-F]{3}$/.test(color)) {
+        return ('#' + color[1] + color[1] + color[2] + color[2] + color[3] + color[3]).toLowerCase();
+      }
+    }
+    const rgb = color.match(/\d+/g);
+    if (rgb && rgb.length >= 3) {
+      const r = Math.min(255, Math.max(0, parseInt(rgb[0], 10))).toString(16).padStart(2, '0');
+      const g = Math.min(255, Math.max(0, parseInt(rgb[1], 10))).toString(16).padStart(2, '0');
+      const b = Math.min(255, Math.max(0, parseInt(rgb[2], 10))).toString(16).padStart(2, '0');
+      return ('#' + r + g + b).toLowerCase();
+    }
+    return '#ffffff';
+  }
+
+  function getSavedThemeConfig() {
+    // 1. Try reading Django json_script element
+    const scriptEl = document.getElementById('initial-theme-config');
+    if (scriptEl && scriptEl.textContent) {
+      try {
+        const parsed = JSON.parse(scriptEl.textContent);
+        if (parsed && typeof parsed === 'object' && parsed.primary) {
+          return parsed;
+        }
+      } catch (e) {
+        console.warn('Could not parse initial-theme-config JSON:', e);
+      }
+    }
+
+    // 2. Fallback to hidden input
+    const inputEl = document.getElementById('id_theme_config');
+    if (inputEl && inputEl.value) {
+      try {
+        const parsed = JSON.parse(inputEl.value);
+        if (parsed && typeof parsed === 'object' && parsed.primary) {
+          return parsed;
+        }
+      } catch (e) {
+        console.warn('Could not parse id_theme_config value:', e);
+      }
+    }
+    return null;
+  }
+
+  function fillDefaults(cfg) {
+    if (!cfg) cfg = {};
+    const resolvedPreset = PRESET_ALIASES[cfg.preset] || cfg.preset;
+    const basePreset = THEME_PRESETS[resolvedPreset] || THEME_PRESETS.emerald_gold;
+    const filled = { ...basePreset, ...cfg };
+    filled.website_type = cfg.website_type || filled.website_type || 'default';
+
+    // Fallbacks for header
+    filled.header_bg = filled.header_bg || filled.background || '#18312e';
+    filled.header_text = filled.header_text || filled.text_primary || '#ffffff';
+    filled.header_nav_active = filled.header_nav_active || filled.primary || '#e6b15f';
+    filled.header_btn_bg = filled.header_btn_bg || filled.primary || '#e6b15f';
+    filled.header_btn_text = filled.header_btn_text || filled.primary_foreground || '#000000';
+    filled.header_border = filled.header_border || 'rgba(255,255,255,0.1)';
+
+    // Fallbacks for footer
+    filled.footer_bg = filled.footer_bg || filled.background_secondary || '#0a1a16';
+    filled.footer_heading_color = filled.footer_heading_color || filled.text_primary || '#ffffff';
+    filled.footer_text = filled.footer_text || filled.text_secondary || 'rgba(255,255,255,0.7)';
+    filled.footer_accent = filled.footer_accent || filled.primary || '#e6b15f';
+    filled.footer_btn_bg = filled.footer_btn_bg || filled.primary || '#e6b15f';
+    filled.footer_btn_text = filled.footer_btn_text || filled.primary_foreground || '#000000';
+    if (filled.footer_bg_image_url === undefined) {
+      filled.footer_bg_image_url = basePreset.footer_bg_image_url || '';
+    }
+    return filled;
+  }
+
+  function initThemeCustomizer() {
+    try {
+      const saved = getSavedThemeConfig();
+      currentThemeConfig = fillDefaults(saved || { preset: 'emerald_gold' });
+
+      // Populate all pickers and hex inputs
+      THEME_KEYS.forEach(key => {
+        const picker = document.getElementById('picker_' + key);
+        const hex = document.getElementById('hex_' + key);
+        const val = currentThemeConfig[key] || '#ffffff';
+
+        if (picker && hex) {
+          try {
+            picker.value = normalizeHex(val);
+          } catch (e) {}
+          hex.value = val.toUpperCase();
+
+          // Color picker change listener
+          picker.addEventListener('input', function () {
+            hex.value = this.value.toUpperCase();
+            currentThemeConfig[key] = this.value;
+            currentThemeConfig.preset = 'custom';
+            markPresetActive('custom');
+            syncThemeJsonAndPreview();
+          });
+
+          // Hex text change listener
+          hex.addEventListener('input', function () {
+            let v = this.value.trim();
+            if (v && !v.startsWith('#') && !v.startsWith('rgb')) {
+              v = '#' + v;
+            }
+            if (v.length === 7 && /^#[0-9A-Fa-f]{6}$/.test(v)) {
+              try {
+                picker.value = v.toLowerCase();
+              } catch (e) {}
+              currentThemeConfig[key] = v;
+              currentThemeConfig.preset = 'custom';
+              markPresetActive('custom');
+              syncThemeJsonAndPreview();
+            }
+          });
+        }
+      });
+
+      // Footer Background Image URL input listener
+      const imgInput = document.getElementById('theme_footer_bg_image_url');
+      if (imgInput) {
+        imgInput.value = currentThemeConfig.footer_bg_image_url || '';
+        imgInput.addEventListener('input', function () {
+          currentThemeConfig.footer_bg_image_url = this.value.trim();
+          currentThemeConfig.preset = 'custom';
+          markPresetActive('custom');
+          syncThemeJsonAndPreview();
+        });
+      }
+
+      // Detect if current config matches any preset
+      if (!currentThemeConfig.preset || currentThemeConfig.preset === 'custom') {
+        const matched = Object.keys(THEME_PRESETS).find(pKey => {
+          const p = THEME_PRESETS[pKey];
+          return p.primary && currentThemeConfig.primary &&
+                 p.primary.toLowerCase() === currentThemeConfig.primary.toLowerCase() &&
+                 p.background && currentThemeConfig.background &&
+                 p.background.toLowerCase() === currentThemeConfig.background.toLowerCase();
+        });
+        if (matched) {
+          currentThemeConfig.preset = matched;
+        }
+      }
+
+      currentThemeConfig.website_type = currentThemeConfig.website_type || 'default';
+      updateWebsiteTypeUI(currentThemeConfig.website_type);
+      markPresetActive(currentThemeConfig.preset || 'custom');
+      syncThemeJsonAndPreview();
+    } catch (err) {
+      console.error('Error initializing theme customizer:', err);
+    }
+  }
+
+  function applyPreset(presetKey) {
+    try {
+      if (!presetKey) return;
+      const resolvedKey = PRESET_ALIASES[presetKey] || presetKey;
+      const preset = THEME_PRESETS[resolvedKey] || THEME_PRESETS.emerald_gold;
+
+      const prevWebsiteType = currentThemeConfig.website_type || 'default';
+      currentThemeConfig = fillDefaults({ ...preset, preset: resolvedKey, website_type: prevWebsiteType });
+      updateWebsiteTypeUI(currentThemeConfig.website_type);
+
+      THEME_KEYS.forEach(key => {
+        const picker = document.getElementById('picker_' + key);
+        const hex = document.getElementById('hex_' + key);
+        const val = currentThemeConfig[key];
+        if (picker && val) {
+          try {
+            picker.value = normalizeHex(val);
+          } catch (e) {}
+        }
+        if (hex && val) {
+          hex.value = val.toUpperCase();
+        }
+      });
+
+      const imgInput = document.getElementById('theme_footer_bg_image_url');
+      if (imgInput) {
+        imgInput.value = currentThemeConfig.footer_bg_image_url || '';
+      }
+
+      markPresetActive(resolvedKey);
+      syncThemeJsonAndPreview();
+      showThemeNotification('Applied Theme: ' + (preset.name || resolvedKey));
+    } catch (err) {
+      console.error('Error applying theme preset ' + presetKey + ':', err);
+    }
+  }
+
+  function setFooterBgPreset(type) {
+    try {
+      const imgMap = {
+        ambient: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1920&q=80',
+        cellar: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&w=1920&q=80',
+        marble: 'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?auto=format&fit=crop&w=1920&q=80'
+      };
+      const url = imgMap[type] || '';
+      const imgInput = document.getElementById('theme_footer_bg_image_url');
+      if (imgInput) {
+        imgInput.value = url;
+      }
+      currentThemeConfig.footer_bg_image_url = url;
+      currentThemeConfig.preset = 'custom';
+      markPresetActive('custom');
+      syncThemeJsonAndPreview();
+      showThemeNotification(url ? 'Footer background image updated' : 'Footer set to solid color');
+    } catch (err) {
+      console.error('Error setting footer bg preset:', err);
+    }
+  }
+
+  function markPresetActive(presetKey) {
+    try {
+      const resolved = PRESET_ALIASES[presetKey] || presetKey;
+      document.querySelectorAll('.theme-preset-card').forEach(card => {
+        const cardPreset = card.getAttribute('data-preset');
+        const cardResolved = PRESET_ALIASES[cardPreset] || cardPreset;
+        if (cardResolved === resolved) {
+          const activeCol = currentThemeConfig.primary || '#e6b15f';
+          card.style.borderColor = activeCol;
+          card.style.boxShadow = '0 0 0 3px ' + activeCol + '40, 0 6px 16px rgba(0,0,0,0.08)';
+          card.classList.add('active');
+        } else {
+          card.style.borderColor = '#e2e8f0';
+          card.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)';
+          card.classList.remove('active');
+        }
+      });
+    } catch (err) {
+      console.error('Error marking preset active:', err);
+    }
+  }
+
+  function selectWebsiteType(type) {
+    try {
+      type = (type === 'rounded') ? 'rounded' : 'default';
+      currentThemeConfig.website_type = type;
+      updateWebsiteTypeUI(type);
+      syncThemeJsonAndPreview();
+      showThemeNotification('Website Type set to: ' + (type === 'rounded' ? 'Rounded' : 'Default'));
+    } catch (err) {
+      console.error('Error selecting website type:', err);
+    }
+  }
+
+  function updateWebsiteTypeUI(type) {
+    try {
+      type = (type === 'rounded') ? 'rounded' : 'default';
+      document.querySelectorAll('.website-type-option').forEach(opt => {
+        if (opt.getAttribute('data-type') === type) {
+          opt.classList.add('active');
+          opt.style.borderColor = '#6366f1';
+          opt.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.22)';
+        } else {
+          opt.classList.remove('active');
+          opt.style.borderColor = '#e2e8f0';
+          opt.style.boxShadow = 'none';
+        }
+      });
+      const badge = document.getElementById('website-type-badge');
+      if (badge) {
+        badge.textContent = 'Active: ' + (type === 'rounded' ? 'Rounded' : 'Default');
+        badge.style.background = (type === 'rounded') ? '#ede9fe' : '#e0e7ff';
+        badge.style.color = (type === 'rounded') ? '#6d28d9' : '#4338ca';
+      }
+    } catch (e) {}
+  }
+
+  function resetThemeToDefault() {
+    if (confirm('Restore the original Emerald & Gold signature luxury theme?')) {
+      applyPreset('emerald_gold');
+    }
+  }
+
+  function showThemeNotification(msg) {
+    try {
+      let toast = document.getElementById('theme-toast-notice');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'theme-toast-notice';
+        toast.style.position = 'fixed';
+        toast.style.bottom = '24px';
+        toast.style.right = '24px';
+        toast.style.background = '#0f172a';
+        toast.style.color = '#ffffff';
+        toast.style.padding = '10px 18px';
+        toast.style.borderRadius = '8px';
+        toast.style.fontSize = '12px';
+        toast.style.fontWeight = '600';
+        toast.style.boxShadow = '0 10px 25px rgba(0,0,0,0.2)';
+        toast.style.zIndex = '99999';
+        toast.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(12px)';
+        toast.style.pointerEvents = 'none';
+        document.body.appendChild(toast);
+      }
+      toast.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles" style="color: #e6b15f; margin-right: 8px;"></i>' + msg;
+      toast.style.opacity = '1';
+      toast.style.transform = 'translateY(0)';
+      clearTimeout(toast._timeout);
+      toast._timeout = setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(12px)';
+      }, 2400);
+    } catch (e) {}
+  }
+
+  function syncThemeJsonAndPreview() {
+    try {
+      // Collect latest values from inputs
+      THEME_KEYS.forEach(key => {
+        const hex = document.getElementById('hex_' + key);
+        if (hex && hex.value.trim()) {
+          currentThemeConfig[key] = hex.value.trim();
+        }
+      });
+
+      const imgInput = document.getElementById('theme_footer_bg_image_url');
+      if (imgInput) {
+        currentThemeConfig.footer_bg_image_url = imgInput.value.trim();
+      }
+
+      const p = currentThemeConfig.primary || '#e6b15f';
+      const pHover = currentThemeConfig.primary_hover || '#f0c878';
+      currentThemeConfig.gradient_primary = `linear-gradient(135deg, ${p} 0%, ${pHover} 100%)`;
+
+      // Write to hidden input for form submission
+      const jsonInput = document.getElementById('id_theme_config');
+      if (jsonInput) {
+        jsonInput.value = JSON.stringify(currentThemeConfig);
+      }
+
+      updateLiveThemePreview();
+    } catch (err) {
+      console.error('Error syncing theme JSON:', err);
+    }
+  }
+
+  function updateLiveThemePreview() {
+    try {
+      const p = currentThemeConfig.primary || '#e6b15f';
+      const pHover = currentThemeConfig.primary_hover || '#f0c878';
+      const pFore = currentThemeConfig.primary_foreground || '#000000';
+      const bg = currentThemeConfig.background || '#18312e';
+      const surf = currentThemeConfig.surface || '#1a3733';
+      const textPri = currentThemeConfig.text_primary || '#ffffff';
+      const textSec = currentThemeConfig.text_secondary || 'rgba(255,255,255,0.7)';
+
+      // Header values
+      const headerBg = currentThemeConfig.header_bg || bg;
+      const headerText = currentThemeConfig.header_text || textPri;
+      const headerNavActive = currentThemeConfig.header_nav_active || p;
+      const headerBtnBg = currentThemeConfig.header_btn_bg || p;
+      const headerBtnText = currentThemeConfig.header_btn_text || pFore;
+      const headerBorder = currentThemeConfig.header_border || 'rgba(255,255,255,0.1)';
+
+      // Footer values
+      const footerBg = currentThemeConfig.footer_bg || currentThemeConfig.background_secondary || '#0a1a16';
+      const footerHeading = currentThemeConfig.footer_heading_color || textPri;
+      const footerText = currentThemeConfig.footer_text || textSec;
+      const footerAccent = currentThemeConfig.footer_accent || p;
+      const footerBtnBg = currentThemeConfig.footer_btn_bg || p;
+      const footerBtnText = currentThemeConfig.footer_btn_text || pFore;
+
+      // Container box
+      const box = document.getElementById('theme-live-preview-box');
+      if (box) {
+        box.style.background = bg;
+        box.style.color = textPri;
+      }
+
+      // Mini Header Preview
+      const miniHeader = document.getElementById('preview-mini-header');
+      if (miniHeader) {
+        miniHeader.style.background = headerBg;
+        miniHeader.style.borderBottomColor = headerBorder;
+      }
+      const headerBrand = document.getElementById('preview-header-brand');
+      if (headerBrand) headerBrand.style.color = headerText;
+
+      const headerLink = document.getElementById('preview-header-link');
+      if (headerLink) headerLink.style.color = headerNavActive;
+
+      const headerBtn = document.getElementById('preview-header-btn');
+      if (headerBtn) {
+        headerBtn.style.background = headerBtnBg;
+        headerBtn.style.color = headerBtnText;
+        headerBtn.style.borderRadius = isRounded ? '9999px' : '4px';
+      }
+
+      // Hero Accents
+      const heroTag = document.getElementById('preview-hero-tag');
+      if (heroTag) heroTag.style.color = p;
+
+      const heroHeading = document.getElementById('preview-hero-heading');
+      if (heroHeading) heroHeading.style.color = textPri;
+
+      const heroItalic = document.getElementById('preview-hero-italic');
+      if (heroItalic) heroItalic.style.color = p;
+
+      const heroDesc = document.getElementById('preview-hero-desc');
+      if (heroDesc) heroDesc.style.color = textSec;
+
+      const isRounded = (currentThemeConfig.website_type === 'rounded');
+
+      // Filled Button
+      const btnFilled = document.getElementById('preview-btn-filled');
+      if (btnFilled) {
+        btnFilled.style.background = p;
+        btnFilled.style.borderColor = p;
+        btnFilled.style.color = pFore;
+        btnFilled.style.borderRadius = isRounded ? '9999px' : '0px';
+        btnFilled.onmouseenter = () => { btnFilled.style.background = pHover; };
+        btnFilled.onmouseleave = () => { btnFilled.style.background = p; };
+      }
+
+      // Outline Button
+      const btnOutline = document.getElementById('preview-btn-outline');
+      if (btnOutline) {
+        btnOutline.style.color = p;
+        btnOutline.style.borderColor = p;
+        btnOutline.style.borderRadius = isRounded ? '9999px' : '0px';
+      }
+
+      // Card
+      const card = document.getElementById('preview-card');
+      if (card) {
+        card.style.background = surf;
+        card.style.borderRadius = isRounded ? '16px' : '8px';
+      }
+
+      const cardTitle = document.getElementById('preview-card-title');
+      if (cardTitle) cardTitle.style.color = textPri;
+
+      const cardDesc = document.getElementById('preview-card-desc');
+      if (cardDesc) cardDesc.style.color = textSec;
+
+      const cardPrice = document.getElementById('preview-card-price');
+      if (cardPrice) cardPrice.style.color = p;
+
+      const cardBadge = document.getElementById('preview-card-badge');
+      if (cardBadge) {
+        cardBadge.style.color = p;
+        cardBadge.style.background = p + '25';
+      }
+
+      const cardAdd = document.getElementById('preview-card-add');
+      if (cardAdd) cardAdd.style.color = p;
+
+      // Mini Footer Preview
+      const miniFooter = document.getElementById('preview-mini-footer');
+      if (miniFooter) {
+        miniFooter.style.background = footerBg;
+      }
+      const footerHeadingEl = document.getElementById('preview-footer-heading');
+      if (footerHeadingEl) footerHeadingEl.style.color = footerHeading;
+
+      const footerAccentEl = document.getElementById('preview-footer-accent');
+      if (footerAccentEl) footerAccentEl.style.color = footerAccent;
+
+      const footerDescEl = document.getElementById('preview-footer-desc');
+      if (footerDescEl) footerDescEl.style.color = footerText;
+
+      const footerBtn = document.getElementById('preview-footer-btn');
+      if (footerBtn) {
+        footerBtn.style.background = footerBtnBg;
+        footerBtn.style.color = footerBtnText;
+        footerBtn.style.borderRadius = isRounded ? '9999px' : '3px';
+      }
+    } catch (err) {
+      console.error('Error updating live theme preview:', err);
+    }
+  }
+
+  // Ensure theme is synced whenever any form is submitted
+  document.addEventListener('submit', function () {
+    try {
+      syncThemeJsonAndPreview();
+    } catch (e) {}
+  });
+
+  // Also bind to any submit button in the appearance tab
+  document.querySelectorAll('button[type="submit"]').forEach(btn => {
+    btn.addEventListener('click', function () {
+      try {
+        syncThemeJsonAndPreview();
+      } catch (e) {}
+    });
+  });
+
 </script>
 {% endblock %}

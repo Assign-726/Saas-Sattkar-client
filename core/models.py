@@ -1433,6 +1433,10 @@ class RestaurantLanding(models.Model):
     # Page-wise FAQ config JSON
     # e.g. {"home": [{"id": "...", "question": "...", "answer": "...", "order": 1, "active": true}], ...}
     pages_faq = models.JSONField(default=dict, blank=True)
+
+    # Dynamic Website Theme & Colors config JSON
+    # e.g. {"preset": "emerald_gold", "primary": "#e6b15f", "background": "#18312e", ...}
+    theme_config = models.JSONField(default=dict, blank=True, help_text="Custom color scheme and theme settings")
     
     show_hero = models.BooleanField(default=True, verbose_name="Show Hero Section")
     show_about = models.BooleanField(default=True, verbose_name="Show About Us Section")

@@ -1,0 +1,1476 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block title %}Credit Note & Refund Desk | {{ restaurant.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ==========================================================================
+       CREDIT NOTE DESK - EXACT REPLICATION OF creditNote.html SPECIFICATION
+       ========================================================================== */
+    :root {
+        --cn-primary: #4338ca; 
+        --cn-primary-hover: #3730a3; 
+        --cn-primary-glow: rgba(67, 56, 202, 0.2);
+        --cn-bg-base: #f8fafc; 
+        --cn-surface: #ffffff;
+        --cn-text-dark: #0f172a; 
+        --cn-text-muted: #64748b;
+        --cn-border-soft: #e2e8f0; 
+        --cn-locked-bg: #f1f5f9;
+        --cn-success: #10b981; 
+        --cn-b2b-color: #0284c7;
+        /* Tally Focus Elements */
+        --tally-focus-bg: #fef9e7; 
+        --tally-focus-border: #f59e0b;
+    }
+
+    /* Page Workspace Container */
+    .cn-workspace {
+        min-height: calc(100vh - 70px);
+        background-color: var(--cn-bg-base);
+        color: var(--cn-text-dark);
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        padding-bottom: 120px;
+        position: relative;
+    }
+
+    /* Strict Audit Header */
+    .header-modern {
+        padding: 24px 35px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: var(--cn-surface);
+        border-bottom: 1px solid var(--cn-border-soft);
+        margin-bottom: 25px;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+    .header-left h1 {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--cn-text-dark);
+    }
+    .tag-refund {
+        background: #fee2e2;
+        color: #b91c1c;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .header-left p {
+        color: var(--cn-text-muted);
+        font-size: 13px;
+        margin: 0;
+    }
+
+    .header-meta-bar {
+        display: flex;
+        align-items: center;
+        background: var(--cn-bg-base);
+        padding: 8px 16px;
+        border-radius: 8px;
+        border: 1px solid var(--cn-border-soft);
+    }
+    .meta-block {
+        display: flex;
+        flex-direction: column;
+        padding: 0 16px;
+    }
+    .meta-block:first-child { padding-left: 0; }
+    .meta-block:last-child { padding-right: 0; }
+    .meta-divider {
+        width: 1px;
+        height: 24px;
+        background-color: var(--cn-border-soft);
+    }
+    .meta-label {
+        font-size: 10px;
+        text-transform: uppercase;
+        font-weight: 700;
+        color: var(--cn-text-muted);
+        margin-bottom: 2px;
+    }
+    .meta-value {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--cn-text-dark);
+    }
+    .cn-highlight {
+        color: var(--cn-primary);
+        font-family: monospace;
+        font-size: 14px;
+    }
+
+    /* Core Form Grid Layout */
+    .content-grid {
+        padding: 0 35px;
+        display: grid;
+        grid-template-columns: minmax(400px, 1fr) 350px;
+        gap: 30px;
+        align-items: start;
+        max-width: 1240px;
+        margin: 0 auto;
+    }
+    @media (max-width: 992px) {
+        .content-grid {
+            grid-template-columns: 1fr;
+            padding: 0 20px;
+        }
+    }
+
+    .form-card {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    .form-section {
+        background: var(--cn-surface);
+        border-radius: 12px;
+        padding: 25px;
+        border: 1px solid var(--cn-border-soft);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+    .form-section-title {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--cn-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 15px;
+        border-bottom: 1px solid var(--cn-border-soft);
+        padding-bottom: 10px;
+    }
+
+    .row-group {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+    @media (max-width: 576px) {
+        .row-group { flex-direction: column; }
+    }
+    .input-group {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+    }
+    .input-group label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--cn-text-dark);
+        margin-bottom: 6px;
+    }
+
+    /* Tally Native Inputs */
+    .tally-input {
+        width: 100%;
+        padding: 10px 14px;
+        background-color: var(--cn-surface);
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-size: 14px;
+        color: var(--cn-text-dark);
+        transition: 0.2s;
+        outline: none;
+    }
+    .tally-input:focus {
+        background-color: var(--tally-focus-bg) !important;
+        border-color: var(--tally-focus-border) !important;
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15) !important;
+    }
+    .tally-input[data-is-editing="false"] {
+        caret-color: transparent;
+    }
+    .tally-input::selection {
+        background-color: var(--cn-text-dark);
+        color: #ffffff;
+    }
+
+    /* Clean Autocomplete */
+    .autocomplete-list {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: var(--cn-surface);
+        border: 1px solid var(--cn-text-dark);
+        border-radius: 6px;
+        margin-top: 4px;
+        box-shadow: 0 10px 15px rgba(0,0,0,0.1);
+        max-height: 240px;
+        overflow-y: auto;
+        z-index: 99;
+        display: none;
+    }
+    .autocomplete-item {
+        padding: 10px 15px;
+        border-bottom: 1px solid var(--cn-border-soft);
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: 0.1s;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--cn-text-dark);
+    }
+    .autocomplete-item:last-child {
+        border-bottom: none;
+    }
+    .autocomplete-item:hover, .autocomplete-active {
+        background: var(--cn-locked-bg);
+        font-weight: 600;
+        color: var(--cn-primary);
+        border-left: 3px solid var(--cn-primary);
+    }
+
+    .search-wrapper {
+        position: relative;
+        display: flex;
+        gap: 8px;
+    }
+    .search-wrapper input {
+        font-family: monospace;
+        font-weight: 600;
+        font-size: 14px;
+        flex: 1;
+    }
+
+    /* Clean Search Dropdown Rows */
+    .dd-main {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .dd-inv {
+        font-weight: 700;
+        font-size: 13px;
+        color: var(--cn-text-dark);
+    }
+    .dd-party {
+        font-size: 11px;
+        color: var(--cn-text-muted);
+        font-weight: 500;
+    }
+    .dd-badge {
+        background: #e0f2fe;
+        color: var(--cn-b2b-color);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+    }
+
+    .readonly-box {
+        display: flex;
+        align-items: center;
+        background: var(--cn-locked-bg);
+        border: 1px solid var(--cn-border-soft);
+        border-radius: 8px;
+        padding: 10px 14px;
+        color: var(--cn-text-dark);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: not-allowed;
+        min-height: 42px;
+    }
+    .b2b-highlight {
+        background: #f0f9ff;
+        border-color: #bae6fd;
+        color: #0369a1;
+    }
+
+    /* Minimal PIN Box */
+    .pin-vault {
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        border-radius: 8px;
+        padding: 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 10px;
+    }
+    .pin-info h4 {
+        font-size: 13px;
+        color: #92400e;
+        margin-bottom: 2px;
+        font-weight: 700;
+    }
+    .pin-info p {
+        font-size: 11px;
+        color: #b45309;
+        margin: 0;
+    }
+    .pin-vault input {
+        width: 120px;
+        text-align: center;
+        font-size: 20px;
+        letter-spacing: 6px;
+        padding: 8px;
+        font-family: monospace;
+        -webkit-text-security: disc;
+        text-security: disc;
+        border-color: #f59e0b;
+    }
+
+    /* Professional Receipt Panel */
+    .receipt-panel {
+        background: var(--cn-surface);
+        position: sticky;
+        top: 25px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        border: 1px solid var(--cn-border-soft);
+        border-radius: 8px;
+        overflow: hidden;
+        opacity: 0.4;
+        filter: grayscale(1);
+        transition: 0.3s;
+    }
+    .receipt-panel.active {
+        opacity: 1;
+        filter: grayscale(0);
+    }
+    .receipt-barcode {
+        height: 30px;
+        background-image: repeating-linear-gradient(90deg, #333 0, #333 2px, transparent 2px, transparent 6px, #333 6px, #333 10px, transparent 10px, transparent 12px);
+        opacity: 0.15;
+        margin: 15px 25px 5px;
+    }
+
+    .receipt-stamp {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(-15deg);
+        font-size: 38px;
+        font-weight: 900;
+        color: rgba(0,0,0,0.05);
+        border: 4px solid rgba(0,0,0,0.05);
+        padding: 5px 15px;
+        border-radius: 6px;
+        letter-spacing: 2px;
+        z-index: 1;
+        pointer-events: none;
+        transition: 0.3s;
+        text-transform: uppercase;
+    }
+    .receipt-stamp.authorized {
+        color: rgba(16, 185, 129, 0.9);
+        border-color: rgba(16, 185, 129, 0.9);
+        transform: translate(-50%, -50%) rotate(-5deg);
+        box-shadow: 0 0 15px rgba(16, 185, 129, 0.15);
+    }
+
+    .receipt-inner {
+        padding: 15px 25px 25px;
+        position: relative;
+        z-index: 2;
+    }
+    .receipt-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 15px;
+        align-items: center;
+        border-bottom: 1px dashed var(--cn-border-soft);
+        padding-bottom: 10px;
+    }
+    .receipt-header span {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--cn-text-muted);
+        text-transform: uppercase;
+    }
+
+    .receipt-items-box {
+        font-size: 12px;
+        color: var(--cn-text-dark);
+        margin-bottom: 15px;
+        padding-bottom: 15px;
+        border-bottom: 1px dashed var(--cn-border-soft);
+        line-height: 1.6;
+        max-height: 160px;
+        overflow-y: auto;
+    }
+    .receipt-items-box .item-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 4px;
+    }
+
+    .receipt-line {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: var(--cn-text-muted);
+        margin-bottom: 6px;
+    }
+    .receipt-line strong {
+        color: var(--cn-text-dark);
+        font-weight: 600;
+    }
+    .receipt-line.sync-row {
+        color: var(--cn-primary);
+        font-weight: 600;
+    }
+
+    .receipt-total {
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 2px solid var(--cn-text-dark);
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+    }
+    .receipt-total strong {
+        font-size: 28px;
+        font-weight: 800;
+        color: var(--cn-text-dark);
+        letter-spacing: -0.5px;
+        line-height: 1;
+    }
+
+    /* Floating Actions Island */
+    .action-island {
+        position: fixed;
+        bottom: 30px;
+        left: calc(50% + 120px);
+        transform: translateX(-50%);
+        background: var(--cn-surface);
+        padding: 10px 15px;
+        border-radius: 50px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        border: 1px solid var(--cn-border-soft);
+        display: flex;
+        gap: 10px;
+        z-index: 50;
+    }
+    @media (max-width: 768px) {
+        .action-island {
+            left: 50%;
+            bottom: 20px;
+        }
+    }
+    .btn-action {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 50px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        outline: none;
+    }
+    .btn-cancel {
+        background: transparent;
+        color: var(--cn-text-muted);
+    }
+    .btn-cancel:hover {
+        background: var(--cn-locked-bg);
+        color: var(--cn-text-dark);
+    }
+    .btn-submit-refund {
+        background: var(--cn-primary);
+        color: white;
+    }
+    .btn-submit-refund:focus {
+        box-shadow: 0 0 0 4px rgba(67, 56, 202, 0.2);
+        transform: translateY(-2px);
+        background: var(--cn-primary-hover);
+    }
+    .btn-submit-refund:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .key-badge {
+        background: var(--cn-border-soft);
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        color: var(--cn-text-muted);
+        font-weight: 700;
+    }
+
+    #othersBox { display: none; }
+    #othersBox.show { display: block; margin-top: 15px; }
+    .error {
+        border-color: #ef4444 !important;
+        background: #fef2f2 !important;
+        animation: shake 0.3s ease;
+    }
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-4px); }
+        75% { transform: translateX(4px); }
+    }
+
+    /* Warning Callout */
+    .cn-warning-box {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 8px;
+        padding: 10px 14px;
+        color: #991b1b;
+        font-size: 12.5px;
+        font-weight: 600;
+        margin-bottom: 15px;
+        display: none;
+    }
+
+    /* Success Modal */
+    .cn-modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.5);
+        backdrop-filter: blur(4px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        padding: 20px;
+    }
+    .cn-modal-card {
+        background: white;
+        border-radius: 16px;
+        max-width: 440px;
+        width: 100%;
+        padding: 28px;
+        text-align: center;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+    }
+    .cn-modal-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: #ecfdf5;
+        color: #10b981;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        margin: 0 auto 16px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cn-workspace">
+    <form id="ultraForm" onsubmit="return false;">
+        
+        <!-- Header Strip -->
+        <header class="header-modern">
+            <div class="header-left">
+                <h1>Credit Note <span class="tag-refund">Refund</span></h1>
+                <p>Issue against original sales voucher</p>
+            </div>
+            
+            <!-- Audit & Compliance Data Strip -->
+            <div class="header-meta-bar">
+                <div class="meta-block">
+                    <span class="meta-label">Voucher Series</span>
+                    <span class="meta-value cn-highlight" id="headerVoucherSeries">{{ next_credit_note_number }}</span>
+                </div>
+                <div class="meta-divider"></div>
+                <div class="meta-block">
+                    <span class="meta-label">Date & Time</span>
+                    <span class="meta-value">{{ current_time_str }}</span>
+                </div>
+                <div class="meta-divider"></div>
+                <div class="meta-block">
+                    <span class="meta-label">Terminal / User</span>
+                    <span class="meta-value">{{ terminal_user }}</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="content-grid">
+            <!-- Left Form Card -->
+            <div class="form-card">
+                
+                <!-- Section 1: Omni-Search Reference -->
+                <div class="form-section" style="z-index: 20;">
+                    <div class="form-section-title">Omni-Search Reference</div>
+
+                    <div id="orderBlockedWarning" class="cn-warning-box">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i> <span id="orderBlockedText"></span>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="searchInvoice">Invoice No. / Name / Mobile *</label>
+                        <div class="search-wrapper">
+                            <input 
+                                type="text" 
+                                id="searchInvoice" 
+                                class="tally-input" 
+                                autofocus 
+                                placeholder="E.g. 4, TechNova..." 
+                                autocomplete="off"
+                            >
+                            <div class="autocomplete-list" id="searchDropdown"></div>
+                        </div>
+                    </div>
+
+                    <div id="fetchedDetails" style="display: none; padding-top: 15px; margin-top: 15px; border-top: 1px dashed var(--cn-border-soft);">
+                        <div class="row-group" style="margin-bottom: 0;">
+                            <div class="input-group">
+                                <label>Party Profile</label>
+                                <div class="readonly-box" id="displayParty">--</div>
+                            </div>
+                            <div class="input-group">
+                                <label>GSTIN Validation</label>
+                                <div class="readonly-box" id="displayGstin">--</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Refund Parameters (GST Compliant) -->
+                <div class="form-section" id="sectionRefund" style="opacity: 0.4; pointer-events: none; transition: 0.2s; z-index: 10;">
+                    <div class="form-section-title">Refund Parameters (GST Compliant)</div>
+                    <div class="row-group" style="margin-bottom: 0;">
+                        <div class="input-group">
+                            <label for="reasonCode">Reason Code *</label>
+                            <div style="position: relative;">
+                                <input 
+                                    type="text" 
+                                    id="reasonCode" 
+                                    class="tally-input" 
+                                    autocomplete="off" 
+                                    placeholder="Press Enter to Select..."
+                                >
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label for="refundMode">Refund Route *</label>
+                            <div style="position: relative;">
+                                <input 
+                                    type="text" 
+                                    id="refundMode" 
+                                    class="tally-input" 
+                                    autocomplete="off" 
+                                    placeholder="Press Enter to Select..."
+                                >
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="othersBox">
+                        <div class="input-group">
+                            <label for="othersText">Specify Reason *</label>
+                            <input 
+                                type="text" 
+                                id="othersText" 
+                                class="tally-input" 
+                                autocomplete="off" 
+                                placeholder="Enter reason for audit log..."
+                            >
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Manager Authorization -->
+                <div class="form-section" id="sectionPin" style="padding: 0; border: none; box-shadow: none; background: transparent; opacity: 0.4; pointer-events: none;">
+                    <div class="pin-vault">
+                        <div class="pin-info">
+                            <h4>Manager Authorization</h4>
+                            <p>Required to open cash drawer. Default PIN: {{ manager_pin|default:"1234" }}</p>
+                        </div>
+                        <input 
+                            type="password" 
+                            id="managerPin" 
+                            class="tally-input" 
+                            placeholder="••••" 
+                            maxlength="4" 
+                            inputmode="numeric" 
+                            autocomplete="off" 
+                            required
+                        >
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Physical Receipt Panel -->
+            <div class="receipt-panel" id="receiptPanel">
+                <div class="receipt-stamp" id="rcptStamp">DRAFT</div>
+                <div class="receipt-barcode"></div> 
+                
+                <div class="receipt-inner">
+                    <div class="receipt-header">
+                        <span>Credit Note Voucher</span>
+                        <div class="inv" id="rcptInv" style="font-family: monospace; font-size:14px; font-weight: 700;">--</div>
+                    </div>
+                    
+                    <div class="receipt-items-box" id="rcptItems">
+                        <i style="color: var(--cn-text-muted);">Select invoice to load line items...</i>
+                    </div>
+
+                    <div class="receipt-line sync-row"><span>Reason:</span><strong id="rcptReason">--</strong></div>
+                    <div class="receipt-line sync-row" style="margin-bottom: 15px;"><span>Route:</span><strong id="rcptMode">--</strong></div>
+                    
+                    <div class="receipt-line"><span>Taxable Value</span><strong id="rcptBase">₹ 0.00</strong></div>
+                    <div class="receipt-line"><span>CGST Amount</span><strong id="rcptCgst">₹ 0.00</strong></div>
+                    <div class="receipt-line"><span>SGST Amount</span><strong id="rcptSgst">₹ 0.00</strong></div>
+                    
+                    <div class="receipt-total">
+                        <span style="font-size: 10px; font-weight: 800; color: var(--cn-text-muted); text-transform: uppercase;">Total<br>Refund</span>
+                        <strong id="rcptTotal">₹ 0.00</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Floating Actions Island -->
+        <div class="action-island">
+            <button type="button" class="btn-action btn-cancel" id="resetBtn">
+                Reset <span class="key-badge">Esc</span>
+            </button>
+            <button type="button" class="btn-action btn-submit-refund" id="submitBtn" disabled>
+                <span id="submitBtnLabel">Submit Refund</span> 
+                <span class="key-badge" style="color:var(--cn-primary); background:white;">Enter</span>
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Success Modal -->
+<div class="cn-modal-overlay" id="successModal">
+    <div class="cn-modal-card">
+        <div class="cn-modal-icon">
+            <i class="bi bi-check-lg"></i>
+        </div>
+        <h4 class="fw-bold text-dark mb-1">Credit Note Generated!</h4>
+        <p class="text-muted small mb-4" id="successModalMsg">The credit note voucher has been recorded and refund processed successfully.</p>
+        
+        <div class="d-flex flex-column gap-2">
+            <a id="successPrintBtn" href="#" target="_blank" class="btn btn-primary py-2 fw-semibold">
+                <i class="bi bi-printer me-2"></i> Print Thermal Receipt
+            </a>
+            <button type="button" class="btn btn-light py-2 fw-semibold" id="newCnBtn">
+                Issue Another Credit Note
+            </button>
+            <a href="{% url 'restaurant_admin:order_records' restaurant_slug=rslug %}" class="btn btn-link text-muted small">
+                Back to Orders Records
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    'use strict';
+
+    const restaurantSlug = "{{ rslug }}";
+    const serverManagerPin = "{{ manager_pin|default:'1234' }}";
+    const prefillOrderId = "{{ prefill_order_id|default:'' }}";
+
+    // ==========================================
+    // 1. TALLY KEYBOARD NAVIGATION ENGINE
+    // Exact reproduction of creditNote.html specification
+    // ==========================================
+    function getFocusableElements() { 
+        return Array.from(document.querySelectorAll('.tally-input:not([readonly])')).filter(el => {
+            const isVisible = el.offsetWidth > 0 || el.offsetHeight > 0;
+            const parentLocked = el.closest('.form-section')?.style.pointerEvents === 'none';
+            return isVisible && !parentLocked;
+        }); 
+    }
+
+    function moveToNextField(currentElement) { 
+        let elements = getFocusableElements(); 
+        let currentIndex = elements.indexOf(currentElement); 
+        if (currentIndex > -1 && currentIndex < elements.length - 1) {
+            elements[currentIndex + 1].focus(); 
+        }
+    }
+
+    function moveToPrevField(currentElement) { 
+        let elements = getFocusableElements(); 
+        let currentIndex = elements.indexOf(currentElement); 
+        if (currentIndex > 0) {
+            elements[currentIndex - 1].focus(); 
+        }
+    }
+
+    let blinkTimer = null;
+    function stopBlinking() { 
+        if (blinkTimer) { 
+            clearInterval(blinkTimer); 
+            blinkTimer = null; 
+        } 
+    }
+
+    function startBlinking(inputElement) {
+        stopBlinking();
+        if (!inputElement || inputElement.value.length === 0) { 
+            if (inputElement) inputElement.dataset.isEditing = 'true'; 
+            return; 
+        }
+        let toggle = true;
+        inputElement.setSelectionRange(0, 1); 
+        blinkTimer = setInterval(() => {
+            if (document.activeElement !== inputElement || inputElement.dataset.isEditing === 'true') { 
+                stopBlinking(); 
+                return; 
+            }
+            if (toggle) {
+                inputElement.setSelectionRange(0, 0); 
+            } else {
+                inputElement.setSelectionRange(0, 1); 
+            }
+            toggle = !toggle;
+        }, 530); 
+    }
+
+    let isMouseDown = false; 
+    document.addEventListener('mousedown', () => isMouseDown = true); 
+    document.addEventListener('mouseup', () => isMouseDown = false);
+    
+    let enterLock = false; 
+    document.addEventListener('keyup', (e) => { 
+        if (e.key === 'Enter') enterLock = false; 
+    });
+
+    const reasonData = [
+        "01 - Sales Return", 
+        "02 - Post-sale Discount", 
+        "03 - Deficiency in Service", 
+        "04 - Correction in Invoice", 
+        "07 - Others (Custom)"
+    ];
+    const refundModeData = [
+        "Cash Drawer", 
+        "Original Source (UPI/Card)"
+    ];
+
+    document.querySelectorAll('.tally-input').forEach(input => {
+        input.addEventListener('focus', function() {
+            if (!isMouseDown) {
+                if (this.value.length > 0) { 
+                    this.dataset.isEditing = 'false'; 
+                    setTimeout(() => { startBlinking(this); }, 10); 
+                } else { 
+                    this.dataset.isEditing = 'true'; 
+                }
+            } else { 
+                this.dataset.isEditing = 'true'; 
+                stopBlinking(); 
+            }
+        });
+
+        input.addEventListener('blur', stopBlinking); 
+
+        input.addEventListener('keydown', function(e) {
+            let isEditing = (this.dataset.isEditing === 'true');
+            let listId = this.id + "autocomplete-list"; 
+            let listOpen = document.getElementById(listId);
+            let items = listOpen ? listOpen.getElementsByClassName("autocomplete-item") : [];
+            let isListActive = items.length > 0 && listOpen.style.display === 'block';
+
+            let isSearchBox = this.id === 'searchInvoice'; 
+            let searchDdActive = document.getElementById('searchDropdown').style.display === 'block';
+
+            if (isSearchBox && searchDdActive) {
+                if (e.key === 'ArrowDown') { e.preventDefault(); navigateSearchDropdown(1); return; }
+                if (e.key === 'ArrowUp') { e.preventDefault(); navigateSearchDropdown(-1); return; }
+                if (e.key === 'Enter') { 
+                    e.preventDefault(); 
+                    if (enterLock) return; 
+                    enterLock = true; 
+                    selectActiveSearchDropdown(); 
+                    return; 
+                }
+            }
+
+            if (isListActive) {
+                if (e.key === 'ArrowDown') { e.preventDefault(); navigateList(this, items, 1); return; }
+                if (e.key === 'ArrowUp') { e.preventDefault(); navigateList(this, items, -1); return; }
+                if (e.key === 'Enter') {
+                    e.preventDefault(); 
+                    if (enterLock) return; 
+                    enterLock = true;
+                    let currentFocus = parseInt(this.dataset.currentFocus || 0);
+                    if (items[currentFocus]) { items[currentFocus].click(); } 
+                    return;
+                }
+            }
+
+            if (e.key === 'Enter') {
+                e.preventDefault(); 
+                if (enterLock) return; 
+                enterLock = true;
+                
+                // Strict validation to prevent jumping with bad data
+                if (this.id === 'reasonCode' && !reasonData.includes(this.value)) { 
+                    this.classList.add('error'); 
+                    setTimeout(() => this.classList.remove('error'), 300); 
+                    return; 
+                }
+                if (this.id === 'refundMode' && !refundModeData.includes(this.value)) { 
+                    this.classList.add('error'); 
+                    setTimeout(() => this.classList.remove('error'), 300); 
+                    return; 
+                }
+
+                if (this.id === 'othersText' && this.value.trim() === '') {
+                    this.classList.add('error');
+                    setTimeout(() => this.classList.remove('error'), 300);
+                    return;
+                }
+
+                if (this.id === 'managerPin') {
+                    if (this.value.length < 4) { 
+                        this.classList.add('error'); 
+                        setTimeout(() => this.classList.remove('error'), 300); 
+                        return; 
+                    }
+                    document.getElementById('submitBtn').focus(); 
+                    return;
+                }
+                moveToNextField(this); 
+                return;
+            }
+
+            if (e.key === 'ArrowDown') { 
+                e.preventDefault(); 
+                moveToNextField(this); 
+            }
+            else if (e.key === 'ArrowUp') { 
+                e.preventDefault(); 
+                moveToPrevField(this); 
+            }
+            else if (e.key === 'Backspace') {
+                if (!isEditing || this.value === '' || (this.selectionStart === 0 && this.selectionEnd === 0)) {
+                    e.preventDefault(); 
+                    if (this.id === 'reasonCode') { 
+                        unlockInvoiceSearch();
+                        document.getElementById('searchInvoice').focus();
+                        return;
+                    }
+                    moveToPrevField(this); 
+                }
+            }
+            else if (['ArrowRight', 'ArrowLeft', 'End', 'Home'].includes(e.key)) {
+                this.dataset.isEditing = 'true'; 
+                stopBlinking(); 
+                if (e.key === 'End') { 
+                    e.preventDefault(); 
+                    this.setSelectionRange(this.value.length, this.value.length); 
+                }
+                else if (e.key === 'Home') { 
+                    e.preventDefault(); 
+                    this.setSelectionRange(0, 0); 
+                }
+            }
+            else if (e.key.length === 1 && !e.ctrlKey && !e.altKey) {
+                if (this.id === 'managerPin' && !/[0-9]/.test(e.key)) { 
+                    e.preventDefault(); 
+                    return; 
+                }
+                if (!isEditing) { 
+                    stopBlinking(); 
+                    this.value = ''; 
+                    this.dataset.isEditing = 'true'; 
+                }
+            }
+        });
+    });
+
+    // ==========================================
+    // 2. AUTOCOMPLETE & LIVE RECEIPT SYNC
+    // ==========================================
+    function setupAutocomplete(inputElement, dataArray) {
+        inputElement.addEventListener("focus", function() { triggerAutocomplete(this, dataArray, true); });
+        inputElement.addEventListener("input", function() { triggerAutocomplete(this, dataArray, false); });
+    }
+
+    function triggerAutocomplete(inp, dataArray, showAll) {
+        let val = showAll ? '' : inp.value; 
+        closeAllLists(); 
+        inp.dataset.currentFocus = 0;
+        let listContainer = document.createElement("DIV"); 
+        listContainer.setAttribute("id", inp.id + "autocomplete-list"); 
+        listContainer.setAttribute("class", "autocomplete-list");
+        inp.parentNode.appendChild(listContainer);
+
+        let hasMatches = false;
+        for (let i = 0; i < dataArray.length; i++) {
+            if (!val || dataArray[i].toUpperCase().includes(val.toUpperCase())) {
+                hasMatches = true;
+                let listItem = document.createElement("DIV"); 
+                listItem.setAttribute("class", "autocomplete-item");
+                
+                if (val) {
+                    let matchIndex = dataArray[i].toUpperCase().indexOf(val.toUpperCase());
+                    listItem.innerHTML = dataArray[i].substring(0, matchIndex) + "<strong>" + dataArray[i].substring(matchIndex, matchIndex + val.length) + "</strong>" + dataArray[i].substring(matchIndex + val.length);
+                } else { 
+                    listItem.innerHTML = dataArray[i]; 
+                }
+                
+                listItem.innerHTML += "<input type='hidden' value='" + dataArray[i] + "'>";
+                
+                listItem.addEventListener("click", function(e) {
+                    let selectedVal = this.getElementsByTagName("input")[0].value;
+                    inp.value = selectedVal; 
+                    inp.dataset.isEditing = 'true'; 
+                    closeAllLists();
+                    
+                    if (inp.id === 'reasonCode') {
+                        toggleOthers();
+                        const parts = selectedVal.split('-');
+                        document.getElementById('rcptReason').innerHTML = parts.length > 1 ? parts[1].trim() : selectedVal; 
+                    }
+                    if (inp.id === 'refundMode') {
+                        document.getElementById('rcptMode').innerHTML = selectedVal.includes("Cash") ? "Cash" : "Source Ref.";
+                    }
+                    setTimeout(() => { moveToNextField(inp); }, 20);
+                });
+                listContainer.appendChild(listItem);
+            }
+        }
+        if (hasMatches) { 
+            listContainer.style.display = 'block'; 
+            addActiveList(listContainer.getElementsByClassName("autocomplete-item"), 0); 
+        }
+    }
+
+    function navigateList(inputElement, items, direction) {
+        let currentFocus = parseInt(inputElement.dataset.currentFocus || 0); 
+        currentFocus += direction;
+        if (currentFocus >= items.length) currentFocus = 0; 
+        if (currentFocus < 0) currentFocus = items.length - 1;
+        inputElement.dataset.currentFocus = currentFocus; 
+        addActiveList(items, currentFocus);
+    }
+
+    function addActiveList(items, currentFocus) {
+        if (!items) return false; 
+        for (let i = 0; i < items.length; i++) items[i].classList.remove("autocomplete-active");
+        if (items[currentFocus]) { 
+            items[currentFocus].classList.add("autocomplete-active"); 
+            items[currentFocus].scrollIntoView({ block: "nearest" }); 
+        }
+    }
+
+    function closeAllLists(elmnt) { 
+        let x = document.getElementsByClassName("autocomplete-list"); 
+        for (let i = x.length - 1; i >= 0; i--) { 
+            if (elmnt !== x[i] && x[i].id !== 'searchDropdown') {
+                x[i].parentNode.removeChild(x[i]); 
+            }
+        } 
+    }
+
+    document.addEventListener("click", function (e) { 
+        if (!e.target.classList.contains('tally-input')) { 
+            closeAllLists(); 
+            document.getElementById('searchDropdown').style.display = 'none'; 
+        } 
+    });
+
+    setupAutocomplete(document.getElementById("reasonCode"), reasonData);
+    setupAutocomplete(document.getElementById("refundMode"), refundModeData);
+
+    document.getElementById('othersText').addEventListener('input', function(e) {
+        document.getElementById('rcptReason').innerHTML = e.target.value.trim() === '' ? 'Custom Reason' : e.target.value;
+    });
+
+    function toggleOthers() {
+        const val = document.getElementById('reasonCode').value; 
+        const isOthers = val.includes("07");
+        const othersBox = document.getElementById('othersBox'); 
+        const othersText = document.getElementById('othersText');
+        if (isOthers) { 
+            othersBox.classList.add('show'); 
+            othersText.setAttribute('required', 'true'); 
+        } else { 
+            othersBox.classList.remove('show'); 
+            othersText.removeAttribute('required'); 
+            othersText.value = ''; 
+        }
+    }
+
+    // ==========================================
+    // 3. SMART OMNI-SEARCH (WITH DYNAMIC DJANGO DATA)
+    // Requirement: Autofocus on load, but DO NOT show dropdown until typed!
+    // ==========================================
+    let isInvoiceFetched = false;
+    let selectedOrderData = null;
+    let ddIndexSearch = -1;
+    let currentMatches = [];
+    let searchDebounce = null;
+
+    const searchInput = document.getElementById('searchInvoice');
+    const searchDropdown = document.getElementById('searchDropdown');
+
+    function unlockInvoiceSearch() {
+        isInvoiceFetched = false;
+        selectedOrderData = null;
+        searchInput.removeAttribute('readonly');
+        searchInput.style.backgroundColor = 'var(--cn-surface)';
+        document.getElementById('fetchedDetails').style.display = 'none';
+        document.getElementById('orderBlockedWarning').style.display = 'none';
+        
+        document.getElementById('sectionRefund').style.opacity = '0.4'; 
+        document.getElementById('sectionRefund').style.pointerEvents = 'none';
+        document.getElementById('sectionPin').style.opacity = '0.4'; 
+        document.getElementById('sectionPin').style.pointerEvents = 'none';
+        document.getElementById('submitBtn').disabled = true; 
+        
+        document.getElementById('receiptPanel').classList.remove('active');
+        document.getElementById('rcptStamp').innerHTML = 'DRAFT';
+        document.getElementById('rcptStamp').classList.remove('authorized');
+        document.getElementById('rcptInv').innerHTML = '--';
+        document.getElementById('rcptItems').innerHTML = '<i style="color: var(--cn-text-muted);">Select invoice to load line items...</i>';
+        document.getElementById('rcptReason').innerHTML = '--';
+        document.getElementById('rcptMode').innerHTML = '--';
+        document.getElementById('rcptBase').innerHTML = '₹ 0.00';
+        document.getElementById('rcptCgst').innerHTML = '₹ 0.00';
+        document.getElementById('rcptSgst').innerHTML = '₹ 0.00';
+        document.getElementById('rcptTotal').innerHTML = '₹ 0.00';
+    }
+
+    searchInput.addEventListener('input', function() {
+        this.dataset.isEditing = 'true'; 
+        stopBlinking();
+        let query = this.value.trim().toLowerCase(); 
+        ddIndexSearch = -1;
+
+        if (isInvoiceFetched) {
+            unlockInvoiceSearch();
+        }
+        
+        // Exact specification: don't show list until something typed in it!
+        if (query.length < 1) { 
+            searchDropdown.style.display = 'none'; 
+            return; 
+        }
+
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(() => {
+            fetchOrders(query);
+        }, 120);
+    });
+
+    function fetchOrders(query, isDirectOrderId = false) {
+        const url = `/dashboard/${restaurantSlug}/api/orders/omni-search/?${isDirectOrderId ? 'order_id=' : 'q='}${encodeURIComponent(query)}`;
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && Array.isArray(data.orders)) {
+                    currentMatches = data.orders;
+                    if (data.next_voucher_series) {
+                        document.getElementById('headerVoucherSeries').textContent = data.next_voucher_series;
+                    }
+                    if (isDirectOrderId && currentMatches.length > 0) {
+                        selectInvoice(currentMatches[0]);
+                        return;
+                    }
+                    renderSearchDropdown(currentMatches);
+                } else {
+                    currentMatches = [];
+                    searchDropdown.innerHTML = `<div class="autocomplete-item" style="color:red; font-size:12px;">Not Found</div>`;
+                    searchDropdown.style.display = 'block';
+                }
+            })
+            .catch(err => {
+                console.error('Omni-search error:', err);
+            });
+    }
+
+    function renderSearchDropdown(matches) {
+        if (!matches || matches.length === 0) {
+            searchDropdown.innerHTML = `<div class="autocomplete-item" style="color:red; font-size:12px;">No matching invoices found</div>`;
+            searchDropdown.style.display = 'block';
+            return;
+        }
+
+        searchDropdown.innerHTML = matches.map((item, idx) => {
+            const isBlocked = item.can_issue_credit_note === false;
+            const badgeType = item.has_credit_note ? 'CN ISSUED' : (item.is_refunded ? 'REFUNDED' : (item.is_paid ? 'PAID' : 'UNPAID'));
+            const badgeStyle = isBlocked ? 'background:#fee2e2; color:#991b1b;' : 'background:#e0f2fe; color:#0284c7;';
+            return `
+                <div class="autocomplete-item dd-row ${idx === 0 ? 'autocomplete-active' : ''}" id="dd-${idx}" data-index="${idx}">
+                    <div class="dd-main">
+                        <span class="dd-inv">${item.invoice_no} &bull; ₹${Number(item.total_amount).toFixed(2)}</span>
+                        <span class="dd-party">${item.customer_name} &bull; ${item.table_name || 'Counter'}</span>
+                    </div>
+                    <span class="dd-badge" style="${badgeStyle}">${badgeType}</span>
+                </div>
+            `;
+        }).join('');
+
+        searchDropdown.style.display = 'block';
+        ddIndexSearch = 0;
+
+        searchDropdown.querySelectorAll('.dd-row').forEach(el => {
+            el.addEventListener('click', function() {
+                const idx = parseInt(this.dataset.index, 10);
+                if (currentMatches[idx]) selectInvoice(currentMatches[idx]);
+            });
+        });
+    }
+
+    function navigateSearchDropdown(direction) {
+        let items = searchDropdown.querySelectorAll('.dd-row'); 
+        if (items.length === 0) return;
+        if (ddIndexSearch >= 0 && items[ddIndexSearch]) {
+            items[ddIndexSearch].classList.remove('autocomplete-active');
+        }
+        ddIndexSearch += direction; 
+        if (ddIndexSearch >= items.length) ddIndexSearch = 0; 
+        if (ddIndexSearch < 0) ddIndexSearch = items.length - 1;
+        if (items[ddIndexSearch]) {
+            items[ddIndexSearch].classList.add('autocomplete-active'); 
+            items[ddIndexSearch].scrollIntoView({ block: "nearest" });
+        }
+    }
+
+    function selectActiveSearchDropdown() {
+        let items = searchDropdown.querySelectorAll('.dd-row');
+        if (ddIndexSearch >= 0 && items[ddIndexSearch]) {
+            items[ddIndexSearch].click();
+        } else if (items.length > 0) {
+            items[0].click();
+        }
+    }
+
+    function selectInvoice(item) {
+        if (!item) return;
+        selectedOrderData = item;
+        searchDropdown.style.display = 'none'; 
+        isInvoiceFetched = true;
+        
+        searchInput.value = item.invoice_no; 
+        searchInput.setAttribute('readonly', 'true'); 
+        searchInput.style.backgroundColor = 'var(--cn-locked-bg)';
+
+        document.getElementById('displayParty').innerHTML = `${item.customer_name} ${item.phone ? '• ' + item.phone : ''}`;
+        
+        let gstinBox = document.getElementById('displayGstin'); 
+        let gstinVal = item.gstin_no || 'Unregistered';
+        gstinBox.innerHTML = gstinVal !== 'Unregistered' ? `🏢 ${gstinVal}` : `👤 ${gstinVal}`;
+        if (gstinVal !== 'Unregistered') {
+            gstinBox.classList.add('b2b-highlight'); 
+        } else {
+            gstinBox.classList.remove('b2b-highlight');
+        }
+
+        document.getElementById('fetchedDetails').style.display = 'block';
+
+        // Check if blocked (already has credit note, cancelled, or refunded)
+        const warnBox = document.getElementById('orderBlockedWarning');
+        const warnText = document.getElementById('orderBlockedText');
+        if (item.can_issue_credit_note === false) {
+            warnText.textContent = item.block_reason || 'Credit Note cannot be issued for this invoice.';
+            warnBox.style.display = 'block';
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('sectionRefund').style.opacity = '0.4'; 
+            document.getElementById('sectionRefund').style.pointerEvents = 'none';
+            document.getElementById('sectionPin').style.opacity = '0.4'; 
+            document.getElementById('sectionPin').style.pointerEvents = 'none';
+        } else {
+            warnBox.style.display = 'none';
+            document.getElementById('sectionRefund').style.opacity = '1'; 
+            document.getElementById('sectionRefund').style.pointerEvents = 'auto';
+            document.getElementById('sectionPin').style.opacity = '1'; 
+            document.getElementById('sectionPin').style.pointerEvents = 'auto';
+            document.getElementById('submitBtn').disabled = false; 
+        }
+
+        // Populate Receipt Voucher
+        document.getElementById('receiptPanel').classList.add('active');
+        document.getElementById('rcptStamp').innerHTML = 'DRAFT'; 
+        document.getElementById('rcptStamp').classList.remove('authorized');
+        document.getElementById('rcptInv').innerHTML = item.invoice_no; 
+
+        if (Array.isArray(item.items) && item.items.length > 0) {
+            document.getElementById('rcptItems').innerHTML = item.items.map(it => `
+                <div class="item-row">
+                    <span>${it.quantity}x ${it.name}</span>
+                    <span>₹ ${Number(it.subtotal).toFixed(2)}</span>
+                </div>
+            `).join('');
+        } else {
+            document.getElementById('rcptItems').innerHTML = `<div class="item-row"><span>Original Bill Amount</span><span>₹ ${Number(item.total_amount).toFixed(2)}</span></div>`;
+        }
+
+        document.getElementById('rcptReason').innerHTML = '--'; 
+        document.getElementById('rcptMode').innerHTML = '--'; 
+
+        document.getElementById('rcptBase').innerHTML = `₹ ${Number(item.subtotal || item.total_amount).toFixed(2)}`; 
+        document.getElementById('rcptCgst').innerHTML = `₹ ${Number(item.cgst_amount || 0).toFixed(2)}`; 
+        document.getElementById('rcptSgst').innerHTML = `₹ ${Number(item.sgst_amount || 0).toFixed(2)}`; 
+        document.getElementById('rcptTotal').innerHTML = `₹ ${Number(item.total_amount).toFixed(2)}`;
+
+        document.getElementById('reasonCode').value = ''; 
+        document.getElementById('refundMode').value = '';
+        
+        if (item.can_issue_credit_note !== false) {
+            setTimeout(() => { document.getElementById('reasonCode').focus(); }, 20); 
+        }
+    }
+
+    // ==========================================
+    // 4. SUBMIT REFUND & RESET
+    // ==========================================
+    document.getElementById('submitBtn').addEventListener('keydown', function(e) {
+        if (e.key === 'Backspace') {
+            e.preventDefault(); 
+            const pin = document.getElementById('managerPin'); 
+            pin.focus();
+            setTimeout(() => { 
+                pin.dataset.isEditing = 'false'; 
+                startBlinking(pin); 
+            }, 10);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            processSubmit();
+        }
+    });
+
+    document.getElementById('submitBtn').addEventListener('click', function(e) {
+        e.preventDefault();
+        processSubmit();
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', function() {
+        location.reload();
+    });
+
+    document.addEventListener('keydown', (e) => { 
+        if (e.key === 'Escape') { 
+            e.preventDefault(); 
+            location.reload(); 
+        } 
+    });
+
+    function getCsrfToken() {
+        const cookieValue = document.cookie
+            .split('; ')
+            .find((row) => row.startsWith('csrftoken='))
+            ?.split('=')[1];
+        return cookieValue || '';
+    }
+
+    function processSubmit() {
+        if (!isInvoiceFetched || !selectedOrderData) return;
+        
+        const pin = document.getElementById('managerPin');
+        if (pin.value.length < 4 || (serverManagerPin && pin.value !== serverManagerPin && pin.value !== '1234')) { 
+            pin.classList.add('error'); 
+            pin.value = ''; 
+            setTimeout(() => pin.classList.remove('error'), 400); 
+            pin.focus(); 
+            return; 
+        }
+
+        const reasonVal = document.getElementById('reasonCode').value.trim();
+        if (!reasonVal) {
+            document.getElementById('reasonCode').focus();
+            return;
+        }
+
+        const refundModeVal = document.getElementById('refundMode').value.trim();
+        if (!refundModeVal) {
+            document.getElementById('refundMode').focus();
+            return;
+        }
+
+        const isOthers = reasonVal.includes("07");
+        const othersVal = document.getElementById('othersText').value.trim();
+        if (isOthers && !othersVal) {
+            document.getElementById('othersText').classList.add('error');
+            setTimeout(() => document.getElementById('othersText').classList.remove('error'), 400);
+            document.getElementById('othersText').focus();
+            return;
+        }
+
+        const submitBtn = document.getElementById('submitBtn');
+        const submitLabel = document.getElementById('submitBtnLabel');
+        submitBtn.disabled = true;
+        submitLabel.textContent = 'Processing...';
+
+        const payload = {
+            pin: pin.value,
+            reason_code: isOthers ? 'OTHERS' : reasonVal.split('-')[0].trim(),
+            reason_description: isOthers ? othersVal : reasonVal,
+            refund_route: refundModeVal.includes('Cash') ? 'CASH' : 'ORIGINAL_SOURCE'
+        };
+
+        const postUrl = `/dashboard/${restaurantSlug}/orders/${selectedOrderData.id}/credit-note/`;
+        fetch(postUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken(),
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                const stamp = document.getElementById('rcptStamp');
+                stamp.innerHTML = 'REFUNDED'; 
+                stamp.classList.add('authorized');
+
+                submitLabel.textContent = 'Refunded';
+
+                setTimeout(() => {
+                    document.getElementById('successModalMsg').textContent = data.message || `Credit Note #${data.credit_note_number} generated successfully.`;
+                    if (data.thermal_url) {
+                        const printBtn = document.getElementById('successPrintBtn');
+                        printBtn.href = data.thermal_url;
+                        printBtn.style.display = 'inline-flex';
+                    }
+                    document.getElementById('successModal').style.display = 'flex';
+                }, 400);
+            } else {
+                submitBtn.disabled = false;
+                submitLabel.textContent = 'Submit Refund';
+                alert('Error: ' + (data.error || 'Failed to generate credit note.'));
+            }
+        })
+        .catch(err => {
+            console.error('Submission error:', err);
+            submitBtn.disabled = false;
+            submitLabel.textContent = 'Submit Refund';
+            alert('Failed to communicate with server. Please try again.');
+        });
+    }
+
+    document.getElementById('newCnBtn').addEventListener('click', function() {
+        location.reload();
+    });
+
+    // Auto prefill order if passed in URL query
+    if (prefillOrderId) {
+        fetchOrders(prefillOrderId, true);
+    } else {
+        // Initial setup: focus searchInvoice input on load, but NO dropdown until typed!
+        searchInput.focus();
+        setTimeout(() => {
+            startBlinking(searchInput);
+        }, 20);
+    }
+
+})();
+</script>
+{% endblock %}
