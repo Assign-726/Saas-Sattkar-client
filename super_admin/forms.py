@@ -1048,7 +1048,7 @@ class RestaurantLandingForm(forms.ModelForm):
             'address', 'phone', 'email', 'opening_hours',
             'seo_title', 'seo_description', 'seo_keywords', 'seo_canonical_url',
             'og_title', 'og_description', 'og_url', 'og_site_name', 'og_locale', 'og_type',
-            'twitter_card_type', 'twitter_title', 'twitter_description', 'pages_seo', 'pages_faq',
+            'twitter_card_type', 'twitter_title', 'twitter_description', 'pages_seo', 'pages_faq', 'theme_config',
             'show_hero', 'show_about', 'show_why_us', 'show_specials', 'show_events', 'show_gallery', 'show_team', 'show_reviews',
             'show_careers', 'careers_title', 'careers_subtitle',
             'why_us_title_1', 'why_us_description_1',
