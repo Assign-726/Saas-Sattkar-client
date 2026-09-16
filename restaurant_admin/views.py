@@ -784,9 +784,14 @@ def order_create_manual(request, restaurant_slug=None):
                 clean_name = table_val_str.replace('Table', '').strip()
                 table_obj = Table.objects.filter(name__iexact=clean_name, restaurant=restaurant).first()
 
-        order_type = data.get('order_type') or (Order.OrderType.DINE_IN if table_obj else Order.OrderType.DINE_IN)
-        if table_obj:
+        raw_order_type = str(data.get('order_type') or '').strip().lower()
+        if raw_order_type in [Order.OrderType.TAKEAWAY, Order.OrderType.DELIVERY, 'takeaway', 'delivery']:
+            order_type = raw_order_type
+            table_obj = None
+        elif table_obj:
             order_type = Order.OrderType.DINE_IN
+        else:
+            order_type = raw_order_type or Order.OrderType.DINE_IN
 
         payment_method = data.get('payment_method') or Order.PaymentMethod.CASH
         payment_status = data.get('payment_status') or Order.PaymentStatus.PAID
@@ -839,6 +844,12 @@ def order_create_manual(request, restaurant_slug=None):
             paid_amount_val = Decimal('0.00')
             valid_payments = []
 
+        # If user settled via settle_order / print_close with non-credit method, ensure it doesn't fall through to unpaid
+        if (action in ['settle_order', 'print_close'] or data.get('payment_status') == 'paid') and payment_method != 'credit':
+            if paid_amount_val <= Decimal('0.00'):
+                paid_amount_val = max(Decimal('0.00'), grand_total_val - advance_amount_input)
+                valid_payments = [{'method': payment_method, 'amount': float(paid_amount_val)}]
+
         due_amount_val = max(Decimal('0.00'), grand_total_val - advance_amount_input - paid_amount_val)
 
         if due_amount_val <= Decimal('0.00'):
@@ -855,11 +866,13 @@ def order_create_manual(request, restaurant_slug=None):
             due_amount_val = grand_total_val
 
         # Determine order status based on action
-        # Determine order status based on action
         if action in ['fire_kot', 'save_kot']:
             initial_status = Order.OrderStatus.PENDING
         elif action in ['settle_order', 'print_close']:
-            initial_status = Order.OrderStatus.SERVED
+            if initial_payment_status == Order.PaymentStatus.PAID:
+                initial_status = Order.OrderStatus.COMPLETED
+            else:
+                initial_status = Order.OrderStatus.SERVED
         else:
             initial_status = Order.OrderStatus.PENDING
 
@@ -930,7 +943,11 @@ def order_create_manual(request, restaurant_slug=None):
             order.customer_name = customer_name or order.customer_name
             order.phone = phone or order.phone
             order.notes = notes if notes is not None else order.notes
-            if table_obj:
+            if order_type in [Order.OrderType.TAKEAWAY, Order.OrderType.DELIVERY, 'takeaway', 'delivery']:
+                order.table = None
+                order.table_number = None
+                order.order_type = order_type
+            elif table_obj:
                 order.table = table_obj
                 order.table_number = table_obj.table_number
                 order.order_type = Order.OrderType.DINE_IN
@@ -983,8 +1000,8 @@ def order_create_manual(request, restaurant_slug=None):
                 phone=phone,
                 notes=notes,
                 order_type=order_type,
-                table=table_obj,
-                table_number=table_obj.table_number if table_obj else None,
+                table=None if order_type in [Order.OrderType.TAKEAWAY, Order.OrderType.DELIVERY, 'takeaway', 'delivery'] else table_obj,
+                table_number=None if order_type in [Order.OrderType.TAKEAWAY, Order.OrderType.DELIVERY, 'takeaway', 'delivery'] else (table_obj.table_number if table_obj else None),
                 payment_method=payment_method,
                 payment_status=initial_payment_status,
                 payments=valid_payments,
@@ -1096,17 +1113,34 @@ def order_create_manual(request, restaurant_slug=None):
                 )
                 created_items.append(created_item)
 
-        table_id = data.get('table_id') or data.get('table')
-        if table_id:
-            try:
-                t_obj = Table.objects.filter(pk=int(table_id), restaurant=restaurant).first()
-                if t_obj:
-                    order.table = t_obj
-                    order.table_number = t_obj.table_number
-                    order.order_type = Order.OrderType.DINE_IN
-                    order.save(update_fields=['table', 'table_number', 'order_type'])
-            except Exception:
-                pass
+        if order_type in [Order.OrderType.TAKEAWAY, Order.OrderType.DELIVERY, 'takeaway', 'delivery']:
+            order.table = None
+            order.table_number = None
+            order.order_type = order_type
+            order.save(update_fields=['table', 'table_number', 'order_type'])
+        else:
+            table_id = data.get('table_id') or data.get('table')
+            if table_id:
+                try:
+                    t_obj = Table.objects.filter(pk=int(table_id), restaurant=restaurant).first()
+                    if t_obj:
+                        order.table = t_obj
+                        order.table_number = t_obj.table_number
+                        order.order_type = Order.OrderType.DINE_IN
+                        order.save(update_fields=['table', 'table_number', 'order_type'])
+                except Exception:
+                    pass
+
+        # Check if service charge is waived
+        sc_pct_raw = data.get('service_charge_percentage')
+        sc_amt_raw = data.get('service_charge_amount')
+        if sc_pct_raw is not None or sc_amt_raw is not None or 'waive_service_charge' in data:
+            sc_pct_val = safe_decimal(sc_pct_raw if sc_pct_raw is not None else -1)
+            sc_amt_val = safe_decimal(sc_amt_raw if sc_amt_raw is not None else -1)
+            if sc_pct_val == Decimal('0.00') or sc_amt_val == Decimal('0.00') or data.get('waive_service_charge') is True or data.get('service_charge_applied') is False:
+                order.waive_service_charge = True
+            else:
+                order.waive_service_charge = False
 
         if grand_total_val > 0:
             order.subtotal = subtotal_val
@@ -1717,6 +1751,10 @@ def order_edit_manual(request, pk, restaurant_slug=None):
         return HttpResponseForbidden("No restaurant associated with this account.")
 
     order = get_object_or_404(Order.objects.prefetch_related('items', 'items__menu_item').filter(restaurant=restaurant), pk=pk)
+
+    if order.status in [Order.OrderStatus.SERVED, Order.OrderStatus.COMPLETED, Order.OrderStatus.CANCELLED] or order.payment_status in [Order.PaymentStatus.PAID, 'paid', 'P']:
+        messages.warning(request, f"Order #{order.order_number or order.id} has already been {order.get_status_display().lower()} or settled and cannot be edited.")
+        return redirect('restaurant_admin:order_detail', restaurant_slug=restaurant.slug, pk=order.id)
 
     if request.method == 'POST':
         import json
@@ -4610,7 +4648,9 @@ def order_settle_api(request, pk, restaurant_slug=None):
 
     order.payments = valid_payments
     order.payment_method = payment_method
-    if order.status in [Order.OrderStatus.PENDING, Order.OrderStatus.READY, Order.OrderStatus.PREPARING]:
+    if order.payment_status in [Order.PaymentStatus.PAID, 'paid', 'P']:
+        order.status = Order.OrderStatus.COMPLETED
+    elif order.status in [Order.OrderStatus.PENDING, Order.OrderStatus.READY, Order.OrderStatus.PREPARING]:
         order.status = Order.OrderStatus.SERVED
 
     gstin_no = (data.get('gstin_no') or '').strip()
@@ -4653,6 +4693,39 @@ def order_settle_api(request, pk, restaurant_slug=None):
         'paid_amount': str(order.paid_amount),
         'due_amount': str(order.due_amount)
     })
+
+
+@login_required
+def detect_location_ip_api(request, restaurant_slug=None):
+    """
+    Server-side IP geolocation helper so LAN users on HTTP do not hit browser mixed-content or insecure origin blocks.
+    """
+    import urllib.request
+    import json
+
+    endpoints = [
+        'https://ipwho.is/',
+        'https://ipapi.co/json/'
+    ]
+    for url in endpoints:
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+            with urllib.request.urlopen(req, timeout=4) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                lat = data.get('latitude') or data.get('lat')
+                lon = data.get('longitude') or data.get('lon')
+                if lat is not None and lon is not None:
+                    return JsonResponse({
+                        'success': True,
+                        'latitude': float(lat),
+                        'longitude': float(lon),
+                        'city': data.get('city', ''),
+                        'region': data.get('region', '') or data.get('region_name', '')
+                    })
+        except Exception:
+            continue
+
+    return JsonResponse({'success': False, 'error': 'Could not detect location from server'}, status=400)
 
 
 # Coupon Management
@@ -4890,11 +4963,32 @@ def order_kot(request, pk, restaurant_slug=None):
     food_items, bar_items = order.get_food_and_bar_items()
 
     item_ids_param = request.GET.get('items')
+    batch_param = request.GET.get('batch')
+    only_unprinted = request.GET.get('unprinted')
+
     if item_ids_param:
         filter_ids = [int(x) for x in item_ids_param.split(',') if x.isdigit()]
         if filter_ids:
             food_items = [it for it in food_items if it.id in filter_ids]
             bar_items = [it for it in bar_items if it.id in filter_ids]
+    elif batch_param and str(batch_param).isdigit():
+        b_num = int(batch_param)
+        food_items = [it for it in food_items if it.kot_batch == b_num]
+        bar_items = [it for it in bar_items if it.kot_batch == b_num]
+    elif only_unprinted:
+        food_items = [it for it in food_items if not it.is_kot_printed]
+        bar_items = [it for it in bar_items if not it.is_kot_printed]
+
+    all_current_items = food_items + bar_items
+    current_batch = max([it.kot_batch for it in all_current_items], default=1)
+    is_addon_kot = current_batch > 1
+
+    # Mark items as printed unless specifically requested not to
+    if request.GET.get('mark_printed') != '0':
+        for it in all_current_items:
+            if not it.is_kot_printed:
+                it.is_kot_printed = True
+                it.save(update_fields=['is_kot_printed'])
 
     total_food_qty = sum(item.quantity for item in food_items)
     total_bar_qty = sum(item.quantity for item in bar_items)
@@ -4915,6 +5009,8 @@ def order_kot(request, pk, restaurant_slug=None):
         'has_food': len(food_items) > 0,
         'has_bar': len(bar_items) > 0,
         'total_kitchen_items': total_kitchen_items,
+        'current_batch': current_batch,
+        'is_addon_kot': is_addon_kot,
         'subtotal': subtotal,
         'cgst_amount': cgst_amount,
         'sgst_amount': sgst_amount,
@@ -4952,6 +5048,8 @@ def order_update_status(request, pk, restaurant_slug=None):
                 order.status = new_status
                 if new_status == Order.OrderStatus.READY and not order.ready_at:
                     order.ready_at = timezone.now()
+                if new_status == Order.OrderStatus.SERVED and order.payment_status in [Order.PaymentStatus.PAID, 'paid', 'P']:
+                    order.status = Order.OrderStatus.COMPLETED
                 order.save()
                 
                 # Publish SSE table update
@@ -4973,18 +5071,22 @@ def order_update_status(request, pk, restaurant_slug=None):
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                     return JsonResponse({
                         'success': True,
-                        'message': f'Order #{order.branch_order_number or order.id} status updated to {status_choices[new_status]}',
+                        'message': f'Order #{order.branch_order_number or order.id} status updated to {order.get_status_display()}',
                         'status': order.get_status_display(),
                         'status_class': {
                             'P': 'warning',
                             'READY': 'primary',
                             'PR': 'info',
                             'S': 'success',
+                            'COMPLETED': 'success',
                             'C': 'danger'
                         }.get(order.status, 'secondary')
                     })
                 else:
-                    messages.success(request, f'Order #{order.branch_order_number or order.id} status updated to {status_choices[new_status]}')
+                    messages.success(request, f'Order #{order.branch_order_number or order.id} status updated to {order.get_status_display()}')
+                    referer = request.META.get('HTTP_REFERER')
+                    if referer:
+                        return redirect(referer)
                     return redirect('restaurant_admin:order_list', restaurant_slug=restaurant.slug)
             else:
                 error_msg = f'Invalid status: {new_status}. Valid statuses are: {list(status_choices.values())}'

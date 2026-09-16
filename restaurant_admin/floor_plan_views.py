@@ -88,7 +88,7 @@ def floor_plan_api(request, restaurant_slug=None):
                     'customer_name': latest_order.customer_name,
                     'total_amount': str(latest_order.total_amount),
                     'status': latest_order.status,
-                    'status_display': 'Ready' if latest_order.is_ready else latest_order.get_status_display(),
+                    'status_display': 'Ready' if (latest_order.is_ready and latest_order.status not in ['S', 'COMPLETED', 'C']) else latest_order.get_status_display(),
                     'payment_status': latest_order.payment_status,
                     'payment_status_display': latest_order.get_payment_status_display(),
                 }

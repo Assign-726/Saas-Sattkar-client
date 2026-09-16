@@ -4069,6 +4069,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
       renderCart();
       renderTopOrderDropdown();
+      if (typeof posCtxRefresh === 'function') posCtxRefresh();
 
       const fItem = document.getElementById('fItem');
       if (fItem) {
@@ -4114,6 +4115,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
       renderCart();
       renderTopOrderDropdown();
+      if (typeof posCtxRefresh === 'function') posCtxRefresh();
 
       if (window.toast) toast("New draft order created.");
       const fItem = document.getElementById('fItem');
@@ -4230,17 +4232,11 @@ document.addEventListener("DOMContentLoaded", function() {
     document.getElementById('fulfillment-selector')?.addEventListener('click', (e) => {
       const btn = e.target.closest('.fulfillment-btn');
       if (!btn) return;
-      document.querySelectorAll('.fulfillment-btn').forEach(b => {
-        b.classList.remove('active', 'btn-primary', 'text-white');
-        b.classList.add('btn-outline-primary');
-      });
-      btn.classList.add('active', 'btn-primary', 'text-white');
-      btn.classList.remove('btn-outline-primary');
-      state.orderType = btn.dataset.type;
-      const tableCol = document.getElementById('table-select-col');
-      if (tableCol) tableCol.style.display = (state.orderType === 'dine_in') ? 'block' : 'none';
-      updateAutoAppliedCharges();
-      renderCart();
+      if (typeof posSetOrderType === 'function') {
+        posSetOrderType(btn.dataset.type);
+      } else if (window.posSetOrderType) {
+        window.posSetOrderType(btn.dataset.type);
+      }
     });
 
     document.getElementById('category-tabs')?.addEventListener('click', (e) => {
@@ -4371,15 +4367,17 @@ document.addEventListener("DOMContentLoaded", function() {
     };
 
     window.setSettlePay = function(mode) {
-      window.SETTLE_PAY_MODE = mode;
+      const normMode = (mode || 'cash').toLowerCase();
+      window.SETTLE_PAY_MODE = normMode;
       const pills = document.querySelectorAll('#settlePayPills button');
       pills.forEach(b => {
-        const isMatch = b.textContent.trim().toLowerCase().startsWith(mode.toLowerCase());
+        const btnText = b.textContent.trim().toLowerCase();
+        const isMatch = btnText.startsWith(normMode) || normMode.startsWith(btnText) || (normMode === 'credit' && btnText.includes('credit'));
         if (isMatch) {
           b.className = 'on';
-          b.style.background = mode === 'Credit' ? '#B45309' : '#2F3E9E';
+          b.style.background = normMode === 'credit' ? '#B45309' : '#2F3E9E';
           b.style.color = '#FFF';
-          b.style.borderColor = mode === 'Credit' ? '#B45309' : '#2F3E9E';
+          b.style.borderColor = normMode === 'credit' ? '#B45309' : '#2F3E9E';
           b.style.fontWeight = '700';
         } else {
           b.className = '';
@@ -4396,8 +4394,9 @@ document.addEventListener("DOMContentLoaded", function() {
       const el = document.getElementById('settlePayBox');
       if (!el) return;
       const netPayable = Math.max(0, state.grandTotal - (state.advanceAmountPaid || 0));
+      const mode = (window.SETTLE_PAY_MODE || 'cash').toLowerCase();
 
-      if (window.SETTLE_PAY_MODE === 'Cash') {
+      if (mode === 'cash') {
         el.innerHTML = `
           <div>
             <label style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:4px;">CASH RECEIVED</label>
@@ -4426,21 +4425,21 @@ document.addEventListener("DOMContentLoaded", function() {
         }
         inp.addEventListener('input', calcCash);
         setTimeout(() => { inp.focus(); try { inp.select(); } catch(e){} }, 50);
-      } else if (window.SETTLE_PAY_MODE === 'Card') {
+      } else if (mode === 'card') {
         el.innerHTML = `
           <div>
             <label style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:4px;">CARD RECEIVED</label>
             <input id="settleCardRecv" type="number" step="0.01" min="0" value="${netPayable.toFixed(2)}" style="width:100%; padding:10px 14px; font-size:15px; font-family:monospace; font-weight:700; border:1.5px solid #E3DFD7; border-radius:8px; outline:none; background:#FFF; color:#1A1815; box-sizing:border-box;">
           </div>
         `;
-      } else if (window.SETTLE_PAY_MODE === 'UPI') {
+      } else if (mode === 'upi') {
         el.innerHTML = `
           <div>
             <label style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:4px;">UPI / QR CODE RECEIVED</label>
             <input id="settleUpiRecv" type="number" step="0.01" min="0" value="${netPayable.toFixed(2)}" style="width:100%; padding:10px 14px; font-size:15px; font-family:monospace; font-weight:700; border:1.5px solid #E3DFD7; border-radius:8px; outline:none; background:#FFF; color:#1A1815; box-sizing:border-box;">
           </div>
         `;
-      } else if (window.SETTLE_PAY_MODE === 'Split') {
+      } else if (mode === 'split') {
         el.innerHTML = `
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
             <div>
@@ -4482,7 +4481,7 @@ document.addEventListener("DOMContentLoaded", function() {
         }
         sc.addEventListener('input', calcSplit);
         so.addEventListener('input', calcSplit);
-      } else if (window.SETTLE_PAY_MODE === 'Credit') {
+      } else if (mode === 'credit') {
         el.innerHTML = `
           <div>
             <label style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#B45309; margin-bottom:4px;">CREDIT / PENDING DUE AMOUNT</label>
@@ -4490,6 +4489,13 @@ document.addEventListener("DOMContentLoaded", function() {
             <div style="margin-top:6px; font-size:11.5px; color:#92400E; padding:8px 12px; background:#FEF3C7; border-radius:6px; border-left:3.5px solid #D97706; line-height:1.4;">
               <strong>Customer Ledger:</strong> This unpaid order of ₹${netPayable.toFixed(2)} will be attached to the customer's account balance.
             </div>
+          </div>
+        `;
+      } else {
+        el.innerHTML = `
+          <div>
+            <label style="display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#6E675C; margin-bottom:4px;">${escapeHtml(mode.toUpperCase())} RECEIVED</label>
+            <input id="settleOtherRecv" type="number" step="0.01" min="0" value="${netPayable.toFixed(2)}" style="width:100%; padding:10px 14px; font-size:15px; font-family:monospace; font-weight:700; border:1.5px solid #E3DFD7; border-radius:8px; outline:none; background:#FFF; color:#1A1815; box-sizing:border-box;">
           </div>
         `;
       }
@@ -4682,25 +4688,27 @@ document.addEventListener("DOMContentLoaded", function() {
       }
 
       // 2. Parse Payment Amounts
-      if (window.SETTLE_PAY_MODE === 'Cash') {
+      const mode = (window.SETTLE_PAY_MODE || 'cash').toLowerCase();
+
+      if (mode === 'cash') {
         payMethod = 'cash';
         const cashVal = parseFloat(document.getElementById('settleCashRecv')?.value) || netPayable;
-        paidAmt = Math.min(cashVal, netPayable);
+        paidAmt = Math.min(cashVal > 0 ? cashVal : netPayable, netPayable);
         dueAmt = Math.max(0, netPayable - paidAmt);
         payments = [{ method: 'cash', amount: paidAmt }];
-      } else if (window.SETTLE_PAY_MODE === 'Card') {
+      } else if (mode === 'card') {
         payMethod = 'card';
         const cardVal = parseFloat(document.getElementById('settleCardRecv')?.value) || netPayable;
-        paidAmt = Math.min(cardVal, netPayable);
+        paidAmt = Math.min(cardVal > 0 ? cardVal : netPayable, netPayable);
         dueAmt = Math.max(0, netPayable - paidAmt);
         payments = [{ method: 'card', amount: paidAmt }];
-      } else if (window.SETTLE_PAY_MODE === 'UPI') {
+      } else if (mode === 'upi') {
         payMethod = 'upi';
         const upiVal = parseFloat(document.getElementById('settleUpiRecv')?.value) || netPayable;
-        paidAmt = Math.min(upiVal, netPayable);
+        paidAmt = Math.min(upiVal > 0 ? upiVal : netPayable, netPayable);
         dueAmt = Math.max(0, netPayable - paidAmt);
         payments = [{ method: 'upi', amount: paidAmt }];
-      } else if (window.SETTLE_PAY_MODE === 'Split') {
+      } else if (mode === 'split') {
         payMethod = 'split';
         const cVal = parseFloat(document.getElementById('splitCashInp')?.value) || 0;
         const oVal = parseFloat(document.getElementById('splitOtherInp')?.value) || 0;
@@ -4709,16 +4717,30 @@ document.addEventListener("DOMContentLoaded", function() {
         payments = [];
         if (cVal > 0) payments.push({ method: 'cash', amount: cVal });
         if (oVal > 0) payments.push({ method: 'card', amount: oVal });
-      } else if (window.SETTLE_PAY_MODE === 'Credit') {
+      } else if (mode === 'credit') {
         payMethod = 'credit';
         paidAmt = 0;
         dueAmt = netPayable;
         payments = [{ method: 'credit', amount: netPayable }];
+      } else {
+        payMethod = mode;
+        paidAmt = netPayable;
+        dueAmt = 0;
+        payments = [{ method: payMethod, amount: paidAmt }];
       }
 
-      if (dueAmt <= 0.01) pStatus = 'paid';
-      else if (paidAmt > 0) pStatus = 'partially_paid';
-      else pStatus = 'unpaid';
+      if (dueAmt <= 0.01) {
+        pStatus = 'paid';
+        dueAmt = 0;
+        if (mode !== 'credit' && paidAmt <= 0) {
+          paidAmt = netPayable;
+          payments = [{ method: payMethod, amount: paidAmt }];
+        }
+      } else if (paidAmt > 0) {
+        pStatus = 'partially_paid';
+      } else {
+        pStatus = 'unpaid';
+      }
 
       // 3. Check for customer name if credit is being logged
       if (dueAmt > 0) {
@@ -4778,8 +4800,12 @@ document.addEventListener("DOMContentLoaded", function() {
         return;
       }
 
-      const tableIdVal = extraData.table_id || document.getElementById('table-id')?.value || state.tableId || '';
-      const orderTypeVal = extraData.order_type || (tableIdVal ? 'dine_in' : state.orderType);
+      const rawOrderType = extraData.order_type || state.orderType || 'dine_in';
+      const orderTypeVal = (typeof normalizeOrderType === 'function') ? normalizeOrderType(rawOrderType) : rawOrderType;
+      let tableIdVal = '';
+      if (orderTypeVal === 'dine_in') {
+        tableIdVal = extraData.table_id || document.getElementById('table-id')?.value || state.tableId || '';
+      }
 
       const payload = {
         order_id: state.activeOrderId,
@@ -5183,40 +5209,70 @@ document.addEventListener("DOMContentLoaded", function() {
   ═══════════════════════════════════════════════════════════════════ */
 
   function posCtxRefresh() {
+    const curType = (window.posState && window.posState.orderType) || (window.state && window.state.orderType) || 'dine_in';
+    const isDineIn = (curType === 'dine_in');
+
+    const ciTable = document.getElementById('ciTable');
+    const ciCov = document.getElementById('ciCov');
+
+    if (ciTable) {
+      ciTable.style.display = isDineIn ? '' : 'none';
+    }
+    if (ciCov) {
+      ciCov.style.display = isDineIn ? '' : 'none';
+    }
+
+    if (!isDineIn) {
+      if (window.state) {
+        window.state.tableId = '';
+        window.state.tableName = '';
+      }
+      if (window.posState) {
+        window.posState.tableId = '';
+        window.posState.tableName = '';
+      }
+      const sel = document.getElementById('table-id');
+      if (sel) sel.value = '';
+    }
+
     // Sync Type pill
     const typeEl = document.getElementById('vType');
     const typeMap = { dine_in: 'Dine-In', takeaway: 'Takeaway', delivery: 'Delivery' };
-    if (typeEl && window.posState) {
-      const t = window.posState.orderType || 'dine_in';
-      typeEl.textContent = typeMap[t] || t;
-      typeEl.className = 'pos-cv';
+    if (typeEl) {
+      typeEl.textContent = typeMap[curType] || curType;
     }
     // Sync Table pill
     const tableEl = document.getElementById('vTable');
     if (tableEl) {
-      const sel = document.getElementById('table-id');
-      const val = sel ? sel.options[sel.selectedIndex]?.text : '';
-      tableEl.textContent = val && val !== 'Select Table' ? val : '—';
-      tableEl.className = val && val !== 'Select Table' ? 'pos-cv' : 'pos-cv empty';
+      if (!isDineIn) {
+        tableEl.textContent = '—';
+        tableEl.classList.add('e');
+      } else {
+        const sel = document.getElementById('table-id');
+        const val = sel ? sel.options[sel.selectedIndex]?.text : '';
+        tableEl.textContent = val && val !== 'Select Table' ? val : '—';
+        tableEl.classList.toggle('e', !val || val === 'Select Table');
+      }
     }
     // Sync Guest pill
     const guestEl = document.getElementById('vGuest');
-    if (guestEl && window.posState) {
-      const n = window.posState.customerName || '';
-      guestEl.textContent = n || 'Walk-in';
-      guestEl.className = n ? 'pos-cv' : 'pos-cv empty';
+    const guestName = (window.posState && window.posState.customerName) || (window.state && window.state.customerName) || '';
+    if (guestEl) {
+      guestEl.textContent = guestName || 'Walk-in';
+      guestEl.classList.toggle('e', !guestName);
     }
     // Sync Notes pill
     const notesEl = document.getElementById('vNotes');
-    if (notesEl && window.posState) {
-      const note = window.posState.notes || '';
-      notesEl.textContent = note || '—';
-      notesEl.className = note ? 'pos-cv' : 'pos-cv empty';
+    const noteVal = (window.posState && window.posState.notes) || (window.state && window.state.notes) || '';
+    if (notesEl) {
+      notesEl.textContent = noteVal || '—';
+      notesEl.classList.toggle('e', !noteVal);
     }
     // Enable/disable action buttons based on cart
     const kotBtn = document.getElementById('btn-fire-kot');
     const settleBtn = document.getElementById('btn-open-settle-modal');
-    const hasCart = window.posState && window.posState.cart && window.posState.cart.length > 0;
+    const cartItems = (window.posState && window.posState.cart) || (window.state && window.state.cart) || [];
+    const hasCart = cartItems && cartItems.length > 0;
     if (kotBtn) kotBtn.disabled = !hasCart;
     if (settleBtn) settleBtn.disabled = !hasCart;
   }
@@ -5308,6 +5364,19 @@ document.addEventListener("DOMContentLoaded", function() {
     if (window.posState) window.posState.orderType = cleanType;
     if (window.state) window.state.orderType = cleanType;
 
+    if (cleanType !== 'dine_in') {
+      if (window.state) {
+        window.state.tableId = '';
+        window.state.tableName = '';
+      }
+      if (window.posState) {
+        window.posState.tableId = '';
+        window.posState.tableName = '';
+      }
+      const sel = document.getElementById('table-id');
+      if (sel) sel.value = '';
+    }
+
     document.querySelectorAll('.fulfillment-btn').forEach(b => {
       const isActive = (typeof normalizeOrderType === 'function' ? normalizeOrderType(b.dataset.type) : b.dataset.type) === cleanType;
       b.classList.toggle('active', isActive);
@@ -5320,9 +5389,13 @@ document.addEventListener("DOMContentLoaded", function() {
       }
     });
 
+    const tableCol = document.getElementById('table-select-col');
+    if (tableCol) tableCol.style.display = (cleanType === 'dine_in') ? 'block' : 'none';
+
     if (typeof updateAutoAppliedCharges === 'function') updateAutoAppliedCharges();
     if (typeof posCtxRefresh === 'function') posCtxRefresh();
     if (typeof renderCart === 'function') renderCart();
+    if (typeof renderTopOrderDropdown === 'function') renderTopOrderDropdown();
   };
 
   // Covers dropdown & stepper (F4 / ciCov)

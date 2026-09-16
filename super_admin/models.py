@@ -345,6 +345,10 @@ class RestaurantBranch(models.Model):
     email = models.EmailField(blank=True, default="")
     opening_hours = models.CharField(max_length=200, blank=True, default="")
     map_iframe_url = models.TextField(blank=True, default="")
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name="Latitude", help_text="GPS Latitude of the restaurant outlet e.g. 19.076090")
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True, verbose_name="Longitude", help_text="GPS Longitude of the restaurant outlet e.g. 72.877426")
+    geofence_radius_meters = models.PositiveIntegerField(default=100, verbose_name="Geofence Radius (meters)", help_text="Permitted distance from outlet for Table QR ordering (default: 100m)")
+    enforce_geofence = models.BooleanField(default=False, verbose_name="Enforce Geofence", help_text="Block Table QR orders if customer GPS location is outside the allowed radius")
 
     # Social media channels per branch
     facebook_url = models.URLField(blank=True, default="")
