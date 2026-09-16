@@ -432,6 +432,9 @@ class Order(models.Model):
     event_time = models.TimeField(null=True, blank=True)
     guest_count = models.PositiveIntegerField(null=True, blank=True)
     waive_service_charge = models.BooleanField(default=False, help_text="Whether service charge was removed from this bill upon customer request")
+    is_prep_paused = models.BooleanField(default=False, help_text="Whether cooking is paused in KDS")
+    paused_at = models.DateTimeField(null=True, blank=True)
+    prep_elapsed_seconds = models.PositiveIntegerField(default=0, help_text="Elapsed cooking seconds tracked by KDS")
 
     class Meta:
         ordering = ['-order_time']

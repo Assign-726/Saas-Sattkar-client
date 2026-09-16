@@ -1,0 +1,1236 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block title %}Kitchen (KDS) - {{ restaurant.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* KDS Page Layout & Aesthetics */
+  :root {
+    --kds-navy: #2B3648;
+    --kds-orange: #F59E0B;
+    --kds-red: #EF4444;
+    --kds-green: #10B981;
+    --kds-blue-btn: #0284C7;
+    --kds-bg: #F8FAFC;
+    --kds-card-border: #E2E8F0;
+  }
+
+  body {
+    background-color: var(--kds-bg);
+  }
+
+  .kds-container {
+    max-width: 100%;
+    padding: 0.5rem 0.5rem 2rem 0.5rem;
+  }
+
+  /* KDS Top Bar Header */
+  .kds-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .kds-title-area {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .kds-page-title {
+    font-size: 1.65rem;
+    font-weight: 800;
+    color: #0F172A;
+    margin: 0;
+    letter-spacing: -0.02em;
+  }
+
+  .kds-btn-refresh {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid #CBD5E1;
+    background: #FFFFFF;
+    color: #475569;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+
+  .kds-btn-refresh:hover {
+    background: #F1F5F9;
+    color: #0F172A;
+    transform: rotate(180deg);
+  }
+
+  /* Status Filter KPI Pills */
+  .kds-kpi-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .kds-kpi-btn {
+    border: none;
+    outline: none;
+    padding: 0.55rem 1.15rem;
+    border-radius: 9999px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    opacity: 0.88;
+    user-select: none;
+  }
+
+  .kds-kpi-btn:hover {
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.12);
+  }
+
+  .kds-kpi-btn.active {
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.35), 0 4px 8px rgba(0,0,0,0.15);
+  }
+
+  .kds-kpi-btn.kpi-new {
+    background-color: var(--kds-navy);
+    color: #FFFFFF;
+  }
+
+  .kds-kpi-btn.kpi-kitchen {
+    background-color: var(--kds-orange);
+    color: #FFFFFF;
+  }
+
+  .kds-kpi-btn.kpi-delayed {
+    background-color: var(--kds-red);
+    color: #FFFFFF;
+  }
+
+  .kds-kpi-btn.kpi-completed {
+    background-color: var(--kds-green);
+    color: #FFFFFF;
+  }
+
+  .kds-kpi-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+  }
+
+  .kds-kpi-count {
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+
+  /* Station Filters & Search */
+  .kds-actions-area {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .kds-station-pill-group {
+    background: #FFFFFF;
+    border: 1px solid #CBD5E1;
+    border-radius: 9999px;
+    padding: 3px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+
+  .station-pill-btn {
+    border: none;
+    background: transparent;
+    padding: 5px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #64748B;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .station-pill-btn.active {
+    background: #0F172A;
+    color: #FFFFFF;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  }
+
+  .kds-search-box {
+    position: relative;
+    width: 220px;
+  }
+
+  .kds-search-input {
+    width: 100%;
+    padding: 0.5rem 2.2rem 0.5rem 1rem;
+    border-radius: 9999px;
+    border: 1px solid #CBD5E1;
+    background: #FFFFFF;
+    font-size: 0.85rem;
+    color: #1E293B;
+    outline: none;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+
+  .kds-search-input:focus {
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  }
+
+  .kds-search-icon {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94A3B8;
+    pointer-events: none;
+    font-size: 0.85rem;
+  }
+
+  /* Fullscreen & Audio controls */
+  .kds-icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid #CBD5E1;
+    background: #FFFFFF;
+    color: #475569;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .kds-icon-btn:hover {
+    background: #F1F5F9;
+    color: #0F172A;
+  }
+
+  /* Cards Grid */
+  .kds-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 1.25rem;
+  }
+
+  @media (min-width: 1400px) {
+    .kds-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  /* Order Card */
+  .kds-card {
+    background: #FFFFFF;
+    border-radius: 14px;
+    border: 1px solid var(--kds-card-border);
+    box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    position: relative;
+  }
+
+  .kds-card:hover {
+    box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.08);
+  }
+
+  /* Header Color Variations */
+  .kds-card-header {
+    padding: 0.9rem 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #FFFFFF;
+  }
+
+  .kds-card[data-kds-status="NEW"] .kds-card-header {
+    background-color: var(--kds-navy);
+  }
+
+  .kds-card[data-kds-status="IN_KITCHEN"] .kds-card-header {
+    background-color: var(--kds-orange);
+  }
+
+  .kds-card[data-kds-status="DELAYED"] .kds-card-header {
+    background-color: var(--kds-red);
+  }
+
+  .kds-card[data-kds-status="COMPLETED"] .kds-card-header {
+    background-color: var(--kds-green);
+  }
+
+  .card-user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .user-avatar-circle {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1.5px solid rgba(255, 255, 255, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    color: #FFFFFF;
+    flex-shrink: 0;
+  }
+
+  .user-text-details {
+    line-height: 1.2;
+  }
+
+  .customer-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 170px;
+  }
+
+  .order-type-badge {
+    font-size: 0.75rem;
+    font-weight: 500;
+    opacity: 0.9;
+  }
+
+  .order-number-pill {
+    background: rgba(255, 255, 255, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: #FFFFFF;
+  }
+
+  /* Card Subheader (Token No & Date) */
+  .kds-card-submeta {
+    padding: 0.75rem 1.1rem 0.5rem 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.82rem;
+    color: #475569;
+    border-bottom: 1px dashed #E2E8F0;
+  }
+
+  .token-label {
+    font-weight: 600;
+    color: #0F172A;
+  }
+
+  .token-no {
+    font-weight: 800;
+    font-size: 0.92rem;
+    color: #0F172A;
+  }
+
+  .order-timestamp {
+    font-size: 0.78rem;
+    color: #64748B;
+    font-weight: 500;
+  }
+
+  /* Items Container */
+  .kds-card-items {
+    padding: 0.85rem 1.1rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-height: 140px;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .kds-item-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding-bottom: 0.55rem;
+    border-bottom: 1px dotted #F1F5F9;
+  }
+
+  .kds-item-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .item-title-line {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .item-name-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  /* Food Type Veg / Non-Veg Icon */
+  .food-type-icon {
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .food-type-icon.veg {
+    border: 1.5px solid #16A34A;
+  }
+
+  .food-type-icon.veg .inner-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #16A34A;
+  }
+
+  .food-type-icon.non-veg {
+    border: 1.5px solid #DC2626;
+  }
+
+  .food-type-icon.non-veg .inner-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #DC2626;
+  }
+
+  .item-name {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #1E293B;
+  }
+
+  .item-qty {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #475569;
+    flex-shrink: 0;
+  }
+
+  .item-notes-pill {
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 0.74rem;
+    color: #475569;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+    margin-left: 1.4rem;
+    width: fit-content;
+  }
+
+  /* Card Bottom Progress & Timers */
+  .kds-card-footer {
+    padding: 0.85rem 1.1rem;
+    background: #FFFFFF;
+    border-top: 1px solid #F1F5F9;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .delayed-notice {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #DC2626;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .completed-notice {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #16A34A;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .progress-and-target {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .kds-progress-bar-bg {
+    flex: 1;
+    height: 5px;
+    background: #E2E8F0;
+    border-radius: 9999px;
+    overflow: hidden;
+  }
+
+  .kds-progress-bar-fill {
+    height: 100%;
+    background: #10B981;
+    border-radius: 9999px;
+    transition: width 0.4s ease;
+  }
+
+  .kds-card[data-kds-status="DELAYED"] .kds-progress-bar-fill {
+    background: #EF4444;
+  }
+
+  .target-duration-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #64748B;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  /* Action Buttons */
+  .card-action-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .kds-action-btn {
+    flex: 1;
+    padding: 0.55rem 0.75rem;
+    border-radius: 8px;
+    border: 1px solid #CBD5E1;
+    background: #FFFFFF;
+    color: #334155;
+    font-size: 0.82rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .kds-action-btn:hover {
+    background: #F8FAFC;
+    border-color: #94A3B8;
+    color: #0F172A;
+  }
+
+  .kds-action-btn.btn-play-action {
+    color: #0F172A;
+  }
+
+  .kds-action-btn.btn-print-order {
+    background: #F8FAFC;
+    color: #334155;
+  }
+
+  .kds-action-btn.btn-print-order:hover {
+    background: #F1F5F9;
+    color: #0F172A;
+  }
+
+  /* Modern Popup Modals */
+  .kds-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+
+  .kds-modal-backdrop.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .kds-modal-card {
+    background: #FFFFFF;
+    border-radius: 20px;
+    padding: 2.2rem 1.8rem 1.8rem 1.8rem;
+    width: 360px;
+    max-width: 90vw;
+    text-align: center;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    transform: scale(0.92);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .kds-modal-backdrop.show .kds-modal-card {
+    transform: scale(1);
+  }
+
+  .kds-modal-icon-circle {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    margin-bottom: 1.2rem;
+  }
+
+  .kds-modal-icon-circle.started {
+    background: #FFF7ED;
+    color: #EA580C;
+  }
+
+  .kds-modal-icon-circle.paused {
+    background: #EFF6FF;
+    color: #2563EB;
+  }
+
+  .kds-modal-icon-circle.completed {
+    background: #F0FDF4;
+    color: #16A34A;
+  }
+
+  .kds-modal-title {
+    font-size: 1.28rem;
+    font-weight: 800;
+    color: #0F172A;
+    margin-bottom: 0.5rem;
+  }
+
+  .kds-modal-desc {
+    font-size: 0.88rem;
+    color: #64748B;
+    line-height: 1.45;
+    margin-bottom: 1.5rem;
+  }
+
+  .kds-modal-btn-close {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--kds-blue-btn);
+    color: #FFFFFF;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .kds-modal-btn-close:hover {
+    background: #0369A1;
+  }
+
+  /* Empty state */
+  .kds-empty-state {
+    grid-column: 1 / -1;
+    background: #FFFFFF;
+    border-radius: 16px;
+    border: 2px dashed #E2E8F0;
+    padding: 4rem 2rem;
+    text-align: center;
+    color: #64748B;
+  }
+
+  .kds-empty-icon {
+    font-size: 3rem;
+    color: #CBD5E1;
+    margin-bottom: 1rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="kds-container">
+
+  <!-- KDS Header Bar -->
+  <div class="kds-header">
+    <div class="d-flex flex-wrap align-items-center gap-3">
+      <!-- Title & Refresh -->
+      <div class="kds-title-area">
+        <h1 class="kds-page-title">Kitchen</h1>
+        <button class="kds-btn-refresh" id="btnRefreshKds" title="Refresh Kitchen Tickets">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      </div>
+
+      <!-- KPI Pills Filter -->
+      <div class="kds-kpi-filters">
+        <button class="kds-kpi-btn kpi-new" data-status-filter="new" id="btnFilterNew">
+          <span class="kds-kpi-icon"><i class="bi bi-receipt"></i></span>
+          <span>New Order</span>
+          <span class="kds-kpi-count" id="countNew">00</span>
+        </button>
+
+        <button class="kds-kpi-btn kpi-kitchen" data-status-filter="in_kitchen" id="btnFilterKitchen">
+          <span class="kds-kpi-icon"><i class="bi bi-fire"></i></span>
+          <span>In Kitchen</span>
+          <span class="kds-kpi-count" id="countInKitchen">00</span>
+        </button>
+
+        <button class="kds-kpi-btn kpi-delayed" data-status-filter="delayed" id="btnFilterDelayed">
+          <span class="kds-kpi-icon"><i class="bi bi-clock-history"></i></span>
+          <span>Delayed</span>
+          <span class="kds-kpi-count" id="countDelayed">00</span>
+        </button>
+
+        <button class="kds-kpi-btn kpi-completed" data-status-filter="completed" id="btnFilterCompleted">
+          <span class="kds-kpi-icon"><i class="bi bi-check2-circle"></i></span>
+          <span>Completed</span>
+          <span class="kds-kpi-count" id="countCompleted">00</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Actions Area: Station Filter, Search, Fullscreen -->
+    <div class="kds-actions-area">
+      <!-- Station Segmented Toggle -->
+      <div class="kds-station-pill-group" title="Filter tickets by preparation station">
+        <button class="station-pill-btn active" data-station="all">All Stations</button>
+        <button class="station-pill-btn" data-station="kitchen">🍳 Kitchen (KOT)</button>
+        <button class="station-pill-btn" data-station="bar">🍸 Bar (BOT)</button>
+      </div>
+
+      <!-- Search Input -->
+      <div class="kds-search-box">
+        <input type="text" class="kds-search-input" id="kdsSearchInput" placeholder="Search...">
+        <i class="bi bi-search kds-search-icon"></i>
+      </div>
+
+      <!-- Fullscreen Toggle -->
+      <button class="kds-icon-btn" id="btnFullscreenKds" title="Toggle Fullscreen Screen">
+        <i class="bi bi-fullscreen" id="fullscreenIcon"></i>
+      </button>
+
+      <!-- Audio Alert Toggle -->
+      <button class="kds-icon-btn" id="btnSoundKds" title="Audio Chime Alert ON/OFF">
+        <i class="bi bi-volume-up-fill text-success" id="soundIcon"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Cards Grid Container -->
+  <div class="kds-grid" id="kdsGrid">
+    <!-- Dynamic ticket cards populated via Javascript -->
+    <div class="kds-empty-state">
+      <div class="kds-empty-icon"><i class="bi bi-egg-fried"></i></div>
+      <h5 class="fw-bold text-dark">Connecting to Kitchen Tickets...</h5>
+      <p class="small text-muted">Retrieving live orders for {{ current_branch.name|default:restaurant.name }}</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal Popup: Cooking Started, Paused, Completed -->
+<div class="kds-modal-backdrop" id="kdsModalBackdrop">
+  <div class="kds-modal-card">
+    <div class="kds-modal-icon-circle" id="modalIconContainer">
+      <i class="bi bi-fire" id="modalIcon"></i>
+    </div>
+    <h3 class="kds-modal-title" id="modalTitle">Cooking Started</h3>
+    <p class="kds-modal-desc" id="modalDesc">Vegetarian Lasagna Cooking has begun in the kitchen.</p>
+    <button type="button" class="kds-modal-btn-close" id="btnModalClose">Close</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  'use strict';
+
+  const RESTAURANT_SLUG = "{{ rslug }}";
+  const ORDERS_API_URL = "{% url 'restaurant_admin:kitchen_kds_orders_api' restaurant_slug=rslug %}";
+  const SSE_STREAM_URL = "{% url 'restaurant_admin:orders_stream' restaurant_slug=rslug %}";
+
+  // State
+  let state = {
+    station: 'all',          // 'all', 'kitchen', 'bar'
+    statusFilter: 'all',     // 'all', 'new', 'in_kitchen', 'delayed', 'completed'
+    searchQuery: '',
+    soundEnabled: true,
+    orders: [],
+    counts: { new: 0, in_kitchen: 0, delayed: 0, completed: 0 }
+  };
+
+  // DOM Elements
+  const gridContainer = document.getElementById('kdsGrid');
+  const btnRefresh = document.getElementById('btnRefreshKds');
+  const btnFullscreen = document.getElementById('btnFullscreenKds');
+  const fullscreenIcon = document.getElementById('fullscreenIcon');
+  const btnSound = document.getElementById('btnSoundKds');
+  const soundIcon = document.getElementById('soundIcon');
+  const searchInput = document.getElementById('kdsSearchInput');
+  const countNew = document.getElementById('countNew');
+  const countInKitchen = document.getElementById('countInKitchen');
+  const countDelayed = document.getElementById('countDelayed');
+  const countCompleted = document.getElementById('countCompleted');
+
+  // Modal elements
+  const modalBackdrop = document.getElementById('kdsModalBackdrop');
+  const modalIconContainer = document.getElementById('modalIconContainer');
+  const modalIcon = document.getElementById('modalIcon');
+  const modalTitle = document.getElementById('modalTitle');
+  const modalDesc = document.getElementById('modalDesc');
+  const btnModalClose = document.getElementById('btnModalClose');
+
+  // Synthesized Web Audio Chime (no audio assets required)
+  function playAudioChime() {
+    if (!state.soundEnabled) return;
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      
+      const playTone = (freq, start, duration) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+        gain.gain.setValueAtTime(0, ctx.currentTime + start);
+        gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + start);
+        osc.stop(ctx.currentTime + start + duration);
+      };
+
+      // Two-tone cheerful kitchen notification chime (E5 -> A5)
+      playTone(659.25, 0, 0.12);
+      playTone(880.00, 0.12, 0.25);
+    } catch (e) {
+      console.warn("Audio chime error:", e);
+    }
+  }
+
+  // Show status confirmation modal (matching screenshots 3, 4, 5)
+  function showConfirmationModal(type, title, message) {
+    modalIconContainer.className = 'kds-modal-icon-circle ' + type;
+    if (type === 'started') {
+      modalIcon.className = 'bi bi-fire';
+    } else if (type === 'paused') {
+      modalIcon.className = 'bi bi-pause-fill';
+    } else if (type === 'completed') {
+      modalIcon.className = 'bi bi-check-lg';
+    }
+    modalTitle.textContent = title;
+    modalDesc.textContent = message;
+    modalBackdrop.classList.add('show');
+  }
+
+  btnModalClose.addEventListener('click', () => {
+    modalBackdrop.classList.remove('show');
+  });
+  modalBackdrop.addEventListener('click', (e) => {
+    if (e.target === modalBackdrop) {
+      modalBackdrop.classList.remove('show');
+    }
+  });
+
+  // Fetch Live Orders
+  async function fetchOrders(silently = false) {
+    if (!silently) {
+      btnRefresh.querySelector('i').classList.add('spin-animation');
+    }
+    try {
+      const params = new URLSearchParams({
+        station: state.station,
+        status: state.statusFilter,
+        search: state.searchQuery
+      });
+      const res = await fetch(`${ORDERS_API_URL}?${params.toString()}`);
+      if (!res.ok) throw new Error("Failed to load orders");
+      const data = await res.json();
+      if (data.success) {
+        state.orders = data.orders || [];
+        state.counts = data.counts || { new: 0, in_kitchen: 0, delayed: 0, completed: 0 };
+        updateCountsUI();
+        renderCards();
+      }
+    } catch (err) {
+      console.error("Error fetching KDS orders:", err);
+    } finally {
+      btnRefresh.querySelector('i').classList.remove('spin-animation');
+    }
+  }
+
+  // Update KPI Counts
+  function updateCountsUI() {
+    countNew.textContent = String(state.counts.new || 0).padStart(2, '0');
+    countInKitchen.textContent = String(state.counts.in_kitchen || 0).padStart(2, '0');
+    countDelayed.textContent = String(state.counts.delayed || 0).padStart(2, '0');
+    countCompleted.textContent = String(state.counts.completed || 0).padStart(2, '0');
+  }
+
+  // Render KDS Cards
+  function renderCards() {
+    if (!state.orders || state.orders.length === 0) {
+      gridContainer.innerHTML = `
+        <div class="kds-empty-state">
+          <div class="kds-empty-icon"><i class="bi bi-check-circle"></i></div>
+          <h5 class="fw-bold text-dark">No Active Tickets</h5>
+          <p class="small text-muted">All kitchen and bar orders are cleared. New orders will appear automatically.</p>
+        </div>
+      `;
+      return;
+    }
+
+    gridContainer.innerHTML = state.orders.map(order => {
+      // Items HTML
+      const itemsHtml = (order.items || []).map(it => `
+        <div class="kds-item-row">
+          <div class="item-title-line">
+            <div class="item-name-group">
+              <span class="food-type-icon ${it.is_veg ? 'veg' : 'non-veg'}">
+                <span class="inner-dot"></span>
+              </span>
+              <span class="item-name">${escapeHtml(it.name)}</span>
+            </div>
+            <span class="item-qty">&times;${it.quantity}</span>
+          </div>
+          ${it.notes ? `<div class="item-notes-pill"><i class="bi bi-info-circle"></i> Notes : ${escapeHtml(it.notes)}</div>` : ''}
+        </div>
+      `).join('');
+
+      // Status indicator tag
+      let statusNoticeHtml = '';
+      if (order.kds_status === 'DELAYED') {
+        statusNoticeHtml = `<div class="delayed-notice"><i class="bi bi-clock"></i> Delayed By ${order.delayed_minutes || 1} Mins</div>`;
+      } else if (order.kds_status === 'COMPLETED') {
+        statusNoticeHtml = `<div class="completed-notice"><i class="bi bi-check-circle"></i> ${order.completed_elapsed_str || 'Completed & Ready'}</div>`;
+      }
+
+      // Action Buttons Row
+      let actionButtonsHtml = '';
+      if (order.kds_status === 'COMPLETED') {
+        actionButtonsHtml = `
+          <div class="card-action-row">
+            <a href="${order.kot_url}" target="_blank" class="kds-action-btn btn-print-order">
+              <i class="bi bi-printer"></i> Print Order
+            </a>
+          </div>
+        `;
+      } else if (order.kds_status === 'IN_KITCHEN' && !order.is_prep_paused) {
+        actionButtonsHtml = `
+          <div class="card-action-row">
+            <button type="button" class="kds-action-btn btn-play-action" data-action="pause" data-order-id="${order.id}">
+              <i class="bi bi-pause"></i> Pause <span class="card-timer-text" data-order-id="${order.id}">${order.elapsed_timer_str}</span>
+            </button>
+            <button type="button" class="kds-action-btn" data-action="complete" data-order-id="${order.id}">
+              <i class="bi bi-check2"></i> Mark Done
+            </button>
+          </div>
+        `;
+      } else {
+        // NEW or PAUSED
+        actionButtonsHtml = `
+          <div class="card-action-row">
+            <button type="button" class="kds-action-btn btn-play-action" data-action="play" data-order-id="${order.id}">
+              <i class="bi bi-play"></i> Play <span class="card-timer-text" data-order-id="${order.id}">${order.elapsed_timer_str}</span>
+            </button>
+            <button type="button" class="kds-action-btn" data-action="complete" data-order-id="${order.id}">
+              <i class="bi bi-check2"></i> Mark Done
+            </button>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="kds-card" data-order-id="${order.id}" data-kds-status="${order.kds_status}">
+          <!-- Header -->
+          <div class="kds-card-header">
+            <div class="card-user-info">
+              <div class="user-avatar-circle">
+                <i class="bi bi-person-fill"></i>
+              </div>
+              <div class="user-text-details">
+                <div class="customer-name">${escapeHtml(order.customer_name)}</div>
+                <div class="order-type-badge">${escapeHtml(order.table_display || order.order_type_display)}</div>
+              </div>
+            </div>
+            <div class="order-number-pill">${order.order_number}</div>
+          </div>
+
+          <!-- Submeta: Token & Date -->
+          <div class="kds-card-submeta">
+            <div class="token-label">Token No : <span class="token-no">${order.token_no}</span></div>
+            <div class="order-timestamp">${order.order_time}</div>
+          </div>
+
+          <!-- Items List -->
+          <div class="kds-card-items">
+            ${itemsHtml}
+          </div>
+
+          <!-- Footer Timers & Progress -->
+          <div class="kds-card-footer">
+            ${statusNoticeHtml}
+            <div class="progress-and-target">
+              <div class="kds-progress-bar-bg">
+                <div class="kds-progress-bar-fill" style="width: ${order.progress_pct}%;"></div>
+              </div>
+              <div class="target-duration-label">
+                <i class="bi bi-clock"></i> ${order.target_time_display}
+              </div>
+            </div>
+            ${actionButtonsHtml}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    attachCardActionHandlers();
+  }
+
+  // Action API calls (Play / Pause / Complete)
+  function attachCardActionHandlers() {
+    gridContainer.querySelectorAll('.kds-action-btn[data-action]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const action = btn.getAttribute('data-action');
+        const orderId = btn.getAttribute('data-order-id');
+        btn.disabled = true;
+
+        try {
+          const res = await fetch(`/dashboard/${RESTAURANT_SLUG}/kitchen/api/orders/${orderId}/action/`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({ action })
+          });
+          const data = await res.json();
+          if (data.success) {
+            // Show modal according to action
+            if (action === 'play') {
+              showConfirmationModal('started', 'Cooking Started', data.message || 'Cooking has begun in the kitchen.');
+            } else if (action === 'pause') {
+              showConfirmationModal('paused', 'Order Paused', data.message || 'Order has been paused in the kitchen.');
+            } else if (action === 'complete') {
+              showConfirmationModal('completed', 'Cooking Completed', data.message || 'Order has been completed & ready in kitchen to serve.');
+            }
+            fetchOrders(true);
+          } else {
+            alert(data.error || "Action failed");
+          }
+        } catch (err) {
+          console.error("Action error:", err);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  // Second-by-second ticker for live cards
+  setInterval(() => {
+    state.orders.forEach(order => {
+      if (order.kds_status === 'IN_KITCHEN' && !order.is_prep_paused) {
+        order.elapsed_seconds = (order.elapsed_seconds || 0) + 1;
+        const targetSecs = (order.prep_minutes || 20) * 60;
+        
+        // Update timer string MM:SS
+        const mins = Math.floor(order.elapsed_seconds / 60);
+        const secs = order.elapsed_seconds % 60;
+        order.elapsed_timer_str = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        
+        // Update DOM element directly for high performance
+        const timerEl = gridContainer.querySelector(`.card-timer-text[data-order-id="${order.id}"]`);
+        if (timerEl) {
+          timerEl.textContent = order.elapsed_timer_str;
+        }
+
+        // Progress calculation
+        order.progress_pct = Math.min(100, Math.floor((order.elapsed_seconds / targetSecs) * 100));
+        const cardEl = gridContainer.querySelector(`.kds-card[data-order-id="${order.id}"]`);
+        if (cardEl) {
+          const progressEl = cardEl.querySelector('.kds-progress-bar-fill');
+          if (progressEl) progressEl.style.width = `${order.progress_pct}%`;
+
+          // If exceeds target, update status to DELAYED
+          if (order.elapsed_seconds > targetSecs && cardEl.getAttribute('data-kds-status') !== 'DELAYED') {
+            cardEl.setAttribute('data-kds-status', 'DELAYED');
+            order.kds_status = 'DELAYED';
+            order.delayed_minutes = Math.floor((order.elapsed_seconds - targetSecs) / 60);
+            fetchOrders(true);
+          }
+        }
+      }
+    });
+  }, 1000);
+
+  // Station Filter Buttons
+  document.querySelectorAll('.station-pill-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.station-pill-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.station = btn.getAttribute('data-station');
+      fetchOrders();
+    });
+  });
+
+  // KPI Pills Filter Buttons
+  document.querySelectorAll('.kds-kpi-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const filterType = btn.getAttribute('data-status-filter');
+      if (state.statusFilter === filterType) {
+        // Toggle off
+        state.statusFilter = 'all';
+        btn.classList.remove('active');
+      } else {
+        document.querySelectorAll('.kds-kpi-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.statusFilter = filterType;
+      }
+      fetchOrders();
+    });
+  });
+
+  // Live Search with Debounce
+  let searchTimeout = null;
+  searchInput.addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      state.searchQuery = searchInput.value.trim();
+      fetchOrders();
+    }, 250);
+  });
+
+  // Manual Refresh
+  btnRefresh.addEventListener('click', () => fetchOrders());
+
+  // Sound Toggle
+  btnSound.addEventListener('click', () => {
+    state.soundEnabled = !state.soundEnabled;
+    if (state.soundEnabled) {
+      soundIcon.className = 'bi bi-volume-up-fill text-success';
+      playAudioChime();
+    } else {
+      soundIcon.className = 'bi bi-volume-mute-fill text-muted';
+    }
+  });
+
+  // Fullscreen Toggle
+  btnFullscreen.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => {
+        fullscreenIcon.className = 'bi bi-fullscreen-exit';
+      }).catch(err => console.warn(err));
+    } else {
+      document.exitFullscreen().then(() => {
+        fullscreenIcon.className = 'bi bi-fullscreen';
+      });
+    }
+  });
+
+  // Server-Sent Events (SSE) Real-time Sync
+  function initSSE() {
+    try {
+      const evtSource = new EventSource(SSE_STREAM_URL);
+      
+      evtSource.addEventListener('new_order', (e) => {
+        playAudioChime();
+        fetchOrders(true);
+      });
+
+      evtSource.addEventListener('order_updated', (e) => {
+        playAudioChime();
+        fetchOrders(true);
+      });
+
+      evtSource.addEventListener('message', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.type === 'kds_update' || data.type === 'new_order' || data.type === 'order_updated') {
+            fetchOrders(true);
+          }
+        } catch (err) {}
+      });
+
+      evtSource.onerror = (err) => {
+        // Reconnects automatically
+      };
+    } catch (err) {
+      console.warn("SSE connection error:", err);
+    }
+  }
+
+  // Helper: Escape HTML
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  // Helper: CSRF token
+  function getCsrfToken() {
+    const cookies = document.cookie.split(';');
+    for (let c of cookies) {
+      const [name, val] = c.trim().split('=');
+      if (name === 'csrftoken') return decodeURIComponent(val);
+    }
+    return '';
+  }
+
+  // Initial Load
+  fetchOrders();
+  initSSE();
+
+})();
+</script>
+{% endblock %}
