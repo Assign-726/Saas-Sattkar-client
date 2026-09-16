@@ -26,9 +26,9 @@ def _get_env_bool(key: str, default: bool = True) -> bool:
 # ==========================================
 # 1. Branding & Identity
 # ==========================================
-APP_NAME = os.environ.get('APP_NAME', 'Hotel Management System')
-APP_NAME_PREFIX = os.environ.get('APP_NAME_PREFIX', 'Hotel Management')
-APP_NAME_SUFFIX = os.environ.get('APP_NAME_SUFFIX', 'System')
+APP_NAME = os.environ.get('APP_NAME', 'Restaurant Management Minku')
+APP_NAME_PREFIX = os.environ.get('APP_NAME_PREFIX', 'Restaurant Management')
+APP_NAME_SUFFIX = os.environ.get('APP_NAME_SUFFIX', 'Minku')
 APP_TAGLINE = os.environ.get('APP_TAGLINE', 'Sign in to access your administrative dashboard')
 APP_SUPPORT_URL = os.environ.get('APP_SUPPORT_URL', 'http://localhost:3000')
 
