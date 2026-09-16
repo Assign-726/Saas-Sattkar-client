@@ -857,6 +857,67 @@
               </div>
             </div>
 
+            <!-- GPS Geofencing (Table QR Ordering Security) -->
+            <div class="mb-4 p-3 bg-white rounded border shadow-sm">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div>
+                  <h6 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-geo-alt-fill text-danger me-1"></i> GPS Geofencing Anti-Fraud for Table QR
+                  </h6>
+                  <div class="form-text text-muted">Prevent customers from placing table dine-in orders from outside the restaurant premises.</div>
+                </div>
+                {% if branch_form and branch_form.enforce_geofence %}
+                <div class="form-check form-switch m-0">
+                  {{ branch_form.enforce_geofence }}
+                  <label class="form-check-label fw-bold text-primary small ms-1" for="id_enforce_geofence">Enforce Geofence</label>
+                </div>
+                {% endif %}
+              </div>
+
+              {% if branch_form %}
+              <div class="row g-3 mt-1">
+                <div class="col-md-4">
+                  <label class="form-label fw-medium small mb-1">Outlet Latitude</label>
+                  <div class="input-group input-group-sm">
+                    {{ branch_form.latitude }}
+                    <button class="btn btn-outline-primary" type="button" onclick="detectCurrentLocation()" title="Detect current GPS location">
+                      <i class="bi bi-crosshair"></i> Auto-Detect
+                    </button>
+                  </div>
+                  {% if branch_form.latitude.errors %}
+                  <div class="text-danger small">{{ branch_form.latitude.errors|join:', ' }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-medium small mb-1">Outlet Longitude</label>
+                  {{ branch_form.longitude }}
+                  {% if branch_form.longitude.errors %}
+                  <div class="text-danger small">{{ branch_form.longitude.errors|join:', ' }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-medium small mb-1">Allowed Radius (meters)</label>
+                  {{ branch_form.geofence_radius_meters }}
+                  <div class="form-text extra-small text-muted">Recommended: 50m - 150m (accounts for indoor GPS drift).</div>
+                  {% if branch_form.geofence_radius_meters.errors %}
+                  <div class="text-danger small">{{ branch_form.geofence_radius_meters.errors|join:', ' }}</div>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="mt-3 p-2 bg-light rounded border d-flex align-items-center gap-2 flex-wrap">
+                <span class="small fw-bold text-dark text-nowrap"><i class="bi bi-geo-alt-fill text-danger me-1"></i> Quick Coordinates / Map Link:</span>
+                <input type="text" id="geoPasteInput" class="form-control form-control-sm flex-grow-1" placeholder="Paste Google Maps link, or lat, lng (e.g. 26.9196, 75.7878)" oninput="parseCoordinatesFromInput(this.value)">
+                <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" onclick="if(navigator.clipboard && navigator.clipboard.readText){ navigator.clipboard.readText().then(t=>{ document.getElementById('geoPasteInput').value=t; parseCoordinatesFromInput(t); }); }else{ alert('Please paste directly in the text box.'); }">
+                  <i class="bi bi-clipboard"></i> Paste
+                </button>
+                <a href="https://maps.google.com" target="_blank" class="btn btn-sm btn-outline-primary text-nowrap" title="Open Google Maps to find rooftop coordinates">
+                  <i class="bi bi-box-arrow-up-right me-1"></i> Open Google Maps
+                </a>
+              </div>
+              <div id="geofence-status-msg" class="small mt-2" style="display: none;"></div>
+              {% endif %}
+            </div>
+
             <!-- Payment Methods -->
             <h6 class="fw-bold mb-3 text-dark">Payment Methods & Gateways</h6>
             <div class="row g-3 mb-3">
@@ -1326,5 +1387,127 @@
       });
     }
   });
+
+  // GPS Location Auto-Detection with HTTP / LAN fallback & Google Maps parser
+  function detectCurrentLocation() {
+    const msgEl = document.getElementById('geofence-status-msg');
+    const latInput = document.getElementById('id_latitude');
+    const lonInput = document.getElementById('id_longitude');
+
+    if (msgEl) {
+      msgEl.style.display = 'block';
+      msgEl.className = 'small text-muted mt-2';
+      msgEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Requesting GPS location...';
+    }
+
+    // Check if running in an insecure origin (HTTP over IP like 192.168.x.x)
+    const isSecure = window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+
+    if (!navigator.geolocation || !isSecure) {
+      fallbackIpLocation('HTTP LAN access: modern browsers require HTTPS or localhost for device GPS hardware.');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      function(pos) {
+        if (latInput) latInput.value = pos.coords.latitude.toFixed(6);
+        if (lonInput) lonInput.value = pos.coords.longitude.toFixed(6);
+        if (msgEl) {
+          msgEl.className = 'small text-success mt-2 fw-semibold';
+          msgEl.innerHTML = `✓ Successfully detected device GPS: <strong>${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}</strong> (accuracy: ±${Math.round(pos.coords.accuracy)}m)`;
+        }
+      },
+      function(err) {
+        console.warn('Browser GPS failed, switching to IP fallback:', err);
+        fallbackIpLocation(err.message || 'Browser location blocked');
+      },
+      { enableHighAccuracy: true, timeout: 7000 }
+    );
+  }
+
+  function fallbackIpLocation(reason) {
+    const msgEl = document.getElementById('geofence-status-msg');
+    const latInput = document.getElementById('id_latitude');
+    const lonInput = document.getElementById('id_longitude');
+    if (msgEl) {
+      msgEl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Auto-detecting location via IP...';
+    }
+
+    function applyCoords(lat, lng, label) {
+      if (latInput) latInput.value = parseFloat(lat).toFixed(6);
+      if (lonInput) lonInput.value = parseFloat(lng).toFixed(6);
+      if (msgEl) {
+        msgEl.className = 'small text-success mt-2';
+        msgEl.innerHTML = `✓ Auto-detected location: <strong>${parseFloat(lat).toFixed(6)}, ${parseFloat(lng).toFixed(6)}</strong> ${label ? '(' + label + ')' : ''}.<br><span class="text-muted extra-small">Tip: Because this server is accessed via <code>${location.host}</code> (HTTP), browser GPS hardware is restricted by browser security policies. For exact rooftop coordinates, click "Open Google Maps" above, right-click your restaurant, and paste.</span>`;
+      }
+    }
+
+    // 1. Try our own backend proxy endpoint (no CORS, works over HTTP LAN)
+    fetch("{% url 'restaurant_admin:detect_location_ip_api' restaurant_slug=restaurant.slug %}")
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.success && data.latitude && data.longitude) {
+          applyCoords(data.latitude, data.longitude, [data.city, data.region].filter(Boolean).join(', '));
+        } else {
+          throw new Error(data.error || 'Server detection failed');
+        }
+      })
+      .catch(err => {
+        // 2. Client-side fallback via ipwho.is
+        fetch('https://ipwho.is/')
+          .then(r => r.json())
+          .then(data => {
+            if (data && data.latitude && data.longitude) {
+              applyCoords(data.latitude, data.longitude, [data.city, data.region].filter(Boolean).join(', '));
+            } else {
+              throw new Error('ipwho.is failed');
+            }
+          })
+          .catch(e => {
+            // 3. Client-side fallback via ipapi.co
+            fetch('https://ipapi.co/json/')
+              .then(r => r.json())
+              .then(data => {
+                if (data && data.latitude && data.longitude) {
+                  applyCoords(data.latitude, data.longitude, [data.city, data.region].filter(Boolean).join(', '));
+                } else {
+                  throw new Error('All IP services failed');
+                }
+              })
+              .catch(finalErr => {
+                if (msgEl) {
+                  msgEl.className = 'small text-danger mt-2';
+                  msgEl.innerHTML = `Could not auto-detect location (${reason || finalErr.message}). Click "Open Google Maps" above, right-click your restaurant, copy coordinates and paste into the box.`;
+                }
+              });
+          });
+      });
+  }
+
+  function parseCoordinatesFromInput(val) {
+    if (!val) return;
+    val = val.trim();
+    const msgEl = document.getElementById('geofence-status-msg');
+    const latInput = document.getElementById('id_latitude');
+    const lonInput = document.getElementById('id_longitude');
+
+    // Matches @26.9124,75.7873 or q=26.9124,75.7873 or !3d26.9124!4d75.7873 or 26.9124, 75.7873 or 26.9124 75.7873
+    const match = val.match(/@?(-?\d{1,3}\.\d+)[,\s]+(-?\d{1,3}\.\d+)/) ||
+                  val.match(/[?&]q=(-?\d{1,3}\.\d+)[,\s]+(-?\d{1,3}\.\d+)/) ||
+                  val.match(/!3d(-?\d{1,3}\.\d+)!4d(-?\d{1,3}\.\d+)/);
+    if (match) {
+      const lat = parseFloat(match[1]);
+      const lng = parseFloat(match[2]);
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        if (latInput) latInput.value = lat.toFixed(6);
+        if (lonInput) lonInput.value = lng.toFixed(6);
+        if (msgEl) {
+          msgEl.style.display = 'block';
+          msgEl.className = 'small text-success mt-2 fw-semibold';
+          msgEl.innerHTML = `✓ Successfully extracted coordinates: <strong>${lat.toFixed(6)}, ${lng.toFixed(6)}</strong>`;
+        }
+      }
+    }
+  }
 </script>
 {% endblock %}

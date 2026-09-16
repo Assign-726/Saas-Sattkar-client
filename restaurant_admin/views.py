@@ -784,9 +784,14 @@ def order_create_manual(request, restaurant_slug=None):
                 clean_name = table_val_str.replace('Table', '').strip()
                 table_obj = Table.objects.filter(name__iexact=clean_name, restaurant=restaurant).first()
 
-        order_type = data.get('order_type') or (Order.OrderType.DINE_IN if table_obj else Order.OrderType.DINE_IN)
-        if table_obj:
+        raw_order_type = str(data.get('order_type') or '').strip().lower()
+        if raw_order_type in [Order.OrderType.TAKEAWAY, Order.OrderType.DELIVERY, 'takeaway', 'delivery']:
+            order_type = raw_order_type
+            table_obj = None
+        elif table_obj:
             order_type = Order.OrderType.DINE_IN
+        else:
+            order_type = raw_order_type or Order.OrderType.DINE_IN
 
         payment_method = data.get('payment_method') or Order.PaymentMethod.CASH
         payment_status = data.get('payment_status') or Order.PaymentStatus.PAID
@@ -839,6 +844,12 @@ def order_create_manual(request, restaurant_slug=None):
             paid_amount_val = Decimal('0.00')
             valid_payments = []
 
+        # If user settled via settle_order / print_close with non-credit method, ensure it doesn't fall through to unpaid
+        if (action in ['settle_order', 'print_close'] or data.get('payment_status') == 'paid') and payment_method != 'credit':
+            if paid_amount_val <= Decimal('0.00'):
+                paid_amount_val = max(Decimal('0.00'), grand_total_val - advance_amount_input)
+                valid_payments = [{'method': payment_method, 'amount': float(paid_amount_val)}]
+
         due_amount_val = max(Decimal('0.00'), grand_total_val - advance_amount_input - paid_amount_val)
 
         if due_amount_val <= Decimal('0.00'):
@@ -855,11 +866,13 @@ def order_create_manual(request, restaurant_slug=None):
             due_amount_val = grand_total_val
 
         # Determine order status based on action
-        # Determine order status based on action
         if action in ['fire_kot', 'save_kot']:
             initial_status = Order.OrderStatus.PENDING
         elif action in ['settle_order', 'print_close']:
-            initial_status = Order.OrderStatus.SERVED
+            if initial_payment_status == Order.PaymentStatus.PAID:
+                initial_status = Order.OrderStatus.COMPLETED
+            else:
+                initial_status = Order.OrderStatus.SERVED
         else:
             initial_status = Order.OrderStatus.PENDING
 
@@ -930,7 +943,11 @@ def order_create_manual(request, restaurant_slug=None):
             order.customer_name = customer_name or order.customer_name
             order.phone = phone or order.phone
             order.notes = notes if notes is not None else order.notes
-            if table_obj:
+            if order_type in [Order.OrderType.TAKEAWAY, Order.OrderType.DELIVERY, 'takeaway', 'delivery']:
+                order.table = None
+                order.table_number = None
+                order.order_type = order_type
+            elif table_obj:
                 order.table = table_obj
                 order.table_number = table_obj.table_number
                 order.order_type = Order.OrderType.DINE_IN
@@ -983,8 +1000,8 @@ def order_create_manual(request, restaurant_slug=None):
                 phone=phone,
                 notes=notes,
                 order_type=order_type,
-                table=table_obj,
-                table_number=table_obj.table_number if table_obj else None,
+                table=None if order_type in [Order.OrderType.TAKEAWAY, Order.OrderType.DELIVERY, 'takeaway', 'delivery'] else table_obj,
+                table_number=None if order_type in [Order.OrderType.TAKEAWAY, Order.OrderType.DELIVERY, 'takeaway', 'delivery'] else (table_obj.table_number if table_obj else None),
                 payment_method=payment_method,
                 payment_status=initial_payment_status,
                 payments=valid_payments,
@@ -1096,17 +1113,34 @@ def order_create_manual(request, restaurant_slug=None):
                 )
                 created_items.append(created_item)
 
-        table_id = data.get('table_id') or data.get('table')
-        if table_id:
-            try:
-                t_obj = Table.objects.filter(pk=int(table_id), restaurant=restaurant).first()
-                if t_obj:
-                    order.table = t_obj
-                    order.table_number = t_obj.table_number
-                    order.order_type = Order.OrderType.DINE_IN
-                    order.save(update_fields=['table', 'table_number', 'order_type'])
-            except Exception:
-                pass
+        if order_type in [Order.OrderType.TAKEAWAY, Order.OrderType.DELIVERY, 'takeaway', 'delivery']:
+            order.table = None
+            order.table_number = None
+            order.order_type = order_type
+            order.save(update_fields=['table', 'table_number', 'order_type'])
+        else:
+            table_id = data.get('table_id') or data.get('table')
+            if table_id:
+                try:
+                    t_obj = Table.objects.filter(pk=int(table_id), restaurant=restaurant).first()
+                    if t_obj:
+                        order.table = t_obj
+                        order.table_number = t_obj.table_number
+                        order.order_type = Order.OrderType.DINE_IN
+                        order.save(update_fields=['table', 'table_number', 'order_type'])
+                except Exception:
+                    pass
+
+        # Check if service charge is waived
+        sc_pct_raw = data.get('service_charge_percentage')
+        sc_amt_raw = data.get('service_charge_amount')
+        if sc_pct_raw is not None or sc_amt_raw is not None or 'waive_service_charge' in data:
+            sc_pct_val = safe_decimal(sc_pct_raw if sc_pct_raw is not None else -1)
+            sc_amt_val = safe_decimal(sc_amt_raw if sc_amt_raw is not None else -1)
+            if sc_pct_val == Decimal('0.00') or sc_amt_val == Decimal('0.00') or data.get('waive_service_charge') is True or data.get('service_charge_applied') is False:
+                order.waive_service_charge = True
+            else:
+                order.waive_service_charge = False
 
         if grand_total_val > 0:
             order.subtotal = subtotal_val
@@ -1717,6 +1751,10 @@ def order_edit_manual(request, pk, restaurant_slug=None):
         return HttpResponseForbidden("No restaurant associated with this account.")
 
     order = get_object_or_404(Order.objects.prefetch_related('items', 'items__menu_item').filter(restaurant=restaurant), pk=pk)
+
+    if order.status in [Order.OrderStatus.SERVED, Order.OrderStatus.COMPLETED, Order.OrderStatus.CANCELLED] or order.payment_status in [Order.PaymentStatus.PAID, 'paid', 'P']:
+        messages.warning(request, f"Order #{order.order_number or order.id} has already been {order.get_status_display().lower()} or settled and cannot be edited.")
+        return redirect('restaurant_admin:order_detail', restaurant_slug=restaurant.slug, pk=order.id)
 
     if request.method == 'POST':
         import json
@@ -4610,7 +4648,9 @@ def order_settle_api(request, pk, restaurant_slug=None):
 
     order.payments = valid_payments
     order.payment_method = payment_method
-    if order.status in [Order.OrderStatus.PENDING, Order.OrderStatus.READY, Order.OrderStatus.PREPARING]:
+    if order.payment_status in [Order.PaymentStatus.PAID, 'paid', 'P']:
+        order.status = Order.OrderStatus.COMPLETED
+    elif order.status in [Order.OrderStatus.PENDING, Order.OrderStatus.READY, Order.OrderStatus.PREPARING]:
         order.status = Order.OrderStatus.SERVED
 
     gstin_no = (data.get('gstin_no') or '').strip()
@@ -4653,6 +4693,39 @@ def order_settle_api(request, pk, restaurant_slug=None):
         'paid_amount': str(order.paid_amount),
         'due_amount': str(order.due_amount)
     })
+
+
+@login_required
+def detect_location_ip_api(request, restaurant_slug=None):
+    """
+    Server-side IP geolocation helper so LAN users on HTTP do not hit browser mixed-content or insecure origin blocks.
+    """
+    import urllib.request
+    import json
+
+    endpoints = [
+        'https://ipwho.is/',
+        'https://ipapi.co/json/'
+    ]
+    for url in endpoints:
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+            with urllib.request.urlopen(req, timeout=4) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                lat = data.get('latitude') or data.get('lat')
+                lon = data.get('longitude') or data.get('lon')
+                if lat is not None and lon is not None:
+                    return JsonResponse({
+                        'success': True,
+                        'latitude': float(lat),
+                        'longitude': float(lon),
+                        'city': data.get('city', ''),
+                        'region': data.get('region', '') or data.get('region_name', '')
+                    })
+        except Exception:
+            continue
+
+    return JsonResponse({'success': False, 'error': 'Could not detect location from server'}, status=400)
 
 
 # Coupon Management
@@ -4890,11 +4963,32 @@ def order_kot(request, pk, restaurant_slug=None):
     food_items, bar_items = order.get_food_and_bar_items()
 
     item_ids_param = request.GET.get('items')
+    batch_param = request.GET.get('batch')
+    only_unprinted = request.GET.get('unprinted')
+
     if item_ids_param:
         filter_ids = [int(x) for x in item_ids_param.split(',') if x.isdigit()]
         if filter_ids:
             food_items = [it for it in food_items if it.id in filter_ids]
             bar_items = [it for it in bar_items if it.id in filter_ids]
+    elif batch_param and str(batch_param).isdigit():
+        b_num = int(batch_param)
+        food_items = [it for it in food_items if it.kot_batch == b_num]
+        bar_items = [it for it in bar_items if it.kot_batch == b_num]
+    elif only_unprinted:
+        food_items = [it for it in food_items if not it.is_kot_printed]
+        bar_items = [it for it in bar_items if not it.is_kot_printed]
+
+    all_current_items = food_items + bar_items
+    current_batch = max([it.kot_batch for it in all_current_items], default=1)
+    is_addon_kot = current_batch > 1
+
+    # Mark items as printed unless specifically requested not to
+    if request.GET.get('mark_printed') != '0':
+        for it in all_current_items:
+            if not it.is_kot_printed:
+                it.is_kot_printed = True
+                it.save(update_fields=['is_kot_printed'])
 
     total_food_qty = sum(item.quantity for item in food_items)
     total_bar_qty = sum(item.quantity for item in bar_items)
@@ -4915,6 +5009,8 @@ def order_kot(request, pk, restaurant_slug=None):
         'has_food': len(food_items) > 0,
         'has_bar': len(bar_items) > 0,
         'total_kitchen_items': total_kitchen_items,
+        'current_batch': current_batch,
+        'is_addon_kot': is_addon_kot,
         'subtotal': subtotal,
         'cgst_amount': cgst_amount,
         'sgst_amount': sgst_amount,
@@ -4952,6 +5048,8 @@ def order_update_status(request, pk, restaurant_slug=None):
                 order.status = new_status
                 if new_status == Order.OrderStatus.READY and not order.ready_at:
                     order.ready_at = timezone.now()
+                if new_status == Order.OrderStatus.SERVED and order.payment_status in [Order.PaymentStatus.PAID, 'paid', 'P']:
+                    order.status = Order.OrderStatus.COMPLETED
                 order.save()
                 
                 # Publish SSE table update
@@ -4973,18 +5071,22 @@ def order_update_status(request, pk, restaurant_slug=None):
                 if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                     return JsonResponse({
                         'success': True,
-                        'message': f'Order #{order.branch_order_number or order.id} status updated to {status_choices[new_status]}',
+                        'message': f'Order #{order.branch_order_number or order.id} status updated to {order.get_status_display()}',
                         'status': order.get_status_display(),
                         'status_class': {
                             'P': 'warning',
                             'READY': 'primary',
                             'PR': 'info',
                             'S': 'success',
+                            'COMPLETED': 'success',
                             'C': 'danger'
                         }.get(order.status, 'secondary')
                     })
                 else:
-                    messages.success(request, f'Order #{order.branch_order_number or order.id} status updated to {status_choices[new_status]}')
+                    messages.success(request, f'Order #{order.branch_order_number or order.id} status updated to {order.get_status_display()}')
+                    referer = request.META.get('HTTP_REFERER')
+                    if referer:
+                        return redirect(referer)
                     return redirect('restaurant_admin:order_list', restaurant_slug=restaurant.slug)
             else:
                 error_msg = f'Invalid status: {new_status}. Valid statuses are: {list(status_choices.values())}'
@@ -7592,3 +7694,343 @@ def transaction_desk_create(request, restaurant_slug=None):
     }
 
     return render(request, 'restaurant_admin/transactions/create.html', context)
+
+
+# ==========================================
+# KITCHEN DISPLAY SYSTEM (KDS) VIEWS & APIS
+# ==========================================
+
+@login_required
+@user_passes_test(is_admin)
+def kitchen_kds_view(request, restaurant_slug=None):
+    """
+    Main Kitchen Display System (KDS) View.
+    Displays active KOT and BOT tickets for Kitchen and Bar.
+    """
+    try:
+        restaurant = request.user.restaurant_profile.restaurant
+    except Exception:
+        restaurant = getattr(request.user, 'restaurant', None)
+
+    if not restaurant:
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden("No restaurant associated with this account.")
+
+    active_branch = get_active_branch(request, restaurant)
+
+    context = {
+        'restaurant': restaurant,
+        'current_restaurant': restaurant,
+        'current_branch': active_branch,
+        'rslug': restaurant.slug,
+        'active_menu': 'kitchen_kds',
+        'active_group': 'dinein',
+    }
+    return render(request, 'restaurant_admin/kitchen/kds.html', context)
+
+
+@login_required
+@user_passes_test(is_admin)
+def kitchen_kds_orders_api(request, restaurant_slug=None):
+    """
+    JSON API for KDS to fetch live tickets, filter by station, and update timers.
+    """
+    try:
+        restaurant = request.user.restaurant_profile.restaurant
+    except Exception:
+        restaurant = getattr(request.user, 'restaurant', None)
+
+    if not restaurant:
+        return JsonResponse({'success': False, 'error': 'No restaurant found'}, status=403)
+
+    active_branch = get_active_branch(request, restaurant)
+    station = request.GET.get('station', 'all').lower()  # all, kitchen, bar
+    status_filter = request.GET.get('status', 'all').lower()  # all, new, in_kitchen, delayed, completed
+    search_q = (request.GET.get('search') or '').strip().lower()
+
+    from django.utils import timezone
+    from datetime import timedelta
+    now = timezone.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Base queryset: orders from today or active non-cancelled/non-draft orders
+    orders_qs = Order.objects.filter(restaurant=restaurant).exclude(status__in=[Order.OrderStatus.CANCELLED, Order.OrderStatus.DRAFT])
+    if active_branch:
+        orders_qs = orders_qs.filter(branch=active_branch)
+
+    # For completed orders, show orders from today only so old orders don't clutter the display
+    orders_qs = orders_qs.filter(
+        Q(status__in=[Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING]) |
+        Q(status__in=[Order.OrderStatus.READY, Order.OrderStatus.SERVED, Order.OrderStatus.COMPLETED], order_time__gte=today_start - timedelta(hours=6))
+    ).prefetch_related('items', 'items__menu_item', 'table').order_by('order_time')
+
+    counts = {
+        'new': 0,
+        'in_kitchen': 0,
+        'delayed': 0,
+        'completed': 0,
+        'total_active': 0
+    }
+
+    serialized_orders = []
+
+    for ord_obj in orders_qs:
+        # Check items and station filtering
+        items_qs = ord_obj.items.select_related('menu_item').all()
+        if not items_qs.exists():
+            continue
+
+        food_items = []
+        bar_items = []
+        for it in items_qs:
+            mi = it.menu_item
+            is_bar_item = mi.tax_type in [MenuItem.TaxType.VAT_BEER, MenuItem.TaxType.VAT_IMFL, MenuItem.TaxType.VAT_WINE, MenuItem.TaxType.VAT_LIQUOR] if mi else False
+            item_data = {
+                'id': it.id,
+                'name': mi.name if mi else 'Item',
+                'quantity': it.quantity,
+                'food_type': getattr(mi, 'food_type', 'veg') if mi else 'veg',
+                'is_veg': getattr(mi, 'food_type', 'veg') == 'veg' if mi else True,
+                'is_bar': is_bar_item,
+                'notes': it.notes or '',
+                'kot_batch': it.kot_batch,
+            }
+            if is_bar_item:
+                bar_items.append(item_data)
+            else:
+                food_items.append(item_data)
+
+        has_food = len(food_items) > 0
+        has_bar = len(bar_items) > 0
+
+        # Filter by requested station
+        if station == 'kitchen':
+            if not has_food:
+                continue
+            display_items = food_items
+        elif station == 'bar':
+            if not has_bar:
+                continue
+            display_items = bar_items
+        else:
+            display_items = food_items + bar_items
+
+        # Prep timing and status logic
+        target_minutes = ord_obj.prep_minutes or 20
+        target_seconds = target_minutes * 60
+
+        # Calculate current elapsed seconds
+        accumulated_seconds = ord_obj.prep_elapsed_seconds or 0
+        is_paused = ord_obj.is_prep_paused
+        
+        if ord_obj.status == Order.OrderStatus.PREPARING and not is_paused and ord_obj.prep_start:
+            live_add = max(0, int((now - ord_obj.prep_start).total_seconds()))
+            total_elapsed_seconds = accumulated_seconds + live_add
+        else:
+            total_elapsed_seconds = accumulated_seconds
+
+        # Determine KDS status
+        if ord_obj.status in [Order.OrderStatus.READY, Order.OrderStatus.SERVED, Order.OrderStatus.COMPLETED]:
+            kds_status = 'COMPLETED'
+            counts['completed'] += 1
+        elif total_elapsed_seconds > target_seconds:
+            kds_status = 'DELAYED'
+            counts['delayed'] += 1
+            counts['total_active'] += 1
+        elif ord_obj.status == Order.OrderStatus.PREPARING:
+            kds_status = 'IN_KITCHEN'
+            counts['in_kitchen'] += 1
+            counts['total_active'] += 1
+        else:
+            kds_status = 'NEW'
+            counts['new'] += 1
+            counts['total_active'] += 1
+
+        # Check status filter
+        if status_filter != 'all':
+            if status_filter == 'new' and kds_status != 'NEW':
+                continue
+            elif status_filter == 'in_kitchen' and kds_status != 'IN_KITCHEN':
+                continue
+            elif status_filter == 'delayed' and kds_status != 'DELAYED':
+                continue
+            elif status_filter == 'completed' and kds_status != 'COMPLETED':
+                continue
+
+        # Format Token Number
+        token_no = f"{ord_obj.branch_order_number:02d}" if ord_obj.branch_order_number is not None else f"{ord_obj.id:02d}"
+        cust_name = ord_obj.customer_name or 'Walk in Customer'
+        ord_num_display = f"#{ord_obj.branch_order_number or ord_obj.id}"
+
+        # Text search matching
+        if search_q:
+            matched = (
+                search_q in token_no.lower() or
+                search_q in cust_name.lower() or
+                search_q in ord_num_display.lower() or
+                (ord_obj.table and search_q in ord_obj.table.name.lower()) or
+                (ord_obj.table_number and search_q in str(ord_obj.table_number)) or
+                any(search_q in it['name'].lower() for it in display_items)
+            )
+            if not matched:
+                continue
+
+        # Progress calculation
+        progress_pct = min(100, int((total_elapsed_seconds / target_seconds) * 100)) if target_seconds > 0 else 0
+        delayed_seconds = max(0, total_elapsed_seconds - target_seconds)
+        delayed_minutes = int(delayed_seconds // 60)
+
+        # Elapsed minutes/seconds string for timers (MM:SS)
+        disp_mins = total_elapsed_seconds // 60
+        disp_secs = total_elapsed_seconds % 60
+        elapsed_timer_str = f"{disp_mins:02d}:{disp_secs:02d}"
+
+        # Completed elapsed string
+        completed_elapsed_str = ""
+        if kds_status == 'COMPLETED':
+            served_diff_mins = max(1, int((now - (ord_obj.ready_at or ord_obj.order_time)).total_seconds() // 60))
+            completed_elapsed_str = f"{disp_mins}:{disp_secs:02d} Mins - Served Before {served_diff_mins} Mins"
+
+        # Table display
+        if ord_obj.table:
+            table_display = ord_obj.table.name
+        elif ord_obj.table_number:
+            table_display = f"Table {ord_obj.table_number}"
+        else:
+            table_display = ord_obj.get_order_type_display()
+
+        kot_url = reverse('restaurant_admin:order_kot', kwargs={'restaurant_slug': restaurant.slug, 'pk': ord_obj.id})
+
+        serialized_orders.append({
+            'id': ord_obj.id,
+            'order_number': ord_num_display,
+            'token_no': token_no,
+            'customer_name': cust_name,
+            'order_type': ord_obj.order_type,
+            'order_type_display': ord_obj.get_order_type_display(),
+            'table_display': table_display,
+            'order_time': ord_obj.order_time.strftime('%d %b %Y, %I:%M %p'),
+            'status': ord_obj.status,
+            'kds_status': kds_status,
+            'prep_minutes': target_minutes,
+            'target_time_display': f"{target_minutes:02d}:00",
+            'is_prep_paused': is_paused,
+            'elapsed_seconds': total_elapsed_seconds,
+            'elapsed_timer_str': elapsed_timer_str,
+            'progress_pct': progress_pct,
+            'delayed_minutes': delayed_minutes,
+            'completed_elapsed_str': completed_elapsed_str,
+            'has_food': has_food,
+            'has_bar': has_bar,
+            'items': display_items,
+            'kot_url': kot_url,
+        })
+
+    return JsonResponse({
+        'success': True,
+        'counts': counts,
+        'orders': serialized_orders,
+    })
+
+
+@login_required
+@user_passes_test(is_admin)
+def kitchen_kds_action_api(request, pk, restaurant_slug=None):
+    """
+    Action API for KDS cards:
+    - 'play': Start / Resume cooking timer, set status to PREPARING
+    - 'pause': Pause cooking timer
+    - 'complete': Mark cooking completed / ready to serve
+    - 'serve': Mark as served
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST method required'}, status=405)
+
+    try:
+        restaurant = request.user.restaurant_profile.restaurant
+    except Exception:
+        restaurant = getattr(request.user, 'restaurant', None)
+
+    if not restaurant:
+        return JsonResponse({'success': False, 'error': 'No restaurant associated with account'}, status=403)
+
+    order = get_object_or_404(Order, pk=pk, restaurant=restaurant)
+
+    import json
+    action = 'play'
+    try:
+        if request.body:
+            body_data = json.loads(request.body.decode('utf-8'))
+            action = body_data.get('action', 'play')
+        else:
+            action = request.POST.get('action', 'play')
+    except Exception:
+        action = request.POST.get('action', 'play')
+
+    from django.utils import timezone
+    from datetime import timedelta
+    now = timezone.now()
+
+    if action == 'play':
+        # Start or resume
+        order.is_prep_paused = False
+        order.paused_at = None
+        order.prep_start = now
+        if not order.prep_minutes:
+            order.prep_minutes = 20
+        order.ready_at = now + timedelta(minutes=order.prep_minutes)
+        if order.status in [Order.OrderStatus.PENDING, Order.OrderStatus.DRAFT, Order.OrderStatus.READY]:
+            order.status = Order.OrderStatus.PREPARING
+        order.save(update_fields=['is_prep_paused', 'paused_at', 'prep_start', 'prep_minutes', 'ready_at', 'status'])
+        first_item_name = order.items.first().menu_item.name if order.items.exists() else "Order"
+        msg = f"{first_item_name} Cooking has begun in the kitchen."
+
+    elif action == 'pause':
+        # Accumulate elapsed time up to now and pause
+        if order.prep_start and not order.is_prep_paused:
+            live_add = max(0, int((now - order.prep_start).total_seconds()))
+            order.prep_elapsed_seconds = (order.prep_elapsed_seconds or 0) + live_add
+        order.is_prep_paused = True
+        order.paused_at = now
+        order.save(update_fields=['is_prep_paused', 'paused_at', 'prep_elapsed_seconds'])
+        msg = f"Order #{order.branch_order_number or order.id} has been paused in the kitchen"
+
+    elif action == 'complete':
+        # Mark ready
+        if order.prep_start and not order.is_prep_paused:
+            live_add = max(0, int((now - order.prep_start).total_seconds()))
+            order.prep_elapsed_seconds = (order.prep_elapsed_seconds or 0) + live_add
+        order.is_prep_paused = False
+        order.status = Order.OrderStatus.READY
+        order.ready_at = now
+        order.save(update_fields=['is_prep_paused', 'status', 'ready_at', 'prep_elapsed_seconds'])
+        msg = f"Order #{order.branch_order_number or order.id} has been completed & ready in kitchen to serve"
+
+    elif action == 'serve':
+        order.status = Order.OrderStatus.SERVED
+        order.save(update_fields=['status'])
+        msg = f"Order #{order.branch_order_number or order.id} marked as served"
+
+    else:
+        return JsonResponse({'success': False, 'error': f"Unknown action '{action}'"}, status=400)
+
+    # Broadcast SSE update so other kitchen stations / POS screens update simultaneously
+    try:
+        from core.sse import publish
+        publish(restaurant.slug, {
+            'type': 'kds_update',
+            'order_id': order.id,
+            'action': action,
+            'status': order.status,
+            'is_prep_paused': order.is_prep_paused,
+        })
+    except Exception:
+        pass
+
+    return JsonResponse({
+        'success': True,
+        'action': action,
+        'order_id': order.id,
+        'status': order.status,
+        'message': msg,
+    })

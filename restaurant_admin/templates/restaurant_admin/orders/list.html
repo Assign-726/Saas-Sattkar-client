@@ -566,7 +566,7 @@
 <div class="om-grid">
     {% for order in orders %}
     <a href="{% url 'restaurant_admin:order_detail' restaurant_slug=rslug pk=order.id %}"
-        class="order-card {% if order.status == 'READY' or order.is_ready %}card-ready{% elif order.status == 'P' %}card-pending{% elif order.status == 'S' %}card-served{% elif order.status == 'C' %}card-cancelled{% endif %}">
+        class="order-card {% if order.status == 'S' or order.status == 'COMPLETED' %}card-served{% elif order.status == 'READY' or order.is_ready %}card-ready{% elif order.status == 'P' %}card-pending{% elif order.status == 'C' %}card-cancelled{% endif %}">
 
         <!-- Top row -->
         <div class="card-top">
@@ -577,8 +577,8 @@
             <div class="card-right">
                 <span class="order-amount">&#8377;{{ order.total_amount|floatformat:2 }}</span>
                 <span
-                    class="status-pill {% if order.status == 'READY' or order.is_ready %}sp-ready{% elif order.status == 'P' %}sp-pending{% elif order.status == 'S' %}sp-served{% elif order.status == 'C' %}sp-cancelled{% endif %}">
-                    {% if order.status == 'READY' or order.is_ready %}Ready{% else %}{{ order.get_status_display }}{% endif %}
+                    class="status-pill {% if order.status == 'S' or order.status == 'COMPLETED' %}sp-served{% elif order.status == 'READY' or order.is_ready %}sp-ready{% elif order.status == 'P' %}sp-pending{% elif order.status == 'C' %}sp-cancelled{% endif %}">
+                    {% if order.status == 'S' %}Served{% elif order.status == 'COMPLETED' %}Completed{% elif order.status == 'READY' or order.is_ready %}Ready{% else %}{{ order.get_status_display }}{% endif %}
                 </span>
             </div>
         </div>

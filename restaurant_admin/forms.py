@@ -887,7 +887,8 @@ class RestaurantBranchComplianceForm(forms.ModelForm):
         fields = [
             'service_charge_percentage',
             'fssai_license_no', 'vat_tin', 'excise_license_no',
-            'vat_beer_rate', 'vat_imfl_rate', 'vat_wine_rate'
+            'vat_beer_rate', 'vat_imfl_rate', 'vat_wine_rate',
+            'latitude', 'longitude', 'geofence_radius_meters', 'enforce_geofence'
         ]
         widgets = {
             'service_charge_percentage': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'placeholder': '0.00'}),
@@ -897,11 +898,18 @@ class RestaurantBranchComplianceForm(forms.ModelForm):
             'vat_beer_rate': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
             'vat_imfl_rate': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
             'vat_wine_rate': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
+            'latitude': forms.NumberInput(attrs={'step': '0.000001', 'placeholder': 'e.g. 19.076090'}),
+            'longitude': forms.NumberInput(attrs={'step': '0.000001', 'placeholder': 'e.g. 72.877426'}),
+            'geofence_radius_meters': forms.NumberInput(attrs={'min': '10', 'max': '5000', 'placeholder': '100'}),
+            'enforce_geofence': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields:
-            self.fields[field].widget.attrs.update({'class': 'form-control'})
+            if field == 'enforce_geofence':
+                self.fields[field].widget.attrs.update({'class': 'form-check-input'})
+            else:
+                self.fields[field].widget.attrs.update({'class': 'form-control'})
             self.fields[field].required = False
 

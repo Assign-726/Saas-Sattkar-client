@@ -393,7 +393,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'create', 'validate_coupon', 'verify_payment', 'cancel_unpaid', 'initiate_razorpay']:
+        if self.action in ['list', 'retrieve', 'create', 'validate_coupon', 'verify_payment', 'cancel_unpaid', 'initiate_razorpay', 'toggle_service_charge']:
             return [AllowAny()]
         return [IsAdminUser()]
 
@@ -735,6 +735,26 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         discount = coupon.calculate_discount(subtotal)
         return Response({'valid': True, 'discount': str(discount), 'code': coupon.code})
+
+    @method_decorator(csrf_exempt)
+    @action(detail=True, methods=['post'], url_path='toggle-service-charge', permission_classes=[AllowAny], authentication_classes=[])
+    def toggle_service_charge(self, request, pk=None):
+        order = self.get_object()
+        data = request.data if isinstance(request.data, dict) else {}
+        if 'waive' in data:
+            order.waive_service_charge = bool(data.get('waive'))
+        else:
+            order.waive_service_charge = not order.waive_service_charge
+        order.save(update_fields=['waive_service_charge'])
+        order.update_total()
+
+        serializer = self.get_serializer(order)
+        return Response({
+            'success': True,
+            'waive_service_charge': order.waive_service_charge,
+            'total_amount': str(order.total_amount),
+            'order': serializer.data
+        })
 
 
 class RestaurantViewSet(viewsets.ReadOnlyModelViewSet):

@@ -203,9 +203,11 @@
             <h2 class="od-page-title">Order Details</h2>
         </div>
         <div class="d-flex gap-2 align-items-center">
+            {% if order.status != 'S' and order.status != 'COMPLETED' and order.status != 'C' and order.payment_status != 'paid' %}
             <a href="{% url 'restaurant_admin:order_edit_manual' restaurant_slug=rslug pk=order.id %}" class="btn btn-sm btn-primary fw-semibold">
                 <i class="bi bi-pencil-square me-1"></i> Edit / Add Items
             </a>
+            {% endif %}
             <!-- Combined Bill option commented out for separate billing compliance
             <a href="{% url 'restaurant_admin:order_invoice' restaurant_slug=rslug pk=order.id %}?type=combined" target="_blank" class="od-invoice-btn">
                 <i class="bi bi-receipt"></i> Combined Bill
@@ -224,8 +226,8 @@
     <div class="od-identity">
         <div>
             <span class="od-number">{{ order.order_number }}</span>
-            <span class="od-status-badge {% if order.status == 'READY' or order.is_ready %}osb-ready{% elif order.status == 'P' %}osb-pending{% elif order.status == 'S' %}osb-served{% elif order.status == 'C' %}osb-cancelled{% endif %}">
-                {% if order.status == 'READY' or order.is_ready %}Ready{% else %}{{ order.get_status_display }}{% endif %}
+            <span class="od-status-badge {% if order.status == 'S' or order.status == 'COMPLETED' %}osb-served{% elif order.status == 'READY' or order.is_ready %}osb-ready{% elif order.status == 'P' %}osb-pending{% elif order.status == 'C' %}osb-cancelled{% endif %}">
+                {% if order.status == 'S' %}Served{% elif order.status == 'COMPLETED' %}Completed{% elif order.status == 'READY' or order.is_ready %}Ready{% else %}{{ order.get_status_display }}{% endif %}
             </span>
         </div>
         <div class="od-datetime">
@@ -234,7 +236,8 @@
         </div>
     </div>
 
-    <!-- ── Preparation timer ── -->
+    <!-- ── Preparation timer (Only shown when order is active in preparation) ── -->
+    {% if order.status in 'P,PR' and not order.is_ready and order.status != 'S' and order.status != 'COMPLETED' and order.status != 'C' and order.payment_status != 'paid' and order.payment_status != 'P' %}
     <div class="od-card prep-card">
         <div class="prep-top">
             <span class="prep-label"><i class="bi bi-hourglass-split me-1"></i>Preparation Timer</span>
@@ -272,6 +275,7 @@
             </form>
         </div>
     </div>
+    {% endif %}
 
     <!-- ── Customer info cards ── -->
     <div class="od-info-grid">
@@ -482,14 +486,22 @@
             </div>
 
             <div class="od-actions" style="justify-content: flex-start; gap:10px; flex-direction: column;">
-                {% if order.status == 'P' %}
+                {% if order.status != 'S' and order.status != 'COMPLETED' and order.status != 'C' %}
                 <form method="post" action="{% url 'restaurant_admin:order_update_status' restaurant_slug=rslug pk=order.id %}" style="width:100%">
                     {% csrf_token %}
                     <input type="hidden" name="status" value="S">
-                    <button type="submit" class="btn-serve-order" style="width:100%; justify-content:center;">
-                        <i class="bi bi-check-circle"></i> Mark as Served
+                    <button type="submit" class="btn-serve-order" style="width:100%; justify-content:center; background:#10B981; font-weight:700;">
+                        <i class="bi bi-check-circle-fill"></i> Mark as Served
                     </button>
                 </form>
+                {% elif order.status == 'S' %}
+                <div class="badge bg-success-subtle text-success border border-success px-3 py-2 fw-bold w-100 text-center fs-6 rounded-3">
+                    <i class="bi bi-concierge-bell me-1"></i> Order Served
+                </div>
+                {% elif order.status == 'COMPLETED' %}
+                <div class="badge bg-success-subtle text-success border border-success px-3 py-2 fw-bold w-100 text-center fs-6 rounded-3">
+                    <i class="bi bi-check-all me-1"></i> Order Completed & Settled
+                </div>
                 {% endif %}
                 <a href="{% url 'restaurant_admin:order_invoice' restaurant_slug=rslug pk=order.id %}" target="_blank" class="btn-print-action">
                     <i class="bi bi-receipt"></i> Print Tax Invoice
@@ -718,6 +730,7 @@
         const readyAt = new Date(readyISO);
         const startAt = startISO ? new Date(startISO) : new Date();
         const total = readyAt - startAt;
+        let timer = null;
 
         function tick() {
             const now = new Date();
@@ -736,16 +749,21 @@
                     badgeEl.textContent = 'Ready';
                     badgeEl.className = 'od-status-badge osb-ready';
                 }
-                clearInterval(timer);
+                if (timer) clearInterval(timer);
             }
         }
         tick();
-        const timer = setInterval(tick, 1000);
+        if (readyAt > new Date()) {
+            timer = setInterval(tick, 1000);
+        }
     }
 
     const _readyAt   = "{{ order.ready_at|date:'c'|default:'' }}";
     const _prepStart = "{{ order.prep_start|date:'c'|default:'' }}";
-    if (_readyAt) startCountdown(_readyAt, _prepStart);
+    const _orderStatus = "{{ order.status }}";
+    if (_readyAt && ['P', 'PR', 'DRAFT'].includes(_orderStatus)) {
+        startCountdown(_readyAt, _prepStart);
+    }
 
     function getCsrf() {
         const m = document.cookie.match(/csrftoken=([^;]+)/);

@@ -431,6 +431,10 @@ class Order(models.Model):
     event_date = models.DateField(null=True, blank=True)
     event_time = models.TimeField(null=True, blank=True)
     guest_count = models.PositiveIntegerField(null=True, blank=True)
+    waive_service_charge = models.BooleanField(default=False, help_text="Whether service charge was removed from this bill upon customer request")
+    is_prep_paused = models.BooleanField(default=False, help_text="Whether cooking is paused in KDS")
+    paused_at = models.DateTimeField(null=True, blank=True)
+    prep_elapsed_seconds = models.PositiveIntegerField(default=0, help_text="Elapsed cooking seconds tracked by KDS")
 
     class Meta:
         ordering = ['-order_time']
@@ -444,11 +448,11 @@ class Order(models.Model):
     @property
     def is_ready(self):
         from django.utils import timezone
+        if self.status in [self.OrderStatus.SERVED, self.OrderStatus.COMPLETED, self.OrderStatus.CANCELLED, self.OrderStatus.DRAFT]:
+            return False
         if self.status == self.OrderStatus.READY:
             return True
-        if self.status in [self.OrderStatus.SERVED, self.OrderStatus.COMPLETED]:
-            return True
-        if self.ready_at and self.ready_at <= timezone.now():
+        if self.ready_at and self.ready_at <= timezone.now() and self.status in [self.OrderStatus.PENDING, self.OrderStatus.PREPARING]:
             return True
         return False
 
@@ -818,7 +822,9 @@ class Order(models.Model):
         else:
             sgst_pct = Decimal('2.50') if bill_type != 'liquor' else Decimal('0.00')
 
-        if branch_obj and branch_obj.service_charge_percentage is not None:
+        if getattr(self, 'waive_service_charge', False):
+            service_pct = Decimal('0.00')
+        elif branch_obj and branch_obj.service_charge_percentage is not None:
             service_pct = Decimal(str(branch_obj.service_charge_percentage)) if bill_type != 'liquor' else Decimal('0.00')
         else:
             service_pct = Decimal(str(settings_obj.service_charge_percentage or 0)) if bill_type != 'liquor' else Decimal('0.00')
@@ -1028,6 +1034,9 @@ class OrderItem(models.Model):
     discount_value = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     discount_reason = models.CharField(max_length=100, blank=True, null=True)
+    kot_batch = models.PositiveIntegerField(default=1, help_text="Incremental kitchen print batch number (1, 2, 3...)")
+    is_kot_printed = models.BooleanField(default=False, help_text="Whether this item has been sent/printed to the kitchen")
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
     class Meta:
         ordering = ['id']
@@ -1363,7 +1372,30 @@ class Coupon(models.Model):
 
 class RestaurantLanding(models.Model):
     restaurant = models.OneToOneField('super_admin.Restaurant', on_delete=models.CASCADE, related_name='landing')
+    LOGO_SHAPE_CHOICES = [
+        ('round', 'Round / Circular'),
+        ('square', 'Square'),
+        ('rectangle', 'Rectangle / Wide'),
+    ]
+    BRAND_DISPLAY_CHOICES = [
+        ('both', 'Both Logo & Name'),
+        ('logo_only', 'Logo Only'),
+        ('name_only', 'Name Only'),
+    ]
+
     logo = models.ImageField(upload_to='landing/logo/', blank=True, null=True)
+    logo_shape = models.CharField(
+        max_length=20,
+        choices=LOGO_SHAPE_CHOICES,
+        default='round',
+        help_text="Display shape/format of logo in navbar (round, square, rectangle)"
+    )
+    brand_display_type = models.CharField(
+        max_length=20,
+        choices=BRAND_DISPLAY_CHOICES,
+        default='both',
+        help_text="Header/navbar display mode: both (logo and name), logo_only, or name_only"
+    )
     favicon = models.FileField(upload_to='landing/favicon/', blank=True, null=True, help_text="Upload .ico favicon file")
     hero_title = models.CharField(max_length=200, blank=True)
     hero_subtitle = models.CharField(max_length=300, blank=True)

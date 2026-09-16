@@ -113,8 +113,8 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrderItem
-        fields = ['id', 'menu_item', 'menu_item_name', 'quantity', 'unit_price', 'subtotal', 'notes']
-        read_only_fields = ['unit_price', 'subtotal']
+        fields = ['id', 'menu_item', 'menu_item_name', 'quantity', 'unit_price', 'subtotal', 'notes', 'kot_batch', 'is_kot_printed']
+        read_only_fields = ['unit_price', 'subtotal', 'kot_batch', 'is_kot_printed']
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -146,6 +146,9 @@ class OrderSerializer(serializers.ModelSerializer):
     razorpay_order_id = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
     razorpay_payment_id = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
     razorpay_signature = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
+    waive_service_charge = serializers.BooleanField(required=False, default=False)
+    customer_latitude = serializers.FloatField(write_only=True, required=False, allow_null=True)
+    customer_longitude = serializers.FloatField(write_only=True, required=False, allow_null=True)
 
     class Meta:
         model = Order
@@ -154,13 +157,15 @@ class OrderSerializer(serializers.ModelSerializer):
             'status', 'status_display', 'subtotal', 'tax_amount', 'round_off_amount', 'total_amount', 'discount_amount', 'bill_breakdown', 'notes', 'items',
             'coupon_code', 'applied_coupon_code', 'payment_method', 'payment_method_display', 'payment_status', 'payment_status_display',
             'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature', 'restaurant_slug', 'branch_slug', 'branch_id', 'branch_name', 'branch_slug_display', 'order_restaurant_slug', 'security_token',
-            'prep_minutes', 'prep_start', 'ready_at', 'remaining_seconds', 'progress_pct'
+            'prep_minutes', 'prep_start', 'ready_at', 'remaining_seconds', 'progress_pct', 'waive_service_charge', 'customer_latitude', 'customer_longitude'
         ]
         read_only_fields = ['order_time', 'subtotal', 'tax_amount', 'round_off_amount', 'total_amount', 'discount_amount', 'security_token', 'order_number', 'branch_order_number', 'branch_name', 'branch_slug_display', 'order_restaurant_slug']
 
     def create(self, validated_data):
         from core.models import Coupon, RestaurantSettings
         items_data = validated_data.pop('items')
+        customer_latitude = validated_data.pop('customer_latitude', None)
+        customer_longitude = validated_data.pop('customer_longitude', None)
         coupon_code = validated_data.pop('coupon_code', '').strip().upper() if 'coupon_code' in validated_data else ''
         payment_method = validated_data.get('payment_method', 'C')
         restaurant_slug = validated_data.pop('restaurant_slug', None)
@@ -302,6 +307,40 @@ class OrderSerializer(serializers.ModelSerializer):
         if not branch and restaurant and restaurant.branches.count() == 1:
             branch = restaurant.branches.first()
 
+        # GPS Geofencing Verification (prevents placing table orders outside the restaurant)
+        if not is_staff_user and (table_obj or table_number) and branch and getattr(branch, 'enforce_geofence', False):
+            b_lat = branch.latitude
+            b_lon = branch.longitude
+            if b_lat is not None and b_lon is not None:
+                if customer_latitude is None or customer_longitude is None:
+                    raise serializers.ValidationError({
+                        "location": "Location verification is required to place an in-restaurant table order. Please allow GPS location access."
+                    })
+                try:
+                    import math
+                    c_lat = float(customer_latitude)
+                    c_lon = float(customer_longitude)
+                    br_lat = float(b_lat)
+                    br_lon = float(b_lon)
+
+                    R = 6371000.0  # Earth radius in meters
+                    phi1 = math.radians(c_lat)
+                    phi2 = math.radians(br_lat)
+                    delta_phi = math.radians(br_lat - c_lat)
+                    delta_lambda = math.radians(br_lon - c_lon)
+
+                    a = math.sin(delta_phi / 2.0)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0)**2
+                    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+                    dist_meters = R * c
+
+                    allowed_radius = getattr(branch, 'geofence_radius_meters', 100) or 100
+                    if dist_meters > allowed_radius:
+                        raise serializers.ValidationError({
+                            "location": f"You appear to be {int(dist_meters)}m away from the restaurant. Table QR orders are only allowed within {allowed_radius}m."
+                        })
+                except (ValueError, TypeError):
+                    raise serializers.ValidationError({"location": "Invalid GPS coordinates provided."})
+
         if table_obj:
             validated_data['table_number'] = table_obj.table_number
 
@@ -310,17 +349,70 @@ class OrderSerializer(serializers.ModelSerializer):
         else:
             validated_data['order_type'] = Order.OrderType.TAKEAWAY
 
-        order = Order.objects.create(restaurant=restaurant, branch=branch, table=table_obj, **validated_data)
-        
-        for item_data in resolved_items:
-            menu_item = item_data['menu_item']
-            OrderItem.objects.create(
-                order=order,
-                menu_item=menu_item,
-                quantity=item_data['quantity'],
-                unit_price=menu_item.price,
-                notes=item_data.get('notes', '')
-            )
+        # Active Order / Master Order Lookup for Table Sessions
+        active_order = None
+        if table_obj and not is_staff_user:
+            active_order = Order.objects.filter(
+                table=table_obj,
+                restaurant=restaurant,
+                status__in=[Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING, Order.OrderStatus.READY]
+            ).exclude(
+                payment_status__in=['paid', 'refunded', 'F']
+            ).order_by('-order_time').first()
+
+        is_reorder = False
+        new_batch_num = 1
+
+        if active_order:
+            # Re-order: Append items to existing Master Order with incremented batch number
+            is_reorder = True
+            from django.db.models import Max
+            max_batch = active_order.items.aggregate(Max('kot_batch'))['kot_batch__max'] or 1
+            new_batch_num = max_batch + 1
+
+            for item_data in resolved_items:
+                menu_item = item_data['menu_item']
+                OrderItem.objects.create(
+                    order=active_order,
+                    menu_item=menu_item,
+                    quantity=item_data['quantity'],
+                    unit_price=menu_item.price,
+                    notes=item_data.get('notes', ''),
+                    kot_batch=new_batch_num,
+                    is_kot_printed=False
+                )
+
+            # Append customer notes if provided
+            new_notes = (validated_data.get('notes') or '').strip()
+            if new_notes:
+                if active_order.notes:
+                    active_order.notes = f"{active_order.notes}\n[Round {new_batch_num}]: {new_notes}"
+                else:
+                    active_order.notes = f"[Round {new_batch_num}]: {new_notes}"
+                active_order.save(update_fields=['notes'])
+
+            # If order was marked READY, reset to PENDING so kitchen prepares the add-on
+            if active_order.status == Order.OrderStatus.READY:
+                active_order.status = Order.OrderStatus.PENDING
+                active_order.save(update_fields=['status'])
+
+            order = active_order
+        else:
+            # Fresh initial order: Create Master Order with Batch 1
+            order = Order.objects.create(restaurant=restaurant, branch=branch, table=table_obj, **validated_data)
+            
+            for item_data in resolved_items:
+                menu_item = item_data['menu_item']
+                OrderItem.objects.create(
+                    order=order,
+                    menu_item=menu_item,
+                    quantity=item_data['quantity'],
+                    unit_price=menu_item.price,
+                    notes=item_data.get('notes', ''),
+                    kot_batch=1,
+                    is_kot_printed=False
+                )
+
         if coupon_code:
             coupon_qs = Coupon.objects.filter(code__iexact=coupon_code)
             if restaurant:
@@ -346,7 +438,16 @@ class OrderSerializer(serializers.ModelSerializer):
         try:
             from core.sse import publish
             if order.restaurant and order.restaurant.slug:
-                publish(order.restaurant.slug, {'type': 'new_order', 'order_id': order.id, 'branch_id': branch.id if branch else None})
+                sse_payload = {
+                    'type': 'order_updated' if is_reorder else 'new_order',
+                    'order_id': order.id,
+                    'order_number': order.order_number,
+                    'branch_id': branch.id if branch else None,
+                    'is_reorder': is_reorder,
+                    'kot_batch': new_batch_num,
+                    'table_number': order.table_number,
+                }
+                publish(order.restaurant.slug, sse_payload)
         except Exception:
             pass
 
@@ -485,6 +586,12 @@ class WhyChooseUsSerializer(serializers.ModelSerializer):
 
 class RestaurantLandingSerializer(serializers.ModelSerializer):
     website_type = serializers.SerializerMethodField()
+    logo_shape = serializers.SerializerMethodField()
+    logo_type = serializers.SerializerMethodField()
+    brand_display_type = serializers.SerializerMethodField()
+    brand_display = serializers.SerializerMethodField()
+    show_brand_logo = serializers.SerializerMethodField()
+    show_brand_name = serializers.SerializerMethodField()
     gallery_images = GalleryImageSerializer(many=True, read_only=True)
     team_members = TeamMemberSerializer(many=True, read_only=True)
     reviews = ReviewSerializer(many=True, read_only=True)
@@ -499,10 +606,40 @@ class RestaurantLandingSerializer(serializers.ModelSerializer):
             return obj.theme_config.get('website_type', 'default')
         return 'default'
 
+    def get_logo_shape(self, obj):
+        if hasattr(obj, 'logo_shape') and obj.logo_shape:
+            return obj.logo_shape
+        if obj.theme_config and isinstance(obj.theme_config, dict):
+            return obj.theme_config.get('logo_shape', 'round')
+        return 'round'
+
+    def get_logo_type(self, obj):
+        return self.get_logo_shape(obj)
+
+    def get_brand_display_type(self, obj):
+        if hasattr(obj, 'brand_display_type') and obj.brand_display_type:
+            return obj.brand_display_type
+        if obj.theme_config and isinstance(obj.theme_config, dict):
+            return obj.theme_config.get('brand_display_type', 'both')
+        return 'both'
+
+    def get_brand_display(self, obj):
+        return self.get_brand_display_type(obj)
+
+    def get_show_brand_logo(self, obj):
+        dtype = self.get_brand_display_type(obj)
+        return dtype in ('both', 'logo_only')
+
+    def get_show_brand_name(self, obj):
+        dtype = self.get_brand_display_type(obj)
+        return dtype in ('both', 'name_only')
+
     class Meta:
         model = RestaurantLanding
         fields = [
-            'id', 'restaurant', 'restaurant_name', 'restaurant_slug', 'logo', 'favicon', 'hero_title', 'hero_subtitle',
+            'id', 'restaurant', 'restaurant_name', 'restaurant_slug',
+            'logo', 'logo_shape', 'logo_type', 'brand_display_type', 'brand_display', 'show_brand_logo', 'show_brand_name',
+            'favicon', 'hero_title', 'hero_subtitle',
             'hero_image', 'hero_video', 'cta_text', 'cta_link',
             'about_heading', 'about_italic', 'about_bullet_1', 'about_bullet_2', 'about_bullet_3', 'about_body',
             'about_image',
