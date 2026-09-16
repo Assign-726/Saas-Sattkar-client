@@ -42,6 +42,9 @@ admin.site = custom_admin_site
 admin.autodiscover()
 
 urlpatterns = [
+    # Favicon
+    path('favicon.ico', RedirectView.as_view(url=settings.STATIC_URL + 'favicon.ico', permanent=True)),
+
     # Admin / Authentication at root
     path('', CustomLoginView.as_view(template_name='admin/login.html'), name='home'),
     path('login/', CustomLoginView.as_view(template_name='admin/login.html'), name='login'),
