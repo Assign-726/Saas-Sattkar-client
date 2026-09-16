@@ -1181,6 +1181,8 @@
     <form method="post" enctype="multipart/form-data" class="form">
       {% csrf_token %}
       <input type="hidden" name="save_landing" value="1" />
+      <input type="hidden" name="logo_shape" id="id_logo_shape" value="{{ form.instance.logo_shape|default:'round' }}" />
+      <input type="hidden" name="brand_display_type" id="id_brand_display_type" value="{{ form.instance.brand_display_type|default:'both' }}" />
 
       <!-- PANE 1: APPEARANCE -->
       <div id="pane-appearance" class="tab-pane active">
@@ -1210,8 +1212,8 @@
                 <label>Current Logo Preview</label>
                 <div
                   style="background: #f8fafc; border: 1.5px dashed var(--border); border-radius: 12px; padding: 12px; display: inline-block;">
-                  <img src="{{ form.instance.logo.url }}" alt="Logo preview"
-                    style="max-height: 80px; max-width: 100%; display: block; border-radius: 6px; margin-bottom: 8px;" />
+                  <img id="current-brand-logo-img" src="{{ form.instance.logo.url }}" alt="Logo preview"
+                    style="max-height: 80px; max-width: 100%; display: block; border-radius: 6px; margin-bottom: 8px; transition: all 0.25s;" />
                   <div style="display: flex; align-items: center; gap: 8px;">
                     <input type="checkbox" name="clear_logo" id="clear_logo"
                       style="width: 16px; height: 16px; cursor: pointer;" />
@@ -1222,6 +1224,140 @@
                 </div>
               </div>
               {% endif %}
+            </div>
+          </div>
+
+          <!-- SECTION: Navbar Logo Shape -->
+          <div style="margin-bottom: 24px; padding: 18px 20px; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;">
+              <div>
+                <label style="font-size: 13px; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
+                  <i class="fa-solid fa-shapes" style="color: #0284c7;"></i> Navbar Logo Shape
+                </label>
+                <div style="font-size: 11px; color: #64748b;">
+                  Configure how your brand logo is formatted in the header navbar (round, square, or rectangular).
+                </div>
+              </div>
+              <span id="logo-shape-badge" style="font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; background: #e0f2fe; color: #0369a1; text-transform: uppercase; letter-spacing: 0.5px;">
+                Active: Round
+              </span>
+            </div>
+
+            <div style="display: flex; gap: 14px; flex-wrap: wrap;">
+              <!-- Option 1: Round -->
+              <div class="logo-shape-option active" id="shape-option-round" onclick="selectLogoShape('round')" data-shape="round" style="flex: 1; min-width: 200px; max-width: 320px; border: 2px solid #0284c7; background: #ffffff; border-radius: 10px; padding: 14px 16px; cursor: pointer; transition: all 0.2s; position: relative;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 38px; height: 38px; border-radius: 50%; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 15px; border: 1px solid #bae6fd; flex-shrink: 0;">
+                    <i class="fa-solid fa-circle"></i>
+                  </div>
+                  <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 13px; font-weight: 700; color: #0f172a;">Round</span>
+                      <span style="font-size: 10px; background: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 4px; font-weight: 600;">Circle 1:1</span>
+                    </div>
+                    <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Circular logo mask with 50% radius</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Option 2: Square -->
+              <div class="logo-shape-option" id="shape-option-square" onclick="selectLogoShape('square')" data-shape="square" style="flex: 1; min-width: 200px; max-width: 320px; border: 2px solid #e2e8f0; background: #ffffff; border-radius: 10px; padding: 14px 16px; cursor: pointer; transition: all 0.2s; position: relative;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 38px; height: 38px; border-radius: 8px; background: #f1f5f9; color: #334155; display: flex; align-items: center; justify-content: center; font-size: 15px; border: 1px solid #cbd5e1; flex-shrink: 0;">
+                    <i class="fa-solid fa-square"></i>
+                  </div>
+                  <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 13px; font-weight: 700; color: #0f172a;">Square</span>
+                      <span style="font-size: 10px; background: #f1f5f9; color: #334155; padding: 1px 6px; border-radius: 4px; font-weight: 600;">Square 1:1</span>
+                    </div>
+                    <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Equal square aspect with subtle rounded corners</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Option 3: Rectangle -->
+              <div class="logo-shape-option" id="shape-option-rectangle" onclick="selectLogoShape('rectangle')" data-shape="rectangle" style="flex: 1; min-width: 200px; max-width: 320px; border: 2px solid #e2e8f0; background: #ffffff; border-radius: 10px; padding: 14px 16px; cursor: pointer; transition: all 0.2s; position: relative;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 44px; height: 32px; border-radius: 6px; background: #fef3c7; color: #d97706; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 1px solid #fde68a; flex-shrink: 0;">
+                    <i class="fa-solid fa-bars"></i>
+                  </div>
+                  <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 13px; font-weight: 700; color: #0f172a;">Rectangle</span>
+                      <span style="font-size: 10px; background: #fef3c7; color: #b45309; padding: 1px 6px; border-radius: 4px; font-weight: 600;">Wide / Wordmark</span>
+                    </div>
+                    <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Natural horizontal ratio for wide emblems & text logos</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION: Navbar Brand Display Mode -->
+          <div style="margin-bottom: 24px; padding: 18px 20px; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;">
+              <div>
+                <label style="font-size: 13px; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
+                  <i class="fa-solid fa-eye" style="color: #8b5cf6;"></i> Navbar Brand Display Mode
+                </label>
+                <div style="font-size: 11px; color: #64748b;">
+                  Choose whether to show both logo & restaurant name, only the logo, or only the restaurant name.
+                </div>
+              </div>
+              <span id="brand-display-badge" style="font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; background: #ede9fe; color: #6d28d9; text-transform: uppercase; letter-spacing: 0.5px;">
+                Active: Both (Logo & Name)
+              </span>
+            </div>
+
+            <div style="display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 16px;">
+              <!-- Option 1: Both -->
+              <div class="brand-display-option active" id="display-option-both" onclick="selectBrandDisplay('both')" data-display="both" style="flex: 1; min-width: 200px; max-width: 320px; border: 2px solid #8b5cf6; background: #ffffff; border-radius: 10px; padding: 14px 16px; cursor: pointer; transition: all 0.2s; position: relative;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 38px; height: 38px; border-radius: 8px; background: #ede9fe; color: #7c3aed; display: flex; align-items: center; justify-content: center; font-size: 15px; border: 1px solid #ddd6fe; flex-shrink: 0;">
+                    <i class="fa-solid fa-layer-group"></i>
+                  </div>
+                  <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 13px; font-weight: 700; color: #0f172a;">Both</span>
+                      <span style="font-size: 10px; background: #ede9fe; color: #6d28d9; padding: 1px 6px; border-radius: 4px; font-weight: 600;">Logo + Name</span>
+                    </div>
+                    <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Shows logo icon alongside the restaurant name</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Option 2: Logo Only -->
+              <div class="brand-display-option" id="display-option-logo_only" onclick="selectBrandDisplay('logo_only')" data-display="logo_only" style="flex: 1; min-width: 200px; max-width: 320px; border: 2px solid #e2e8f0; background: #ffffff; border-radius: 10px; padding: 14px 16px; cursor: pointer; transition: all 0.2s; position: relative;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 38px; height: 38px; border-radius: 8px; background: #ecfdf5; color: #059669; display: flex; align-items: center; justify-content: center; font-size: 15px; border: 1px solid #a7f3d0; flex-shrink: 0;">
+                    <i class="fa-solid fa-image"></i>
+                  </div>
+                  <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 13px; font-weight: 700; color: #0f172a;">Logo Only</span>
+                      <span style="font-size: 10px; background: #ecfdf5; color: #047857; padding: 1px 6px; border-radius: 4px; font-weight: 600;">Minimalist</span>
+                    </div>
+                    <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Hides name text; displays only the brand logo asset</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Option 3: Name Only -->
+              <div class="brand-display-option" id="display-option-name_only" onclick="selectBrandDisplay('name_only')" data-display="name_only" style="flex: 1; min-width: 200px; max-width: 320px; border: 2px solid #e2e8f0; background: #ffffff; border-radius: 10px; padding: 14px 16px; cursor: pointer; transition: all 0.2s; position: relative;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 38px; height: 38px; border-radius: 8px; background: #fdf2f8; color: #db2777; display: flex; align-items: center; justify-content: center; font-size: 15px; border: 1px solid #fbcfe8; flex-shrink: 0;">
+                    <i class="fa-solid fa-font"></i>
+                  </div>
+                  <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 13px; font-weight: 700; color: #0f172a;">Name Only</span>
+                      <span style="font-size: 10px; background: #fdf2f8; color: #be185d; padding: 1px 6px; border-radius: 4px; font-weight: 600;">Typography</span>
+                    </div>
+                    <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Hides logo image; displays only the restaurant brand text</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1568,13 +1704,25 @@
                 
                 <!-- Mini Header Preview -->
                 <div id="preview-mini-header" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-radius: 8px 8px 0 0; background: #18312e; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 18px; transition: all 0.3s;">
-                  <div style="display: flex; align-items: center; gap: 6px;">
-                    <div style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></div>
-                    <div style="width: 8px; height: 8px; border-radius: 50%; background: #f59e0b;"></div>
-                    <div style="width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></div>
-                    <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-left: 4px;" id="preview-header-brand">
-                      {{ restaurant.name|default:"Restaurant" }}
-                    </span>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 5px;">
+                      <div style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></div>
+                      <div style="width: 8px; height: 8px; border-radius: 50%; background: #f59e0b;"></div>
+                      <div style="width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></div>
+                    </div>
+                    <!-- Brand Section in Mini Header -->
+                    <div id="preview-header-brand-container" style="display: flex; align-items: center; gap: 7px; margin-left: 4px;">
+                      {% if form.instance.logo %}
+                      <img id="preview-header-logo-img" src="{{ form.instance.logo.url }}" alt="Logo" style="height: 22px; width: 22px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255,255,255,0.2); transition: all 0.2s; display: inline-block;" />
+                      {% else %}
+                      <div id="preview-header-logo-ph" style="height: 22px; width: 22px; border-radius: 50%; background: #e6b15f; color: #000; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; border: 1px solid rgba(255,255,255,0.2); transition: all 0.2s;">
+                        <i class="fa-solid fa-utensils" style="font-size: 9px;"></i>
+                      </div>
+                      {% endif %}
+                      <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;" id="preview-header-brand">
+                        {{ restaurant.name|default:"Restaurant" }}
+                      </span>
+                    </div>
                   </div>
                   <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 10px; font-weight: 600;" id="preview-header-link">Menu</span>
@@ -5862,6 +6010,8 @@ ${rName} reserves the right to modify or update these Terms of Service at any ti
     const basePreset = THEME_PRESETS[resolvedPreset] || THEME_PRESETS.emerald_gold;
     const filled = { ...basePreset, ...cfg };
     filled.website_type = cfg.website_type || filled.website_type || 'default';
+    filled.logo_shape = cfg.logo_shape || filled.logo_shape || 'round';
+    filled.brand_display_type = cfg.brand_display_type || filled.brand_display_type || 'both';
 
     // Fallbacks for header
     filled.header_bg = filled.header_bg || filled.background || '#18312e';
@@ -5957,6 +6107,13 @@ ${rName} reserves the right to modify or update these Terms of Service at any ti
 
       currentThemeConfig.website_type = currentThemeConfig.website_type || 'default';
       updateWebsiteTypeUI(currentThemeConfig.website_type);
+
+      currentThemeConfig.logo_shape = currentThemeConfig.logo_shape || document.getElementById('id_logo_shape')?.value || 'round';
+      updateLogoShapeUI(currentThemeConfig.logo_shape);
+
+      currentThemeConfig.brand_display_type = currentThemeConfig.brand_display_type || document.getElementById('id_brand_display_type')?.value || 'both';
+      updateBrandDisplayUI(currentThemeConfig.brand_display_type);
+
       markPresetActive(currentThemeConfig.preset || 'custom');
       syncThemeJsonAndPreview();
     } catch (err) {
@@ -5971,8 +6128,18 @@ ${rName} reserves the right to modify or update these Terms of Service at any ti
       const preset = THEME_PRESETS[resolvedKey] || THEME_PRESETS.emerald_gold;
 
       const prevWebsiteType = currentThemeConfig.website_type || 'default';
-      currentThemeConfig = fillDefaults({ ...preset, preset: resolvedKey, website_type: prevWebsiteType });
+      const prevLogoShape = currentThemeConfig.logo_shape || 'round';
+      const prevBrandDisplay = currentThemeConfig.brand_display_type || 'both';
+      currentThemeConfig = fillDefaults({
+        ...preset,
+        preset: resolvedKey,
+        website_type: prevWebsiteType,
+        logo_shape: prevLogoShape,
+        brand_display_type: prevBrandDisplay
+      });
       updateWebsiteTypeUI(currentThemeConfig.website_type);
+      updateLogoShapeUI(currentThemeConfig.logo_shape);
+      updateBrandDisplayUI(currentThemeConfig.brand_display_type);
 
       THEME_KEYS.forEach(key => {
         const picker = document.getElementById('picker_' + key);
@@ -6080,6 +6247,102 @@ ${rName} reserves the right to modify or update these Terms of Service at any ti
     } catch (e) {}
   }
 
+  function selectLogoShape(shape) {
+    try {
+      shape = ['round', 'square', 'rectangle'].includes(shape) ? shape : 'round';
+      currentThemeConfig.logo_shape = shape;
+      const input = document.getElementById('id_logo_shape');
+      if (input) input.value = shape;
+      updateLogoShapeUI(shape);
+      syncThemeJsonAndPreview();
+      const labels = { round: 'Round / Circle', square: 'Square', rectangle: 'Rectangle / Wide' };
+      showThemeNotification('Navbar Logo Shape set to: ' + (labels[shape] || shape));
+    } catch (err) {
+      console.error('Error selecting logo shape:', err);
+    }
+  }
+
+  function updateLogoShapeUI(shape) {
+    try {
+      shape = ['round', 'square', 'rectangle'].includes(shape) ? shape : 'round';
+      document.querySelectorAll('.logo-shape-option').forEach(opt => {
+        if (opt.getAttribute('data-shape') === shape) {
+          opt.classList.add('active');
+          opt.style.borderColor = '#0284c7';
+          opt.style.boxShadow = '0 0 0 3px rgba(2, 132, 199, 0.22)';
+        } else {
+          opt.classList.remove('active');
+          opt.style.borderColor = '#e2e8f0';
+          opt.style.boxShadow = 'none';
+        }
+      });
+      const badge = document.getElementById('logo-shape-badge');
+      if (badge) {
+        const labels = { round: 'Active: Round', square: 'Active: Square', rectangle: 'Active: Rectangle' };
+        badge.textContent = labels[shape] || ('Active: ' + shape);
+      }
+
+      // Update Current Logo Preview image styling
+      const logoImg = document.getElementById('current-brand-logo-img');
+      if (logoImg) {
+        if (shape === 'round') {
+          logoImg.style.borderRadius = '50%';
+          logoImg.style.width = '70px';
+          logoImg.style.height = '70px';
+          logoImg.style.objectFit = 'cover';
+        } else if (shape === 'square') {
+          logoImg.style.borderRadius = '8px';
+          logoImg.style.width = '70px';
+          logoImg.style.height = '70px';
+          logoImg.style.objectFit = 'contain';
+        } else if (shape === 'rectangle') {
+          logoImg.style.borderRadius = '6px';
+          logoImg.style.width = 'auto';
+          logoImg.style.maxHeight = '65px';
+          logoImg.style.maxWidth = '150px';
+          logoImg.style.objectFit = 'contain';
+        }
+      }
+    } catch (e) {}
+  }
+
+  function selectBrandDisplay(mode) {
+    try {
+      mode = ['both', 'logo_only', 'name_only'].includes(mode) ? mode : 'both';
+      currentThemeConfig.brand_display_type = mode;
+      const input = document.getElementById('id_brand_display_type');
+      if (input) input.value = mode;
+      updateBrandDisplayUI(mode);
+      syncThemeJsonAndPreview();
+      const labels = { both: 'Both (Logo & Name)', logo_only: 'Logo Only', name_only: 'Restaurant Name Only' };
+      showThemeNotification('Navbar Brand Display set to: ' + (labels[mode] || mode));
+    } catch (err) {
+      console.error('Error selecting brand display mode:', err);
+    }
+  }
+
+  function updateBrandDisplayUI(mode) {
+    try {
+      mode = ['both', 'logo_only', 'name_only'].includes(mode) ? mode : 'both';
+      document.querySelectorAll('.brand-display-option').forEach(opt => {
+        if (opt.getAttribute('data-display') === mode) {
+          opt.classList.add('active');
+          opt.style.borderColor = '#8b5cf6';
+          opt.style.boxShadow = '0 0 0 3px rgba(139, 92, 246, 0.22)';
+        } else {
+          opt.classList.remove('active');
+          opt.style.borderColor = '#e2e8f0';
+          opt.style.boxShadow = 'none';
+        }
+      });
+      const badge = document.getElementById('brand-display-badge');
+      if (badge) {
+        const labels = { both: 'Active: Both (Logo & Name)', logo_only: 'Active: Logo Only', name_only: 'Active: Name Only' };
+        badge.textContent = labels[mode] || ('Active: ' + mode);
+      }
+    } catch (e) {}
+  }
+
   function resetThemeToDefault() {
     if (confirm('Restore the original Emerald & Gold signature luxury theme?')) {
       applyPreset('emerald_gold');
@@ -6139,6 +6402,15 @@ ${rName} reserves the right to modify or update these Terms of Service at any ti
       const pHover = currentThemeConfig.primary_hover || '#f0c878';
       currentThemeConfig.gradient_primary = `linear-gradient(135deg, ${p} 0%, ${pHover} 100%)`;
 
+      const shapeInput = document.getElementById('id_logo_shape');
+      if (shapeInput && shapeInput.value) {
+        currentThemeConfig.logo_shape = shapeInput.value;
+      }
+      const displayInput = document.getElementById('id_brand_display_type');
+      if (displayInput && displayInput.value) {
+        currentThemeConfig.brand_display_type = displayInput.value;
+      }
+
       // Write to hidden input for form submission
       const jsonInput = document.getElementById('id_theme_config');
       if (jsonInput) {
@@ -6190,8 +6462,46 @@ ${rName} reserves the right to modify or update these Terms of Service at any ti
         miniHeader.style.background = headerBg;
         miniHeader.style.borderBottomColor = headerBorder;
       }
+
+      // Brand Display & Logo Shape in Mini Header Preview
+      const currentShape = currentThemeConfig.logo_shape || 'round';
+      const currentDisplay = currentThemeConfig.brand_display_type || 'both';
+
+      const showLogo = (currentDisplay === 'both' || currentDisplay === 'logo_only');
+      const showName = (currentDisplay === 'both' || currentDisplay === 'name_only');
+
       const headerBrand = document.getElementById('preview-header-brand');
-      if (headerBrand) headerBrand.style.color = headerText;
+      if (headerBrand) {
+        headerBrand.style.color = headerText;
+        headerBrand.style.display = showName ? 'inline-block' : 'none';
+      }
+
+      const headerLogo = document.getElementById('preview-header-logo-img');
+      const headerLogoPh = document.getElementById('preview-header-logo-ph');
+      [headerLogo, headerLogoPh].forEach(el => {
+        if (!el) return;
+        if (!showLogo) {
+          el.style.display = 'none';
+        } else {
+          el.style.display = (el === headerLogo && !el.getAttribute('src')) ? 'none' : 'inline-block';
+          if (currentShape === 'round') {
+            el.style.borderRadius = '50%';
+            el.style.width = '22px';
+            el.style.height = '22px';
+            el.style.aspectRatio = '1 / 1';
+          } else if (currentShape === 'square') {
+            el.style.borderRadius = '4px';
+            el.style.width = '22px';
+            el.style.height = '22px';
+            el.style.aspectRatio = '1 / 1';
+          } else if (currentShape === 'rectangle') {
+            el.style.borderRadius = '3px';
+            el.style.width = '42px';
+            el.style.height = '18px';
+            el.style.aspectRatio = 'auto';
+          }
+        }
+      });
 
       const headerLink = document.getElementById('preview-header-link');
       if (headerLink) headerLink.style.color = headerNavActive;

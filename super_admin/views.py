@@ -366,6 +366,19 @@ def landing_edit(request, pk):
                 except Exception as e:
                     print("Error parsing theme_config JSON:", e)
 
+            # Handle logo_shape and brand_display_type
+            logo_shape_val = request.POST.get('logo_shape')
+            if logo_shape_val in ('round', 'square', 'rectangle'):
+                landing_obj.logo_shape = logo_shape_val
+            brand_display_val = request.POST.get('brand_display_type')
+            if brand_display_val in ('both', 'logo_only', 'name_only'):
+                landing_obj.brand_display_type = brand_display_val
+
+            # Keep theme_config in sync with logo_shape and brand_display_type
+            if isinstance(landing_obj.theme_config, dict):
+                landing_obj.theme_config['logo_shape'] = landing_obj.logo_shape
+                landing_obj.theme_config['brand_display_type'] = landing_obj.brand_display_type
+
             landing_obj.save()
             messages.success(request, 'Landing page saved.')
             return redirect('super_admin:landing_edit', pk=restaurant.pk)
@@ -403,6 +416,10 @@ def landing_edit(request, pk):
     pages_faq_json = json.dumps(pages_faq_dict)
 
     theme_config_dict = landing.theme_config if isinstance(landing.theme_config, dict) else {}
+    if 'logo_shape' not in theme_config_dict:
+        theme_config_dict['logo_shape'] = landing.logo_shape or 'round'
+    if 'brand_display_type' not in theme_config_dict:
+        theme_config_dict['brand_display_type'] = landing.brand_display_type or 'both'
     theme_config_json = json.dumps(theme_config_dict)
 
     job_form = JobPostingForm(restaurant=restaurant)

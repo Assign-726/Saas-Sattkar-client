@@ -1037,7 +1037,7 @@ class RestaurantLandingForm(forms.ModelForm):
     class Meta:
         model = RestaurantLanding
         fields = [
-            'logo', 'favicon', 'hero_title', 'hero_subtitle', 'hero_image', 'hero_video',
+            'logo', 'logo_shape', 'brand_display_type', 'favicon', 'hero_title', 'hero_subtitle', 'hero_image', 'hero_video',
             'cta_text', 'cta_link',
             'about_heading', 'about_italic', 'about_bullet_1', 'about_bullet_2', 'about_bullet_3', 'about_body', 'about_image',
             'about_video_url',

@@ -586,6 +586,12 @@ class WhyChooseUsSerializer(serializers.ModelSerializer):
 
 class RestaurantLandingSerializer(serializers.ModelSerializer):
     website_type = serializers.SerializerMethodField()
+    logo_shape = serializers.SerializerMethodField()
+    logo_type = serializers.SerializerMethodField()
+    brand_display_type = serializers.SerializerMethodField()
+    brand_display = serializers.SerializerMethodField()
+    show_brand_logo = serializers.SerializerMethodField()
+    show_brand_name = serializers.SerializerMethodField()
     gallery_images = GalleryImageSerializer(many=True, read_only=True)
     team_members = TeamMemberSerializer(many=True, read_only=True)
     reviews = ReviewSerializer(many=True, read_only=True)
@@ -600,10 +606,40 @@ class RestaurantLandingSerializer(serializers.ModelSerializer):
             return obj.theme_config.get('website_type', 'default')
         return 'default'
 
+    def get_logo_shape(self, obj):
+        if hasattr(obj, 'logo_shape') and obj.logo_shape:
+            return obj.logo_shape
+        if obj.theme_config and isinstance(obj.theme_config, dict):
+            return obj.theme_config.get('logo_shape', 'round')
+        return 'round'
+
+    def get_logo_type(self, obj):
+        return self.get_logo_shape(obj)
+
+    def get_brand_display_type(self, obj):
+        if hasattr(obj, 'brand_display_type') and obj.brand_display_type:
+            return obj.brand_display_type
+        if obj.theme_config and isinstance(obj.theme_config, dict):
+            return obj.theme_config.get('brand_display_type', 'both')
+        return 'both'
+
+    def get_brand_display(self, obj):
+        return self.get_brand_display_type(obj)
+
+    def get_show_brand_logo(self, obj):
+        dtype = self.get_brand_display_type(obj)
+        return dtype in ('both', 'logo_only')
+
+    def get_show_brand_name(self, obj):
+        dtype = self.get_brand_display_type(obj)
+        return dtype in ('both', 'name_only')
+
     class Meta:
         model = RestaurantLanding
         fields = [
-            'id', 'restaurant', 'restaurant_name', 'restaurant_slug', 'logo', 'favicon', 'hero_title', 'hero_subtitle',
+            'id', 'restaurant', 'restaurant_name', 'restaurant_slug',
+            'logo', 'logo_shape', 'logo_type', 'brand_display_type', 'brand_display', 'show_brand_logo', 'show_brand_name',
+            'favicon', 'hero_title', 'hero_subtitle',
             'hero_image', 'hero_video', 'cta_text', 'cta_link',
             'about_heading', 'about_italic', 'about_bullet_1', 'about_bullet_2', 'about_bullet_3', 'about_body',
             'about_image',

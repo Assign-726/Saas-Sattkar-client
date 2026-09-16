@@ -1372,7 +1372,30 @@ class Coupon(models.Model):
 
 class RestaurantLanding(models.Model):
     restaurant = models.OneToOneField('super_admin.Restaurant', on_delete=models.CASCADE, related_name='landing')
+    LOGO_SHAPE_CHOICES = [
+        ('round', 'Round / Circular'),
+        ('square', 'Square'),
+        ('rectangle', 'Rectangle / Wide'),
+    ]
+    BRAND_DISPLAY_CHOICES = [
+        ('both', 'Both Logo & Name'),
+        ('logo_only', 'Logo Only'),
+        ('name_only', 'Name Only'),
+    ]
+
     logo = models.ImageField(upload_to='landing/logo/', blank=True, null=True)
+    logo_shape = models.CharField(
+        max_length=20,
+        choices=LOGO_SHAPE_CHOICES,
+        default='round',
+        help_text="Display shape/format of logo in navbar (round, square, rectangle)"
+    )
+    brand_display_type = models.CharField(
+        max_length=20,
+        choices=BRAND_DISPLAY_CHOICES,
+        default='both',
+        help_text="Header/navbar display mode: both (logo and name), logo_only, or name_only"
+    )
     favicon = models.FileField(upload_to='landing/favicon/', blank=True, null=True, help_text="Upload .ico favicon file")
     hero_title = models.CharField(max_length=200, blank=True)
     hero_subtitle = models.CharField(max_length=300, blank=True)

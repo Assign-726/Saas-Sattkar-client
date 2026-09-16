@@ -304,7 +304,7 @@ class RestaurantLandingAdmin(admin.ModelAdmin):
     inlines = [GalleryImageInline, TeamMemberInline, ReviewInline]
     fieldsets = (
         ('Brand', {
-            'fields': ('restaurant', 'logo', 'favicon')
+            'fields': ('restaurant', 'logo', 'logo_shape', 'brand_display_type', 'favicon')
         }),
         ('Hero Section', {
             'fields': ('hero_title', 'hero_subtitle', 'hero_image','hero_video', 'cta_text', 'cta_link')
