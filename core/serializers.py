@@ -568,7 +568,33 @@ class ReviewSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Review
-        fields = ['id', 'name', 'stars', 'description', 'branch', 'branch_name', 'branch_slug', 'display_order', 'active']
+        fields = [
+            'id', 'name', 'stars', 'description', 'branch', 'branch_name', 'branch_slug',
+            'display_order', 'active', 'email', 'phone', 'table_no', 'is_customer_submitted', 'created_at'
+        ]
+
+
+class CustomerReviewSubmitSerializer(serializers.ModelSerializer):
+    restaurant_slug = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    restaurant_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    branch_slug = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    branch_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+
+    class Meta:
+        model = Review
+        fields = [
+            'id', 'name', 'stars', 'description', 'email', 'phone', 'table_no',
+            'restaurant_slug', 'restaurant_id', 'branch_slug', 'branch_id', 'created_at'
+        ]
+        read_only_fields = ['id', 'created_at']
+
+    def validate(self, attrs):
+        if not attrs.get('restaurant_slug') and not attrs.get('restaurant_id') and not attrs.get('branch_slug') and not attrs.get('branch_id'):
+            raise serializers.ValidationError({"restaurant": "Either restaurant_slug, restaurant_id, branch_slug, or branch_id must be provided."})
+        stars = attrs.get('stars', 5)
+        if stars < 1 or stars > 5:
+            raise serializers.ValidationError({"stars": "Rating must be between 1 and 5 stars."})
+        return attrs
 
 
 class EventSerializer(serializers.ModelSerializer):

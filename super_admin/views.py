@@ -1,6 +1,8 @@
 from django.conf import settings
 import os
+import io
 import json
+import qrcode
 from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
@@ -425,6 +427,8 @@ def landing_edit(request, pk):
     job_form = JobPostingForm(restaurant=restaurant)
     job_postings = restaurant.job_postings.select_related('branch').all().order_by('display_order', '-created_at')
 
+    frontend_base_url = Table.get_frontend_base_url()
+
     return render(request, 'super_admin/landing_edit.html', {
         'restaurant': restaurant,
         'branches': branches,
@@ -450,6 +454,7 @@ def landing_edit(request, pk):
         'pages_faq': pages_faq_dict,
         'theme_config_json': theme_config_json,
         'theme_config': theme_config_dict,
+        'frontend_base_url': frontend_base_url,
     })
 
 
@@ -581,6 +586,62 @@ def review_delete(request, rid):
         rv.delete()
         messages.success(request, 'Review removed.')
     return redirect('super_admin:landing_edit', pk=restaurant_id)
+
+
+@superuser_required
+def review_toggle_approve(request, rid):
+    rv = get_object_or_404(Review.objects.select_related('landing__restaurant'), pk=rid)
+    restaurant_id = rv.landing.restaurant.pk
+    if request.method == 'POST':
+        rv.active = not rv.active
+        rv.save()
+        status_label = "published to website testimonials" if rv.active else "hidden / unapproved"
+        messages.success(request, f'Review from "{rv.name}" is now {status_label}.')
+    return redirect('super_admin:landing_edit', pk=restaurant_id)
+
+
+@superuser_required
+def restaurant_feedback_qr(request, pk):
+    restaurant = get_object_or_404(Restaurant, pk=pk)
+    branch_id = request.GET.get('branch_id')
+    table_no = request.GET.get('table_no', '').strip()
+    download = request.GET.get('download') == '1'
+
+    # Determine frontend URL base dynamically from .env or settings
+    frontend_base = Table.get_frontend_base_url()
+
+    url = f"{frontend_base.rstrip('/')}/feedback?restaurant={restaurant.slug}"
+    branch_name = "All-Outlets"
+    if branch_id:
+        branch = restaurant.branches.filter(id=branch_id).first()
+        if branch:
+            url += f"&branch={branch.slug}"
+            branch_name = branch.name.replace(' ', '_')
+
+    if table_no:
+        url += f"&table={table_no}"
+
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=10,
+        border=3,
+    )
+    qr.add_data(url)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="#0f172a", back_color="#ffffff")
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+
+    response = HttpResponse(buffer.getvalue(), content_type="image/png")
+    filename = f"feedback_qr_{restaurant.slug}_{branch_name}.png"
+    if download:
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    else:
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+    return response
 
 
 @superuser_required

@@ -105,6 +105,28 @@ class BlogCommentDayRateThrottle(SimpleRateThrottle):
         return f"throttle_blog_comment_day_{self.get_ident(request)}"
 
 
+class ReviewAnonRateThrottle(SimpleRateThrottle):
+    """Throttle customer review/feedback submissions: 5 submissions per minute per IP."""
+    scope = 'review_anon'
+    rate = '5/min'
+
+    def get_cache_key(self, request, view):
+        if request.user.is_authenticated and request.user.is_staff:
+            return None
+        return f"throttle_review_min_{self.get_ident(request)}"
+
+
+class ReviewDayRateThrottle(SimpleRateThrottle):
+    """Throttle customer review/feedback submissions: 25 submissions per day per IP."""
+    scope = 'review_day'
+    rate = '25/day'
+
+    def get_cache_key(self, request, view):
+        if request.user.is_authenticated and request.user.is_staff:
+            return None
+        return f"throttle_review_day_{self.get_ident(request)}"
+
+
 # -------------------------------------------------------------------
 # Standard Django View Throttle Helper
 # -------------------------------------------------------------------

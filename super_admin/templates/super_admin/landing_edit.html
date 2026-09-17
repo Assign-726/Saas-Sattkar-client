@@ -903,35 +903,56 @@
     transform: translateY(-1px);
   }
 
-  /* Responsive Modal Dialog System */
+  /* Responsive Modal Dialog System & Background Scroll Lock */
+  body.modal-open {
+    overflow: hidden !important;
+    touch-action: none !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+  }
+
   .shop-modal {
     box-sizing: border-box !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
   }
   .shop-modal > div {
     box-sizing: border-box !important;
     max-width: 640px !important;
     width: 100% !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
   }
 
   @media (max-width: 768px) {
     .shop-modal {
-      padding: 12px 8px !important;
-      align-items: flex-end !important;
+      padding: 10px 8px !important;
+      align-items: center !important;
     }
     .shop-modal > div {
       padding: 20px 16px !important;
-      border-radius: 18px 18px 0 0 !important;
-      max-height: 92vh !important;
+      border-radius: 18px !important;
+      max-height: 90vh !important;
+      max-height: 90dvh !important;
       width: 100% !important;
     }
-    .shop-modal form > div[style*="justify-content: flex-end"] {
+    .shop-modal form > div[style*="justify-content: flex-end"],
+    .shop-modal-footer,
+    .feedback-qr-footer {
       flex-direction: column-reverse !important;
       gap: 8px !important;
       width: 100% !important;
+      padding: 12px 16px !important;
     }
-    .shop-modal form > div[style*="justify-content: flex-end"] .btn {
+    .shop-modal form > div[style*="justify-content: flex-end"] .btn,
+    .shop-modal-footer .btn,
+    .shop-modal-footer a.btn,
+    .feedback-qr-footer .btn,
+    .feedback-qr-footer a.btn {
       width: 100% !important;
       justify-content: center !important;
+      text-align: center !important;
     }
   }
 
@@ -1149,9 +1170,13 @@
         <i class="fa-solid fa-circle-nodes"></i>
         <span>Contact & Social</span>
       </button>
-      <button class="shop-tab-btn" onclick="switchTab(event, 'sections')">
-        <i class="fa-solid fa-table-cells-large"></i>
-        <span>Team & Reviews</span>
+      <button class="shop-tab-btn" onclick="switchTab(event, 'team')">
+        <i class="fa-solid fa-users"></i>
+        <span>Our Team</span>
+      </button>
+      <button class="shop-tab-btn" onclick="switchTab(event, 'reviews')">
+        <i class="fa-solid fa-comments"></i>
+        <span>Reviews & Feedback</span>
       </button>
       <button class="shop-tab-btn" onclick="switchTab(event, 'seo')">
         <i class="fa-solid fa-globe"></i>
@@ -3539,8 +3564,8 @@
       </div>
     </div>
 
-    <!-- PANE 6: PAGE SECTIONS (Separate Team & Reviews forms) -->
-    <div id="pane-sections" class="tab-pane">
+    <!-- PANE: OUR TEAM MEMBERS -->
+    <div id="pane-team" class="tab-pane">
       <!-- OUR TEAM MANAGER -->
       <div class="shop-panel">
         <div class="shop-panel-header">
@@ -3684,17 +3709,25 @@
         </div>
         {% endif %}
       </div>
+    </div>
 
+    <!-- PANE: CUSTOMER REVIEWS & FEEDBACK -->
+    <div id="pane-reviews" class="tab-pane">
       <!-- CUSTOMER REVIEWS MANAGER -->
-      <div class="shop-panel" style="margin-top: 32px;">
-        <div class="shop-panel-header">
-          <div class="shop-panel-icon">
-            <i class="fa-solid fa-comments"></i>
+      <div class="shop-panel">
+        <div class="shop-panel-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <div class="shop-panel-icon">
+              <i class="fa-solid fa-comments"></i>
+            </div>
+            <div>
+              <div class="shop-panel-title">Customer Reviews & Testimonials</div>
+              <div class="shop-panel-subtitle">Add curated testimonials or manage diner QR feedback</div>
+            </div>
           </div>
-          <div>
-            <div class="shop-panel-title">Customer Reviews & Testimonials</div>
-            <div class="shop-panel-subtitle">Add and configure customer review posts</div>
-          </div>
+          <button type="button" class="btn secondary small" onclick="openFeedbackQrModal()" style="display: inline-flex; align-items: center; gap: 8px; font-weight: 600;">
+            <i class="fa-solid fa-qrcode" style="color: #059669;"></i> Feedback QR Code & Links
+          </button>
         </div>
 
         <form method="post" action="{% url 'super_admin:review_add' restaurant.id %}" class="form">
@@ -3759,19 +3792,39 @@
           <table class="table">
             <thead>
               <tr>
-                <th>Reviewer Name</th>
-                <th style="width: 120px;">Rating</th>
+                <th>Reviewer / Diner</th>
+                <th style="width: 110px;">Rating</th>
                 <th>Comments</th>
-                <th style="width: 160px;">Outlet / Branch</th>
-                <th style="width: 90px;">Sort Order</th>
-                <th style="width: 90px;">Status</th>
-                <th style="width: 100px; text-align: right; padding-right: 24px;">Actions</th>
+                <th style="width: 150px;">Outlet / Branch</th>
+                <th style="width: 80px;">Order</th>
+                <th style="width: 110px;">Status</th>
+                <th style="width: 130px; text-align: right; padding-right: 20px;">Actions</th>
               </tr>
             </thead>
             <tbody>
               {% for r in reviews %}
               <tr>
-                <td style="font-weight: 600;">{{ r.name }}</td>
+                <td>
+                  <div style="font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    {{ r.name }}
+                    {% if r.is_customer_submitted %}
+                    <span class="badge" style="background: rgba(16, 185, 129, 0.12); color: #059669; font-size: 10px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.25);">
+                      <i class="fa-solid fa-qrcode"></i> Diner QR
+                    </span>
+                    {% else %}
+                    <span class="badge" style="background: rgba(100, 116, 139, 0.1); color: #475569; font-size: 10px;">
+                      Admin
+                    </span>
+                    {% endif %}
+                  </div>
+                  {% if r.table_no or r.phone or r.email %}
+                  <div style="font-size: 11px; color: var(--muted); margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap;">
+                    {% if r.table_no %}<span style="background: rgba(241,245,249,0.9); padding: 1px 5px; border-radius: 4px; font-weight: 600; color: #334155;">Table {{ r.table_no }}</span>{% endif %}
+                    {% if r.phone %}<span><i class="fa-solid fa-phone" style="font-size: 9px;"></i> {{ r.phone }}</span>{% endif %}
+                    {% if r.email %}<span><i class="fa-solid fa-envelope" style="font-size: 9px;"></i> {{ r.email }}</span>{% endif %}
+                  </div>
+                  {% endif %}
+                </td>
                 <td style="color: #f59e0b; font-size: 13px;">
                   {% for i in "12345"|make_list %}
                   {% if forloop.counter <= r.stars %} <i class="fa-solid fa-star"></i>
@@ -3780,7 +3833,7 @@
                     {% endif %}
                     {% endfor %}
                 </td>
-                <td class="muted" style="max-width: 260px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">{{ r.description }}</td>
+                <td class="muted" style="max-width: 260px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="{{ r.description }}">{{ r.description }}</td>
                 <td>
                   {% if r.branch %}
                   <span class="badge" style="background: rgba(30,58,138,0.1); color: #1e40af; border: 1px solid rgba(30,58,138,0.2);">
@@ -3793,13 +3846,29 @@
                 <td>{{ r.display_order }}</td>
                 <td>
                   {% if r.active %}
-                  <span class="badge ok">Visible</span>
+                  <span class="badge ok" title="Live in testimonials"><i class="fa-solid fa-check" style="font-size: 10px; margin-right: 3px;"></i>Visible</span>
                   {% else %}
-                  <span class="badge neutral">Hidden</span>
+                  <span class="badge warning" style="background: rgba(245, 158, 11, 0.12); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.25);" title="Pending admin approval">
+                    <i class="fa-solid fa-clock" style="font-size: 10px; margin-right: 3px;"></i>Pending
+                  </span>
                   {% endif %}
                 </td>
-                <td style="text-align: right; padding-right: 24px;">
-                  <div style="display: flex; gap: 8px; justify-content: flex-end; align-items: center;">
+                <td style="text-align: right; padding-right: 20px;">
+                  <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center;">
+                    <!-- 1-Click Approve / Toggle Publish -->
+                    <form method="post" action="{% url 'super_admin:review_toggle_approve' r.id %}" style="display: inline-block;">
+                      {% csrf_token %}
+                      {% if r.active %}
+                      <button type="submit" class="action-btn" title="Hide / Unpublish Review" style="color: #64748b; background: rgba(100, 116, 139, 0.1);">
+                        <i class="fa-solid fa-eye-slash"></i>
+                      </button>
+                      {% else %}
+                      <button type="submit" class="action-btn" title="Approve & Publish to Testimonials" style="color: #059669; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3);">
+                        <i class="fa-solid fa-check"></i>
+                      </button>
+                      {% endif %}
+                    </form>
+
                     <button type="button" class="action-btn edit" title="Edit Review"
                       data-id="{{ r.id }}"
                       data-name="{{ r.name|escape }}"
@@ -4770,6 +4839,78 @@
 </div>
 
 <!-- =============================================================
+     MODAL DIALOG: Customer Feedback QR Code & Links
+     ============================================================= -->
+<div id="modal-feedback-qr" class="shop-modal" style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.65); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px); padding: 12px; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;">
+  <div class="feedback-qr-modal-card" style="background: #ffffff; border-radius: 20px; width: 100%; max-width: 500px; max-height: 88vh; max-height: 88dvh; display: flex; flex-direction: column; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); overflow: hidden; padding: 0 !important;">
+    
+    <!-- Fixed Sticky Modal Header -->
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; background: #ffffff;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(16,185,129,0.1); color: #059669; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;">
+          <i class="fa-solid fa-qrcode"></i>
+        </div>
+        <div>
+          <h3 style="font-size: 16px; font-weight: 800; color: #0f172a; margin: 0; line-height: 1.2;">Feedback & Review QR Code</h3>
+          <p style="font-size: 11px; color: #64748b; margin: 2px 0 0;">Table stands and dining receipts</p>
+        </div>
+      </div>
+      <button type="button" onclick="closeFeedbackQrModal()" style="background: #f1f5f9; border: none; width: 32px; height: 32px; border-radius: 8px; font-size: 16px; color: #64748b; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- Scrollable Modal Body -->
+    <div style="padding: 16px 20px; overflow-y: auto; flex: 1; min-height: 0; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;">
+      <div class="shop-form-group" style="margin-bottom: 12px;">
+        <label style="font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 4px; display: block;">Target Outlet / Branch</label>
+        <select id="qr_branch_select" class="shop-input" onchange="updateQrPreview()" style="font-size: 13px; height: 38px;">
+          <option value="" data-slug="">All Outlets / Global</option>
+          {% for b in branches %}
+          <option value="{{ b.id }}" data-slug="{{ b.slug }}">{{ b.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="shop-form-group" style="margin-bottom: 14px;">
+        <label style="font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 4px; display: block;">Table Number (Optional for Table Stands)</label>
+        <input type="text" id="qr_table_input" class="shop-input" placeholder="e.g. T-1, Table 4" oninput="updateQrPreview()" style="font-size: 13px; height: 38px;" />
+        <div class="hint" style="font-size: 11px; margin-top: 3px; color: #64748b;">If filled, scanning will automatically link feedback to this table.</div>
+      </div>
+
+      <!-- Live QR Preview Card -->
+      <div style="background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 14px; padding: 14px 10px; text-align: center; margin: 0 0 6px;">
+        <div style="display: inline-block; background: #ffffff; padding: 8px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+          <img id="qr_image_preview" src="{% url 'super_admin:restaurant_feedback_qr' restaurant.id %}" alt="Feedback QR Code" style="width: 140px; height: 140px; max-width: 100%; display: block; object-fit: contain;" />
+        </div>
+        <div style="margin-top: 8px;">
+          <span id="qr_badge_target" class="badge ok" style="font-size: 11px; padding: 3px 8px;">All Outlets</span>
+        </div>
+        <div style="margin-top: 8px; display: flex; gap: 6px; justify-content: center; align-items: center; width: 100%;">
+          <input type="text" id="qr_target_url" readonly class="shop-input" style="font-size: 11px; background: #ffffff; color: #475569; flex: 1; min-width: 0; height: 34px; text-align: center; padding: 0 8px;" value="" />
+          <button type="button" class="btn secondary small" onclick="copyQrUrl()" title="Copy Link" style="height: 34px; padding: 0 12px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 12px;">
+            <i class="fa-regular fa-copy"></i>
+          </button>
+        </div>
+        <div class="hint" style="font-size: 10.5px; margin-top: 6px; color: #64748b; display: flex; align-items: center; justify-content: center; gap: 4px;">
+          <i class="fa-solid fa-sliders" style="font-size: 10px;"></i>
+          <span>Frontend URL dynamically configured via <code>FRONTEND_URL</code> in <code>.env</code></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fixed Sticky Modal Footer -->
+    <div class="feedback-qr-footer" style="display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px; border-top: 1px solid var(--border); flex-shrink: 0; background: #fafbfc; border-radius: 0 0 20px 20px;">
+      <button type="button" class="btn secondary" onclick="closeFeedbackQrModal()" style="height: 38px; padding: 0 16px; font-weight: 600; font-size: 13px;">Close</button>
+      <a id="qr_download_btn" href="{% url 'super_admin:restaurant_feedback_qr' restaurant.id %}?download=1" class="btn" style="text-decoration: none; height: 38px; padding: 0 18px; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+        <i class="fa-solid fa-download"></i> Download QR Image (PNG)
+      </a>
+    </div>
+
+  </div>
+</div>
+
+<!-- =============================================================
      MODAL DIALOG: Add / Edit FAQ Item (Page-wise)
      ============================================================= -->
 <div id="modal-faq-item" class="shop-modal" style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.6); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px); padding: 20px;">
@@ -4907,11 +5048,17 @@
     document.getElementById('edit_event_order').value = d.order || '0';
     document.getElementById('edit_event_active').checked = (d.active === 'true');
     const modal = document.getElementById('modal-edit-event');
-    if (modal) modal.style.display = 'flex';
+    if (modal) {
+      modal.style.display = 'flex';
+      document.body.classList.add('modal-open');
+    }
   }
   function closeEditEventModal() {
     const modal = document.getElementById('modal-edit-event');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+      modal.style.display = 'none';
+      checkCloseAllModals();
+    }
   }
 
   // Edit Team Modal
@@ -4925,11 +5072,17 @@
     document.getElementById('edit_team_order').value = d.order || '0';
     document.getElementById('edit_team_active').checked = (d.active === 'true');
     const modal = document.getElementById('modal-edit-team');
-    if (modal) modal.style.display = 'flex';
+    if (modal) {
+      modal.style.display = 'flex';
+      document.body.classList.add('modal-open');
+    }
   }
   function closeEditTeamModal() {
     const modal = document.getElementById('modal-edit-team');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+      modal.style.display = 'none';
+      checkCloseAllModals();
+    }
   }
 
   // Edit Review Modal
@@ -4944,17 +5097,98 @@
     document.getElementById('edit_review_order').value = d.order || '0';
     document.getElementById('edit_review_active').checked = (d.active === 'true');
     const modal = document.getElementById('modal-edit-review');
-    if (modal) modal.style.display = 'flex';
+    if (modal) {
+      modal.style.display = 'flex';
+      document.body.classList.add('modal-open');
+    }
   }
   function closeEditReviewModal() {
     const modal = document.getElementById('modal-edit-review');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+      modal.style.display = 'none';
+      checkCloseAllModals();
+    }
+  }
+
+  // Feedback QR Modal functions
+  function openFeedbackQrModal() {
+    const modal = document.getElementById('modal-feedback-qr');
+    if (modal) {
+      modal.style.display = 'flex';
+      document.body.classList.add('modal-open');
+      updateQrPreview();
+    }
+  }
+
+  function closeFeedbackQrModal() {
+    const modal = document.getElementById('modal-feedback-qr');
+    if (modal) {
+      modal.style.display = 'none';
+      checkCloseAllModals();
+    }
+  }
+
+  function checkCloseAllModals() {
+    const anyOpen = Array.from(document.querySelectorAll('.shop-modal')).some(m => m.style.display === 'flex');
+    if (!anyOpen) {
+      document.body.classList.remove('modal-open');
+    }
+  }
+
+  function updateQrPreview() {
+    const branchSelect = document.getElementById('qr_branch_select');
+    const tableInput = document.getElementById('qr_table_input');
+    const qrImg = document.getElementById('qr_image_preview');
+    const badge = document.getElementById('qr_badge_target');
+    const urlInput = document.getElementById('qr_target_url');
+    const downloadBtn = document.getElementById('qr_download_btn');
+
+    const branchId = branchSelect ? branchSelect.value : '';
+    const selectedOption = branchSelect ? branchSelect.options[branchSelect.selectedIndex] : null;
+    const branchSlug = selectedOption ? (selectedOption.getAttribute('data-slug') || '') : '';
+    const branchText = selectedOption ? selectedOption.text : 'All Outlets';
+    const tableNo = tableInput ? tableInput.value.trim() : '';
+
+    // Frontend URL calculation dynamically from environment variable (.env)
+    const envFrontendBase = "{{ frontend_base_url|default:''|escapejs }}";
+    const frontendBase = envFrontendBase ? envFrontendBase.replace(/\/+$/, '') : `${window.location.protocol}//${window.location.hostname}:3000`;
+    let targetUrl = `${frontendBase}/feedback?restaurant={{ restaurant.slug }}`;
+    if (branchSlug) {
+      targetUrl += `&branch=${branchSlug}`;
+    }
+    if (tableNo) {
+      targetUrl += `&table=${encodeURIComponent(tableNo)}`;
+    }
+    if (urlInput) urlInput.value = targetUrl;
+    if (badge) badge.textContent = branchId ? `${branchText}${tableNo ? ' (Table ' + tableNo + ')' : ''}` : `All Outlets${tableNo ? ' (Table ' + tableNo + ')' : ''}`;
+
+    // Backend QR image URL
+    let qrUrl = "{% url 'super_admin:restaurant_feedback_qr' restaurant.id %}?";
+    if (branchId) qrUrl += `branch_id=${branchId}&`;
+    if (tableNo) qrUrl += `table_no=${encodeURIComponent(tableNo)}&`;
+
+    if (qrImg) qrImg.src = qrUrl;
+    if (downloadBtn) downloadBtn.href = qrUrl + 'download=1';
+  }
+
+  function copyQrUrl() {
+    const urlInput = document.getElementById('qr_target_url');
+    if (urlInput) {
+      urlInput.select();
+      navigator.clipboard.writeText(urlInput.value).then(() => {
+        alert('Feedback link copied to clipboard!');
+      }).catch(() => {
+        document.execCommand('copy');
+        alert('Feedback link copied to clipboard!');
+      });
+    }
   }
 
   // Close modals when clicking outside content
   window.addEventListener('click', function(e) {
     if (e.target && e.target.classList.contains('shop-modal')) {
       e.target.style.display = 'none';
+      checkCloseAllModals();
     }
   });
 

@@ -1606,11 +1606,15 @@ class Review(models.Model):
     stars = models.PositiveSmallIntegerField(default=5, validators=[MinValueValidator(1), MaxValueValidator(5)])
     description = models.TextField()
     display_order = models.PositiveIntegerField(default=0)
+    email = models.EmailField(blank=True, null=True)
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    table_no = models.CharField(max_length=50, blank=True, null=True)
+    is_customer_submitted = models.BooleanField(default=False)
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['display_order', 'id']
+        ordering = ['display_order', '-created_at', 'id']
         verbose_name = 'Review'
         verbose_name_plural = 'Reviews'
 
