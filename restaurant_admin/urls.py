@@ -72,6 +72,7 @@ urlpatterns = [
     path('kitchen/', views.kitchen_kds_view, name='kitchen_kds'),
     path('kitchen/api/orders/', views.kitchen_kds_orders_api, name='kitchen_kds_orders_api'),
     path('kitchen/api/orders/<int:pk>/action/', views.kitchen_kds_action_api, name='kitchen_kds_action_api'),
+    path('kitchen/api/orders/<int:order_pk>/items/<int:item_pk>/toggle/', views.kitchen_kds_item_toggle_api, name='kitchen_kds_item_toggle_api'),
     path('orders/draft/', views.pos_draft_order_api, name='pos_draft_order_api'),
     path('orders/draft/sync-items/', views.pos_sync_draft_items_api, name='pos_sync_draft_items_api'),
     path('orders/draft/finalize/', views.pos_finalize_order_api, name='pos_finalize_order_api'),

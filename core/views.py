@@ -11,7 +11,7 @@ from super_admin.models import Restaurant, RestaurantBranch
 from django.db.models import Prefetch
 from restaurant_project import constants
 
-from core.models import Category, SubCategory, MenuItem, Order, RestaurantSettings, RestaurantLanding, BlogPost, BlogComment
+from core.models import Category, SubCategory, MenuItem, Order, RestaurantSettings, RestaurantLanding, BlogPost, BlogComment, Review
 
 from core.serializers import (
     RestaurantBranchSerializer,
@@ -23,7 +23,9 @@ from core.serializers import (
     RestaurantLandingSerializer,
     RestaurantSettingsSerializer, ZoneSerializer, TableSerializer, CustomChargeSerializer, ZoneSerializer, TableSerializer, CustomChargeSerializer,
     BlogPostSerializer,
-    BlogCommentSerializer
+    BlogCommentSerializer,
+    ReviewSerializer,
+    CustomerReviewSubmitSerializer
 )
 
 
@@ -953,6 +955,7 @@ from core.throttling import (
     NewsletterAnonRateThrottle, NewsletterDayRateThrottle,
     JobApplicationAnonRateThrottle, JobApplicationDayRateThrottle,
     BlogCommentAnonRateThrottle, BlogCommentDayRateThrottle,
+    ReviewAnonRateThrottle, ReviewDayRateThrottle,
 )
 
 
@@ -1146,4 +1149,105 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
             'message': f'Thank you {instance.full_name}! Your application for {instance.job.title} has been submitted successfully.',
             'application_id': instance.id
         }, status=status.HTTP_201_CREATED)
+
+
+class ReviewViewSet(viewsets.ModelViewSet):
+    queryset = Review.objects.all().select_related('landing__restaurant', 'branch')
+    serializer_class = ReviewSerializer
+
+    def get_throttles(self):
+        if self.action in ['create', 'submit']:
+            return [ReviewAnonRateThrottle(), ReviewDayRateThrottle()]
+        return super().get_throttles()
+
+    def get_permissions(self):
+        if self.action in ['create', 'submit']:
+            return [AllowAny()]
+        return [IsAdminUser()]
+
+    def get_serializer_class(self):
+        if self.action in ['create', 'submit']:
+            return CustomerReviewSubmitSerializer
+        return ReviewSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        rslug = self.request.query_params.get('restaurant_slug')
+        rid = self.request.query_params.get('restaurant')
+        branch_id = self.request.query_params.get('branch_id')
+        branch_slug = self.request.query_params.get('branch_slug')
+        is_active = self.request.query_params.get('active')
+
+        if rslug:
+            qs = qs.filter(landing__restaurant__slug=rslug)
+        elif rid:
+            qs = qs.filter(landing__restaurant_id=rid)
+
+        if branch_id:
+            qs = qs.filter(branch_id=branch_id)
+        elif branch_slug:
+            qs = qs.filter(branch__slug=branch_slug)
+
+        if is_active is not None:
+            if is_active.lower() in ('true', '1'):
+                qs = qs.filter(active=True)
+            elif is_active.lower() in ('false', '0'):
+                qs = qs.filter(active=False)
+
+        return qs.order_by('display_order', '-created_at', 'id')
+
+    def create(self, request, *args, **kwargs):
+        return self.submit(request)
+
+    @action(detail=False, methods=['post'], url_path='submit', permission_classes=[AllowAny])
+    def submit(self, request):
+        serializer = CustomerReviewSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        # Resolve restaurant
+        restaurant = None
+        if data.get('restaurant_slug'):
+            restaurant = Restaurant.objects.filter(slug=data['restaurant_slug']).first()
+        elif data.get('restaurant_id'):
+            restaurant = Restaurant.objects.filter(id=data['restaurant_id']).first()
+
+        # Resolve branch
+        branch = None
+        if data.get('branch_id'):
+            branch = RestaurantBranch.objects.filter(id=data['branch_id']).first()
+            if branch and not restaurant:
+                restaurant = branch.restaurant
+        elif data.get('branch_slug'):
+            if restaurant:
+                branch = restaurant.branches.filter(slug=data['branch_slug']).first()
+            else:
+                branch = RestaurantBranch.objects.filter(slug=data['branch_slug']).first()
+                if branch:
+                    restaurant = branch.restaurant
+
+        if not restaurant:
+            return Response({'error': 'Valid restaurant or branch could not be resolved.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
+
+        review = Review.objects.create(
+            landing=landing,
+            branch=branch,
+            name=data['name'].strip(),
+            stars=data.get('stars', 5),
+            description=data['description'].strip(),
+            email=data.get('email'),
+            phone=data.get('phone'),
+            table_no=data.get('table_no'),
+            is_customer_submitted=True,
+            active=False  # Must be approved by admin before displaying publicly
+        )
+
+        return Response({
+            'status': 'success',
+            'message': f'Thank you {review.name}! Your review has been received and will be published shortly.',
+            'review_id': review.id
+        }, status=status.HTTP_201_CREATED)
+
 

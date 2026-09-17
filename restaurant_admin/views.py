@@ -1113,6 +1113,10 @@ def order_create_manual(request, restaurant_slug=None):
                 )
                 created_items.append(created_item)
 
+        if created_items and not order.prep_minutes:
+            order.prep_minutes = order.calculate_estimated_prep_minutes()
+            order.save(update_fields=['prep_minutes'])
+
         if order_type in [Order.OrderType.TAKEAWAY, Order.OrderType.DELIVERY, 'takeaway', 'delivery']:
             order.table = None
             order.table_number = None
@@ -3781,13 +3785,22 @@ def order_notifications_poll(request, restaurant_slug=None):
     if active_branch:
         orders_qs = orders_qs.filter(branch=active_branch)
 
-    latest_order = orders_qs.select_related('table').order_by('-id').first()
-    latest_id = latest_order.id if latest_order else 0
-    total_orders = orders_qs.count()
+    # 1. Fast indexed-only lookup for latest order id (B-Tree PK index, no heavy joins)
+    latest_id = orders_qs.values_list('id', flat=True).order_by('-id').first() or 0
 
     since_id_raw = request.GET.get('since_id')
     since_id = int(since_id_raw) if (since_id_raw and str(since_id_raw).isdigit()) else 0
 
+    # 2. ULTRA-FAST SHORT-CIRCUIT: If client is up to date, return immediately!
+    # Skips COUNT(*), skips 5 recent orders query, skips settings query (takes < 2ms).
+    if since_id > 0 and latest_id <= since_id:
+        return JsonResponse({
+            'success': True,
+            'has_new': False,
+            'latest_id': latest_id,
+        })
+
+    # 3. If since_id == 0 (initial dashboard load) or latest_id > since_id (new order arrived!):
     new_orders = []
     if since_id > 0 and latest_id > since_id:
         new_items = orders_qs.filter(id__gt=since_id).select_related('table').order_by('-id')[:10]
@@ -3807,7 +3820,7 @@ def order_notifications_poll(request, restaurant_slug=None):
                 'detail_url': reverse('restaurant_admin:order_detail', kwargs={'restaurant_slug': restaurant.slug, 'pk': o.id}),
             })
 
-    # Recent 5 orders for dropdown preview
+    # Recent 5 orders for dropdown preview (only fetched on initial load or new order arrival)
     recent_items = orders_qs.select_related('table').order_by('-id')[:5]
     recent_orders = []
     for o in recent_items:
@@ -3839,7 +3852,7 @@ def order_notifications_poll(request, restaurant_slug=None):
 
     return JsonResponse({
         'success': True,
-        'total_orders': total_orders,
+        'has_new': bool(new_orders),
         'latest_id': latest_id,
         'new_orders': new_orders,
         'recent_orders': recent_orders,
@@ -7785,6 +7798,7 @@ def kitchen_kds_orders_api(request, restaurant_slug=None):
         for it in items_qs:
             mi = it.menu_item
             is_bar_item = mi.tax_type in [MenuItem.TaxType.VAT_BEER, MenuItem.TaxType.VAT_IMFL, MenuItem.TaxType.VAT_WINE, MenuItem.TaxType.VAT_LIQUOR] if mi else False
+            is_item_prepared = bool(it.is_prepared)
             item_data = {
                 'id': it.id,
                 'name': mi.name if mi else 'Item',
@@ -7794,6 +7808,7 @@ def kitchen_kds_orders_api(request, restaurant_slug=None):
                 'is_bar': is_bar_item,
                 'notes': it.notes or '',
                 'kot_batch': it.kot_batch,
+                'is_prepared': is_item_prepared,
             }
             if is_bar_item:
                 bar_items.append(item_data)
@@ -7815,8 +7830,8 @@ def kitchen_kds_orders_api(request, restaurant_slug=None):
         else:
             display_items = food_items + bar_items
 
-        # Prep timing and status logic
-        target_minutes = ord_obj.prep_minutes or 20
+        # Prep timing and status logic: dynamic based on items in order or custom set
+        target_minutes = ord_obj.get_target_prep_minutes()
         target_seconds = target_minutes * 60
 
         # Calculate current elapsed seconds
@@ -7977,13 +7992,30 @@ def kitchen_kds_action_api(request, pk, restaurant_slug=None):
         order.paused_at = None
         order.prep_start = now
         if not order.prep_minutes:
-            order.prep_minutes = 20
+            order.prep_minutes = order.get_target_prep_minutes()
         order.ready_at = now + timedelta(minutes=order.prep_minutes)
         if order.status in [Order.OrderStatus.PENDING, Order.OrderStatus.DRAFT, Order.OrderStatus.READY]:
             order.status = Order.OrderStatus.PREPARING
         order.save(update_fields=['is_prep_paused', 'paused_at', 'prep_start', 'prep_minutes', 'ready_at', 'status'])
         first_item_name = order.items.first().menu_item.name if order.items.exists() else "Order"
         msg = f"{first_item_name} Cooking has begun in the kitchen."
+
+    elif action == 'adjust_time':
+        # Quick set target preparation duration directly from KDS card
+        try:
+            minutes = int(body_data.get('minutes', 15) if request.body else request.POST.get('minutes', 15))
+            if minutes < 1 or minutes > 240:
+                return JsonResponse({'success': False, 'error': 'Minutes must be between 1 and 240'}, status=400)
+        except (TypeError, ValueError):
+            return JsonResponse({'success': False, 'error': 'Invalid minutes provided'}, status=400)
+
+        order.prep_minutes = minutes
+        if order.prep_start and not order.is_prep_paused:
+            order.ready_at = order.prep_start + timedelta(minutes=minutes)
+        elif not order.prep_start:
+            order.ready_at = now + timedelta(minutes=minutes)
+        order.save(update_fields=['prep_minutes', 'ready_at'])
+        msg = f"Order #{order.branch_order_number or order.id} prep time set to {minutes} mins"
 
     elif action == 'pause':
         # Accumulate elapsed time up to now and pause
@@ -8004,11 +8036,13 @@ def kitchen_kds_action_api(request, pk, restaurant_slug=None):
         order.status = Order.OrderStatus.READY
         order.ready_at = now
         order.save(update_fields=['is_prep_paused', 'status', 'ready_at', 'prep_elapsed_seconds'])
+        order.items.update(is_prepared=True)
         msg = f"Order #{order.branch_order_number or order.id} has been completed & ready in kitchen to serve"
 
     elif action == 'serve':
         order.status = Order.OrderStatus.SERVED
         order.save(update_fields=['status'])
+        order.items.update(is_prepared=True)
         msg = f"Order #{order.branch_order_number or order.id} marked as served"
 
     else:
@@ -8033,4 +8067,39 @@ def kitchen_kds_action_api(request, pk, restaurant_slug=None):
         'order_id': order.id,
         'status': order.status,
         'message': msg,
+    })
+
+
+@login_required
+@user_passes_test(is_admin)
+def kitchen_kds_item_toggle_api(request, order_pk, item_pk, restaurant_slug=None):
+    """
+    Toggle an individual OrderItem's is_prepared status in KDS.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST required'}, status=405)
+
+    try:
+        restaurant = request.user.restaurant_profile.restaurant
+    except Exception:
+        restaurant = getattr(request.user, 'restaurant', None)
+
+    if not restaurant:
+        return JsonResponse({'success': False, 'error': 'No restaurant found'}, status=403)
+
+    order = get_object_or_404(Order, pk=order_pk, restaurant=restaurant)
+    item = get_object_or_404(OrderItem, pk=item_pk, order=order)
+
+    # Toggle status
+    item.is_prepared = not item.is_prepared
+    item.save(update_fields=['is_prepared'])
+
+    all_prepared = not order.items.filter(is_prepared=False).exists()
+
+    # Optional: if all items are prepared, can automatically mark order ready if desired or leave for chef
+    return JsonResponse({
+        'success': True,
+        'item_id': item.id,
+        'is_prepared': item.is_prepared,
+        'all_prepared': all_prepared,
     })

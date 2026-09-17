@@ -1572,7 +1572,12 @@
                     }
                 }
 
+                let isPolling = false;
+
                 function pollOrders() {
+                    if (isPolling) return;
+                    isPolling = true;
+
                     const url = pollUrl + '?since_id=' + lastOrderId;
                     fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                         .then(function (res) { return res.ok ? res.json() : null; })
@@ -1592,8 +1597,16 @@
                                 return;
                             }
 
+                            // Ultra-lightweight short-circuit: server confirmed no new orders
+                            if (data.has_new === false) {
+                                if (data.latest_id && data.latest_id > lastOrderId) {
+                                    lastOrderId = data.latest_id;
+                                }
+                                return;
+                            }
+
                             if (data.new_orders && data.new_orders.length > 0) {
-                                lastOrderId = data.latest_id;
+                                lastOrderId = data.latest_id || lastOrderId;
                                 playAlertSound();
                                 ringBellAnimation();
                                 updateBadgeCount(data.new_orders.length);
@@ -1625,21 +1638,51 @@
                                 }
                             }
                         })
-                        .catch(function () { });
+                        .catch(function () { })
+                        .finally(function () {
+                            isPolling = false;
+                        });
                 }
 
-                // Poll every 6 seconds
-                let pollInterval = setInterval(pollOrders, 15000);
+                // Background Web Worker timer:
+                // Prevents Chrome/Edge from throttling the timer to minutes when tab is minimized
+                let workerTimer = null;
+                try {
+                    const workerBlob = new Blob([
+                        'var timer = null;' +
+                        'self.onmessage = function(e) {' +
+                        '    if (e.data === "start") {' +
+                        '        if (timer) clearInterval(timer);' +
+                        '        timer = setInterval(function() { self.postMessage("tick"); }, 12000);' +
+                        '    } else if (e.data === "stop") {' +
+                        '        if (timer) clearInterval(timer);' +
+                        '        timer = null;' +
+                        '    }' +
+                        '};'
+                    ], { type: 'application/javascript' });
+                    workerTimer = new Worker(URL.createObjectURL(workerBlob));
+                    workerTimer.onmessage = function (e) {
+                        if (e.data === 'tick') {
+                            pollOrders();
+                        }
+                    };
+                    workerTimer.postMessage('start');
+                } catch (e) {
+                    // Fallback to standard setInterval if Web Worker is restricted
+                    setInterval(pollOrders, 12000);
+                }
+
+                // Initial poll on page load
                 pollOrders();
 
+                // Instant check when user switches back to tab or un-minimizes window
                 document.addEventListener('visibilitychange', function () {
-                    clearInterval(pollInterval);
-                    if (document.hidden) {
-                        pollInterval = setInterval(pollOrders, 15000);
-                    } else {
+                    if (!document.hidden) {
                         pollOrders();
-                        pollInterval = setInterval(pollOrders, 15000);
                     }
+                });
+                window.addEventListener('focus', function () {
+                    pollOrders();
                 });
             })();
         </script>
