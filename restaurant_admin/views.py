@@ -3781,13 +3781,22 @@ def order_notifications_poll(request, restaurant_slug=None):
     if active_branch:
         orders_qs = orders_qs.filter(branch=active_branch)
 
-    latest_order = orders_qs.select_related('table').order_by('-id').first()
-    latest_id = latest_order.id if latest_order else 0
-    total_orders = orders_qs.count()
+    # 1. Fast indexed-only lookup for latest order id (B-Tree PK index, no heavy joins)
+    latest_id = orders_qs.values_list('id', flat=True).order_by('-id').first() or 0
 
     since_id_raw = request.GET.get('since_id')
     since_id = int(since_id_raw) if (since_id_raw and str(since_id_raw).isdigit()) else 0
 
+    # 2. ULTRA-FAST SHORT-CIRCUIT: If client is up to date, return immediately!
+    # Skips COUNT(*), skips 5 recent orders query, skips settings query (takes < 2ms).
+    if since_id > 0 and latest_id <= since_id:
+        return JsonResponse({
+            'success': True,
+            'has_new': False,
+            'latest_id': latest_id,
+        })
+
+    # 3. If since_id == 0 (initial dashboard load) or latest_id > since_id (new order arrived!):
     new_orders = []
     if since_id > 0 and latest_id > since_id:
         new_items = orders_qs.filter(id__gt=since_id).select_related('table').order_by('-id')[:10]
@@ -3807,7 +3816,7 @@ def order_notifications_poll(request, restaurant_slug=None):
                 'detail_url': reverse('restaurant_admin:order_detail', kwargs={'restaurant_slug': restaurant.slug, 'pk': o.id}),
             })
 
-    # Recent 5 orders for dropdown preview
+    # Recent 5 orders for dropdown preview (only fetched on initial load or new order arrival)
     recent_items = orders_qs.select_related('table').order_by('-id')[:5]
     recent_orders = []
     for o in recent_items:
@@ -3839,7 +3848,7 @@ def order_notifications_poll(request, restaurant_slug=None):
 
     return JsonResponse({
         'success': True,
-        'total_orders': total_orders,
+        'has_new': bool(new_orders),
         'latest_id': latest_id,
         'new_orders': new_orders,
         'recent_orders': recent_orders,
