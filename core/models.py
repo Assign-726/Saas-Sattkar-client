@@ -318,6 +318,7 @@ class MenuItem(models.Model):
     # FSSAI Nutritional & Allergen Compliance
     calories = models.CharField(max_length=50, blank=True, default='', help_text="Calories (Kcal) for FSSAI compliance")
     portion_serves = models.CharField(max_length=50, blank=True, default='1 Person', help_text="Portion serving size")
+    preparation_time = models.PositiveIntegerField(default=15, help_text="Estimated preparation time in minutes")
     allergens = models.JSONField(default=list, blank=True, help_text="Declared FSSAI 8 major allergens list")
 
     # Publishing & Variants
@@ -460,6 +461,34 @@ class Order(models.Model):
     def order_number(self):
         num = self.branch_order_number if self.branch_order_number is not None else self.id
         return f"ORD-{num:04d}" if num else ""
+
+    def calculate_estimated_prep_minutes(self):
+        """
+        Calculate estimated preparation time in minutes based on items in this order.
+        Takes the maximum preparation time of items in the order.
+        """
+        prep_times = [
+            getattr(it.menu_item, 'preparation_time', 15) or 15
+            for it in self.items.select_related('menu_item').all()
+            if it.menu_item
+        ]
+        if prep_times:
+            return max(prep_times)
+        return 15
+
+    def get_target_prep_minutes(self):
+        """
+        Get or dynamically initialize target preparation minutes for this order.
+        """
+        if self.prep_minutes:
+            return self.prep_minutes
+        estimated = self.calculate_estimated_prep_minutes()
+        self.prep_minutes = estimated
+        try:
+            Order.objects.filter(pk=self.pk).update(prep_minutes=estimated)
+        except Exception:
+            pass
+        return estimated
 
     def check_item_types(self):
         """
@@ -1036,6 +1065,7 @@ class OrderItem(models.Model):
     discount_reason = models.CharField(max_length=100, blank=True, null=True)
     kot_batch = models.PositiveIntegerField(default=1, help_text="Incremental kitchen print batch number (1, 2, 3...)")
     is_kot_printed = models.BooleanField(default=False, help_text="Whether this item has been sent/printed to the kitchen")
+    is_prepared = models.BooleanField(default=False, help_text="Whether this item has been marked prepared in KDS")
     created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
 
     class Meta:

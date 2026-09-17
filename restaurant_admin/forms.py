@@ -21,7 +21,7 @@ class MenuItemForm(forms.ModelForm):
         fields = [
             'name', 'short_code', 'sku', 'description', 'price', 'tax_type', 'is_tax_inclusive',
             'category', 'subcategory', 'image', 'availability',
-            'food_type', 'is_jain', 'is_vegan', 'calories', 'portion_serves',
+            'food_type', 'is_jain', 'is_vegan', 'calories', 'portion_serves', 'preparation_time',
             'allergens', 'publishing_channels', 'variants_json',
             'markup_price', 'packaging_fee'
         ]
@@ -40,6 +40,7 @@ class MenuItemForm(forms.ModelForm):
             'is_vegan': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'calories': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. 450'}),
             'portion_serves': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '1 Person'}),
+            'preparation_time': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'max': '180', 'placeholder': 'e.g. 15 (minutes)'}),
             'markup_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0'}),
             'packaging_fee': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0'}),
         }

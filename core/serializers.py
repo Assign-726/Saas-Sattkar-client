@@ -435,6 +435,11 @@ class OrderSerializer(serializers.ModelSerializer):
         else:
             order.update_total()
 
+        # Dynamically calculate estimated preparation time based on ordered items
+        if not order.prep_minutes or is_reorder:
+            order.prep_minutes = order.calculate_estimated_prep_minutes()
+            order.save(update_fields=['prep_minutes'])
+
         try:
             from core.sse import publish
             if order.restaurant and order.restaurant.slug:
