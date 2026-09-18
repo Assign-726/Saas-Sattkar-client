@@ -149,6 +149,7 @@ class OrderSerializer(serializers.ModelSerializer):
     waive_service_charge = serializers.BooleanField(required=False, default=False)
     customer_latitude = serializers.FloatField(write_only=True, required=False, allow_null=True)
     customer_longitude = serializers.FloatField(write_only=True, required=False, allow_null=True)
+    parent_order_token = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
 
     class Meta:
         model = Order
@@ -157,7 +158,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'status', 'status_display', 'subtotal', 'tax_amount', 'round_off_amount', 'total_amount', 'discount_amount', 'bill_breakdown', 'notes', 'items',
             'coupon_code', 'applied_coupon_code', 'payment_method', 'payment_method_display', 'payment_status', 'payment_status_display',
             'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature', 'restaurant_slug', 'branch_slug', 'branch_id', 'branch_name', 'branch_slug_display', 'order_restaurant_slug', 'security_token',
-            'prep_minutes', 'prep_start', 'ready_at', 'remaining_seconds', 'progress_pct', 'waive_service_charge', 'customer_latitude', 'customer_longitude'
+            'prep_minutes', 'prep_start', 'ready_at', 'remaining_seconds', 'progress_pct', 'waive_service_charge', 'customer_latitude', 'customer_longitude', 'parent_order_token'
         ]
         read_only_fields = ['order_time', 'subtotal', 'tax_amount', 'round_off_amount', 'total_amount', 'discount_amount', 'security_token', 'order_number', 'branch_order_number', 'branch_name', 'branch_slug_display', 'order_restaurant_slug']
 
@@ -350,14 +351,34 @@ class OrderSerializer(serializers.ModelSerializer):
             validated_data['order_type'] = Order.OrderType.TAKEAWAY
 
         # Active Order / Master Order Lookup for Table Sessions
+        parent_order_token = (
+            validated_data.pop('parent_order_token', None) or
+            self.initial_data.get('parent_order_token') or
+            self.initial_data.get('existing_order_token')
+        )
         active_order = None
-        if table_obj and not is_staff_user:
+        if parent_order_token:
+            active_order = Order.objects.filter(
+                security_token=parent_order_token,
+                restaurant=restaurant
+            ).exclude(
+                status__in=[Order.OrderStatus.COMPLETED, Order.OrderStatus.CANCELLED]
+            ).first()
+
+        if not active_order and table_obj and not is_staff_user:
+            now = timezone.now()
             active_order = Order.objects.filter(
                 table=table_obj,
                 restaurant=restaurant,
-                status__in=[Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING, Order.OrderStatus.READY]
+                status__in=[
+                    Order.OrderStatus.PENDING,
+                    Order.OrderStatus.PREPARING,
+                    Order.OrderStatus.READY,
+                    Order.OrderStatus.SERVED,
+                ],
+                order_time__gte=now - timezone.timedelta(hours=14)
             ).exclude(
-                payment_status__in=['paid', 'refunded', 'F']
+                status__in=[Order.OrderStatus.COMPLETED, Order.OrderStatus.CANCELLED]
             ).order_by('-order_time').first()
 
         is_reorder = False
@@ -379,7 +400,8 @@ class OrderSerializer(serializers.ModelSerializer):
                     unit_price=menu_item.price,
                     notes=item_data.get('notes', ''),
                     kot_batch=new_batch_num,
-                    is_kot_printed=False
+                    is_kot_printed=False,
+                    is_prepared=False
                 )
 
             # Append customer notes if provided
@@ -389,12 +411,15 @@ class OrderSerializer(serializers.ModelSerializer):
                     active_order.notes = f"{active_order.notes}\n[Round {new_batch_num}]: {new_notes}"
                 else:
                     active_order.notes = f"[Round {new_batch_num}]: {new_notes}"
-                active_order.save(update_fields=['notes'])
 
-            # If order was marked READY, reset to PENDING so kitchen prepares the add-on
-            if active_order.status == Order.OrderStatus.READY:
+            # Reset status to PENDING so kitchen prepares the add-on ticket
+            if active_order.status in [Order.OrderStatus.READY, Order.OrderStatus.SERVED]:
                 active_order.status = Order.OrderStatus.PENDING
-                active_order.save(update_fields=['status'])
+
+            active_order.prep_start = None
+            active_order.ready_at = None
+            active_order.prep_minutes = active_order.calculate_estimated_prep_minutes()
+            active_order.save(update_fields=['status', 'prep_start', 'ready_at', 'prep_minutes', 'notes'])
 
             order = active_order
         else:
@@ -410,8 +435,14 @@ class OrderSerializer(serializers.ModelSerializer):
                     unit_price=menu_item.price,
                     notes=item_data.get('notes', ''),
                     kot_batch=1,
-                    is_kot_printed=False
+                    is_kot_printed=False,
+                    is_prepared=False
                 )
+
+            order.prep_minutes = order.calculate_estimated_prep_minutes()
+            order.prep_start = None
+            order.ready_at = None
+            order.save(update_fields=['prep_minutes', 'prep_start', 'ready_at'])
 
         if coupon_code:
             coupon_qs = Coupon.objects.filter(code__iexact=coupon_code)
@@ -435,11 +466,6 @@ class OrderSerializer(serializers.ModelSerializer):
         else:
             order.update_total()
 
-        # Dynamically calculate estimated preparation time based on ordered items
-        if not order.prep_minutes or is_reorder:
-            order.prep_minutes = order.calculate_estimated_prep_minutes()
-            order.save(update_fields=['prep_minutes'])
-
         try:
             from core.sse import publish
             if order.restaurant and order.restaurant.slug:
@@ -460,13 +486,11 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_remaining_seconds(self, obj):
         try:
-            if obj.ready_at:
+            if obj.status in [Order.OrderStatus.READY, Order.OrderStatus.SERVED, Order.OrderStatus.COMPLETED]:
+                return 0
+            if obj.prep_start and obj.ready_at:
                 now = timezone.now()
                 delta = (obj.ready_at - now).total_seconds()
-                return int(delta) if delta > 0 else 0
-            if obj.prep_minutes and obj.order_time:
-                end = obj.order_time + timezone.timedelta(minutes=obj.prep_minutes)
-                delta = (end - timezone.now()).total_seconds()
                 return int(delta) if delta > 0 else 0
         except Exception:
             return None
@@ -474,18 +498,20 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_progress_pct(self, obj):
         try:
-            if obj.prep_minutes:
-                start = obj.prep_start or obj.order_time
-                end = obj.ready_at or (start + timezone.timedelta(minutes=obj.prep_minutes))
+            if obj.status in [Order.OrderStatus.READY, Order.OrderStatus.SERVED, Order.OrderStatus.COMPLETED]:
+                return 100
+            if obj.prep_start and obj.ready_at:
+                start = obj.prep_start
+                end = obj.ready_at
                 total = (end - start).total_seconds()
                 if total <= 0:
                     return 100
                 elapsed = (timezone.now() - start).total_seconds()
-                pct = max(0, min(100, int((elapsed/total)*100)))
+                pct = max(0, min(100, int((elapsed / total) * 100)))
                 return pct
         except Exception:
             return None
-        return None
+        return 0
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
