@@ -94,6 +94,175 @@
         }
     }
 
+    /* Modern Status Segmented Tabs Bar */
+    .order-status-bar {
+        display: flex;
+        align-items: center;
+        margin-bottom: 18px;
+        width: 100%;
+    }
+    .status-tabs-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scrollbar-width: thin;
+    }
+    .order-status-tabs {
+        display: inline-flex;
+        align-items: center;
+        background: #F8FAFC;
+        padding: 4px;
+        border-radius: 12px;
+        border: 1px solid #E2E8F0;
+        gap: 5px;
+        flex-wrap: nowrap;
+    }
+    .order-status-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 14px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #64748B;
+        text-decoration: none;
+        border-radius: 8px;
+        transition: all 0.18s ease;
+        white-space: nowrap;
+    }
+    .order-status-tab:hover {
+        color: #0F172A;
+        background: rgba(255, 255, 255, 0.85);
+    }
+    .order-status-tab .st-count {
+        font-size: 0.72rem;
+        padding: 2px 7px;
+        border-radius: 12px;
+        background: #E2E8F0;
+        color: #475569;
+        font-weight: 700;
+        transition: all 0.18s ease;
+    }
+    .order-status-tab.active {
+        background: #ffffff;
+        font-weight: 700;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+
+    /* Status specific highlights */
+    .order-status-tab.st-tab-all.active {
+        color: #0F172A;
+        border: 1px solid #CBD5E1;
+    }
+    .order-status-tab.st-tab-all.active .st-count {
+        background: #0F172A;
+        color: #FFFFFF;
+    }
+
+    .order-status-tab.st-tab-preparing {
+        color: #B45309;
+    }
+    .order-status-tab.st-tab-preparing .st-count {
+        background: #FEF3C7;
+        color: #B45309;
+    }
+    .order-status-tab.st-tab-preparing.active {
+        color: #B45309;
+        border: 1px solid #FCD34D;
+        background: #FFFBEB;
+    }
+    .order-status-tab.st-tab-preparing.active .st-count {
+        background: #F59E0B;
+        color: #FFFFFF;
+    }
+
+    .order-status-tab.st-tab-ready {
+        color: #1D4ED8;
+    }
+    .order-status-tab.st-tab-ready .st-count {
+        background: #DBEAFE;
+        color: #1D4ED8;
+    }
+    .order-status-tab.st-tab-ready.active {
+        color: #1D4ED8;
+        border: 1px solid #93C5FD;
+        background: #EFF6FF;
+    }
+    .order-status-tab.st-tab-ready.active .st-count {
+        background: #2563EB;
+        color: #FFFFFF;
+    }
+    .order-status-tab .st-bell-shake {
+        animation: bellShake 1.8s cubic-bezier(.36,.07,.19,.97) infinite;
+        transform-origin: top center;
+        display: inline-block;
+    }
+    @keyframes bellShake {
+        0%, 50%, 100% { transform: rotate(0); }
+        10%, 30% { transform: rotate(14deg); }
+        20%, 40% { transform: rotate(-14deg); }
+    }
+
+    .order-status-tab.st-tab-served {
+        color: #059669;
+    }
+    .order-status-tab.st-tab-served .st-count {
+        background: #D1FAE5;
+        color: #059669;
+    }
+    .order-status-tab.st-tab-served.active {
+        color: #059669;
+        border: 1px solid #6EE7B7;
+        background: #ECFDF5;
+    }
+    .order-status-tab.st-tab-served.active .st-count {
+        background: #10B981;
+        color: #FFFFFF;
+    }
+
+    .order-status-tab.st-tab-completed {
+        color: #0D9488;
+    }
+    .order-status-tab.st-tab-completed .st-count {
+        background: #CCFBF1;
+        color: #0D9488;
+    }
+    .order-status-tab.st-tab-completed.active {
+        color: #0D9488;
+        border: 1px solid #5EEAD4;
+        background: #F0FDF4;
+    }
+    .order-status-tab.st-tab-completed.active .st-count {
+        background: #0D9488;
+        color: #FFFFFF;
+    }
+
+    .order-status-tab.st-tab-cancelled {
+        color: #DC2626;
+    }
+    .order-status-tab.st-tab-cancelled .st-count {
+        background: #FEE2E2;
+        color: #DC2626;
+    }
+    .order-status-tab.st-tab-cancelled.active {
+        color: #DC2626;
+        border: 1px solid #FCA5A5;
+        background: #FEF2F2;
+    }
+    .order-status-tab.st-tab-cancelled.active .st-count {
+        background: #EF4444;
+        color: #FFFFFF;
+    }
+
+    /* READY Order Row highlight */
+    .row-ready-highlight {
+        background: #F8FAFF !important;
+        box-shadow: inset 4px 0 0 #2563EB;
+    }
+
     /* KPI Summary Cards */
     .rec-kpis {
         display: grid;
@@ -530,6 +699,56 @@
         </div>
     </div>
 
+    <!-- Order State / Kitchen Status Tabs Bar -->
+    <div class="order-status-bar">
+        <div class="status-tabs-container">
+            <div class="order-status-tabs">
+                <a href="?{% query_transform request status='' page=1 %}" 
+                   class="order-status-tab st-tab-all {% if not status_filter %}active{% endif %}"
+                   title="Show orders across all statuses">
+                    <i class="fas fa-layer-group"></i>
+                    <span>All States</span>
+                    <span class="st-count">{{ status_counts.all|default:0 }}</span>
+                </a>
+                <a href="?{% query_transform request status='preparing' page=1 %}" 
+                   class="order-status-tab st-tab-preparing {% if status_filter == 'preparing' or status_filter == 'P' or status_filter == 'PR' %}active{% endif %}"
+                   title="Orders currently cooking in kitchen">
+                    <i class="fas fa-fire-burner"></i>
+                    <span>In Kitchen (Preparing)</span>
+                    <span class="st-count">{{ status_counts.preparing|default:0 }}</span>
+                </a>
+                <a href="?{% query_transform request status='ready' page=1 %}" 
+                   class="order-status-tab st-tab-ready {% if status_filter == 'ready' or status_filter == 'READY' %}active{% endif %}"
+                   title="Orders ready to be served to tables">
+                    <i class="fas fa-bell {% if status_counts.ready > 0 %}st-bell-shake text-primary{% endif %}"></i>
+                    <span>Ready to Serve (Done)</span>
+                    <span class="st-count">{{ status_counts.ready|default:0 }}</span>
+                </a>
+                <a href="?{% query_transform request status='served' page=1 %}" 
+                   class="order-status-tab st-tab-served {% if status_filter == 'served' or status_filter == 'S' %}active{% endif %}"
+                   title="Orders served to customers">
+                    <i class="fas fa-concierge-bell"></i>
+                    <span>Served</span>
+                    <span class="st-count">{{ status_counts.served|default:0 }}</span>
+                </a>
+                <a href="?{% query_transform request status='completed' page=1 %}" 
+                   class="order-status-tab st-tab-completed {% if status_filter == 'completed' or status_filter == 'COMPLETED' %}active{% endif %}"
+                   title="Fully paid and completed orders">
+                    <i class="fas fa-circle-check"></i>
+                    <span>Completed</span>
+                    <span class="st-count">{{ status_counts.completed|default:0 }}</span>
+                </a>
+                <a href="?{% query_transform request status='cancelled' page=1 %}" 
+                   class="order-status-tab st-tab-cancelled {% if status_filter == 'cancelled' or status_filter == 'C' %}active{% endif %}"
+                   title="Cancelled orders">
+                    <i class="fas fa-ban"></i>
+                    <span>Cancelled</span>
+                    <span class="st-count">{{ status_counts.cancelled|default:0 }}</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
     <!-- KPI Summary Cards -->
     <div class="rec-kpis">
         <div class="kpi-card">
@@ -676,7 +895,7 @@
                 </thead>
                 <tbody>
                     {% for o in orders %}
-                    <tr>
+                    <tr class="{% if o.status == 'READY' or o.is_ready %}row-ready-highlight{% endif %}">
                         <td>
                             <a href="{% url 'restaurant_admin:order_detail' restaurant_slug=rslug pk=o.pk %}" style="text-decoration: none;" title="View Order Details">
                                 <strong style="color: #4F46E5; font-weight: 700; font-size: 0.84rem;">{{ o.order_number }}</strong>

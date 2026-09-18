@@ -1040,12 +1040,23 @@ class Order(models.Model):
         }
 
     def update_total(self):
+        from decimal import Decimal
         breakdown = self.calculate_bill_breakdown()
         self.discount_amount = breakdown['discount_amount']
         self.subtotal = breakdown['gross_subtotal']
         self.tax_amount = breakdown['cgst'] + breakdown['sgst'] + breakdown['vat']
         self.round_off_amount = breakdown['round_off_amount']
         self.total_amount = breakdown['final_total']
+        paid = Decimal(str(self.paid_amount or 0))
+        tot = Decimal(str(self.total_amount or 0))
+        if paid > 0:
+            self.due_amount = max(Decimal('0.00'), tot - paid)
+            if self.due_amount > 0 and self.payment_status == self.PaymentStatus.PAID:
+                self.payment_status = self.PaymentStatus.PARTIALLY_PAID
+            elif self.due_amount <= 0:
+                self.payment_status = self.PaymentStatus.PAID
+        else:
+            self.due_amount = tot
         self.save()
 
 

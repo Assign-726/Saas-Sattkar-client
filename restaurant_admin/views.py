@@ -3788,16 +3788,22 @@ def order_notifications_poll(request, restaurant_slug=None):
     # 1. Fast indexed-only lookup for latest order id (B-Tree PK index, no heavy joins)
     latest_id = orders_qs.values_list('id', flat=True).order_by('-id').first() or 0
 
+    ready_orders_count = orders_qs.filter(status=Order.OrderStatus.READY).count()
+    since_ready_raw = request.GET.get('since_ready')
+    since_ready = int(since_ready_raw) if (since_ready_raw and str(since_ready_raw).isdigit()) else -1
+    has_new_ready = (since_ready >= 0 and ready_orders_count > since_ready)
+
     since_id_raw = request.GET.get('since_id')
     since_id = int(since_id_raw) if (since_id_raw and str(since_id_raw).isdigit()) else 0
 
-    # 2. ULTRA-FAST SHORT-CIRCUIT: If client is up to date, return immediately!
-    # Skips COUNT(*), skips 5 recent orders query, skips settings query (takes < 2ms).
-    if since_id > 0 and latest_id <= since_id:
+    # 2. ULTRA-FAST SHORT-CIRCUIT: If client is up to date on both new orders and ready status, return immediately!
+    if since_id > 0 and latest_id <= since_id and not has_new_ready:
         return JsonResponse({
             'success': True,
             'has_new': False,
+            'has_new_ready': False,
             'latest_id': latest_id,
+            'ready_count': ready_orders_count,
         })
 
     # 3. If since_id == 0 (initial dashboard load) or latest_id > since_id (new order arrived!):
@@ -3817,6 +3823,24 @@ def order_notifications_poll(request, restaurant_slug=None):
                 'status': o.get_status_display(),
                 'status_raw': o.status,
                 'time_str': format_local_time(o.order_time),
+                'detail_url': reverse('restaurant_admin:order_detail', kwargs={'restaurant_slug': restaurant.slug, 'pk': o.id}),
+            })
+
+    # 4. Newly ready orders to alert floor staff / cashier
+    new_ready_orders = []
+    if has_new_ready:
+        ready_items = orders_qs.filter(status=Order.OrderStatus.READY).select_related('table').order_by('-ready_at')[:5]
+        for o in ready_items:
+            table_name = o.table.name if o.table else (f"Table {o.table_number}" if o.table_number else (o.get_order_type_display() or "Takeaway"))
+            new_ready_orders.append({
+                'id': o.id,
+                'order_number': o.order_number or f"#{o.id}",
+                'order_type': o.get_order_type_display(),
+                'table_name': table_name,
+                'customer_name': o.customer_name or 'Customer',
+                'total_amount': float(o.total_amount or 0),
+                'status': 'Ready to Serve',
+                'time_str': format_local_time(o.ready_at or o.order_time),
                 'detail_url': reverse('restaurant_admin:order_detail', kwargs={'restaurant_slug': restaurant.slug, 'pk': o.id}),
             })
 
@@ -3853,8 +3877,11 @@ def order_notifications_poll(request, restaurant_slug=None):
     return JsonResponse({
         'success': True,
         'has_new': bool(new_orders),
+        'has_new_ready': has_new_ready,
         'latest_id': latest_id,
+        'ready_count': ready_orders_count,
         'new_orders': new_orders,
+        'new_ready_orders': new_ready_orders,
         'recent_orders': recent_orders,
         'sound_url': sound_url,
     })
@@ -4012,7 +4039,7 @@ def order_list(request, restaurant_slug=None):
     )
 
 
-def _filter_order_queryset(request, restaurant, ignore_order_type=False):
+def _filter_order_queryset(request, restaurant, ignore_order_type=False, ignore_status=False):
     profile = getattr(request.user, 'restaurant_profile', None)
     branch = profile.branch if profile else None
     if not branch and restaurant:
@@ -4039,9 +4066,21 @@ def _filter_order_queryset(request, restaurant, ignore_order_type=False):
         )
 
     # Status filter
-    status = request.GET.get('status', '').strip()
-    if status:
-        orders_qs = orders_qs.filter(status=status)
+    if not ignore_status:
+        status = request.GET.get('status', '').strip()
+        if status:
+            if status == 'preparing':
+                orders_qs = orders_qs.filter(status__in=[Order.OrderStatus.PENDING, 'PR'])
+            elif status == 'ready':
+                orders_qs = orders_qs.filter(status='READY')
+            elif status == 'served':
+                orders_qs = orders_qs.filter(status='S')
+            elif status == 'completed':
+                orders_qs = orders_qs.filter(status='COMPLETED')
+            elif status == 'cancelled':
+                orders_qs = orders_qs.filter(status='C')
+            else:
+                orders_qs = orders_qs.filter(status=status)
 
     # Payment Status filter
     payment_status = request.GET.get('payment_status', '').strip()
@@ -4098,7 +4137,8 @@ def order_records(request, restaurant_slug=None):
     if not isinstance(restaurant, Restaurant):
         return restaurant
 
-    base_orders_qs = _filter_order_queryset(request, restaurant, ignore_order_type=True)
+    base_orders_qs = _filter_order_queryset(request, restaurant, ignore_order_type=True, ignore_status=False)
+    base_status_qs = _filter_order_queryset(request, restaurant, ignore_order_type=False, ignore_status=True)
 
     # Compute live counts for each Order Type tab
     order_type_counts = {
@@ -4108,11 +4148,20 @@ def order_records(request, restaurant_slug=None):
         'delivery': base_orders_qs.filter(order_type='delivery').count(),
     }
 
+    # Compute live counts for each Order Status tab
+    status_counts = {
+        'all': base_status_qs.count(),
+        'preparing': base_status_qs.filter(status__in=[Order.OrderStatus.PENDING, 'PR']).count(),
+        'ready': base_status_qs.filter(status='READY').count(),
+        'served': base_status_qs.filter(status='S').count(),
+        'completed': base_status_qs.filter(status='COMPLETED').count(),
+        'cancelled': base_status_qs.filter(status='C').count(),
+    }
+
     order_type_filter = request.GET.get('order_type', '').strip()
-    if order_type_filter:
-        orders_qs = base_orders_qs.filter(order_type=order_type_filter)
-    else:
-        orders_qs = base_orders_qs
+    status_filter = request.GET.get('status', '').strip()
+
+    orders_qs = _filter_order_queryset(request, restaurant, ignore_order_type=False, ignore_status=False)
 
     # Compute Summary Stats (strictly excluding cancelled and refunded orders from revenue)
     total_orders = orders_qs.count()
@@ -4150,10 +4199,11 @@ def order_records(request, restaurant_slug=None):
         'paid_revenue': paid_revenue,
         'avg_order_value': avg_order_value,
         'order_type_counts': order_type_counts,
+        'status_counts': status_counts,
         'period': request.GET.get('period', ''),
         'start_date': request.GET.get('start_date', ''),
         'end_date': request.GET.get('end_date', ''),
-        'status_filter': request.GET.get('status', ''),
+        'status_filter': status_filter,
         'payment_status_filter': request.GET.get('payment_status', ''),
         'payment_method_filter': request.GET.get('payment_method', ''),
         'order_type_filter': order_type_filter,
@@ -5059,6 +5109,11 @@ def order_update_status(request, pk, restaurant_slug=None):
             
             if new_status in status_choices:
                 order.status = new_status
+                if new_status == Order.OrderStatus.PREPARING and not order.prep_start:
+                    order.prep_start = timezone.now()
+                    if not order.prep_minutes:
+                        order.prep_minutes = order.calculate_estimated_prep_minutes()
+                    order.ready_at = order.prep_start + timezone.timedelta(minutes=order.prep_minutes)
                 if new_status == Order.OrderStatus.READY and not order.ready_at:
                     order.ready_at = timezone.now()
                 if new_status == Order.OrderStatus.SERVED and order.payment_status in [Order.PaymentStatus.PAID, 'paid', 'P']:
@@ -7994,7 +8049,7 @@ def kitchen_kds_action_api(request, pk, restaurant_slug=None):
         if not order.prep_minutes:
             order.prep_minutes = order.get_target_prep_minutes()
         order.ready_at = now + timedelta(minutes=order.prep_minutes)
-        if order.status in [Order.OrderStatus.PENDING, Order.OrderStatus.DRAFT, Order.OrderStatus.READY]:
+        if order.status in [Order.OrderStatus.PENDING, Order.OrderStatus.DRAFT, Order.OrderStatus.READY, Order.OrderStatus.SERVED]:
             order.status = Order.OrderStatus.PREPARING
         order.save(update_fields=['is_prep_paused', 'paused_at', 'prep_start', 'prep_minutes', 'ready_at', 'status'])
         first_item_name = order.items.first().menu_item.name if order.items.exists() else "Order"
