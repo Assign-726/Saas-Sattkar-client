@@ -2,6 +2,7 @@ from django.urls import path
 from restaurant_admin import views
 from restaurant_admin import views_reservations
 from restaurant_admin import floor_plan_views
+from restaurant_admin import views_events
 
 app_name = 'restaurant_admin'
 
@@ -155,4 +156,17 @@ urlpatterns = [
     path('receipts/<int:pk>/print/', views.receipt_print, name='receipt_print'),
     path('receipts/<int:pk>/cancel/', views.receipt_cancel_api, name='receipt_cancel_api'),
     path('receipts/api/<str:receipt_no>/', views.receipt_detail_api, name='receipt_detail_api'),
+
+    # Club & Events Management
+    path('club-events/', views_events.club_events_list, name='club_events_list'),
+    path('club-events/create/', views_events.club_event_create, name='club_event_create'),
+    path('club-events/<int:pk>/edit/', views_events.club_event_edit, name='club_event_edit'),
+    path('club-events/<int:pk>/delete/', views_events.club_event_delete, name='club_event_delete'),
+    path('club-events/<int:pk>/toggle-publish/', views_events.club_event_toggle_publish, name='club_event_toggle_publish'),
+    path('club-events/guestlist/', views_events.club_guestlist, name='club_guestlist'),
+    path('club-events/<int:event_id>/guestlist/', views_events.club_guestlist, name='club_guestlist_event'),
+    path('club-events/<int:event_id>/manual-booking/', views_events.club_manual_booking_create, name='club_manual_booking_create'),
+    path('club-events/booking/<int:booking_id>/toggle-checkin/', views_events.club_booking_toggle_checkin, name='club_booking_toggle_checkin'),
+    path('club-events/gate-scanner/', views_events.club_gate_scanner, name='club_gate_scanner'),
+    path('club-events/<int:event_id>/gate-scanner/', views_events.club_gate_scanner, name='club_gate_scanner_event'),
 ]

@@ -86,6 +86,7 @@ INSTALLED_APPS = [
     'restaurant_admin',
     'super_admin',
     'reservations',
+    'events',
 ]
 
 # CORS & CSRF settings

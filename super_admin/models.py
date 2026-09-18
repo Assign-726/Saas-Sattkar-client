@@ -356,6 +356,13 @@ class RestaurantBranch(models.Model):
     twitter_url = models.URLField(blank=True, default="")
     youtube_url = models.URLField(blank=True, default="")
     
+    # Feature gating: Club & Events Ticketing module
+    has_club_module = models.BooleanField(
+        default=False,
+        verbose_name="Enable Club & Events Module",
+        help_text="Enables ticketed club events, ticket tiers, and guestlist management for this branch"
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -379,6 +386,14 @@ class RestaurantBranch(models.Model):
                 counter += 1
             self.slug = candidate
         super().save(*args, **kwargs)
+
+    @property
+    def address(self):
+        parts = [self.address_line_1, self.address_line_2, self.city, self.state, self.pincode]
+        addr = ", ".join([p for p in parts if p])
+        if addr:
+            return addr
+        return self.restaurant.address if self.restaurant else ""
 
     @property
     def is_vat_config_complete(self):

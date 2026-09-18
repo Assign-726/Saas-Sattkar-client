@@ -1571,7 +1571,8 @@
       gstin: "",
       gst_registration_type: "R5",
       is_hotel_tariff_7500_plus: false,
-      e_invoicing_enabled: false
+      e_invoicing_enabled: false,
+      has_club_module: false
     };
 
     branches.push(newBranch);
@@ -1659,6 +1660,9 @@
             ${b.use_company_address ? `<span style="font-size: 11px; color: #059669; font-weight: 600; background: #f0fdf4; padding: 2px 7px; border-radius: 6px; border: 1px solid #bbf7d0;"><i class="fa-solid fa-link"></i> HQ Address</span>` : ''}
             {% if ENABLE_ALCOHOL_VAT %}
             ${b.serves_alcohol ? `<span style="font-size: 11px; color: #b45309; font-weight: 600; background: #fffbeb; padding: 2px 7px; border-radius: 6px; border: 1px solid #fde68a;"><i class="fa-solid fa-martini-glass-citrus"></i> Bar / VAT</span>` : ''}
+            {% endif %}
+            {% if ENABLE_CLUB_EVENTS_MODULE %}
+            ${b.has_club_module ? `<span class="badge-tag" style="background: #f3e8ff; color: #7e22ce; padding: 3px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; border: 1px solid #d8b4fe;"><i class="fa-solid fa-ticket"></i> Club Events Active</span>` : ''}
             {% endif %}
           </div>
 
@@ -1759,6 +1763,30 @@
                 <button type="button" class="toggle-btn ${!b.serves_alcohol ? 'active' : ''}" style="flex: 1;" onclick="setBranchAlcohol(${idx}, false)">No</button>
               </div>
               <span class="form-hint">${b.serves_alcohol ? 'Liquor is billed under state VAT, outside GST' : 'Pure food service — standard GST applies, State VAT disabled'}</span>
+            </div>
+            {% endif %}
+
+            {% if ENABLE_CLUB_EVENTS_MODULE %}
+            <!-- Club Events & Ticketing Module Permission Toggle -->
+            <div class="form-group full-width" style="margin-top: 8px; padding: 14px 16px; background: #faf5ff; border: 1.5px solid #d8b4fe; border-radius: 12px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                <div>
+                  <label class="form-label" style="font-size: 14px; font-weight: 700; color: #6b21a8; margin-bottom: 2px; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-ticket" style="color: #9333ea; font-size: 15px;"></i> Enable Club & Events Ticketing Module
+                  </label>
+                  <span class="form-hint" style="color: #7e22ce; font-size: 12px; line-height: 1.4; display: block;">
+                    Grants this branch permission to host ticketed club nights, live music, sell passes online, and scan entry QR codes.
+                  </span>
+                </div>
+                <div class="toggle-group" style="width: 100%; max-width: 220px; border-color: #d8b4fe;">
+                  <button type="button" class="toggle-btn ${b.has_club_module ? 'active' : ''}" style="flex: 1; ${b.has_club_module ? 'background-color: #7e22ce !important; color: #ffffff !important;' : ''}" onclick="setBranchClubModule(${idx}, true)">
+                    <i class="fa-solid fa-check"></i> Enabled
+                  </button>
+                  <button type="button" class="toggle-btn ${!b.has_club_module ? 'active' : ''}" style="flex: 1;" onclick="setBranchClubModule(${idx}, false)">
+                    Disabled
+                  </button>
+                </div>
+              </div>
             </div>
             {% endif %}
           </div>
@@ -1878,6 +1906,31 @@
       if (!branches[idx].vat_wine_rate) branches[idx].vat_wine_rate = "60.00";
     }
     renderBranchCards();
+  }
+
+  function setBranchClubModule(idx, val) {
+    syncBranchesFromDOM();
+    branches[idx].has_club_module = val;
+    renderBranchCards();
+    const branchesJsonElem = document.getElementById("branches_json");
+    if (branchesJsonElem) branchesJsonElem.value = JSON.stringify(branches);
+
+    // If branch already exists in DB, persist immediately via AJAX
+    if (branches[idx].id) {
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+      fetch(`/super/api/branches/${branches[idx].id}/toggle-club-module/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ has_club_module: val })
+      }).then(res => res.json()).then(data => {
+        if (data.success) {
+          console.log(data.message);
+        }
+      }).catch(err => console.warn('Club module instant toggle warning:', err));
+    }
   }
 
   function setBranchHotelTariff(idx, val) {

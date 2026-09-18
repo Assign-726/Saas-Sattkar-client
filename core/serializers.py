@@ -18,7 +18,8 @@ class RestaurantBranchSerializer(serializers.ModelSerializer):
             'city', 'state', 'pincode', 'address', 'serves_alcohol',
             'service_charge_percentage', 'fssai_license_no', 'gstin',
             'map_iframe_url', 'facebook_url', 'instagram_url', 'twitter_url', 'youtube_url',
-            'enable_customer_ordering', 'enable_online_payment', 'enable_pay_at_counter'
+            'enable_customer_ordering', 'enable_online_payment', 'enable_pay_at_counter',
+            'has_club_module'
         ]
 
     def get_address(self, obj):

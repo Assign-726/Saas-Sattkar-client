@@ -1,0 +1,274 @@
+{% extends 'restaurant_admin/base.html' %}
+
+{% block title %}{% if is_edit %}Edit Event: {{ event.title }}{% else %}Create Club Event{% endif %} | {{ current_branch.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Back Header -->
+    <div class="mb-4">
+        <a href="{% url 'restaurant_admin:club_events_list' restaurant_slug=rslug %}" class="text-decoration-none text-muted small fw-semibold">
+            <i class="fas fa-arrow-left me-1"></i> Back to Events
+        </a>
+        <h2 class="h3 fw-bold text-gray-800 mt-2">
+            {% if is_edit %}Edit Club Event: {{ event.title }}{% else %}Create New Club Event{% endif %}
+        </h2>
+        <p class="text-muted small">Configure event details, posters, timings, and ticket tiers for {{ current_branch.name }}.</p>
+    </div>
+
+    <form method="POST" enctype="multipart/form-data" id="eventForm">
+        {% csrf_token %}
+        <div class="row g-4">
+            <!-- Left Column: Event Core Info & Media -->
+            <div class="col-lg-8">
+                <!-- 1. Basic Info Card -->
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
+                    <h5 class="fw-bold text-dark mb-3 border-bottom pb-2">
+                        <i class="fas fa-info-circle text-primary me-2"></i>1. Event Details
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Event Title <span class="text-danger">*</span></label>
+                        <input type="text" name="title" class="form-control" required placeholder="e.g. Saturday Neon Night ft. DJ Shadow" value="{{ event.title|default:'' }}">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Description</label>
+                        <textarea name="description" rows="4" class="form-control" placeholder="Describe the vibe, performers, special perks, or highlights...">{{ event.description|default:'' }}</textarea>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Age Restriction</label>
+                            <select name="age_restriction" class="form-select">
+                                <option value="21+" {% if event.age_restriction == "21+" %}selected{% endif %}>21+ Only</option>
+                                <option value="18+" {% if event.age_restriction == "18+" %}selected{% endif %}>18+ Only</option>
+                                <option value="25+" {% if event.age_restriction == "25+" %}selected{% endif %}>25+ Only (Couples / Stags)</option>
+                                <option value="All Ages" {% if event.age_restriction == "All Ages" %}selected{% endif %}>All Ages</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Dress Code</label>
+                            <input type="text" name="dress_code" class="form-control" placeholder="e.g. Smart Casual, Clubwear, Neon" value="{{ event.dress_code|default:'Smart Casual' }}">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="form-label fw-semibold">Event Poster / Cover Banner</label>
+                        <input type="file" name="cover_image" class="form-control" accept="image/*">
+                        {% if event.cover_image %}
+                        <div class="mt-2 small text-muted d-flex align-items-center gap-2">
+                            <span>Current:</span>
+                            <img src="{{ event.cover_image.url }}" alt="Poster" class="rounded" style="height: 50px; width: 80px; object-fit: cover;">
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- 2. Dates & Venue Card -->
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
+                    <h5 class="fw-bold text-dark mb-3 border-bottom pb-2">
+                        <i class="far fa-calendar-alt text-success me-2"></i>2. Schedule & Venue Location
+                    </h5>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Start Date & Time <span class="text-danger">*</span></label>
+                            <input type="datetime-local" name="start_datetime" class="form-control" required value="{% if event.start_datetime %}{{ event.start_datetime|date:'Y-m-d\TH:i' }}{% endif %}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">End Date & Time <span class="text-danger">*</span></label>
+                            <input type="datetime-local" name="end_datetime" class="form-control" required value="{% if event.end_datetime %}{{ event.end_datetime|date:'Y-m-d\TH:i' }}{% endif %}">
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Venue / Club Name</label>
+                            <input type="text" name="venue_name" class="form-control" placeholder="{{ current_branch.name }}" value="{{ event.venue_name|default:current_branch.name }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Venue Address</label>
+                            <input type="text" name="venue_address" class="form-control" placeholder="{{ current_branch.address }}" value="{{ event.venue_address|default:current_branch.address }}">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Ticket Tiers Builder -->
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+                        <h5 class="fw-bold text-dark mb-0">
+                            <i class="fas fa-ticket-alt text-warning me-2"></i>3. Ticket Tiers & Pricing
+                        </h5>
+                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill" id="addTierBtn">
+                            <i class="fas fa-plus me-1"></i> Add Tier
+                        </button>
+                    </div>
+
+                    <p class="small text-muted mb-3">
+                        Define ticket categories (e.g. VIP, General, Female Stag). <strong>No tax is applied</strong>; customer pays the exact base price.
+                    </p>
+
+                    <div id="tiersContainer">
+                        {% if ticket_types %}
+                            {% for tt in ticket_types %}
+                            <div class="tier-row card border p-3 mb-3 bg-light rounded-3 position-relative">
+                                <input type="hidden" name="tier_id[]" value="{{ tt.id }}">
+                                <div class="row g-2 align-items-center">
+                                    <div class="col-md-4">
+                                        <label class="small text-muted fw-semibold">Tier Name</label>
+                                        <input type="text" name="tier_name[]" class="form-control form-control-sm" required placeholder="e.g. VIP Pass" value="{{ tt.name }}">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="small text-muted fw-semibold">Price (₹)</label>
+                                        <input type="number" step="0.01" min="0" name="tier_price[]" class="form-control form-control-sm" required placeholder="0.00" value="{{ tt.base_price }}">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="small text-muted fw-semibold">Total Tickets</label>
+                                        <input type="number" min="1" name="tier_capacity[]" class="form-control form-control-sm" required placeholder="100" value="{{ tt.total_allocated }}">
+                                    </div>
+                                    <div class="col-md-2 d-flex align-items-end justify-content-end">
+                                        <button type="button" class="btn btn-sm btn-outline-danger remove-tier-btn mt-3" title="Remove Tier">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <!-- Default Initial Tier Rows -->
+                            <div class="tier-row card border p-3 mb-3 bg-light rounded-3 position-relative">
+                                <input type="hidden" name="tier_id[]" value="">
+                                <div class="row g-2 align-items-center">
+                                    <div class="col-md-4">
+                                        <label class="small text-muted fw-semibold">Tier Name</label>
+                                        <input type="text" name="tier_name[]" class="form-control form-control-sm" required placeholder="e.g. General Admission" value="General Admission">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="small text-muted fw-semibold">Price (₹)</label>
+                                        <input type="number" step="0.01" min="0" name="tier_price[]" class="form-control form-control-sm" required placeholder="499" value="499">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="small text-muted fw-semibold">Total Tickets</label>
+                                        <input type="number" min="1" name="tier_capacity[]" class="form-control form-control-sm" required placeholder="100" value="100">
+                                    </div>
+                                    <div class="col-md-2 d-flex align-items-end justify-content-end">
+                                        <button type="button" class="btn btn-sm btn-outline-danger remove-tier-btn mt-3" title="Remove Tier">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="tier-row card border p-3 mb-3 bg-light rounded-3 position-relative">
+                                <input type="hidden" name="tier_id[]" value="">
+                                <div class="row g-2 align-items-center">
+                                    <div class="col-md-4">
+                                        <label class="small text-muted fw-semibold">Tier Name</label>
+                                        <input type="text" name="tier_name[]" class="form-control form-control-sm" required placeholder="e.g. VIP Pass" value="VIP Table / Pass">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="small text-muted fw-semibold">Price (₹)</label>
+                                        <input type="number" step="0.01" min="0" name="tier_price[]" class="form-control form-control-sm" required placeholder="1499" value="1499">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="small text-muted fw-semibold">Total Tickets</label>
+                                        <input type="number" min="1" name="tier_capacity[]" class="form-control form-control-sm" required placeholder="30" value="30">
+                                    </div>
+                                    <div class="col-md-2 d-flex align-items-end justify-content-end">
+                                        <button type="button" class="btn btn-sm btn-outline-danger remove-tier-btn mt-3" title="Remove Tier">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Settings & Publishing -->
+            <div class="col-lg-4">
+                <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4 sticky-top" style="top: 2rem;">
+                    <h5 class="fw-bold text-dark mb-3 border-bottom pb-2">Publishing Status</h5>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" name="is_published" id="isPublishedSwitch" {% if event.is_published or not is_edit %}checked{% endif %}>
+                        <label class="form-check-label fw-bold text-dark" for="isPublishedSwitch">
+                            Publish Event Live
+                        </label>
+                        <div class="form-text small">When live, customers can discover and book tickets directly.</div>
+                    </div>
+
+                    <div class="form-check form-switch mb-4">
+                        <input class="form-check-input" type="checkbox" name="is_featured" id="isFeaturedSwitch" {% if event.is_featured %}checked{% endif %}>
+                        <label class="form-check-label fw-semibold text-dark" for="isFeaturedSwitch">
+                            Feature at Top of Discovery
+                        </label>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold small text-muted">Venue Terms & Guidelines</label>
+                        <textarea name="terms_and_conditions" rows="3" class="form-control form-control-sm" placeholder="Entry rules, rights of admission...">{{ event.terms_and_conditions|default:'Entry strictly allowed with valid QR pass. Rights of admission reserved.' }}</textarea>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary rounded-pill py-2 fw-bold shadow-sm">
+                            <i class="fas fa-save me-1"></i> {% if is_edit %}Save Changes{% else %}Create & Publish Event{% endif %}
+                        </button>
+                        <a href="{% url 'restaurant_admin:club_events_list' restaurant_slug=rslug %}" class="btn btn-outline-secondary rounded-pill py-2">
+                            Cancel
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Dynamic Tier Template Script -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('tiersContainer');
+    const addBtn = document.getElementById('addTierBtn');
+
+    addBtn.addEventListener('click', function() {
+        const row = document.createElement('div');
+        row.className = 'tier-row card border p-3 mb-3 bg-light rounded-3 position-relative';
+        row.innerHTML = `
+            <input type="hidden" name="tier_id[]" value="">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-4">
+                    <label class="small text-muted fw-semibold">Tier Name</label>
+                    <input type="text" name="tier_name[]" class="form-control form-control-sm" required placeholder="e.g. VIP Table" value="">
+                </div>
+                <div class="col-md-3">
+                    <label class="small text-muted fw-semibold">Price (₹)</label>
+                    <input type="number" step="0.01" min="0" name="tier_price[]" class="form-control form-control-sm" required placeholder="999" value="">
+                </div>
+                <div class="col-md-3">
+                    <label class="small text-muted fw-semibold">Total Tickets</label>
+                    <input type="number" min="1" name="tier_capacity[]" class="form-control form-control-sm" required placeholder="50" value="50">
+                </div>
+                <div class="col-md-2 d-flex align-items-end justify-content-end">
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-tier-btn mt-3" title="Remove Tier">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        container.appendChild(row);
+    });
+
+    container.addEventListener('click', function(e) {
+        if (e.target.closest('.remove-tier-btn')) {
+            const row = e.target.closest('.tier-row');
+            if (container.querySelectorAll('.tier-row').length > 1) {
+                row.remove();
+            } else {
+                alert('An event must have at least one ticket tier.');
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

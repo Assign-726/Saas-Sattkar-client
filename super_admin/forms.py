@@ -594,6 +594,7 @@ class OnboardRestaurantForm(forms.Form):
                 'gst_registration_type': reg_type_val,
                 'is_hotel_tariff_7500_plus': is_hotel_tariff,
                 'e_invoicing_enabled': bool(bdata.get("e_invoicing_enabled", False)),
+                'has_club_module': bool(bdata.get("has_club_module", False)),
             })
 
         return cleaned_branches
@@ -708,6 +709,7 @@ class OnboardRestaurantForm(forms.Form):
                 branch.gst_registration_type = bdata.get("gst_registration_type", "R5")
                 branch.is_hotel_tariff_7500_plus = bdata.get("is_hotel_tariff_7500_plus", False)
                 branch.e_invoicing_enabled = bdata.get("e_invoicing_enabled", False)
+                branch.has_club_module = bool(bdata.get("has_club_module", False))
                 branch.save()
             else:
                 branch = RestaurantBranch.objects.create(
@@ -733,6 +735,7 @@ class OnboardRestaurantForm(forms.Form):
                     gst_registration_type=bdata.get("gst_registration_type", "R5"),
                     is_hotel_tariff_7500_plus=bdata.get("is_hotel_tariff_7500_plus", False),
                     e_invoicing_enabled=bdata.get("e_invoicing_enabled", False),
+                    has_club_module=bool(bdata.get("has_club_module", False)),
                 )
 
             kept_branch_ids.append(branch.id)
