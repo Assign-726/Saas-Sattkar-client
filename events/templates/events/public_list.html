@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upcoming Club Events & Passes {% if branch %}| {{ branch.name }}{% endif %}</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Razorpay Checkout -->
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #0a0e17;
+            --card-dark: #121826;
+            --accent-primary: #8b5cf6;
+            --accent-glow: rgba(139, 92, 246, 0.35);
+            --accent-gold: #f59e0b;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-dark);
+            color: #f8fafc;
+            min-height: 100vh;
+        }
+
+        .hero-banner {
+            background: radial-gradient(circle at 50% -20%, #4c1d95 0%, #0a0e17 75%);
+            padding: 4rem 1rem 3rem;
+            text-align: center;
+        }
+
+        .event-card {
+            background-color: var(--card-dark);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1.25rem;
+            overflow: hidden;
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+        }
+
+        .event-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(139, 92, 246, 0.5);
+            box-shadow: 0 15px 30px -10px var(--accent-glow);
+        }
+
+        .poster-container {
+            height: 220px;
+            background: #1e1b4b;
+            position: relative;
+        }
+
+        .poster-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .badge-age {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-book {
+            background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+            color: #ffffff;
+            border: none;
+            border-radius: 999px;
+            font-weight: 700;
+            padding: 0.65rem 1.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .btn-book:hover {
+            box-shadow: 0 0 20px var(--accent-glow);
+            color: #fff;
+            transform: scale(1.02);
+        }
+
+        .modal-content {
+            background-color: #121826;
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .tier-select-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 0.85rem;
+            padding: 0.9rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .tier-select-card:hover, .tier-select-card.selected {
+            background: rgba(139, 92, 246, 0.15);
+            border-color: #8b5cf6;
+        }
+
+        .tier-select-card.selected {
+            box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
+        }
+
+        .form-control, .form-select {
+            background-color: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.12);
+            color: #fff;
+        }
+
+        .form-control:focus, .form-select:focus {
+            background-color: rgba(255, 255, 255, 0.09);
+            border-color: #8b5cf6;
+            color: #fff;
+            box-shadow: 0 0 0 0.25rem rgba(139, 92, 246, 0.25);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Hero Header -->
+    <header class="hero-banner">
+        <div class="container">
+            <span class="badge bg-purple text-uppercase rounded-pill px-3 py-2 mb-3 fw-bold" style="background: rgba(139, 92, 246, 0.2); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.3);">
+                <i class="fas fa-sparkles me-1"></i> Nightlife & Live Events
+            </span>
+            <h1 class="display-4 fw-extrabold mb-2" style="letter-spacing: -1px;">
+                Experience the Beat
+            </h1>
+            <p class="lead text-light opacity-75 mx-auto" style="max-width: 600px;">
+                Book exclusive entry passes and VIP tables with zero extra fees. Instant scannable passes delivered straight to your phone.
+            </p>
+        </div>
+    </header>
+
+    <!-- Events Grid -->
+    <main class="container py-5">
+        {% if events %}
+        <div class="row g-4">
+            {% for evt in events %}
+            <div class="col-md-6 col-lg-4">
+                <div class="event-card h-100 d-flex flex-column">
+                    <!-- Poster -->
+                    <div class="poster-container">
+                        {% if evt.cover_image %}
+                        <img src="{{ evt.cover_image.url }}" alt="{{ evt.title }}">
+                        {% else %}
+                        <div class="w-100 h-100 d-flex flex-column align-items-center justify-content-center text-white-50">
+                            <i class="fas fa-music fa-3x mb-2 opacity-50"></i>
+                            <span class="small">Live Music & Club</span>
+                        </div>
+                        {% endif %}
+
+                        <div class="position-absolute top-0 end-0 m-3">
+                            <span class="badge badge-age rounded-pill px-2 py-1 small text-white">
+                                <i class="fas fa-id-card me-1"></i> {{ evt.age_restriction }}
+                            </span>
+                        </div>
+
+                        {% if evt.is_featured %}
+                        <div class="position-absolute top-0 start-0 m-3">
+                            <span class="badge bg-warning text-dark rounded-pill px-3 py-1 small fw-bold">
+                                <i class="fas fa-fire me-1"></i> HOT EVENT
+                            </span>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Details -->
+                    <div class="p-4 flex-grow-1 d-flex flex-column justify-content-between">
+                        <div>
+                            <div class="small fw-bold text-uppercase mb-1" style="color: #c4b5fd;">
+                                <i class="far fa-calendar-alt me-1"></i>
+                                {{ evt.start_datetime|date:"D, d M Y • h:i A" }}
+                            </div>
+                            <h4 class="fw-bold text-white mb-2">{{ evt.title }}</h4>
+                            <p class="small text-light opacity-75 mb-3">
+                                {{ evt.description|default:"Get ready for an electrifying night of music and drinks."|truncatechars:100 }}
+                            </p>
+
+                            <div class="small text-white-50 mb-3">
+                                <i class="fas fa-map-marker-alt text-danger me-1"></i>
+                                {{ evt.venue_name }}
+                            </div>
+                        </div>
+
+                        <div class="border-top border-white border-opacity-10 pt-3 mt-3 d-flex align-items-center justify-content-between">
+                            <div>
+                                <span class="small text-white-50 d-block">Starting from</span>
+                                <span class="fs-5 fw-bold text-warning">
+                                    {% with first_tier=evt.ticket_types.first %}
+                                    ₹{{ first_tier.base_price|default:"Free"|floatformat:0 }}
+                                    {% endwith %}
+                                </span>
+                            </div>
+                            <button class="btn btn-book book-pass-btn"
+                                    data-event-id="{{ evt.id }}"
+                                    data-title="{{ evt.title }}"
+                                    data-meta="{{ evt.start_datetime|date:'D, d M • h:i A' }}"
+                                    data-venue="{{ evt.venue_name }}">
+                                Book Passes <i class="fas fa-arrow-right ms-1"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-calendar-times fa-3x opacity-25 text-white mb-3"></i>
+            <h4 class="fw-bold text-white">No Upcoming Events Right Now</h4>
+            <p class="text-white-50">Check back soon for upcoming DJ nights, parties, and live gigs!</p>
+        </div>
+        {% endif %}
+    </main>
+
+    <!-- Checkout Modal -->
+    <div class="modal fade" id="checkoutModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 p-2 shadow-lg">
+                <div class="modal-header border-0 pb-0">
+                    <div>
+                        <span class="badge bg-purple text-uppercase rounded-pill px-2 py-1 small" style="background: rgba(139, 92, 246, 0.25); color: #c4b5fd;">
+                            Pass Checkout
+                        </span>
+                        <h4 class="modal-title fw-bold mt-1 text-white" id="modalEventTitle">Event Name</h4>
+                        <div class="small text-white-50" id="modalEventMeta"></div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+
+                <div class="modal-body py-4">
+                    <!-- Step 1: Select Tier -->
+                    <div class="mb-4">
+                        <label class="form-label small fw-bold text-uppercase text-white-50">Select Ticket Tier</label>
+                        <div id="tiersListContainer" class="d-flex flex-column gap-2">
+                            <!-- Populated dynamically via JS -->
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Quantity Selector -->
+                    <div class="mb-4 d-flex justify-content-between align-items-center bg-white bg-opacity-5 p-3 rounded-3">
+                        <div>
+                            <div class="fw-bold text-white">Quantity</div>
+                            <small class="text-white-50" id="tierPriceLabel">₹0 per person</small>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-light rounded-circle" style="width:32px;height:32px;" onclick="changeQty(-1)">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                            <span id="qtyDisplay" class="fw-bold fs-5 px-2">1</span>
+                            <button type="button" class="btn btn-sm btn-outline-light rounded-circle" style="width:32px;height:32px;" onclick="changeQty(1)">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Guest Details -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-uppercase text-white-50">Full Name</label>
+                        <input type="text" id="guestName" class="form-control" placeholder="Your name">
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-uppercase text-white-50">Mobile Number</label>
+                            <input type="tel" id="guestPhone" class="form-control" placeholder="10-digit phone">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold text-uppercase text-white-50">Email</label>
+                            <input type="email" id="guestEmail" class="form-control" placeholder="name@email.com">
+                        </div>
+                    </div>
+
+                    <!-- Summary Price -->
+                    <div class="border-top border-white border-opacity-10 pt-3 mt-4">
+                        <div class="d-flex justify-content-between align-items-center mb-1 small text-white-50">
+                            <span>Taxes & Fees</span>
+                            <span class="text-success fw-bold">₹0.00 (Zero Tax)</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center fs-5 fw-bold text-white">
+                            <span>Total Payable</span>
+                            <span class="text-warning" id="totalPayableDisplay">₹0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer border-0 pt-0 pb-3">
+                    <button type="button" id="payNowBtn" class="btn btn-book w-100 py-3 fs-6" onclick="executeCheckout()">
+                        Proceed to Payment <i class="fas fa-lock ms-2"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script for Checkout and Razorpay Integration -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentEventId = null;
+        let selectedTierId = null;
+        let selectedTierPrice = 0;
+        let selectedQuantity = 1;
+        let checkoutModal = null;
+
+        function openCheckoutModal(eventId, title, meta, venue) {
+            currentEventId = eventId;
+            document.getElementById('modalEventTitle').innerText = title;
+            document.getElementById('modalEventMeta').innerText = meta + ' • ' + venue;
+            selectedQuantity = 1;
+            document.getElementById('qtyDisplay').innerText = 1;
+
+            const container = document.getElementById('tiersListContainer');
+            container.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+
+            if (!checkoutModal) {
+                checkoutModal = new bootstrap.Modal(document.getElementById('checkoutModal'));
+            }
+            checkoutModal.show();
+
+            // Fetch active tiers for this event
+            fetch(`/api/events/public/events/${eventId}/`)
+                .then(res => res.json())
+                .then(data => {
+                    container.innerHTML = '';
+                    if (data.ticket_types && data.ticket_types.length > 0) {
+                        data.ticket_types.forEach((tier, idx) => {
+                            const card = document.createElement('div');
+                            card.className = `tier-select-card d-flex justify-content-between align-items-center ${idx === 0 ? 'selected' : ''}`;
+                            if (tier.is_sold_out) card.style.opacity = '0.5';
+
+                            card.onclick = () => {
+                                if (tier.is_sold_out) return;
+                                document.querySelectorAll('.tier-select-card').forEach(c => c.classList.remove('selected'));
+                                card.classList.add('selected');
+                                selectTier(tier.id, parseFloat(tier.base_price));
+                            };
+
+                            card.innerHTML = `
+                                <div>
+                                    <div class="fw-bold text-white">${tier.name}</div>
+                                    <small class="text-white-50">${tier.available_quantity} passes left</small>
+                                </div>
+                                <div class="fs-5 fw-bold text-warning">
+                                    ₹${Math.round(tier.base_price)}
+                                </div>
+                            `;
+                            container.appendChild(card);
+                        });
+                        selectTier(data.ticket_types[0].id, parseFloat(data.ticket_types[0].base_price));
+                    } else {
+                        container.innerHTML = '<div class="small text-danger">No ticket tiers currently available.</div>';
+                    }
+                });
+        }
+
+        function selectTier(id, price) {
+            selectedTierId = id;
+            selectedTierPrice = price;
+            updatePriceDisplay();
+        }
+
+        function changeQty(delta) {
+            const next = selectedQuantity + delta;
+            if (next >= 1 && next <= 10) {
+                selectedQuantity = next;
+                document.getElementById('qtyDisplay').innerText = next;
+                updatePriceDisplay();
+            }
+        }
+
+        function updatePriceDisplay() {
+            const total = selectedTierPrice * selectedQuantity;
+            document.getElementById('tierPriceLabel').innerText = `₹${selectedTierPrice} per pass`;
+            document.getElementById('totalPayableDisplay').innerText = `₹${total.toFixed(2)}`;
+        }
+
+        async function executeCheckout() {
+            const name = document.getElementById('guestName').value.trim();
+            const phone = document.getElementById('guestPhone').value.trim();
+            const email = document.getElementById('guestEmail').value.trim();
+            const btn = document.getElementById('payNowBtn');
+
+            if (!selectedTierId) {
+                alert('Please select a ticket tier.');
+                return;
+            }
+            if (!name || !phone || !email) {
+                alert('Please complete your name, phone, and email.');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Locking Tickets...';
+
+            try {
+                const initResp = await fetch('/api/events/public/checkout/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ticket_type_id: selectedTierId,
+                        quantity: selectedQuantity,
+                        guest_name: name,
+                        guest_phone: phone,
+                        guest_email: email
+                    })
+                });
+
+                const initData = await initResp.json();
+                if (!initResp.ok) {
+                    alert(initData.error || 'Failed to initialize booking.');
+                    btn.disabled = false;
+                    btn.innerHTML = 'Proceed to Payment <i class="fas fa-lock ms-2"></i>';
+                    return;
+                }
+
+                // If key is mock/local test, auto-verify for instant preview
+                if (!initData.razorpay_key_id || initData.razorpay_key_id.includes('placeholder') || initData.razorpay_key_id.includes('test')) {
+                    const verifyResp = await fetch('/api/events/public/verify-payment/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            booking_reference: initData.booking_reference,
+                            razorpay_order_id: initData.razorpay_order_id,
+                            razorpay_payment_id: 'pay_mock_' + Math.random().toString(36).substring(7),
+                            razorpay_signature: 'sig_mock_verified'
+                        })
+                    });
+                    const verifyData = await verifyResp.json();
+                    if (verifyResp.ok) {
+                        window.location.href = `/api/events/portal/pass/${initData.booking_reference}/`;
+                        return;
+                    }
+                }
+
+                // Launch Razorpay standard modal
+                const options = {
+                    key: initData.razorpay_key_id,
+                    amount: initData.amount_in_paise,
+                    currency: "INR",
+                    name: "Venue Club Pass",
+                    description: `${initData.tier_name} (${initData.quantity} Person(s))`,
+                    order_id: initData.razorpay_order_id,
+                    handler: async function (response) {
+                        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Confirming Pass...';
+                        const verifyResp = await fetch('/api/events/public/verify-payment/', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                booking_reference: initData.booking_reference,
+                                razorpay_order_id: response.razorpay_order_id,
+                                razorpay_payment_id: response.razorpay_payment_id,
+                                razorpay_signature: response.razorpay_signature
+                            })
+                        });
+                        if (verifyResp.ok) {
+                            window.location.href = `/api/events/portal/pass/${initData.booking_reference}/`;
+                        } else {
+                            alert("Payment verification failed. Please contact venue support.");
+                            btn.disabled = false;
+                        }
+                    },
+                    prefill: {
+                        name: name,
+                        email: email,
+                        contact: phone
+                    },
+                    theme: { color: "#8b5cf6" }
+                };
+
+                const rzp = new Razorpay(options);
+                rzp.open();
+                btn.disabled = false;
+                btn.innerHTML = 'Proceed to Payment <i class="fas fa-lock ms-2"></i>';
+            } catch (err) {
+                alert("Network error: " + err);
+                btn.disabled = false;
+                btn.innerHTML = 'Proceed to Payment <i class="fas fa-lock ms-2"></i>';
+            }
+        }
+
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('.book-pass-btn');
+            if (btn) {
+                openCheckoutModal(btn.dataset.eventId, btn.dataset.title, btn.dataset.meta, btn.dataset.venue);
+            }
+        });
+    </script>
+</body>
+</html>

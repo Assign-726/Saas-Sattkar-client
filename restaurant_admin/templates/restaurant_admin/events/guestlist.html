@@ -1,0 +1,315 @@
+{% extends 'restaurant_admin/base.html' %}
+
+{% block title %}Guestlist & Tickets | {{ current_branch.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header & Event Selector -->
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div>
+            <h2 class="h3 mb-1 text-gray-800 fw-bold">
+                <i class="fas fa-users text-primary me-2"></i>Guestlist & Attendee Desk
+            </h2>
+            <p class="text-muted small mb-0">
+                Track confirmed ticket buyers, issue door cash passes, and manage real-time entry check-ins.
+            </p>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <!-- Event Picker Dropdown -->
+            <div class="dropdown">
+                <button class="btn btn-outline-dark dropdown-toggle rounded-pill px-3 py-2 shadow-sm" type="button" data-bs-toggle="dropdown">
+                    <i class="fas fa-calendar-alt me-1 text-primary"></i>
+                    {% if selected_event %}{{ selected_event.title|truncatechars:28 }}{% else %}Select Event{% endif %}
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0" style="max-height: 300px; overflow-y: auto;">
+                    {% for ev in events_list %}
+                    <li>
+                        <a class="dropdown-item py-2 {% if selected_event and selected_event.id == ev.id %}active{% endif %}" href="{% url 'restaurant_admin:club_guestlist_event' restaurant_slug=rslug event_id=ev.id %}">
+                            {{ ev.title }} <small class="text-muted d-block">{{ ev.start_datetime|date:"d M Y" }}</small>
+                        </a>
+                    </li>
+                    {% empty %}
+                    <li><span class="dropdown-item text-muted">No events found</span></li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            {% if selected_event %}
+            <a href="{% url 'restaurant_admin:club_gate_scanner_event' restaurant_slug=rslug event_id=selected_event.id %}" class="btn btn-dark rounded-pill px-3 shadow-sm">
+                <i class="fas fa-qrcode me-1 text-warning"></i> Open Gate Scanner
+            </a>
+            <button type="button" class="btn btn-primary rounded-pill px-3 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#manualBookingModal">
+                <i class="fas fa-user-plus me-1"></i> Add Manual / Door Pass
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if selected_event %}
+    <!-- Event Quick Stats -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
+                <div class="text-muted small fw-semibold text-uppercase">Total Attendees</div>
+                <div class="fs-4 fw-bold text-dark mt-1">{{ total_confirmed_attendees }}</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
+                <div class="text-muted small fw-semibold text-uppercase">Checked In at Gate</div>
+                <div class="fs-4 fw-bold text-success mt-1">{{ checked_in_count }}</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
+                <div class="text-muted small fw-semibold text-uppercase">Total Sales</div>
+                <div class="fs-4 fw-bold text-warning mt-1">₹{{ total_sales_amount|floatformat:2 }}</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
+                <div class="text-muted small fw-semibold text-uppercase">Check-In Rate</div>
+                <div class="fs-4 fw-bold text-info mt-1">
+                    {% if total_confirmed_attendees > 0 %}
+                    {{ checked_in_count|stringformat:"d" }}/{{ total_confirmed_attendees }}
+                    {% else %}0%{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter & Search Bar -->
+    <div class="card border-0 shadow-sm rounded-4 p-3 bg-white mb-4">
+        <form method="GET" action="{% url 'restaurant_admin:club_guestlist_event' restaurant_slug=rslug event_id=selected_event.id %}" class="row g-2 align-items-center">
+            <div class="col-md-4">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-light border-0"><i class="fas fa-search text-muted"></i></span>
+                    <input type="text" name="q" class="form-control border-0 bg-light" placeholder="Search by name, phone, or booking ref..." value="{{ search_query }}">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <select name="tier" class="form-select form-select-sm bg-light border-0">
+                    <option value="">All Ticket Tiers</option>
+                    {% for tt in ticket_tiers %}
+                    <option value="{{ tt.id }}" {% if tier_filter == tt.id|stringformat:"d" %}selected{% endif %}>{{ tt.name }} (₹{{ tt.base_price|floatformat:0 }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select name="checked_in" class="form-select form-select-sm bg-light border-0">
+                    <option value="">All Check-in Status</option>
+                    <option value="1" {% if checked_in_filter == '1' %}selected{% endif %}>Checked In</option>
+                    <option value="0" {% if checked_in_filter == '0' %}selected{% endif %}>Not Checked In</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-sm btn-primary rounded-pill w-100">Filter</button>
+                <a href="{% url 'restaurant_admin:club_guestlist_event' restaurant_slug=rslug event_id=selected_event.id %}" class="btn btn-sm btn-outline-secondary rounded-pill">Reset</a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Attendees Table -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-white">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-muted small text-uppercase">
+                    <tr>
+                        <th class="ps-4">Booking Ref / Pass</th>
+                        <th>Guest Details</th>
+                        <th>Ticket Tier</th>
+                        <th>Qty</th>
+                        <th>Total Paid</th>
+                        <th>Payment</th>
+                        <th>Gate Entry</th>
+                        <th class="text-end pe-4">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in bookings %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="fw-bold text-dark font-monospace" style="font-size: 0.85rem;">{{ b.booking_reference }}</div>
+                            <small class="text-muted">{{ b.created_at|date:"d M, h:i A" }}</small>
+                        </td>
+                        <td>
+                            <div class="fw-bold text-dark">{{ b.guest_name }}</div>
+                            <div class="small text-muted">
+                                <i class="fas fa-phone-alt me-1 opacity-50"></i>{{ b.guest_phone }}
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-dark border px-2 py-1">
+                                {{ b.ticket_type.name }}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge bg-primary rounded-pill px-2">{{ b.quantity }}</span>
+                        </td>
+                        <td>
+                            <div class="fw-bold text-dark">₹{{ b.total_amount|floatformat:2 }}</div>
+                            <small class="text-muted">{{ b.get_payment_method_display }}</small>
+                        </td>
+                        <td>
+                            {% if b.payment_status == 'SUCCESS' %}
+                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1 rounded-pill">
+                                <i class="fas fa-check-circle me-1"></i> Paid
+                            </span>
+                            {% elif b.payment_status == 'PENDING' %}
+                            <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 px-2 py-1 rounded-pill">
+                                <i class="fas fa-clock me-1"></i> Pending
+                            </span>
+                            {% else %}
+                            <span class="badge bg-secondary px-2 py-1 rounded-pill">{{ b.payment_status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if b.checked_in %}
+                            <span class="badge bg-success text-white px-2 py-1 rounded-pill">
+                                <i class="fas fa-user-check me-1"></i> Checked In
+                            </span>
+                            <div class="small text-muted mt-1" style="font-size: 0.72rem;">
+                                {{ b.checked_in_at|date:"h:i A" }}
+                            </div>
+                            {% else %}
+                            <span class="badge bg-light text-muted border px-2 py-1 rounded-pill">
+                                Not Checked In
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-4">
+                            {% if b.payment_status == 'SUCCESS' %}
+                            <form method="POST" action="{% url 'restaurant_admin:club_booking_toggle_checkin' restaurant_slug=rslug booking_id=b.id %}" class="d-inline">
+                                {% csrf_token %}
+                                {% if b.checked_in %}
+                                <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill py-1 px-2" title="Undo check-in">
+                                    <i class="fas fa-undo me-1"></i> Undo
+                                </button>
+                                {% else %}
+                                <button type="submit" class="btn btn-sm btn-success rounded-pill py-1 px-3 shadow-sm fw-bold">
+                                    <i class="fas fa-check me-1"></i> Check In
+                                </button>
+                                {% endif %}
+                            </form>
+                            {% endif %}
+
+                            {% if b.booking_qr_code %}
+                            <button type="button" class="btn btn-sm btn-light rounded-circle p-2 ms-1" data-bs-toggle="modal" data-bs-target="#qrModal{{ b.id }}" title="View QR Pass">
+                                <i class="fas fa-qrcode text-primary"></i>
+                            </button>
+
+                            <!-- QR Code Modal -->
+                            <div class="modal fade text-start" id="qrModal{{ b.id }}" tabindex="-1">
+                                <div class="modal-dialog modal-dialog-centered modal-sm">
+                                    <div class="modal-content rounded-4 border-0 p-3 text-center">
+                                        <div class="modal-header border-0 pb-0">
+                                            <h6 class="modal-title fw-bold">Pass: {{ b.booking_reference }}</h6>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body py-3">
+                                            <img src="{{ b.booking_qr_code.url }}" alt="QR Pass" class="img-fluid rounded border p-2 mb-2" style="max-height: 220px;">
+                                            <div class="fw-bold">{{ b.guest_name }}</div>
+                                            <div class="small text-muted">{{ b.ticket_type.name }} • {{ b.quantity }} Guest(s)</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5 text-muted">
+                            <i class="fas fa-users-slash fa-2x opacity-25 mb-2 d-block"></i>
+                            No attendee bookings match the selected criteria.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Manual / Door Cash Booking Modal -->
+    <div class="modal fade" id="manualBookingModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 shadow">
+                <form method="POST" action="{% url 'restaurant_admin:club_manual_booking_create' restaurant_slug=rslug event_id=selected_event.id %}">
+                    {% csrf_token %}
+                    <div class="modal-header border-bottom p-4">
+                        <h5 class="modal-title fw-bold text-dark">
+                            <i class="fas fa-user-plus text-primary me-2"></i>Issue Door / Walk-in Pass
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Select Ticket Tier <span class="text-danger">*</span></label>
+                            <select name="ticket_type_id" class="form-select" required>
+                                {% for tt in ticket_tiers %}
+                                <option value="{{ tt.id }}">
+                                    {{ tt.name }} — ₹{{ tt.base_price|floatformat:0 }} ({{ tt.available_quantity }} available)
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-7">
+                                <label class="form-label fw-semibold">Guest Name <span class="text-danger">*</span></label>
+                                <input type="text" name="guest_name" class="form-control" required placeholder="Guest full name">
+                            </div>
+                            <div class="col-md-5">
+                                <label class="form-label fw-semibold">Quantity <span class="text-danger">*</span></label>
+                                <input type="number" name="quantity" class="form-control" min="1" max="50" value="1" required>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Mobile Number <span class="text-danger">*</span></label>
+                                <input type="text" name="guest_phone" class="form-control" required placeholder="10-digit mobile">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Payment Method</label>
+                                <select name="payment_method" class="form-select">
+                                    <option value="DOOR_CASH">Cash at Door (Paid)</option>
+                                    <option value="COMPLIMENTARY">Complimentary (₹0 / Guestlist)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Email (Optional)</label>
+                            <input type="email" name="guest_email" class="form-control" placeholder="guest@email.com">
+                        </div>
+
+                        <div class="mb-0">
+                            <label class="form-label fw-semibold">Staff Notes (Optional)</label>
+                            <input type="text" name="notes" class="form-control" placeholder="e.g. VIP table 4, Manager guest">
+                        </div>
+                    </div>
+                    <div class="modal-footer border-top p-3 bg-light">
+                        <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
+                            <i class="fas fa-ticket-alt me-1"></i> Issue Pass
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="card border-0 shadow-sm rounded-4 text-center p-5 bg-white">
+        <div class="py-4">
+            <i class="fas fa-calendar-times fa-3x text-muted opacity-50 mb-3"></i>
+            <h5 class="fw-bold text-dark">No Events Available</h5>
+            <p class="text-muted small">Please create an event first to view attendees and manage passes.</p>
+            <a href="{% url 'restaurant_admin:club_event_create' restaurant_slug=rslug %}" class="btn btn-primary rounded-pill px-4">
+                Create Event
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

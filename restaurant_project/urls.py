@@ -79,6 +79,7 @@ urlpatterns = [
     # API endpoints
     path('api/', include('core.urls')),
     path('api/', include('reservations.urls')),
+    path('api/events/', include(('events.urls', 'events'), namespace='events')),
     
     # API Token Authentication
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),

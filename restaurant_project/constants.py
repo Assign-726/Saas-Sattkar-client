@@ -62,4 +62,11 @@ ENABLE_ALCOHOL_VAT = _get_env_bool(
     _get_env_bool('ENABLE_LIQUOR_VAT', _get_env_bool('ENABLE_ALCOHOL_SERVICE', True))
 )
 
+# Controls whether Club & Events Ticketing Module is enabled and visible in Super Admin / system
+ENABLE_CLUB_EVENTS_MODULE = _get_env_bool(
+    'ENABLE_CLUB_EVENTS_MODULE',
+    _get_env_bool('ENABLE_CLUB_MODULE', True)
+)
+
+
 

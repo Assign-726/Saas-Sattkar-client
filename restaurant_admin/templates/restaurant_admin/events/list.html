@@ -1,0 +1,229 @@
+{% extends 'restaurant_admin/base.html' %}
+
+{% block title %}Club Events & Ticketing | {{ current_branch.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header with Action Buttons -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+        <div>
+            <h2 class="h3 mb-1 text-gray-800 fw-bold">
+                <i class="fas fa-ticket-alt text-warning me-2"></i>Club Events & Passes
+            </h2>
+            <p class="text-muted small mb-0">
+                Manage ticketed events, tiers, online sales, and door guestlists for <strong>{{ current_branch.name }}</strong>.
+            </p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{% url 'restaurant_admin:club_gate_scanner' restaurant_slug=rslug %}" class="btn btn-outline-dark rounded-pill px-3 shadow-sm">
+                <i class="fas fa-qrcode me-1 text-primary"></i> Door Pass Scanner
+            </a>
+            <a href="{% url 'restaurant_admin:club_guestlist' restaurant_slug=rslug %}" class="btn btn-outline-primary rounded-pill px-3 shadow-sm">
+                <i class="fas fa-users me-1"></i> Full Guestlist
+            </a>
+            <a href="{% url 'restaurant_admin:club_event_create' restaurant_slug=rslug %}" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold">
+                <i class="fas fa-plus me-1"></i> Create Event
+            </a>
+        </div>
+    </div>
+
+    <!-- Analytics Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small fw-semibold text-uppercase">Total Events</div>
+                        <div class="fs-4 fw-bold text-dark mt-1">{{ total_events }}</div>
+                    </div>
+                    <div class="p-3 bg-primary bg-opacity-10 text-primary rounded-circle">
+                        <i class="fas fa-calendar-alt fa-lg"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small fw-semibold text-uppercase">Upcoming</div>
+                        <div class="fs-4 fw-bold text-success mt-1">{{ upcoming_events }}</div>
+                    </div>
+                    <div class="p-3 bg-success bg-opacity-10 text-success rounded-circle">
+                        <i class="fas fa-bolt fa-lg"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small fw-semibold text-uppercase">Tickets Sold</div>
+                        <div class="fs-4 fw-bold text-info mt-1">{{ total_tickets_sold }}</div>
+                    </div>
+                    <div class="p-3 bg-info bg-opacity-10 text-info rounded-circle">
+                        <i class="fas fa-ticket-alt fa-lg"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small fw-semibold text-uppercase">Event Revenue</div>
+                        <div class="fs-4 fw-bold text-warning mt-1">₹{{ total_revenue|floatformat:2 }}</div>
+                    </div>
+                    <div class="p-3 bg-warning bg-opacity-10 text-warning rounded-circle">
+                        <i class="fas fa-coins fa-lg"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Events List / Grid -->
+    {% if events %}
+    <div class="row g-4">
+        {% for evt in events %}
+        <div class="col-md-6 col-xl-4">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden h-100 d-flex flex-column bg-white">
+                <!-- Cover Image & Badges -->
+                <div class="position-relative" style="height: 190px; background-color: #1e293b;">
+                    {% if evt.cover_image %}
+                    <img src="{{ evt.cover_image.url }}" alt="{{ evt.title }}" class="w-100 h-100 object-fit-cover">
+                    {% else %}
+                    <div class="w-100 h-100 d-flex flex-column align-items-center justify-content-center text-white bg-dark">
+                        <i class="fas fa-music fa-3x opacity-50 mb-2"></i>
+                        <span class="small opacity-75">No Poster Uploaded</span>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="position-absolute top-0 start-0 m-3 d-flex gap-2">
+                        {% if evt.is_published %}
+                        <span class="badge bg-success rounded-pill px-3 py-2 shadow-sm">
+                            <i class="fas fa-check-circle me-1"></i> Live
+                        </span>
+                        {% else %}
+                        <span class="badge bg-secondary rounded-pill px-3 py-2 shadow-sm">
+                            <i class="fas fa-eye-slash me-1"></i> Draft
+                        </span>
+                        {% endif %}
+
+                        {% if evt.is_featured %}
+                        <span class="badge bg-warning text-dark rounded-pill px-3 py-2 shadow-sm">
+                            <i class="fas fa-star me-1"></i> Featured
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    <div class="position-absolute bottom-0 end-0 m-3">
+                        <span class="badge bg-dark bg-opacity-75 text-white px-2 py-1 rounded-2 small">
+                            <i class="fas fa-user-shield me-1"></i> {{ evt.age_restriction }}
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Event Details -->
+                <div class="card-body p-4 flex-grow-1 d-flex flex-column justify-content-between">
+                    <div>
+                        <div class="text-primary small fw-bold text-uppercase mb-1">
+                            <i class="far fa-calendar-alt me-1"></i>
+                            {{ evt.start_datetime|date:"D, d M Y • h:i A" }}
+                        </div>
+                        <h4 class="card-title fw-bold text-dark mb-2">{{ evt.title }}</h4>
+                        <p class="text-muted small mb-3 text-truncate-2">
+                            {{ evt.description|default:"No description provided."|truncatechars:120 }}
+                        </p>
+
+                        <!-- Venue -->
+                        <div class="small text-secondary mb-3">
+                            <i class="fas fa-map-marker-alt text-danger me-1"></i>
+                            <strong>{{ evt.venue_name }}</strong>
+                        </div>
+
+                        <!-- Ticket Tiers Summary -->
+                        <div class="mb-3">
+                            <div class="small text-muted mb-2 fw-semibold">Available Ticket Tiers:</div>
+                            <div class="d-flex flex-wrap gap-2">
+                                {% for tt in evt.ticket_types.all %}
+                                <span class="badge bg-light text-dark border px-2 py-1" style="font-size: 0.78rem;">
+                                    {{ tt.name }}: <strong class="text-primary">₹{{ tt.base_price|floatformat:0 }}</strong>
+                                    ({{ tt.quantity_sold }}/{{ tt.total_allocated }})
+                                </span>
+                                {% empty %}
+                                <span class="text-muted small fst-italic">No ticket tiers added.</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions Bottom Row -->
+                    <div class="border-top pt-3 mt-3 d-flex align-items-center justify-content-between">
+                        <a href="{% url 'restaurant_admin:club_guestlist_event' restaurant_slug=rslug event_id=evt.id %}" class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                            <i class="fas fa-users me-1"></i> Guestlist ({{ evt.bookings.count }})
+                        </a>
+                        
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-light rounded-circle p-2" type="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-ellipsis-v text-muted"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
+                                <li>
+                                    <a class="dropdown-item py-2" href="{% url 'restaurant_admin:club_event_edit' restaurant_slug=rslug pk=evt.id %}">
+                                        <i class="fas fa-edit me-2 text-warning"></i> Edit Event & Tiers
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item py-2" href="{% url 'restaurant_admin:club_gate_scanner_event' restaurant_slug=rslug event_id=evt.id %}">
+                                        <i class="fas fa-qrcode me-2 text-info"></i> Open Door Scanner
+                                    </a>
+                                </li>
+                                <li>
+                                    <form method="POST" action="{% url 'restaurant_admin:club_event_toggle_publish' restaurant_slug=rslug pk=evt.id %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="dropdown-item py-2">
+                                            {% if evt.is_published %}
+                                            <i class="fas fa-eye-slash me-2 text-secondary"></i> Unpublish (Draft)
+                                            {% else %}
+                                            <i class="fas fa-globe me-2 text-success"></i> Publish Live
+                                            {% endif %}
+                                        </button>
+                                    </form>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <form method="POST" action="{% url 'restaurant_admin:club_event_delete' restaurant_slug=rslug pk=evt.id %}" onsubmit="return confirm('Are you sure you want to delete this event?');">
+                                        {% csrf_token %}
+                                        <button type="submit" class="dropdown-item py-2 text-danger">
+                                            <i class="fas fa-trash me-2"></i> Delete Event
+                                        </button>
+                                    </form>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card border-0 shadow-sm rounded-4 text-center p-5 bg-white">
+        <div class="py-5">
+            <div class="p-4 bg-light rounded-circle d-inline-block text-warning mb-3">
+                <i class="fas fa-ticket-alt fa-3x"></i>
+            </div>
+            <h4 class="fw-bold text-dark mb-2">No Club Events Created Yet</h4>
+            <p class="text-muted small mx-auto mb-4" style="max-width: 450px;">
+                Start scheduling live music gigs, DJ sets, weekend parties, or VIP nights for <strong>{{ current_branch.name }}</strong> with custom ticket tiers and zero ticketing fees.
+            </p>
+            <a href="{% url 'restaurant_admin:club_event_create' restaurant_slug=rslug %}" class="btn btn-primary rounded-pill px-4 py-2 shadow-sm fw-bold">
+                <i class="fas fa-plus me-1"></i> Create Your First Event
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -31,6 +31,8 @@ def app_constants(request):
         'ENABLE_WEBSITE_CMS': constants.SHOW_WEBSITE_PAGES,
         'ENABLE_ALCOHOL_VAT': constants.ENABLE_ALCOHOL_VAT,
         'SHOW_ALCOHOL_MODULE': constants.ENABLE_ALCOHOL_VAT,
+        'ENABLE_CLUB_EVENTS_MODULE': constants.ENABLE_CLUB_EVENTS_MODULE,
+        'SHOW_CLUB_EVENTS_MODULE': constants.ENABLE_CLUB_EVENTS_MODULE,
         'UNREAD_INQUIRIES_COUNT': unread_inquiries,
         'PENDING_APPLICATIONS_COUNT': pending_applications,
     }

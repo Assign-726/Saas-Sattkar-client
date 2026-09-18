@@ -151,6 +151,9 @@
                 <th style="padding: 10px 14px;">Location / Address</th>
                 <th style="padding: 10px 14px;">Tax & License Info</th>
                 <th style="padding: 10px 14px;">Alcohol & VAT Status</th>
+                {% if ENABLE_CLUB_EVENTS_MODULE %}
+                <th style="padding: 10px 14px;">Club & Events Module</th>
+                {% endif %}
               </tr>
             </thead>
             <tbody>
@@ -205,6 +208,18 @@
                     {% endif %}
                   {% endif %}
                 </td>
+                {% if ENABLE_CLUB_EVENTS_MODULE %}
+                <td style="padding: 12px 14px;">
+                  <button type="button" 
+                          class="btn small club-module-toggle-btn {% if b.has_club_module %}club-enabled{% else %}club-disabled{% endif %}"
+                          data-branch-id="{{ b.id }}"
+                          onclick="toggleBranchClubModule(this)" 
+                          title="Click to toggle Club Events module permission">
+                    <i class="fa-solid fa-ticket"></i>
+                    <span class="club-toggle-text">{% if b.has_club_module %}Active (Enabled){% else %}Disabled{% endif %}</span>
+                  </button>
+                </td>
+                {% endif %}
               </tr>
               {% endfor %}
             </tbody>
@@ -309,4 +324,73 @@
     {% endif %}
   </div>
 </div>
+
+{% if ENABLE_CLUB_EVENTS_MODULE %}
+<style>
+  .club-module-toggle-btn {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+  }
+  .club-module-toggle-btn.club-enabled {
+    background: #7e22ce;
+    color: #ffffff;
+    border: 1px solid #6b21a8;
+  }
+  .club-module-toggle-btn.club-disabled {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #cbd5e1;
+  }
+</style>
+
+<script>
+function getCsrfToken() {
+  const cookieVal = document.cookie.split('; ').find(row => row.startsWith('csrftoken='));
+  return cookieVal ? decodeURIComponent(cookieVal.split('=')[1]) : '';
+}
+
+function toggleBranchClubModule(btn) {
+  if (!btn) return;
+  const branchId = btn.dataset.branchId;
+  if (!branchId) return;
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
+
+  fetch(`/super/api/branches/${branchId}/toggle-club-module/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCsrfToken()
+    },
+    body: JSON.stringify({})
+  })
+  .then(res => res.json())
+  .then(data => {
+    btn.disabled = false;
+    if (data.success) {
+      const isEnabled = Boolean(data.has_club_module);
+      btn.classList.toggle('club-enabled', isEnabled);
+      btn.classList.toggle('club-disabled', !isEnabled);
+      btn.innerHTML = `<i class="fa-solid fa-ticket"></i> <span class="club-toggle-text">${isEnabled ? 'Active (Enabled)' : 'Disabled'}</span>`;
+    } else {
+      btn.innerHTML = originalHtml;
+      alert(data.error || 'Failed to toggle Club Events module.');
+    }
+  })
+  .catch(err => {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+    console.error('Error toggling club module:', err);
+    alert('Error toggling Club module permission. Please check connection.');
+  });
+}
+</script>
+{% endif %}
 {% endblock %}

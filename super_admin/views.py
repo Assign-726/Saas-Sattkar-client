@@ -238,6 +238,7 @@ def restaurant_edit(request, pk):
             'gst_registration_type': b.gst_registration_type,
             'is_hotel_tariff_7500_plus': b.is_hotel_tariff_7500_plus,
             'e_invoicing_enabled': b.e_invoicing_enabled,
+            'has_club_module': bool(getattr(b, 'has_club_module', False)),
         })
 
     return render(request, 'super_admin/onboard.html', {
@@ -632,6 +633,7 @@ def restaurant_feedback_qr(request, pk):
 
     img = qr.make_image(fill_color="#0f172a", back_color="#ffffff")
     buffer = io.BytesIO()
+    # pyrefly: ignore [unexpected-keyword]
     img.save(buffer, format="PNG")
     buffer.seek(0)
 
@@ -802,8 +804,34 @@ def api_branches_by_restaurant(request):
                     'gst_registration_type': b.gst_registration_type,
                     'is_hotel_tariff_7500_plus': b.is_hotel_tariff_7500_plus,
                     'e_invoicing_enabled': b.e_invoicing_enabled,
+                    'has_club_module': bool(getattr(b, 'has_club_module', False)),
                 })
     return JsonResponse({'restaurant': restaurant_data, 'branches': branches})
+
+
+@superuser_required
+def api_toggle_branch_club_module(request, pk):
+    if not constants.ENABLE_CLUB_EVENTS_MODULE:
+        return JsonResponse({'success': False, 'error': 'Club & Events module is disabled in system configuration (.env).'}, status=403)
+    branch = get_object_or_404(RestaurantBranch, pk=pk)
+    if request.method == 'POST':
+        try:
+            body = json.loads(request.body.decode('utf-8'))
+            if 'has_club_module' in body:
+                branch.has_club_module = bool(body['has_club_module'])
+            else:
+                branch.has_club_module = not branch.has_club_module
+        except Exception:
+            branch.has_club_module = not branch.has_club_module
+
+        branch.save(update_fields=['has_club_module'])
+        return JsonResponse({
+            'success': True,
+            'branch_id': branch.id,
+            'branch_name': branch.name,
+            'has_club_module': branch.has_club_module
+        })
+    return JsonResponse({'error': 'POST method required'}, status=405)
 
 
 @superuser_required
