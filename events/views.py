@@ -33,6 +33,15 @@ from events.serializers import (
 )
 
 
+from rest_framework.authentication import SessionAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
+
+class CsrfExemptSessionAuthentication(SessionAuthentication):
+    def enforce_csrf(self, request):
+        return  # Bypasses CSRF validation for staff session AJAX / fetch calls
+
+
 def _get_branch_razorpay_credentials(branch):
     """
     Resolves Razorpay API credentials for a branch.
@@ -57,9 +66,10 @@ def _get_branch_razorpay_credentials(branch):
 class AdminClubEventViewSet(viewsets.ModelViewSet):
     """
     Branch Admin Event Management ViewSet.
-    Protected by JWT Authentication and HasClubModule permission.
+    Protected by Session/JWT Authentication and HasClubModule permission.
     """
     serializer_class = ClubEventSerializer
+    authentication_classes = [CsrfExemptSessionAuthentication, JWTAuthentication]
     permission_classes = [IsAuthenticated, HasClubModule]
 
     def get_queryset(self):
@@ -218,6 +228,9 @@ class AdminClubEventViewSet(viewsets.ModelViewSet):
         except Exception:
             booking_ref = raw_input
 
+        if booking_ref:
+            booking_ref = str(booking_ref).strip().lstrip('#')
+
         booking = EventBooking.objects.filter(booking_reference=booking_ref).select_related('event', 'ticket_type', 'event__branch').first()
         if not booking:
             return Response({'valid': False, 'message': 'Invalid pass: Booking reference not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -265,6 +278,7 @@ class AdminTicketTypeViewSet(viewsets.ModelViewSet):
     CRUD ViewSet for Ticket Types belonging to an event.
     """
     serializer_class = TicketTypeSerializer
+    authentication_classes = [CsrfExemptSessionAuthentication, JWTAuthentication]
     permission_classes = [IsAuthenticated, HasClubModule]
 
     def get_queryset(self):
@@ -300,6 +314,10 @@ class PublicClubEventViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [AllowAny]
 
     def get_queryset(self):
+        from restaurant_project import constants
+        if not getattr(constants, 'ENABLE_CLUB_EVENTS_MODULE', True):
+            return ClubEvent.objects.none()
+
         # Clean up any expired pending holds before querying
         now = timezone.now()
         EventBooking.objects.filter(
@@ -307,15 +325,21 @@ class PublicClubEventViewSet(viewsets.ReadOnlyModelViewSet):
             expires_at__lt=now
         ).update(payment_status=EventBooking.PaymentStatus.EXPIRED)
 
-        qs = ClubEvent.objects.filter(is_published=True).select_related('branch').prefetch_related('ticket_types')
+        qs = ClubEvent.objects.filter(
+            is_published=True,
+            branch__has_club_module=True
+        ).select_related('branch', 'branch__restaurant').prefetch_related('ticket_types')
         
         branch_id = self.request.query_params.get('branch') or self.request.query_params.get('branch_id')
         branch_slug = self.request.query_params.get('branch_slug') or self.request.query_params.get('slug')
+        restaurant_slug = self.request.query_params.get('restaurant_slug') or self.request.query_params.get('restaurant')
 
         if branch_id:
             qs = qs.filter(branch_id=branch_id)
         elif branch_slug:
             qs = qs.filter(branch__slug=branch_slug)
+        elif restaurant_slug:
+            qs = qs.filter(branch__restaurant__slug=restaurant_slug)
 
         return qs.order_by('start_datetime')
 

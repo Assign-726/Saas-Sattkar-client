@@ -11,8 +11,8 @@ class HasClubModule(permissions.BasePermission):
     code = "FEATURE_GATED_CLUB_MODULE"
 
     def has_permission(self, request, view):
-        # Superusers bypass module gating
-        if request.user and request.user.is_superuser:
+        # Superusers and staff bypass module gating
+        if request.user and (request.user.is_superuser or request.user.is_staff):
             return True
 
         # Unauthenticated public endpoints (like browsing published events or checkout)

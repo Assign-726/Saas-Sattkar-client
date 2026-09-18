@@ -86,13 +86,17 @@ class EventBookingSerializer(serializers.ModelSerializer):
     event_title = serializers.CharField(source='event.title', read_only=True)
     ticket_tier_name = serializers.CharField(source='ticket_type.name', read_only=True)
     event_start_datetime = serializers.DateTimeField(source='event.start_datetime', read_only=True)
+    event_end_datetime = serializers.DateTimeField(source='event.end_datetime', read_only=True)
     venue_name = serializers.CharField(source='event.venue_name', read_only=True)
+    venue_address = serializers.CharField(source='event.venue_address', read_only=True)
+    branch_name = serializers.CharField(source='event.branch.name', read_only=True)
 
     class Meta:
         model = EventBooking
         fields = [
             'id', 'booking_reference', 'event', 'event_title', 'event_start_datetime',
-            'venue_name', 'ticket_type', 'ticket_tier_name', 'guest_name',
+            'event_end_datetime', 'venue_name', 'venue_address', 'branch_name',
+            'ticket_type', 'ticket_tier_name', 'guest_name',
             'guest_email', 'guest_phone', 'quantity', 'unit_price', 'tax_amount',
             'total_amount', 'payment_status', 'payment_method',
             'razorpay_order_id', 'razorpay_payment_id', 'booking_qr_code',
