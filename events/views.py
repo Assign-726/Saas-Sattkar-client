@@ -330,6 +330,10 @@ class PublicClubEventViewSet(viewsets.ReadOnlyModelViewSet):
             branch__has_club_module=True
         ).select_related('branch', 'branch__restaurant').prefetch_related('ticket_types')
         
+        include_past = self.request.query_params.get('include_past', 'false').lower() in ['true', '1', 'yes']
+        if not include_past:
+            qs = qs.filter(end_datetime__gte=now)
+
         branch_id = self.request.query_params.get('branch') or self.request.query_params.get('branch_id')
         branch_slug = self.request.query_params.get('branch_slug') or self.request.query_params.get('slug')
         restaurant_slug = self.request.query_params.get('restaurant_slug') or self.request.query_params.get('restaurant')

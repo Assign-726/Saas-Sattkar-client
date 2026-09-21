@@ -35,6 +35,12 @@
             </div>
 
             {% if selected_event %}
+            <a href="{% url 'restaurant_admin:club_ticket_grid_event' restaurant_slug=rslug event_id=selected_event.id %}" class="btn btn-outline-primary rounded-pill px-3 shadow-sm">
+                <i class="fas fa-th me-1"></i> Ticket Sales Grid
+            </a>
+            <a href="{% url 'restaurant_admin:club_floor_plan_event' restaurant_slug=rslug event_id=selected_event.id %}" class="btn btn-outline-dark rounded-pill px-3 shadow-sm">
+                <i class="fas fa-th-large me-1 text-primary"></i> Visual Floor Plan
+            </a>
             <a href="{% url 'restaurant_admin:club_gate_scanner_event' restaurant_slug=rslug event_id=selected_event.id %}" class="btn btn-dark rounded-pill px-3 shadow-sm">
                 <i class="fas fa-qrcode me-1 text-warning"></i> Open Gate Scanner
             </a>
@@ -118,6 +124,7 @@
                         <th class="ps-4">Booking Ref / Pass</th>
                         <th>Guest Details</th>
                         <th>Ticket Tier</th>
+                        <th>Table</th>
                         <th>Qty</th>
                         <th>Total Paid</th>
                         <th>Payment</th>
@@ -142,6 +149,17 @@
                             <span class="badge bg-light text-dark border px-2 py-1">
                                 {{ b.ticket_type.name }}
                             </span>
+                        </td>
+                        <td>
+                            {% if b.assigned_table %}
+                            <a href="{% url 'restaurant_admin:club_floor_plan_event' restaurant_slug=rslug event_id=selected_event.id %}" class="badge bg-primary-subtle text-primary border border-primary-subtle text-decoration-none px-2 py-1">
+                                <i class="fas fa-chair me-1"></i> {{ b.assigned_table.name }}
+                            </a>
+                            {% else %}
+                            <a href="{% url 'restaurant_admin:club_floor_plan_event' restaurant_slug=rslug event_id=selected_event.id %}" class="badge bg-light text-muted text-decoration-none border px-2 py-1">
+                                <i class="fas fa-plus me-1"></i> Unassigned
+                            </a>
+                            {% endif %}
                         </td>
                         <td>
                             <span class="badge bg-primary rounded-pill px-2">{{ b.quantity }}</span>

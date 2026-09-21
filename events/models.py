@@ -102,7 +102,7 @@ class TicketType(models.Model):
         related_name='ticket_types'
     )
     name = models.CharField(max_length=100)
-    description = models.CharField(max_length=255, blank=True)
+    description = models.TextField(blank=True)
     base_price = models.DecimalField(max_digits=10, decimal_places=2)
     total_allocated = models.PositiveIntegerField(help_text="Maximum tickets available for this tier")
     quantity_sold = models.PositiveIntegerField(default=0, help_text="Number of confirmed tickets sold")
@@ -224,6 +224,16 @@ class EventBooking(models.Model):
         related_name='scanned_bookings'
     )
     notes = models.TextField(blank=True)
+
+    # Visual Floor Plan & Table Allocation
+    assigned_table = models.ForeignKey(
+        'core.Table',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='event_bookings'
+    )
+    assigned_at = models.DateTimeField(null=True, blank=True)
 
     # 15-minute temporary inventory reservation expiry
     expires_at = models.DateTimeField(null=True, blank=True, db_index=True)

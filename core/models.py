@@ -1528,6 +1528,46 @@ class RestaurantLanding(models.Model):
     why_us_description_2 = models.TextField(blank=True, default="")
     why_us_title_3 = models.CharField(max_length=100, blank=True, default="")
     why_us_description_3 = models.TextField(blank=True, default="")
+    
+    # Club & Events Page Customization
+    events_hero_suptitle = models.CharField(max_length=200, blank=True, default="EXCLUSIVE GATHERINGS & NIGHTLIFE")
+    events_hero_title = models.CharField(max_length=200, blank=True, default="Events & Club Experiences")
+    events_hero_subtitle = models.TextField(blank=True, default="From candlelit jazz nights and electrifying resident DJ lounges to bespoke sommelier galas and live culinary celebrations.")
+    events_hero_image = models.ImageField(upload_to='landing/events_hero/', blank=True, null=True)
+    events_hero_video = models.FileField(
+        upload_to='landing/events_videos/',
+        null=True,
+        blank=True,
+        help_text="Upload MP4/WebM hero background video for the events page"
+    )
+    events_hero_video_url = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="External video URL (MP4/WebM, YouTube, Vimeo, or CDN URL)"
+    )
+    events_hero_bg_type = models.CharField(
+        max_length=20,
+        default="auto",
+        choices=[
+            ('auto', 'Auto (Video if available, else Slider)'),
+            ('video', 'Background Video'),
+            ('slider', 'Image Slider'),
+            ('image', 'Single Image'),
+        ],
+        help_text="Background display mode for Events page hero"
+    )
+    events_about_suptitle = models.CharField(max_length=200, blank=True, default="ATMOSPHERE & HOSPITALITY")
+    events_about_title = models.CharField(max_length=200, blank=True, default="Where Haute Cuisine Meets Electrifying Nights")
+    events_about_subtitle = models.TextField(
+        blank=True,
+        default="We transcend conventional dining. By evening, our curated spaces transform into intimate jazz sanctuaries, energetic DJ lounges, and grand banquet venues designed to create enduring memories."
+    )
+    events_page_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Dynamic configuration for events page feature cards and venue stats"
+    )
     map_iframe_url = models.TextField(blank=True, default="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3022.617540232549!2d-73.98785312347953!3d40.74844047138902!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x89c259a9b3117469%3A0xd134e199a405a163!2sEmpire%20State%20Building!5e0!3m2!1sen!2sus!4v1700000000000!5m2!1sen!2sus")
     
     # Legal & Policies

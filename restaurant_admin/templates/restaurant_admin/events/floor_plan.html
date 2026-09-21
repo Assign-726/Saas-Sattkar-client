@@ -1,0 +1,852 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block title %}Visual Floor Plan & Table Sales | {{ current_branch.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Floor Plan Styles */
+    .club-floor-header {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 18px 24px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        margin-bottom: 20px;
+    }
+
+    .kpi-card {
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 16px 20px;
+        border: 1px solid #edf2f7;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        transition: all 0.2s ease;
+    }
+    .kpi-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+
+    .zone-pill {
+        border-radius: 30px;
+        padding: 6px 16px;
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid #e2e8f0;
+        background: #ffffff;
+        color: #4a5568;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .zone-pill.active {
+        background: #4F46E5;
+        color: #ffffff;
+        border-color: #4F46E5;
+        box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
+    }
+    .zone-pill:hover:not(.active) {
+        background: #f7fafc;
+        border-color: #cbd5e1;
+    }
+
+    /* Floor Canvas Container */
+    .floor-canvas-container {
+        background: #0f172a;
+        background-image: 
+            radial-gradient(circle at 50% 50%, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.9) 100%),
+            linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        background-size: 100% 100%, 30px 30px, 30px 30px;
+        border-radius: 20px;
+        min-height: 580px;
+        position: relative;
+        padding: 30px;
+        overflow-x: auto;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: inset 0 2px 8px rgba(0,0,0,0.4);
+    }
+
+    /* Stage / DJ Booth Graphic */
+    .stage-banner {
+        background: linear-gradient(135deg, #312e81 0%, #1e1b4b 100%);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        color: #e0e7ff;
+        border-radius: 12px;
+        padding: 10px 24px;
+        text-align: center;
+        max-width: 380px;
+        margin: 0 auto 35px auto;
+        box-shadow: 0 0 25px rgba(99, 102, 241, 0.2);
+    }
+
+    /* Table Grid / Placement */
+    .tables-flow-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 24px;
+        justify-items: center;
+    }
+
+    /* Table Visual Card */
+    .table-seat-card {
+        width: 175px;
+        min-height: 140px;
+        border-radius: 16px;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        cursor: pointer;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        user-select: none;
+    }
+    .table-seat-card:hover {
+        transform: translateY(-4px) scale(1.02);
+        box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Table Shape Modifier */
+    .table-seat-card.shape-round {
+        border-radius: 50%;
+        width: 160px;
+        height: 160px;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+    }
+    .table-seat-card.shape-square {
+        border-radius: 16px;
+    }
+    .table-seat-card.shape-rectangle {
+        width: 220px;
+        border-radius: 16px;
+    }
+
+    /* Status Themes */
+    /* 1. Available / Vacant */
+    .table-seat-card.status-available {
+        background: #1e293b;
+        border: 2px dashed rgba(255, 255, 255, 0.2);
+        color: #94a3b8;
+    }
+    .table-seat-card.status-available:hover {
+        border-color: #6366f1;
+        background: #243248;
+        color: #f8fafc;
+    }
+
+    /* 2. VIP Reserved / Booked */
+    .table-seat-card.status-reserved {
+        background: linear-gradient(135deg, #422006 0%, #291804 100%);
+        border: 2px solid #eab308;
+        color: #fef08a;
+        box-shadow: 0 4px 15px rgba(234, 179, 8, 0.15);
+    }
+    .table-seat-card.status-reserved:hover {
+        border-color: #fde047;
+        box-shadow: 0 6px 20px rgba(234, 179, 8, 0.25);
+    }
+
+    /* 3. Checked-In / Seated */
+    .table-seat-card.status-checked-in {
+        background: linear-gradient(135deg, #064e3b 0%, #022c22 100%);
+        border: 2px solid #10b981;
+        color: #a7f3d0;
+        box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);
+    }
+    .table-seat-card.status-checked-in:hover {
+        border-color: #34d399;
+        box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+    }
+
+    /* Selected Table Halo */
+    .table-seat-card.is-selected {
+        outline: 3px solid #38bdf8;
+        outline-offset: 3px;
+    }
+
+    /* Offcanvas Inspector */
+    .inspector-drawer {
+        width: 380px !important;
+        border-left: 1px solid #e2e8f0;
+    }
+
+    /* Badges */
+    .status-badge-pill {
+        font-size: 10px;
+        text-transform: uppercase;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        padding: 3px 8px;
+        border-radius: 20px;
+        display: inline-block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <!-- Top Bar: Title, Event Selector, and Quick Actions -->
+    <div class="club-floor-header d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <a href="{% url 'restaurant_admin:club_events_list' restaurant_slug=rslug %}" class="text-decoration-none text-muted small fw-semibold">
+                    <i class="fas fa-arrow-left me-1"></i> Club & Events
+                </a>
+                <span class="text-muted small">•</span>
+                <span class="badge bg-primary-subtle text-primary fw-bold text-uppercase small">Visual Floor Plan</span>
+            </div>
+            <h2 class="h3 fw-bold text-gray-800 mb-0">
+                <i class="fas fa-th-large text-primary me-2"></i>Venue Floor & Table Sales
+            </h2>
+            <p class="text-muted small mb-0">Visual seating, VIP table sales, and live attendee check-in map for <strong>{{ current_branch.name }}</strong>.</p>
+        </div>
+
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <!-- Event Selector Dropdown -->
+            {% if events_list %}
+            <div class="dropdown">
+                <button class="btn btn-outline-dark dropdown-toggle rounded-pill px-3 py-2 fw-semibold text-truncate" style="max-width: 280px;" type="button" data-bs-toggle="dropdown">
+                    <i class="fas fa-calendar-star text-warning me-1"></i>
+                    {{ selected_event.title|default:"Select Event" }}
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 rounded-4">
+                    {% for evt in events_list %}
+                    <li>
+                        <a class="dropdown-item py-2 {% if evt.id == selected_event.id %}active fw-bold{% endif %}" href="{% url 'restaurant_admin:club_floor_plan_event' restaurant_slug=rslug event_id=evt.id %}">
+                            <div class="small fw-semibold">{{ evt.title }}</div>
+                            <div class="text-muted" style="font-size: 11px;">{{ evt.start_datetime|date:"d M Y, h:i A" }}</div>
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+
+            {% if selected_event %}
+            <a href="{% url 'restaurant_admin:club_ticket_grid_event' restaurant_slug=rslug event_id=selected_event.id %}" class="btn btn-outline-primary rounded-pill px-3 py-2 fw-semibold">
+                <i class="fas fa-th me-1"></i> Ticket Sales Grid
+            </a>
+            <a href="{% url 'restaurant_admin:club_guestlist_event' restaurant_slug=rslug event_id=selected_event.id %}" class="btn btn-outline-secondary rounded-pill px-3 py-2 fw-semibold">
+                <i class="fas fa-users me-1"></i> Guestlist
+            </a>
+            <a href="{% url 'restaurant_admin:club_gate_scanner_event' restaurant_slug=rslug event_id=selected_event.id %}" class="btn btn-outline-secondary rounded-pill px-3 py-2 fw-semibold">
+                <i class="fas fa-qrcode me-1"></i> Scanner
+            </a>
+            {% endif %}
+
+            <button id="refreshFloorBtn" class="btn btn-primary rounded-pill px-3 py-2 fw-semibold shadow-sm" type="button" onclick="loadFloorPlanData()">
+                <i class="fas fa-sync-alt me-1" id="refreshIcon"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    {% if not selected_event %}
+    <div class="alert alert-warning border-0 rounded-4 shadow-sm p-4 text-center">
+        <i class="fas fa-exclamation-triangle fa-2x text-warning mb-3"></i>
+        <h5 class="fw-bold">No Club Events Found</h5>
+        <p class="small text-muted mb-3">Create an event first to visualize table sales and seating occupancy.</p>
+        <a href="{% url 'restaurant_admin:club_event_create' restaurant_slug=rslug %}" class="btn btn-primary rounded-pill px-4">
+            <i class="fas fa-plus me-1"></i> Create Event
+        </a>
+    </div>
+    {% else %}
+
+    <!-- 4 KPI Summary Cards -->
+    <div class="row g-3 mb-4">
+        <!-- Card 1: Tables Booked -->
+        <div class="col-xl-3 col-sm-6">
+            <div class="kpi-card h-100">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <span class="text-muted text-uppercase fw-bold" style="font-size: 11px;">VIP Tables Booked</span>
+                        <h3 class="fw-bold text-dark mt-1 mb-0">
+                            <span id="kpiAssignedTables">{{ assigned_tables_count }}</span>
+                            <span class="text-muted fs-6 font-monospace">/ {{ total_tables }}</span>
+                        </h3>
+                    </div>
+                    <div class="p-2.5 rounded-3 bg-warning-subtle text-warning">
+                        <i class="fas fa-crown fa-lg"></i>
+                    </div>
+                </div>
+                <div class="mt-2 text-muted" style="font-size: 12px;">
+                    <span class="text-success fw-bold" id="kpiAvailableTables">{{ available_tables_count }}</span> tables vacant / available
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 2: Seated Occupancy -->
+        <div class="col-xl-3 col-sm-6">
+            <div class="kpi-card h-100">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <span class="text-muted text-uppercase fw-bold" style="font-size: 11px;">Seated Headcount</span>
+                        <h3 class="fw-bold text-dark mt-1 mb-0">
+                            <span id="kpiSeatedOccupied">{{ occupied_seated_capacity }}</span>
+                            <span class="text-muted fs-6 font-monospace">/ {{ total_seated_capacity }}</span>
+                        </h3>
+                    </div>
+                    <div class="p-2.5 rounded-3 bg-primary-subtle text-primary">
+                        <i class="fas fa-chair fa-lg"></i>
+                    </div>
+                </div>
+                <div class="mt-2 text-muted" style="font-size: 12px;">
+                    Total venue seating capacity
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 3: Checked In At Gate -->
+        <div class="col-xl-3 col-sm-6">
+            <div class="kpi-card h-100">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <span class="text-muted text-uppercase fw-bold" style="font-size: 11px;">Door Check-In Progress</span>
+                        <h3 class="fw-bold text-success mt-1 mb-0">
+                            <span id="kpiCheckedIn">{{ checked_in_count }}</span>
+                            <span class="text-muted fs-6 font-monospace">/ {{ total_event_attendees }}</span>
+                        </h3>
+                    </div>
+                    <div class="p-2.5 rounded-3 bg-success-subtle text-success">
+                        <i class="fas fa-user-check fa-lg"></i>
+                    </div>
+                </div>
+                <div class="mt-2 text-muted" style="font-size: 12px;">
+                    Attendees verified via gate scanner
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 4: Event Revenue -->
+        <div class="col-xl-3 col-sm-6">
+            <div class="kpi-card h-100">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <span class="text-muted text-uppercase fw-bold" style="font-size: 11px;">Total Ticket Sales</span>
+                        <h3 class="fw-bold text-dark mt-1 mb-0 font-monospace">
+                            ₹<span id="kpiTotalSales">{{ total_sales|floatformat:0 }}</span>
+                        </h3>
+                    </div>
+                    <div class="p-2.5 rounded-3 bg-emerald-50 text-success">
+                        <i class="fas fa-coins fa-lg"></i>
+                    </div>
+                </div>
+                <div class="mt-2 text-muted" style="font-size: 12px;">
+                    Flat 0% tax ticket revenue
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Zone Filters & Color Legend Bar -->
+    <div class="card border-0 shadow-sm rounded-4 p-3 bg-white mb-4">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <!-- Zone Filter Pills -->
+            <div class="d-flex flex-wrap align-items-center gap-2" id="zoneFilterContainer">
+                <button type="button" class="zone-pill active" onclick="filterByZone('ALL', this)">
+                    <span>All Zones</span>
+                    <span class="badge bg-dark rounded-pill">{{ total_tables }}</span>
+                </button>
+                {% for z in zones %}
+                <button type="button" class="zone-pill" onclick="filterByZone('{{ z.id }}', this)">
+                    <span>{{ z.name }}</span>
+                    <span class="badge bg-secondary-subtle text-dark rounded-pill">{{ z.tables.count }}</span>
+                </button>
+                {% endfor %}
+            </div>
+
+            <!-- Legend -->
+            <div class="d-flex flex-wrap align-items-center gap-3 small text-muted font-medium">
+                <div class="d-flex align-items-center gap-1.5">
+                    <span style="width: 14px; height: 14px; border-radius: 4px; background: #eab308; display: inline-block;"></span>
+                    <span>VIP Reserved</span>
+                </div>
+                <div class="d-flex align-items-center gap-1.5">
+                    <span style="width: 14px; height: 14px; border-radius: 4px; background: #10b981; display: inline-block;"></span>
+                    <span>Checked In</span>
+                </div>
+                <div class="d-flex align-items-center gap-1.5">
+                    <span style="width: 14px; height: 14px; border-radius: 4px; border: 1px dashed #94a3b8; background: #1e293b; display: inline-block;"></span>
+                    <span>Available / Vacant</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Visual Floor Canvas Section -->
+    <div class="floor-canvas-container mb-4">
+        <!-- Stage / DJ Console Anchor -->
+        <div class="stage-banner">
+            <i class="fas fa-compact-disc fa-spin text-warning me-2" style="animation-duration: 4s;"></i>
+            <span class="fw-bold text-uppercase tracking-wider" style="letter-spacing: 1.5px; font-size: 13px;">
+                STAGE • RESIDENT DJ LOUNGE
+            </span>
+        </div>
+
+        <!-- Tables Grid -->
+        <div id="tablesContainer" class="tables-flow-grid">
+            <!-- Rendered dynamically by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Unassigned Bookings Warning / Action Strip -->
+    {% if unassigned_bookings %}
+    <div class="card border-0 shadow-sm rounded-4 p-4 bg-white mb-4">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+                <h6 class="fw-bold text-dark mb-1">
+                    <i class="fas fa-ticket text-warning me-2"></i>Unassigned VIP / Ticket Bookings ({{ unassigned_bookings|length }})
+                </h6>
+                <p class="small text-muted mb-0">These ticket holders do not have a designated table assigned yet. Click any vacant table above or select an attendee to assign.</p>
+            </div>
+            <button class="btn btn-outline-dark rounded-pill btn-sm px-3 fw-semibold" type="button" data-bs-toggle="collapse" data-bs-target="#unassignedListCollapse">
+                <i class="fas fa-list me-1"></i> View Unassigned List
+            </button>
+        </div>
+
+        <div class="collapse mt-3" id="unassignedListCollapse">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0 small">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Booking Ref</th>
+                            <th>Guest Name</th>
+                            <th>Phone</th>
+                            <th>Ticket Tier</th>
+                            <th>Qty</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Quick Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ub in unassigned_bookings %}
+                        <tr>
+                            <td><code class="fw-bold text-primary">#{{ ub.booking_reference }}</code></td>
+                            <td class="fw-bold text-dark">{{ ub.guest_name }}</td>
+                            <td>{{ ub.guest_phone }}</td>
+                            <td><span class="badge bg-warning-subtle text-dark">{{ ub.ticket_type.name }}</span></td>
+                            <td>{{ ub.quantity }}</td>
+                            <td class="font-monospace fw-bold">₹{{ ub.total_amount|floatformat:0 }}</td>
+                            <td>
+                                {% if ub.checked_in %}
+                                <span class="badge bg-success-subtle text-success">Checked In</span>
+                                {% else %}
+                                <span class="badge bg-secondary-subtle text-dark">Confirmed</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1" onclick="openAssignModalForBooking('{{ ub.id }}', '{{ ub.guest_name|escapejs }}', '{{ ub.booking_reference }}')">
+                                    <i class="fas fa-chair me-1"></i> Assign Table
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% endif %}
+
+</div>
+
+<!-- Table Inspector Offcanvas Drawer -->
+<div class="offcanvas offcanvas-end inspector-drawer shadow-lg" tabindex="-1" id="tableInspectorDrawer" aria-labelledby="tableInspectorLabel">
+    <div class="offcanvas-header border-bottom py-3 bg-light">
+        <div class="d-flex align-items-center gap-2">
+            <div id="inspectorShapeIcon" class="p-2 rounded-3 bg-primary-subtle text-primary">
+                <i class="fas fa-chair"></i>
+            </div>
+            <div>
+                <h5 class="offcanvas-title fw-bold text-dark mb-0" id="tableInspectorLabel">Table Details</h5>
+                <span class="small text-muted" id="inspectorZoneLabel">Zone Name</span>
+            </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+
+    <div class="offcanvas-body p-4">
+        <!-- Status Indicator Pill -->
+        <div class="mb-4 text-center">
+            <span id="inspectorStatusBadge" class="status-badge-pill"></span>
+        </div>
+
+        <!-- Table Core Specifications Card -->
+        <div class="card border-0 bg-light p-3 rounded-4 mb-4">
+            <div class="row g-2 text-center">
+                <div class="col-6">
+                    <span class="text-muted small d-block">Table Number</span>
+                    <strong class="fs-5 text-dark" id="inspectorTableNumber">#1</strong>
+                </div>
+                <div class="col-6">
+                    <span class="text-muted small d-block">Max Capacity</span>
+                    <strong class="fs-5 text-dark" id="inspectorCapacity">4 Guests</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Booking Details Section -->
+        <div id="inspectorBookingSection">
+            <h6 class="fw-bold text-dark mb-3">
+                <i class="fas fa-ticket text-warning me-2"></i>VIP Booking Information
+            </h6>
+            <div class="p-3 border rounded-4 mb-4 bg-white shadow-sm space-y-2 text-sm">
+                <div class="d-flex justify-content-between py-1 border-bottom">
+                    <span class="text-muted">Guest:</span>
+                    <strong class="text-dark" id="inspectorGuestName">-</strong>
+                </div>
+                <div class="d-flex justify-content-between py-1 border-bottom">
+                    <span class="text-muted">Pass Reference:</span>
+                    <code class="text-primary fw-bold" id="inspectorBookingRef">-</code>
+                </div>
+                <div class="d-flex justify-content-between py-1 border-bottom">
+                    <span class="text-muted">Ticket Category:</span>
+                    <span class="badge bg-warning text-dark" id="inspectorTicketTier">-</span>
+                </div>
+                <div class="d-flex justify-content-between py-1 border-bottom">
+                    <span class="text-muted">Admit Quantity:</span>
+                    <strong class="text-dark" id="inspectorGuestQty">1 Guest</strong>
+                </div>
+                <div class="d-flex justify-content-between py-1 border-bottom">
+                    <span class="text-muted">Contact Phone:</span>
+                    <span class="text-dark" id="inspectorGuestPhone">-</span>
+                </div>
+                <div class="d-flex justify-content-between py-1 border-bottom">
+                    <span class="text-muted">Total Paid:</span>
+                    <strong class="text-success font-monospace" id="inspectorTotalAmount">₹0</strong>
+                </div>
+                <div class="d-flex justify-content-between py-1">
+                    <span class="text-muted">Check-In Status:</span>
+                    <span id="inspectorCheckInBadge" class="badge">Not Checked In</span>
+                </div>
+            </div>
+
+            <!-- Booking Quick Actions -->
+            <div class="d-grid gap-2">
+                <button type="button" id="inspectorCheckInBtn" class="btn btn-success rounded-pill py-2 fw-semibold" onclick="handleInspectorCheckInToggle()">
+                    <i class="fas fa-check me-1"></i> Mark Checked In
+                </button>
+                <button type="button" class="btn btn-outline-danger rounded-pill py-2 fw-semibold" onclick="handleUnassignCurrentTable()">
+                    <i class="fas fa-unlink me-1"></i> Unassign Table
+                </button>
+            </div>
+        </div>
+
+        <!-- Vacant Assignment Section -->
+        <div id="inspectorVacantSection" style="display: none;">
+            <div class="p-3 bg-light rounded-4 text-center mb-4">
+                <i class="fas fa-check-circle text-muted fa-2x mb-2"></i>
+                <h6 class="fw-bold text-dark mb-1">Table is Vacant</h6>
+                <p class="small text-muted mb-0">You can assign any unassigned attendee with a VIP or Table pass to this table.</p>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-dark">Select Confirmed Booking:</label>
+                <select id="unassignedBookingSelect" class="form-select rounded-pill">
+                    <option value="">-- Select an Attendee --</option>
+                </select>
+            </div>
+
+            <div class="d-grid">
+                <button type="button" class="btn btn-primary rounded-pill py-2.5 fw-bold" onclick="handleAssignSelectedBooking()">
+                    <i class="fas fa-check me-1"></i> Assign to this Table
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script id="tables-data" type="application/json">{{ tables_json|safe|default:"[]" }}</script>
+<script id="zones-data" type="application/json">{{ zones_json|safe|default:"[]" }}</script>
+<script id="unassigned-data" type="application/json">{{ unassigned_json|safe|default:"[]" }}</script>
+
+<script>
+// Server Data Injected Safely
+const tablesData = JSON.parse(document.getElementById('tables-data')?.textContent || '[]');
+const zonesData = JSON.parse(document.getElementById('zones-data')?.textContent || '[]');
+const unassignedData = JSON.parse(document.getElementById('unassigned-data')?.textContent || '[]');
+const eventId = "{{ selected_event.id|default:'' }}";
+const rslug = "{{ rslug }}";
+
+let currentActiveZone = 'ALL';
+let selectedTable = null;
+let bsDrawer = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const drawerEl = document.getElementById('tableInspectorDrawer');
+    if (drawerEl) {
+        bsDrawer = new bootstrap.Offcanvas(drawerEl);
+    }
+    renderFloorPlan();
+});
+
+function filterByZone(zoneId, btnElement) {
+    currentActiveZone = zoneId;
+    document.querySelectorAll('.zone-pill').forEach(btn => btn.classList.remove('active'));
+    if (btnElement) btnElement.classList.add('active');
+    renderFloorPlan();
+}
+
+function renderFloorPlan() {
+    const container = document.getElementById('tablesContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const filteredTables = tablesData.filter(t => {
+        if (currentActiveZone === 'ALL') return true;
+        return String(t.zone_id) === String(currentActiveZone);
+    });
+
+    if (filteredTables.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-5 text-white-50 w-100" style="grid-column: 1 / -1;">
+                <i class="fas fa-chair fa-3x mb-3 text-secondary"></i>
+                <h6>No tables found in this zone.</h6>
+            </div>
+        `;
+        return;
+    }
+
+    filteredTables.forEach(table => {
+        const card = document.createElement('div');
+        const shapeClass = `shape-${table.shape || 'round'}`;
+        const statusClass = table.status === 'CHECKED_IN' ? 'status-checked-in' : (table.status === 'RESERVED' ? 'status-reserved' : 'status-available');
+        
+        card.className = `table-seat-card ${shapeClass} ${statusClass}`;
+        card.id = `table-card-${table.id}`;
+
+        let statusText = 'Available';
+        let statusBadge = `<span class="status-badge-pill bg-white/10 text-white">Vacant</span>`;
+        if (table.status === 'CHECKED_IN') {
+            statusText = 'Checked In';
+            statusBadge = `<span class="status-badge-pill bg-emerald-500 text-white"><i class="fas fa-check me-1"></i>Checked In</span>`;
+        } else if (table.status === 'RESERVED') {
+            statusText = 'VIP Reserved';
+            statusBadge = `<span class="status-badge-pill bg-warning text-dark"><i class="fas fa-crown me-1"></i>Reserved</span>`;
+        }
+
+        let guestSnippet = '';
+        if (table.booking) {
+            guestSnippet = `
+                <div class="mt-2 text-truncate w-100">
+                    <strong class="d-block text-truncate text-white" style="font-size: 12px;">${table.booking.guest_name}</strong>
+                    <span class="text-white-50" style="font-size: 10px;">#${table.booking.reference}</span>
+                </div>
+            `;
+        } else {
+            guestSnippet = `
+                <div class="mt-2 text-white-50" style="font-size: 11px;">
+                    <i class="fas fa-plus-circle me-1"></i>Tap to Assign
+                </div>
+            `;
+        }
+
+        card.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center w-100">
+                <span class="fw-bold" style="font-size: 13px;">${table.name}</span>
+                <span class="badge bg-black/40 rounded-pill px-2 py-0.5" style="font-size: 10px;">${table.capacity}P</span>
+            </div>
+            ${guestSnippet}
+            <div class="mt-2">
+                ${statusBadge}
+            </div>
+        `;
+
+        card.addEventListener('click', () => openTableInspector(table));
+        container.appendChild(card);
+    });
+}
+
+function openTableInspector(table) {
+    selectedTable = table;
+
+    // Highlight card
+    document.querySelectorAll('.table-seat-card').forEach(c => c.classList.remove('is-selected'));
+    const cardEl = document.getElementById(`table-card-${table.id}`);
+    if (cardEl) cardEl.classList.add('is-selected');
+
+    // Populate drawer
+    document.getElementById('tableInspectorLabel').innerText = table.name;
+    document.getElementById('inspectorZoneLabel').innerText = table.zone_name || 'Main Area';
+    document.getElementById('inspectorTableNumber').innerText = `#${table.table_number}`;
+    document.getElementById('inspectorCapacity').innerText = `${table.capacity} Guests`;
+
+    const statusBadge = document.getElementById('inspectorStatusBadge');
+    const bookingSection = document.getElementById('inspectorBookingSection');
+    const vacantSection = document.getElementById('inspectorVacantSection');
+
+    if (table.booking) {
+        bookingSection.style.display = 'block';
+        vacantSection.style.display = 'none';
+
+        const b = table.booking;
+        document.getElementById('inspectorGuestName').innerText = b.guest_name;
+        document.getElementById('inspectorBookingRef').innerText = `#${b.reference}`;
+        document.getElementById('inspectorTicketTier').innerText = b.ticket_tier;
+        document.getElementById('inspectorGuestQty').innerText = `${b.quantity} Guest(s)`;
+        document.getElementById('inspectorGuestPhone').innerText = b.guest_phone || 'N/A';
+        document.getElementById('inspectorTotalAmount').innerText = `₹${parseFloat(b.total_amount).toFixed(0)}`;
+
+        const checkInBadge = document.getElementById('inspectorCheckInBadge');
+        const checkInBtn = document.getElementById('inspectorCheckInBtn');
+
+        if (b.checked_in) {
+            statusBadge.className = 'status-badge-pill bg-success text-white py-1.5 px-3';
+            statusBadge.innerHTML = '<i class="fas fa-check-circle me-1"></i> Guest Checked In';
+            checkInBadge.className = 'badge bg-success';
+            checkInBadge.innerText = `Checked In (${b.checked_in_at || 'Door Gate'})`;
+            checkInBtn.className = 'btn btn-outline-secondary rounded-pill py-2 fw-semibold';
+            checkInBtn.innerHTML = '<i class="fas fa-undo me-1"></i> Undo Check-In';
+        } else {
+            statusBadge.className = 'status-badge-pill bg-warning text-dark py-1.5 px-3';
+            statusBadge.innerHTML = '<i class="fas fa-crown me-1"></i> VIP Table Reserved';
+            checkInBadge.className = 'badge bg-secondary';
+            checkInBadge.innerText = 'Awaiting Arrival';
+            checkInBtn.className = 'btn btn-success rounded-pill py-2 fw-semibold';
+            checkInBtn.innerHTML = '<i class="fas fa-check me-1"></i> Check In Guest';
+        }
+    } else {
+        bookingSection.style.display = 'none';
+        vacantSection.style.display = 'block';
+
+        statusBadge.className = 'status-badge-pill bg-secondary-subtle text-dark py-1.5 px-3';
+        statusBadge.innerHTML = '<i class="fas fa-circle-notch me-1"></i> Table Vacant / Available';
+
+        // Populate unassigned select dropdown
+        const selectEl = document.getElementById('unassignedBookingSelect');
+        selectEl.innerHTML = '<option value="">-- Select an Attendee --</option>';
+        unassignedData.forEach(ub => {
+            const opt = document.createElement('option');
+            opt.value = ub.id;
+            opt.innerText = `${ub.guest_name} (#${ub.reference}) - ${ub.ticket_tier} (${ub.quantity}p)`;
+            selectEl.appendChild(opt);
+        });
+    }
+
+    if (bsDrawer) bsDrawer.show();
+}
+
+async function handleAssignSelectedBooking() {
+    if (!selectedTable || !eventId) return;
+    const selectEl = document.getElementById('unassignedBookingSelect');
+    const bookingId = selectEl.value;
+    if (!bookingId) {
+        alert('Please select an unassigned attendee from the dropdown.');
+        return;
+    }
+
+    try {
+        const resp = await fetch(`/dashboard/${rslug}/club-events/${eventId}/floor-plan/assign/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                booking_id: bookingId,
+                table_id: selectedTable.id
+            })
+        });
+
+        const data = await resp.json();
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert(data.error || 'Failed to assign table.');
+        }
+    } catch (err) {
+        alert('Server error while assigning table.');
+    }
+}
+
+async function handleUnassignCurrentTable() {
+    if (!selectedTable || !selectedTable.booking || !eventId) return;
+    if (!confirm(`Are you sure you want to unassign Table "${selectedTable.name}" from ${selectedTable.booking.guest_name}?`)) {
+        return;
+    }
+
+    try {
+        const resp = await fetch(`/dashboard/${rslug}/club-events/${eventId}/floor-plan/assign/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                booking_id: selectedTable.booking.id,
+                table_id: null
+            })
+        });
+
+        const data = await resp.json();
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert(data.error || 'Failed to unassign table.');
+        }
+    } catch (err) {
+        alert('Server error while unassigning table.');
+    }
+}
+
+async function handleInspectorCheckInToggle() {
+    if (!selectedTable || !selectedTable.booking) return;
+    const bookingId = selectedTable.booking.id;
+    window.location.href = `/dashboard/${rslug}/club-events/booking/${bookingId}/toggle-checkin/`;
+}
+
+function openAssignModalForBooking(bookingId, guestName, bookingRef) {
+    // Find first vacant table
+    const vacant = tablesData.find(t => t.status === 'AVAILABLE');
+    if (vacant) {
+        openTableInspector(vacant);
+        const selectEl = document.getElementById('unassignedBookingSelect');
+        if (selectEl) selectEl.value = bookingId;
+    } else {
+        alert('All tables are currently assigned for this event. Please select a table to reassign.');
+    }
+}
+
+async function loadFloorPlanData() {
+    if (!eventId) return;
+    const icon = document.getElementById('refreshIcon');
+    if (icon) icon.classList.add('fa-spin');
+
+    try {
+        const resp = await fetch(`/dashboard/${rslug}/club-events/${eventId}/floor-plan/api/`);
+        const data = await resp.json();
+        if (data.success) {
+            // Update tablesData in-place
+            tablesData.length = 0;
+            data.tables.forEach(t => tablesData.push(t));
+
+            // Update unassignedData in-place
+            unassignedData.length = 0;
+            data.unassigned.forEach(u => unassignedData.push(u));
+
+            // Update KPI cards
+            if (data.metrics) {
+                document.getElementById('kpiAssignedTables').innerText = data.metrics.assigned_tables;
+                document.getElementById('kpiAvailableTables').innerText = data.metrics.available_tables;
+                document.getElementById('kpiCheckedIn').innerText = data.metrics.checked_in;
+                document.getElementById('kpiTotalSales').innerText = parseFloat(data.metrics.total_sales).toFixed(0);
+            }
+
+            renderFloorPlan();
+        }
+    } catch (err) {
+        console.warn('Live floor refresh failed:', err);
+    } finally {
+        if (icon) icon.classList.remove('fa-spin');
+    }
+}
+</script>
+{% endblock %}

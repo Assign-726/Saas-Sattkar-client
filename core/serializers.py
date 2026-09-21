@@ -692,6 +692,58 @@ class RestaurantLandingSerializer(serializers.ModelSerializer):
         dtype = self.get_brand_display_type(obj)
         return dtype in ('both', 'name_only')
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Check if a branch query parameter is present
+        request = self.context.get('request')
+        branch_param = None
+        if request:
+            branch_param = (
+                request.query_params.get('branch') or 
+                request.query_params.get('branch_id') or 
+                request.query_params.get('branch_slug')
+            )
+        
+        # If branch_param is present, find matching branch config
+        if branch_param and instance.events_page_config and isinstance(instance.events_page_config, dict):
+            from django.db.models import Q
+            branches_dict = instance.events_page_config.get('branches', {})
+            b_cfg = None
+            if str(branch_param) in branches_dict:
+                b_cfg = branches_dict[str(branch_param)]
+            else:
+                try:
+                    matched_branch = instance.restaurant.branches.filter(
+                        Q(slug=branch_param) | Q(id=int(branch_param) if str(branch_param).isdigit() else None)
+                    ).first()
+                    if matched_branch and str(matched_branch.id) in branches_dict:
+                        b_cfg = branches_dict[str(matched_branch.id)]
+                except Exception:
+                    pass
+
+            if b_cfg and isinstance(b_cfg, dict):
+                if b_cfg.get('hero_title'):
+                    data['events_hero_title'] = b_cfg['hero_title']
+                if b_cfg.get('hero_suptitle'):
+                    data['events_hero_suptitle'] = b_cfg['hero_suptitle']
+                if b_cfg.get('hero_subtitle'):
+                    data['events_hero_subtitle'] = b_cfg['hero_subtitle']
+                if b_cfg.get('hero_video_url'):
+                    data['events_hero_video_url'] = b_cfg['hero_video_url']
+                if b_cfg.get('hero_image_url'):
+                    data['events_hero_image'] = b_cfg['hero_image_url']
+                if b_cfg.get('hero_bg_type') and b_cfg['hero_bg_type'] != 'inherit':
+                    data['events_hero_bg_type'] = b_cfg['hero_bg_type']
+                if b_cfg.get('about_title'):
+                    data['events_about_title'] = b_cfg['about_title']
+                if b_cfg.get('about_suptitle'):
+                    data['events_about_suptitle'] = b_cfg['about_suptitle']
+                if b_cfg.get('about_subtitle'):
+                    data['events_about_subtitle'] = b_cfg['about_subtitle']
+                data['branch_events_config'] = b_cfg
+
+        return data
+
     class Meta:
         model = RestaurantLanding
         fields = [
@@ -719,6 +771,10 @@ class RestaurantLandingSerializer(serializers.ModelSerializer):
             'map_iframe_url',
             'privacy_policy_title', 'privacy_policy_updated_at', 'privacy_policy_content',
             'terms_of_service_title', 'terms_of_service_updated_at', 'terms_of_service_content',
+            'events_hero_suptitle', 'events_hero_title', 'events_hero_subtitle',
+            'events_hero_image', 'events_hero_video', 'events_hero_video_url', 'events_hero_bg_type',
+            'events_about_suptitle', 'events_about_title', 'events_about_subtitle',
+            'events_page_config',
             'gallery_images', 'team_members', 'reviews', 'events', 'why_choose_us', 'branches'
         ]
 
