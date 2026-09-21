@@ -1060,8 +1060,46 @@ class RestaurantLandingForm(forms.ModelForm):
             'map_iframe_url',
             'privacy_policy_title', 'privacy_policy_updated_at', 'privacy_policy_content',
             'terms_of_service_title', 'terms_of_service_updated_at', 'terms_of_service_content',
-            'facebook_url', 'instagram_url', 'twitter_url', 'youtube_url'
+            'facebook_url', 'instagram_url', 'twitter_url', 'youtube_url',
+            'events_hero_suptitle', 'events_hero_title', 'events_hero_subtitle',
+            'events_hero_image', 'events_hero_video', 'events_hero_video_url', 'events_hero_bg_type',
+            'events_about_suptitle', 'events_about_title', 'events_about_subtitle',
+            'events_page_config'
         ]
+
+    def clean_events_hero_video(self):
+        video = self.cleaned_data.get('events_hero_video')
+        if not video:
+            return video
+
+        import os
+        from django.core.files.uploadedfile import UploadedFile
+
+        if not isinstance(video, UploadedFile):
+            return video
+
+        max_size_mb = 35
+        max_size_bytes = max_size_mb * 1024 * 1024
+
+        if video.size > max_size_bytes:
+            actual_mb = video.size / (1024 * 1024)
+            raise forms.ValidationError(
+                f"Video file is too large ({actual_mb:.1f} MB). "
+                f"Maximum allowed size for events hero background video is {max_size_mb} MB."
+            )
+
+        ext = os.path.splitext(video.name)[1].lower()
+        allowed_extensions = ['.mp4', '.webm']
+        if ext not in allowed_extensions:
+            raise forms.ValidationError(
+                f"Unsupported video format '{ext}'. Only web-optimized MP4 (.mp4) and WebM (.webm) files are supported."
+            )
+
+        content_type = getattr(video, 'content_type', '')
+        if content_type and not (content_type.startswith('video/') or content_type == 'application/octet-stream'):
+            raise forms.ValidationError("The uploaded file does not appear to be a valid video.")
+
+        return video
 
     def clean_hero_video(self):
         video = self.cleaned_data.get('hero_video')

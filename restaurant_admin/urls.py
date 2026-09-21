@@ -167,6 +167,13 @@ urlpatterns = [
     path('club-events/<int:event_id>/guestlist/', views_events.club_guestlist, name='club_guestlist_event'),
     path('club-events/<int:event_id>/manual-booking/', views_events.club_manual_booking_create, name='club_manual_booking_create'),
     path('club-events/booking/<int:booking_id>/toggle-checkin/', views_events.club_booking_toggle_checkin, name='club_booking_toggle_checkin'),
+    path('club-events/floor-plan/', views_events.club_floor_plan, name='club_floor_plan'),
+    path('club-events/<int:event_id>/floor-plan/', views_events.club_floor_plan, name='club_floor_plan_event'),
+    path('club-events/<int:event_id>/floor-plan/api/', views_events.club_floor_plan_api, name='club_floor_plan_api'),
+    path('club-events/<int:event_id>/floor-plan/assign/', views_events.club_floor_plan_assign_table, name='club_floor_plan_assign_table'),
+    path('club-events/ticket-grid/', views_events.club_ticket_grid, name='club_ticket_grid'),
+    path('club-events/<int:event_id>/ticket-grid/', views_events.club_ticket_grid, name='club_ticket_grid_event'),
+    path('club-events/<int:event_id>/ticket-grid/api/', views_events.club_ticket_grid_api, name='club_ticket_grid_api'),
     path('club-events/gate-scanner/', views_events.club_gate_scanner, name='club_gate_scanner'),
     path('club-events/<int:event_id>/gate-scanner/', views_events.club_gate_scanner, name='club_gate_scanner_event'),
 ]

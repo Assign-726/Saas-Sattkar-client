@@ -15,6 +15,8 @@ from decimal import Decimal
 from django.http import JsonResponse, HttpResponse
 import csv
 
+from django.core.files.storage import default_storage
+
 from super_admin.forms import (
     RestaurantForm,
     RestaurantAdminCreateForm,
@@ -335,6 +337,139 @@ def landing_edit(request, pk):
                 if landing_obj.about_image:
                     landing_obj.about_image.delete(save=False)
                 landing_obj.about_image = None
+            if 'clear_events_hero_image' in request.POST:
+                if landing_obj.events_hero_image:
+                    landing_obj.events_hero_image.delete(save=False)
+                landing_obj.events_hero_image = None
+            if 'clear_events_hero_video' in request.POST:
+                if landing_obj.events_hero_video:
+                    landing_obj.events_hero_video.delete(save=False)
+                landing_obj.events_hero_video = None
+
+            # Handle events_page_config cards and stats
+            cards = []
+            for i in range(1, 4):
+                c_title = request.POST.get(f'events_card_title_{i}', '').strip()
+                c_desc = request.POST.get(f'events_card_desc_{i}', '').strip()
+                c_sched = request.POST.get(f'events_card_schedule_{i}', '').strip()
+                c_icon = request.POST.get(f'events_card_icon_{i}', 'music').strip()
+                if c_title or c_desc:
+                    cards.append({
+                        'title': c_title,
+                        'description': c_desc,
+                        'schedule': c_sched,
+                        'icon': c_icon
+                    })
+
+            stats = []
+            for i in range(1, 5):
+                s_val = request.POST.get(f'events_stat_val_{i}', '').strip()
+                s_label = request.POST.get(f'events_stat_label_{i}', '').strip()
+                s_desc = request.POST.get(f'events_stat_desc_{i}', '').strip()
+                if s_val or s_label:
+                    stats.append({
+                        'value': s_val,
+                        'label': s_label,
+                        'desc': s_desc
+                    })
+
+            events_cfg = landing_obj.events_page_config if isinstance(landing_obj.events_page_config, dict) else {}
+            events_cfg['cards'] = cards
+            events_cfg['stats'] = stats
+
+            # Handle branch-specific events configuration
+            branches_cfg = events_cfg.get('branches', {}) if isinstance(events_cfg.get('branches'), dict) else {}
+            for b in restaurant.branches.all():
+                b_id_str = str(b.id)
+                prefix = f'events_branch_{b.id}_'
+                b_hero_title = request.POST.get(f'{prefix}hero_title', '').strip()
+                b_hero_suptitle = request.POST.get(f'{prefix}hero_suptitle', '').strip()
+                b_hero_subtitle = request.POST.get(f'{prefix}hero_subtitle', '').strip()
+                b_hero_bg_type = request.POST.get(f'{prefix}hero_bg_type', 'inherit').strip()
+                b_hero_video_url = request.POST.get(f'{prefix}hero_video_url', '').strip()
+                b_hero_image_url = request.POST.get(f'{prefix}hero_image_url', '').strip()
+
+                # Handle branch video file upload
+                b_video_file = request.FILES.get(f'{prefix}hero_video')
+                if b_video_file:
+                    saved_path = default_storage.save(f'landing/events_videos/branch_{b.id}_{b_video_file.name}', b_video_file)
+                    b_hero_video_url = default_storage.url(saved_path)
+                elif request.POST.get(f'clear_{prefix}hero_video'):
+                    b_hero_video_url = ''
+
+                # Handle branch image file upload
+                b_image_file = request.FILES.get(f'{prefix}hero_image')
+                if b_image_file:
+                    saved_path = default_storage.save(f'landing/events_hero/branch_{b.id}_{b_image_file.name}', b_image_file)
+                    b_hero_image_url = default_storage.url(saved_path)
+                elif request.POST.get(f'clear_{prefix}hero_image'):
+                    b_hero_image_url = ''
+
+                b_about_suptitle = request.POST.get(f'{prefix}about_suptitle', '').strip()
+                b_about_title = request.POST.get(f'{prefix}about_title', '').strip()
+                b_about_subtitle = request.POST.get(f'{prefix}about_subtitle', '').strip()
+
+                # Branch cards
+                b_cards = []
+                for i in range(1, 4):
+                    bc_title = request.POST.get(f'{prefix}card_title_{i}', '').strip()
+                    bc_desc = request.POST.get(f'{prefix}card_desc_{i}', '').strip()
+                    bc_sched = request.POST.get(f'{prefix}card_schedule_{i}', '').strip()
+                    bc_icon = request.POST.get(f'{prefix}card_icon_{i}', 'music').strip()
+                    if bc_title or bc_desc:
+                        b_cards.append({
+                            'title': bc_title,
+                            'description': bc_desc,
+                            'schedule': bc_sched,
+                            'icon': bc_icon
+                        })
+
+                # Branch stats
+                b_stats = []
+                for i in range(1, 5):
+                    bs_val = request.POST.get(f'{prefix}stat_val_{i}', '').strip()
+                    bs_label = request.POST.get(f'{prefix}stat_label_{i}', '').strip()
+                    bs_desc = request.POST.get(f'{prefix}stat_desc_{i}', '').strip()
+                    if bs_val or bs_label:
+                        b_stats.append({
+                            'value': bs_val,
+                            'label': bs_label,
+                            'desc': bs_desc
+                        })
+
+                existing_b_cfg = branches_cfg.get(b_id_str, {})
+                if not b_hero_video_url and not request.POST.get(f'clear_{prefix}hero_video') and existing_b_cfg.get('hero_video_url'):
+                    b_hero_video_url = existing_b_cfg.get('hero_video_url')
+                if not b_hero_image_url and not request.POST.get(f'clear_{prefix}hero_image') and existing_b_cfg.get('hero_image_url'):
+                    b_hero_image_url = existing_b_cfg.get('hero_image_url')
+
+                has_any_override = any([
+                    b_hero_title, b_hero_suptitle, b_hero_subtitle,
+                    b_hero_video_url, b_hero_image_url,
+                    (b_hero_bg_type and b_hero_bg_type != 'inherit'),
+                    b_about_suptitle, b_about_title, b_about_subtitle,
+                    b_cards, b_stats
+                ])
+
+                if has_any_override:
+                    branches_cfg[b_id_str] = {
+                        'hero_title': b_hero_title,
+                        'hero_suptitle': b_hero_suptitle,
+                        'hero_subtitle': b_hero_subtitle,
+                        'hero_bg_type': b_hero_bg_type,
+                        'hero_video_url': b_hero_video_url,
+                        'hero_image_url': b_hero_image_url,
+                        'about_suptitle': b_about_suptitle,
+                        'about_title': b_about_title,
+                        'about_subtitle': b_about_subtitle,
+                        'cards': b_cards,
+                        'stats': b_stats,
+                    }
+                elif b_id_str in branches_cfg:
+                    del branches_cfg[b_id_str]
+
+            events_cfg['branches'] = branches_cfg
+            landing_obj.events_page_config = events_cfg
             
             # Handle pages_seo JSON
             pages_seo_raw = request.POST.get('pages_seo')
@@ -430,6 +565,61 @@ def landing_edit(request, pk):
 
     frontend_base_url = Table.get_frontend_base_url()
 
+    events_cfg = landing.events_page_config if isinstance(landing.events_page_config, dict) else {}
+    events_cards = list(events_cfg.get('cards', []))
+    if not events_cards:
+        events_cards = [
+            {
+                'icon': 'music',
+                'title': 'Live Acoustic & Jazz Soirées',
+                'description': 'Intimate candlelit evenings curated with handpicked jazz trios, soulful vocalists, and acoustic ensembles paired with reserve cellar flights.',
+                'schedule': 'Every Friday & Sunday'
+            },
+            {
+                'icon': 'flame',
+                'title': 'VIP Club Lounge & DJ Nights',
+                'description': 'Electrifying Saturday late-nights with bespoke bottle service, neon mood installations, and signature house & melodic techno DJ sets.',
+                'schedule': 'Saturday Nights • 10 PM'
+            },
+            {
+                'icon': 'wine',
+                'title': 'Signature Galas & Masterclasses',
+                'description': 'Intimate culinary masterclasses, Michelin-grade truffle dinners, and sommelier guided Grand Cru wine flights.',
+                'schedule': 'Featured Monthly Nights'
+            }
+        ]
+    while len(events_cards) < 3:
+        events_cards.append({'icon': 'music', 'title': '', 'description': '', 'schedule': ''})
+
+    events_stats = list(events_cfg.get('stats', []))
+    if not events_stats:
+        events_stats = [
+            {'value': '250+', 'label': 'Guest Capacity', 'desc': 'Multi-zone venue space'},
+            {'value': '4', 'label': 'Distinct Club Zones', 'desc': 'Terrace, Lounge, Vault, Ballroom'},
+            {'value': '100%', 'label': 'VIP Table Service', 'desc': 'Dedicated sommelier & hostess'},
+            {'value': '4.9★', 'label': 'Guest Rating', 'desc': 'Over 1,200+ event reviews'}
+        ]
+    while len(events_stats) < 4:
+        events_stats.append({'value': '', 'label': '', 'desc': ''})
+
+    saved_branches_cfg = events_cfg.get('branches', {}) if isinstance(events_cfg, dict) else {}
+    branches_events_data = {}
+    for b in branches:
+        b_id_str = str(b.id)
+        b_cfg = saved_branches_cfg.get(b_id_str, {})
+        b_cards = list(b_cfg.get('cards', []))
+        while len(b_cards) < 3:
+            b_cards.append({'icon': 'music', 'title': '', 'description': '', 'schedule': ''})
+        b_stats = list(b_cfg.get('stats', []))
+        while len(b_stats) < 4:
+            b_stats.append({'value': '', 'label': '', 'desc': ''})
+        branches_events_data[b.id] = {
+            'branch': b,
+            'config': b_cfg,
+            'cards': b_cards,
+            'stats': b_stats,
+        }
+
     return render(request, 'super_admin/landing_edit.html', {
         'restaurant': restaurant,
         'branches': branches,
@@ -456,6 +646,9 @@ def landing_edit(request, pk):
         'theme_config_json': theme_config_json,
         'theme_config': theme_config_dict,
         'frontend_base_url': frontend_base_url,
+        'events_cards': events_cards,
+        'events_stats': events_stats,
+        'branches_events_data': branches_events_data,
     })
 
 

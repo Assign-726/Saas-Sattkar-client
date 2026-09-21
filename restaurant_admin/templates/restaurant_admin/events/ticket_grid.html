@@ -1,0 +1,1035 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block title %}Ticket Sales Visualizer & Matrix | {{ selected_event.title }} | {{ current_branch.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Ticket Grid Header & Container */
+    .ticket-grid-header {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 18px 24px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        margin-bottom: 20px;
+    }
+
+    .kpi-card {
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 16px 20px;
+        border: 1px solid #edf2f7;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        transition: all 0.2s ease;
+    }
+    .kpi-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+
+    .filter-pill {
+        border-radius: 30px;
+        padding: 6px 16px;
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid #e2e8f0;
+        background: #ffffff;
+        color: #4a5568;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .filter-pill.active {
+        background: #4F46E5;
+        color: #ffffff;
+        border-color: #4F46E5;
+        box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
+    }
+    .filter-pill:hover:not(.active) {
+        background: #f7fafc;
+        border-color: #cbd5e1;
+    }
+
+    /* Ticket Matrix Canvas */
+    .ticket-matrix-canvas {
+        background: #ffffff;
+        border-radius: 20px;
+        padding: 28px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+        margin-bottom: 25px;
+    }
+
+    /* Stage / DJ Screen Banner */
+    .stage-indicator {
+        background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+        border: 1px solid #cbd5e1;
+        border-radius: 30px;
+        padding: 8px 32px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: #64748b;
+        max-width: 320px;
+        margin: 0 auto 30px auto;
+        text-align: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    }
+
+    /* Tier Section */
+    .tier-section {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 22px;
+        margin-bottom: 28px;
+    }
+    .tier-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 18px;
+        flex-wrap: wrap;
+        gap: 12px;
+        border-bottom: 1px solid #e2e8f0;
+        padding-bottom: 12px;
+    }
+
+    /* Rows of Tickets */
+    .ticket-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 12px;
+        gap: 12px;
+    }
+    .ticket-row-label {
+        width: 75px;
+        font-size: 11px;
+        font-weight: 700;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        flex-shrink: 0;
+        text-align: right;
+        padding-right: 8px;
+    }
+    .ticket-row-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        flex-grow: 1;
+    }
+
+    /* Ticket Slot Item (Matching user reference image) */
+    .ticket-slot {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        user-select: none;
+    }
+    .ticket-slot:hover {
+        transform: translateY(-2px) scale(1.06);
+        z-index: 10;
+    }
+
+    /* 1. AVAILABLE: Green border, white background, green text */
+    .ticket-slot.status-available {
+        background: #ffffff;
+        border: 2px solid #10b981;
+        color: #059669;
+        box-shadow: 0 1px 3px rgba(16, 185, 129, 0.1);
+    }
+    .ticket-slot.status-available:hover {
+        background: #ecfdf5;
+        border-color: #059669;
+        box-shadow: 0 4px 10px rgba(16, 185, 129, 0.25);
+    }
+
+    /* 2. SOLD: Clean light/medium gray fill with dark text */
+    .ticket-slot.status-sold {
+        background: #e2e8f0;
+        border: 1.5px solid #cbd5e1;
+        color: #475569;
+    }
+    .ticket-slot.status-sold:hover {
+        background: #cbd5e1;
+        color: #1e293b;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+    }
+
+    /* 3. CHECKED IN: Solid emerald green with white text */
+    .ticket-slot.status-checked-in {
+        background: #059669;
+        border: 1.5px solid #047857;
+        color: #ffffff;
+        box-shadow: 0 2px 6px rgba(5, 150, 105, 0.3);
+    }
+    .ticket-slot.status-checked-in:hover {
+        background: #047857;
+        box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4);
+    }
+
+    /* 4. PENDING HOLD: Amber/gold filled or border with dark amber text */
+    .ticket-slot.status-pending {
+        background: #fef3c7;
+        border: 2px solid #f59e0b;
+        color: #b45309;
+        box-shadow: 0 1px 3px rgba(245, 158, 11, 0.15);
+    }
+    .ticket-slot.status-pending:hover {
+        background: #fde68a;
+        box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3);
+    }
+
+    /* 5. SELECTED (Active focus state) */
+    .ticket-slot.selected {
+        outline: 3px solid #4F46E5 !important;
+        outline-offset: 2px;
+        transform: scale(1.08);
+        z-index: 20;
+    }
+
+    /* Checkmark / Status icon badges */
+    .slot-sub-badge {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        font-size: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #ffffff;
+    }
+    .slot-sub-badge.check {
+        background: #10b981;
+        border: 1.5px solid #ffffff;
+    }
+    .slot-sub-badge.clock {
+        background: #f59e0b;
+        border: 1.5px solid #ffffff;
+    }
+
+    /* Legend Bar (Matching user image) */
+    .legend-bar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 28px;
+        padding: 16px 20px;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        margin-top: 24px;
+        flex-wrap: wrap;
+    }
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #475569;
+    }
+    .legend-box {
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        display: inline-block;
+    }
+
+    /* Offcanvas Inspector Drawer */
+    .offcanvas-ticket-details {
+        width: 420px !important;
+        border-left: 1px solid #e2e8f0;
+        box-shadow: -8px 0 24px rgba(0,0,0,0.08);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+
+    <!-- Top Navigation Tabs (Seamless switching between Grid, Floor Plan, Guestlist, Scanner) -->
+    <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-3">
+        <ul class="nav nav-pills bg-white p-1.5 rounded-4 shadow-sm border border-slate-200">
+            <li class="nav-item">
+                <a class="nav-link active fw-bold px-3 py-2" href="#">
+                    <i class="fas fa-th-large me-1.5 text-primary"></i> Ticket Sales Grid
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-secondary fw-semibold px-3 py-2" href="{% url 'restaurant_admin:club_floor_plan_event' restaurant_slug=rslug event_id=selected_event.id %}">
+                    <i class="fas fa-layer-group me-1.5"></i> Table Floor Plan
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-secondary fw-semibold px-3 py-2" href="{% url 'restaurant_admin:club_guestlist_event' restaurant_slug=rslug event_id=selected_event.id %}">
+                    <i class="fas fa-clipboard-list me-1.5"></i> Guestlist &amp; Check-in
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link text-secondary fw-semibold px-3 py-2" href="{% url 'restaurant_admin:club_gate_scanner_event' restaurant_slug=rslug event_id=selected_event.id %}">
+                    <i class="fas fa-qrcode me-1.5"></i> Gate Scanner
+                </a>
+            </li>
+        </ul>
+
+        <!-- Event Switcher Dropdown & Live Refresh Indicator -->
+        <div class="d-flex align-items-center gap-2.5">
+            <div class="dropdown">
+                <button class="btn btn-white border shadow-sm dropdown-toggle fw-bold d-flex align-items-center gap-2 px-3 py-2 rounded-3" type="button" data-bs-toggle="dropdown">
+                    <i class="fas fa-glass-cheers text-primary"></i>
+                    <span class="text-truncate" style="max-width: 220px;">{{ selected_event.title }}</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 rounded-3 p-2">
+                    <li class="dropdown-header text-uppercase fs-11 fw-bold text-muted">Select Event</li>
+                    {% for evt in events %}
+                    <li>
+                        <a class="dropdown-item rounded-2 py-2 d-flex align-items-center justify-content-between {% if evt.id == selected_event.id %}active{% endif %}" href="{% url 'restaurant_admin:club_ticket_grid_event' restaurant_slug=rslug event_id=evt.id %}">
+                            <span class="text-truncate me-2">{{ evt.title }}</span>
+                            <span class="badge {% if evt.is_upcoming %}bg-success-subtle text-success{% else %}bg-secondary-subtle text-secondary{% endif %} rounded-pill fs-11">
+                                {{ evt.start_datetime|date:"M d" }}
+                            </span>
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <button type="button" class="btn btn-primary rounded-3 px-3 py-2 shadow-sm d-flex align-items-center gap-2 fw-semibold fs-13" onclick="openWalkInModal()">
+                <i class="fas fa-user-plus"></i>
+                <span class="d-none d-sm-inline">Issue Walk-in Pass</span>
+            </button>
+            <button type="button" id="btn-refresh-grid" class="btn btn-light border shadow-sm px-3 py-2 rounded-3 text-secondary" title="Refresh Live Ticket Status">
+                <i class="fas fa-sync-alt" id="refresh-icon"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Live KPI Summary Bar -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="kpi-card">
+                <div class="text-muted fs-12 fw-semibold mb-1 text-uppercase">Total Capacity</div>
+                <div class="fs-4 fw-bolder text-dark" id="kpi-total-allocated">{{ total_allocated }}</div>
+                <div class="fs-11 text-muted mt-1"><i class="fas fa-ticket-alt me-1"></i> Allocated Passes</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="kpi-card">
+                <div class="text-muted fs-12 fw-semibold mb-1 text-uppercase">Confirmed Sold</div>
+                <div class="fs-4 fw-bolder text-dark" id="kpi-total-sold">{{ total_sold }}</div>
+                <div class="fs-11 text-success mt-1"><i class="fas fa-check-circle me-1"></i> Confirmed Tickets</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="kpi-card">
+                <div class="text-muted fs-12 fw-semibold mb-1 text-uppercase">Available (Unsold)</div>
+                <div class="fs-4 fw-bolder text-success" id="kpi-total-available">{{ total_available }}</div>
+                <div class="fs-11 text-muted mt-1"><i class="fas fa-door-open me-1"></i> Ready for Sale</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="kpi-card">
+                <div class="text-muted fs-12 fw-semibold mb-1 text-uppercase">Checked In</div>
+                <div class="fs-4 fw-bolder text-primary" id="kpi-total-checked-in">{{ total_checked_in }}</div>
+                <div class="fs-11 text-primary mt-1"><i class="fas fa-user-check me-1"></i> In Venue</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="kpi-card">
+                <div class="text-muted fs-12 fw-semibold mb-1 text-uppercase">Pending Holds</div>
+                <div class="fs-4 fw-bolder text-warning" id="kpi-total-holds">{{ total_holds }}</div>
+                <div class="fs-11 text-warning mt-1"><i class="fas fa-clock me-1"></i> In Cart (15m lock)</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="kpi-card">
+                <div class="text-muted fs-12 fw-semibold mb-1 text-uppercase">Total Revenue</div>
+                <div class="fs-4 fw-bolder text-dark" id="kpi-total-revenue">₹{{ total_revenue|floatformat:0 }}</div>
+                <div class="fs-11 text-muted mt-1"><i class="fas fa-receipt me-1"></i> Zero Tax Flat Rate</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter & Search Strip -->
+    <div class="ticket-grid-header d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <!-- Tier Filters -->
+        <div class="d-flex align-items-center gap-2 flex-wrap" id="tier-filter-container">
+            <button type="button" class="filter-pill active" data-tier-filter="all">
+                All Ticket Tiers
+            </button>
+            {% for tt in ticket_types %}
+            <button type="button" class="filter-pill" data-tier-filter="{{ tt.id }}">
+                {{ tt.name }} ({{ tt.total_allocated }})
+            </button>
+            {% endfor %}
+        </div>
+
+        <!-- Status Filter & Search -->
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <div class="btn-group btn-group-sm" role="group" id="status-filter-group">
+                <input type="radio" class="btn-check" name="statusFilter" id="filter-all" value="ALL" checked>
+                <label class="btn btn-outline-secondary fw-semibold px-2.5" for="filter-all">All</label>
+
+                <input type="radio" class="btn-check" name="statusFilter" id="filter-avail" value="AVAILABLE">
+                <label class="btn btn-outline-success fw-semibold px-2.5" for="filter-avail">Available</label>
+
+                <input type="radio" class="btn-check" name="statusFilter" id="filter-sold" value="SOLD">
+                <label class="btn btn-outline-secondary fw-semibold px-2.5" for="filter-sold">Sold</label>
+
+                <input type="radio" class="btn-check" name="statusFilter" id="filter-checked" value="CHECKED_IN">
+                <label class="btn btn-outline-primary fw-semibold px-2.5" for="filter-checked">Checked In</label>
+
+                <input type="radio" class="btn-check" name="statusFilter" id="filter-hold" value="PENDING_HOLD">
+                <label class="btn btn-outline-warning fw-semibold px-2.5" for="filter-hold">Held</label>
+            </div>
+
+            <div class="input-group input-group-sm" style="width: 220px;">
+                <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted fs-12"></i></span>
+                <input type="text" id="ticket-search-input" class="form-control border-start-0 ps-0" placeholder="Search ticket # or guest...">
+            </div>
+        </div>
+    </div>
+
+    <!-- Ticket Matrix Canvas -->
+    <div class="ticket-matrix-canvas">
+        <!-- Stage / DJ Landmark -->
+        <div class="stage-indicator">
+            <i class="fas fa-music me-1.5"></i> STAGE / DJ BOOTH &bull; DANCE FLOOR
+        </div>
+
+        <!-- Container for Tiers & Ticket Slots -->
+        <div id="ticket-tiers-container">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading Ticket Matrix...</span>
+                </div>
+                <div class="text-muted fs-13 mt-2">Loading live ticket matrix...</div>
+            </div>
+        </div>
+
+        <!-- Legend (Matching User Image) -->
+        <div class="legend-bar">
+            <div class="legend-item">
+                <span class="legend-box" style="border: 2px solid #10b981; background: #ffffff;"></span>
+                <span>Available</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-box" style="background: #e2e8f0; border: 1.5px solid #cbd5e1;"></span>
+                <span>Sold</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-box" style="background: #fef3c7; border: 2px solid #f59e0b;"></span>
+                <span>Pending Hold</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-box" style="background: #059669; border: 1.5px solid #047857;"></span>
+                <span>Checked In</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-box" style="background: #ffffff; border: 3px solid #4F46E5;"></span>
+                <span>Selected</span>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Offcanvas Ticket Inspector Drawer -->
+<div class="offcanvas offcanvas-end offcanvas-ticket-details" tabindex="-1" id="ticketInspectorOffcanvas" aria-labelledby="ticketInspectorLabel">
+    <div class="offcanvas-header border-bottom py-3 px-4 bg-light">
+        <div>
+            <span class="badge bg-primary-subtle text-primary rounded-pill fs-11 px-2.5 py-1 mb-1 fw-bold" id="drawer-tier-name">Tier Name</span>
+            <h5 class="offcanvas-title fw-bold text-dark fs-17" id="drawer-slot-title">Ticket #01</h5>
+        </div>
+        <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body p-4" id="drawer-content">
+        <!-- Injected dynamically via JS -->
+    </div>
+</div>
+
+<!-- Manual / Door Cash Booking Modal (Walk-in Desk) -->
+<div class="modal fade" id="manualBookingModal" tabindex="-1" aria-labelledby="manualBookingModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form method="POST" action="{% url 'restaurant_admin:club_manual_booking_create' restaurant_slug=rslug event_id=selected_event.id %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                
+                <div class="modal-header border-bottom p-4">
+                    <h5 class="modal-title fw-bold text-dark d-flex align-items-center gap-2" id="manualBookingModalLabel">
+                        <i class="fas fa-user-plus text-primary"></i> Issue Door / Walk-in Pass
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold text-dark">Select Ticket Tier <span class="text-danger">*</span></label>
+                        <select name="ticket_type_id" id="walkin_ticket_type_id" class="form-select rounded-3" required>
+                            {% for tt in ticket_types %}
+                            <option value="{{ tt.id }}" data-price="{{ tt.base_price }}" data-available="{{ tt.available_quantity }}">
+                                {{ tt.name }} — ₹{{ tt.base_price|floatformat:0 }} ({{ tt.available_quantity }} available)
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label fw-semibold text-dark">Guest Name <span class="text-danger">*</span></label>
+                            <input type="text" name="guest_name" id="walkin_guest_name" class="form-control rounded-3" required placeholder="Guest full name">
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label fw-semibold text-dark">Quantity <span class="text-danger">*</span></label>
+                            <input type="number" name="quantity" id="walkin_quantity" class="form-control rounded-3" min="1" max="50" value="1" required>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold text-dark">Mobile Number <span class="text-danger">*</span></label>
+                            <input type="text" name="guest_phone" id="walkin_guest_phone" class="form-control rounded-3" required placeholder="10-digit mobile">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold text-dark">Payment Method</label>
+                            <select name="payment_method" id="walkin_payment_method" class="form-select rounded-3">
+                                <option value="DOOR_CASH" selected>Cash at Door (Paid)</option>
+                                <option value="COMPLIMENTARY">Complimentary / Guestlist</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold text-dark">Email (Optional)</label>
+                        <input type="email" name="guest_email" id="walkin_guest_email" class="form-control rounded-3" placeholder="guest@email.com">
+                    </div>
+
+                    <div class="mb-0">
+                        <label class="form-label fw-semibold text-dark">Staff Notes (Optional)</label>
+                        <input type="text" name="notes" id="walkin_notes" class="form-control rounded-3" placeholder="e.g. VIP table 4, Manager guest">
+                    </div>
+                </div>
+                
+                <div class="modal-footer border-top p-3 bg-light">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm d-flex align-items-center gap-2">
+                        <i class="fas fa-ticket-alt"></i> Issue Pass
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const EVENT_ID = parseInt("{{ selected_event.id }}", 10);
+    const RSLUG = "{{ rslug }}";
+    const API_URL = `/dashboard/${RSLUG}/club-events/${EVENT_ID}/ticket-grid/api/`;
+
+    let ticketGridData = null;
+    let currentTierFilter = 'all';
+    let currentStatusFilter = 'ALL';
+    let searchQuery = '';
+    let selectedSlotKey = null;
+
+    const tiersContainer = document.getElementById('ticket-tiers-container');
+    const offcanvasEl = document.getElementById('ticketInspectorOffcanvas');
+    const bsOffcanvas = new bootstrap.Offcanvas(offcanvasEl);
+
+    // Fetch live grid data
+    function loadTicketGrid(showLoading = false) {
+        const refreshIcon = document.getElementById('refresh-icon');
+        if (refreshIcon) refreshIcon.classList.add('fa-spin');
+
+        fetch(API_URL)
+            .then(res => res.json())
+            .then(data => {
+                ticketGridData = data;
+                updateKPIs(data.metrics);
+                renderGrid();
+            })
+            .catch(err => {
+                console.error('Failed to load ticket grid data:', err);
+                if (showLoading) {
+                    tiersContainer.innerHTML = `
+                        <div class="alert alert-danger my-4 text-center">
+                            <i class="fas fa-exclamation-triangle me-2"></i> Failed to load ticket data. Please try again.
+                        </div>
+                    `;
+                }
+            })
+            .finally(() => {
+                if (refreshIcon) refreshIcon.classList.remove('fa-spin');
+            });
+    }
+
+    // Update KPI indicators
+    function updateKPIs(metrics) {
+        if (!metrics) return;
+        document.getElementById('kpi-total-allocated').textContent = metrics.total_allocated || 0;
+        document.getElementById('kpi-total-sold').textContent = metrics.total_sold || 0;
+        document.getElementById('kpi-total-available').textContent = metrics.total_available || 0;
+        document.getElementById('kpi-total-checked-in').textContent = metrics.total_checked_in || 0;
+        document.getElementById('kpi-total-holds').textContent = metrics.total_holds || 0;
+        document.getElementById('kpi-total-revenue').textContent = `₹${parseFloat(metrics.total_revenue || 0).toFixed(0)}`;
+    }
+
+    // Render the visual matrix
+    function renderGrid() {
+        if (!ticketGridData || !ticketGridData.ticket_types) return;
+
+        let html = '';
+        const tiers = ticketGridData.ticket_types;
+
+        tiers.forEach(tier => {
+            if (currentTierFilter !== 'all' && String(tier.id) !== String(currentTierFilter)) {
+                return;
+            }
+
+            // Filter slots based on status & search query
+            const filteredSlots = tier.slots.filter(slot => {
+                // Status match
+                if (currentStatusFilter !== 'ALL' && slot.status !== currentStatusFilter) {
+                    return false;
+                }
+                // Search match
+                if (searchQuery) {
+                    const q = searchQuery.toLowerCase();
+                    const numMatch = slot.slot_number.toLowerCase().includes(q);
+                    const nameMatch = slot.guest_name && slot.guest_name.toLowerCase().includes(q);
+                    const refMatch = slot.booking_reference && slot.booking_reference.toLowerCase().includes(q);
+                    return numMatch || nameMatch || refMatch;
+                }
+                return true;
+            });
+
+            // Group filtered slots into rows of 12 tickets
+            const ROWS_SIZE = 12;
+            const rows = [];
+            for (let i = 0; i < filteredSlots.length; i += ROWS_SIZE) {
+                rows.push(filteredSlots.slice(i, i + ROWS_SIZE));
+            }
+
+            html += `
+                <div class="tier-section" id="tier-block-${tier.id}">
+                    <div class="tier-section-header">
+                        <div class="d-flex align-items-center gap-3">
+                            <h6 class="fw-bold text-dark mb-0 fs-15">
+                                <i class="fas fa-ticket-alt text-primary me-2"></i> ${escapeHtml(tier.name)}
+                            </h6>
+                            <span class="badge bg-primary-subtle text-primary rounded-pill px-2.5 py-1 fs-12 fw-bold">
+                                ₹${parseFloat(tier.base_price).toFixed(0)}
+                            </span>
+                            <span class="badge bg-light text-secondary border rounded-pill px-2.5 py-1 fs-11">
+                                ${tier.sold_count} / ${tier.total_allocated} Sold (${tier.occupancy_rate}%)
+                            </span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="progress" style="width: 140px; height: 7px;">
+                                <div class="progress-bar bg-success" role="progressbar" style="width: ${tier.occupancy_rate}%;" aria-valuenow="${tier.occupancy_rate}" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                            <span class="fs-11 fw-bold text-muted">${tier.available_count} Left</span>
+                        </div>
+                    </div>
+
+                    <div class="tier-rows-container">
+            `;
+
+            if (rows.length === 0) {
+                html += `
+                    <div class="text-center py-4 text-muted fs-12">
+                        <i class="fas fa-filter me-1"></i> No ticket slots match the current filters.
+                    </div>
+                `;
+            } else {
+                rows.forEach((rowSlots, rIndex) => {
+                    const rowLabel = `Row ${String.fromCharCode(65 + rIndex)}`;
+                    const startSlot = rowSlots[0].slot_number;
+                    const endSlot = rowSlots[rowSlots.length - 1].slot_number;
+
+                    html += `
+                        <div class="ticket-row">
+                            <div class="ticket-row-label">${rowLabel} <span class="fs-10 text-muted fw-normal">(${startSlot}-${endSlot})</span></div>
+                            <div class="ticket-row-grid">
+                    `;
+
+                    rowSlots.forEach(slot => {
+                        const slotKey = `${tier.id}-${slot.slot_number}`;
+                        const isSelected = selectedSlotKey === slotKey;
+                        let statusClass = 'status-available';
+                        let badgeIcon = '';
+
+                        if (slot.status === 'CHECKED_IN') {
+                            statusClass = 'status-checked-in';
+                            badgeIcon = `<span class="slot-sub-badge check" title="Checked In"><i class="fas fa-check"></i></span>`;
+                        } else if (slot.status === 'SOLD') {
+                            statusClass = 'status-sold';
+                        } else if (slot.status === 'PENDING_HOLD') {
+                            statusClass = 'status-pending';
+                            badgeIcon = `<span class="slot-sub-badge clock" title="Pending Hold"><i class="fas fa-clock"></i></span>`;
+                        }
+
+                        const tooltipText = slot.guest_name
+                            ? `Pass #${slot.slot_number}: ${escapeHtml(slot.guest_name)} (${slot.status})`
+                            : `Pass #${slot.slot_number}: Available (₹${parseFloat(tier.base_price).toFixed(0)})`;
+
+                        html += `
+                            <div class="ticket-slot ${statusClass} ${isSelected ? 'selected' : ''}" 
+                                 data-tier-id="${tier.id}"
+                                 data-tier-name="${escapeHtml(tier.name)}"
+                                 data-tier-price="${tier.base_price}"
+                                 data-slot-number="${slot.slot_number}"
+                                 title="${tooltipText}">
+                                ${badgeIcon}
+                                <span>${slot.slot_number}</span>
+                            </div>
+                        `;
+                    });
+
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            html += `
+                    </div>
+                </div>
+            `;
+        });
+
+        tiersContainer.innerHTML = html;
+
+        // Attach click listeners to ticket slots
+        document.querySelectorAll('.ticket-slot').forEach(slotEl => {
+            slotEl.addEventListener('click', function() {
+                const tierId = parseInt(this.getAttribute('data-tier-id'));
+                const slotNum = this.getAttribute('data-slot-number');
+                const tierName = this.getAttribute('data-tier-name');
+                const tierPrice = this.getAttribute('data-tier-price');
+
+                // Update selected styling
+                document.querySelectorAll('.ticket-slot.selected').forEach(s => s.classList.remove('selected'));
+                this.classList.add('selected');
+                selectedSlotKey = `${tierId}-${slotNum}`;
+
+                openTicketInspector(tierId, slotNum, tierName, tierPrice);
+            });
+
+            // Double click on available slot directly opens walk-in booking modal
+            slotEl.addEventListener('dblclick', function() {
+                if (this.classList.contains('available')) {
+                    const tierId = parseInt(this.getAttribute('data-tier-id'));
+                    const slotNum = this.getAttribute('data-slot-number');
+                    openWalkInModal(tierId, slotNum);
+                }
+            });
+        });
+    }
+
+    // Open side inspector drawer with slot details
+    function openTicketInspector(tierId, slotNum, tierName, tierPrice) {
+        if (!ticketGridData) return;
+        const tier = ticketGridData.ticket_types.find(t => t.id === tierId);
+        if (!tier) return;
+        const slot = tier.slots.find(s => s.slot_number === slotNum);
+        if (!slot) return;
+
+        document.getElementById('drawer-tier-name').textContent = tierName;
+        document.getElementById('drawer-slot-title').textContent = `Pass Slot #${slot.slot_number}`;
+
+        const drawerContent = document.getElementById('drawer-content');
+
+        if (slot.status === 'AVAILABLE') {
+            drawerContent.innerHTML = `
+                <div class="text-center py-4">
+                    <div class="w-16 h-16 rounded-circle bg-success-subtle text-success d-flex align-items-center justify-content-center mx-auto mb-3" style="width: 60px; height: 60px; font-size: 26px;">
+                        <i class="fas fa-ticket-alt"></i>
+                    </div>
+                    <h6 class="fw-bold text-dark fs-16 mb-1">Pass #${slot.slot_number} is Available</h6>
+                    <p class="text-muted fs-12 mb-4">This ticket capacity is open for online booking or walk-in guests at the door.</p>
+
+                    <div class="bg-light p-3 rounded-3 border text-start fs-12 space-y-2 mb-4">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Ticket Category:</span>
+                            <span class="fw-bold text-dark">${escapeHtml(tierName)}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Unit Rate:</span>
+                            <span class="fw-bold text-success fs-14">₹${parseFloat(tierPrice).toFixed(0)}</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">Tax Policy:</span>
+                            <span class="badge bg-emerald-100 text-emerald-800 fs-11">0% Flat Tax</span>
+                        </div>
+                    </div>
+
+                    <button type="button" 
+                            id="btn-open-walkin-modal" 
+                            class="btn btn-primary w-100 py-2.5 rounded-3 fw-bold fs-13 d-flex align-items-center justify-content-center gap-2 shadow-sm">
+                        <i class="fas fa-plus-circle"></i> Issue Manual Walk-in Pass
+                    </button>
+                </div>
+            `;
+
+            // Attach Walk-in Pass button click listener
+            const walkinBtn = document.getElementById('btn-open-walkin-modal');
+            if (walkinBtn) {
+                walkinBtn.addEventListener('click', function() {
+                    openWalkInModal(tier.id, slot.slot_number);
+                });
+            }
+        } else if (slot.status === 'PENDING_HOLD') {
+            drawerContent.innerHTML = `
+                <div class="text-center py-4">
+                    <div class="w-16 h-16 rounded-circle bg-warning-subtle text-warning d-flex align-items-center justify-content-center mx-auto mb-3" style="width: 60px; height: 60px; font-size: 26px;">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill px-3 py-1 fw-bold fs-12 mb-2">Pending Checkout Hold</span>
+                    <h6 class="fw-bold text-dark fs-16 mb-1">Held in Customer Cart</h6>
+                    <p class="text-muted fs-12 mb-4">This ticket is temporarily reserved in a 15-minute checkout session.</p>
+
+                    <div class="bg-light p-3 rounded-3 border text-start fs-12 mb-4">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Customer Name:</span>
+                            <span class="fw-bold text-dark">${escapeHtml(slot.guest_name || 'Anonymous Guest')}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Reference:</span>
+                            <span class="font-monospace fw-bold text-primary">#${escapeHtml(slot.booking_reference)}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Expires In:</span>
+                            <span class="fw-bold text-danger">${Math.max(0, Math.floor((slot.hold_expires_in_seconds || 0) / 60))}m ${(slot.hold_expires_in_seconds || 0) % 60}s</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">Rate:</span>
+                            <span class="fw-bold text-dark">₹${parseFloat(slot.unit_price).toFixed(0)}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            // SOLD or CHECKED_IN
+            const isCheckedIn = slot.status === 'CHECKED_IN';
+            const statusBadge = isCheckedIn
+                ? `<span class="badge bg-success rounded-pill px-3 py-1 fs-12 fw-bold"><i class="fas fa-check-circle me-1"></i> Checked In</span>`
+                : `<span class="badge bg-secondary rounded-pill px-3 py-1 fs-12 fw-bold"><i class="fas fa-ticket-alt me-1"></i> Confirmed Ticket</span>`;
+
+            drawerContent.innerHTML = `
+                <div class="py-2">
+                    <div class="d-flex align-items-center justify-content-between mb-3">
+                        ${statusBadge}
+                        <span class="font-monospace fw-bold text-primary fs-13">#${escapeHtml(slot.booking_reference)}</span>
+                    </div>
+
+                    <!-- Guest Card -->
+                    <div class="card border border-slate-200 shadow-sm rounded-3 mb-3 p-3 bg-white">
+                        <div class="d-flex align-items-center gap-3 mb-2">
+                            <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center fw-bold fs-16" style="width: 44px; height: 44px;">
+                                ${escapeHtml((slot.guest_name || 'G').charAt(0).toUpperCase())}
+                            </div>
+                            <div>
+                                <h6 class="fw-bold text-dark mb-0 fs-15">${escapeHtml(slot.guest_name)}</h6>
+                                <span class="text-muted fs-11">${escapeHtml(slot.guest_email || 'No email provided')}</span>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 pt-2 border-top fs-12 text-secondary">
+                            <i class="fas fa-phone-alt text-muted"></i>
+                            <a href="tel:${escapeHtml(slot.guest_phone)}" class="text-decoration-none text-dark fw-semibold">${escapeHtml(slot.guest_phone)}</a>
+                        </div>
+                    </div>
+
+                    <!-- Pass Details List -->
+                    <div class="bg-light p-3 rounded-3 border text-start fs-12 mb-4 space-y-2">
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <span class="text-muted">Ticket Category:</span>
+                            <span class="fw-bold text-dark">${escapeHtml(tierName)}</span>
+                        </div>
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <span class="text-muted">Pass Slot #:</span>
+                            <span class="fw-bold text-primary">#${slot.slot_number}</span>
+                        </div>
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <span class="text-muted">Assigned Table:</span>
+                            <span class="fw-bold ${slot.assigned_table ? 'text-primary' : 'text-muted'}">${escapeHtml(slot.assigned_table || 'Open Floor / Standing')}</span>
+                        </div>
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <span class="text-muted">Rate Paid:</span>
+                            <span class="fw-bold text-success fs-13">₹${parseFloat(slot.unit_price).toFixed(0)} (0% Tax)</span>
+                        </div>
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <span class="text-muted">Booked At:</span>
+                            <span class="text-dark">${escapeHtml(slot.booked_at)}</span>
+                        </div>
+                        <div class="d-flex justify-content-between py-1">
+                            <span class="text-muted">Gate Arrival:</span>
+                            <span class="fw-semibold ${isCheckedIn ? 'text-success' : 'text-muted'}">
+                                ${isCheckedIn ? `${escapeHtml(slot.checked_in_at || 'Checked In')}` : 'Not Scanned Yet'}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Check-in Action Button -->
+                    <button type="button" 
+                            id="btn-toggle-checkin"
+                            data-booking-id="${slot.booking_id}"
+                            class="btn ${isCheckedIn ? 'btn-outline-danger' : 'btn-success'} w-100 py-2.5 rounded-3 fw-bold fs-13 d-flex align-items-center justify-content-center gap-2 mb-2">
+                        <i class="fas ${isCheckedIn ? 'fa-undo' : 'fa-check'}"></i>
+                        <span>${isCheckedIn ? 'Undo Gate Check-in' : '1-Click Gate Check-in'}</span>
+                    </button>
+
+                    <!-- View Customer Digital Pass Link -->
+                    <a href="/events/pass/${encodeURIComponent(slot.booking_reference)}" target="_blank" class="btn btn-light border w-100 py-2 rounded-3 text-secondary fs-12 fw-semibold d-flex align-items-center justify-content-center gap-2">
+                        <i class="fas fa-external-link-alt"></i> View Digital QR Pass
+                    </a>
+                </div>
+            `;
+
+            // Attach Check-in Toggle Listener
+            const checkinBtn = document.getElementById('btn-toggle-checkin');
+            if (checkinBtn) {
+                checkinBtn.addEventListener('click', function() {
+                    const bookingId = this.getAttribute('data-booking-id');
+                    this.disabled = true;
+                    this.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status"></span> Updating...`;
+
+                    fetch(`/dashboard/${RSLUG}/club-events/booking/${bookingId}/toggle-checkin/`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken'),
+                            'Content-Type': 'application/json',
+                        }
+                    })
+                    .then(res => res.json())
+                    .then(resData => {
+                        loadTicketGrid();
+                        // Re-open updated inspector
+                        openTicketInspector(tierId, slotNum, tierName, tierPrice);
+                    })
+                    .catch(err => {
+                        console.error('Check-in error:', err);
+                        alert('Failed to update check-in status.');
+                    });
+                });
+            }
+        }
+
+        bsOffcanvas.show();
+    }
+
+    // Tier Filter Buttons
+    document.querySelectorAll('[data-tier-filter]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('[data-tier-filter]').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            currentTierFilter = this.getAttribute('data-tier-filter');
+            renderGrid();
+        });
+    });
+
+    // Status Filter Radio Buttons
+    document.querySelectorAll('input[name="statusFilter"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            currentStatusFilter = this.value;
+            renderGrid();
+        });
+    });
+
+    // Search Input
+    const searchInput = document.getElementById('ticket-search-input');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            searchQuery = this.value.trim();
+            renderGrid();
+        });
+    }
+
+    // Refresh Button
+    document.getElementById('btn-refresh-grid').addEventListener('click', () => {
+        loadTicketGrid(true);
+    });
+
+    // Helper: CSRF token
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // Open Door / Walk-in Pass Modal
+    window.openWalkInModal = function(tierId = null, slotNum = null) {
+        if (bsOffcanvas) {
+            bsOffcanvas.hide();
+        }
+
+        const tierSelect = document.getElementById('walkin_ticket_type_id');
+        if (tierSelect && tierId) {
+            tierSelect.value = String(tierId);
+        }
+
+        const notesInput = document.getElementById('walkin_notes');
+        if (notesInput) {
+            if (slotNum) {
+                notesInput.value = `Pass Slot #${slotNum} (Door Sale)`;
+            } else {
+                notesInput.value = '';
+            }
+        }
+
+        const qtyInput = document.getElementById('walkin_quantity');
+        if (qtyInput) {
+            qtyInput.value = '1';
+        }
+
+        const modalEl = document.getElementById('manualBookingModal');
+        if (modalEl) {
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
+    };
+
+    // Initial load
+    loadTicketGrid(true);
+
+    // Live polling every 25 seconds
+    setInterval(loadTicketGrid, 25000);
+});
+</script>
+{% endblock %}

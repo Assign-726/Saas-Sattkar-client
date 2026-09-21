@@ -90,6 +90,9 @@ class EventBookingSerializer(serializers.ModelSerializer):
     venue_name = serializers.CharField(source='event.venue_name', read_only=True)
     venue_address = serializers.CharField(source='event.venue_address', read_only=True)
     branch_name = serializers.CharField(source='event.branch.name', read_only=True)
+    assigned_table_name = serializers.CharField(source='assigned_table.name', read_only=True, allow_null=True)
+    assigned_table_number = serializers.IntegerField(source='assigned_table.table_number', read_only=True, allow_null=True)
+    assigned_table_zone = serializers.CharField(source='assigned_table.zone.name', read_only=True, allow_null=True)
 
     class Meta:
         model = EventBooking
@@ -100,12 +103,14 @@ class EventBookingSerializer(serializers.ModelSerializer):
             'guest_email', 'guest_phone', 'quantity', 'unit_price', 'tax_amount',
             'total_amount', 'payment_status', 'payment_method',
             'razorpay_order_id', 'razorpay_payment_id', 'booking_qr_code',
-            'checked_in', 'checked_in_at', 'notes', 'created_at'
+            'checked_in', 'checked_in_at', 'notes', 'created_at',
+            'assigned_table', 'assigned_table_name', 'assigned_table_number',
+            'assigned_table_zone', 'assigned_at'
         ]
         read_only_fields = [
             'booking_reference', 'tax_amount', 'total_amount',
             'razorpay_order_id', 'razorpay_payment_id', 'booking_qr_code',
-            'checked_in', 'checked_in_at', 'created_at'
+            'checked_in', 'checked_in_at', 'created_at', 'assigned_at'
         ]
 
 

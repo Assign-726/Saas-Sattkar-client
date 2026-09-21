@@ -1166,6 +1166,10 @@
         <i class="fa-solid fa-calendar-days"></i>
         <span>Events</span>
       </button>
+      <button class="shop-tab-btn" onclick="switchTab(event, 'club_events')">
+        <i class="fa-solid fa-champagne-glasses"></i>
+        <span>Club & Events Page</span>
+      </button>
       <button class="shop-tab-btn" onclick="switchTab(event, 'contact')">
         <i class="fa-solid fa-circle-nodes"></i>
         <span>Contact & Social</span>
@@ -2369,6 +2373,512 @@
           <button type="submit" class="btn">
             <i class="fa-solid fa-circle-check"></i>
             <span>Save About Story Details</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- PANE: CLUB & EVENTS PAGE CUSTOMIZATION -->
+      <div id="pane-club_events" class="tab-pane">
+        <!-- SCOPE SWITCHER BAR -->
+        <div style="background: #ffffff; border: 1px solid var(--border); border-radius: 16px; padding: 18px 22px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <div style="width: 44px; height: 44px; border-radius: 12px; background: #fff7ed; color: #ea580c; display: flex; align-items: center; justify-content: center; font-size: 20px; border: 1px solid #ffedd5;">
+                <i class="fa-solid fa-code-branch"></i>
+              </div>
+              <div>
+                <div style="font-weight: 800; font-size: 15px; color: #0f172a;">Configuration Scope &bull; Select Branch / Outlet</div>
+                <div style="font-size: 12px; color: #64748b;">
+                  Configure brand-wide defaults or customize hero video, title, about story, and stats for a specific branch outlet.
+                </div>
+              </div>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <label for="events_scope_select" style="font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 0;">Active Scope:</label>
+              <select id="events_scope_select" class="shop-input" onchange="switchEventsScope(this.value)" style="min-width: 280px; font-weight: 700; font-size: 13px; padding: 8px 14px; background: #f8fafc;">
+                <option value="global">🌐 Global / All Branches (Brand Default)</option>
+                {% for b in branches %}
+                  <option value="{{ b.id }}">
+                    📍 {{ b.name }} {% if b.has_club_module %}(Club Active){% else %}(Club Disabled){% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <!-- Quick Scope Pills -->
+          <div style="display: flex; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid #f1f5f9; overflow-x: auto;">
+            <button type="button" class="events-scope-pill active" data-scope="global" onclick="switchEventsScope('global')">
+              <i class="fa-solid fa-globe"></i> Global Brand Defaults
+            </button>
+            {% for b in branches %}
+              <button type="button" class="events-scope-pill" data-scope="{{ b.id }}" onclick="switchEventsScope('{{ b.id }}')">
+                <i class="fa-solid fa-location-dot"></i> {{ b.name }}
+                {% if b.has_club_module %}
+                  <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981; margin-left: 4px;" title="Club Module Active"></span>
+                {% else %}
+                  <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; margin-left: 4px;" title="Club Module Disabled"></span>
+                {% endif %}
+              </button>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- 1. GLOBAL SCOPE PANE -->
+        <div id="events_scope_global" class="events-scope-pane">
+          <!-- Global Hero Section Details -->
+          <div class="shop-panel">
+            <div class="shop-panel-header">
+              <div class="shop-panel-icon" style="background: #fff7ed; color: #ea580c; border-color: #ffedd5;">
+                <i class="fa-solid fa-champagne-glasses"></i>
+              </div>
+              <div>
+                <div class="shop-panel-title">Global Club &amp; Events Page &bull; Hero Section</div>
+                <div class="shop-panel-subtitle">Brand-wide default titles, category badge, hero background video/image for /events</div>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-4">
+                <div class="shop-form-group">
+                  <label for="id_events_hero_suptitle">Suptitle / Category Badge</label>
+                  <input type="text" name="events_hero_suptitle" id="id_events_hero_suptitle" class="shop-input"
+                    value="{{ form.events_hero_suptitle.value|default:'EXCLUSIVE GATHERINGS & NIGHTLIFE' }}"
+                    placeholder="e.g. EXCLUSIVE GATHERINGS & NIGHTLIFE" />
+                </div>
+              </div>
+              <div class="col-8">
+                <div class="shop-form-group">
+                  <label for="id_events_hero_title">Hero Main Title *</label>
+                  <input type="text" name="events_hero_title" id="id_events_hero_title" class="shop-input"
+                    value="{{ form.events_hero_title.value|default:'Events & Club Experiences' }}"
+                    placeholder="e.g. Events & Club Experiences" />
+                </div>
+              </div>
+              <div class="col-12">
+                <div class="shop-form-group">
+                  <label for="id_events_hero_subtitle">Hero Subtitle / Description</label>
+                  <textarea name="events_hero_subtitle" id="id_events_hero_subtitle" class="shop-input" style="min-height: 85px;"
+                    placeholder="Describe your nightlife vibe, jazz evenings, resident DJ sets, or signature galas...">{{ form.events_hero_subtitle.value|default:'From candlelit jazz nights and electrifying resident DJ lounges to bespoke sommelier galas and live culinary celebrations.' }}</textarea>
+                </div>
+              </div>
+
+              <!-- Background Mode -->
+              <div class="col-4">
+                <div class="shop-form-group">
+                  <label for="id_events_hero_bg_type">Hero Background Display Mode</label>
+                  <select name="events_hero_bg_type" id="id_events_hero_bg_type" class="shop-input">
+                    <option value="auto" {% if form.events_hero_bg_type.value == 'auto' or not form.events_hero_bg_type.value %}selected{% endif %}>Auto (Video if uploaded/set, else Slider)</option>
+                    <option value="video" {% if form.events_hero_bg_type.value == 'video' %}selected{% endif %}>Background Video Only</option>
+                    <option value="slider" {% if form.events_hero_bg_type.value == 'slider' %}selected{% endif %}>Dynamic Image Slider</option>
+                    <option value="image" {% if form.events_hero_bg_type.value == 'image' %}selected{% endif %}>Static Single Image</option>
+                  </select>
+                  <div class="hint" style="margin-top: 6px; font-size: 11px; color: #64748b;">
+                    Controls how the background media is presented in the top hero.
+                  </div>
+                </div>
+              </div>
+
+              <!-- External Video URL -->
+              <div class="col-8">
+                <div class="shop-form-group">
+                  <label for="id_events_hero_video_url">Background Video URL (Optional)</label>
+                  <input type="text" name="events_hero_video_url" id="id_events_hero_video_url" class="shop-input"
+                    value="{{ form.events_hero_video_url.value|default:'' }}"
+                    placeholder="e.g. https://assets.mixkit.co/.../video.mp4 or YouTube/Vimeo embed" />
+                  <div class="hint" style="margin-top: 6px; font-size: 11px; color: #64748b;">
+                    Provide a direct MP4/WebM URL or video link if you prefer not to upload a local video file.
+                  </div>
+                </div>
+              </div>
+
+              <!-- Upload Hero Background Video File -->
+              <div class="col-6">
+                <div class="shop-form-group">
+                  <label for="id_events_hero_video">Upload Hero Background Video (.mp4 / .webm)</label>
+                  <input type="file" name="events_hero_video" id="id_events_hero_video" class="shop-input" accept="video/mp4,video/webm" />
+                  <div class="hint" style="margin-top: 6px; font-size: 11px; color: #64748b;">
+                    Max file size: <strong>35 MB</strong>. Autoplays smoothly in background with atmospheric dark overlay.
+                  </div>
+                  {% if form.instance.events_hero_video %}
+                  <div style="margin-top: 12px; padding: 12px; background: #f8fafc; border: 1.5px dashed var(--border); border-radius: 12px;">
+                    <video controls style="max-height: 120px; width: 100%; max-width: 320px; border-radius: 8px; display: block; margin-bottom: 8px;">
+                      <source src="{{ form.instance.events_hero_video.url }}" type="video/mp4">
+                      Your browser does not support the video tag.
+                    </video>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <input type="checkbox" name="clear_events_hero_video" id="clear_events_hero_video" style="width: 16px; height: 16px; cursor: pointer;" />
+                      <label for="clear_events_hero_video" style="margin-bottom: 0; font-size: 11px; font-weight: 700; color: #ef4444; cursor: pointer;">Delete Current Video</label>
+                    </div>
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+
+              <!-- Upload Hero Image File -->
+              <div class="col-6">
+                <div class="shop-form-group">
+                  <label for="id_events_hero_image">Upload Hero Fallback / Cover Image</label>
+                  <input type="file" name="events_hero_image" id="id_events_hero_image" class="shop-input" accept="image/*" />
+                  <div class="hint" style="margin-top: 6px; font-size: 11px; color: #64748b;">
+                    High-res banner (1920×1080 recommended) displayed as cover or when video is loading/paused.
+                  </div>
+                  {% if form.instance.events_hero_image %}
+                  <div style="margin-top: 12px; padding: 12px; background: #f8fafc; border: 1.5px dashed var(--border); border-radius: 12px;">
+                    <img src="{{ form.instance.events_hero_image.url }}" alt="Hero Cover" style="max-height: 120px; width: auto; border-radius: 8px; display: block; margin-bottom: 8px;" />
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <input type="checkbox" name="clear_events_hero_image" id="clear_events_hero_image" style="width: 16px; height: 16px; cursor: pointer;" />
+                      <label for="clear_events_hero_image" style="margin-bottom: 0; font-size: 11px; font-weight: 700; color: #ef4444; cursor: pointer;">Delete Current Image</label>
+                    </div>
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Global About Section: Atmosphere & Hospitality -->
+          <div class="shop-panel">
+            <div class="shop-panel-header">
+              <div class="shop-panel-icon" style="background: #fdf2f8; color: #db2777; border-color: #fbcfe8;">
+                <i class="fa-solid fa-sparkles"></i>
+              </div>
+              <div>
+                <div class="shop-panel-title">Global Club &amp; Events Page &bull; About Section</div>
+                <div class="shop-panel-subtitle">Atmosphere, Hospitality narrative, 3 pillar feature cards, and venue metric badges</div>
+              </div>
+            </div>
+
+            <div class="row" style="margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px dashed #e2e8f0;">
+              <div class="col-4">
+                <div class="shop-form-group">
+                  <label for="id_events_about_suptitle">About Suptitle / Badge</label>
+                  <input type="text" name="events_about_suptitle" id="id_events_about_suptitle" class="shop-input"
+                    value="{{ form.events_about_suptitle.value|default:'ATMOSPHERE & HOSPITALITY' }}"
+                    placeholder="e.g. ATMOSPHERE & HOSPITALITY" />
+                </div>
+              </div>
+              <div class="col-8">
+                <div class="shop-form-group">
+                  <label for="id_events_about_title">About Main Heading *</label>
+                  <input type="text" name="events_about_title" id="id_events_about_title" class="shop-input"
+                    value="{{ form.events_about_title.value|default:'Where Haute Cuisine Meets Electrifying Nights' }}"
+                    placeholder="e.g. Where Haute Cuisine Meets Electrifying Nights" />
+                </div>
+              </div>
+              <div class="col-12">
+                <div class="shop-form-group" style="margin-bottom: 0;">
+                  <label for="id_events_about_subtitle">About Narrative / Paragraph</label>
+                  <textarea name="events_about_subtitle" id="id_events_about_subtitle" class="shop-input" style="min-height: 85px;"
+                    placeholder="Enter the storytelling paragraph describing your venue transformation and hospitality...">{{ form.events_about_subtitle.value|default:'We transcend conventional dining. By evening, our curated spaces transform into intimate jazz sanctuaries, energetic DJ lounges, and grand banquet venues designed to create enduring memories.' }}</textarea>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3 Pillar Feature Cards (Global) -->
+            <div style="margin-bottom: 24px;">
+              <h4 style="font-size: 14px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-layer-group" style="color: var(--primary);"></i> 3 Pillar Feature Experience Cards (Global Default)
+              </h4>
+              <div class="row">
+                {% for card in events_cards %}
+                <div class="col-4">
+                  <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                      <span style="font-size: 12px; font-weight: 800; color: #0f172a; text-transform: uppercase;">Card #{{ forloop.counter }}</span>
+                      <select name="events_card_icon_{{ forloop.counter }}" id="id_events_card_icon_{{ forloop.counter }}" class="shop-input" style="width: auto; padding: 4px 10px; font-size: 12px;">
+                        <option value="music" {% if card.icon == 'music' %}selected{% endif %}>🎵 Music / Jazz</option>
+                        <option value="flame" {% if card.icon == 'flame' %}selected{% endif %}>🔥 Flame / DJ Lounge</option>
+                        <option value="wine" {% if card.icon == 'wine' %}selected{% endif %}>🍷 Wine / Gala</option>
+                        <option value="star" {% if card.icon == 'star' %}selected{% endif %}>⭐ Star / VIP</option>
+                        <option value="sparkles" {% if card.icon == 'sparkles' %}selected{% endif %}>✨ Sparkles</option>
+                        <option value="crown" {% if card.icon == 'crown' %}selected{% endif %}>👑 Crown</option>
+                      </select>
+                    </div>
+                    <div class="shop-form-group">
+                      <label>Card Title</label>
+                      <input type="text" name="events_card_title_{{ forloop.counter }}" id="id_events_card_title_{{ forloop.counter }}" class="shop-input" value="{{ card.title }}" placeholder="e.g. Live Acoustic & Jazz Soirées" />
+                    </div>
+                    <div class="shop-form-group">
+                      <label>Description</label>
+                      <textarea name="events_card_desc_{{ forloop.counter }}" id="id_events_card_desc_{{ forloop.counter }}" class="shop-input" style="min-height: 75px;" placeholder="Card description...">{{ card.description }}</textarea>
+                    </div>
+                    <div class="shop-form-group" style="margin-bottom: 0;">
+                      <label>Schedule Tagline</label>
+                      <input type="text" name="events_card_schedule_{{ forloop.counter }}" id="id_events_card_schedule_{{ forloop.counter }}" class="shop-input" value="{{ card.schedule }}" placeholder="e.g. Every Friday & Sunday" />
+                    </div>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+
+            <!-- 4 Venue Metric Badges (Stats) (Global) -->
+            <div>
+              <h4 style="font-size: 14px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-chart-simple" style="color: #059669;"></i> 4 Venue Metric Badges / Stats (Global Default)
+              </h4>
+              <div class="row">
+                {% for stat in events_stats %}
+                <div class="col-3">
+                  <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px;">
+                    <div style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Stat #{{ forloop.counter }}</div>
+                    <div class="shop-form-group">
+                      <label>Value / Number</label>
+                      <input type="text" name="events_stat_val_{{ forloop.counter }}" id="id_events_stat_val_{{ forloop.counter }}" class="shop-input" value="{{ stat.value }}" placeholder="e.g. 250+" />
+                    </div>
+                    <div class="shop-form-group">
+                      <label>Stat Label</label>
+                      <input type="text" name="events_stat_label_{{ forloop.counter }}" id="id_events_stat_label_{{ forloop.counter }}" class="shop-input" value="{{ stat.label }}" placeholder="e.g. Guest Capacity" />
+                    </div>
+                    <div class="shop-form-group" style="margin-bottom: 0;">
+                      <label>Sub-Description</label>
+                      <input type="text" name="events_stat_desc_{{ forloop.counter }}" id="id_events_stat_desc_{{ forloop.counter }}" class="shop-input" value="{{ stat.desc }}" placeholder="e.g. Multi-zone venue space" />
+                    </div>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. BRANCH-SPECIFIC SCOPE PANES -->
+        {% for b_id, b_data in branches_events_data.items %}
+        <div id="events_scope_branch_{{ b_id }}" class="events-scope-pane" style="display: none;">
+          <!-- Branch Info Banner -->
+          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 14px; padding: 16px 20px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span style="font-size: 20px;">📍</span>
+              <div>
+                <div style="font-size: 14px; font-weight: 800; color: #166534;">
+                  Customizing Club &amp; Events for: {{ b_data.branch.name }}
+                  {% if b_data.branch.has_club_module %}
+                    <span style="background: #16a34a; color: #ffffff; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 800; margin-left: 6px; text-transform: uppercase;">Club Active</span>
+                  {% else %}
+                    <span style="background: #e2e8f0; color: #475569; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 800; margin-left: 6px; text-transform: uppercase;">Club Disabled</span>
+                  {% endif %}
+                </div>
+                <div style="font-size: 12px; color: #15803d; margin-top: 2px;">
+                  Any field left blank will automatically inherit from the <strong>Global Brand Defaults</strong>.
+                </div>
+              </div>
+            </div>
+            <button type="button" class="btn secondary small" onclick="copyGlobalToBranch('{{ b_id }}')" style="padding: 6px 14px; font-size: 11px; background: #ffffff;">
+              <i class="fa-solid fa-copy"></i> Copy Global Defaults to this Branch
+            </button>
+          </div>
+
+          <!-- Branch Hero Section -->
+          <div class="shop-panel">
+            <div class="shop-panel-header">
+              <div class="shop-panel-icon" style="background: #fff7ed; color: #ea580c; border-color: #ffedd5;">
+                <i class="fa-solid fa-champagne-glasses"></i>
+              </div>
+              <div>
+                <div class="shop-panel-title">{{ b_data.branch.name }} &bull; Hero Section Overrides</div>
+                <div class="shop-panel-subtitle">Custom titles, background video, and visuals for {{ b_data.branch.name }}</div>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-4">
+                <div class="shop-form-group">
+                  <label for="id_events_branch_{{ b_id }}_hero_suptitle">Suptitle / Category Badge</label>
+                  <input type="text" name="events_branch_{{ b_id }}_hero_suptitle" id="id_events_branch_{{ b_id }}_hero_suptitle" class="shop-input"
+                    value="{{ b_data.config.hero_suptitle|default:'' }}"
+                    placeholder="Leave blank to inherit global badge" />
+                </div>
+              </div>
+              <div class="col-8">
+                <div class="shop-form-group">
+                  <label for="id_events_branch_{{ b_id }}_hero_title">Hero Main Title</label>
+                  <input type="text" name="events_branch_{{ b_id }}_hero_title" id="id_events_branch_{{ b_id }}_hero_title" class="shop-input"
+                    value="{{ b_data.config.hero_title|default:'' }}"
+                    placeholder="Leave blank to inherit: {{ form.events_hero_title.value|default:'Events & Club Experiences' }}" />
+                </div>
+              </div>
+              <div class="col-12">
+                <div class="shop-form-group">
+                  <label for="id_events_branch_{{ b_id }}_hero_subtitle">Hero Subtitle / Description</label>
+                  <textarea name="events_branch_{{ b_id }}_hero_subtitle" id="id_events_branch_{{ b_id }}_hero_subtitle" class="shop-input" style="min-height: 85px;"
+                    placeholder="Leave blank to inherit global subtitle...">{{ b_data.config.hero_subtitle|default:'' }}</textarea>
+                </div>
+              </div>
+
+              <!-- Branch Background Mode -->
+              <div class="col-4">
+                <div class="shop-form-group">
+                  <label for="id_events_branch_{{ b_id }}_hero_bg_type">Hero Background Mode</label>
+                  <select name="events_branch_{{ b_id }}_hero_bg_type" id="id_events_branch_{{ b_id }}_hero_bg_type" class="shop-input">
+                    <option value="inherit" {% if not b_data.config.hero_bg_type or b_data.config.hero_bg_type == 'inherit' %}selected{% endif %}>Inherit Global Setting</option>
+                    <option value="auto" {% if b_data.config.hero_bg_type == 'auto' %}selected{% endif %}>Auto (Video if available, else Slider)</option>
+                    <option value="video" {% if b_data.config.hero_bg_type == 'video' %}selected{% endif %}>Background Video Only</option>
+                    <option value="slider" {% if b_data.config.hero_bg_type == 'slider' %}selected{% endif %}>Dynamic Image Slider</option>
+                    <option value="image" {% if b_data.config.hero_bg_type == 'image' %}selected{% endif %}>Static Single Image</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Branch Video URL -->
+              <div class="col-8">
+                <div class="shop-form-group">
+                  <label for="id_events_branch_{{ b_id }}_hero_video_url">Branch Background Video URL (Optional)</label>
+                  <input type="text" name="events_branch_{{ b_id }}_hero_video_url" id="id_events_branch_{{ b_id }}_hero_video_url" class="shop-input"
+                    value="{{ b_data.config.hero_video_url|default:'' }}"
+                    placeholder="e.g. MP4/WebM URL or YouTube/Vimeo embed for {{ b_data.branch.name }}" />
+                </div>
+              </div>
+
+              <!-- Branch Upload Video File -->
+              <div class="col-6">
+                <div class="shop-form-group">
+                  <label for="id_events_branch_{{ b_id }}_hero_video">Upload Branch Video (.mp4 / .webm)</label>
+                  <input type="file" name="events_branch_{{ b_id }}_hero_video" id="id_events_branch_{{ b_id }}_hero_video" class="shop-input" accept="video/mp4,video/webm" />
+                  {% if b_data.config.hero_video_url %}
+                  <div style="margin-top: 10px; padding: 10px; background: #f8fafc; border: 1.5px dashed var(--border); border-radius: 12px;">
+                    <div style="font-size: 11px; font-weight: 700; color: #0f172a; margin-bottom: 6px;">Active Video URL:</div>
+                    <div style="font-size: 11px; color: #2563eb; word-break: break-all; margin-bottom: 6px;">{{ b_data.config.hero_video_url }}</div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <input type="checkbox" name="clear_events_branch_{{ b_id }}_hero_video" id="clear_events_branch_{{ b_id }}_hero_video" style="width: 16px; height: 16px; cursor: pointer;" />
+                      <label for="clear_events_branch_{{ b_id }}_hero_video" style="margin-bottom: 0; font-size: 11px; font-weight: 700; color: #ef4444; cursor: pointer;">Remove Branch Video</label>
+                    </div>
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+
+              <!-- Branch Upload Cover Image File -->
+              <div class="col-6">
+                <div class="shop-form-group">
+                  <label for="id_events_branch_{{ b_id }}_hero_image">Upload Branch Cover Image</label>
+                  <input type="file" name="events_branch_{{ b_id }}_hero_image" id="id_events_branch_{{ b_id }}_hero_image" class="shop-input" accept="image/*" />
+                  {% if b_data.config.hero_image_url %}
+                  <div style="margin-top: 10px; padding: 10px; background: #f8fafc; border: 1.5px dashed var(--border); border-radius: 12px;">
+                    <img src="{{ b_data.config.hero_image_url }}" alt="Branch Cover" style="max-height: 90px; width: auto; border-radius: 6px; display: block; margin-bottom: 6px;" />
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <input type="checkbox" name="clear_events_branch_{{ b_id }}_hero_image" id="clear_events_branch_{{ b_id }}_hero_image" style="width: 16px; height: 16px; cursor: pointer;" />
+                      <label for="clear_events_branch_{{ b_id }}_hero_image" style="margin-bottom: 0; font-size: 11px; font-weight: 700; color: #ef4444; cursor: pointer;">Remove Branch Image</label>
+                    </div>
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Branch About Section -->
+          <div class="shop-panel">
+            <div class="shop-panel-header">
+              <div class="shop-panel-icon" style="background: #fdf2f8; color: #db2777; border-color: #fbcfe8;">
+                <i class="fa-solid fa-sparkles"></i>
+              </div>
+              <div>
+                <div class="shop-panel-title">{{ b_data.branch.name }} &bull; About Section Overrides</div>
+                <div class="shop-panel-subtitle">Storytelling, feature cards, and venue metric badges for {{ b_data.branch.name }}</div>
+              </div>
+            </div>
+
+            <div class="row" style="margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px dashed #e2e8f0;">
+              <div class="col-4">
+                <div class="shop-form-group">
+                  <label for="id_events_branch_{{ b_id }}_about_suptitle">About Suptitle / Badge</label>
+                  <input type="text" name="events_branch_{{ b_id }}_about_suptitle" id="id_events_branch_{{ b_id }}_about_suptitle" class="shop-input"
+                    value="{{ b_data.config.about_suptitle|default:'' }}"
+                    placeholder="Leave blank to inherit global badge" />
+                </div>
+              </div>
+              <div class="col-8">
+                <div class="shop-form-group">
+                  <label for="id_events_branch_{{ b_id }}_about_title">About Main Heading</label>
+                  <input type="text" name="events_branch_{{ b_id }}_about_title" id="id_events_branch_{{ b_id }}_about_title" class="shop-input"
+                    value="{{ b_data.config.about_title|default:'' }}"
+                    placeholder="Leave blank to inherit global heading" />
+                </div>
+              </div>
+              <div class="col-12">
+                <div class="shop-form-group" style="margin-bottom: 0;">
+                  <label for="id_events_branch_{{ b_id }}_about_subtitle">About Narrative / Paragraph</label>
+                  <textarea name="events_branch_{{ b_id }}_about_subtitle" id="id_events_branch_{{ b_id }}_about_subtitle" class="shop-input" style="min-height: 85px;"
+                    placeholder="Leave blank to inherit global narrative...">{{ b_data.config.about_subtitle|default:'' }}</textarea>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3 Pillar Feature Cards (Branch) -->
+            <div style="margin-bottom: 24px;">
+              <h4 style="font-size: 14px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-layer-group" style="color: var(--primary);"></i> 3 Pillar Feature Cards ({{ b_data.branch.name }})
+              </h4>
+              <div class="row">
+                {% for card in b_data.cards %}
+                <div class="col-4">
+                  <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                      <span style="font-size: 12px; font-weight: 800; color: #0f172a; text-transform: uppercase;">Card #{{ forloop.counter }}</span>
+                      <select name="events_branch_{{ b_id }}_card_icon_{{ forloop.counter }}" id="id_events_branch_{{ b_id }}_card_icon_{{ forloop.counter }}" class="shop-input" style="width: auto; padding: 4px 10px; font-size: 12px;">
+                        <option value="music" {% if card.icon == 'music' %}selected{% endif %}>🎵 Music / Jazz</option>
+                        <option value="flame" {% if card.icon == 'flame' %}selected{% endif %}>🔥 Flame / DJ Lounge</option>
+                        <option value="wine" {% if card.icon == 'wine' %}selected{% endif %}>🍷 Wine / Gala</option>
+                        <option value="star" {% if card.icon == 'star' %}selected{% endif %}>⭐ Star / VIP</option>
+                        <option value="sparkles" {% if card.icon == 'sparkles' %}selected{% endif %}>✨ Sparkles</option>
+                        <option value="crown" {% if card.icon == 'crown' %}selected{% endif %}>👑 Crown</option>
+                      </select>
+                    </div>
+                    <div class="shop-form-group">
+                      <label>Card Title</label>
+                      <input type="text" name="events_branch_{{ b_id }}_card_title_{{ forloop.counter }}" id="id_events_branch_{{ b_id }}_card_title_{{ forloop.counter }}" class="shop-input" value="{{ card.title }}" placeholder="Leave blank to inherit global" />
+                    </div>
+                    <div class="shop-form-group">
+                      <label>Description</label>
+                      <textarea name="events_branch_{{ b_id }}_card_desc_{{ forloop.counter }}" id="id_events_branch_{{ b_id }}_card_desc_{{ forloop.counter }}" class="shop-input" style="min-height: 75px;" placeholder="Leave blank to inherit global...">{{ card.description }}</textarea>
+                    </div>
+                    <div class="shop-form-group" style="margin-bottom: 0;">
+                      <label>Schedule Tagline</label>
+                      <input type="text" name="events_branch_{{ b_id }}_card_schedule_{{ forloop.counter }}" id="id_events_branch_{{ b_id }}_card_schedule_{{ forloop.counter }}" class="shop-input" value="{{ card.schedule }}" placeholder="Leave blank to inherit global" />
+                    </div>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+
+            <!-- 4 Venue Metric Badges (Stats) (Branch) -->
+            <div>
+              <h4 style="font-size: 14px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
+                <i class="fa-solid fa-chart-simple" style="color: #059669;"></i> 4 Venue Metric Badges / Stats ({{ b_data.branch.name }})
+              </h4>
+              <div class="row">
+                {% for stat in b_data.stats %}
+                <div class="col-3">
+                  <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px;">
+                    <div style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Stat #{{ forloop.counter }}</div>
+                    <div class="shop-form-group">
+                      <label>Value / Number</label>
+                      <input type="text" name="events_branch_{{ b_id }}_stat_val_{{ forloop.counter }}" id="id_events_branch_{{ b_id }}_stat_val_{{ forloop.counter }}" class="shop-input" value="{{ stat.value }}" placeholder="Leave blank to inherit" />
+                    </div>
+                    <div class="shop-form-group">
+                      <label>Stat Label</label>
+                      <input type="text" name="events_branch_{{ b_id }}_stat_label_{{ forloop.counter }}" id="id_events_branch_{{ b_id }}_stat_label_{{ forloop.counter }}" class="shop-input" value="{{ stat.label }}" placeholder="Leave blank to inherit" />
+                    </div>
+                    <div class="shop-form-group" style="margin-bottom: 0;">
+                      <label>Sub-Description</label>
+                      <input type="text" name="events_branch_{{ b_id }}_stat_desc_{{ forloop.counter }}" id="id_events_branch_{{ b_id }}_stat_desc_{{ forloop.counter }}" class="shop-input" value="{{ stat.desc }}" placeholder="Leave blank to inherit" />
+                    </div>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+
+        <div class="actions" style="margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border);">
+          <button type="submit" class="btn">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>Save Club &amp; Events Customization</span>
           </button>
         </div>
       </div>
@@ -6847,5 +7357,141 @@ ${rName} reserves the right to modify or update these Terms of Service at any ti
     });
   });
 
+  /* ── Club & Events Scope Switcher ── */
+  function switchEventsScope(scopeId) {
+    try {
+      // Hide all scope panes
+      document.querySelectorAll('.events-scope-pane').forEach(el => {
+        el.style.display = 'none';
+      });
+
+      // Show target scope pane
+      const targetPane = document.getElementById(scopeId === 'global' ? 'events_scope_global' : 'events_scope_branch_' + scopeId);
+      if (targetPane) {
+        targetPane.style.display = 'block';
+      }
+
+      // Sync select dropdown
+      const sel = document.getElementById('events_scope_select');
+      if (sel) sel.value = scopeId;
+
+      // Sync pill active class
+      document.querySelectorAll('.events-scope-pill').forEach(pill => {
+        if (pill.getAttribute('data-scope') === String(scopeId)) {
+          pill.classList.add('active');
+          pill.style.background = '#ea580c';
+          pill.style.color = '#ffffff';
+          pill.style.borderColor = '#ea580c';
+        } else {
+          pill.classList.remove('active');
+          pill.style.background = '#f8fafc';
+          pill.style.color = '#475569';
+          pill.style.borderColor = 'var(--border)';
+        }
+      });
+    } catch (e) {
+      console.error('Error switching events scope:', e);
+    }
+  }
+
+  function copyGlobalToBranch(branchId) {
+    if (!confirm('Copy Global Brand Defaults into this branch form? (You can still adjust any field afterwards)')) {
+      return;
+    }
+    try {
+      // Copy hero fields
+      const gHeroSup = document.getElementById('id_events_hero_suptitle')?.value || '';
+      const gHeroTitle = document.getElementById('id_events_hero_title')?.value || '';
+      const gHeroSub = document.getElementById('id_events_hero_subtitle')?.value || '';
+      const gHeroBg = document.getElementById('id_events_hero_bg_type')?.value || 'auto';
+      const gHeroVidUrl = document.getElementById('id_events_hero_video_url')?.value || '';
+
+      const bHeroSup = document.getElementById('id_events_branch_' + branchId + '_hero_suptitle');
+      if (bHeroSup) bHeroSup.value = gHeroSup;
+      const bHeroTitle = document.getElementById('id_events_branch_' + branchId + '_hero_title');
+      if (bHeroTitle) bHeroTitle.value = gHeroTitle;
+      const bHeroSub = document.getElementById('id_events_branch_' + branchId + '_hero_subtitle');
+      if (bHeroSub) bHeroSub.value = gHeroSub;
+      const bHeroBg = document.getElementById('id_events_branch_' + branchId + '_hero_bg_type');
+      if (bHeroBg) bHeroBg.value = gHeroBg;
+      const bHeroVidUrl = document.getElementById('id_events_branch_' + branchId + '_hero_video_url');
+      if (bHeroVidUrl && gHeroVidUrl) bHeroVidUrl.value = gHeroVidUrl;
+
+      // Copy about fields
+      const gAboutSup = document.getElementById('id_events_about_suptitle')?.value || '';
+      const gAboutTitle = document.getElementById('id_events_about_title')?.value || '';
+      const gAboutSub = document.getElementById('id_events_about_subtitle')?.value || '';
+
+      const bAboutSup = document.getElementById('id_events_branch_' + branchId + '_about_suptitle');
+      if (bAboutSup) bAboutSup.value = gAboutSup;
+      const bAboutTitle = document.getElementById('id_events_branch_' + branchId + '_about_title');
+      if (bAboutTitle) bAboutTitle.value = gAboutTitle;
+      const bAboutSub = document.getElementById('id_events_branch_' + branchId + '_about_subtitle');
+      if (bAboutSub) bAboutSub.value = gAboutSub;
+
+      // Copy 3 Cards
+      for (let i = 1; i <= 3; i++) {
+        const gIcon = document.getElementById('id_events_card_icon_' + i)?.value || 'music';
+        const gTitle = document.getElementById('id_events_card_title_' + i)?.value || '';
+        const gDesc = document.getElementById('id_events_card_desc_' + i)?.value || '';
+        const gSched = document.getElementById('id_events_card_schedule_' + i)?.value || '';
+
+        const bIcon = document.getElementById('id_events_branch_' + branchId + '_card_icon_' + i);
+        if (bIcon) bIcon.value = gIcon;
+        const bTitle = document.getElementById('id_events_branch_' + branchId + '_card_title_' + i);
+        if (bTitle) bTitle.value = gTitle;
+        const bDesc = document.getElementById('id_events_branch_' + branchId + '_card_desc_' + i);
+        if (bDesc) bDesc.value = gDesc;
+        const bSched = document.getElementById('id_events_branch_' + branchId + '_card_schedule_' + i);
+        if (bSched) bSched.value = gSched;
+      }
+
+      // Copy 4 Stats
+      for (let i = 1; i <= 4; i++) {
+        const gVal = document.getElementById('id_events_stat_val_' + i)?.value || '';
+        const gLbl = document.getElementById('id_events_stat_label_' + i)?.value || '';
+        const gDesc = document.getElementById('id_events_stat_desc_' + i)?.value || '';
+
+        const bVal = document.getElementById('id_events_branch_' + branchId + '_stat_val_' + i);
+        if (bVal) bVal.value = gVal;
+        const bLbl = document.getElementById('id_events_branch_' + branchId + '_stat_label_' + i);
+        if (bLbl) bLbl.value = gLbl;
+        const bDesc = document.getElementById('id_events_branch_' + branchId + '_stat_desc_' + i);
+        if (bDesc) bDesc.value = gDesc;
+      }
+
+      showThemeNotification('Copied global defaults into branch form.');
+    } catch (e) {
+      console.error('Error copying global settings:', e);
+    }
+  }
+
 </script>
+<style>
+.events-scope-pill {
+  padding: 8px 16px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  background: #f8fafc;
+  color: #475569;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.events-scope-pill:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+.events-scope-pill.active {
+  background: #ea580c !important;
+  color: #ffffff !important;
+  border-color: #ea580c !important;
+  box-shadow: 0 2px 6px rgba(234, 88, 12, 0.25);
+}
+</style>
 {% endblock %}
