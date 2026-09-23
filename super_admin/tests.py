@@ -321,3 +321,91 @@ class ValidationSpecTestCase(TestCase):
         self.assertEqual(gst_regs.count(), 1)
         self.assertEqual(gst_regs.first().gstin, "27AABCA1234C1ZN")
 
+
+class RoleAssignmentTestCase(TestCase):
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name="Royal Palace", slug="royal-palace")
+        self.branch = RestaurantBranch.objects.create(
+            restaurant=self.restaurant,
+            name="Palace Suites & Dine",
+            slug="palace-suites",
+            has_hotel_module=False
+        )
+
+    def test_super_admin_create_hotel_admin_auto_activates_module(self):
+        from super_admin.forms import RestaurantAdminCreateForm
+        form_data = {
+            'username': 'hotel_manager_1',
+            'email': 'hotel1@royalpalace.com',
+            'password': 'Secr3tPassword123!',
+            'restaurant': self.restaurant.id,
+            'branch': self.branch.id,
+            'role': RestaurantUser.Role.HOTEL_ADMIN,
+            'is_primary_admin': False,
+            'is_2fa_enabled': False,
+        }
+        form = RestaurantAdminCreateForm(data=form_data)
+        self.assertTrue(form.is_valid(), form.errors)
+        ru = form.save()
+
+        self.assertEqual(ru.role, RestaurantUser.Role.HOTEL_ADMIN)
+        self.assertEqual(ru.user.role, 'HOTEL_ADMIN')
+        self.branch.refresh_from_db()
+        self.assertTrue(self.branch.has_hotel_module, "Assigning HOTEL_ADMIN should auto-activate branch hotel module")
+
+    def test_super_admin_create_general_manager(self):
+        from super_admin.forms import RestaurantAdminCreateForm
+        form_data = {
+            'username': 'gm_director',
+            'email': 'gm@royalpalace.com',
+            'password': 'Secr3tPassword123!',
+            'restaurant': self.restaurant.id,
+            'branch': '',
+            'role': RestaurantUser.Role.GENERAL_MANAGER,
+            'is_primary_admin': True,
+            'is_2fa_enabled': False,
+        }
+        form = RestaurantAdminCreateForm(data=form_data)
+        self.assertTrue(form.is_valid(), form.errors)
+        ru = form.save()
+
+        self.assertEqual(ru.role, RestaurantUser.Role.GENERAL_MANAGER)
+        self.assertEqual(ru.user.role, 'GENERAL_MANAGER')
+        self.assertTrue(ru.is_primary_admin)
+
+    def test_super_admin_update_admin_role(self):
+        from super_admin.forms import RestaurantAdminCreateForm, RestaurantAdminUpdateForm
+        from django.contrib.auth.models import User
+        # First create as RESTAURANT_ADMIN
+        cform = RestaurantAdminCreateForm(data={
+            'username': 'staff_user',
+            'email': 'staff@royalpalace.com',
+            'password': 'Secr3tPassword123!',
+            'restaurant': self.restaurant.id,
+            'branch': self.branch.id,
+            'role': RestaurantUser.Role.RESTAURANT_ADMIN,
+            'is_primary_admin': False,
+            'is_2fa_enabled': False,
+        })
+        self.assertTrue(cform.is_valid())
+        ru = cform.save()
+        self.assertEqual(ru.role, RestaurantUser.Role.RESTAURANT_ADMIN)
+
+        # Update role to HOTEL_ADMIN
+        uform = RestaurantAdminUpdateForm(data={
+            'username': 'staff_user',
+            'email': 'staff@royalpalace.com',
+            'restaurant': self.restaurant.id,
+            'branch': self.branch.id,
+            'role': RestaurantUser.Role.HOTEL_ADMIN,
+            'is_primary_admin': True,
+            'is_2fa_enabled': False,
+        }, instance=ru)
+        self.assertTrue(uform.is_valid(), uform.errors)
+        updated_ru = uform.save()
+
+        self.assertEqual(updated_ru.role, RestaurantUser.Role.HOTEL_ADMIN)
+        self.assertEqual(updated_ru.user.role, 'HOTEL_ADMIN')
+        self.assertTrue(updated_ru.is_primary_admin)
+
+

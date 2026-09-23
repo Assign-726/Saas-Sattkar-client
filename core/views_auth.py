@@ -19,27 +19,82 @@ logger = logging.getLogger(__name__)
 
 def resolve_user_redirect(request, user, next_url=None):
     """
-    Resolves the smart redirect URL based on user role.
+    Resolves the smart redirect URL based on user role and module permissions.
+    Guarantees role isolation: Hotel Admin always goes to Hotel PMS, Restaurant Admin to POS.
     """
-    if next_url:
-        from django.utils.http import url_has_allowed_host_and_scheme
-        if url_has_allowed_host_and_scheme(
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    if not user or not user.is_authenticated:
+        return reverse_lazy('login')
+
+    user_role = getattr(user, 'role', None)
+    profile = getattr(user, 'restaurant_profile', None)
+    if not user_role and profile:
+        user_role = profile.role
+    user_role = user_role or 'RESTAURANT_ADMIN'
+
+    # Superusers go to super admin (unless they specifically requested a safe next URL)
+    if getattr(user, 'is_superuser', False):
+        if next_url and url_has_allowed_host_and_scheme(
             url=next_url,
             allowed_hosts={request.get_host()},
             require_https=request.is_secure()
         ):
             return next_url
+        return reverse_lazy('super_admin:dashboard')
 
-    # Redirect restaurant admins to their slugged dashboard
-    try:
-        profile = getattr(user, 'restaurant_profile', None)
-        if profile and getattr(profile, 'restaurant', None):
-            return reverse_lazy('restaurant_admin:dashboard', kwargs={'restaurant_slug': profile.restaurant.slug})
-    except Exception:
-        pass
+    restaurant_slug = None
+    if profile and profile.restaurant:
+        restaurant_slug = profile.restaurant.slug
+    elif hasattr(user, 'branch') and user.branch and user.branch.restaurant:
+        restaurant_slug = user.branch.restaurant.slug
+    else:
+        from super_admin.models import Restaurant
+        first_r = Restaurant.objects.first()
+        restaurant_slug = first_r.slug if first_r else 'default'
 
-    # Superusers or staff without a restaurant go to super admin
-    if user.is_superuser or user.is_staff:
+    # 1. Hotel Admin: ALWAYS route to Hotel PMS (unless next_url is specifically a hotel_admin subpath)
+    if user_role == 'HOTEL_ADMIN':
+        if next_url and '/hotel-admin/' in next_url and url_has_allowed_host_and_scheme(
+            url=next_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure()
+        ):
+            return next_url
+        return reverse_lazy('hotel_admin:dashboard', kwargs={'restaurant_slug': restaurant_slug})
+
+    # 2. Club Admin: Route to Club Events
+    if user_role == 'CLUB_ADMIN':
+        if next_url and '/club-events/' in next_url and url_has_allowed_host_and_scheme(
+            url=next_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure()
+        ):
+            return next_url
+        return reverse_lazy('restaurant_admin:club_events_list', kwargs={'restaurant_slug': restaurant_slug})
+
+    # 3. General Manager: Full access across modules (can navigate to either Hotel PMS or Restaurant POS)
+    if user_role == 'GENERAL_MANAGER':
+        if next_url and not next_url.startswith('/super/') and url_has_allowed_host_and_scheme(
+            url=next_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure()
+        ):
+            return next_url
+        return reverse_lazy('restaurant_admin:dashboard', kwargs={'restaurant_slug': restaurant_slug})
+
+    # 4. Restaurant Admin: Route to Restaurant POS (blocks /hotel-admin/ in next_url)
+    if next_url and not next_url.startswith('/hotel-admin/') and not next_url.startswith('/super/') and url_has_allowed_host_and_scheme(
+        url=next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure()
+    ):
+        return next_url
+
+    if restaurant_slug:
+        return reverse_lazy('restaurant_admin:dashboard', kwargs={'restaurant_slug': restaurant_slug})
+
+    if user.is_staff:
         return reverse_lazy('super_admin:dashboard')
 
     return reverse_lazy('login')
@@ -71,6 +126,11 @@ class CustomLoginView(BaseLoginView):
         if request.user.is_authenticated:
             slug = self._user_restaurant_slug(request.user)
             if slug:
+                user_role = getattr(request.user, 'role', 'RESTAURANT_ADMIN')
+                if user_role == 'HOTEL_ADMIN':
+                    return redirect('hotel_admin:dashboard', restaurant_slug=slug)
+                elif user_role == 'CLUB_ADMIN':
+                    return redirect('restaurant_admin:club_events_list', restaurant_slug=slug)
                 return redirect('restaurant_admin:dashboard', restaurant_slug=slug)
             if request.user.is_superuser or request.user.is_staff:
                 return redirect('super_admin:dashboard')

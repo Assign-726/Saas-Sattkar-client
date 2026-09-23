@@ -1,0 +1,410 @@
+{% extends 'hotel_admin/base_hotel.html' %}
+
+{% block title %}Tape Chart Timeline{% endblock %}
+
+{% block extra_css %}
+<style>
+    .tape-chart-container {
+        background: #FFFFFF;
+        border-radius: 12px;
+        border: 1px solid #E2E8F0;
+        overflow-x: auto;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+
+    .tape-table {
+        min-width: 1100px;
+        margin-bottom: 0;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .tape-header-cell {
+        background-color: #F8FAFC;
+        border-bottom: 2px solid #E2E8F0;
+        border-right: 1px solid #E2E8F0;
+        padding: 0.65rem 0.4rem;
+        text-align: center;
+        font-size: 0.76rem;
+        min-width: 65px;
+    }
+
+    .tape-header-cell.today-col {
+        background-color: #EFF6FF !important;
+        border-bottom-color: #3B82F6;
+        color: #1D4ED8;
+        font-weight: 700;
+    }
+
+    .tape-room-col {
+        position: sticky;
+        left: 0;
+        z-index: 10;
+        background-color: #FFFFFF;
+        border-right: 2px solid #CBD5E1;
+        width: 170px;
+        min-width: 170px;
+        max-width: 170px;
+        padding: 0.75rem 1rem;
+        box-shadow: 4px 0 8px rgba(0, 0, 0, 0.02);
+    }
+
+    .tape-cell {
+        border-right: 1px solid #F1F5F9;
+        border-bottom: 1px solid #F1F5F9;
+        height: 52px;
+        padding: 3px;
+        position: relative;
+        vertical-align: middle;
+        background-color: #FFFFFF;
+        transition: background-color 0.15s ease;
+    }
+
+    .tape-cell:hover {
+        background-color: #F8FAFC;
+        cursor: pointer;
+    }
+
+    .tape-cell.today-cell {
+        background-color: rgba(59, 130, 246, 0.03);
+    }
+
+    .booking-block {
+        display: block;
+        padding: 0.35rem 0.5rem;
+        border-radius: 6px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: #FFFFFF;
+        text-decoration: none;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+        transition: transform 0.1s ease, filter 0.15s ease;
+        cursor: pointer;
+    }
+
+    .booking-block:hover {
+        transform: scale(1.02);
+        filter: brightness(1.1);
+        color: #FFFFFF;
+    }
+
+    .booking-status-reserved {
+        background: linear-gradient(135deg, #0284C7, #0369A1);
+    }
+
+    .booking-status-checked_in {
+        background: linear-gradient(135deg, #2563EB, #1D4ED8);
+        border-left: 3px solid #60A5FA;
+    }
+
+    .booking-status-checked_out {
+        background: linear-gradient(135deg, #64748B, #475569);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <h4 class="fw-bold mb-1 text-dark">Interactive Tape Chart &bull; Room Timeline</h4>
+        <p class="text-muted small mb-0">Multi-day timeline of room inventory, check-in durations, and occupancy blocks</p>
+    </div>
+
+    <!-- Date Navigation Toolbar -->
+    <div class="d-flex align-items-center gap-2">
+        <a href="?start_date={{ prev_date|date:'Y-m-d' }}&days={{ days_count }}" class="btn btn-sm btn-outline-secondary rounded-pill px-2.5" title="Previous Window">
+            <i class="fa-solid fa-chevron-left"></i>
+        </a>
+        <a href="?start_date={{ today|date:'Y-m-d' }}&days={{ days_count }}" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold">
+            Today
+        </a>
+        <a href="?start_date={{ next_date|date:'Y-m-d' }}&days={{ days_count }}" class="btn btn-sm btn-outline-secondary rounded-pill px-2.5" title="Next Window">
+            <i class="fa-solid fa-chevron-right"></i>
+        </a>
+
+        <!-- Jump to Date Form -->
+        <form method="GET" class="d-flex align-items-center gap-2 ms-2">
+            <input type="date" name="start_date" value="{{ start_date|date:'Y-m-d' }}" class="form-control form-control-sm rounded-pill font-mono px-3" style="width: 145px;">
+            <select name="days" class="form-select form-select-sm rounded-pill" style="width: 105px;" onchange="this.form.submit()">
+                <option value="7" {% if days_count == 7 %}selected{% endif %}>7 Days</option>
+                <option value="14" {% if days_count == 14 %}selected{% endif %}>14 Days</option>
+                <option value="21" {% if days_count == 21 %}selected{% endif %}>21 Days</option>
+            </select>
+            <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill px-3">Go</button>
+        </form>
+    </div>
+</div>
+
+<!-- Legend Bar -->
+<div class="d-flex align-items-center gap-3 mb-3 p-2.5 px-3 bg-white rounded-3 border" style="font-size: 0.78rem;">
+    <span class="fw-bold text-dark me-2">Legend:</span>
+    <span class="d-flex align-items-center gap-1.5"><span class="badge bg-primary p-1 rounded-circle"></span> In-House (Checked-In)</span>
+    <span class="d-flex align-items-center gap-1.5"><span class="badge bg-info p-1 rounded-circle"></span> Reserved / Upcoming</span>
+    <span class="d-flex align-items-center gap-1.5"><span class="badge bg-secondary p-1 rounded-circle"></span> Checked Out</span>
+    <span class="d-flex align-items-center gap-1.5 ms-auto text-muted"><i class="fa-solid fa-circle-info text-primary me-1"></i>Click any empty date box to create a reservation</span>
+</div>
+
+<!-- Tape Chart Grid Table -->
+<div class="tape-chart-container">
+    <table class="table tape-table">
+        <thead>
+            <tr>
+                <th class="tape-room-col bg-light fw-bold" style="font-size: 0.8rem;">
+                    ROOM / TYPE
+                </th>
+                {% for d in dates_list %}
+                <th class="tape-header-cell {% if d == today %}today-col{% endif %}">
+                    <div>{{ d|date:"D" }}</div>
+                    <div style="font-size: 0.7rem;">{{ d|date:"d M" }}</div>
+                </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for r_data in rooms_data %}
+            {% with r=r_data.room b_list=r_data.bookings %}
+            <tr>
+                <td class="tape-room-col">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <span class="fw-bold text-dark fs-6">#{{ r.room_number }}</span>
+                            <small class="d-block text-muted text-truncate" style="max-width: 110px; font-size: 0.7rem;">{{ r.category.name }}</small>
+                        </div>
+                        <span class="badge {% if r.status == 'AVAILABLE' %}bg-success{% elif r.status == 'OCCUPIED' %}bg-primary{% elif r.status == 'CLEANING' %}bg-warning text-dark{% else %}bg-danger{% endif %}" style="font-size: 0.6rem;">
+                            {{ r.status|slice:":3" }}
+                        </span>
+                    </div>
+                </td>
+
+                {% for d in dates_list %}
+                <td class="tape-cell {% if d == today %}today-cell{% endif %}" 
+                    data-room-id="{{ r.id }}" 
+                    data-room-number="{{ r.room_number }}" 
+                    data-date="{{ d|date:'Y-m-d' }}"
+                    onclick="handleCellClick(this, event)">
+                    {% for b in b_list %}
+                        {% if b.check_in_date <= d and b.check_out_date > d %}
+                            {% if b.check_in_date == d %}
+                            <!-- Start of reservation block -->
+                            <div class="booking-block {% if b.booking_status == 'CHECKED_IN' %}booking-status-checked_in{% elif b.booking_status == 'CHECKED_OUT' %}booking-status-checked_out{% else %}booking-status-reserved{% endif %}"
+                                 data-id="{{ b.id }}"
+                                 data-booking-id="{{ b.booking_id }}"
+                                 data-guest-name="{{ b.guest_name|escape }}"
+                                 data-guest-phone="{{ b.guest_phone }}"
+                                 data-check-in="{{ b.check_in_date|date:'Y-m-d' }}"
+                                 data-check-out="{{ b.check_out_date|date:'Y-m-d' }}"
+                                 data-grand-total="{{ b.grand_total }}"
+                                 data-status="{{ b.booking_status }}"
+                                 data-room-number="{{ r.room_number }}"
+                                 onclick="handleBlockClick(this, event);"
+                                 title="{{ b.guest_name }} ({{ b.check_in_date|date:'d M' }} - {{ b.check_out_date|date:'d M' }})">
+                                <i class="fa-solid fa-user me-1" style="font-size: 0.65rem;"></i>{{ b.guest_name }}
+                            </div>
+                            {% else %}
+                            <!-- Continuation block -->
+                            <div class="booking-block opacity-75 {% if b.booking_status == 'CHECKED_IN' %}booking-status-checked_in{% elif b.booking_status == 'CHECKED_OUT' %}booking-status-checked_out{% else %}booking-status-reserved{% endif %}"
+                                 data-id="{{ b.id }}"
+                                 data-booking-id="{{ b.booking_id }}"
+                                 data-guest-name="{{ b.guest_name|escape }}"
+                                 data-guest-phone="{{ b.guest_phone }}"
+                                 data-check-in="{{ b.check_in_date|date:'Y-m-d' }}"
+                                 data-check-out="{{ b.check_out_date|date:'Y-m-d' }}"
+                                 data-grand-total="{{ b.grand_total }}"
+                                 data-status="{{ b.booking_status }}"
+                                 data-room-number="{{ r.room_number }}"
+                                 onclick="handleBlockClick(this, event);"
+                                 style="font-size: 0.65rem;">
+                                &bull;&bull;&bull;
+                            </div>
+                            {% endif %}
+                        {% endif %}
+                    {% endfor %}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endwith %}
+            {% empty %}
+            <tr>
+                <td colspan="{{ days_count|add:1 }}" class="text-center py-5 text-muted">
+                    <i class="fa-solid fa-hotel fs-1 mb-2 d-block opacity-25"></i>
+                    No physical rooms found. Please configure rooms in the Room Inventory panel.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Modal: Quick Booking from Cell Click -->
+<div class="modal fade" id="quickBookingModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow">
+            <form method="POST" action="{% url 'hotel_admin:booking_create' restaurant_slug=rslug %}">
+                {% csrf_token %}
+                <input type="hidden" name="room_id" id="quickRoomId">
+                <div class="modal-header bg-light">
+                    <h5 class="modal-title fw-bold" id="quickBookingTitle">Reserve Room</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-3">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Guest Name *</label>
+                        <input type="text" name="guest_name" class="form-control form-control-sm" placeholder="e.g. Emily Watson" required>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold">Check-In *</label>
+                            <input type="date" name="check_in_date" id="quickCheckIn" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold">Check-Out *</label>
+                            <input type="date" name="check_out_date" id="quickCheckOut" class="form-control form-control-sm" required>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold">Phone *</label>
+                            <input type="text" name="guest_phone" class="form-control form-control-sm" placeholder="Phone number" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold">Email</label>
+                            <input type="email" name="guest_email" class="form-control form-control-sm" placeholder="guest@email.com">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-primary">Book Now</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Booking Folio Details -->
+<div class="modal fade" id="folioDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-light">
+                <div>
+                    <h6 class="modal-title fw-bold mb-0" id="folioBookingId">Reservation Details</h6>
+                    <small class="text-muted" id="folioRoomNum">Room #</small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div class="p-3 bg-light rounded mb-3">
+                    <h5 class="fw-bold text-dark mb-1" id="folioGuestName">Guest Name</h5>
+                    <p class="text-muted small mb-0" id="folioGuestPhone">+91 Phone</p>
+                </div>
+                <div class="row g-2 mb-3 text-center">
+                    <div class="col-6">
+                        <div class="p-2 border rounded">
+                            <small class="text-muted d-block" style="font-size: 0.7rem;">CHECK-IN</small>
+                            <strong class="text-dark" id="folioCheckIn">Date</strong>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-2 border rounded">
+                            <small class="text-muted d-block" style="font-size: 0.7rem;">CHECK-OUT</small>
+                            <strong class="text-dark" id="folioCheckOut">Date</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between align-items-center p-2 border-top">
+                    <span class="text-muted">Total Grand Charges:</span>
+                    <span class="fw-bold fs-5 text-dark" id="folioGrandTotal">₹0.00</span>
+                </div>
+            </div>
+            <div class="modal-footer bg-light d-flex justify-content-between">
+                <form id="folioCancelForm" method="POST" action="">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Cancel this reservation?');">
+                        Cancel Booking
+                    </button>
+                </form>
+
+                <div class="d-flex gap-2">
+                    <form id="folioCheckInForm" method="POST" action="">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-primary" id="folioCheckInBtn">
+                            <i class="fa-solid fa-key me-1"></i>Check-In
+                        </button>
+                    </form>
+                    <form id="folioCheckOutForm" method="POST" action="">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-warning text-dark fw-semibold" id="folioCheckOutBtn">
+                            <i class="fa-solid fa-arrow-right-from-bracket me-1"></i>Check-Out
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function handleCellClick(td, event) {
+    const roomId = td.getAttribute('data-room-id');
+    const roomNumber = td.getAttribute('data-room-number');
+    const dateStr = td.getAttribute('data-date');
+
+    if (!roomId || !dateStr) return;
+
+    // Set dates in modal
+    document.getElementById('quickRoomId').value = roomId;
+    document.getElementById('quickBookingTitle').innerText = 'Reserve Room #' + roomNumber;
+    document.getElementById('quickCheckIn').value = dateStr;
+
+    // Default checkout = checkin + 1 day
+    const d = new Date(dateStr);
+    d.setDate(d.getDate() + 1);
+    const nextDate = d.toISOString().split('T')[0];
+    document.getElementById('quickCheckOut').value = nextDate;
+
+    const modal = new bootstrap.Modal(document.getElementById('quickBookingModal'));
+    modal.show();
+}
+
+function handleBlockClick(el, event) {
+    if (event) event.stopPropagation();
+    const d = el.dataset;
+    openFolioModal(d.id, d.bookingId, d.guestName, d.guestPhone, d.checkIn, d.checkOut, d.grandTotal, d.status, d.roomNumber);
+}
+
+function openFolioModal(id, bookingId, guestName, phone, checkIn, checkOut, total, status, roomNum) {
+    document.getElementById('folioBookingId').innerText = bookingId;
+    document.getElementById('folioRoomNum').innerText = 'Room #' + roomNum;
+    document.getElementById('folioGuestName').innerText = guestName;
+    document.getElementById('folioGuestPhone').innerText = phone;
+    document.getElementById('folioCheckIn').innerText = checkIn;
+    document.getElementById('folioCheckOut').innerText = checkOut;
+    document.getElementById('folioGrandTotal').innerText = '₹' + total;
+
+    const checkInUrl = "{% url 'hotel_admin:booking_check_in' restaurant_slug=rslug booking_id=0 %}".replace('/0/', '/' + id + '/');
+    const checkOutUrl = "{% url 'hotel_admin:booking_check_out' restaurant_slug=rslug booking_id=0 %}".replace('/0/', '/' + id + '/');
+    const cancelUrl = "{% url 'hotel_admin:booking_cancel' restaurant_slug=rslug booking_id=0 %}".replace('/0/', '/' + id + '/');
+
+    document.getElementById('folioCheckInForm').action = checkInUrl;
+    document.getElementById('folioCheckOutForm').action = checkOutUrl;
+    document.getElementById('folioCancelForm').action = cancelUrl;
+
+    if (status === 'CHECKED_IN') {
+        document.getElementById('folioCheckInBtn').classList.add('d-none');
+        document.getElementById('folioCheckOutBtn').classList.remove('d-none');
+    } else if (status === 'CHECKED_OUT') {
+        document.getElementById('folioCheckInBtn').classList.add('d-none');
+        document.getElementById('folioCheckOutBtn').classList.add('d-none');
+    } else {
+        document.getElementById('folioCheckInBtn').classList.remove('d-none');
+        document.getElementById('folioCheckOutBtn').classList.add('d-none');
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('folioDetailModal'));
+    modal.show();
+}
+</script>
+{% endblock %}

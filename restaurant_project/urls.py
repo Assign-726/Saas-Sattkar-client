@@ -11,6 +11,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.views.static import serve
 from django.contrib.staticfiles.views import serve as staticfiles_serve
+from django.shortcuts import redirect
 from django.views.generic import RedirectView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.contrib.auth import views as auth_views
@@ -35,6 +36,7 @@ from core.views_auth import (
 )
 from core.admin_custom import custom_admin_site
 from restaurant_admin import urls as restaurant_admin_urls
+from hotel import views as views_hotel
 
 
 # Use the custom admin site
@@ -72,6 +74,16 @@ urlpatterns = [
     path('dj-admin/', custom_admin_site.urls),
     # Restaurant Admin (slug-scoped). Example: /dashboard/itc-rajasthan/menu/
     path('dashboard/<slug:restaurant_slug>/', include(('restaurant_admin.urls', 'restaurant_admin'), namespace='restaurant_admin')),
+
+    # Dedicated Hotel Admin PMS (slug-scoped). Example: /hotel-admin/sharma-hotel/
+    path('hotel-admin/', include([
+        path('', lambda req: redirect('hotel_admin:dashboard', restaurant_slug=(
+            req.user.restaurant_profile.restaurant.slug if req.user.is_authenticated and hasattr(req.user, 'restaurant_profile') and req.user.restaurant_profile.restaurant else (
+                __import__('super_admin.models').models.Restaurant.objects.first().slug if __import__('super_admin.models').models.Restaurant.objects.exists() else 'default'
+            )
+        ))),
+        path('<slug:restaurant_slug>/', include(('hotel.urls_admin', 'hotel_admin'), namespace='hotel_admin')),
+    ])),
     
     # Super Admin
     path('super/', include(('super_admin.urls', 'super_admin'), namespace='super_admin')),
@@ -80,7 +92,13 @@ urlpatterns = [
     path('api/', include('core.urls')),
     path('api/', include('reservations.urls')),
     path('api/events/', include(('events.urls', 'events'), namespace='events')),
+    path('api/hotel/', include(('hotel.urls', 'hotel'), namespace='hotel')),
+    path('api/public/branches/<int:branch_id>/availability/', include('hotel.urls_public')),
     
+    # Public Hotel / Rooms Booking Engine endpoints
+    path('api/rooms/', views_hotel.PublicBranchAvailabilityView.as_view(), name='api_rooms_availability'),
+    path('api/rooms/bookings/', views_hotel.PublicBookingCreateView.as_view(), name='api_rooms_bookings'),
+
     # API Token Authentication
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

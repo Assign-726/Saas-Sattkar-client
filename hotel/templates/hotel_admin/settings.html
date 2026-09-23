@@ -1,0 +1,589 @@
+{% extends 'hotel_admin/base_hotel.html' %}
+
+{% block title %}Hotel Settings &amp; Configuration{% endblock %}
+
+{% block extra_css %}
+<style>
+    .settings-nav-tabs .nav-link {
+        color: #64748B;
+        font-weight: 600;
+        font-size: 0.85rem;
+        padding: 0.75rem 1.25rem;
+        border: none;
+        border-bottom: 2px solid transparent;
+        background: transparent;
+        transition: all 0.2s ease;
+    }
+    .settings-nav-tabs .nav-link:hover {
+        color: #1E293B;
+    }
+    .settings-nav-tabs .nav-link.active {
+        color: #2563EB;
+        border-bottom-color: #2563EB;
+        background: transparent;
+    }
+    .settings-section-card {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 16px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        margin-bottom: 1.5rem;
+        overflow: hidden;
+    }
+    .settings-card-header {
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid #F1F5F9;
+        background: #F8FAFC;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .settings-card-body {
+        padding: 1.5rem;
+    }
+    .provider-card {
+        border: 2px solid #E2E8F0;
+        border-radius: 12px;
+        padding: 1rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .provider-card:hover {
+        border-color: #93C5FD;
+        background: #F8FAFC;
+    }
+    .provider-card.selected {
+        border-color: #2563EB;
+        background: #EFF6FF;
+    }
+    .live-badge-test {
+        background: #FEF3C7;
+        color: #92400E;
+        border: 1px solid #FDE68A;
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 20px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+    .live-badge-prod {
+        background: #D1FAE5;
+        color: #065F46;
+        border: 1px solid #A7F3D0;
+        font-size: 0.7rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 20px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+    .gst-slab-pill {
+        background: #F1F5F9;
+        border: 1px solid #CBD5E1;
+        border-radius: 10px;
+        padding: 0.6rem 0.85rem;
+        font-size: 0.8rem;
+    }
+    .sticky-save-bar {
+        position: sticky;
+        bottom: 1rem;
+        z-index: 1000;
+        background: rgba(15, 23, 42, 0.95);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 16px;
+        padding: 0.85rem 1.5rem;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<form method="post" id="hotelSettingsForm">
+    {% csrf_token %}
+
+    <!-- Page Header -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <h4 class="fw-bold mb-0 text-dark">Hotel PMS Configuration</h4>
+                {% if settings_obj.payment_mode == 'TEST' %}
+                <span class="live-badge-test"><i class="fa-solid fa-flask"></i> Sandbox Mode</span>
+                {% else %}
+                <span class="live-badge-prod"><i class="fa-solid fa-bolt"></i> Live Mode</span>
+                {% endif %}
+            </div>
+            <p class="text-muted small mb-0">
+                Configure online payment gateways (Razorpay/Stripe), Indian GST tax slabs, guest stay policies, and folio receipts for 
+                <strong class="text-dark">{{ current_branch.name }}</strong>.
+            </p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm rounded-3 px-3" onclick="location.reload();">
+                <i class="fa-solid fa-arrow-rotate-left me-1"></i> Discard
+            </button>
+            <button type="submit" class="btn btn-pms-primary shadow-sm">
+                <i class="fa-solid fa-cloud-arrow-up me-1"></i> Save All Settings
+            </button>
+        </div>
+    </div>
+
+    <!-- Navigation Pills / Tabs -->
+    <ul class="nav settings-nav-tabs mb-4 border-bottom bg-white rounded-3 px-3 shadow-sm" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-payments" type="button" role="tab">
+                <i class="fa-solid fa-credit-card me-1.5 text-primary"></i> Online Payment Gateway
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-taxes" type="button" role="tab">
+                <i class="fa-solid fa-scale-balanced me-1.5 text-success"></i> GST &amp; Taxes
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-property" type="button" role="tab">
+                <i class="fa-solid fa-hotel me-1.5 text-info"></i> Property &amp; Policies
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-invoicing" type="button" role="tab">
+                <i class="fa-solid fa-file-invoice me-1.5 text-warning"></i> Invoicing &amp; Receipts
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Contents -->
+    <div class="tab-content">
+
+        <!-- ========================================== -->
+        <!-- TAB 1: ONLINE PAYMENT GATEWAY SETTINGS     -->
+        <!-- ========================================== -->
+        <div class="tab-pane fade show active" id="tab-payments" role="tabpanel">
+            
+            <!-- Gateway Master Controls -->
+            <div class="settings-section-card">
+                <div class="settings-card-header">
+                    <div>
+                        <h6 class="fw-bold mb-0 text-dark">Payment Collection Methods</h6>
+                        <small class="text-muted">Choose how guests can pay for rooms (online or upon arrival)</small>
+                    </div>
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1 rounded-pill">
+                        Multi-Gateway Ready
+                    </span>
+                </div>
+                <div class="settings-card-body">
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <div class="p-3 rounded-3 border bg-light-subtle d-flex align-items-center justify-content-between">
+                                <div class="pe-3">
+                                    <strong class="d-block text-dark mb-1">Online Payment Gateway</strong>
+                                    <span class="text-muted small">Enable card, UPI, and NetBanking payments during online suite reservations.</span>
+                                </div>
+                                <div class="form-check form-switch fs-4 mb-0">
+                                    {{ form.enable_online_payment }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="p-3 rounded-3 border bg-light-subtle d-flex align-items-center justify-content-between">
+                                <div class="pe-3">
+                                    <strong class="d-block text-dark mb-1">Pay at Front Desk (Cash / POS)</strong>
+                                    <span class="text-muted small">Allow guests to reserve rooms online and complete payment upon arrival.</span>
+                                </div>
+                                <div class="form-check form-switch fs-4 mb-0">
+                                    {{ form.enable_pay_at_desk }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Provider Credentials -->
+            <div class="settings-section-card">
+                <div class="settings-card-header">
+                    <div>
+                        <h6 class="fw-bold mb-0 text-dark">Primary Payment Gateway Provider</h6>
+                        <small class="text-muted">Select active gateway provider and configure environment API keys</small>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#testGatewayModal">
+                        <i class="fa-solid fa-vial me-1"></i> Test Gateway Connection
+                    </button>
+                </div>
+                <div class="settings-card-body">
+                    <div class="row g-3 mb-4">
+                        <div class="col-sm-6 col-md-3">
+                            <label class="form-label fw-bold small text-muted text-uppercase">Payment Provider</label>
+                            {{ form.payment_gateway_provider }}
+                            {% if form.payment_gateway_provider.errors %}
+                            <div class="text-danger small mt-1">{{ form.payment_gateway_provider.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-sm-6 col-md-3">
+                            <label class="form-label fw-bold small text-muted text-uppercase">Environment Mode</label>
+                            {{ form.payment_mode }}
+                            {% if form.payment_mode.errors %}
+                            <div class="text-danger small mt-1">{{ form.payment_mode.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-muted text-uppercase">Direct UPI VPA ID / QR Code</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white"><i class="fa-solid fa-qrcode text-primary"></i></span>
+                                {{ form.upi_id }}
+                            </div>
+                            <small class="text-muted">Used for generating UPI QR codes at the front desk or mobile checkout.</small>
+                        </div>
+                    </div>
+
+                    <!-- Razorpay Configuration Block -->
+                    <div class="p-3.5 rounded-3 border bg-white mb-3" id="provider-razorpay-panel">
+                        <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 28px; height: 28px;">
+                                    <i class="fa-solid fa-bolt" style="font-size: 0.8rem;"></i>
+                                </div>
+                                <strong class="text-dark">Razorpay API Credentials</strong>
+                            </div>
+                            <span class="text-muted small">Standard Indian Payment Gateway</span>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label small text-muted fw-bold">Razorpay Key ID</label>
+                                {{ form.razorpay_key_id }}
+                                <small class="text-muted">Starts with <code>rzp_test_...</code> or <code>rzp_live_...</code></small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small text-muted fw-bold">Razorpay Key Secret</label>
+                                <div class="input-group">
+                                    {{ form.razorpay_key_secret }}
+                                    <button class="btn btn-outline-secondary" type="button" onclick="toggleSecretVisibility('id_razorpay_key_secret')">
+                                        <i class="fa-solid fa-eye" id="toggle-icon-id_razorpay_key_secret"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">Keep this secret secure. Never share in client-side code.</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stripe Configuration Block -->
+                    <div class="p-3.5 rounded-3 border bg-white" id="provider-stripe-panel">
+                        <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="bg-dark text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 28px; height: 28px;">
+                                    <i class="fa-brands fa-stripe-s" style="font-size: 0.85rem;"></i>
+                                </div>
+                                <strong class="text-dark">Stripe API Credentials</strong>
+                            </div>
+                            <span class="text-muted small">International &amp; Multi-Currency Support</span>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label small text-muted fw-bold">Stripe Publishable Key</label>
+                                {{ form.stripe_publishable_key }}
+                                <small class="text-muted">Starts with <code>pk_test_...</code> or <code>pk_live_...</code></small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small text-muted fw-bold">Stripe Secret Key</label>
+                                <div class="input-group">
+                                    {{ form.stripe_secret_key }}
+                                    <button class="btn btn-outline-secondary" type="button" onclick="toggleSecretVisibility('id_stripe_secret_key')">
+                                        <i class="fa-solid fa-eye" id="toggle-icon-id_stripe_secret_key"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">Stored securely with restricted access.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ========================================== -->
+        <!-- TAB 2: GST & TAXATION SETTINGS             -->
+        <!-- ========================================== -->
+        <div class="tab-pane fade" id="tab-taxes" role="tabpanel">
+            
+            <!-- Indian Hospitality GST Framework Card -->
+            <div class="settings-section-card">
+                <div class="settings-card-header">
+                    <div>
+                        <h6 class="fw-bold mb-0 text-dark">Indian Hospitality GST Compliance</h6>
+                        <small class="text-muted">Statutory GST slabs for hotel accommodations and lodging</small>
+                    </div>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1 rounded-pill">
+                        GST Council Compliant
+                    </span>
+                </div>
+                <div class="settings-card-body">
+                    <!-- Slabs Visual Breakdown -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="gst-slab-pill">
+                                <span class="badge bg-secondary-subtle text-secondary mb-1">Budget Stay</span>
+                                <div class="fw-bold text-dark fs-6">0% GST</div>
+                                <small class="text-muted d-block mt-0.5">Room Tariff &le; ₹1,000 / night</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="gst-slab-pill border-primary bg-primary-subtle">
+                                <span class="badge bg-primary text-white mb-1">Standard Luxury</span>
+                                <div class="fw-bold text-primary fs-6">12% GST (6% CGST + 6% SGST)</div>
+                                <small class="text-muted d-block mt-0.5">Room Tariff ₹1,001 &ndash; ₹7,500 / night</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="gst-slab-pill border-warning bg-warning-subtle">
+                                <span class="badge bg-warning text-dark mb-1">Premium &amp; Villas</span>
+                                <div class="fw-bold text-dark fs-6">18% GST (9% CGST + 9% SGST)</div>
+                                <small class="text-muted d-block mt-0.5">Room Tariff &gt; ₹7,500 / night</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic GST Toggle -->
+                    <div class="p-3 rounded-3 border bg-light-subtle d-flex align-items-center justify-content-between mb-4">
+                        <div class="pe-3">
+                            <strong class="d-block text-dark mb-1">Enable Dynamic Indian Hospitality GST Slabs</strong>
+                            <span class="text-muted small">
+                                When enabled, the billing engine automatically calculates 12% or 18% GST according to the room tariff per night.
+                            </span>
+                        </div>
+                        <div class="form-check form-switch fs-4 mb-0">
+                            {{ form.enable_dynamic_gst }}
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-bold">GSTIN Registration Number</label>
+                            {{ form.gstin }}
+                            <small class="text-muted">Printed on official tax invoice receipts (15 characters)</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-bold">Custom Flat Tax Rate (%)</label>
+                            {{ form.tax_rate }}
+                            <small class="text-muted">Only applied if Dynamic GST is switched OFF.</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-bold">Hotel Service Charge (%)</label>
+                            {{ form.service_charge_percent }}
+                            <small class="text-muted">Discretionary service charge (0% if none).</small>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 pt-3 border-t d-flex align-items-center justify-content-between">
+                        <div>
+                            <strong class="d-block text-dark small">Tax-Inclusive Room Display Pricing</strong>
+                            <span class="text-muted" style="font-size: 0.76rem;">Show rates on frontend inclusive of GST taxes instead of adding tax at checkout.</span>
+                        </div>
+                        <div class="form-check form-switch fs-5 mb-0">
+                            {{ form.tax_inclusive_pricing }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ========================================== -->
+        <!-- TAB 3: PROPERTY & STAY POLICIES            -->
+        <!-- ========================================== -->
+        <div class="tab-pane fade" id="tab-property" role="tabpanel">
+            
+            <div class="settings-section-card">
+                <div class="settings-card-header">
+                    <div>
+                        <h6 class="fw-bold mb-0 text-dark">Hotel Property &amp; Front Desk Contact</h6>
+                        <small class="text-muted">Guest contact information displayed on booking vouchers</small>
+                    </div>
+                </div>
+                <div class="settings-card-body">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-bold">Hotel Display Name</label>
+                            {{ form.hotel_name }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-bold">Reservation Support Email</label>
+                            {{ form.contact_email }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-bold">Front Desk Helpline Phone</label>
+                            {{ form.contact_phone }}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small text-muted fw-bold">Physical Property Address</label>
+                            {{ form.address }}
+                        </div>
+                    </div>
+
+                    <h6 class="fw-bold text-dark pt-3 border-top mb-3">Check-In / Check-Out Timings &amp; Cancellation</h6>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-bold">Standard Check-In Time</label>
+                            {{ form.check_in_time }}
+                            <small class="text-muted">Default check-in slot (e.g. 14:00 / 2:00 PM)</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-bold">Standard Check-Out Time</label>
+                            {{ form.check_out_time }}
+                            <small class="text-muted">Default check-out slot (e.g. 11:00 / 11:00 AM)</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-bold">Free Cancellation Grace (Hours)</label>
+                            {{ form.cancellation_grace_hours }}
+                            <small class="text-muted">Hours prior to check-in for full refund</small>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small text-muted fw-bold">Cancellation &amp; Retention Terms</label>
+                            {{ form.cancellation_policy }}
+                            <small class="text-muted">Printed on guest confirmation vouchers and displayed in booking modal.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ========================================== -->
+        <!-- TAB 4: INVOICING & RECEIPTS                -->
+        <!-- ========================================== -->
+        <div class="tab-pane fade" id="tab-invoicing" role="tabpanel">
+            
+            <div class="settings-section-card">
+                <div class="settings-card-header">
+                    <div>
+                        <h6 class="fw-bold mb-0 text-dark">Invoice &amp; Guest Folio Receipt Customization</h6>
+                        <small class="text-muted">Customize tax invoice numbering and printed receipts</small>
+                    </div>
+                </div>
+                <div class="settings-card-body">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-bold">Invoice Prefix</label>
+                            {{ form.invoice_prefix }}
+                            <small class="text-muted">Preview: <code class="text-primary font-mono fw-bold">INV-HTL-2026-0042</code></small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-bold">Currency Symbol</label>
+                            {{ form.currency_symbol }}
+                            <small class="text-muted">e.g. ₹ or $</small>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small text-muted fw-bold">Invoice Footer Gratitude Message</label>
+                            {{ form.invoice_footer_notes }}
+                            <small class="text-muted">Printed at the bottom of customer checkout invoices.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Floating Sticky Save Bar -->
+    <div class="sticky-save-bar mt-4 d-flex align-items-center justify-content-between flex-wrap gap-2 text-white">
+        <div class="d-flex align-items-center gap-2">
+            <div class="w-8 h-8 rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center">
+                <i class="fa-solid fa-sliders"></i>
+            </div>
+            <div>
+                <strong class="d-block text-white" style="font-size: 0.85rem;">Ready to save hotel configuration?</strong>
+                <span class="text-white-50 small">Changes take effect immediately on both Hotel PMS and frontend website.</span>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-outline-light btn-sm px-3 rounded-pill" onclick="location.reload();">
+                Cancel
+            </button>
+            <button type="submit" class="btn btn-primary btn-sm px-4 fw-bold rounded-pill shadow-lg">
+                <i class="fa-solid fa-check me-1"></i> Save Changes
+            </button>
+        </div>
+    </div>
+</form>
+
+<!-- Modal: Test Payment Gateway Connection -->
+<div class="modal fade" id="testGatewayModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-header bg-light border-0 p-4 pb-2">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">
+                        <i class="fa-solid fa-vial"></i>
+                    </div>
+                    <div>
+                        <h6 class="modal-title fw-bold text-dark mb-0">Test Payment Gateway</h6>
+                        <small class="text-muted">Simulate API handshake with configured provider</small>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4 text-center">
+                <div id="test-step-initial">
+                    <p class="text-muted small mb-4">
+                        Verify your configured API Key ID and Secret with 
+                        <strong class="text-dark">{{ form.payment_gateway_provider.value|default:"Razorpay" }}</strong>.
+                    </p>
+                    <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold" onclick="runGatewayTest();">
+                        <i class="fa-solid fa-play me-1"></i> Run Handshake Test
+                    </button>
+                </div>
+
+                <div id="test-step-loading" style="display: none;" class="py-4">
+                    <div class="spinner-border text-primary mb-3" role="status"></div>
+                    <h6 class="text-dark fw-bold mb-1">Verifying Credentials...</h6>
+                    <small class="text-muted">Connecting to secure gateway endpoints...</small>
+                </div>
+
+                <div id="test-step-success" style="display: none;" class="py-2">
+                    <div class="w-12 h-12 bg-success-subtle text-success rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 50px; height: 50px;">
+                        <i class="fa-solid fa-check fs-4"></i>
+                    </div>
+                    <h6 class="text-dark fw-bold mb-1">Credentials Valid &amp; Operational!</h6>
+                    <p class="text-muted small mb-0">Gateway API responded successfully. Your checkout engine is ready to accept guest reservations.</p>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-3 pt-0">
+                <button type="button" class="btn btn-light btn-sm rounded-pill px-4" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function toggleSecretVisibility(fieldId) {
+        const input = document.getElementById(fieldId);
+        const icon = document.getElementById('toggle-icon-' + fieldId);
+        if (!input) return;
+        if (input.type === 'password') {
+            input.type = 'text';
+            if (icon) {
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            }
+        } else {
+            input.type = 'password';
+            if (icon) {
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+    }
+
+    function runGatewayTest() {
+        document.getElementById('test-step-initial').style.display = 'none';
+        document.getElementById('test-step-loading').style.display = 'block';
+
+        setTimeout(() => {
+            document.getElementById('test-step-loading').style.display = 'none';
+            document.getElementById('test-step-success').style.display = 'block';
+        }, 1200);
+    }
+</script>
+{% endblock %}

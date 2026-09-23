@@ -889,7 +889,8 @@ class RestaurantBranchComplianceForm(forms.ModelForm):
             'service_charge_percentage',
             'fssai_license_no', 'vat_tin', 'excise_license_no',
             'vat_beer_rate', 'vat_imfl_rate', 'vat_wine_rate',
-            'latitude', 'longitude', 'geofence_radius_meters', 'enforce_geofence'
+            'latitude', 'longitude', 'geofence_radius_meters', 'enforce_geofence',
+            'enforce_operating_hours', 'opening_time', 'closing_time', 'closed_message', 'weekly_schedule'
         ]
         widgets = {
             'service_charge_percentage': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'placeholder': '0.00'}),
@@ -903,14 +904,22 @@ class RestaurantBranchComplianceForm(forms.ModelForm):
             'longitude': forms.NumberInput(attrs={'step': '0.000001', 'placeholder': 'e.g. 72.877426'}),
             'geofence_radius_meters': forms.NumberInput(attrs={'min': '10', 'max': '5000', 'placeholder': '100'}),
             'enforce_geofence': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'enforce_operating_hours': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'opening_time': forms.TimeInput(attrs={'type': 'time', 'class': 'form-control'}),
+            'closing_time': forms.TimeInput(attrs={'type': 'time', 'class': 'form-control'}),
+            'closed_message': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Doors open at 11:00 AM. Thank you for your patience!'}),
+            'weekly_schedule': forms.HiddenInput(),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields:
-            if field == 'enforce_geofence':
+            if field in ['enforce_geofence', 'enforce_operating_hours']:
                 self.fields[field].widget.attrs.update({'class': 'form-check-input'})
+            elif field == 'weekly_schedule':
+                pass
             else:
                 self.fields[field].widget.attrs.update({'class': 'form-control'})
             self.fields[field].required = False
+
 

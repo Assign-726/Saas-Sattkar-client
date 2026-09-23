@@ -451,6 +451,15 @@ class OrderViewSet(viewsets.ModelViewSet):
         if not branch and restaurant and restaurant.branches.count() == 1:
             branch = restaurant.branches.first()
 
+        if branch and getattr(branch, 'enforce_operating_hours', False):
+            op_status = branch.get_operating_status()
+            if not op_status.get('is_open'):
+                next_info = f" {op_status.get('next_open_label')}." if op_status.get('next_open_label') else ""
+                return Response(
+                    {'error': f"Ordering is currently closed for {branch.name}.{next_info}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
         # Compute taxes & service charges
         if settings_obj and settings_obj.cgst_percentage is not None:
             cgst_pct = Decimal(str(settings_obj.cgst_percentage))
@@ -809,6 +818,11 @@ class RestaurantSettingsViewSet(viewsets.ReadOnlyModelViewSet):
                 data['enable_customer_ordering'] = getattr(branch, 'enable_customer_ordering', True)
                 data['enable_online_payment'] = getattr(branch, 'enable_online_payment', False)
                 data['enable_pay_at_counter'] = getattr(branch, 'enable_pay_at_counter', True)
+                data['enforce_operating_hours'] = getattr(branch, 'enforce_operating_hours', False)
+                data['opening_time'] = branch.opening_time.strftime("%H:%M") if branch.opening_time else None
+                data['closing_time'] = branch.closing_time.strftime("%H:%M") if branch.closing_time else None
+                data['closed_message'] = branch.closed_message
+                data['operating_status'] = branch.get_operating_status()
                 if branch.service_charge_percentage is not None:
                     data['service_charge_percentage'] = str(branch.service_charge_percentage)
 

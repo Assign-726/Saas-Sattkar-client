@@ -1,0 +1,777 @@
+{% extends 'hotel_admin/base_hotel.html' %}
+
+{% block title %}Front Desk Command Center{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Metric Card Modern Styling */
+    .pms-stat-card {
+        background: #FFFFFF;
+        border-radius: 16px;
+        border: 1px solid var(--pms-border);
+        padding: 1.25rem;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    }
+
+    .pms-stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.06), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+        border-color: #CBD5E1;
+    }
+
+    .pms-stat-icon-wrapper {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        flex-shrink: 0;
+    }
+
+    .pms-stat-value {
+        font-size: 1.85rem;
+        font-weight: 800;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+        margin-top: 0.35rem;
+    }
+
+    .pms-stat-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #64748B;
+    }
+
+    /* Guest Avatar Initials Circle */
+    .guest-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: #EFF6FF;
+        color: #2563EB;
+        font-weight: 700;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        border: 1px solid #DBEAFE;
+    }
+
+    /* Room Badge */
+    .room-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: #0F172A;
+        color: #FFFFFF;
+        font-weight: 700;
+        font-size: 0.76rem;
+        padding: 0.2rem 0.6rem;
+        border-radius: 6px;
+        letter-spacing: 0.02em;
+    }
+
+    /* Tape Chart Mini Preview */
+    .mini-tape-table th {
+        font-size: 0.74rem;
+        padding: 0.65rem 0.3rem;
+        border-color: #E2E8F0;
+        background-color: #F8FAFC;
+    }
+
+    .mini-tape-table td {
+        padding: 4px;
+        height: 44px;
+        vertical-align: middle;
+        border-color: #F1F5F9;
+    }
+
+    .mini-tape-today-col {
+        background-color: #EFF6FF !important;
+        border-bottom: 2px solid #2563EB !important;
+        color: #1D4ED8 !important;
+        font-weight: 700;
+    }
+
+    .tape-booking-bar {
+        border-radius: 6px;
+        padding: 0.28rem 0.45rem;
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: #FFFFFF;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+        display: block;
+        text-decoration: none;
+        transition: transform 0.15s ease;
+    }
+
+    .tape-booking-bar:hover {
+        transform: scale(1.02);
+        color: #FFFFFF;
+    }
+
+    .bar-checked-in {
+        background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+        border-left: 3px solid #60A5FA;
+    }
+
+    .bar-reserved {
+        background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%);
+        border-left: 3px solid #38BDF8;
+    }
+
+    /* Live Clock Widget */
+    .live-clock-badge {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        padding: 0.45rem 0.95rem;
+        border-radius: 10px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #334155;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Executive Dashboard Header -->
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <h4 class="fw-bold text-dark mb-0">Front Desk &amp; Hotel Operations</h4>
+            <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-2.5 py-1 fw-semibold" style="font-size: 0.72rem;">
+                <i class="fa-solid fa-circle text-success me-1" style="font-size: 0.5rem;"></i>Operational
+            </span>
+        </div>
+        <p class="text-muted small mb-0">
+            Real-time room occupancy, check-in queue, housekeeping status, and guest folios for <strong class="text-dark">{{ current_branch.name }}</strong>
+        </p>
+    </div>
+
+    <!-- Right Date & Quick Action Buttons -->
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <div class="live-clock-badge">
+            <i class="fa-regular fa-clock text-primary"></i>
+            <span id="currentLiveClock">{{ today|date:"l, M d, Y" }}</span>
+        </div>
+        <a href="{% url 'hotel_admin:tape_chart' restaurant_slug=rslug %}" class="btn btn-sm btn-outline-primary fw-semibold px-3 py-2 rounded-2 d-flex align-items-center gap-2">
+            <i class="fa-solid fa-calendar-days"></i>
+            <span>Tape Chart</span>
+        </a>
+        <a href="{% url 'hotel_admin:bookings' restaurant_slug=rslug %}" class="btn btn-sm btn-outline-secondary fw-semibold px-3 py-2 rounded-2 d-flex align-items-center gap-2">
+            <i class="fa-solid fa-list-check"></i>
+            <span>All Bookings</span>
+        </a>
+    </div>
+</div>
+
+<!-- 6 Executive KPI Metric Cards -->
+<div class="row g-3 mb-4">
+    <!-- Available Rooms -->
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="pms-stat-card h-100">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="pms-stat-label">Available</span>
+                <div class="pms-stat-icon-wrapper bg-success-subtle text-success">
+                    <i class="fa-solid fa-door-open"></i>
+                </div>
+            </div>
+            <div class="pms-stat-value text-success font-mono">{{ available_count }}</div>
+            <div class="d-flex align-items-center justify-content-between mt-2 pt-2 border-top">
+                <span class="text-muted small" style="font-size: 0.73rem;">Clean &amp; Ready</span>
+                <span class="badge bg-success-subtle text-success fw-bold" style="font-size: 0.65rem;">Ready</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Occupied Rooms -->
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="pms-stat-card h-100">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="pms-stat-label">Occupied</span>
+                <div class="pms-stat-icon-wrapper bg-primary-subtle text-primary">
+                    <i class="fa-solid fa-bed"></i>
+                </div>
+            </div>
+            <div class="pms-stat-value text-primary font-mono">{{ occupied_count }}</div>
+            <div class="d-flex align-items-center justify-content-between mt-2 pt-2 border-top">
+                <span class="text-muted small" style="font-size: 0.73rem;">In-House Guests</span>
+                <span class="badge bg-primary-subtle text-primary fw-bold" style="font-size: 0.65rem;">Active</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Today's Arrivals -->
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="pms-stat-card h-100">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="pms-stat-label">Today Arrivals</span>
+                <div class="pms-stat-icon-wrapper bg-info-subtle text-info">
+                    <i class="fa-solid fa-plane-arrival"></i>
+                </div>
+            </div>
+            <div class="pms-stat-value text-info font-mono">{{ arrivals_today|length }}</div>
+            <div class="d-flex align-items-center justify-content-between mt-2 pt-2 border-top">
+                <span class="text-muted small" style="font-size: 0.73rem;">Due Check-In</span>
+                <span class="badge bg-info-subtle text-info fw-bold" style="font-size: 0.65rem;">Today</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Today's Departures -->
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="pms-stat-card h-100">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="pms-stat-label">Departures</span>
+                <div class="pms-stat-icon-wrapper bg-warning-subtle text-warning">
+                    <i class="fa-solid fa-plane-departure"></i>
+                </div>
+            </div>
+            <div class="pms-stat-value text-warning font-mono">{{ departures_today|length }}</div>
+            <div class="d-flex align-items-center justify-content-between mt-2 pt-2 border-top">
+                <span class="text-muted small" style="font-size: 0.73rem;">Due Check-Out</span>
+                <span class="badge bg-warning-subtle text-warning fw-bold" style="font-size: 0.65rem;">Today</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dirty / Housekeeping -->
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="pms-stat-card h-100">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="pms-stat-label">Housekeeping</span>
+                <div class="pms-stat-icon-wrapper" style="background: rgba(245, 158, 11, 0.12); color: #D97706;">
+                    <i class="fa-solid fa-broom"></i>
+                </div>
+            </div>
+            <div class="pms-stat-value font-mono" style="color: #D97706;">{{ cleaning_count }}</div>
+            <div class="d-flex align-items-center justify-content-between mt-2 pt-2 border-top">
+                <span class="text-muted small" style="font-size: 0.73rem;">Awaiting Cleaning</span>
+                <a href="{% url 'hotel_admin:rooms' restaurant_slug=rslug %}" class="badge bg-warning-subtle text-warning text-decoration-none fw-bold" style="font-size: 0.65rem;">Queue &rarr;</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Occupancy % -->
+    <div class="col-6 col-md-4 col-xl-2">
+        <div class="pms-stat-card h-100">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="pms-stat-label">Occupancy</span>
+                <div class="pms-stat-icon-wrapper bg-dark-subtle text-dark">
+                    <i class="fa-solid fa-chart-line"></i>
+                </div>
+            </div>
+            <div class="pms-stat-value text-dark font-mono">{{ occupancy_rate }}%</div>
+            <div class="d-flex align-items-center justify-content-between mt-2 pt-2 border-top">
+                <span class="text-muted small" style="font-size: 0.73rem;">{{ total_rooms_count }} Total Rooms</span>
+                <span class="badge bg-secondary-subtle text-secondary fw-bold" style="font-size: 0.65rem;">Capacity</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Daily Operations Center: Arrivals & Departures Split -->
+<div class="row g-4 mb-4">
+    <!-- Today's Arrivals -->
+    <div class="col-lg-6">
+        <div class="pms-card h-100">
+            <div class="pms-card-header bg-white">
+                <div class="d-flex align-items-center gap-2.5">
+                    <div class="pms-stat-icon-wrapper bg-primary-subtle text-primary" style="width: 34px; height: 34px; font-size: 0.95rem; border-radius: 8px;">
+                        <i class="fa-solid fa-plane-arrival"></i>
+                    </div>
+                    <div>
+                        <h6 class="pms-card-title mb-0">Today's Arrivals</h6>
+                        <small class="text-muted" style="font-size: 0.72rem;">Guests scheduled to check-in today</small>
+                    </div>
+                </div>
+                <span class="badge bg-primary text-white rounded-pill px-2.5 py-1 font-mono">{{ arrivals_today|length }} Expected</span>
+            </div>
+            <div class="pms-card-body p-0">
+                {% if arrivals_today %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-3">Guest Details</th>
+                                <th>Room Unit</th>
+                                <th>Stay Duration</th>
+                                <th>Status</th>
+                                <th class="text-end pe-3">Front Desk Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for b in arrivals_today %}
+                            <tr>
+                                <td class="ps-3">
+                                    <div class="d-flex align-items-center gap-2.5">
+                                        <div class="guest-avatar">
+                                            {{ b.guest_name|slice:":2"|upper }}
+                                        </div>
+                                        <div>
+                                            <span class="fw-bold text-dark d-block">{{ b.guest_name }}</span>
+                                            <small class="text-muted font-mono"><i class="fa-solid fa-phone me-1 text-muted" style="font-size: 0.7rem;"></i>{{ b.guest_phone }}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="room-pill mb-1">
+                                        <i class="fa-solid fa-door-closed" style="font-size: 0.7rem;"></i>
+                                        <span>#{{ b.room.room_number }}</span>
+                                    </div>
+                                    <small class="d-block text-muted text-truncate" style="max-width: 140px; font-size: 0.72rem;">{{ b.room.category.name }}</small>
+                                </td>
+                                <td>
+                                    <div class="fw-semibold text-dark font-mono" style="font-size: 0.8rem;">
+                                        {{ b.check_in_date|date:"d M" }} &rarr; {{ b.check_out_date|date:"d M" }}
+                                    </div>
+                                    <span class="badge bg-light text-secondary border px-1.5 py-0.5" style="font-size: 0.68rem;">{{ b.nights_count }} Nights</span>
+                                </td>
+                                <td>
+                                    {% if b.booking_status == 'CHECKED_IN' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                                        <i class="fa-solid fa-circle-check me-1"></i>Checked-In
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-2 py-1">
+                                        <i class="fa-regular fa-clock me-1"></i>Expected
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end pe-3">
+                                    {% if b.booking_status != 'CHECKED_IN' %}
+                                    <form method="POST" action="{% url 'hotel_admin:booking_check_in' restaurant_slug=rslug booking_id=b.id %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-primary rounded-pill px-3 py-1 fw-semibold shadow-sm" style="font-size: 0.76rem;">
+                                            <i class="fa-solid fa-key me-1.5"></i>Check In
+                                        </button>
+                                    </form>
+                                    {% else %}
+                                    <span class="badge bg-light text-success border border-success-subtle px-2.5 py-1.5">
+                                        <i class="fa-solid fa-check me-1"></i>In House
+                                    </span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5 px-3">
+                    <div class="rounded-circle bg-light d-inline-flex align-items-center justify-content-center mb-3" style="width: 56px; height: 56px;">
+                        <i class="fa-solid fa-calendar-check text-muted fs-4"></i>
+                    </div>
+                    <h6 class="fw-bold text-dark mb-1">No arrivals scheduled for today</h6>
+                    <p class="text-muted small mb-3">All expected guests for today have either checked in or no bookings are set.</p>
+                    <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#newBookingModal">
+                        <i class="fa-solid fa-plus me-1"></i>Create Walk-In Reservation
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Today's Departures -->
+    <div class="col-lg-6">
+        <div class="pms-card h-100">
+            <div class="pms-card-header bg-white">
+                <div class="d-flex align-items-center gap-2.5">
+                    <div class="pms-stat-icon-wrapper bg-warning-subtle text-warning" style="width: 34px; height: 34px; font-size: 0.95rem; border-radius: 8px;">
+                        <i class="fa-solid fa-plane-departure"></i>
+                    </div>
+                    <div>
+                        <h6 class="pms-card-title mb-0">Today's Departures</h6>
+                        <small class="text-muted" style="font-size: 0.72rem;">Guests scheduled to check-out today</small>
+                    </div>
+                </div>
+                <span class="badge bg-warning text-dark rounded-pill px-2.5 py-1 font-mono">{{ departures_today|length }} Due Out</span>
+            </div>
+            <div class="pms-card-body p-0">
+                {% if departures_today %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-3">Guest Details</th>
+                                <th>Room</th>
+                                <th>Total Bill / Folio</th>
+                                <th>Status</th>
+                                <th class="text-end pe-3">Front Desk Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for b in departures_today %}
+                            <tr>
+                                <td class="ps-3">
+                                    <div class="d-flex align-items-center gap-2.5">
+                                        <div class="guest-avatar" style="background: #FEF3C7; color: #D97706; border-color: #FDE68A;">
+                                            {{ b.guest_name|slice:":2"|upper }}
+                                        </div>
+                                        <div>
+                                            <span class="fw-bold text-dark d-block">{{ b.guest_name }}</span>
+                                            <small class="text-muted font-mono"><i class="fa-solid fa-phone me-1 text-muted" style="font-size: 0.7rem;"></i>{{ b.guest_phone }}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="room-pill">
+                                        <i class="fa-solid fa-door-closed" style="font-size: 0.7rem;"></i>
+                                        <span>#{{ b.room.room_number }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="fw-bold text-dark font-mono">₹{{ b.grand_total }}</div>
+                                    <span class="badge {% if b.payment_status == 'PAID' %}bg-success-subtle text-success border border-success-subtle{% else %}bg-warning-subtle text-warning border border-warning-subtle{% endif %} px-2 py-0.5" style="font-size: 0.68rem;">
+                                        {{ b.get_payment_status_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if b.booking_status == 'CHECKED_OUT' %}
+                                    <span class="badge bg-secondary-subtle text-secondary border px-2 py-1">Checked Out</span>
+                                    {% else %}
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1">In House</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end pe-3">
+                                    {% if b.booking_status != 'CHECKED_OUT' %}
+                                    <form method="POST" action="{% url 'hotel_admin:booking_check_out' restaurant_slug=rslug booking_id=b.id %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-warning text-dark rounded-pill px-3 py-1 fw-bold shadow-sm" style="font-size: 0.76rem;">
+                                            <i class="fa-solid fa-arrow-right-from-bracket me-1.5"></i>Check Out
+                                        </button>
+                                    </form>
+                                    {% else %}
+                                    <span class="badge bg-light text-muted border px-2 py-1">Completed</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5 px-3">
+                    <div class="rounded-circle bg-light d-inline-flex align-items-center justify-content-center mb-3" style="width: 56px; height: 56px;">
+                        <i class="fa-solid fa-hotel text-muted fs-4"></i>
+                    </div>
+                    <h6 class="fw-bold text-dark mb-1">No check-outs scheduled for today</h6>
+                    <p class="text-muted small mb-0">All in-house guests are comfortably staying through tonight.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Housekeeping Alerts & 7-Day Interactive Tape Chart Preview -->
+<div class="row g-4 mb-4">
+    <!-- Housekeeping Needs Queue -->
+    <div class="col-lg-4">
+        <div class="pms-card h-100">
+            <div class="pms-card-header bg-white">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="pms-stat-icon-wrapper" style="width: 32px; height: 32px; background: rgba(245, 158, 11, 0.12); color: #D97706; font-size: 0.9rem; border-radius: 8px;">
+                        <i class="fa-solid fa-broom"></i>
+                    </div>
+                    <h6 class="pms-card-title mb-0">Housekeeping Queue</h6>
+                </div>
+                <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill font-mono">{{ cleaning_rooms|length }} Units</span>
+            </div>
+            <div class="pms-card-body p-3">
+                {% if cleaning_rooms %}
+                <div class="d-flex flex-column gap-2.5">
+                    {% for r in cleaning_rooms %}
+                    <div class="p-2.5 rounded-3 border bg-light d-flex align-items-center justify-content-between">
+                        <div>
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <span class="room-pill">#{{ r.room_number }}</span>
+                                <span class="badge bg-warning-subtle text-warning border border-warning-subtle" style="font-size: 0.65rem;">Dirty</span>
+                            </div>
+                            <small class="text-muted d-block" style="font-size: 0.73rem;">{{ r.category.name }} &bull; Floor {{ r.floor }}</small>
+                        </div>
+                        <form method="POST" action="{% url 'hotel_admin:room_status_update' restaurant_slug=rslug room_id=r.id %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="status" value="AVAILABLE">
+                            <button type="submit" class="btn btn-sm btn-success rounded-pill px-3 py-1 fw-semibold shadow-sm" style="font-size: 0.74rem;" title="Mark this room clean and ready for sale">
+                                <i class="fa-solid fa-check me-1"></i>Mark Clean
+                            </button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="mt-3 text-center">
+                    <a href="{% url 'hotel_admin:rooms' restaurant_slug=rslug %}" class="btn btn-xs btn-outline-secondary w-100 py-1.5 rounded-2" style="font-size: 0.78rem;">
+                        View Full Rooms &amp; Housekeeping Board &rarr;
+                    </a>
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                    <div class="rounded-circle bg-success-subtle text-success d-inline-flex align-items-center justify-content-center mb-2" style="width: 48px; height: 48px;">
+                        <i class="fa-solid fa-sparkles fs-5"></i>
+                    </div>
+                    <h6 class="fw-bold text-dark mb-1">Housekeeping Up to Date</h6>
+                    <p class="text-muted small mb-0">All physical rooms are clean, sanitized, and ready for guests.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 7-Day Tape Chart Overview -->
+    <div class="col-lg-8">
+        <div class="pms-card h-100">
+            <div class="pms-card-header bg-white">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="pms-stat-icon-wrapper bg-primary-subtle text-primary" style="width: 32px; height: 32px; font-size: 0.9rem; border-radius: 8px;">
+                        <i class="fa-solid fa-calendar-week"></i>
+                    </div>
+                    <div>
+                        <h6 class="pms-card-title mb-0">7-Day Tape Chart Timeline</h6>
+                        <small class="text-muted" style="font-size: 0.72rem;">Live calendar occupancy and room bookings</small>
+                    </div>
+                </div>
+                <a href="{% url 'hotel_admin:tape_chart' restaurant_slug=rslug %}" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 fw-semibold" style="font-size: 0.75rem;">
+                    Full Tape Chart &rarr;
+                </a>
+            </div>
+            <div class="pms-card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-bordered mb-0 text-center mini-tape-table align-middle">
+                        <thead>
+                            <tr>
+                                <th style="width: 140px;" class="text-start ps-3">Physical Unit</th>
+                                {% for d in preview_dates %}
+                                <th class="{% if d == today %}mini-tape-today-col{% endif %}">
+                                    <span class="d-block text-uppercase" style="font-size: 0.68rem;">{{ d|date:"D" }}</span>
+                                    <span class="font-mono fw-bold" style="font-size: 0.78rem;">{{ d|date:"d M" }}</span>
+                                </th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in rooms|slice:":8" %}
+                            <tr>
+                                <td class="text-start ps-3 bg-white">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="room-pill">#{{ r.room_number }}</span>
+                                        <span class="badge {% if r.status == 'AVAILABLE' %}bg-success-subtle text-success border border-success-subtle{% elif r.status == 'OCCUPIED' %}bg-primary-subtle text-primary border border-primary-subtle{% elif r.status == 'CLEANING' %}bg-warning-subtle text-warning border border-warning-subtle{% else %}bg-danger-subtle text-danger border border-danger-subtle{% endif %}" style="font-size: 0.62rem;">
+                                            {{ r.get_status_display|slice:":3" }}
+                                        </span>
+                                    </div>
+                                    <small class="text-muted d-block text-truncate" style="max-width: 120px; font-size: 0.68rem;">{{ r.category.name }}</small>
+                                </td>
+                                {% for d in preview_dates %}
+                                {% with b_list=booking_map|default_if_none:"" %}
+                                <td class="{% if d == today %}bg-primary-subtle bg-opacity-25{% endif %} position-relative p-1">
+                                    {% for b in b_list %}
+                                        {% if b.room_id == r.id and b.check_in_date <= d and b.check_out_date > d %}
+                                            <a href="{% url 'hotel_admin:bookings' restaurant_slug=rslug %}?q={{ b.booking_id }}" class="tape-booking-bar {% if b.booking_status == 'CHECKED_IN' %}bar-checked-in{% else %}bar-reserved{% endif %}" title="{{ b.guest_name }} ({{ b.booking_status }}) | {{ b.check_in_date|date:'d M' }} - {{ b.check_out_date|date:'d M' }}">
+                                                {{ b.guest_name }}
+                                            </a>
+                                        {% endif %}
+                                    {% endfor %}
+                                </td>
+                                {% endwith %}
+                                {% endfor %}
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center py-4 text-muted">No rooms configured yet. Add your first room in Room Inventory.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Tape Chart Legend Bar -->
+                <div class="p-2.5 bg-light border-top d-flex flex-wrap align-items-center justify-content-between px-3" style="font-size: 0.74rem;">
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="d-flex align-items-center gap-1.5"><span class="badge bg-primary p-1 rounded-circle"></span> In-House (Checked-In)</span>
+                        <span class="d-flex align-items-center gap-1.5"><span class="badge bg-info p-1 rounded-circle"></span> Reserved (Upcoming)</span>
+                        <span class="d-flex align-items-center gap-1.5"><span class="badge bg-success p-1 rounded-circle"></span> Available & Clean</span>
+                        <span class="d-flex align-items-center gap-1.5"><span class="badge bg-warning p-1 rounded-circle"></span> Needs Cleaning</span>
+                    </div>
+                    <span class="text-muted font-mono"><i class="fa-solid fa-clock-rotate-left me-1"></i>Real-time Sync</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: New Reservation -->
+<div class="modal fade" id="newBookingModal" tabindex="-1" aria-labelledby="newBookingModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <form method="POST" action="{% url 'hotel_admin:booking_create' restaurant_slug=rslug %}" id="pmsBookingForm">
+                {% csrf_token %}
+                <div class="modal-header bg-dark text-white px-4 py-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="pms-stat-icon-wrapper bg-primary text-white" style="width: 36px; height: 36px; font-size: 1rem; border-radius: 8px;">
+                            <i class="fa-solid fa-calendar-plus"></i>
+                        </div>
+                        <div>
+                            <h5 class="modal-title fw-bold text-white mb-0" id="newBookingModalLabel">New Guest Reservation</h5>
+                            <small class="text-white-50" style="font-size: 0.75rem;">Create a direct walk-in or advance booking</small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body p-4 bg-light">
+                    <!-- Step 1: Room & Stay Dates -->
+                    <div class="p-3 bg-white rounded-3 border mb-3">
+                        <h6 class="fw-bold text-primary mb-3 d-flex align-items-center gap-2">
+                            <i class="fa-solid fa-bed"></i> 1. Room &amp; Stay Details
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small">Physical Room *</label>
+                                <select name="room_id" id="bookingRoomSelect" class="form-select" required>
+                                    <option value="" data-price="0">-- Select Physical Room --</option>
+                                    {% for r in rooms %}
+                                    <option value="{{ r.id }}" data-price="{{ r.category.base_price_per_night }}" data-category="{{ r.category.name }}" {% if r.status != 'AVAILABLE' %}class="text-muted"{% endif %}>
+                                        Room #{{ r.room_number }} ({{ r.category.name }}) - ₹{{ r.category.base_price_per_night }}/nt [{{ r.get_status_display }}]
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small">Number of Guests</label>
+                                <input type="number" name="num_guests" class="form-control" value="1" min="1" max="10" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small">Check-In Date *</label>
+                                <input type="date" name="check_in_date" id="checkInDateInput" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small">Check-Out Date *</label>
+                                <input type="date" name="check_out_date" id="checkOutDateInput" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+                            </div>
+                        </div>
+
+                        <!-- Live Tariff Estimate Banner -->
+                        <div class="mt-3 p-2.5 bg-primary-subtle text-primary border border-primary-subtle rounded-3 d-flex align-items-center justify-content-between">
+                            <span class="small fw-semibold"><i class="fa-solid fa-receipt me-1.5"></i>Estimated Stay Cost:</span>
+                            <span class="fw-bold font-mono fs-6" id="stayCostEstimate">₹0 (0 Nights)</span>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Guest Details -->
+                    <div class="p-3 bg-white rounded-3 border mb-3">
+                        <h6 class="fw-bold text-primary mb-3 d-flex align-items-center gap-2">
+                            <i class="fa-solid fa-user"></i> 2. Guest Information
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold small">Guest Full Name *</label>
+                                <input type="text" name="guest_name" class="form-control" placeholder="e.g. Rahul Sharma" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold small">Phone Number *</label>
+                                <input type="tel" name="guest_phone" class="form-control" placeholder="e.g. +91 98765 43210" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold small">Email Address</label>
+                                <input type="email" name="guest_email" class="form-control" placeholder="e.g. rahul@example.com">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Payment & Special Requests -->
+                    <div class="p-3 bg-white rounded-3 border">
+                        <h6 class="fw-bold text-primary mb-3 d-flex align-items-center gap-2">
+                            <i class="fa-solid fa-credit-card"></i> 3. Payment &amp; Notes
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small">Initial Payment Status</label>
+                                <select name="payment_status" class="form-select">
+                                    <option value="PENDING">Pending (Pay at Check-In)</option>
+                                    <option value="PAID">Paid in Full</option>
+                                    <option value="PARTIALLY_PAID">Partially Paid (Advance Deposit)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small">Special Requests / Preferences</label>
+                                <input type="text" name="special_requests" class="form-control" placeholder="e.g. Quiet room, extra towels, airport pickup">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-white border-top px-4 py-3">
+                    <button type="button" class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-pms-primary px-4 rounded-pill fw-bold shadow-sm">
+                        <i class="fa-solid fa-check me-1.5"></i>Confirm &amp; Book Room
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Live Clock Update
+    function updateClock() {
+        const now = new Date();
+        const options = { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+        const el = document.getElementById('currentLiveClock');
+        if (el) {
+            el.innerText = now.toLocaleDateString('en-US', options);
+        }
+    }
+    setInterval(updateClock, 1000);
+
+    // Auto-calculate Stay Cost in Booking Modal
+    const roomSelect = document.getElementById('bookingRoomSelect');
+    const inDate = document.getElementById('checkInDateInput');
+    const outDate = document.getElementById('checkOutDateInput');
+    const costEstimate = document.getElementById('stayCostEstimate');
+
+    function calculateEstimate() {
+        if (!roomSelect || !inDate || !outDate || !costEstimate) return;
+        const opt = roomSelect.options[roomSelect.selectedIndex];
+        const price = parseFloat(opt ? opt.getAttribute('data-price') || 0 : 0);
+        
+        const d1 = new Date(inDate.value);
+        const d2 = new Date(outDate.value);
+        
+        let nights = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+        if (nights <= 0) nights = 1; // Minimum 1 night
+        
+        const total = price * nights;
+        costEstimate.innerText = `₹${total.toLocaleString('en-IN')} (${nights} Night${nights > 1 ? 's' : ''} @ ₹${price}/nt)`;
+    }
+
+    roomSelect?.addEventListener('change', calculateEstimate);
+    inDate?.addEventListener('change', calculateEstimate);
+    outDate?.addEventListener('change', calculateEstimate);
+
+    // Default checkout date to tomorrow on load
+    if (inDate && outDate && inDate.value === outDate.value) {
+        const nextDay = new Date(inDate.value);
+        nextDay.setDate(nextDay.getDate() + 1);
+        outDate.value = nextDay.toISOString().split('T')[0];
+        calculateEstimate();
+    }
+</script>
+{% endblock %}

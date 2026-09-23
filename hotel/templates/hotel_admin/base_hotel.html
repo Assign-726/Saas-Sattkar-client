@@ -1,0 +1,760 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Hotel PMS & Front Desk{% endblock %} | {{ current_restaurant.name }}</title>
+    <link rel="shortcut icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons & Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+    <style>
+        :root {
+            --pms-sidebar-bg: #090D16;
+            --pms-sidebar-surface: #111827;
+            --pms-sidebar-hover: #1F2937;
+            --pms-sidebar-border: rgba(255, 255, 255, 0.07);
+            --pms-primary: #2563EB;
+            --pms-primary-hover: #1D4ED8;
+            --pms-primary-light: #EFF6FF;
+            --pms-accent: #6366F1;
+            --pms-success: #10B981;
+            --pms-warning: #F59E0B;
+            --pms-danger: #EF4444;
+            --pms-info: #06B6D4;
+            --pms-body-bg: #F8FAFC;
+            --pms-card-bg: #FFFFFF;
+            --pms-border: #E2E8F0;
+            --pms-text-main: #0F172A;
+            --pms-text-muted: #64748B;
+            --sidebar-width: 260px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--pms-body-bg);
+            color: var(--pms-text-main);
+            font-size: 0.885rem;
+            min-height: 100vh;
+            margin: 0;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Monospace figures */
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Sidebar Styling */
+        .pms-sidebar {
+            width: var(--sidebar-width);
+            background: linear-gradient(180deg, #090D16 0%, #0F172A 100%);
+            color: #94A3B8;
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 1050;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            border-right: 1px solid var(--pms-sidebar-border);
+            box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25);
+        }
+
+        .pms-sidebar-header {
+            padding: 1.25rem 1.25rem;
+            border-bottom: 1px solid var(--pms-sidebar-border);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .pms-brand {
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+        }
+
+        .pms-brand-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #FFFFFF;
+            font-size: 1.25rem;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+            flex-shrink: 0;
+        }
+
+        .pms-brand-title {
+            font-size: 0.98rem;
+            font-weight: 700;
+            color: #F8FAFC;
+            line-height: 1.25;
+            letter-spacing: -0.01em;
+        }
+
+        .pms-badge-hotel {
+            display: inline-block;
+            background: rgba(56, 189, 248, 0.15);
+            color: #38BDF8;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            font-size: 0.62rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 0.15rem 0.45rem;
+            border-radius: 4px;
+            font-weight: 700;
+            margin-top: 0.2rem;
+        }
+
+        .pms-nav-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem 0.85rem;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+        }
+
+        .pms-section-title {
+            font-size: 0.66rem;
+            font-weight: 700;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+            color: #475569;
+            padding: 0.75rem 0.75rem 0.35rem;
+        }
+
+        .pms-nav-link {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.68rem 0.85rem;
+            color: #94A3B8;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.86rem;
+            margin-bottom: 0.3rem;
+            transition: all 0.18s ease;
+        }
+
+        .pms-nav-link-content {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+        }
+
+        .pms-nav-link i {
+            width: 20px;
+            text-align: center;
+            font-size: 1rem;
+            color: #64748B;
+            transition: color 0.18s ease;
+        }
+
+        .pms-nav-link:hover {
+            background-color: var(--pms-sidebar-hover);
+            color: #F8FAFC;
+        }
+
+        .pms-nav-link:hover i {
+            color: #38BDF8;
+        }
+
+        .pms-nav-link.active {
+            background: linear-gradient(90deg, rgba(37, 99, 235, 0.22) 0%, rgba(37, 99, 235, 0.1) 100%);
+            color: #FFFFFF;
+            font-weight: 600;
+            border-left: 3px solid #3B82F6;
+        }
+
+        .pms-nav-link.active i {
+            color: #60A5FA;
+        }
+
+        .pms-sidebar-footer {
+            padding: 1rem 1.15rem;
+            border-top: 1px solid var(--pms-sidebar-border);
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .pms-user-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 0.6rem 0.75rem;
+            border-radius: 10px;
+        }
+
+        .pms-user-avatar {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            background: #2563EB;
+            color: white;
+            font-weight: 700;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        /* Main Content Wrapper */
+        .pms-main-wrapper {
+            margin-left: var(--sidebar-width);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.25s ease;
+        }
+
+        /* Top Header Navbar */
+        .pms-topbar {
+            background: #FFFFFF;
+            border-bottom: 1px solid var(--pms-border);
+            padding: 0.75rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 1020;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+            gap: 1.5rem;
+        }
+
+        /* Branch Outlet Dropdown Button */
+        .pms-branch-btn {
+            background: #F8FAFC;
+            border: 1px solid #CBD5E1;
+            color: #0F172A;
+            font-weight: 600;
+            font-size: 0.85rem;
+            padding: 0.45rem 0.95rem;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+        }
+
+        .pms-branch-btn:hover, .pms-branch-btn:focus {
+            background: #F1F5F9;
+            border-color: #94A3B8;
+            color: #0F172A;
+        }
+
+        .pms-branch-dropdown-menu {
+            border-radius: 12px;
+            border: 1px solid #E2E8F0;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            padding: 0.5rem;
+            min-width: 250px;
+            z-index: 1060;
+        }
+
+        .pms-branch-dropdown-menu .dropdown-item {
+            padding: 0.6rem 0.85rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: background 0.15s ease;
+        }
+
+        .pms-branch-dropdown-menu .dropdown-item.active {
+            background-color: #EFF6FF;
+            color: #1D4ED8;
+            font-weight: 600;
+        }
+
+        /* Global Quick Search */
+        .pms-search-box {
+            position: relative;
+            flex: 1;
+            max-width: 440px;
+        }
+
+        .pms-search-box i {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94A3B8;
+            font-size: 0.9rem;
+            pointer-events: none;
+        }
+
+        .pms-search-input {
+            width: 100%;
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 10px;
+            padding: 0.48rem 1rem 0.48rem 2.4rem;
+            font-size: 0.84rem;
+            color: #1E293B;
+            transition: all 0.2s ease;
+        }
+
+        .pms-search-input:focus {
+            background: #FFFFFF;
+            border-color: #3B82F6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+            outline: none;
+        }
+
+        .pms-search-badge {
+            position: absolute;
+            right: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #E2E8F0;
+            color: #64748B;
+            border-radius: 4px;
+            padding: 0.1rem 0.35rem;
+            font-size: 0.65rem;
+            font-family: monospace;
+            font-weight: 600;
+        }
+
+        /* Live Status Pill */
+        .pms-live-pill {
+            background: #ECFDF5;
+            color: #065F46;
+            border: 1px solid #A7F3D0;
+            font-size: 0.76rem;
+            font-weight: 600;
+            padding: 0.35rem 0.75rem;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+        }
+
+        .pms-live-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background-color: #10B981;
+            display: inline-block;
+            box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+            animation: pulse-dot 2s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+            70% { transform: scale(1); box-shadow: 0 0 0 5px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        /* Module Switcher Pill */
+        .module-switcher-btn {
+            background: #F8FAFC;
+            border: 1px solid #CBD5E1;
+            color: #1E293B;
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.45rem 0.85rem;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            transition: all 0.2s ease;
+        }
+
+        .module-switcher-btn:hover {
+            background: #F1F5F9;
+            color: #0F172A;
+            border-color: #94A3B8;
+        }
+
+        /* Content Container */
+        .pms-content-body {
+            padding: 1.75rem 2rem;
+            flex: 1;
+        }
+
+        /* Card Elegance */
+        .pms-card {
+            background: #FFFFFF;
+            border-radius: 16px;
+            border: 1px solid var(--pms-border);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02), 0 4px 12px rgba(0, 0, 0, 0.03);
+            margin-bottom: 1.5rem;
+            transition: box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+
+        .pms-card:hover {
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+        }
+
+        .pms-card-header {
+            padding: 1.15rem 1.4rem;
+            border-bottom: 1px solid #F1F5F9;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .pms-card-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin: 0;
+            color: #0F172A;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .pms-card-body {
+            padding: 1.4rem;
+        }
+
+        /* Status Badges */
+        .badge-status-available {
+            background-color: #ECFDF5;
+            color: #065F46;
+            border: 1px solid #A7F3D0;
+            font-weight: 600;
+            border-radius: 6px;
+            padding: 0.35rem 0.65rem;
+        }
+
+        .badge-status-occupied {
+            background-color: #EFF6FF;
+            color: #1E40AF;
+            border: 1px solid #BFDBFE;
+            font-weight: 600;
+            border-radius: 6px;
+            padding: 0.35rem 0.65rem;
+        }
+
+        .badge-status-cleaning {
+            background-color: #FFFBEB;
+            color: #92400E;
+            border: 1px solid #FDE68A;
+            font-weight: 600;
+            border-radius: 6px;
+            padding: 0.35rem 0.65rem;
+        }
+
+        .badge-status-maintenance {
+            background-color: #FEF2F2;
+            color: #991B1B;
+            border: 1px solid #FECACA;
+            font-weight: 600;
+            border-radius: 6px;
+            padding: 0.35rem 0.65rem;
+        }
+
+        /* Primary Action Button */
+        .btn-pms-primary {
+            background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+            color: #FFFFFF;
+            border: none;
+            font-weight: 600;
+            border-radius: 10px;
+            padding: 0.5rem 1.15rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+            transition: all 0.2s ease;
+        }
+
+        .btn-pms-primary:hover {
+            color: #FFFFFF;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+        }
+
+        @media (max-width: 991.98px) {
+            .pms-sidebar {
+                transform: translateX(-100%);
+            }
+            .pms-sidebar.open {
+                transform: translateX(0);
+            }
+            .pms-main-wrapper {
+                margin-left: 0;
+            }
+            .pms-topbar {
+                padding: 0.75rem 1rem;
+            }
+            .pms-content-body {
+                padding: 1rem;
+            }
+            .pms-search-box {
+                display: none;
+            }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+    <!-- Dedicated Hotel Sidebar -->
+    <aside class="pms-sidebar" id="pmsSidebar">
+        <div class="pms-sidebar-header">
+            <a href="{% url 'hotel_admin:dashboard' restaurant_slug=rslug %}" class="pms-brand">
+                <div class="pms-brand-icon">
+                    <i class="fa-solid fa-hotel"></i>
+                </div>
+                <div class="d-flex flex-column overflow-hidden">
+                    <span class="pms-brand-title text-truncate">{{ current_branch.name|default:current_restaurant.name }}</span>
+                    <span class="pms-badge-hotel">Hotel PMS Desk</span>
+                </div>
+            </a>
+        </div>
+
+        <div class="pms-nav-container">
+            <div class="pms-section-title">Front Desk Operations</div>
+            <a href="{% url 'hotel_admin:dashboard' restaurant_slug=rslug %}" class="pms-nav-link {% if active_menu == 'dashboard' %}active{% endif %}">
+                <div class="pms-nav-link-content">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>Front Desk Overview</span>
+                </div>
+                <span class="badge bg-primary-subtle text-primary rounded-pill px-2 py-0.5" style="font-size: 0.65rem;">Live</span>
+            </a>
+            <a href="{% url 'hotel_admin:tape_chart' restaurant_slug=rslug %}" class="pms-nav-link {% if active_menu == 'tape_chart' %}active{% endif %}">
+                <div class="pms-nav-link-content">
+                    <i class="fa-solid fa-calendar-days"></i>
+                    <span>Tape Chart Timeline</span>
+                </div>
+            </a>
+            <a href="{% url 'hotel_admin:bookings' restaurant_slug=rslug %}" class="pms-nav-link {% if active_menu == 'bookings' %}active{% endif %}">
+                <div class="pms-nav-link-content">
+                    <i class="fa-solid fa-bell-concierge"></i>
+                    <span>Guest Folios & Bookings</span>
+                </div>
+            </a>
+
+            <div class="pms-section-title mt-3">Inventory & Housekeeping</div>
+            <a href="{% url 'hotel_admin:rooms' restaurant_slug=rslug %}" class="pms-nav-link {% if active_menu == 'rooms' %}active{% endif %}">
+                <div class="pms-nav-link-content">
+                    <i class="fa-solid fa-bed"></i>
+                    <span>Rooms & Housekeeping</span>
+                </div>
+                {% if cleaning_count %}
+                <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill px-2 py-0.5" style="font-size: 0.68rem;">{{ cleaning_count }} Dirty</span>
+                {% endif %}
+            </a>
+            <a href="{% url 'hotel_admin:categories' restaurant_slug=rslug %}" class="pms-nav-link {% if active_menu == 'categories' %}active{% endif %}">
+                <div class="pms-nav-link-content">
+                    <i class="fa-solid fa-tags"></i>
+                    <span>Room Categories & Tariffs</span>
+                </div>
+            </a>
+
+            <div class="pms-section-title mt-3">Hotel Configuration</div>
+            <a href="{% url 'hotel_admin:settings' restaurant_slug=rslug %}" class="pms-nav-link {% if active_menu == 'settings' %}active{% endif %}">
+                <div class="pms-nav-link-content">
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>Hotel Settings</span>
+                </div>
+            </a>
+
+            {% if is_general_manager %}
+            <div class="pms-section-title mt-4 text-warning">Venue Switcher</div>
+            <a href="{% url 'restaurant_admin:dashboard' restaurant_slug=rslug %}" class="pms-nav-link text-warning-emphasis">
+                <div class="pms-nav-link-content">
+                    <i class="fa-solid fa-utensils"></i>
+                    <span>Switch to Restaurant POS</span>
+                </div>
+                <i class="fa-solid fa-arrow-right small text-muted"></i>
+            </a>
+            {% endif %}
+        </div>
+
+        <div class="pms-sidebar-footer">
+            <div class="pms-user-card">
+                <div class="d-flex align-items-center gap-2.5 overflow-hidden">
+                    <div class="pms-user-avatar">
+                        {{ user.username|slice:":1"|upper }}
+                    </div>
+                    <div class="overflow-hidden" style="font-size: 0.78rem;">
+                        <strong class="d-block text-white text-truncate">{{ user.username }}</strong>
+                        <span class="text-white-50" style="font-size: 0.68rem;">{{ user_role|title }}</span>
+                    </div>
+                </div>
+                <a href="{% url 'logout' %}" class="btn btn-sm btn-outline-danger p-1 px-2 rounded-2" title="Sign Out">
+                    <i class="fa-solid fa-power-off"></i>
+                </a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div class="pms-main-wrapper">
+        <!-- Topbar -->
+        <header class="pms-topbar">
+            <div class="d-flex align-items-center gap-3">
+                <button class="btn btn-sm btn-outline-secondary d-lg-none" id="mobileSidebarToggle" type="button" aria-label="Toggle Navigation">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+
+                <!-- Branch Outlet Selector -->
+                {% if available_branches|length > 1 %}
+                <div class="dropdown">
+                    <button class="pms-branch-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fa-solid fa-building-columns text-primary"></i>
+                        <span>{{ current_branch.name }}</span>
+                    </button>
+                    <ul class="dropdown-menu pms-branch-dropdown-menu">
+                        <li><h6 class="dropdown-header text-uppercase small fw-bold px-2 py-1 text-muted">Select Branch Outlet</h6></li>
+                        {% for b in available_branches %}
+                        <li>
+                            <a class="dropdown-item {% if b.id == current_branch.id %}active{% endif %}" href="?branch_id={{ b.id }}">
+                                <span><i class="fa-solid fa-location-dot me-2 {% if b.id == current_branch.id %}text-primary{% else %}text-muted{% endif %}"></i>{{ b.name }}</span>
+                                {% if not b.has_hotel_module %}
+                                <span class="badge bg-secondary-subtle text-secondary" style="font-size: 0.65rem;">No PMS</span>
+                                {% else %}
+                                <span class="badge bg-success-subtle text-success" style="font-size: 0.65rem;">Active</span>
+                                {% endif %}
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% else %}
+                <div class="d-flex align-items-center gap-2 fw-bold text-dark px-2">
+                    <i class="fa-solid fa-location-dot text-primary"></i>
+                    <span>{{ current_branch.name }}</span>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Global Quick Search Bar -->
+            <div class="pms-search-box">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="pmsGlobalSearch" class="pms-search-input" placeholder="Quick search guest, room #, phone or booking...">
+                <span class="pms-search-badge">/</span>
+            </div>
+
+            <!-- Right Controls: Status, Switcher & Quick Booking -->
+            <div class="d-flex align-items-center gap-3">
+                <!-- Live Occupancy Pill -->
+                <div class="d-none d-xl-flex pms-live-pill" title="Current in-house occupancy">
+                    <span class="pms-live-dot"></span>
+                    <span>{{ occupancy_rate|default:"0" }}% Occupied ({{ occupied_count|default:"0" }}/{{ total_rooms_count|default:"0" }} Rooms)</span>
+                </div>
+
+                {% if is_general_manager %}
+                <div class="dropdown">
+                    <button class="module-switcher-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fa-solid fa-cubes text-primary"></i>
+                        <span class="d-none d-md-inline">Hotel PMS</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 rounded-3">
+                        <li><h6 class="dropdown-header">Switch Management Module</h6></li>
+                        <li>
+                            <a class="dropdown-item active d-flex align-items-center gap-2" href="#">
+                                <i class="fa-solid fa-hotel text-primary"></i> Hotel PMS (Current)
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2" href="{% url 'restaurant_admin:dashboard' restaurant_slug=rslug %}">
+                                <i class="fa-solid fa-utensils text-success"></i> Restaurant POS & Tables
+                            </a>
+                        </li>
+                        {% if current_branch.has_club_module %}
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2" href="{% url 'restaurant_admin:club_events_list' restaurant_slug=rslug %}">
+                                <i class="fa-solid fa-ticket text-info"></i> Club & Ticketing
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+                {% endif %}
+
+                <!-- Quick New Reservation Trigger Button -->
+                <button type="button" class="btn btn-pms-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#newBookingModal">
+                    <i class="fa-solid fa-plus"></i>
+                    <span class="d-none d-sm-inline">New Reservation</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Body Content -->
+        <main class="pms-content-body">
+            <!-- Flash Message Alerts -->
+            {% if messages %}
+            <div class="mb-3">
+                {% for message in messages %}
+                <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show d-flex align-items-center gap-2 shadow-sm py-2.5 rounded-3" role="alert">
+                    <i class="fa-solid {% if message.tags == 'success' %}fa-circle-check text-success{% elif message.tags == 'error' %}fa-triangle-exclamation text-danger{% else %}fa-circle-info text-info{% endif %}"></i>
+                    <div>{{ message }}</div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <!-- Bootstrap 5 Bundle JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Mobile Sidebar Toggle
+        document.getElementById('mobileSidebarToggle')?.addEventListener('click', function() {
+            document.getElementById('pmsSidebar')?.classList.toggle('open');
+        });
+
+        // Keyboard Shortcut for search (/)
+        document.addEventListener('keydown', function(e) {
+            if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+                e.preventDefault();
+                const searchInput = document.getElementById('pmsGlobalSearch');
+                if (searchInput) {
+                    searchInput.focus();
+                    searchInput.select();
+                }
+            }
+        });
+
+        // Instant Filter for Table rows when typing in global search
+        document.getElementById('pmsGlobalSearch')?.addEventListener('input', function(e) {
+            const term = e.target.value.toLowerCase().trim();
+            const rows = document.querySelectorAll('table tbody tr');
+            if (!rows.length) return;
+            rows.forEach(row => {
+                const text = row.innerText.toLowerCase();
+                if (!term || text.includes(term)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
+
