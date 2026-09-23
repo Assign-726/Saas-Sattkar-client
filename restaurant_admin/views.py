@@ -6076,10 +6076,13 @@ def settings_view(request, restaurant_slug=None):
 
     rslug = branch.slug if (branch and branch.slug) else getattr(restaurant, 'slug', None)
 
+    branch_operating_status = branch.get_operating_status() if branch else None
+
     return render(request, 'restaurant_admin/settings.html', {
         'form': form,
         'branch_form': branch_form,
         'branch': branch,
+        'branch_operating_status': branch_operating_status,
         'custom_charges': custom_charges,
         'doc_sequences': doc_sequences,
         'active_menu': 'settings',

@@ -370,6 +370,39 @@ class RestaurantBranch(models.Model):
         help_text="Enables hotel room inventory, tape chart, guest folios, and booking engine for this branch"
     )
     
+    # Branch Operating Hours & Online Ordering Restrictions (QR & Takeaway)
+    enforce_operating_hours = models.BooleanField(
+        default=False,
+        verbose_name="Enforce Strict Operating Hours",
+        help_text="Restrict digital ordering (QR and takeaway) to branch operating hours"
+    )
+    opening_time = models.TimeField(
+        null=True,
+        blank=True,
+        verbose_name="Daily Opening Time",
+        help_text="Time branch opens for orders e.g. 11:00 AM"
+    )
+    closing_time = models.TimeField(
+        null=True,
+        blank=True,
+        verbose_name="Daily Closing Time",
+        help_text="Time branch closes for orders e.g. 11:00 PM"
+    )
+    closed_message = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Closed Announcement Note",
+        help_text="Optional notice message displayed to customers when ordering is closed"
+    )
+    weekly_schedule = models.JSONField(
+        null=True,
+        blank=True,
+        default=dict,
+        verbose_name="Weekly Operating Schedule",
+        help_text="Custom day-wise schedule JSON e.g. {'0': [{'label': 'Lunch', 'from': '12:00', 'to': '15:30'}]}"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -407,6 +440,188 @@ class RestaurantBranch(models.Model):
         if not self.serves_alcohol:
             return True
         return bool(self.vat_tin and self.excise_license_no)
+
+    def get_effective_schedule(self):
+        """
+        Returns a normalized weekly schedule dict with keys 0..6 (0=Sunday ... 6=Saturday)
+        matching JavaScript Date.getDay() convention.
+        """
+        raw = self.weekly_schedule or {}
+        schedule = {}
+        has_custom = False
+        for d in range(7):
+            val = raw.get(str(d)) if isinstance(raw, dict) else None
+            if val is None and isinstance(raw, dict):
+                val = raw.get(d)
+            if isinstance(val, list) and len(val) > 0:
+                has_custom = True
+            schedule[d] = val if isinstance(val, list) else []
+
+        if not has_custom:
+            # Fallback to opening_time and closing_time for all days
+            if self.opening_time and self.closing_time:
+                o_str = self.opening_time.strftime("%H:%M")
+                c_str = self.closing_time.strftime("%H:%M")
+                for d in range(7):
+                    schedule[d] = [{"label": "Regular Hours", "from": o_str, "to": c_str}]
+            else:
+                for d in range(7):
+                    schedule[d] = []
+        return schedule
+
+    def get_operating_status(self, dt=None):
+        """
+        Checks whether this branch is currently open for orders.
+        Returns a rich status dict with countdown data, labels, and formatted weekly schedule.
+        """
+        from django.utils import timezone
+        import datetime
+
+        if dt is None:
+            dt = timezone.localtime()
+
+        # If strict operating hours are not enforced, outlet is open 24/7
+        if not self.enforce_operating_hours:
+            return {
+                "is_open": True,
+                "enforce_operating_hours": False,
+                "status_label": "Operating Hours Not Enforced (24/7 Active)",
+                "service_label": "24/7 Unrestricted",
+                "opens_at": None,
+                "closes_at": None,
+                "next_open_label": None,
+                "next_open_time": None,
+                "seconds_until_next": None,
+                "message": "",
+                "schedule": self.get_effective_schedule(),
+            }
+
+        schedule = self.get_effective_schedule()
+        DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        today_js_day = (dt.weekday() + 1) % 7
+
+        def parse_time(t_str):
+            try:
+                parts = [int(p) for p in str(t_str).split(":")]
+                return datetime.time(parts[0], parts[1])
+            except Exception:
+                return None
+
+        def fmt_12h(hhmm_str):
+            try:
+                t = parse_time(hhmm_str)
+                if not t:
+                    return hhmm_str
+                return t.strftime("%I:%M %p").lstrip("0")
+            except Exception:
+                return hhmm_str
+
+        yesterday_js_day = (today_js_day - 1) % 7
+        current_time = dt.time()
+
+        is_open = False
+        active_service = None
+        closes_at_dt = None
+
+        # Check yesterday's overnight slots
+        for s in schedule.get(yesterday_js_day, []):
+            f_time = parse_time(s.get("from", ""))
+            t_time = parse_time(s.get("to", ""))
+            if f_time and t_time and t_time < f_time:
+                if current_time < t_time:
+                    is_open = True
+                    active_service = s
+                    closes_at_dt = dt.replace(hour=t_time.hour, minute=t_time.minute, second=0, microsecond=0)
+                    break
+
+        # Check today's slots
+        if not is_open:
+            for s in schedule.get(today_js_day, []):
+                f_time = parse_time(s.get("from", ""))
+                t_time = parse_time(s.get("to", ""))
+                if not f_time or not t_time:
+                    continue
+                if f_time <= t_time:
+                    if f_time <= current_time < t_time:
+                        is_open = True
+                        active_service = s
+                        closes_at_dt = dt.replace(hour=t_time.hour, minute=t_time.minute, second=0, microsecond=0)
+                        break
+                else:
+                    if current_time >= f_time:
+                        is_open = True
+                        active_service = s
+                        tomorrow = dt + datetime.timedelta(days=1)
+                        closes_at_dt = tomorrow.replace(hour=t_time.hour, minute=t_time.minute, second=0, microsecond=0)
+                        break
+
+        if is_open and closes_at_dt:
+            seconds_until_close = max(0, int((closes_at_dt - dt).total_seconds()))
+            return {
+                "is_open": True,
+                "enforce_operating_hours": True,
+                "status_label": f"Open now for {active_service.get('label', 'Service').lower()}",
+                "service_label": active_service.get("label", "Regular Service"),
+                "opens_at": fmt_12h(active_service.get("from", "")),
+                "closes_at": fmt_12h(active_service.get("to", "")),
+                "closes_at_iso": closes_at_dt.isoformat(),
+                "seconds_until_next": seconds_until_close,
+                "next_open_label": None,
+                "next_open_time": None,
+                "message": self.closed_message or "",
+                "schedule": schedule,
+            }
+
+        # Otherwise outlet is closed: Find next opening in the next 7 days
+        next_open_dt = None
+        next_service = None
+        when_label = "today"
+
+        for offset in range(8):
+            check_day = (today_js_day + offset) % 7
+            for s in schedule.get(check_day, []):
+                f_time = parse_time(s.get("from", ""))
+                if not f_time:
+                    continue
+                slot_date = dt.date() + datetime.timedelta(days=offset)
+                slot_start_dt = timezone.make_aware(
+                    datetime.datetime.combine(slot_date, f_time),
+                    timezone.get_current_timezone()
+                )
+                if slot_start_dt > dt:
+                    if offset == 0:
+                        when_label = "today"
+                    elif offset == 1:
+                        when_label = "tomorrow"
+                    else:
+                        when_label = f"on {DAYS[check_day]}"
+                    next_open_dt = slot_start_dt
+                    next_service = s
+                    break
+            if next_open_dt:
+                break
+
+        seconds_until_open = max(0, int((next_open_dt - dt).total_seconds())) if next_open_dt else None
+        next_label = (
+            f"Doors open {when_label} at {fmt_12h(next_service.get('from', ''))}"
+            if (next_open_dt and next_service)
+            else "Currently closed"
+        )
+
+        return {
+            "is_open": False,
+            "enforce_operating_hours": True,
+            "status_label": "We're closed right now",
+            "service_label": next_service.get("label", "Service") if next_service else "Closed",
+            "opens_at": fmt_12h(next_service.get("from", "")) if next_service else None,
+            "closes_at": fmt_12h(next_service.get("to", "")) if next_service else None,
+            "next_open_label": next_label,
+            "next_open_time": next_open_dt.isoformat() if next_open_dt else None,
+            "seconds_until_next": seconds_until_open,
+            "message": self.closed_message or "We are currently closed for orders.",
+            "schedule": schedule,
+        }
+
 
 
 class DocumentSeries(models.Model):

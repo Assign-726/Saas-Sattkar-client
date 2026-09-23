@@ -918,6 +918,114 @@
               {% endif %}
             </div>
 
+            <!-- Branch Operating Hours & Strict Ordering Schedule -->
+            {% if branch_form and branch_form.enforce_operating_hours %}
+            <div class="mb-4 p-3 bg-white rounded border shadow-sm">
+              <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                <div>
+                  <h6 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-clock-history text-warning me-1"></i> Branch Operating Hours & Online Ordering Schedule
+                  </h6>
+                  <div class="form-text text-muted">Restrict customer online ordering (Table QR dine-in and Takeaway) to your branch operating hours. Outside hours, customers see the luxury Restaurant Closed screen with a live countdown timer.</div>
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  {% if branch_operating_status %}
+                    {% if branch_operating_status.enforce_operating_hours %}
+                      {% if branch_operating_status.is_open %}
+                      <span class="badge bg-success-subtle text-success border border-success px-2 py-1 small fw-semibold">
+                        <i class="bi bi-check-circle-fill me-1"></i> Currently OPEN {% if branch_operating_status.closes_at %}(until {{ branch_operating_status.closes_at }}){% endif %}
+                      </span>
+                      {% else %}
+                      <span class="badge bg-danger-subtle text-danger border border-danger px-2 py-1 small fw-semibold">
+                        <i class="bi bi-moon-stars-fill me-1"></i> Currently CLOSED ({{ branch_operating_status.next_open_label }})
+                      </span>
+                      {% endif %}
+                    {% else %}
+                      <span class="badge bg-warning-subtle text-dark border border-warning px-2 py-1 small fw-semibold" title="Operating hours are saved but not enforced. Customers can order 24/7. Turn on the switch to enforce!">
+                        <i class="bi bi-pause-circle me-1"></i> Restrictions OFF (Open 24/7)
+                      </span>
+                    {% endif %}
+                  {% endif %}
+                  <div class="form-check form-switch m-0 ms-2">
+                    {{ branch_form.enforce_operating_hours }}
+                    <label class="form-check-label fw-bold text-primary small ms-1" for="id_enforce_operating_hours">Enforce Hours</label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row g-3 mt-1">
+                <div class="col-md-3">
+                  <label class="form-label fw-medium small mb-1">
+                    <i class="bi bi-sunrise text-warning me-1"></i> Daily Opening Time
+                  </label>
+                  {{ branch_form.opening_time }}
+                  <div class="form-text extra-small text-muted">e.g. 11:00 AM (08:00 for 8 AM)</div>
+                  {% if branch_form.opening_time.errors %}
+                  <div class="text-danger small">{{ branch_form.opening_time.errors|join:', ' }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label fw-medium small mb-1">
+                    <i class="bi bi-sunset text-danger me-1"></i> Daily Closing Time
+                  </label>
+                  {{ branch_form.closing_time }}
+                  <div class="form-text extra-small text-muted">e.g. 11:00 PM (18:00 for 6 PM, 02:00 overnight)</div>
+                  {% if branch_form.closing_time.errors %}
+                  <div class="text-danger small">{{ branch_form.closing_time.errors|join:', ' }}</div>
+                  {% endif %}
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label fw-medium small mb-1">
+                    <i class="bi bi-chat-quote text-secondary me-1"></i> Closed Announcement / Host Note (Optional)
+                  </label>
+                  {{ branch_form.closed_message }}
+                  <div class="form-text extra-small text-muted">Message shown on the website when orders are closed.</div>
+                  {% if branch_form.closed_message.errors %}
+                  <div class="text-danger small">{{ branch_form.closed_message.errors|join:', ' }}</div>
+                  {% endif %}
+                </div>
+              </div>
+
+              <!-- Quick Time Preset Pills -->
+              <div class="d-flex align-items-center gap-2 mt-3 flex-wrap">
+                <span class="extra-small text-muted fw-bold">Quick Presets:</span>
+                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size: 11px;" onclick="document.getElementById('id_opening_time').value='08:00'; document.getElementById('id_closing_time').value='18:00'; document.getElementById('id_enforce_operating_hours').checked=true;">
+                  8:00 AM – 6:00 PM
+                </button>
+                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size: 11px;" onclick="document.getElementById('id_opening_time').value='11:00'; document.getElementById('id_closing_time').value='23:00'; document.getElementById('id_enforce_operating_hours').checked=true;">
+                  11:00 AM – 11:00 PM
+                </button>
+                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size: 11px;" onclick="document.getElementById('id_opening_time').value='12:00'; document.getElementById('id_closing_time').value='23:30'; document.getElementById('id_enforce_operating_hours').checked=true;">
+                  12:00 PM – 11:30 PM
+                </button>
+                <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size: 11px;" onclick="document.getElementById('id_opening_time').value='18:00'; document.getElementById('id_closing_time').value='02:00'; document.getElementById('id_enforce_operating_hours').checked=true;">
+                  Dinner & Late Night (6:00 PM – 2:00 AM)
+                </button>
+              </div>
+
+              {{ branch_form.weekly_schedule }}
+            </div>
+
+            <script>
+              document.addEventListener('DOMContentLoaded', function() {
+                var enforceOpSwitch = document.getElementById('id_enforce_operating_hours');
+                var opTimeInp = document.getElementById('id_opening_time');
+                var clTimeInp = document.getElementById('id_closing_time');
+                if (enforceOpSwitch && opTimeInp && clTimeInp) {
+                  var autoTurnOn = function() {
+                    if (opTimeInp.value || clTimeInp.value) {
+                      enforceOpSwitch.checked = true;
+                    }
+                  };
+                  opTimeInp.addEventListener('change', autoTurnOn);
+                  clTimeInp.addEventListener('change', autoTurnOn);
+                  opTimeInp.addEventListener('input', autoTurnOn);
+                  clTimeInp.addEventListener('input', autoTurnOn);
+                }
+              });
+            </script>
+            {% endif %}
+
             <!-- Payment Methods -->
             <h6 class="fw-bold mb-3 text-dark">Payment Methods & Gateways</h6>
             <div class="row g-3 mb-3">
@@ -1181,7 +1289,7 @@
     }
   }
 
-  const initialErrorTab = "{% if form.bill_template.errors or form.kot_template.errors %}printing{% elif form.enable_customer_ordering.errors or form.enable_pay_at_counter.errors or form.enable_online_payment.errors or form.razorpay_key_id.errors or form.razorpay_key_secret.errors or form.notification_sound.errors %}ordering{% elif form.cgst_percentage.errors or form.sgst_percentage.errors or form.service_charge_percentage.errors or branch_form.fssai_license_no.errors or branch_form.vat_tin.errors or branch_form.excise_license_no.errors %}tax{% endif %}";
+  const initialErrorTab = "{% if form.bill_template.errors or form.kot_template.errors %}printing{% elif form.enable_customer_ordering.errors or form.enable_pay_at_counter.errors or form.enable_online_payment.errors or form.razorpay_key_id.errors or form.razorpay_key_secret.errors or form.notification_sound.errors or branch_form.opening_time.errors or branch_form.closing_time.errors %}ordering{% elif form.cgst_percentage.errors or form.sgst_percentage.errors or form.service_charge_percentage.errors or branch_form.fssai_license_no.errors or branch_form.vat_tin.errors or branch_form.excise_license_no.errors %}tax{% endif %}";
 
   let settingsTallyEngine = null;
   let chargeModalTallyEngine = null;

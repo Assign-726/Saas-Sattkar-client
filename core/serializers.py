@@ -9,6 +9,7 @@ class RestaurantBranchSerializer(serializers.ModelSerializer):
     address = serializers.SerializerMethodField()
     gstin = serializers.SerializerMethodField()
     service_charge_percentage = serializers.SerializerMethodField()
+    operating_status = serializers.SerializerMethodField()
 
     class Meta:
         model = RestaurantBranch
@@ -19,7 +20,8 @@ class RestaurantBranchSerializer(serializers.ModelSerializer):
             'service_charge_percentage', 'fssai_license_no', 'gstin',
             'map_iframe_url', 'facebook_url', 'instagram_url', 'twitter_url', 'youtube_url',
             'enable_customer_ordering', 'enable_online_payment', 'enable_pay_at_counter',
-            'has_club_module'
+            'enforce_operating_hours', 'opening_time', 'closing_time', 'closed_message', 'weekly_schedule',
+            'operating_status', 'has_club_module'
         ]
 
     def get_address(self, obj):
@@ -35,6 +37,10 @@ class RestaurantBranchSerializer(serializers.ModelSerializer):
 
     def get_service_charge_percentage(self, obj):
         return str(obj.service_charge_percentage or 0)
+
+    def get_operating_status(self, obj):
+        return obj.get_operating_status()
+
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -211,6 +217,12 @@ class OrderSerializer(serializers.ModelSerializer):
         if branch:
             if not getattr(branch, 'enable_customer_ordering', True):
                 raise serializers.ValidationError(f"Digital ordering is currently disabled for {branch.name}.")
+            if getattr(branch, 'enforce_operating_hours', False):
+                op_status = branch.get_operating_status()
+                if not op_status.get('is_open'):
+                    next_info = f" {op_status.get('next_open_label')}." if op_status.get('next_open_label') else ""
+                    msg = op_status.get('message') or "We are currently closed for online orders."
+                    raise serializers.ValidationError(f"Ordering is currently closed for {branch.name}.{next_info} ({msg})")
         else:
             if not settings_obj.enable_customer_ordering:
                 raise serializers.ValidationError("Ordering is currently disabled for this restaurant.")
