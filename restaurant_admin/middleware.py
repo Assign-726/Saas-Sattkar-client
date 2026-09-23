@@ -34,6 +34,23 @@ class BranchContextMiddleware:
                 restaurant = profile.restaurant
                 request.restaurant = restaurant
 
+                # RBAC Isolation:
+                user_role = getattr(user, 'role', None) or profile.role
+                if not user.is_superuser:
+                    # 1. Hotel Admin is strictly isolated from Restaurant POS
+                    if user_role == 'HOTEL_ADMIN' and request.path.startswith('/dashboard/'):
+                        from django.shortcuts import redirect
+                        slug = restaurant.slug if restaurant else 'default'
+                        return redirect('hotel_admin:dashboard', restaurant_slug=slug)
+
+                    # 2. Club Admin is strictly directed to Club Events
+                    if user_role == 'CLUB_ADMIN' and request.path.startswith('/dashboard/'):
+                        slug = restaurant.slug if restaurant else 'default'
+                        club_prefix = f'/dashboard/{slug}/club-events/'
+                        if not request.path.startswith(club_prefix) and not '/api/' in request.path and not request.path.endswith('/switch-branch/'):
+                            from django.shortcuts import redirect
+                            return redirect('restaurant_admin:club_events_list', restaurant_slug=slug)
+
                 # 1. Branch-locked admin (e.g. a single-outlet manager)
                 if profile.branch:
                     request.active_branch = profile.branch

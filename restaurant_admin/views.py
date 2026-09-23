@@ -3000,6 +3000,14 @@ def dashboard(request, restaurant_slug=None):
     if not request.user.is_staff:
         from django.http import HttpResponseForbidden
         return HttpResponseForbidden("Access denied. Staff permissions required.")
+
+    # Guard: Hotel Admin is isolated from Restaurant POS dashboard
+    user_role = getattr(request.user, 'role', None)
+    if not user_role and hasattr(request.user, 'restaurant_profile'):
+        user_role = request.user.restaurant_profile.role
+    if not request.user.is_superuser and user_role == 'HOTEL_ADMIN':
+        slug = restaurant_slug or (request.user.restaurant_profile.restaurant.slug if hasattr(request.user, 'restaurant_profile') and request.user.restaurant_profile.restaurant else 'default')
+        return redirect('hotel_admin:dashboard', restaurant_slug=slug)
     
     # Resolve restaurant for this staff user or slug
     restaurant = resolve_restaurant(request, restaurant_slug)

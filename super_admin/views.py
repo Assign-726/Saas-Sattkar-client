@@ -998,6 +998,7 @@ def api_branches_by_restaurant(request):
                     'is_hotel_tariff_7500_plus': b.is_hotel_tariff_7500_plus,
                     'e_invoicing_enabled': b.e_invoicing_enabled,
                     'has_club_module': bool(getattr(b, 'has_club_module', False)),
+                    'has_hotel_module': bool(getattr(b, 'has_hotel_module', False)),
                 })
     return JsonResponse({'restaurant': restaurant_data, 'branches': branches})
 
@@ -1023,6 +1024,28 @@ def api_toggle_branch_club_module(request, pk):
             'branch_id': branch.id,
             'branch_name': branch.name,
             'has_club_module': branch.has_club_module
+        })
+    return JsonResponse({'error': 'POST method required'}, status=405)
+
+
+def api_toggle_branch_hotel_module(request, pk):
+    branch = get_object_or_404(RestaurantBranch, pk=pk)
+    if request.method == 'POST':
+        try:
+            body = json.loads(request.body.decode('utf-8'))
+            if 'has_hotel_module' in body:
+                branch.has_hotel_module = bool(body['has_hotel_module'])
+            else:
+                branch.has_hotel_module = not branch.has_hotel_module
+        except Exception:
+            branch.has_hotel_module = not branch.has_hotel_module
+
+        branch.save(update_fields=['has_hotel_module'])
+        return JsonResponse({
+            'success': True,
+            'branch_id': branch.id,
+            'branch_name': branch.name,
+            'has_hotel_module': branch.has_hotel_module
         })
     return JsonResponse({'error': 'POST method required'}, status=405)
 

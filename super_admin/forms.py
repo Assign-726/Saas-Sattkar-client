@@ -227,6 +227,7 @@ class RestaurantAdminCreateForm(forms.Form):
     password = forms.CharField(widget=forms.PasswordInput, label="Password*")
     restaurant = forms.ModelChoiceField(queryset=Restaurant.objects.all(), label="Assigned Business / Restaurant*")
     branch = forms.ModelChoiceField(queryset=RestaurantBranch.objects.all(), required=False, label="Assigned Branch Outlet (Optional)", help_text="Optional: Restrict admin to a specific branch")
+    role = forms.ChoiceField(choices=RestaurantUser.Role.choices, initial=RestaurantUser.Role.RESTAURANT_ADMIN, label="User Role")
     is_primary_admin = forms.BooleanField(required=False, initial=False, label="Designate as Primary Admin")
     is_2fa_enabled = forms.BooleanField(required=False, initial=True, label="Enable Two-Factor Authentication (OTP on Login)")
 
@@ -264,12 +265,19 @@ class RestaurantAdminCreateForm(forms.Form):
         except Exception:
             pass
 
+        assigned_role = self.cleaned_data.get('role', RestaurantUser.Role.RESTAURANT_ADMIN)
         ru = RestaurantUser.objects.create(
             user=user,
             restaurant=restaurant,
             branch=branch,
+            role=assigned_role,
             is_primary_admin=is_primary,
         )
+
+        # If assigning Hotel Admin to a branch, auto-activate Hotel PMS module on that branch
+        if branch and assigned_role == RestaurantUser.Role.HOTEL_ADMIN and not getattr(branch, 'has_hotel_module', False):
+            branch.has_hotel_module = True
+            branch.save(update_fields=['has_hotel_module'])
 
         UserSecuritySetting.objects.update_or_create(
             user=user,
@@ -595,6 +603,7 @@ class OnboardRestaurantForm(forms.Form):
                 'is_hotel_tariff_7500_plus': is_hotel_tariff,
                 'e_invoicing_enabled': bool(bdata.get("e_invoicing_enabled", False)),
                 'has_club_module': bool(bdata.get("has_club_module", False)),
+                'has_hotel_module': bool(bdata.get("has_hotel_module", False)),
             })
 
         return cleaned_branches
@@ -710,6 +719,7 @@ class OnboardRestaurantForm(forms.Form):
                 branch.is_hotel_tariff_7500_plus = bdata.get("is_hotel_tariff_7500_plus", False)
                 branch.e_invoicing_enabled = bdata.get("e_invoicing_enabled", False)
                 branch.has_club_module = bool(bdata.get("has_club_module", False))
+                branch.has_hotel_module = bool(bdata.get("has_hotel_module", False))
                 branch.save()
             else:
                 branch = RestaurantBranch.objects.create(
@@ -736,6 +746,7 @@ class OnboardRestaurantForm(forms.Form):
                     is_hotel_tariff_7500_plus=bdata.get("is_hotel_tariff_7500_plus", False),
                     e_invoicing_enabled=bdata.get("e_invoicing_enabled", False),
                     has_club_module=bool(bdata.get("has_club_module", False)),
+                    has_hotel_module=bool(bdata.get("has_hotel_module", False)),
                 )
 
             kept_branch_ids.append(branch.id)
@@ -962,6 +973,7 @@ class RestaurantAdminUpdateForm(forms.Form):
     password = forms.CharField(widget=forms.PasswordInput, required=False, label="New Password (optional)")
     restaurant = forms.ModelChoiceField(queryset=Restaurant.objects.all(), label="Assigned Business / Restaurant*")
     branch = forms.ModelChoiceField(queryset=RestaurantBranch.objects.all(), required=False, label="Assigned Branch Outlet (Optional)", help_text="Optional: Restrict admin to a specific branch")
+    role = forms.ChoiceField(choices=RestaurantUser.Role.choices, initial=RestaurantUser.Role.RESTAURANT_ADMIN, label="User Role")
     is_primary_admin = forms.BooleanField(required=False, initial=False, label="Designate as Primary Admin")
     is_2fa_enabled = forms.BooleanField(required=False, initial=True, label="Enable Two-Factor Authentication (OTP on Login)")
 
@@ -973,12 +985,14 @@ class RestaurantAdminUpdateForm(forms.Form):
             self.fields['email'].initial = self.instance.user.email
             self.fields['restaurant'].initial = self.instance.restaurant
             self.fields['branch'].initial = self.instance.branch
+            self.fields['role'].initial = self.instance.role
             self.fields['is_primary_admin'].initial = self.instance.is_primary_admin
 
             self.initial['username'] = self.instance.user.username
             self.initial['email'] = self.instance.user.email
             self.initial['restaurant'] = self.instance.restaurant
             self.initial['branch'] = self.instance.branch
+            self.initial['role'] = self.instance.role
             self.initial['is_primary_admin'] = self.instance.is_primary_admin
 
             try:
@@ -1018,8 +1032,15 @@ class RestaurantAdminUpdateForm(forms.Form):
 
         self.instance.restaurant = self.cleaned_data['restaurant']
         self.instance.branch = self.cleaned_data.get('branch')
+        assigned_role = self.cleaned_data.get('role', RestaurantUser.Role.RESTAURANT_ADMIN)
+        self.instance.role = assigned_role
         self.instance.is_primary_admin = self.cleaned_data.get('is_primary_admin', False)
         self.instance.save()
+
+        # If assigning Hotel Admin to a branch, auto-activate Hotel PMS module on that branch
+        if self.instance.branch and assigned_role == RestaurantUser.Role.HOTEL_ADMIN and not getattr(self.instance.branch, 'has_hotel_module', False):
+            self.instance.branch.has_hotel_module = True
+            self.instance.branch.save(update_fields=['has_hotel_module'])
 
         is_2fa = bool(self.cleaned_data.get('is_2fa_enabled', False))
         try:

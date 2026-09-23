@@ -13,9 +13,10 @@ class RestaurantAdmin(admin.ModelAdmin):
 
 @admin.register(RestaurantUser)
 class RestaurantUserAdmin(admin.ModelAdmin):
-    list_display = ("user", "restaurant", "is_primary_admin", "created_at")
+    list_display = ("user", "restaurant", "role", "branch", "is_primary_admin", "created_at")
     search_fields = ("user__username", "user__email", "restaurant__name")
-    list_filter = ("is_primary_admin", "restaurant")
+    list_filter = ("role", "is_primary_admin", "restaurant", "branch")
+    fields = ("user", "restaurant", "branch", "role", "is_primary_admin")
 
 
 @admin.register(JobPosting)

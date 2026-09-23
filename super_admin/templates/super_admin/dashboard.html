@@ -151,6 +151,7 @@
                 <th style="padding: 10px 14px;">Location / Address</th>
                 <th style="padding: 10px 14px;">Tax & License Info</th>
                 <th style="padding: 10px 14px;">Alcohol & VAT Status</th>
+                <th style="padding: 10px 14px;">Hotel PMS Module</th>
                 {% if ENABLE_CLUB_EVENTS_MODULE %}
                 <th style="padding: 10px 14px;">Club & Events Module</th>
                 {% endif %}
@@ -208,6 +209,16 @@
                     {% endif %}
                   {% endif %}
                 </td>
+                <td style="padding: 12px 14px;">
+                  <button type="button" 
+                          class="btn small hotel-module-toggle-btn {% if b.has_hotel_module %}hotel-enabled{% else %}hotel-disabled{% endif %}"
+                          data-branch-id="{{ b.id }}"
+                          onclick="toggleBranchHotelModule(this)" 
+                          title="Click to toggle Hotel PMS module permission for this branch">
+                    <i class="fa-solid fa-hotel"></i>
+                    <span class="hotel-toggle-text">{% if b.has_hotel_module %}Hotel Active{% else %}Disabled{% endif %}</span>
+                  </button>
+                </td>
                 {% if ENABLE_CLUB_EVENTS_MODULE %}
                 <td style="padding: 12px 14px;">
                   <button type="button" 
@@ -248,9 +259,16 @@
 
 <!-- Restaurant Admins Table -->
 <div class="card" style="margin-top: 24px; border-radius: 14px;">
-  <div class="hd">
-    <div><i class="fa-solid fa-users-gear" style="color: var(--primary); margin-right: 8px;"></i> System Administrators</div>
-    <span class="badge neutral">{{ admins|length }} User Account(s)</span>
+  <div class="hd" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <i class="fa-solid fa-users-gear" style="color: var(--primary);"></i>
+      <span style="font-weight: 700;">System Administrators &amp; Operational Staff</span>
+      <span class="badge neutral" style="margin-left: 6px;">{{ admins|length }} User Account(s)</span>
+    </div>
+    <a class="btn small" href="{% url 'super_admin:restaurant_admin_create' %}" style="display: inline-flex; align-items: center; gap: 6px;">
+      <i class="fa-solid fa-user-plus"></i>
+      <span>Add New Admin</span>
+    </a>
   </div>
   <div class="bd" style="padding: 0;">
     {% if admins %}
@@ -261,7 +279,7 @@
             <th>Username</th>
             <th>Assigned Business</th>
             <th>Assigned Branch Outlet</th>
-            <th>Role Level</th>
+            <th>Assigned Role &amp; Access</th>
             <th style="width: 120px; text-align: right; padding-right: 20px;">Actions</th>
           </tr>
         </thead>
@@ -271,6 +289,9 @@
             <td style="font-weight: 600; color: var(--text);">
               <i class="fa-solid fa-user" style="color: var(--muted); margin-right: 6px;"></i>
               {{ a.user.username }}
+              {% if a.user.email %}
+                <div style="font-size: 0.75rem; color: #64748b; font-weight: normal; margin-left: 20px;">{{ a.user.email }}</div>
+              {% endif %}
             </td>
             <td style="color: #475569;"><strong>{{ a.restaurant.name }}</strong></td>
             <td>
@@ -287,17 +308,36 @@
               {% endif %}
             </td>
             <td>
-              {% if a.is_primary_admin %}
-              <span class="badge ok">
-                <i class="fa-solid fa-star"></i>
-                <span>Primary Admin</span>
-              </span>
-              {% else %}
-              <span class="badge neutral">
-                <i class="fa-solid fa-user-shield"></i>
-                <span>Branch Admin</span>
-              </span>
-              {% endif %}
+              <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                {% if a.role == 'GENERAL_MANAGER' %}
+                  <span class="badge" style="background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; font-size: 0.78rem;" title="Full venue oversight across Hotel PMS, Restaurant POS, & Club Ticketing">
+                    <i class="fa-solid fa-crown" style="color: #4f46e5;"></i>
+                    <span>General Manager</span>
+                  </span>
+                {% elif a.role == 'HOTEL_ADMIN' %}
+                  <span class="badge" style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; font-size: 0.78rem;" title="Front Desk PMS Manager (Room Inventory, Folio Billing, & Tape Chart)">
+                    <i class="fa-solid fa-hotel" style="color: #0284c7;"></i>
+                    <span>Hotel Admin</span>
+                  </span>
+                {% elif a.role == 'CLUB_ADMIN' %}
+                  <span class="badge" style="background: #faf5ff; color: #7e22ce; border: 1px solid #e9d5ff; font-size: 0.78rem;" title="Nightclub & Event Ticketing Manager">
+                    <i class="fa-solid fa-ticket" style="color: #9333ea;"></i>
+                    <span>Club Admin</span>
+                  </span>
+                {% else %}
+                  <span class="badge" style="background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; font-size: 0.78rem;" title="Restaurant F&B POS Manager (Menu, Tables, Kitchen Orders)">
+                    <i class="fa-solid fa-utensils" style="color: #059669;"></i>
+                    <span>Restaurant Admin</span>
+                  </span>
+                {% endif %}
+
+                {% if a.is_primary_admin %}
+                  <span class="badge ok" style="font-size: 0.7rem; padding: 2px 6px;" title="Designated Primary Business Administrator">
+                    <i class="fa-solid fa-star" style="color: #eab308;"></i>
+                    <span>Primary</span>
+                  </span>
+                {% endif %}
+              </div>
             </td>
             <td>
               <div class="action-row" style="justify-content: flex-end; padding-right: 8px;">
@@ -325,17 +365,27 @@
   </div>
 </div>
 
-{% if ENABLE_CLUB_EVENTS_MODULE %}
 <style>
-  .club-module-toggle-btn {
+  .hotel-module-toggle-btn, .club-module-toggle-btn {
     font-size: 0.75rem;
     padding: 4px 10px;
     border-radius: 6px;
+    font-weight: 600;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     gap: 6px;
     transition: all 0.2s;
+  }
+  .hotel-module-toggle-btn.hotel-enabled {
+    background: #0284c7;
+    color: #ffffff;
+    border: 1px solid #0369a1;
+  }
+  .hotel-module-toggle-btn.hotel-disabled {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #cbd5e1;
   }
   .club-module-toggle-btn.club-enabled {
     background: #7e22ce;
@@ -353,6 +403,43 @@
 function getCsrfToken() {
   const cookieVal = document.cookie.split('; ').find(row => row.startsWith('csrftoken='));
   return cookieVal ? decodeURIComponent(cookieVal.split('=')[1]) : '';
+}
+
+function toggleBranchHotelModule(btn) {
+  if (!btn) return;
+  const branchId = btn.dataset.branchId;
+  if (!branchId) return;
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
+
+  fetch(`/super/api/branches/${branchId}/toggle-hotel-module/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCsrfToken()
+    },
+    body: JSON.stringify({})
+  })
+  .then(res => res.json())
+  .then(data => {
+    btn.disabled = false;
+    if (data.success) {
+      const isEnabled = Boolean(data.has_hotel_module);
+      btn.classList.toggle('hotel-enabled', isEnabled);
+      btn.classList.toggle('hotel-disabled', !isEnabled);
+      btn.innerHTML = `<i class="fa-solid fa-hotel"></i> <span class="hotel-toggle-text">${isEnabled ? 'Hotel Active' : 'Disabled'}</span>`;
+    } else {
+      btn.innerHTML = originalHtml;
+      alert(data.error || 'Failed to toggle Hotel PMS module.');
+    }
+  })
+  .catch(err => {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+    console.error('Error toggling hotel module:', err);
+    alert('Error toggling Hotel PMS module permission. Please check connection.');
+  });
 }
 
 function toggleBranchClubModule(btn) {
@@ -392,5 +479,4 @@ function toggleBranchClubModule(btn) {
   });
 }
 </script>
-{% endif %}
 {% endblock %}

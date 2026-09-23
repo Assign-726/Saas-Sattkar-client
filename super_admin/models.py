@@ -362,6 +362,13 @@ class RestaurantBranch(models.Model):
         verbose_name="Enable Club & Events Module",
         help_text="Enables ticketed club events, ticket tiers, and guestlist management for this branch"
     )
+
+    # Feature gating: Hotel PMS module
+    has_hotel_module = models.BooleanField(
+        default=False,
+        verbose_name="Enable Hotel Module",
+        help_text="Enables hotel room inventory, tape chart, guest folios, and booking engine for this branch"
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -445,9 +452,21 @@ class DocumentSeries(models.Model):
 
 
 class RestaurantUser(models.Model):
+    class Role(models.TextChoices):
+        GENERAL_MANAGER = 'GENERAL_MANAGER', 'General Manager'
+        RESTAURANT_ADMIN = 'RESTAURANT_ADMIN', 'Restaurant Admin'
+        HOTEL_ADMIN = 'HOTEL_ADMIN', 'Hotel Admin'
+        CLUB_ADMIN = 'CLUB_ADMIN', 'Club Admin'
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='restaurant_profile')
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='admins')
     branch = models.ForeignKey(RestaurantBranch, on_delete=models.SET_NULL, null=True, blank=True, related_name='admins')
+    role = models.CharField(
+        max_length=30,
+        choices=Role.choices,
+        default=Role.RESTAURANT_ADMIN,
+        verbose_name="User Role"
+    )
     is_primary_admin = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -458,7 +477,31 @@ class RestaurantUser(models.Model):
 
     def __str__(self):
         branch_str = f" ({self.branch.name})" if self.branch else ""
-        return f"{self.user.username} -> {self.restaurant.name}{branch_str}"
+        return f"{self.user.username} [{self.get_role_display()}] -> {self.restaurant.name}{branch_str}"
+
+
+def _user_role(self):
+    if getattr(self, 'is_superuser', False):
+        return 'GENERAL_MANAGER'
+    profile = getattr(self, 'restaurant_profile', None)
+    if profile:
+        return profile.role
+    return 'RESTAURANT_ADMIN'
+
+
+def _user_branch(self):
+    profile = getattr(self, 'restaurant_profile', None)
+    if profile and profile.branch:
+        return profile.branch
+    if profile and profile.restaurant:
+        return profile.restaurant.branches.filter(has_hotel_module=True).first() or profile.restaurant.branches.first()
+    return RestaurantBranch.objects.filter(has_hotel_module=True).first() or RestaurantBranch.objects.first()
+
+
+if not hasattr(User, 'role'):
+    User.add_to_class('role', property(_user_role))
+if not hasattr(User, 'branch'):
+    User.add_to_class('branch', property(_user_branch))
 
 
 class UserSecuritySetting(models.Model):
