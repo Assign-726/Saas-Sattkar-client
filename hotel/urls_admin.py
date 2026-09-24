@@ -16,6 +16,9 @@ urlpatterns = [
     # Room Categories & Tariffs
     path('categories/', views_admin.categories_view, name='categories'),
     path('categories/create-edit/', views_admin.category_create_edit_action, name='category_create_edit'),
+    path('categories/images/<int:image_id>/delete/', views_admin.category_delete_image_action, name='category_delete_image'),
+    path('categories/images/<int:image_id>/set-cover/', views_admin.category_set_cover_action, name='category_set_cover'),
+    path('categories/<int:category_id>/videos/<int:video_idx>/delete/', views_admin.category_delete_video_action, name='category_delete_video'),
 
     # Bookings & Guest Folios
     path('bookings/', views_admin.bookings_view, name='bookings'),

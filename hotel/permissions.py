@@ -12,6 +12,10 @@ class IsHotelAdminOrManager(permissions.BasePermission):
     code = "FEATURE_GATED_HOTEL_MODULE"
 
     def has_permission(self, request, view):
+        from restaurant_project import constants
+        if not getattr(constants, 'ENABLE_HOTEL_MODULE', True):
+            return False
+
         # 1. Superuser / platform staff bypass
         if request.user and (request.user.is_superuser or request.user.is_staff):
             return True

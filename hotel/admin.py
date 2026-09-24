@@ -1,20 +1,30 @@
 from django.contrib import admin
-from hotel.models import RoomCategory, Room, RoomBooking, HotelSettings
+from hotel.models import RoomCategory, Room, RoomBooking, HotelSettings, RoomCategoryImage
 
 
-@admin.register(HotelSettings)
-class HotelSettingsAdmin(admin.ModelAdmin):
-    list_display = ('branch', 'hotel_name', 'payment_gateway_provider', 'payment_mode', 'enable_dynamic_gst', 'updated_at')
-    list_filter = ('payment_gateway_provider', 'payment_mode', 'enable_dynamic_gst')
-    search_fields = ('branch__name', 'hotel_name', 'gstin')
+class RoomCategoryImageInline(admin.TabularInline):
+    model = RoomCategoryImage
+    extra = 1
+    fields = ('image', 'image_url', 'caption', 'display_order')
 
 
 @admin.register(RoomCategory)
 class RoomCategoryAdmin(admin.ModelAdmin):
-    list_display = ('name', 'branch', 'base_price_per_night', 'max_occupancy', 'is_active', 'created_at')
-    list_filter = ('branch', 'is_active')
-    search_fields = ('name', 'branch__name')
+    list_display = (
+        'name',
+        'branch',
+        'base_price_per_night',
+        'price_is_tax_inclusive',
+        'original_price_per_night',
+        'show_on_banner',
+        'max_occupancy',
+        'is_active',
+        'created_at'
+    )
+    list_filter = ('branch', 'price_is_tax_inclusive', 'show_on_banner', 'is_active')
+    search_fields = ('name', 'branch__name', 'banner_badge_text')
     prepopulated_fields = {'slug': ('name',)}
+    inlines = [RoomCategoryImageInline]
 
 
 @admin.register(Room)
