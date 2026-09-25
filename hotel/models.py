@@ -32,6 +32,56 @@ class RoomCategory(models.Model):
     amenities = models.JSONField(default=list, blank=True, help_text="List of amenities e.g. ['Wi-Fi', 'AC', 'Mini Bar']")
     cover_image = models.ImageField(upload_to='hotel/categories/', blank=True, null=True)
     cover_image_url = models.URLField(blank=True, default="", help_text="Fallback external or CDN image URL")
+    
+    # Pricing & Tax Structure
+    price_is_tax_inclusive = models.BooleanField(
+        default=False,
+        verbose_name="Price is Tax Inclusive",
+        help_text="If checked, base price already includes all taxes/GST"
+    )
+    original_price_per_night = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Original / Rack Rate (₹)",
+        help_text="Higher reference/rack rate displayed struck out (e.g. ₹6,000)"
+    )
+    custom_tax_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Custom Tax Rate (%)",
+        help_text="Optional custom tax % for this category; if blank, branch default GST applies"
+    )
+    
+    # Banner & Promotional Highlights
+    show_on_banner = models.BooleanField(
+        default=False,
+        verbose_name="Show on Banner / Hero Highlights",
+        help_text="Prominently highlight this category on the public hero banner"
+    )
+    banner_badge_text = models.CharField(
+        max_length=60,
+        blank=True,
+        default="",
+        verbose_name="Banner Promo Badge",
+        help_text="e.g. 'Best Seller', 'Special Deal', 'Flat 20% Off', 'Exclusive Suite'"
+    )
+
+    # Gallery Images & Videos (Max 5)
+    gallery_images = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of external gallery image URLs or JSON objects"
+    )
+    video_links = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of up to 5 video links/embed objects: [{'url': '...', 'title': '...'}]"
+    )
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -66,7 +116,87 @@ class RoomCategory(models.Model):
             return self.cover_image.url
         if self.cover_image_url:
             return self.cover_image_url
+        first_img = self.images.first()
+        if first_img:
+            return first_img.effective_url
+        if self.gallery_images and isinstance(self.gallery_images, list) and len(self.gallery_images) > 0:
+            first = self.gallery_images[0]
+            if isinstance(first, str):
+                return first
+            if isinstance(first, dict) and first.get('url'):
+                return first['url']
         return 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?q=80&w=1200&auto=format&fit=crop'
+
+    @property
+    def discount_percent(self):
+        if self.original_price_per_night and self.base_price_per_night:
+            if self.original_price_per_night > self.base_price_per_night:
+                diff = self.original_price_per_night - self.base_price_per_night
+                return int(round((diff / self.original_price_per_night) * 100))
+        return 0
+
+    @property
+    def all_images_list(self):
+        items = []
+        if self.cover_image:
+            items.append({'url': self.cover_image.url, 'caption': 'Cover Photo', 'is_cover': True})
+        elif self.cover_image_url:
+            items.append({'url': self.cover_image_url, 'caption': 'Cover Photo', 'is_cover': True})
+            
+        for img in self.images.all():
+            u = img.effective_url
+            if u and not any(x['url'] == u for x in items):
+                items.append({'id': img.id, 'url': u, 'caption': img.caption or 'Gallery Photo', 'is_cover': False})
+                
+        if isinstance(self.gallery_images, list):
+            for g in self.gallery_images:
+                if isinstance(g, str) and g.strip() and not any(x['url'] == g.strip() for x in items):
+                    items.append({'url': g.strip(), 'caption': 'Gallery Photo', 'is_cover': False})
+                elif isinstance(g, dict) and g.get('url') and not any(x['url'] == g['url'].strip() for x in items):
+                    items.append({'url': g['url'].strip(), 'caption': g.get('caption', 'Gallery Photo'), 'is_cover': False})
+        return items
+
+    @property
+    def video_links_list(self):
+        if not isinstance(self.video_links, list):
+            return []
+        res = []
+        for idx, v in enumerate(self.video_links[:5], start=1):
+            if isinstance(v, str) and v.strip():
+                res.append({'url': v.strip(), 'title': f'Video Tour #{idx}'})
+            elif isinstance(v, dict) and v.get('url'):
+                res.append({'url': v['url'].strip(), 'title': v.get('title') or f'Video Tour #{idx}'})
+        return res
+
+
+class RoomCategoryImage(models.Model):
+    """
+    Individual uploaded photo or gallery image for a RoomCategory.
+    """
+    category = models.ForeignKey(
+        RoomCategory,
+        on_delete=models.CASCADE,
+        related_name='images'
+    )
+    image = models.ImageField(upload_to='hotel/categories/gallery/', blank=True, null=True)
+    image_url = models.URLField(blank=True, default="", help_text="External image URL")
+    caption = models.CharField(max_length=150, blank=True, default="")
+    display_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['display_order', 'id']
+        verbose_name = 'Room Category Image'
+        verbose_name_plural = 'Room Category Images'
+
+    def __str__(self):
+        return f"{self.category.name} - Image #{self.id}"
+
+    @property
+    def effective_url(self):
+        if self.image:
+            return self.image.url
+        return self.image_url
 
 
 class Room(models.Model):
@@ -304,6 +434,51 @@ class HotelSettings(models.Model):
         verbose_name="Invoice Footer Note"
     )
     currency_symbol = models.CharField(max_length=10, default="₹", verbose_name="Currency Symbol")
+
+    # Hotel Custom SMTP / Mailing Credentials
+    email_is_active = models.BooleanField(
+        default=True,
+        verbose_name="Enable Hotel Custom SMTP",
+        help_text="Use hotel-specific email account for guest confirmations and invoices"
+    )
+    email_sender_name = models.CharField(
+        max_length=150,
+        blank=True,
+        default="",
+        verbose_name="Hotel Sender Display Name",
+        help_text="Name displayed to guests (e.g. 'Royal Heritage Palace')"
+    )
+    email_host_user = models.EmailField(
+        blank=True,
+        default="",
+        verbose_name="Hotel SMTP Email Address",
+        help_text="e.g. reservations@royalheritage.com or hotel.jaipur@gmail.com"
+    )
+    email_host_password = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Hotel SMTP Password / App Password",
+        help_text="16-character Google App Password or SMTP password"
+    )
+    email_host = models.CharField(
+        max_length=150,
+        default="smtp.gmail.com",
+        blank=True,
+        verbose_name="SMTP Host"
+    )
+    email_port = models.PositiveIntegerField(
+        default=587,
+        verbose_name="SMTP Port"
+    )
+    email_use_tls = models.BooleanField(
+        default=True,
+        verbose_name="Use TLS"
+    )
+    email_use_ssl = models.BooleanField(
+        default=False,
+        verbose_name="Use SSL"
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

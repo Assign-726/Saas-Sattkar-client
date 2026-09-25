@@ -1,17 +1,76 @@
+import os
+import io
+import uuid
 import datetime
 import json
 from decimal import Decimal
 from functools import wraps
+from PIL import Image
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.http import JsonResponse, HttpResponseForbidden
 from django.contrib import messages
 from django.utils import timezone
+from django.db import transaction
 from django.db.models import Q, Sum, Count
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.contrib.auth.models import User, Group
 
 from super_admin.models import Restaurant, RestaurantBranch, RestaurantUser
-from hotel.models import RoomCategory, Room, RoomBooking, HotelSettings
+from hotel.models import RoomCategory, Room, RoomBooking, HotelSettings, RoomCategoryImage
 from hotel.forms import HotelSettingsForm
+
+
+def optimize_image_to_webp(uploaded_file, max_size=(1920, 1080), quality=85):
+    """
+    Media Controller:
+    Validates file size (max 8MB).
+    Reads image, converts mode to RGB/RGBA, resizes within max_size preserving aspect ratio,
+    and converts to modern, lightweight WebP format.
+    Returns ContentFile with .webp extension.
+    """
+    try:
+        img = Image.open(uploaded_file)
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGBA")
+        else:
+            img = img.convert("RGB")
+        
+        img.thumbnail(max_size, Image.Resampling.LANCZOS)
+        
+        output = io.BytesIO()
+        img.save(output, format="WEBP", quality=quality, optimize=True)
+        output.seek(0)
+        
+        base_name = os.path.splitext(uploaded_file.name)[0]
+        return ContentFile(output.read(), name=f"{base_name}.webp")
+    except Exception as e:
+        return uploaded_file
+
+
+def process_video_file_upload(uploaded_file, max_size_mb=25):
+    """
+    Media Controller:
+    Validates video file size (max 25MB) and format (MP4, WebM, MOV).
+    Saves to media/hotel/categories/videos/
+    Returns (url_path, file_size_display).
+    """
+    ext = os.path.splitext(uploaded_file.name)[1].lower()
+    allowed = ['.mp4', '.webm', '.mov', '.mkv']
+    if ext not in allowed:
+        raise ValueError(f"Invalid video format '{ext}'. Allowed formats: MP4, WebM, MOV.")
+    
+    max_bytes = max_size_mb * 1024 * 1024
+    if uploaded_file.size > max_bytes:
+        raise ValueError(f"Video '{uploaded_file.name}' exceeds {max_size_mb}MB limit ({round(uploaded_file.size / (1024*1024), 1)}MB).")
+    
+    clean_name = f"cat_vid_{uuid.uuid4().hex[:8]}{ext}"
+    save_path = f"hotel/categories/videos/{clean_name}"
+    saved_name = default_storage.save(save_path, uploaded_file)
+    size_mb = f"{round(uploaded_file.size / (1024*1024), 1)} MB"
+    return default_storage.url(saved_name), size_mb
 
 
 def get_hotel_context(request, restaurant_slug):
@@ -56,8 +115,25 @@ def get_hotel_context(request, restaurant_slug):
                     request.session[f'active_branch_{restaurant.id}'] = active_branch.id
 
     available_branches = restaurant.branches.all()
-    user_role = getattr(user, 'role', 'HOTEL_ADMIN')
+    user_role = getattr(user, 'role', None)
+    if not user_role and profile:
+        user_role = profile.role
+    user_role = user_role or 'HOTEL_ADMIN'
+
     is_general_manager = (user_role == 'GENERAL_MANAGER' or user.is_superuser)
+    is_hotel_admin = (user_role == 'HOTEL_ADMIN' or is_general_manager)
+    is_front_desk = (user_role == 'FRONT_DESK')
+    is_housekeeping = (user_role == 'HOUSEKEEPING')
+
+    # Feature Group Visibility Flags for Hotel PMS:
+    show_front_desk_ops = (is_hotel_admin or is_front_desk) and not is_housekeeping
+    show_rooms_board = True
+    show_room_categories = is_hotel_admin
+    show_hotel_config = is_hotel_admin
+    show_hotel_settings = is_hotel_admin
+    show_hotel_staff = is_hotel_admin
+    can_create_reservation = (is_hotel_admin or is_front_desk) and not is_housekeeping
+    can_manage_physical_rooms = is_hotel_admin
 
     return {
         'restaurant': restaurant,
@@ -67,6 +143,17 @@ def get_hotel_context(request, restaurant_slug):
         'rslug': restaurant.slug,
         'user_role': user_role,
         'is_general_manager': is_general_manager,
+        'is_hotel_admin': is_hotel_admin,
+        'is_front_desk': is_front_desk,
+        'is_housekeeping': is_housekeeping,
+        'show_front_desk_ops': show_front_desk_ops,
+        'show_rooms_board': show_rooms_board,
+        'show_room_categories': show_room_categories,
+        'show_hotel_config': show_hotel_config,
+        'show_hotel_settings': show_hotel_settings,
+        'show_hotel_staff': show_hotel_staff,
+        'can_create_reservation': can_create_reservation,
+        'can_manage_physical_rooms': can_manage_physical_rooms,
     }
 
 
@@ -86,14 +173,26 @@ def hotel_admin_required(view_func):
         if not user_role and hasattr(request.user, 'restaurant_profile'):
             user_role = request.user.restaurant_profile.role
 
-        # If user is strictly a RESTAURANT_ADMIN without superuser permissions, deny access
-        if not request.user.is_superuser and user_role not in ['HOTEL_ADMIN', 'GENERAL_MANAGER']:
+        from restaurant_project import constants
+        if not getattr(constants, 'ENABLE_HOTEL_MODULE', True):
+            messages.error(
+                request,
+                "The Hotel & Rooms PMS module is globally disabled in system configuration (.env)."
+            )
+            return redirect('restaurant_admin:dashboard', restaurant_slug=restaurant_slug)
+
+        # If user is not authorized for Hotel PMS, deny access
+        if not request.user.is_superuser and user_role not in ['HOTEL_ADMIN', 'GENERAL_MANAGER', 'FRONT_DESK', 'HOUSEKEEPING']:
             messages.error(
                 request,
                 "Access restricted: Your account does not have Hotel PMS permissions. "
                 "You have been redirected to the Restaurant Admin portal."
             )
             return redirect('restaurant_admin:dashboard', restaurant_slug=restaurant_slug)
+
+        # Housekeeping role is strictly locked to Room Status view
+        if user_role == 'HOUSEKEEPING' and not request.path.endswith('/rooms/') and not '/rooms/' in request.path:
+            return redirect('hotel_admin:rooms', restaurant_slug=restaurant_slug)
 
         ctx = get_hotel_context(request, restaurant_slug)
         branch = ctx['current_branch']
@@ -309,8 +408,12 @@ def categories_view(request, restaurant_slug, ctx):
     Room Categories / Types Configuration View:
     Deluxe Suite, Royal Villa, etc. with base price, max occupancy, and amenities.
     """
+    if not ctx['show_room_categories']:
+        messages.error(request, "Permission denied: Only Hotel Administrators can manage room categories and tariffs.")
+        return redirect('hotel_admin:rooms' if ctx['is_housekeeping'] else 'hotel_admin:dashboard', restaurant_slug=restaurant_slug)
+
     branch = ctx['current_branch']
-    categories = RoomCategory.objects.filter(branch=branch).prefetch_related('rooms').order_by('name') if branch else []
+    categories = RoomCategory.objects.filter(branch=branch).prefetch_related('rooms', 'images').order_by('name') if branch else []
 
     context = {
         **ctx,
@@ -463,6 +566,10 @@ def room_create_edit_action(request, restaurant_slug, ctx):
     """
     Create or edit a physical room inventory item.
     """
+    if not ctx['can_manage_physical_rooms']:
+        messages.error(request, "Permission denied: Only Hotel Administrators can add or edit physical rooms.")
+        return redirect('hotel_admin:rooms', restaurant_slug=restaurant_slug)
+
     branch = ctx['current_branch']
     if request.method == 'POST':
         room_id = request.POST.get('room_id')
@@ -511,18 +618,41 @@ def room_create_edit_action(request, restaurant_slug, ctx):
 @hotel_admin_required
 def category_create_edit_action(request, restaurant_slug, ctx):
     """
-    Create or edit a room category.
+    Create or edit a room category with:
+    - Enforced MAX 10 Total Media Limit (Cover + Gallery Images + Videos <= 10)
+    - Automated WebP Image Conversion & Optimization Controller
+    - Video File Upload (max 25MB) & Video Streaming URL Controller
+    - Tax Inclusive/Exclusive Pricing & Banner Showcase
     """
     branch = ctx['current_branch']
+    MAX_TOTAL_MEDIA = 10
+
     if request.method == 'POST':
         cat_id = request.POST.get('category_id')
         name = request.POST.get('name', '').strip()
         price_str = request.POST.get('base_price_per_night', '0')
-        max_occ = int(request.POST.get('max_occupancy', 2))
+        max_occ = int(request.POST.get('max_occupancy', 2) or 2)
+        max_adults = int(request.POST.get('max_adults', 2) or 2)
+        max_children = int(request.POST.get('max_children', 1) or 0)
         bed_type = request.POST.get('bed_type', 'King Bed').strip()
         room_size = int(request.POST.get('room_size_sqft', 350) or 350)
         description = request.POST.get('description', '').strip()
         amenities_raw = request.POST.get('amenities', '').strip()
+
+        # Pricing & Tax details
+        price_is_tax_inclusive = request.POST.get('price_is_tax_inclusive') in ['true', 'on', '1', True]
+        original_price_str = request.POST.get('original_price_per_night', '').strip()
+        original_price = Decimal(original_price_str) if original_price_str else None
+        
+        custom_tax_str = request.POST.get('custom_tax_rate', '').strip()
+        custom_tax_rate = Decimal(custom_tax_str) if custom_tax_str else None
+
+        # Banner & Promotion
+        show_on_banner = request.POST.get('show_on_banner') in ['true', 'on', '1', True]
+        banner_badge_text = request.POST.get('banner_badge_text', '').strip()
+
+        # Image URLs
+        cover_image_url = request.POST.get('cover_image_url', '').strip()
 
         if not name:
             messages.error(request, "Category name is required.")
@@ -540,25 +670,207 @@ def category_create_edit_action(request, restaurant_slug, ctx):
             category.name = name
             category.base_price_per_night = base_price
             category.max_occupancy = max_occ
+            category.max_adults = max_adults
+            category.max_children = max_children
             category.bed_type = bed_type
             category.room_size_sqft = room_size
             category.description = description
             category.amenities = amenities_list
-            category.save()
-            messages.success(request, f"Category '{category.name}' updated successfully.")
+            category.price_is_tax_inclusive = price_is_tax_inclusive
+            category.original_price_per_night = original_price
+            category.custom_tax_rate = custom_tax_rate
+            category.show_on_banner = show_on_banner
+            category.banner_badge_text = banner_badge_text
         else:
-            category = RoomCategory.objects.create(
+            category = RoomCategory(
                 branch=branch,
                 name=name,
                 base_price_per_night=base_price,
                 max_occupancy=max_occ,
+                max_adults=max_adults,
+                max_children=max_children,
                 bed_type=bed_type,
                 room_size_sqft=room_size,
                 description=description,
-                amenities=amenities_list
+                amenities=amenities_list,
+                price_is_tax_inclusive=price_is_tax_inclusive,
+                original_price_per_night=original_price,
+                custom_tax_rate=custom_tax_rate,
+                show_on_banner=show_on_banner,
+                banner_badge_text=banner_badge_text,
             )
-            messages.success(request, f"Category '{category.name}' created successfully.")
+            category.save()
 
+        # Handle Cover Image with WebP conversion
+        if 'cover_image' in request.FILES:
+            converted_cover = optimize_image_to_webp(request.FILES['cover_image'])
+            category.cover_image = converted_cover
+        if cover_image_url:
+            category.cover_image_url = cover_image_url
+
+        # Existing media count
+        current_images_count = category.images.count()
+        current_videos = list(category.video_links) if isinstance(category.video_links, list) else []
+        current_media_count = current_images_count + len(current_videos) + (1 if category.cover_image or category.cover_image_url else 0)
+
+        # Process uploaded video files (Controller: max 25MB, mp4/webm/mov)
+        uploaded_video_files = request.FILES.getlist('uploaded_videos')
+        for v_file in uploaded_video_files:
+            if current_media_count >= MAX_TOTAL_MEDIA:
+                messages.warning(request, f"Media limit reached (max {MAX_TOTAL_MEDIA} items). Some videos were skipped.")
+                break
+            try:
+                vid_url, vid_size = process_video_file_upload(v_file, max_size_mb=25)
+                current_videos.append({
+                    'url': vid_url,
+                    'title': f"Video Tour ({vid_size})",
+                    'type': 'uploaded',
+                    'size': vid_size
+                })
+                current_media_count += 1
+            except ValueError as ve:
+                messages.error(request, str(ve))
+
+        # Parse external video URLs (YouTube, Vimeo, MP4 CDN)
+        video_json_raw = request.POST.get('video_links_json', '').strip()
+        if video_json_raw:
+            try:
+                parsed_vids = json.loads(video_json_raw)
+                if isinstance(parsed_vids, list):
+                    for v in parsed_vids:
+                        if current_media_count >= MAX_TOTAL_MEDIA:
+                            break
+                        if isinstance(v, dict) and v.get('url', '').strip():
+                            v_url = v['url'].strip()
+                            if not any(x.get('url') == v_url for x in current_videos):
+                                current_videos.append({
+                                    'url': v_url,
+                                    'title': v.get('title', '').strip() or f'Video Tour #{len(current_videos)+1}',
+                                    'type': 'link'
+                                })
+                                current_media_count += 1
+            except Exception:
+                pass
+
+        # Also parse individual video_url_1 .. 5 inputs
+        for i in range(1, 6):
+            if current_media_count >= MAX_TOTAL_MEDIA:
+                break
+            v_url = request.POST.get(f'video_url_{i}', '').strip()
+            v_title = request.POST.get(f'video_title_{i}', '').strip()
+            if v_url and not any(x.get('url') == v_url for x in current_videos):
+                current_videos.append({
+                    'url': v_url,
+                    'title': v_title or f'Video Tour #{len(current_videos)+1}',
+                    'type': 'link'
+                })
+                current_media_count += 1
+
+        category.video_links = current_videos[:MAX_TOTAL_MEDIA]
+
+        # External Gallery URLs
+        gallery_urls_raw = request.POST.get('gallery_image_urls', '').strip()
+        if gallery_urls_raw:
+            raw_lines = [u.strip() for u in gallery_urls_raw.replace('\r\n', '\n').split('\n') if u.strip()]
+            for line in raw_lines:
+                for part in line.split(','):
+                    if current_media_count >= MAX_TOTAL_MEDIA:
+                        break
+                    part_clean = part.strip()
+                    if part_clean and part_clean.startswith(('http://', 'https://', '/media/')):
+                        RoomCategoryImage.objects.create(
+                            category=category,
+                            image_url=part_clean,
+                            caption=f"{category.name} - Photo",
+                            display_order=category.images.count() + 1
+                        )
+                        current_media_count += 1
+
+        # Process multiple uploaded gallery photos (Controller: Auto WebP conversion, max 8MB)
+        uploaded_gallery = request.FILES.getlist('gallery_images')
+        for idx, file_obj in enumerate(uploaded_gallery, start=1):
+            if current_media_count >= MAX_TOTAL_MEDIA:
+                messages.warning(request, f"Media limit reached (max {MAX_TOTAL_MEDIA} items). Excess photos were skipped.")
+                break
+            webp_file = optimize_image_to_webp(file_obj, quality=85)
+            RoomCategoryImage.objects.create(
+                category=category,
+                image=webp_file,
+                caption=f"{category.name} - WebP Photo",
+                display_order=category.images.count() + idx
+            )
+            current_media_count += 1
+
+        category.save()
+
+        if cat_id:
+            messages.success(request, f"Category '{category.name}' updated successfully with optimized media assets.")
+        else:
+            messages.success(request, f"Category '{category.name}' created successfully with optimized media assets.")
+
+    return redirect(reverse('hotel_admin:categories', kwargs={'restaurant_slug': restaurant_slug}))
+
+
+@hotel_admin_required
+def category_set_cover_action(request, restaurant_slug, image_id, ctx):
+    """
+    Media Controller: Make an existing gallery photo the primary category cover.
+    """
+    branch = ctx['current_branch']
+    img = get_object_or_404(RoomCategoryImage, id=image_id, category__branch=branch)
+    category = img.category
+
+    if img.image:
+        category.cover_image = img.image
+        category.cover_image_url = ""
+    elif img.image_url:
+        category.cover_image_url = img.image_url
+
+    category.save(update_fields=['cover_image', 'cover_image_url', 'updated_at'])
+
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('ajax'):
+        return JsonResponse({'status': 'ok', 'new_cover_url': category.effective_image_url})
+
+    messages.success(request, f"Cover photo updated for '{category.name}'.")
+    return redirect(reverse('hotel_admin:categories', kwargs={'restaurant_slug': restaurant_slug}))
+
+
+@hotel_admin_required
+def category_delete_video_action(request, restaurant_slug, category_id, video_idx, ctx):
+    """
+    Media Controller: Remove a video from category's video_links by index.
+    """
+    branch = ctx['current_branch']
+    category = get_object_or_404(RoomCategory, id=category_id, branch=branch)
+    videos = list(category.video_links) if isinstance(category.video_links, list) else []
+
+    if 0 <= video_idx < len(videos):
+        removed = videos.pop(video_idx)
+        category.video_links = videos
+        category.save(update_fields=['video_links', 'updated_at'])
+
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('ajax'):
+        return JsonResponse({'status': 'ok', 'remaining_videos_count': len(videos)})
+
+    messages.success(request, "Video removed from category.")
+    return redirect(reverse('hotel_admin:categories', kwargs={'restaurant_slug': restaurant_slug}))
+
+
+@hotel_admin_required
+def category_delete_image_action(request, restaurant_slug, image_id, ctx):
+    """
+    Remove an individual gallery photo from a category.
+    Supports AJAX or normal POST.
+    """
+    branch = ctx['current_branch']
+    img = get_object_or_404(RoomCategoryImage, id=image_id, category__branch=branch)
+    cat_name = img.category.name
+    img.delete()
+
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('ajax'):
+        return JsonResponse({'status': 'ok', 'deleted_id': image_id})
+
+    messages.success(request, f"Photo removed from '{cat_name}'.")
     return redirect(reverse('hotel_admin:categories', kwargs={'restaurant_slug': restaurant_slug}))
 
 
@@ -641,6 +953,10 @@ def hotel_settings_view(request, restaurant_slug, ctx):
     - Hotel Property Info & Check-in / Check-out Timings
     - Guest Receipt / Invoice Formatting
     """
+    if not ctx['show_hotel_settings']:
+        messages.error(request, "Permission denied: Only Hotel Administrators can configure hotel settings.")
+        return redirect('hotel_admin:rooms' if ctx['is_housekeeping'] else 'hotel_admin:dashboard', restaurant_slug=restaurant_slug)
+
     branch = ctx['current_branch']
     if not branch:
         messages.error(request, "No active hotel branch found.")
@@ -665,3 +981,420 @@ def hotel_settings_view(request, restaurant_slug, ctx):
         'settings_obj': settings_obj,
         'form': form,
     })
+
+
+@hotel_admin_required
+def hotel_test_email_view(request, restaurant_slug, ctx):
+    """
+    Live test dispatcher for hotel custom SMTP credentials.
+    Accepts POST parameters via AJAX, verifies SMTP connection, and sends a test email.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Invalid request method.'}, status=405)
+
+    from core.emails import send_test_email
+
+    host = request.POST.get('email_host', 'smtp.gmail.com')
+    port = request.POST.get('email_port', 587)
+    username = request.POST.get('email_host_user', '')
+    password = request.POST.get('email_host_password', '')
+    use_tls = request.POST.get('email_use_tls') in ['true', 'True', '1', 'on']
+    use_ssl = request.POST.get('email_use_ssl') in ['true', 'True', '1', 'on']
+    recipient = request.POST.get('test_recipient', '').strip() or request.user.email
+    sender_name = request.POST.get('email_sender_name', '').strip() or "Hotel PMS"
+
+    success, message = send_test_email(
+        host=host,
+        port=port,
+        username=username,
+        password=password,
+        use_tls=use_tls,
+        use_ssl=use_ssl,
+        recipient_email=recipient,
+        sender_name=sender_name
+    )
+
+    return JsonResponse({'success': success, 'message': message}, status=200 if success else 400)
+
+
+# ==============================================================================
+# HOTEL STAFF & OPERATIONS TEAM MANAGEMENT (PMS-NATIVE)
+# ==============================================================================
+
+@hotel_admin_required
+def staff_list_view(request, restaurant_slug, ctx):
+    """
+    Hotel Staff & Operations Team Directory (PMS-native):
+    Strictly scoped to Front Desk Receptionists (FRONT_DESK) and Housekeeping Attendants (HOUSEKEEPING).
+    Non-GM Hotel Admins are strictly scoped to their assigned hotel branch.
+    """
+    user_role = ctx['user_role']
+    is_gm = ctx['is_general_manager']
+    branch = ctx['current_branch']
+    restaurant = ctx['restaurant']
+
+    # Security check: Only Hotel Admin and GM can view staff management
+    if user_role not in ['HOTEL_ADMIN', 'GENERAL_MANAGER'] and not request.user.is_superuser:
+        messages.error(request, "Permission denied: Staff management requires Hotel Administrator access.")
+        return redirect('hotel_admin:dashboard', restaurant_slug=restaurant_slug)
+
+    # Base queryset strictly limited to Hotel operational roles
+    staff_qs = RestaurantUser.objects.filter(
+        restaurant=restaurant,
+        role__in=[RestaurantUser.Role.FRONT_DESK, RestaurantUser.Role.HOUSEKEEPING]
+    ).select_related('user', 'branch', 'created_by')
+
+    # Branch scoping: HOTEL_ADMIN is strictly locked to their branch
+    if not is_gm:
+        if branch:
+            staff_qs = staff_qs.filter(branch=branch)
+        else:
+            staff_qs = staff_qs.none()
+    else:
+        # GM can optionally filter by branch if provided
+        branch_filter = request.GET.get('branch_id')
+        if branch_filter and str(branch_filter).isdigit():
+            staff_qs = staff_qs.filter(branch_id=int(branch_filter))
+
+    # Metric counts (before role/search filters)
+    total_staff = staff_qs.count()
+    front_desk_count = staff_qs.filter(role=RestaurantUser.Role.FRONT_DESK).count()
+    housekeeping_count = staff_qs.filter(role=RestaurantUser.Role.HOUSEKEEPING).count()
+
+    # Search filter
+    search_query = request.GET.get('q', '').strip()
+    if search_query:
+        staff_qs = staff_qs.filter(
+            Q(user__first_name__icontains=search_query) |
+            Q(user__last_name__icontains=search_query) |
+            Q(user__username__icontains=search_query) |
+            Q(user__email__icontains=search_query) |
+            Q(pos_pin__icontains=search_query)
+        )
+
+    # Role filter
+    role_filter = request.GET.get('role', '').strip()
+    if role_filter in [RestaurantUser.Role.FRONT_DESK, RestaurantUser.Role.HOUSEKEEPING]:
+        staff_qs = staff_qs.filter(role=role_filter)
+
+    staff_members = staff_qs.order_by('-created_at')
+
+    # Available hotel branches for GM
+    hotel_branches = restaurant.branches.filter(has_hotel_module=True) if is_gm else ([branch] if branch else [])
+
+    return render(request, 'hotel_admin/staff/staff_list.html', {
+        **ctx,
+        'active_menu': 'staff',
+        'staff_members': staff_members,
+        'total_staff': total_staff,
+        'front_desk_count': front_desk_count,
+        'housekeeping_count': housekeeping_count,
+        'search_query': search_query,
+        'role_filter': role_filter,
+        'hotel_branches': hotel_branches,
+        'selected_branch_id': request.GET.get('branch_id', ''),
+    })
+
+
+@hotel_admin_required
+def staff_create_view(request, restaurant_slug, ctx):
+    """
+    Create a new Hotel PMS staff member (Front Desk Receptionist or Housekeeping Attendant).
+    """
+    user_role = ctx['user_role']
+    is_gm = ctx['is_general_manager']
+    branch = ctx['current_branch']
+    restaurant = ctx['restaurant']
+
+    if user_role not in ['HOTEL_ADMIN', 'GENERAL_MANAGER'] and not request.user.is_superuser:
+        messages.error(request, "Permission denied: Staff creation requires Hotel Administrator access.")
+        return redirect('hotel_admin:dashboard', restaurant_slug=restaurant_slug)
+
+    allowed_roles = [
+        (RestaurantUser.Role.FRONT_DESK, 'Front Desk Receptionist (Check-in, Check-out, Bookings)'),
+        (RestaurantUser.Role.HOUSEKEEPING, 'Housekeeping Attendant (Room Cleaning & Maintenance)'),
+    ]
+
+    hotel_branches = restaurant.branches.filter(has_hotel_module=True) if is_gm else ([branch] if branch else [])
+
+    errors = {}
+    form_data = {
+        'username': '',
+        'first_name': '',
+        'last_name': '',
+        'email': '',
+        'phone': '',
+        'pos_pin': '',
+        'role': RestaurantUser.Role.FRONT_DESK,
+        'branch_id': str(branch.id) if branch else '',
+        'is_active': True,
+    }
+
+    if request.method == 'POST':
+        form_data['username'] = request.POST.get('username', '').strip()
+        form_data['first_name'] = request.POST.get('first_name', '').strip()
+        form_data['last_name'] = request.POST.get('last_name', '').strip()
+        form_data['email'] = request.POST.get('email', '').strip()
+        form_data['phone'] = request.POST.get('phone', '').strip()
+        password = request.POST.get('password', '').strip()
+        form_data['pos_pin'] = request.POST.get('pos_pin', '').strip()
+        form_data['role'] = request.POST.get('role', '').strip()
+        form_data['branch_id'] = request.POST.get('branch_id', '').strip()
+        form_data['is_active'] = request.POST.get('is_active') == 'on'
+
+        # Validation
+        if not form_data['username']:
+            errors['username'] = "Username is required."
+        elif User.objects.filter(username__iexact=form_data['username']).exists():
+            errors['username'] = "This username is already taken. Please choose another."
+
+        if not password:
+            errors['password'] = "Password is required."
+        elif len(password) < 6:
+            errors['password'] = "Password must be at least 6 characters."
+
+        valid_roles = [r[0] for r in allowed_roles]
+        if form_data['role'] not in valid_roles:
+            errors['role'] = "Please select a valid Hotel PMS role."
+
+        if form_data['pos_pin'] and (not form_data['pos_pin'].isdigit() or len(form_data['pos_pin']) != 4):
+            errors['pos_pin'] = "Quick Switch PIN must be exactly 4 digits."
+
+        # Target branch
+        if is_gm and form_data['branch_id'] and form_data['branch_id'].isdigit():
+            target_branch = restaurant.branches.filter(id=int(form_data['branch_id']), has_hotel_module=True).first()
+            if not target_branch:
+                target_branch = branch
+        else:
+            target_branch = branch
+
+        if not target_branch:
+            errors['branch'] = "No valid hotel branch is assigned."
+
+        if not errors:
+            try:
+                with transaction.atomic():
+                    new_user = User.objects.create_user(
+                        username=form_data['username'],
+                        email=form_data['email'],
+                        password=password,
+                        first_name=form_data['first_name'],
+                        last_name=form_data['last_name'],
+                    )
+                    new_user.is_staff = True
+                    new_user.is_active = form_data['is_active']
+                    new_user.save()
+
+                    try:
+                        grp, _ = Group.objects.get_or_create(name="RestaurantAdmin")
+                        new_user.groups.add(grp)
+                    except Exception:
+                        pass
+
+                    ru = RestaurantUser.objects.create(
+                        user=new_user,
+                        restaurant=restaurant,
+                        branch=target_branch,
+                        role=form_data['role'],
+                        is_primary_admin=False,
+                        pos_pin=form_data['pos_pin'] or None,
+                        created_by=request.user,
+                    )
+
+                messages.success(request, f"Hotel staff member '{new_user.get_full_name() or new_user.username}' created successfully.")
+                return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+            except Exception as e:
+                errors['general'] = f"Failed to create staff member: {str(e)}"
+
+    return render(request, 'hotel_admin/staff/staff_form.html', {
+        **ctx,
+        'active_menu': 'staff',
+        'is_edit': False,
+        'allowed_roles': allowed_roles,
+        'hotel_branches': hotel_branches,
+        'form_data': form_data,
+        'errors': errors,
+    })
+
+
+@hotel_admin_required
+def staff_edit_view(request, restaurant_slug, ctx, user_id):
+    """
+    Edit an existing Hotel staff member (Front Desk Receptionist or Housekeeping Attendant).
+    """
+    user_role = ctx['user_role']
+    is_gm = ctx['is_general_manager']
+    branch = ctx['current_branch']
+    restaurant = ctx['restaurant']
+
+    if user_role not in ['HOTEL_ADMIN', 'GENERAL_MANAGER'] and not request.user.is_superuser:
+        messages.error(request, "Permission denied: Staff editing requires Hotel Administrator access.")
+        return redirect('hotel_admin:dashboard', restaurant_slug=restaurant_slug)
+
+    target_profile = get_object_or_404(
+        RestaurantUser.objects.select_related('user', 'branch'),
+        user_id=user_id,
+        restaurant=restaurant
+    )
+
+    # Security: Ensure target is a hotel staff role
+    if target_profile.role not in [RestaurantUser.Role.FRONT_DESK, RestaurantUser.Role.HOUSEKEEPING]:
+        messages.error(request, "Unauthorized: Only Hotel PMS staff (Front Desk & Housekeeping) can be edited from Hotel PMS.")
+        return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+    # Security: Non-GM cannot edit staff of other branches
+    if not is_gm and target_profile.branch_id != (branch.id if branch else None):
+        messages.error(request, "Unauthorized: You can only edit staff in your assigned property.")
+        return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+    allowed_roles = [
+        (RestaurantUser.Role.FRONT_DESK, 'Front Desk Receptionist (Check-in, Check-out, Bookings)'),
+        (RestaurantUser.Role.HOUSEKEEPING, 'Housekeeping Attendant (Room Cleaning & Maintenance)'),
+    ]
+    hotel_branches = restaurant.branches.filter(has_hotel_module=True) if is_gm else ([branch] if branch else [])
+
+    errors = {}
+    target_user = target_profile.user
+    form_data = {
+        'username': target_user.username,
+        'first_name': target_user.first_name,
+        'last_name': target_user.last_name,
+        'email': target_user.email,
+        'phone': '',
+        'pos_pin': target_profile.pos_pin or '',
+        'role': target_profile.role,
+        'branch_id': str(target_profile.branch_id or ''),
+        'is_active': target_user.is_active,
+    }
+
+    if request.method == 'POST':
+        form_data['first_name'] = request.POST.get('first_name', '').strip()
+        form_data['last_name'] = request.POST.get('last_name', '').strip()
+        form_data['email'] = request.POST.get('email', '').strip()
+        form_data['phone'] = request.POST.get('phone', '').strip()
+        password = request.POST.get('password', '').strip()
+        form_data['pos_pin'] = request.POST.get('pos_pin', '').strip()
+        form_data['role'] = request.POST.get('role', '').strip()
+        form_data['branch_id'] = request.POST.get('branch_id', '').strip()
+        form_data['is_active'] = request.POST.get('is_active') == 'on'
+
+        if password and len(password) < 6:
+            errors['password'] = "New password must be at least 6 characters."
+
+        valid_roles = [r[0] for r in allowed_roles]
+        if form_data['role'] not in valid_roles:
+            errors['role'] = "Please select a valid Hotel PMS role."
+
+        if form_data['pos_pin'] and (not form_data['pos_pin'].isdigit() or len(form_data['pos_pin']) != 4):
+            errors['pos_pin'] = "Quick Switch PIN must be exactly 4 digits."
+
+        if not errors:
+            try:
+                with transaction.atomic():
+                    target_user.first_name = form_data['first_name']
+                    target_user.last_name = form_data['last_name']
+                    target_user.email = form_data['email']
+                    target_user.is_active = form_data['is_active']
+                    if password:
+                        target_user.set_password(password)
+                    target_user.save()
+
+                    target_profile.role = form_data['role']
+                    target_profile.pos_pin = form_data['pos_pin'] or None
+
+                    if is_gm and form_data['branch_id'] and form_data['branch_id'].isdigit():
+                        new_branch = restaurant.branches.filter(id=int(form_data['branch_id']), has_hotel_module=True).first()
+                        if new_branch:
+                            target_profile.branch = new_branch
+
+                    target_profile.save()
+
+                messages.success(request, f"Staff account @{target_user.username} updated successfully.")
+                return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+            except Exception as e:
+                errors['general'] = f"Failed to update staff member: {str(e)}"
+
+    return render(request, 'hotel_admin/staff/staff_form.html', {
+        **ctx,
+        'active_menu': 'staff',
+        'is_edit': True,
+        'target_user': target_user,
+        'target_profile': target_profile,
+        'allowed_roles': allowed_roles,
+        'hotel_branches': hotel_branches,
+        'form_data': form_data,
+        'errors': errors,
+    })
+
+
+@hotel_admin_required
+def staff_toggle_active_view(request, restaurant_slug, ctx, user_id):
+    """Toggle active status for a Hotel staff member."""
+    if request.method != 'POST':
+        return HttpResponseForbidden("POST method required")
+
+    user_role = ctx['user_role']
+    is_gm = ctx['is_general_manager']
+    branch = ctx['current_branch']
+    restaurant = ctx['restaurant']
+
+    if user_role not in ['HOTEL_ADMIN', 'GENERAL_MANAGER'] and not request.user.is_superuser:
+        messages.error(request, "Permission denied.")
+        return redirect('hotel_admin:dashboard', restaurant_slug=restaurant_slug)
+
+    target_profile = get_object_or_404(RestaurantUser, user_id=user_id, restaurant=restaurant)
+
+    if target_profile.user == request.user:
+        messages.error(request, "You cannot deactivate your own administrative account.")
+        return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+    if target_profile.role not in [RestaurantUser.Role.FRONT_DESK, RestaurantUser.Role.HOUSEKEEPING]:
+        messages.error(request, "Unauthorized to toggle non-hotel staff.")
+        return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+    if not is_gm and target_profile.branch_id != (branch.id if branch else None):
+        messages.error(request, "Unauthorized: Staff belongs to another property.")
+        return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+    new_state = not target_profile.user.is_active
+    target_profile.user.is_active = new_state
+    target_profile.user.save()
+
+    status_str = "activated" if new_state else "deactivated"
+    messages.success(request, f"Staff member @{target_profile.user.username} has been {status_str}.")
+    return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+
+@hotel_admin_required
+def staff_delete_view(request, restaurant_slug, ctx, user_id):
+    """Delete a Hotel staff member."""
+    if request.method != 'POST':
+        return HttpResponseForbidden("POST method required")
+
+    user_role = ctx['user_role']
+    is_gm = ctx['is_general_manager']
+    branch = ctx['current_branch']
+    restaurant = ctx['restaurant']
+
+    if user_role not in ['HOTEL_ADMIN', 'GENERAL_MANAGER'] and not request.user.is_superuser:
+        messages.error(request, "Permission denied.")
+        return redirect('hotel_admin:dashboard', restaurant_slug=restaurant_slug)
+
+    target_profile = get_object_or_404(RestaurantUser, user_id=user_id, restaurant=restaurant)
+
+    if target_profile.user == request.user:
+        messages.error(request, "You cannot delete your own administrative account.")
+        return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+    if target_profile.role not in [RestaurantUser.Role.FRONT_DESK, RestaurantUser.Role.HOUSEKEEPING]:
+        messages.error(request, "Unauthorized to delete non-hotel staff.")
+        return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+    if not is_gm and target_profile.branch_id != (branch.id if branch else None):
+        messages.error(request, "Unauthorized: Staff belongs to another property.")
+        return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+    username = target_profile.user.username
+    target_profile.user.delete()
+    messages.success(request, f"Staff member @{username} has been permanently deleted.")
+    return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)

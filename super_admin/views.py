@@ -241,6 +241,7 @@ def restaurant_edit(request, pk):
             'is_hotel_tariff_7500_plus': b.is_hotel_tariff_7500_plus,
             'e_invoicing_enabled': b.e_invoicing_enabled,
             'has_club_module': bool(getattr(b, 'has_club_module', False)),
+            'has_hotel_module': bool(getattr(b, 'has_hotel_module', False)),
         })
 
     return render(request, 'super_admin/onboard.html', {
@@ -1029,6 +1030,8 @@ def api_toggle_branch_club_module(request, pk):
 
 
 def api_toggle_branch_hotel_module(request, pk):
+    if not constants.ENABLE_HOTEL_MODULE:
+        return JsonResponse({'success': False, 'error': 'Hotel & Rooms PMS module is disabled in system configuration (.env).'}, status=403)
     branch = get_object_or_404(RestaurantBranch, pk=pk)
     if request.method == 'POST':
         try:

@@ -33,6 +33,8 @@ def app_constants(request):
         'SHOW_ALCOHOL_MODULE': constants.ENABLE_ALCOHOL_VAT,
         'ENABLE_CLUB_EVENTS_MODULE': constants.ENABLE_CLUB_EVENTS_MODULE,
         'SHOW_CLUB_EVENTS_MODULE': constants.ENABLE_CLUB_EVENTS_MODULE,
+        'ENABLE_HOTEL_MODULE': constants.ENABLE_HOTEL_MODULE,
+        'SHOW_HOTEL_MODULE': constants.ENABLE_HOTEL_MODULE,
         'UNREAD_INQUIRIES_COUNT': unread_inquiries,
         'PENDING_APPLICATIONS_COUNT': pending_applications,
     }

@@ -8,6 +8,9 @@ class RoomCategorySerializer(serializers.ModelSerializer):
     branch_name = serializers.ReadOnlyField(source='branch.name')
     total_rooms_count = serializers.ReadOnlyField()
     effective_image = serializers.ReadOnlyField(source='effective_image_url')
+    discount_percent = serializers.ReadOnlyField()
+    all_images = serializers.ReadOnlyField(source='all_images_list')
+    video_links_list = serializers.ReadOnlyField()
 
     class Meta:
         model = RoomCategory
@@ -19,6 +22,12 @@ class RoomCategorySerializer(serializers.ModelSerializer):
             'slug',
             'description',
             'base_price_per_night',
+            'price_is_tax_inclusive',
+            'original_price_per_night',
+            'discount_percent',
+            'custom_tax_rate',
+            'show_on_banner',
+            'banner_badge_text',
             'max_occupancy',
             'max_adults',
             'max_children',
@@ -28,12 +37,15 @@ class RoomCategorySerializer(serializers.ModelSerializer):
             'cover_image',
             'cover_image_url',
             'effective_image',
+            'all_images',
+            'video_links',
+            'video_links_list',
             'total_rooms_count',
             'is_active',
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['id', 'slug', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'slug', 'discount_percent', 'all_images', 'video_links_list', 'created_at', 'updated_at']
 
 
 class RoomSerializer(serializers.ModelSerializer):
@@ -146,6 +158,9 @@ class PublicAvailabilityCategorySerializer(serializers.ModelSerializer):
     estimated_taxes = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     estimated_grand_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     effective_image = serializers.ReadOnlyField(source='effective_image_url')
+    discount_percent = serializers.ReadOnlyField()
+    all_images = serializers.ReadOnlyField(source='all_images_list')
+    video_links = serializers.ReadOnlyField(source='video_links_list')
 
     class Meta:
         model = RoomCategory
@@ -155,6 +170,11 @@ class PublicAvailabilityCategorySerializer(serializers.ModelSerializer):
             'slug',
             'description',
             'base_price_per_night',
+            'price_is_tax_inclusive',
+            'original_price_per_night',
+            'discount_percent',
+            'show_on_banner',
+            'banner_badge_text',
             'max_occupancy',
             'max_adults',
             'max_children',
@@ -162,6 +182,8 @@ class PublicAvailabilityCategorySerializer(serializers.ModelSerializer):
             'room_size_sqft',
             'amenities',
             'effective_image',
+            'all_images',
+            'video_links',
             'available_rooms_count',
             'available_room_ids',
             'nights',

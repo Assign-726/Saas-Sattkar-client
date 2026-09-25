@@ -728,6 +728,7 @@
             {% if current_branch %}
             <span class="badge bg-primary text-wrap" style="font-size: 0.7rem;">{{ current_branch.name }}</span>
             {% endif %}
+            {% if not is_club_user and not is_kitchen_user %}
             <!-- Mobile Notification Bell Dropdown -->
             <div class="dropdown">
                 <button class="btn btn-sm btn-light border position-relative p-1 px-2" id="mobileNotifDropdownBtn"
@@ -757,6 +758,11 @@
                     </div>
                 </div>
             </div>
+            {% elif is_club_user %}
+            <a href="{% url 'restaurant_admin:club_gate_scanner' restaurant_slug=rslug %}" class="btn btn-sm btn-dark py-1 px-2" title="Gate Scanner">
+                <i class="fas fa-qrcode text-warning"></i>
+            </a>
+            {% endif %}
         </div>
     </div>
     <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
@@ -765,12 +771,35 @@
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="sidebar-header d-flex justify-content-between align-items-center">
+                {% if is_club_user %}
+                <a href="{% if user_role == 'GATE_SCANNER' %}{% url 'restaurant_admin:club_gate_scanner' restaurant_slug=rslug %}{% else %}{% url 'restaurant_admin:club_events_list' restaurant_slug=rslug %}{% endif %}"
+                    class="sidebar-brand text-truncate"
+                    title="{{ current_branch.name|default:current_restaurant.name|default:'Club & Events Desk' }}">
+                    <i class="fas fa-ticket-alt text-warning"></i>
+                    <span style="font-size: 0.95rem; font-weight: 700;">{{ current_branch.name|default:current_restaurant.name|default:"Club & Events" }}</span>
+                </a>
+                {% elif is_hotel_user %}
+                <a href="{% url 'hotel_admin:dashboard' restaurant_slug=rslug %}"
+                    class="sidebar-brand text-truncate"
+                    title="{{ current_branch.name|default:current_restaurant.name|default:'Hotel PMS' }}">
+                    <i class="fa-solid fa-hotel text-primary"></i>
+                    <span style="font-size: 0.95rem; font-weight: 700;">{{ current_branch.name|default:current_restaurant.name|default:"Hotel PMS" }}</span>
+                </a>
+                {% elif is_kitchen_user %}
+                <a href="{% url 'restaurant_admin:kitchen_kds' restaurant_slug=rslug %}"
+                    class="sidebar-brand text-truncate"
+                    title="{{ current_branch.name|default:current_restaurant.name|default:'Kitchen Station' }}">
+                    <i class="bi bi-display text-primary"></i>
+                    <span style="font-size: 0.95rem; font-weight: 700;">Kitchen KDS</span>
+                </a>
+                {% else %}
                 <a href="{% url 'restaurant_admin:dashboard' restaurant_slug=rslug %}"
                     class="sidebar-brand text-truncate"
                     title="{{ current_branch.name|default:current_restaurant.name|default:'Admin Panel' }}">
                     <i class="fas fa-utensils"></i>
                     <span style="font-size: 0.95rem; font-weight: 700;">{{ current_branch.name|default:current_restaurant.name|default:"Admin Panel" }}</span>
                 </a>
+                {% endif %}
                 <button
                     class="btn btn-sm btn-light border-0 text-secondary d-none d-lg-flex align-items-center justify-content-center p-1"
                     id="desktopSidebarCollapseBtn" type="button" title="Collapse Sidebar"
@@ -779,6 +808,7 @@
                 </button>
             </div>
             <div class="sidebar-menu">
+                {% if show_dining_dashboard %}
                 <!-- Ungrouped Standalone: Dashboard -->
                 <div class="sidebar-single-nav">
                     <a class="nav-link {% if active_menu == 'dashboard' %}active{% endif %}"
@@ -787,7 +817,9 @@
                         <span>Dashboard</span>
                     </a>
                 </div>
+                {% endif %}
 
+                {% if show_dining_analytics %}
                 <!-- Ungrouped Standalone: Analytics & Sales -->
                 <div class="sidebar-single-nav">
                     <a class="nav-link {% if active_menu == 'analytics' %}active{% endif %}"
@@ -797,7 +829,9 @@
                         <span>Analytics & Sales</span>
                     </a>
                 </div>
+                {% endif %}
 
+                {% if show_pos_group %}
                 <!-- Group 2: Point of Sale -->
                 <div class="sidebar-group">
                     <div class="sidebar-group-header {% if active_menu == 'order_records' or active_menu == 'order_list' or active_menu == 'receipts' or active_menu == 'order_create_manual' or active_menu == 'transactions_create' or active_menu == 'credit_note' %}open active-group{% endif %}"
@@ -843,6 +877,7 @@
                                     <span>Receipt System</span>
                                 </a>
                             </li>
+                            {% if is_dining_mgmt or is_cashier_user %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'credit_note' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:credit_note_desk' restaurant_slug=rslug %}"
@@ -851,10 +886,25 @@
                                     <span>Issue Credit Note</span>
                                 </a>
                             </li>
+                            {% endif %}
                         </ul>
                     </div>
                 </div>
+                {% endif %}
 
+                {% if is_kitchen_user %}
+                <!-- Dedicated Station Nav for Kitchen -->
+                <div class="sidebar-single-nav">
+                    <a class="nav-link {% if active_menu == 'kitchen_kds' %}active{% endif %}"
+                        href="{% url 'restaurant_admin:kitchen_kds' restaurant_slug=rslug %}"
+                        title="Kitchen Display System (KDS)">
+                        <i class="bi bi-display text-primary"></i>
+                        <span>Kitchen (KDS)</span>
+                    </a>
+                </div>
+                {% endif %}
+
+                {% if show_dinein_group %}
                 <!-- Group 3: Dine-In Operations -->
                 <div class="sidebar-group">
                     <div class="sidebar-group-header {% if active_menu == 'floor_plan' or active_menu == 'tables' or active_menu == 'reservations' or active_menu == 'kitchen_kds' %}open active-group{% endif %}"
@@ -868,6 +918,7 @@
                     <div class="sidebar-group-content {% if active_menu == 'floor_plan' or active_menu == 'tables' or active_menu == 'reservations' or active_menu == 'kitchen_kds' %}show{% endif %}"
                         id="group-dinein">
                         <ul class="nav flex-column">
+                            {% if is_dining_mgmt %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'kitchen_kds' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:kitchen_kds' restaurant_slug=rslug %}"
@@ -884,6 +935,7 @@
                                     <span>Floor Plan</span>
                                 </a>
                             </li>
+                            {% endif %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'tables' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:table_list' restaurant_slug=rslug %}" title="Tables">
@@ -902,7 +954,9 @@
                         </ul>
                     </div>
                 </div>
+                {% endif %}
 
+                {% if show_menu_group %}
                 <!-- Group 4: Menu & Marketing -->
                 <div class="sidebar-group">
                     <div class="sidebar-group-header {% if active_menu == 'category_list' or active_menu == 'categories' or active_menu == 'menu_list' or active_menu == 'menu' or active_menu == 'coupons' or active_menu == 'qr_generator' %}open active-group{% endif %}"
@@ -932,6 +986,7 @@
                                     <span>Menu Items</span>
                                 </a>
                             </li>
+                            {% if is_dining_mgmt %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'coupons' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:coupon_list' restaurant_slug=rslug %}"
@@ -948,11 +1003,13 @@
                                     <span>QR Codes</span>
                                 </a>
                             </li>
+                            {% endif %}
                         </ul>
                     </div>
                 </div>
+                {% endif %}
 
-                {% if ENABLE_CLUB_EVENTS_MODULE and current_branch.has_club_module or ENABLE_CLUB_EVENTS_MODULE and request.user.is_superuser %}
+                {% if show_club_events %}
                 <!-- Group: Club & Events Module -->
                 <div class="sidebar-group">
                     <div class="sidebar-group-header {% if active_menu == 'club_events' or active_menu == 'club_guestlist' or active_menu == 'club_scanner' or active_menu == 'club_floor_plan' or active_menu == 'club_ticket_grid' %}open active-group{% endif %}"
@@ -966,6 +1023,7 @@
                     <div class="sidebar-group-content {% if active_menu == 'club_events' or active_menu == 'club_guestlist' or active_menu == 'club_scanner' or active_menu == 'club_floor_plan' or active_menu == 'club_ticket_grid' %}show{% endif %}"
                         id="group-club-events">
                         <ul class="nav flex-column">
+                            {% if user_role != 'GATE_SCANNER' %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'club_events' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:club_events_list' restaurant_slug=rslug %}"
@@ -974,6 +1032,7 @@
                                     <span>Manage Events</span>
                                 </a>
                             </li>
+                            {% endif %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'club_guestlist' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:club_guestlist' restaurant_slug=rslug %}"
@@ -982,6 +1041,7 @@
                                     <span>Guestlist & Passes</span>
                                 </a>
                             </li>
+                            {% if user_role != 'GATE_SCANNER' %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'club_ticket_grid' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:club_ticket_grid' restaurant_slug=rslug %}"
@@ -998,6 +1058,7 @@
                                     <span>Visual Floor Plan</span>
                                 </a>
                             </li>
+                            {% endif %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'club_scanner' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:club_gate_scanner' restaurant_slug=rslug %}"
@@ -1011,6 +1072,7 @@
                 </div>
                 {% endif %}
 
+                {% if show_stock_group %}
                 <!-- Group 5: Stock & Supply Chain -->
                 <div class="sidebar-group">
                     <div class="sidebar-group-header {% if active_menu == 'inventory' or active_menu == 'inventory_categories' or active_menu == 'purchases' or active_menu == 'challans' or active_menu == 'inventory_logs' %}open active-group{% endif %}"
@@ -1067,7 +1129,9 @@
                         </ul>
                     </div>
                 </div>
+                {% endif %}
 
+                {% if show_parties %}
                 <!-- Standalone Item: Parties -->
                 <div class="sidebar-single-nav">
                     <a class="nav-link {% if active_menu == 'parties' %}active{% endif %}"
@@ -1077,7 +1141,21 @@
                         <span>Parties</span>
                     </a>
                 </div>
+                {% endif %}
 
+                {% if show_staff %}
+                <!-- Standalone Item: Staff & Sub-Roles -->
+                <div class="sidebar-single-nav">
+                    <a class="nav-link {% if active_menu == 'staff' %}active{% endif %}"
+                        href="{% url 'restaurant_admin:staff_list' restaurant_slug=rslug %}"
+                        title="Staff & Sub-Roles Management">
+                        <i class="bi bi-people-gear"></i>
+                        <span>Staff & Roles</span>
+                    </a>
+                </div>
+                {% endif %}
+
+                {% if show_settings %}
                 <!-- Standalone Item: Settings / Setup -->
                 <div class="sidebar-single-nav">
                     <a class="nav-link {% if active_menu == 'settings' %}active{% endif %}"
@@ -1087,6 +1165,7 @@
                         <span>Settings</span>
                     </a>
                 </div>
+                {% endif %}
             </div>
             <div class="sidebar-footer">
                 <button type="button" class="btn-logout-sidebar" id="sidebarLogoutTrigger" title="Sign out of account">
@@ -1108,18 +1187,66 @@
                         <i class="bi bi-shop text-primary me-1"></i><strong>{{ current_branch.name|default:current_restaurant.name|default:"Branch" }}</strong>
                     </span>
                     {% if user.role == 'GENERAL_MANAGER' or user.is_superuser %}
-                    {% if current_branch.has_hotel_module %}
+                    {% if ENABLE_HOTEL_MODULE and current_branch.has_hotel_module %}
                     <a href="{% url 'hotel_admin:dashboard' restaurant_slug=rslug %}" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 shadow-xs fw-semibold text-decoration-none" style="font-size: 0.78rem;">
                         <i class="fa-solid fa-hotel me-1"></i>Switch to Hotel PMS
                     </a>
                     {% endif %}
                     {% endif %}
+                    {% if is_club_user %}
+                    <span class="badge bg-warning-subtle text-dark border border-warning-subtle px-2.5 py-1.5 rounded-pill shadow-xs" style="font-size: 0.78rem;">
+                        <i class="fas fa-ticket-alt text-warning me-1.5"></i><strong>Club & Events Portal</strong>
+                    </span>
+                    {% elif is_hotel_user %}
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1.5 rounded-pill shadow-xs" style="font-size: 0.78rem;">
+                        <i class="fa-solid fa-hotel me-1.5"></i><strong>Hotel PMS Portal</strong>
+                    </span>
+                    {% elif is_kitchen_user %}
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1.5 rounded-pill shadow-xs" style="font-size: 0.78rem;">
+                        <i class="bi bi-display me-1.5"></i><strong>Kitchen (KDS) Station</strong>
+                    </span>
+                    {% else %}
                     <span class="text-muted d-none d-xl-inline" style="font-size: 0.78rem;">
                         <i class="bi bi-circle-fill text-success me-1" style="font-size: 8px;"></i>Live Orders Connected
                     </span>
+                    {% endif %}
                 </div>
 
                 <div class="d-flex align-items-center gap-2">
+                    {% if is_club_user %}
+                    <!-- Quick Club Actions for Club Admin / Gate Scanner -->
+                    <a href="{% url 'restaurant_admin:club_gate_scanner' restaurant_slug=rslug %}"
+                        class="btn btn-sm btn-outline-dark rounded-pill px-3 py-1.5 d-flex align-items-center gap-1.5 shadow-xs text-decoration-none {% if active_menu == 'club_scanner' %}bg-dark text-white{% endif %}"
+                        title="Door Pass Scanner">
+                        <i class="fas fa-qrcode text-warning"></i>
+                        <span class="fw-semibold">Door Pass Scanner</span>
+                    </a>
+                    <a href="{% url 'restaurant_admin:club_guestlist' restaurant_slug=rslug %}"
+                        class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1.5 d-flex align-items-center gap-1.5 shadow-xs text-decoration-none {% if active_menu == 'club_guestlist' %}bg-primary text-white{% endif %}"
+                        title="Full Guestlist">
+                        <i class="fas fa-users"></i>
+                        <span class="fw-semibold">Guestlist</span>
+                    </a>
+                    {% if user_role == 'CLUB_ADMIN' %}
+                    <a href="{% url 'restaurant_admin:club_events_list' restaurant_slug=rslug %}"
+                        class="btn btn-sm btn-primary rounded-pill px-3 py-1.5 d-flex align-items-center gap-1.5 shadow-xs text-decoration-none"
+                        title="Events Overview">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span class="fw-semibold">Events</span>
+                    </a>
+                    {% endif %}
+                    {% elif is_hotel_user %}
+                    <a href="{% url 'hotel_admin:dashboard' restaurant_slug=rslug %}"
+                        class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1.5 d-flex align-items-center gap-1.5 shadow-xs text-decoration-none"
+                        title="Hotel PMS Dashboard">
+                        <i class="fa-solid fa-hotel"></i>
+                        <span class="fw-semibold">Hotel PMS</span>
+                    </a>
+                    {% elif is_kitchen_user %}
+                    <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-1.5 rounded-pill shadow-xs" style="font-size: 0.78rem;">
+                        <i class="bi bi-broadcast me-1"></i>KDS Active
+                    </span>
+                    {% else %}
                     <!-- Quick KDS Screen Link -->
                     <a href="{% url 'restaurant_admin:kitchen_kds' restaurant_slug=rslug %}"
                         class="btn btn-sm btn-white-notif rounded-pill px-3 py-1.5 d-flex align-items-center gap-1.5 shadow-xs text-decoration-none {% if active_menu == 'kitchen_kds' %}border-primary text-primary fw-bold bg-primary-subtle{% endif %}"
@@ -1166,17 +1293,18 @@
                             <div class="overflow-auto global-notif-list-container" style="max-height: 320px;">
                                 <div class="text-center py-4 text-muted small empty-notif-msg">
                                     <i class="bi bi-bell-slash text-secondary fs-3 d-block mb-1"></i>
-                                    No new orders yet
+                                    No recent orders yet
                                 </div>
                             </div>
-                            <div class="p-2 text-center bg-light border-top">
+                            <div class="p-2.5 text-center bg-light border-top">
                                 <a href="{% url 'restaurant_admin:order_records' restaurant_slug=rslug %}"
-                                    class="btn btn-sm btn-primary w-100 py-1 fw-semibold" style="font-size: 0.8rem;">
-                                    View All Orders & Records →
+                                    class="btn btn-sm btn-primary w-100 py-1.5 fw-semibold" style="font-size: 0.82rem;">
+                                    Go to Live Orders Desk <i class="bi bi-arrow-right ms-1"></i>
                                 </a>
                             </div>
                         </div>
                     </div>
+                    {% endif %}
                 </div>
             </div>
 
@@ -1353,6 +1481,7 @@
         </div>
 
         <!-- Global Real-Time Order Notification Engine -->
+        {% if not is_club_user and not is_kitchen_user and not is_hotel_user %}
         <script>
             (function () {
                 const pollUrl = "{% url 'restaurant_admin:order_notifications_poll' restaurant_slug=rslug %}";
@@ -1818,6 +1947,7 @@
                 });
             })();
         </script>
+        {% endif %}
 
         <script>
             window.CURRENT_RESTAURANT_SLUG = "{{ rslug|default:'' }}";

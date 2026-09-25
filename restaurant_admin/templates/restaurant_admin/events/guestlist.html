@@ -35,18 +35,22 @@
             </div>
 
             {% if selected_event %}
+            {% if not is_scanner %}
             <a href="{% url 'restaurant_admin:club_ticket_grid_event' restaurant_slug=rslug event_id=selected_event.id %}" class="btn btn-outline-primary rounded-pill px-3 shadow-sm">
                 <i class="fas fa-th me-1"></i> Ticket Sales Grid
             </a>
             <a href="{% url 'restaurant_admin:club_floor_plan_event' restaurant_slug=rslug event_id=selected_event.id %}" class="btn btn-outline-dark rounded-pill px-3 shadow-sm">
                 <i class="fas fa-th-large me-1 text-primary"></i> Visual Floor Plan
             </a>
+            {% endif %}
             <a href="{% url 'restaurant_admin:club_gate_scanner_event' restaurant_slug=rslug event_id=selected_event.id %}" class="btn btn-dark rounded-pill px-3 shadow-sm">
                 <i class="fas fa-qrcode me-1 text-warning"></i> Open Gate Scanner
             </a>
+            {% if can_issue_passes %}
             <button type="button" class="btn btn-primary rounded-pill px-3 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#manualBookingModal">
                 <i class="fas fa-user-plus me-1"></i> Add Manual / Door Pass
             </button>
+            {% endif %}
             {% endif %}
         </div>
     </div>
@@ -54,25 +58,27 @@
     {% if selected_event %}
     <!-- Event Quick Stats -->
     <div class="row g-3 mb-4">
-        <div class="col-6 col-md-3">
+        <div class="{% if not can_view_sales %}col-md-4{% else %}col-6 col-md-3{% endif %}">
             <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
                 <div class="text-muted small fw-semibold text-uppercase">Total Attendees</div>
                 <div class="fs-4 fw-bold text-dark mt-1">{{ total_confirmed_attendees }}</div>
             </div>
         </div>
-        <div class="col-6 col-md-3">
+        <div class="{% if not can_view_sales %}col-md-4{% else %}col-6 col-md-3{% endif %}">
             <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
                 <div class="text-muted small fw-semibold text-uppercase">Checked In at Gate</div>
                 <div class="fs-4 fw-bold text-success mt-1">{{ checked_in_count }}</div>
             </div>
         </div>
+        {% if can_view_sales %}
         <div class="col-6 col-md-3">
             <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
                 <div class="text-muted small fw-semibold text-uppercase">Total Sales</div>
                 <div class="fs-4 fw-bold text-warning mt-1">₹{{ total_sales_amount|floatformat:2 }}</div>
             </div>
         </div>
-        <div class="col-6 col-md-3">
+        {% endif %}
+        <div class="{% if not can_view_sales %}col-md-4{% else %}col-6 col-md-3{% endif %}">
             <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
                 <div class="text-muted small fw-semibold text-uppercase">Check-In Rate</div>
                 <div class="fs-4 fw-bold text-info mt-1">
@@ -97,7 +103,7 @@
                 <select name="tier" class="form-select form-select-sm bg-light border-0">
                     <option value="">All Ticket Tiers</option>
                     {% for tt in ticket_tiers %}
-                    <option value="{{ tt.id }}" {% if tier_filter == tt.id|stringformat:"d" %}selected{% endif %}>{{ tt.name }} (₹{{ tt.base_price|floatformat:0 }})</option>
+                    <option value="{{ tt.id }}" {% if tier_filter == tt.id|stringformat:"d" %}selected{% endif %}>{{ tt.name }}{% if can_view_sales %} (₹{{ tt.base_price|floatformat:0 }}){% endif %}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -124,10 +130,14 @@
                         <th class="ps-4">Booking Ref / Pass</th>
                         <th>Guest Details</th>
                         <th>Ticket Tier</th>
+                        {% if can_view_sales %}
                         <th>Table</th>
+                        {% endif %}
                         <th>Qty</th>
+                        {% if can_view_sales %}
                         <th>Total Paid</th>
                         <th>Payment</th>
+                        {% endif %}
                         <th>Gate Entry</th>
                         <th class="text-end pe-4">Action</th>
                     </tr>
@@ -141,15 +151,18 @@
                         </td>
                         <td>
                             <div class="fw-bold text-dark">{{ b.guest_name }}</div>
+                            {% if can_view_sales and b.guest_phone %}
                             <div class="small text-muted">
                                 <i class="fas fa-phone-alt me-1 opacity-50"></i>{{ b.guest_phone }}
                             </div>
+                            {% endif %}
                         </td>
                         <td>
                             <span class="badge bg-light text-dark border px-2 py-1">
                                 {{ b.ticket_type.name }}
                             </span>
                         </td>
+                        {% if can_view_sales %}
                         <td>
                             {% if b.assigned_table %}
                             <a href="{% url 'restaurant_admin:club_floor_plan_event' restaurant_slug=rslug event_id=selected_event.id %}" class="badge bg-primary-subtle text-primary border border-primary-subtle text-decoration-none px-2 py-1">
@@ -161,9 +174,11 @@
                             </a>
                             {% endif %}
                         </td>
+                        {% endif %}
                         <td>
                             <span class="badge bg-primary rounded-pill px-2">{{ b.quantity }}</span>
                         </td>
+                        {% if can_view_sales %}
                         <td>
                             <div class="fw-bold text-dark">₹{{ b.total_amount|floatformat:2 }}</div>
                             <small class="text-muted">{{ b.get_payment_method_display }}</small>
@@ -181,6 +196,7 @@
                             <span class="badge bg-secondary px-2 py-1 rounded-pill">{{ b.payment_status }}</span>
                             {% endif %}
                         </td>
+                        {% endif %}
                         <td>
                             {% if b.checked_in %}
                             <span class="badge bg-success text-white px-2 py-1 rounded-pill">
@@ -197,21 +213,30 @@
                         </td>
                         <td class="text-end pe-4">
                             {% if b.payment_status == 'SUCCESS' %}
-                            <form method="POST" action="{% url 'restaurant_admin:club_booking_toggle_checkin' restaurant_slug=rslug booking_id=b.id %}" class="d-inline">
-                                {% csrf_token %}
                                 {% if b.checked_in %}
-                                <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill py-1 px-2" title="Undo check-in">
-                                    <i class="fas fa-undo me-1"></i> Undo
-                                </button>
+                                    {% if can_undo_checkin %}
+                                    <form method="POST" action="{% url 'restaurant_admin:club_booking_toggle_checkin' restaurant_slug=rslug booking_id=b.id %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill py-1 px-2" title="Undo check-in">
+                                            <i class="fas fa-undo me-1"></i> Undo
+                                        </button>
+                                    </form>
+                                    {% else %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-pill fw-medium" title="Admitted">
+                                        <i class="fas fa-check-double me-1"></i> Admitted
+                                    </span>
+                                    {% endif %}
                                 {% else %}
-                                <button type="submit" class="btn btn-sm btn-success rounded-pill py-1 px-3 shadow-sm fw-bold">
-                                    <i class="fas fa-check me-1"></i> Check In
-                                </button>
+                                <form method="POST" action="{% url 'restaurant_admin:club_booking_toggle_checkin' restaurant_slug=rslug booking_id=b.id %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-success rounded-pill py-1 px-3 shadow-sm fw-bold">
+                                        <i class="fas fa-check me-1"></i> Check In
+                                    </button>
+                                </form>
                                 {% endif %}
-                            </form>
                             {% endif %}
 
-                            {% if b.booking_qr_code %}
+                            {% if can_view_qr and b.booking_qr_code %}
                             <button type="button" class="btn btn-sm btn-light rounded-circle p-2 ms-1" data-bs-toggle="modal" data-bs-target="#qrModal{{ b.id }}" title="View QR Pass">
                                 <i class="fas fa-qrcode text-primary"></i>
                             </button>
@@ -237,7 +262,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="8" class="text-center py-5 text-muted">
+                        <td colspan="{% if not can_view_sales %}6{% else %}9{% endif %}" class="text-center py-5 text-muted">
                             <i class="fas fa-users-slash fa-2x opacity-25 mb-2 d-block"></i>
                             No attendee bookings match the selected criteria.
                         </td>
@@ -248,6 +273,7 @@
         </div>
     </div>
 
+    {% if can_issue_passes %}
     <!-- Manual / Door Cash Booking Modal -->
     <div class="modal fade" id="manualBookingModal" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
@@ -317,6 +343,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
     {% else %}
     <div class="card border-0 shadow-sm rounded-4 text-center p-5 bg-white">
         <div class="py-4">

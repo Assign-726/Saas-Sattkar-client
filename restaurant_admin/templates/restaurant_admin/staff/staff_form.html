@@ -1,0 +1,474 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block title %}{% if is_edit %}Edit Staff Member - {{ target_user.username }}{% else %}Add New Staff Member{% endif %} - {{ restaurant.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .perm-card {
+        border: 1.5px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 12px 14px;
+        transition: all 0.2s ease;
+        background: #ffffff;
+    }
+    .perm-card:hover {
+        border-color: #cbd5e1;
+        background: #f8fafc;
+    }
+    .perm-switch-label {
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 0;
+        width: 100%;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 px-md-4 py-3" style="max-width: 900px;">
+
+    <!-- Back Button & Breadcrumb -->
+    <div class="mb-3">
+        <a href="{% url 'restaurant_admin:staff_list' restaurant_slug=rslug %}" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1">
+            <i class="bi bi-arrow-left"></i> Back to Staff Directory
+        </a>
+    </div>
+
+    <!-- Page Header -->
+    <div class="mb-4">
+        <h1 class="h3 fw-bold text-dark mb-1">
+            {% if is_edit %}Edit Staff: {{ target_user.username }}{% else %}Add New Staff Member{% endif %}
+        </h1>
+        <p class="text-muted small mb-0">
+            {% if is_edit %}
+            Modify operational roles, outlet assignments, and granular system permissions.
+            {% else %}
+            {% if is_club_user %}
+            Create a gate pass scanner account to verify digital tickets and passes at club entry gates.
+            {% elif is_hotel_user %}
+            Create a hotel front desk receptionist or housekeeping room attendant account.
+            {% else %}
+            Create a cashier, kitchen station, or waiter account with specific station permissions.
+            {% endif %}
+            {% endif %}
+        </p>
+    </div>
+
+    {% if errors.general %}
+    <div class="alert alert-danger shadow-sm border-0 d-flex align-items-center gap-2 mb-4">
+        <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+        <div>{{ errors.general }}</div>
+    </div>
+    {% endif %}
+
+    <!-- Staff Form Card -->
+    <form method="post" class="card border-0 shadow-sm" style="border-radius: 14px; overflow: hidden;">
+        {% csrf_token %}
+
+        <!-- Section 1: User Credentials -->
+        <div class="card-header bg-light py-3 border-bottom">
+            <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                <i class="bi bi-person-badge text-primary"></i> 1. Account Credentials & Personal Details
+            </h6>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-bold text-dark small">Username *</label>
+                    <input type="text" name="username" class="form-control {% if errors.username %}is-invalid{% endif %}"
+                           value="{{ form_data.username }}" placeholder="e.g. cashier_murlipura" required {% if is_edit %}readonly style="background-color: #f8fafc;"{% endif %}>
+                    {% if errors.username %}
+                    <div class="invalid-feedback">{{ errors.username }}</div>
+                    {% endif %}
+                    <div class="form-text fs-8 text-muted">Used by staff to log in at the POS or station terminal.</div>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-bold text-dark small">{% if is_edit %}Change Password (leave blank to keep){% else %}Password *{% endif %}</label>
+                    <input type="password" name="password" class="form-control {% if errors.password %}is-invalid{% endif %}"
+                           placeholder="••••••••" {% if not is_edit %}required{% endif %}>
+                    {% if errors.password %}
+                    <div class="invalid-feedback">{{ errors.password }}</div>
+                    {% endif %}
+                    <div class="form-text fs-8 text-muted">Minimum 6 characters.</div>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-bold text-dark small">First Name</label>
+                    <input type="text" name="first_name" class="form-control" value="{{ form_data.first_name }}" placeholder="e.g. Ramesh">
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-bold text-dark small">Last Name</label>
+                    <input type="text" name="last_name" class="form-control" value="{{ form_data.last_name }}" placeholder="e.g. Kumar">
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-bold text-dark small">Email Address</label>
+                    <input type="email" name="email" class="form-control {% if errors.email %}is-invalid{% endif %}"
+                           value="{{ form_data.email }}" placeholder="ramesh@example.com">
+                    {% if errors.email %}
+                    <div class="invalid-feedback">{{ errors.email }}</div>
+                    {% endif %}
+                    <div class="form-text fs-8 text-muted">Required only if Two-Factor Authentication (OTP) is turned ON.</div>
+                </div>
+
+                <div class="col-12 col-md-6" id="posPinWrapper">
+                    <label class="form-label fw-bold text-dark small">Quick POS PIN (Optional)</label>
+                    <input type="text" name="pos_pin" class="form-control font-monospace" maxlength="8"
+                           value="{{ form_data.pos_pin }}" placeholder="e.g. 1234">
+                    <div class="form-text fs-8 text-muted">4-6 digit numeric passcode for fast cashier switching on POS terminals.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 2: Role & Branch Assignment -->
+        <div class="card-header bg-light py-3 border-top border-bottom">
+            <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                <i class="bi bi-diagram-3 text-primary"></i> 2. Operational Sub-Role & Branch Assignment
+            </h6>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-bold text-dark small">Assigned Sub-Role *</label>
+                    <select name="role" class="form-select {% if errors.role %}is-invalid{% endif %}" required id="roleSelector">
+                        {% for r_val, r_lbl in allowed_roles %}
+                        <option value="{{ r_val }}" {% if form_data.role == r_val %}selected{% endif %}>{{ r_lbl }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if errors.role %}
+                    <div class="invalid-feedback">{{ errors.role }}</div>
+                    {% endif %}
+                    <div class="form-text fs-8 text-muted">Determines the user's primary interface and screen isolation.</div>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <label class="form-label fw-bold text-dark small">Assigned Branch Outlet</label>
+                    {% if is_gm and available_branches|length > 1 %}
+                    <select name="branch_id" class="form-select">
+                        <option value="">-- All Branches (Unrestricted) --</option>
+                        {% for b in available_branches %}
+                        <option value="{{ b.id }}" {% if form_data.branch_id == b.id|stringformat:"s" %}selected{% endif %}>
+                            {{ b.name }} ({{ b.city }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text fs-8 text-muted">Assign staff to a specific outlet or unrestricted across branches.</div>
+                    {% else %}
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-end-0"><i class="bi bi-geo-alt-fill text-primary"></i></span>
+                        <input type="text" class="form-control bg-light border-start-0 fw-semibold text-dark" value="{{ current_branch.name|default:current_restaurant.name }}" readonly>
+                        <input type="hidden" name="branch_id" value="{{ current_branch.id|default:'' }}">
+                    </div>
+                    <div class="form-text fs-8 text-muted">Staff member will be locked to operate strictly inside this outlet.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 3: Fine-Grained Operational Permissions -->
+        <div class="card-header bg-light py-3 border-top border-bottom">
+            <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                <i class="bi bi-shield-check text-primary"></i> 3. Granular Access Permissions
+            </h6>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-3">
+                <!-- Apply Discounts / Door Passes -->
+                <div class="col-12 col-md-6" id="permCard-discounts">
+                    <div class="perm-card">
+                        <label class="perm-switch-label">
+                            <div>
+                                <div class="fw-bold text-dark small perm-title">Can Apply Discounts</div>
+                                <div class="text-muted fs-8 perm-desc">Permit applying manual custom % or flat discounts on bills.</div>
+                            </div>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" name="can_apply_discounts" {% if form_data.can_apply_discounts %}checked{% endif %}>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Issue Refunds / Undo Check-in -->
+                <div class="col-12 col-md-6" id="permCard-refunds">
+                    <div class="perm-card">
+                        <label class="perm-switch-label">
+                            <div>
+                                <div class="fw-bold text-dark small perm-title">Can Issue Refunds / Credit Notes</div>
+                                <div class="text-muted fs-8 perm-desc">Permit cancelling active orders or issuing refund vouchers.</div>
+                            </div>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" name="can_issue_refunds" {% if form_data.can_issue_refunds %}checked{% endif %}>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Manage Menu / QR Codes -->
+                <div class="col-12 col-md-6" id="permCard-menu">
+                    <div class="perm-card">
+                        <label class="perm-switch-label">
+                            <div>
+                                <div class="fw-bold text-dark small perm-title">Can Manage Menu & Prices</div>
+                                <div class="text-muted fs-8 perm-desc">Permit editing dish base prices, categories, and item catalog.</div>
+                            </div>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" name="can_manage_menu" {% if form_data.can_manage_menu %}checked{% endif %}>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- View Analytics / Event Sales & Pricing -->
+                <div class="col-12 col-md-6" id="permCard-analytics">
+                    <div class="perm-card">
+                        <label class="perm-switch-label">
+                            <div>
+                                <div class="fw-bold text-dark small perm-title">Can View Sales Analytics</div>
+                                <div class="text-muted fs-8 perm-desc">Permit access to venue revenue, profit margins, and sales charts.</div>
+                            </div>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" name="can_view_analytics" {% if form_data.can_view_analytics %}checked{% endif %}>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- View Stock / Inventory -->
+                <div class="col-12 col-md-6" id="permCard-inventory">
+                    <div class="perm-card">
+                        <label class="perm-switch-label">
+                            <div>
+                                <div class="fw-bold text-dark small perm-title">Can Access Stock & Purchasing</div>
+                                <div class="text-muted fs-8 perm-desc">Permit viewing supplier costs, purchase register, and stock ledgers.</div>
+                            </div>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" name="can_view_inventory" {% if form_data.can_view_inventory %}checked{% endif %}>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Manage Settings -->
+                <div class="col-12 col-md-6" id="permCard-settings">
+                    <div class="perm-card">
+                        <label class="perm-switch-label">
+                            <div>
+                                <div class="fw-bold text-dark small perm-title">Can Edit Venue Settings</div>
+                                <div class="text-muted fs-8 perm-desc">Permit altering printer templates, taxes, and branch setup.</div>
+                            </div>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" name="can_manage_settings" {% if form_data.can_manage_settings %}checked{% endif %}>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 4: Security & Login Configuration -->
+        <div class="card-header bg-light py-3 border-top border-bottom">
+            <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                <i class="bi bi-lock text-primary"></i> 4. Security & Account Status
+            </h6>
+        </div>
+        <div class="card-body p-4">
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <div class="perm-card">
+                        <label class="perm-switch-label">
+                            <div>
+                                <div class="fw-bold text-dark small">Two-Factor Authentication (OTP)</div>
+                                <div class="text-muted fs-8">Require 6-digit email OTP on login (recommended OFF for cashiers/kitchen).</div>
+                            </div>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" name="is_2fa_enabled" {% if form_data.is_2fa_enabled %}checked{% endif %}>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                {% if is_edit %}
+                <div class="col-12 col-md-6">
+                    <div class="perm-card">
+                        <label class="perm-switch-label">
+                            <div>
+                                <div class="fw-bold text-dark small">Account Active Status</div>
+                                <div class="text-muted fs-8">Turn OFF to immediately disable terminal login for this staff member.</div>
+                            </div>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" name="is_active" {% if form_data.is_active %}checked{% endif %}>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Form Actions Footer -->
+        <div class="card-footer bg-white p-3 border-top d-flex justify-content-between align-items-center">
+            <a href="{% url 'restaurant_admin:staff_list' restaurant_slug=rslug %}" class="btn btn-light border px-4">
+                Cancel
+            </a>
+            <button type="submit" class="btn btn-primary px-4 fw-semibold shadow-sm">
+                <i class="bi bi-check-lg me-1"></i> {% if is_edit %}Save Changes{% else %}Create Staff Member{% endif %}
+            </button>
+        </div>
+    </form>
+
+</div>
+
+<script>
+function configureRoleForm(role) {
+    const cardDiscounts = document.getElementById('permCard-discounts');
+    const cardRefunds = document.getElementById('permCard-refunds');
+    const cardMenu = document.getElementById('permCard-menu');
+    const cardAnalytics = document.getElementById('permCard-analytics');
+    const cardInventory = document.getElementById('permCard-inventory');
+    const cardSettings = document.getElementById('permCard-settings');
+    const posPinWrapper = document.getElementById('posPinWrapper');
+
+    function setCardText(card, title, desc) {
+        if (!card) return;
+        const titleEl = card.querySelector('.perm-title');
+        const descEl = card.querySelector('.perm-desc');
+        if (titleEl) titleEl.textContent = title;
+        if (descEl) descEl.textContent = desc;
+    }
+
+    if (role === 'GATE_SCANNER') {
+        // Gate Scanner / Door Staff
+        if (posPinWrapper) posPinWrapper.style.display = 'none';
+
+        if (cardAnalytics) {
+            cardAnalytics.style.display = '';
+            setCardText(cardAnalytics, 'Can View Ticket Sales & Prices', 'Permit viewing total event revenue, sales cards, and ticket prices on the guestlist desk.');
+        }
+        if (cardRefunds) {
+            cardRefunds.style.display = '';
+            setCardText(cardRefunds, 'Can Undo Check-Ins', 'Permit undoing or reverting attendee check-in admissions at the gate.');
+        }
+        if (cardDiscounts) {
+            cardDiscounts.style.display = '';
+            setCardText(cardDiscounts, 'Can Issue Door / Walk-in Passes', 'Permit issuing walk-in door cash passes or complimentary tickets at the entrance.');
+        }
+        if (cardMenu) {
+            cardMenu.style.display = '';
+            setCardText(cardMenu, 'Can View Pass QR Codes', 'Permit viewing and inspecting attendee ticket QR passes and detailed tickets.');
+        }
+        if (cardInventory) cardInventory.style.display = 'none';
+        if (cardSettings) cardSettings.style.display = 'none';
+
+    } else if (role === 'KITCHEN') {
+        // Kitchen / KDS Station
+        if (posPinWrapper) posPinWrapper.style.display = 'none';
+
+        if (cardAnalytics) {
+            cardAnalytics.style.display = '';
+            setCardText(cardAnalytics, 'Can View Analytics & Reports', 'Permit viewing kitchen preparation reports, preparation time stats, and venue sales.');
+        }
+        if (cardInventory) {
+            cardInventory.style.display = '';
+            setCardText(cardInventory, 'Can Access Stock & Inventory', 'Permit viewing kitchen raw materials, stock ledgers, and inventory levels.');
+        }
+        if (cardMenu) {
+            cardMenu.style.display = '';
+            setCardText(cardMenu, 'Can Manage Menu Availability', 'Permit toggling 86\'d / out-of-stock items and updating dish availability.');
+        }
+        if (cardDiscounts) cardDiscounts.style.display = 'none';
+        if (cardRefunds) cardRefunds.style.display = 'none';
+        if (cardSettings) cardSettings.style.display = 'none';
+
+    } else if (role === 'WAITER') {
+        // Waiter / Captain
+        if (posPinWrapper) posPinWrapper.style.display = '';
+
+        if (cardDiscounts) {
+            cardDiscounts.style.display = '';
+            setCardText(cardDiscounts, 'Can Apply Table Discounts', 'Permit applying manual custom % or flat discounts on dining orders.');
+        }
+        if (cardMenu) {
+            cardMenu.style.display = '';
+            setCardText(cardMenu, 'Can View Menu & Prices', 'Permit viewing dining menu catalog, dish allergen notes, and base prices.');
+        }
+        if (cardAnalytics) {
+            cardAnalytics.style.display = '';
+            setCardText(cardAnalytics, 'Can View Sales & Tip Analytics', 'Permit viewing shift sales numbers and tip summaries.');
+        }
+        if (cardRefunds) cardRefunds.style.display = 'none';
+        if (cardInventory) cardInventory.style.display = 'none';
+        if (cardSettings) cardSettings.style.display = 'none';
+
+    } else if (role === 'CASHIER') {
+        // Cashier / Biller
+        if (posPinWrapper) posPinWrapper.style.display = '';
+
+        if (cardDiscounts) {
+            cardDiscounts.style.display = '';
+            setCardText(cardDiscounts, 'Can Apply Discounts', 'Permit applying manual custom % or flat discounts on bills.');
+        }
+        if (cardRefunds) {
+            cardRefunds.style.display = '';
+            setCardText(cardRefunds, 'Can Issue Refunds / Credit Notes', 'Permit cancelling active orders or issuing refund vouchers.');
+        }
+        if (cardMenu) {
+            cardMenu.style.display = '';
+            setCardText(cardMenu, 'Can Manage Menu & Prices', 'Permit editing dish base prices, categories, and item catalog.');
+        }
+        if (cardAnalytics) {
+            cardAnalytics.style.display = '';
+            setCardText(cardAnalytics, 'Can View Sales Analytics', 'Permit access to venue revenue, profit margins, and sales charts.');
+        }
+        if (cardInventory) {
+            cardInventory.style.display = '';
+            setCardText(cardInventory, 'Can Access Stock & Purchasing', 'Permit viewing supplier costs, purchase register, and stock ledgers.');
+        }
+        if (cardSettings) cardSettings.style.display = 'none';
+
+    } else {
+        // General Manager / Restaurant Admin
+        if (posPinWrapper) posPinWrapper.style.display = '';
+
+        if (cardDiscounts) {
+            cardDiscounts.style.display = '';
+            setCardText(cardDiscounts, 'Can Apply Discounts', 'Permit applying manual custom % or flat discounts on bills.');
+        }
+        if (cardRefunds) {
+            cardRefunds.style.display = '';
+            setCardText(cardRefunds, 'Can Issue Refunds / Credit Notes', 'Permit cancelling active orders or issuing refund vouchers.');
+        }
+        if (cardMenu) {
+            cardMenu.style.display = '';
+            setCardText(cardMenu, 'Can Manage Menu & Prices', 'Permit editing dish base prices, categories, and item catalog.');
+        }
+        if (cardAnalytics) {
+            cardAnalytics.style.display = '';
+            setCardText(cardAnalytics, 'Can View Sales Analytics', 'Permit access to venue revenue, profit margins, and sales charts.');
+        }
+        if (cardInventory) {
+            cardInventory.style.display = '';
+            setCardText(cardInventory, 'Can Access Stock & Purchasing', 'Permit viewing supplier costs, purchase register, and stock ledgers.');
+        }
+        if (cardSettings) {
+            cardSettings.style.display = '';
+            setCardText(cardSettings, 'Can Edit Venue Settings', 'Permit altering printer templates, taxes, and branch setup.');
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const roleSelector = document.getElementById('roleSelector');
+    if (roleSelector) {
+        configureRoleForm(roleSelector.value);
+        roleSelector.addEventListener('change', function() {
+            configureRoleForm(this.value);
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -138,6 +138,10 @@
         <i class="bi bi-wallet2"></i>
         <span>Ordering & Payments</span>
       </button>
+      <button type="button" class="settings-tab-btn" id="tab-btn-email" onclick="switchBranchSettingsTab('email')">
+        <i class="bi bi-envelope-at"></i>
+        <span>Email &amp; SMTP</span>
+      </button>
     </div>
 
     <!-- Main Settings Form Container -->
@@ -1149,6 +1153,138 @@
           </div>
         </div>
       </div>
+
+      <!-- ========================================== -->
+      <!-- TAB 6: BRANCH CUSTOM SMTP / EMAIL SETTINGS -->
+      <!-- ========================================== -->
+      <div id="pane-email" class="settings-tab-pane">
+        <div class="card border-0 shadow-sm mb-4">
+          <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+            <div>
+              <h5 class="card-title mb-0 fw-bold"><i class="bi bi-envelope-at me-2 text-danger"></i>Branch Outgoing Email &amp; SMTP Configuration</h5>
+              <div class="text-muted small mt-1">Configure branch-specific SMTP credentials (e.g. Gmail App Password) for digital bills, event passes, and branch staff security.</div>
+            </div>
+            {% if branch_form %}
+            <div class="form-check form-switch m-0 d-flex align-items-center gap-2">
+              {{ branch_form.email_is_active }}
+              <label class="form-check-label fw-bold small text-dark" for="{{ branch_form.email_is_active.id_for_label }}">
+                Enable Branch SMTP
+              </label>
+            </div>
+            {% endif %}
+          </div>
+          <div class="card-body p-4">
+            <!-- Information Alert -->
+            <div class="p-3 mb-4 rounded-3 border d-flex align-items-start gap-3 bg-light">
+              <div class="text-primary mt-1" style="font-size: 1.25rem;">
+                <i class="bi bi-info-circle-fill"></i>
+              </div>
+              <div class="small text-muted flex-grow-1">
+                <strong class="text-dark d-block mb-1">Independent Mailing &amp; Sender Isolation</strong>
+                When <strong class="text-dark">enabled</strong>, digital receipts, club event tickets, and dining confirmations for <strong>{{ branch.name }}</strong> are dispatched directly from this branch email account.
+                When <strong class="text-dark">disabled</strong>, emails seamlessly fall back to the Super Admin system email without breaking the application.
+              </div>
+            </div>
+
+            {% if branch_form %}
+            <div class="row g-3 mb-4">
+              <!-- Sender Display Name -->
+              <div class="col-md-6">
+                <label class="form-label fw-medium small">Sender Display Name</label>
+                {{ branch_form.email_sender_name }}
+                <div class="form-text small text-muted">The name customers see in their inbox (e.g., <em>{{ branch.name }}</em>)</div>
+              </div>
+
+              <!-- Sender Email -->
+              <div class="col-md-6">
+                <label class="form-label fw-medium small">SMTP Username / Sender Email</label>
+                {{ branch_form.email_host_user }}
+                <div class="form-text small text-muted">e.g. <code>branch.restaurant@gmail.com</code></div>
+              </div>
+
+              <!-- SMTP Password / App Password -->
+              <div class="col-md-6">
+                <label class="form-label fw-medium small">SMTP Password / Google App Password</label>
+                <div class="input-group">
+                  {{ branch_form.email_host_password }}
+                  <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('{{ branch_form.email_host_password.id_for_label }}');">
+                    <i class="bi bi-eye" id="toggle-icon-{{ branch_form.email_host_password.id_for_label }}"></i>
+                  </button>
+                </div>
+                <div class="form-text small text-muted">Generate a 16-character <strong>App Password</strong> in Google Account Security.</div>
+              </div>
+
+              <!-- Host & Port -->
+              <div class="col-md-4">
+                <label class="form-label fw-medium small">SMTP Host Server</label>
+                {{ branch_form.email_host }}
+                <div class="form-text small text-muted">Default: <code>smtp.gmail.com</code></div>
+              </div>
+
+              <div class="col-md-2">
+                <label class="form-label fw-medium small">Port</label>
+                {{ branch_form.email_port }}
+                <div class="form-text small text-muted">Default: <code>587</code></div>
+              </div>
+
+              <!-- Encryption Toggles -->
+              <div class="col-md-6">
+                <div class="p-3 bg-light rounded border d-flex align-items-center justify-content-between">
+                  <div>
+                    <strong class="d-block small text-dark">Use TLS Encryption</strong>
+                    <span class="text-muted" style="font-size: 11px;">Recommended for Port 587</span>
+                  </div>
+                  <div class="form-check form-switch m-0">
+                    {{ branch_form.email_use_tls }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="p-3 bg-light rounded border d-flex align-items-center justify-content-between">
+                  <div>
+                    <strong class="d-block small text-dark">Use SSL Encryption</strong>
+                    <span class="text-muted" style="font-size: 11px;">Required for Port 465</span>
+                  </div>
+                  <div class="form-check form-switch m-0">
+                    {{ branch_form.email_use_ssl }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Test Email Dispatcher -->
+            <div class="p-3 border rounded bg-white mt-3">
+              <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-2">
+                <div>
+                  <h6 class="fw-bold mb-1 text-dark"><i class="bi bi-send-check text-primary me-2"></i>Test Outgoing Email Connection</h6>
+                  <p class="text-muted small mb-0">Verify your Google App Password and SMTP handshake before saving.</p>
+                </div>
+              </div>
+              <div class="row g-2 align-items-center mt-1">
+                <div class="col-md-6">
+                  <input type="email" id="branchTestRecipient" class="form-control form-control-sm" placeholder="Enter recipient email (e.g. your personal email)" value="{{ request.user.email|default:'' }}">
+                </div>
+                <div class="col-md-auto">
+                  <button type="button" class="btn btn-outline-primary btn-sm px-3 fw-semibold rounded-pill" id="btnBranchTestEmail" onclick="sendBranchTestEmail();">
+                    <i class="bi bi-send me-1"></i> Send Test Email
+                  </button>
+                </div>
+              </div>
+              <div id="branchTestEmailResult" class="mt-3" style="display: none;"></div>
+            </div>
+            {% else %}
+            <div class="alert alert-warning">Please select a branch to configure custom email credentials.</div>
+            {% endif %}
+
+            <div class="d-flex justify-content-end mt-4 pt-3 border-top">
+              <button type="submit" class="btn btn-primary px-4 fw-semibold">
+                <i class="bi bi-check2-circle me-1"></i> Save Branch Email Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </form>
   </div>
 </div>
@@ -1289,7 +1425,7 @@
     }
   }
 
-  const initialErrorTab = "{% if form.bill_template.errors or form.kot_template.errors %}printing{% elif form.enable_customer_ordering.errors or form.enable_pay_at_counter.errors or form.enable_online_payment.errors or form.razorpay_key_id.errors or form.razorpay_key_secret.errors or form.notification_sound.errors or branch_form.opening_time.errors or branch_form.closing_time.errors %}ordering{% elif form.cgst_percentage.errors or form.sgst_percentage.errors or form.service_charge_percentage.errors or branch_form.fssai_license_no.errors or branch_form.vat_tin.errors or branch_form.excise_license_no.errors %}tax{% endif %}";
+  const initialErrorTab = "{% if form.bill_template.errors or form.kot_template.errors %}printing{% elif branch_form.email_host_user.errors or branch_form.email_host_password.errors or branch_form.email_host.errors or branch_form.email_port.errors %}email{% elif form.enable_customer_ordering.errors or form.enable_pay_at_counter.errors or form.enable_online_payment.errors or form.razorpay_key_id.errors or form.razorpay_key_secret.errors or form.notification_sound.errors or branch_form.opening_time.errors or branch_form.closing_time.errors %}ordering{% elif form.cgst_percentage.errors or form.sgst_percentage.errors or form.service_charge_percentage.errors or branch_form.fssai_license_no.errors or branch_form.vat_tin.errors or branch_form.excise_license_no.errors %}tax{% endif %}";
 
   let settingsTallyEngine = null;
   let chargeModalTallyEngine = null;
@@ -1616,6 +1752,100 @@
         }
       }
     }
+  }
+
+  function togglePasswordVisibility(fieldId) {
+    const input = document.getElementById(fieldId);
+    const icon = document.getElementById('toggle-icon-' + fieldId);
+    if (!input) return;
+    if (input.type === 'password') {
+      input.type = 'text';
+      if (icon) {
+        icon.classList.remove('bi-eye');
+        icon.classList.add('bi-eye-slash');
+      }
+    } else {
+      input.type = 'password';
+      if (icon) {
+        icon.classList.remove('bi-eye-slash');
+        icon.classList.add('bi-eye');
+      }
+    }
+  }
+
+  function sendBranchTestEmail() {
+    const btn = document.getElementById('btnBranchTestEmail');
+    const resDiv = document.getElementById('branchTestEmailResult');
+    const recipientInput = document.getElementById('branchTestRecipient');
+    const recipient = recipientInput ? recipientInput.value.trim() : '';
+
+    const senderNameInput = document.getElementById('id_email_sender_name');
+    const hostUserInput = document.getElementById('id_email_host_user');
+    const hostPasswordInput = document.getElementById('id_email_host_password');
+    const hostInput = document.getElementById('id_email_host');
+    const portInput = document.getElementById('id_email_port');
+    const useTlsInput = document.getElementById('id_email_use_tls');
+    const useSslInput = document.getElementById('id_email_use_ssl');
+
+    const senderName = senderNameInput ? senderNameInput.value.trim() : '';
+    const hostUser = hostUserInput ? hostUserInput.value.trim() : '';
+    const hostPassword = hostPasswordInput ? hostPasswordInput.value.trim() : '';
+    const host = hostInput ? hostInput.value.trim() : 'smtp.gmail.com';
+    const port = portInput ? portInput.value.trim() : '587';
+    const useTls = useTlsInput ? useTlsInput.checked : true;
+    const useSsl = useSslInput ? useSslInput.checked : false;
+
+    if (!hostUser || !hostPassword) {
+      resDiv.style.display = 'block';
+      resDiv.innerHTML = '<div class="alert alert-warning py-2 px-3 small mb-0"><i class="bi bi-exclamation-triangle me-1"></i> Please enter both SMTP Username (Email) and Password (App Password) before testing.</div>';
+      return;
+    }
+
+    if (!recipient) {
+      resDiv.style.display = 'block';
+      resDiv.innerHTML = '<div class="alert alert-warning py-2 px-3 small mb-0"><i class="bi bi-exclamation-triangle me-1"></i> Please specify a test recipient email address.</div>';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span> Connecting...';
+    resDiv.style.display = 'block';
+    resDiv.innerHTML = '<div class="alert alert-info py-2 px-3 small mb-0"><i class="bi bi-arrow-repeat spin me-1"></i> Establishing SMTP connection and sending test email...</div>';
+
+    const formData = new FormData();
+    formData.append('email_host', host);
+    formData.append('email_port', port);
+    formData.append('email_host_user', hostUser);
+    formData.append('email_host_password', hostPassword);
+    formData.append('email_use_tls', useTls);
+    formData.append('email_use_ssl', useSsl);
+    formData.append('email_sender_name', senderName);
+    formData.append('test_recipient', recipient);
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]') ? document.querySelector('[name=csrfmiddlewaretoken]').value : '';
+
+    fetch("{% url 'restaurant_admin:test_email' restaurant_slug=rslug %}", {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrfToken
+      },
+      body: formData
+    })
+    .then(response => response.json().then(data => ({ status: response.status, body: data })))
+    .then(({ status, body }) => {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-send me-1"></i> Send Test Email';
+      if (body.success) {
+        resDiv.innerHTML = `<div class="alert alert-success py-2 px-3 small mb-0"><i class="bi bi-check-circle-fill me-1"></i> <strong>Success!</strong> ${body.message}</div>`;
+      } else {
+        resDiv.innerHTML = `<div class="alert alert-danger py-2 px-3 small mb-0"><i class="bi bi-x-circle-fill me-1"></i> <strong>Failed:</strong> ${body.message}</div>`;
+      }
+    })
+    .catch(err => {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-send me-1"></i> Send Test Email';
+      resDiv.innerHTML = `<div class="alert alert-danger py-2 px-3 small mb-0"><i class="bi bi-exclamation-triangle me-1"></i> Network error: ${err.message}</div>`;
+    });
   }
 </script>
 {% endblock %}

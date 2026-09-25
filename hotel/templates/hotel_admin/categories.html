@@ -2,76 +2,379 @@
 
 {% block title %}Room Categories & Tariffs{% endblock %}
 
+{% block extra_css %}
+<style>
+/* Modal Viewport Fit & Pinning (Guarantees footer is always visible at 100% zoom) */
+#addCategoryModal .modal-dialog {
+    max-height: 90vh !important;
+    margin: 1.5rem auto !important;
+}
+#addCategoryModal .modal-content {
+    max-height: 90vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    border-radius: 1rem !important;
+}
+#addCategoryModal form {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    max-height: 90vh !important;
+    overflow: hidden !important;
+}
+#addCategoryModal .modal-header {
+    flex-shrink: 0 !important;
+    padding: 0.85rem 1.4rem !important;
+}
+#addCategoryModal .modal-body {
+    flex: 1 1 auto !important;
+    overflow-y: auto !important;
+    max-height: calc(90vh - 140px) !important;
+    padding: 1.15rem 1.4rem !important;
+}
+#addCategoryModal .modal-footer {
+    flex-shrink: 0 !important;
+    padding: 0.75rem 1.4rem !important;
+    background: #ffffff !important;
+    border-top: 1px solid #e2e8f0 !important;
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 1055 !important;
+}
+
+/* Card & Banner Consistency */
+.cat-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border-radius: 0.95rem;
+    overflow: hidden;
+    background: #ffffff;
+}
+.cat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.07) !important;
+}
+.cat-img-box {
+    position: relative !important;
+    height: 145px !important;
+    max-height: 145px !important;
+    width: 100% !important;
+    background: #0f172a !important;
+    overflow: hidden !important;
+}
+.cat-img-box img {
+    width: 100% !important;
+    height: 145px !important;
+    max-height: 145px !important;
+    object-fit: cover !important;
+    display: block !important;
+    transition: transform 0.3s ease;
+}
+.cat-card:hover .cat-img-box img {
+    transform: scale(1.03);
+}
+.cat-overlay-badges {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+    z-index: 2;
+}
+.cat-overlay-badges .badge {
+    pointer-events: auto;
+}
+
+/* Modal Nav Tabs (Streamlined to 3) */
+.nav-pills-modern {
+    background: #f1f5f9;
+    padding: 0.3rem;
+    border-radius: 0.75rem;
+}
+.nav-pills-modern .nav-link {
+    color: #475569;
+    font-weight: 600;
+    font-size: 0.83rem;
+    padding: 0.45rem 0.95rem;
+    border-radius: 0.55rem;
+    border: none;
+    background: transparent;
+    transition: all 0.2s ease;
+}
+.nav-pills-modern .nav-link.active {
+    background: #0f172a;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(15,23,42,0.18);
+}
+.nav-pills-modern .nav-link i {
+    margin-right: 0.4rem;
+}
+
+/* Media Sub-navigation buttons */
+.media-subnav-btn {
+    font-size: 0.78rem;
+    padding: 0.32rem 0.65rem;
+    border-radius: 0.5rem;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #334155;
+    font-weight: 600;
+    transition: all 0.15s ease;
+}
+.media-subnav-btn.active {
+    background: #2563eb;
+    color: #ffffff;
+    border-color: #2563eb;
+}
+
+/* Chips & Mini controls */
+.quick-chip {
+    cursor: pointer;
+    font-size: 0.74rem;
+    padding: 0.26rem 0.55rem;
+    border-radius: 2rem;
+    border: 1px dashed #cbd5e1;
+    background: #f8fafc;
+    color: #334155;
+    transition: all 0.15s ease;
+    display: inline-block;
+}
+.quick-chip:hover {
+    background: #e2e8f0;
+    border-color: #94a3b8;
+    color: #0f172a;
+}
+
+/* Compact Media Tile Card in Gallery */
+.media-tile {
+    position: relative;
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    overflow: hidden;
+    padding: 0.35rem;
+    transition: all 0.15s ease;
+}
+.media-tile:hover {
+    border-color: #94a3b8;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.media-tile-thumb {
+    width: 100%;
+    height: 72px;
+    object-fit: cover;
+    display: block;
+    border-radius: 0.35rem;
+    background: #0f172a;
+}
+.media-tile-vid {
+    width: 100%;
+    height: 72px;
+    background: #0f172a;
+    color: #ef4444;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    border-radius: 0.35rem;
+}
+.media-tile-del {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.62rem;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.95);
+    color: #ffffff;
+    border: none;
+    z-index: 2;
+}
+
+/* Price breakdown */
+.price-breakdown-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    padding: 0.85rem;
+}
+</style>
+{% endblock %}
+
 {% block content %}
+<!-- Fail-safe inline styles to guarantee cards never stretch -->
+<style>
+.cat-img-box { position: relative !important; height: 145px !important; max-height: 145px !important; width: 100% !important; background: #0f172a !important; overflow: hidden !important; }
+.cat-img-box img { width: 100% !important; height: 145px !important; max-height: 145px !important; object-fit: cover !important; display: block !important; }
+</style>
+
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
     <div>
         <h4 class="fw-bold mb-1 text-dark">Room Categories &amp; Tariffs</h4>
-        <p class="text-muted small mb-0">Configure room types, standard night tariffs, occupancy limits, and amenities</p>
+        <p class="text-muted small mb-0">Configure room types, pricing, tax-inclusive tariffs, WebP media gallery, videos, and banner highlights</p>
     </div>
     <div>
-        <button type="button" class="btn btn-pms-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#addCategoryModal">
-            <i class="fa-solid fa-plus"></i>
+        <button type="button" class="btn btn-pms-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#addCategoryModal" onclick="openNewCategoryModal()">
+            <i class="fa-solid fa-plus me-1"></i>
             <span>Add New Category</span>
         </button>
     </div>
 </div>
 
-<div class="row g-4">
+<div class="row g-3">
     {% for c in categories %}
     <div class="col-md-6 col-xl-4">
-        <div class="pms-card h-100 d-flex flex-column border">
-            <div class="pms-card-header bg-white">
-                <div>
-                    <h5 class="fw-bold text-dark mb-0">{{ c.name }}</h5>
-                    <small class="text-muted">{{ c.bed_type }} &bull; {{ c.room_size_sqft|default:350 }} sq ft</small>
-                </div>
-                <div class="text-end">
-                    <span class="fs-5 fw-bold text-primary font-mono">₹{{ c.base_price_per_night }}</span>
-                    <small class="text-muted d-block" style="font-size: 0.72rem;">per night</small>
+        <div class="pms-card cat-card h-100 d-flex flex-column border">
+            <!-- Compact 145px Locked Banner / Cover Photo -->
+            <div class="cat-img-box" style="height: 145px !important; max-height: 145px !important; width: 100% !important; position: relative !important; overflow: hidden !important;">
+                <img src="{{ c.effective_image_url }}" alt="{{ c.name }}" loading="lazy" style="height: 145px !important; width: 100% !important; object-fit: cover !important;">
+                <div class="cat-overlay-badges">
+                    <div>
+                        {% if c.show_on_banner %}
+                        <span class="badge bg-warning text-dark fw-bold shadow-sm" style="font-size: 0.7rem;" title="Featured on Banner">
+                            <i class="fa-solid fa-crown me-1 text-danger"></i>{{ c.banner_badge_text|default:"Banner Feature" }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <div class="d-flex gap-1">
+                        {% if c.all_images_list|length > 0 %}
+                        <span class="badge bg-dark bg-opacity-75 text-white shadow-sm" style="font-size: 0.7rem;" title="Photos">
+                            <i class="fa-solid fa-images me-1"></i>{{ c.all_images_list|length }}
+                        </span>
+                        {% endif %}
+                        {% if c.video_links_list|length > 0 %}
+                        <span class="badge bg-danger bg-opacity-90 text-white shadow-sm" style="font-size: 0.7rem;" title="Videos">
+                            <i class="fa-solid fa-video me-1"></i>{{ c.video_links_list|length }}
+                        </span>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
-            <div class="pms-card-body flex-grow-1">
+
+            <!-- Card Header -->
+            <div class="pms-card-header bg-white pb-2 border-bottom-0 pt-2.5">
+                <div class="w-100">
+                    <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+                        <div>
+                            <h6 class="fw-bold text-dark mb-0 fs-6">{{ c.name }}</h6>
+                            <small class="text-muted" style="font-size: 0.78rem;">{{ c.bed_type }} &bull; {{ c.room_size_sqft|default:350 }} sq ft</small>
+                        </div>
+                        <div class="text-end">
+                            {% if c.original_price_per_night and c.original_price_per_night > c.base_price_per_night %}
+                            <div class="d-flex align-items-center justify-content-end gap-1 mb-0.5">
+                                <span class="text-muted text-decoration-line-through font-mono" style="font-size: 0.74rem;">₹{{ c.original_price_per_night }}</span>
+                                <span class="badge bg-success-subtle text-success border border-success-subtle px-1 py-0.5" style="font-size: 0.65rem;">{{ c.discount_percent }}% OFF</span>
+                            </div>
+                            {% endif %}
+                            <span class="fs-5 fw-bold text-primary font-mono">₹{{ c.base_price_per_night }}</span>
+                            <small class="text-muted d-block" style="font-size: 0.7rem;">per night</small>
+                            {% if c.price_is_tax_inclusive %}
+                            <span class="badge bg-info-subtle text-info border border-info-subtle px-1.5 py-0.5 mt-0.5" style="font-size: 0.65rem;">
+                                <i class="fa-solid fa-circle-check me-0.5"></i>Tax Inclusive
+                            </span>
+                            {% else %}
+                            <span class="badge bg-light text-secondary border px-1.5 py-0.5 mt-0.5" style="font-size: 0.65rem;">
+                                + GST Taxes
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card Body -->
+            <div class="pms-card-body flex-grow-1 pt-0">
                 {% if c.description %}
-                <p class="text-muted small mb-3">{{ c.description|truncatewords:20 }}</p>
+                <p class="text-muted small mb-2.5" style="font-size: 0.78rem; line-height: 1.35;">{{ c.description|truncatewords:16 }}</p>
                 {% endif %}
 
-                <div class="d-flex align-items-center gap-3 mb-3 p-2.5 bg-light rounded-3 text-center" style="font-size: 0.78rem;">
+                <div class="d-flex align-items-center gap-2 mb-2.5 p-2 bg-light rounded-3 text-center" style="font-size: 0.76rem;">
                     <div class="flex-fill border-end">
-                        <span class="text-muted d-block" style="font-size: 0.7rem;">Max Guests</span>
+                        <span class="text-muted d-block" style="font-size: 0.68rem;">Max Guests</span>
                         <strong class="text-dark font-mono">{{ c.max_occupancy }}</strong>
                     </div>
                     <div class="flex-fill border-end">
-                        <span class="text-muted d-block" style="font-size: 0.7rem;">Adults / Kids</span>
+                        <span class="text-muted d-block" style="font-size: 0.68rem;">Adults / Kids</span>
                         <strong class="text-dark font-mono">{{ c.max_adults }} / {{ c.max_children }}</strong>
                     </div>
                     <div class="flex-fill">
-                        <span class="text-muted d-block" style="font-size: 0.7rem;">Inventory</span>
+                        <span class="text-muted d-block" style="font-size: 0.68rem;">Inventory</span>
                         <strong class="text-primary font-mono">{{ c.rooms.count }} units</strong>
                     </div>
                 </div>
 
+                <!-- Amenities badges -->
                 <div class="mb-2">
-                    <span class="text-muted small fw-semibold d-block mb-1.5">Amenities:</span>
-                    <div class="d-flex flex-wrap gap-1.5">
-                        {% for a in c.amenities %}
-                        <span class="badge bg-light text-secondary border px-2 py-1" style="font-size: 0.72rem;">{{ a }}</span>
+                    <span class="text-muted small fw-semibold d-block mb-1" style="font-size: 0.72rem;">Amenities:</span>
+                    <div class="d-flex flex-wrap gap-1">
+                        {% for a in c.amenities|slice:":4" %}
+                        <span class="badge bg-light text-secondary border px-1.5 py-1" style="font-size: 0.7rem;">{{ a }}</span>
                         {% empty %}
-                        <span class="text-muted small">No amenities listed</span>
+                        <span class="text-muted small" style="font-size: 0.7rem;">No amenities listed</span>
+                        {% endfor %}
+                        {% if c.amenities|length > 4 %}
+                        <span class="badge bg-light text-muted border px-1.5 py-1" style="font-size: 0.7rem;">+{{ c.amenities|length|add:"-4" }} more</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Compact Media Assets Bar -->
+                {% if c.images.all|length > 0 or c.video_links_list|length > 0 %}
+                <div class="pt-2 border-top mt-2">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <small class="text-muted fw-semibold" style="font-size: 0.72rem;">Media Assets (Max 10)</small>
+                        <small class="text-muted" style="font-size: 0.72rem;">{{ c.images.count|add:c.video_links_list|length }} / 10 items</small>
+                    </div>
+                    <div class="d-flex gap-1 overflow-hidden">
+                        {% for img in c.images.all|slice:":4" %}
+                        <img src="{{ img.effective_url }}" alt="thumb" class="rounded" style="width: 40px; height: 28px; object-fit: cover; border: 1px solid #cbd5e1;">
+                        {% endfor %}
+                        {% for vid in c.video_links_list|slice:":2" %}
+                        <div class="rounded bg-danger bg-opacity-10 text-danger border border-danger-subtle d-flex align-items-center justify-content-center" style="width: 40px; height: 28px; font-size: 0.7rem;" title="{{ vid.title }}">
+                            <i class="fa-solid fa-play"></i>
+                        </div>
                         {% endfor %}
                     </div>
                 </div>
+                {% endif %}
             </div>
-            <div class="p-3 border-top bg-light d-flex align-items-center justify-content-between">
-                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">Active Tariff</span>
-                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 fw-semibold"
+
+            <!-- Footer -->
+            <div class="p-2.5 border-top bg-light d-flex align-items-center justify-content-between">
+                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1" style="font-size: 0.7rem;">Active Tariff</span>
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 fw-semibold" style="font-size: 0.78rem;"
                     data-id="{{ c.id }}"
                     data-name="{{ c.name|escape }}"
                     data-price="{{ c.base_price_per_night }}"
+                    data-orig-price="{{ c.original_price_per_night|default:'' }}"
+                    data-tax-inc="{% if c.price_is_tax_inclusive %}1{% else %}0{% endif %}"
+                    data-custom-tax="{{ c.custom_tax_rate|default:'' }}"
+                    data-show-banner="{% if c.show_on_banner %}1{% else %}0{% endif %}"
+                    data-banner-badge="{{ c.banner_badge_text|default:''|escape }}"
+                    data-cover-url="{{ c.cover_image_url|default:''|escape }}"
+                    data-cover-img="{% if c.cover_image %}{{ c.cover_image.url }}{% endif %}"
                     data-occ="{{ c.max_occupancy }}"
+                    data-adults="{{ c.max_adults }}"
+                    data-children="{{ c.max_children }}"
                     data-bed="{{ c.bed_type }}"
                     data-size="{{ c.room_size_sqft|default:'' }}"
                     data-desc="{{ c.description|default:''|escape }}"
                     data-amenities="{{ c.amenities|join:', '|escape }}"
+                    data-videos='{{ c.video_links_list|safe }}'
+                    data-images='[
+                        {% for img in c.images.all %}
+                        {"id": {{ img.id }}, "url": "{{ img.effective_url|escapejs }}", "caption": "{{ img.caption|default:''|escapejs }}"}{% if not forloop.last %},{% endif %}
+                        {% endfor %}
+                    ]'
                     onclick="handleEditCategory(this)">
                     <i class="fa-solid fa-pen-to-square me-1"></i>Edit Category
                 </button>
@@ -84,7 +387,7 @@
             <i class="fa-solid fa-tags fs-1 mb-2 d-block opacity-25"></i>
             <h5>No Room Categories Configured Yet</h5>
             <p class="small mb-3">Add categories like "Deluxe Suite", "Executive Room", or "Royal Villa" to begin assigning rooms.</p>
-            <button type="button" class="btn btn-pms-primary" data-bs-toggle="modal" data-bs-target="#addCategoryModal">
+            <button type="button" class="btn btn-pms-primary" data-bs-toggle="modal" data-bs-target="#addCategoryModal" onclick="openNewCategoryModal()">
                 <i class="fa-solid fa-plus me-1"></i>Add First Category
             </button>
         </div>
@@ -94,50 +397,355 @@
 
 <!-- Modal: Add / Edit Category -->
 <div class="modal fade" id="addCategoryModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
-            <form method="POST" action="{% url 'hotel_admin:category_create_edit' restaurant_slug=rslug %}">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg overflow-hidden">
+            <form method="POST" action="{% url 'hotel_admin:category_create_edit' restaurant_slug=rslug %}" enctype="multipart/form-data" id="catForm">
                 {% csrf_token %}
                 <input type="hidden" name="category_id" id="catFormId">
-                <div class="modal-header bg-dark text-white px-4 py-3">
-                    <h5 class="modal-title fw-bold text-white mb-0" id="catModalTitle"><i class="fa-solid fa-tags text-primary me-2"></i>Add Room Category</h5>
+
+                <!-- Sticky Header -->
+                <div class="modal-header bg-dark text-white px-4 py-2.5">
+                    <h5 class="modal-title fw-bold text-white mb-0 fs-6" id="catModalTitle">
+                        <i class="fa-solid fa-tags text-primary me-2"></i>Add Room Category
+                    </h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body p-4 bg-light">
-                    <div class="row g-3">
-                        <div class="col-md-7">
-                            <label class="form-label small fw-semibold">Category Name *</label>
-                            <input type="text" name="name" id="catFormName" class="form-control" placeholder="e.g. Executive Deluxe Suite" required>
+
+                <!-- Navigation: Clean 3 Tabs -->
+                <div class="bg-light px-4 pt-2.5 pb-2 border-bottom flex-shrink-0">
+                    <ul class="nav nav-pills nav-pills-modern gap-1" id="catTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="tab-specs-btn" data-bs-toggle="pill" data-bs-target="#tab-specs" type="button" role="tab">
+                                <i class="fa-solid fa-hotel"></i>Basic Info &amp; Specs
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="tab-pricing-btn" data-bs-toggle="pill" data-bs-target="#tab-pricing" type="button" role="tab">
+                                <i class="fa-solid fa-calculator"></i>Pricing, Tax &amp; Banner
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="tab-media-btn" data-bs-toggle="pill" data-bs-target="#tab-media" type="button" role="tab">
+                                <i class="fa-solid fa-photo-film"></i>Media &amp; Assets (Max 10)
+                                <span class="badge bg-primary ms-1" id="tabMediaBadge">0/10</span>
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Scrollable Body (Max 80vh to guarantee footer is ALWAYS visible) -->
+                <div class="modal-body p-3 bg-light">
+                    <div class="tab-content" id="catTabContent">
+
+                        <!-- TAB 1: BASIC SPECS -->
+                        <div class="tab-pane fade show active" id="tab-specs" role="tabpanel">
+                            <div class="card border-0 shadow-sm rounded-3 p-3 bg-white">
+                                <div class="row g-2.5">
+                                    <div class="col-md-7">
+                                        <label class="form-label small fw-semibold mb-1">Category Name *</label>
+                                        <input type="text" name="name" id="catFormName" class="form-control form-control-sm" placeholder="e.g. Executive Deluxe Suite" required>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <label class="form-label small fw-semibold mb-1">Bed Configuration</label>
+                                        <input type="text" name="bed_type" id="catFormBed" class="form-control form-control-sm" value="King Bed" placeholder="e.g. 1 King Bed or 2 Twins">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-semibold mb-1">Max Total Occupancy</label>
+                                        <input type="number" name="max_occupancy" id="catFormOcc" class="form-control form-control-sm" value="2" min="1" max="20">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-semibold mb-1">Max Adults</label>
+                                        <input type="number" name="max_adults" id="catFormAdults" class="form-control form-control-sm" value="2" min="1" max="15">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-semibold mb-1">Max Children</label>
+                                        <input type="number" name="max_children" id="catFormChildren" class="form-control form-control-sm" value="1" min="0" max="10">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-semibold mb-1">Room Size (Sq Ft)</label>
+                                        <input type="number" name="room_size_sqft" id="catFormSize" class="form-control form-control-sm" value="350">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label small fw-semibold mb-1">Amenities (Comma-separated)</label>
+                                        <input type="text" name="amenities" id="catFormAmenities" class="form-control form-control-sm" placeholder="e.g. High-Speed Wi-Fi, AC, Mini Bar, Balcony View, Room Service">
+                                        <div class="mt-1.5">
+                                            <span class="text-muted small me-1">Quick Add:</span>
+                                            <span class="quick-chip" onclick="addAmenity('High-Speed Wi-Fi')">+ Wi-Fi</span>
+                                            <span class="quick-chip" onclick="addAmenity('Air Conditioning')">+ AC</span>
+                                            <span class="quick-chip" onclick="addAmenity('Smart TV')">+ Smart TV</span>
+                                            <span class="quick-chip" onclick="addAmenity('Mini Bar')">+ Mini Bar</span>
+                                            <span class="quick-chip" onclick="addAmenity('Balcony View')">+ Balcony</span>
+                                            <span class="quick-chip" onclick="addAmenity('Jacuzzi / Bathtub')">+ Jacuzzi</span>
+                                            <span class="quick-chip" onclick="addAmenity('Complimentary Breakfast')">+ Breakfast</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label small fw-semibold mb-1">Description</label>
+                                        <textarea name="description" id="catFormDesc" class="form-control form-control-sm" rows="2" placeholder="Brief summary of room highlights and comforts"></textarea>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-5">
-                            <label class="form-label small fw-semibold">Base Price per Night (₹) *</label>
-                            <input type="number" step="0.01" name="base_price_per_night" id="catFormPrice" class="form-control" placeholder="e.g. 4500.00" required>
+
+                        <!-- TAB 2: PRICING, TAX & BANNER -->
+                        <div class="tab-pane fade" id="tab-pricing" role="tabpanel">
+                            <div class="row g-2.5">
+                                <!-- Price & Tax Setting Box -->
+                                <div class="col-md-7">
+                                    <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+                                        <h6 class="fw-bold text-dark mb-2.5 fs-6"><i class="fa-solid fa-indian-rupee-sign text-primary me-1.5"></i>Tariff &amp; Tax Structure</h6>
+
+                                        <div class="row g-2 mb-2.5">
+                                            <div class="col-md-6">
+                                                <label class="form-label small fw-semibold mb-1">Base Price per Night (₹) *</label>
+                                                <div class="input-group input-group-sm">
+                                                    <span class="input-group-text bg-light">₹</span>
+                                                    <input type="number" step="0.01" name="base_price_per_night" id="catFormPrice" class="form-control fw-bold" placeholder="4500.00" required oninput="calculatePricePreview()">
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label small fw-semibold mb-1">Original / Rack Rate (₹)</label>
+                                                <div class="input-group input-group-sm">
+                                                    <span class="input-group-text bg-light">₹</span>
+                                                    <input type="number" step="0.01" name="original_price_per_night" id="catFormOrigPrice" class="form-control" placeholder="6000.00" oninput="calculatePricePreview()">
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Tax Inclusive Toggle -->
+                                        <div class="p-2.5 bg-light rounded-3 mb-2.5 border">
+                                            <div class="form-check form-switch mb-0.5">
+                                                <input class="form-check-input" type="checkbox" role="switch" name="price_is_tax_inclusive" id="catFormTaxInc" onchange="calculatePricePreview()">
+                                                <label class="form-check-label fw-bold text-dark small" for="catFormTaxInc">
+                                                    Price is Tax Inclusive
+                                                </label>
+                                            </div>
+                                            <div class="text-muted" style="font-size: 0.72rem;">
+                                                Base tariff already includes all GST/taxes. If disabled, GST is added at checkout.
+                                            </div>
+                                        </div>
+
+                                        <!-- Custom Tax % override -->
+                                        <div class="row g-2 align-items-center mb-2.5">
+                                            <div class="col-sm-6">
+                                                <label class="form-label small fw-semibold mb-0">Custom Tax Rate (%) <span class="text-muted fw-normal">(Optional)</span></label>
+                                            </div>
+                                            <div class="col-sm-6">
+                                                <div class="input-group input-group-sm">
+                                                    <input type="number" step="0.01" name="custom_tax_rate" id="catFormCustomTax" class="form-control" placeholder="Default GST" oninput="calculatePricePreview()">
+                                                    <span class="input-group-text">%</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Banner Highlights -->
+                                        <hr class="my-2 text-muted">
+                                        <div class="form-check form-switch mb-1.5">
+                                            <input class="form-check-input" type="checkbox" role="switch" name="show_on_banner" id="catFormShowBanner" onchange="calculatePricePreview()">
+                                            <label class="form-check-label fw-bold text-dark small" for="catFormShowBanner">
+                                                Show this Category on Banner / Hero Section
+                                            </label>
+                                        </div>
+
+                                        <div class="mb-1">
+                                            <label class="form-label small fw-semibold mb-1">Banner Promo Badge Text</label>
+                                            <input type="text" name="banner_badge_text" id="catFormBannerBadge" class="form-control form-control-sm" placeholder="e.g. ⭐ Best Seller, 🔥 Hot Deal, 20% OFF" oninput="calculatePricePreview()">
+                                            <div class="mt-1">
+                                                <span class="quick-chip" onclick="setBannerBadge('⭐ Best Seller')">⭐ Best Seller</span>
+                                                <span class="quick-chip" onclick="setBannerBadge('🔥 Hot Deal')">🔥 Hot Deal</span>
+                                                <span class="quick-chip" onclick="setBannerBadge('👑 Luxury Pick')">👑 Luxury Pick</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Live Price & Banner Preview Box -->
+                                <div class="col-md-5">
+                                    <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+                                        <h6 class="fw-bold text-dark mb-2 fs-6"><i class="fa-solid fa-eye text-primary me-1.5"></i>Live Guest View</h6>
+
+                                        <!-- Banner Card Preview -->
+                                        <div class="border rounded-3 p-2.5 bg-dark text-white mb-2.5 shadow-sm position-relative overflow-hidden">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <span class="badge bg-warning text-dark fw-bold px-1.5 py-0.5" style="font-size: 0.68rem;" id="previewBadge">⭐ Best Seller</span>
+                                                <span class="badge bg-secondary" style="font-size: 0.65rem;" id="previewDiscountBadge">0% OFF</span>
+                                            </div>
+                                            <h6 class="fw-bold text-white mb-0.5" id="previewName">Category Name</h6>
+                                            <div class="d-flex align-items-baseline gap-1.5 mt-1">
+                                                <span class="fs-5 fw-bold font-mono text-warning" id="previewPrice">₹4500.00</span>
+                                                <span class="text-decoration-line-through text-white-50 font-mono small" id="previewOrigPrice">₹6000.00</span>
+                                                <small class="text-white-50" style="font-size: 0.68rem;">/ night</small>
+                                            </div>
+                                            <div class="mt-0.5">
+                                                <span class="badge bg-info-subtle text-info" style="font-size: 0.65rem;" id="previewTaxModeBadge">Tax Exclusive (+ GST)</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Calculation breakdown -->
+                                        <div class="price-breakdown-box">
+                                            <div class="d-flex justify-content-between text-muted small mb-1">
+                                                <span>Room Base Tariff:</span>
+                                                <span class="font-mono text-dark fw-semibold" id="calcBase">₹4500.00</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between text-muted small mb-1">
+                                                <span>Estimated GST (<span id="calcGstRate">12</span>%):</span>
+                                                <span class="font-mono text-dark fw-semibold" id="calcGst">₹540.00</span>
+                                            </div>
+                                            <hr class="my-1">
+                                            <div class="d-flex justify-content-between text-dark fw-bold small">
+                                                <span>Guest Grand Total:</span>
+                                                <span class="font-mono text-primary fs-6" id="calcTotal">₹5040.00</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-semibold">Max Total Occupancy</label>
-                            <input type="number" name="max_occupancy" id="catFormOcc" class="form-control" value="2" min="1" max="10">
+
+                        <!-- TAB 3: STREAMLINED COMPACT MEDIA CONTROLLER (SIDE-BY-SIDE FIT) -->
+                        <div class="tab-pane fade" id="tab-media" role="tabpanel">
+                            <!-- Ultra-Slim Quota Bar -->
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 p-2 px-3 bg-white rounded-3 border shadow-sm mb-2.5">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge px-2.5 py-1 text-white fw-bold" id="quotaBadge" style="background: #0f172a; font-size: 0.78rem;">
+                                        <i class="fa-solid fa-layer-group me-1"></i><span id="quotaUsedText">0</span> / 10 Media Used
+                                    </span>
+                                    <div class="progress" style="width: 110px; height: 6px;">
+                                        <div class="progress-bar bg-primary" id="quotaProgressBar" style="width: 0%;"></div>
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-1.5">
+                                    <span class="badge bg-light text-secondary border" style="font-size: 0.68rem;" title="Images are auto-converted to WebP">
+                                        <i class="fa-solid fa-bolt text-warning me-0.5"></i>Auto WebP (85%)
+                                    </span>
+                                    <span class="badge bg-light text-secondary border" style="font-size: 0.68rem;">
+                                        <i class="fa-solid fa-film text-danger me-0.5"></i>Max Video 25MB
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- 2-Column Side-by-Side: Left (Add Media) + Right (Attached Media Gallery) -->
+                            <div class="row g-2.5">
+                                <!-- LEFT COLUMN: Upload & Add (Takes 5 cols) -->
+                                <div class="col-lg-5">
+                                    <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+                                        <!-- Mode Switcher -->
+                                        <div class="d-flex gap-1 mb-2.5 pb-2 border-bottom">
+                                            <button type="button" class="media-subnav-btn active" id="btnModePhotos" onclick="switchMediaMode('photos')">
+                                                <i class="fa-solid fa-image me-1"></i>Photos
+                                            </button>
+                                            <button type="button" class="media-subnav-btn" id="btnModeUrls" onclick="switchMediaMode('urls')">
+                                                <i class="fa-solid fa-link me-1"></i>Image URLs
+                                            </button>
+                                            <button type="button" class="media-subnav-btn" id="btnModeVideos" onclick="switchMediaMode('videos')">
+                                                <i class="fa-solid fa-video me-1"></i>Videos
+                                            </button>
+                                        </div>
+
+                                        <!-- Sub-panel 1: Photo Uploads -->
+                                        <div id="mediaPanelPhotos">
+                                            <div class="mb-2">
+                                                <label class="form-label small fw-semibold text-dark mb-0.5">
+                                                    <i class="fa-solid fa-star text-warning me-1"></i>Primary Cover Photo
+                                                </label>
+                                                <input type="file" name="cover_image" id="catFormCoverFile" class="form-control form-control-sm" accept="image/*" onchange="previewCoverFile(this)">
+                                                <div class="text-muted" style="font-size: 0.7rem;">Auto-converts to WebP.</div>
+                                            </div>
+
+                                            <div class="mb-2">
+                                                <label class="form-label small fw-semibold text-dark mb-0.5">
+                                                    <i class="fa-solid fa-images text-primary me-1"></i>Upload Gallery Photos
+                                                </label>
+                                                <input type="file" name="gallery_images" id="catFormGalleryFiles" class="form-control form-control-sm" accept="image/*" multiple onchange="updateQuotaPreview()">
+                                                <div class="text-muted" style="font-size: 0.7rem;">Select multiple photos (Hold Ctrl / Cmd).</div>
+                                            </div>
+
+                                            <div id="coverPreviewWrap" class="mt-1" style="display: none;">
+                                                <small class="text-muted d-block" style="font-size: 0.68rem;">Cover Preview:</small>
+                                                <img id="coverPreviewImg" src="" alt="Cover preview" class="rounded border" style="height: 55px; width: 85px; object-fit: cover;">
+                                            </div>
+                                        </div>
+
+                                        <!-- Sub-panel 2: External Photo URLs -->
+                                        <div id="mediaPanelUrls" style="display: none;">
+                                            <div class="mb-2">
+                                                <label class="form-label small fw-semibold text-dark mb-0.5">
+                                                    <i class="fa-solid fa-star text-warning me-1"></i>External Cover URL
+                                                </label>
+                                                <input type="url" name="cover_image_url" id="catFormCoverUrl" class="form-control form-control-sm" placeholder="https://images.unsplash.com/..." oninput="previewCoverUrl(this.value)">
+                                            </div>
+                                            <div class="mb-1">
+                                                <label class="form-label small fw-semibold text-dark mb-0.5">
+                                                    <i class="fa-solid fa-link text-primary me-1"></i>Gallery Photo URLs (1 per line)
+                                                </label>
+                                                <textarea name="gallery_image_urls" id="catFormGalleryUrls" class="form-control form-control-sm" rows="3" placeholder="https://...\nhttps://..." oninput="updateQuotaPreview()"></textarea>
+                                            </div>
+                                        </div>
+
+                                        <!-- Sub-panel 3: Videos (File + Links) -->
+                                        <div id="mediaPanelVideos" style="display: none;">
+                                            <div class="mb-2">
+                                                <label class="form-label small fw-semibold text-dark mb-0.5">
+                                                    <i class="fa-solid fa-film text-danger me-1"></i>Upload Video File (Max 25MB)
+                                                </label>
+                                                <input type="file" name="uploaded_videos" id="catFormVideoFiles" class="form-control form-control-sm" accept="video/mp4,video/webm,video/quicktime" multiple onchange="updateQuotaPreview()">
+                                                <div class="text-muted" style="font-size: 0.7rem;">Formats: MP4, WebM, MOV.</div>
+                                            </div>
+
+                                            <div class="mb-2">
+                                                <label class="form-label small fw-semibold text-dark mb-0.5">
+                                                    <i class="fa-brands fa-youtube text-danger me-1"></i>Or Video URL (YouTube, Vimeo, MP4)
+                                                </label>
+                                                <input type="url" name="video_url_1" id="catVideoUrl_1" class="form-control form-control-sm mb-1" placeholder="https://www.youtube.com/watch?v=..." oninput="updateQuotaPreview()">
+                                                <input type="text" name="video_title_1" id="catVideoTitle_1" class="form-control form-control-sm" placeholder="Video Title (e.g. Master Suite Tour)">
+                                            </div>
+
+                                            <!-- Collapsible extra video slots -->
+                                            <a class="small text-primary text-decoration-none" data-bs-toggle="collapse" href="#extraVidRows" role="button" style="font-size: 0.75rem;">
+                                                <i class="fa-solid fa-plus-circle me-1"></i>More video links...
+                                            </a>
+                                            <div class="collapse mt-1" id="extraVidRows">
+                                                {% for idx in "2345" %}
+                                                <div class="input-group input-group-sm mb-1">
+                                                    <span class="input-group-text py-0" style="font-size: 0.7rem;">#{{ idx }}</span>
+                                                    <input type="url" name="video_url_{{ idx }}" id="catVideoUrl_{{ idx }}" class="form-control" placeholder="Video URL" oninput="updateQuotaPreview()">
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- RIGHT COLUMN: Attached Media Grid (Takes 7 cols, max-height 290px scroll) -->
+                                <div class="col-lg-7">
+                                    <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+                                        <div class="d-flex align-items-center justify-content-between mb-2">
+                                            <h6 class="fw-bold text-dark mb-0 fs-6">
+                                                <i class="fa-solid fa-images text-primary me-1"></i>Attached Assets (<span id="savedMediaCount">0</span>)
+                                            </h6>
+                                            <small class="text-muted" style="font-size: 0.7rem;">Click "Cover" to set photo as cover</small>
+                                        </div>
+
+                                        <!-- Scrollable Grid (Fits in screen!) -->
+                                        <div style="max-height: 250px; overflow-y: auto; overflow-x: hidden; padding-right: 4px;">
+                                            <div class="row g-2" id="savedMediaGrid">
+                                                <!-- Populated dynamically by JS -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-semibold">Bed Configuration</label>
-                            <input type="text" name="bed_type" id="catFormBed" class="form-control" value="King Bed" placeholder="e.g. 1 King Bed or 2 Twins">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-semibold">Room Size (Sq Ft)</label>
-                            <input type="number" name="room_size_sqft" id="catFormSize" class="form-control" value="350">
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label small fw-semibold">Amenities (Comma-separated)</label>
-                            <input type="text" name="amenities" id="catFormAmenities" class="form-control" placeholder="e.g. High-Speed Wi-Fi, AC, Mini Bar, Balcony View, Room Service">
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label small fw-semibold">Description</label>
-                            <textarea name="description" id="catFormDesc" class="form-control" rows="3" placeholder="Brief summary of room highlights, views, and comforts"></textarea>
-                        </div>
+
                     </div>
                 </div>
-                <div class="modal-footer bg-white border-top px-4 py-3">
-                    <button type="button" class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-pms-primary px-4 rounded-pill fw-bold shadow-sm">Save Category</button>
+
+                <!-- Sticky Footer (ALWAYS Visible on Screen!) -->
+                <div class="modal-footer bg-white border-top px-4 py-2.5">
+                    <button type="button" class="btn btn-sm btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-pms-primary px-4 rounded-pill fw-bold shadow-sm" id="btnSaveCategory">
+                        <i class="fa-solid fa-check me-1"></i>Save Category
+                    </button>
                 </div>
             </form>
         </div>
@@ -145,34 +753,440 @@
 </div>
 
 <script>
-function handleEditCategory(btn) {
-    const d = btn.dataset;
-    editCategoryModal(d.id, d.name, d.price, d.occ, d.bed, d.size, d.desc, d.amenities);
+const MAX_MEDIA = 10;
+let currentImagesState = [];
+let currentVideosState = [];
+let currentCoverState = null;
+
+// Media sub-navigation mode switcher (Photos / URLs / Videos)
+function switchMediaMode(mode) {
+    document.getElementById('mediaPanelPhotos').style.display = (mode === 'photos') ? 'block' : 'none';
+    document.getElementById('mediaPanelUrls').style.display = (mode === 'urls') ? 'block' : 'none';
+    document.getElementById('mediaPanelVideos').style.display = (mode === 'videos') ? 'block' : 'none';
+
+    document.getElementById('btnModePhotos').className = 'media-subnav-btn' + (mode === 'photos' ? ' active' : '');
+    document.getElementById('btnModeUrls').className = 'media-subnav-btn' + (mode === 'urls' ? ' active' : '');
+    document.getElementById('btnModeVideos').className = 'media-subnav-btn' + (mode === 'videos' ? ' active' : '');
 }
 
-function editCategoryModal(id, name, price, occ, bed, size, desc, amenities) {
-    document.getElementById('catFormId').value = id;
-    document.getElementById('catFormName').value = name;
-    document.getElementById('catFormPrice').value = price;
-    document.getElementById('catFormOcc').value = occ;
-    document.getElementById('catFormBed').value = bed;
-    document.getElementById('catFormSize').value = size;
-    document.getElementById('catFormDesc').value = desc;
-    document.getElementById('catFormAmenities').value = amenities;
-    document.getElementById('catModalTitle').innerHTML = '<i class="fa-solid fa-pen-to-square text-primary me-2"></i>Edit Room Category';
+// Open New Category Modal
+function openNewCategoryModal() {
+    document.getElementById('catForm').reset();
+    document.getElementById('catFormId').value = '';
+    document.getElementById('catModalTitle').innerHTML = '<i class="fa-solid fa-tags text-primary me-2"></i>Add Room Category';
+    document.getElementById('coverPreviewWrap').style.display = 'none';
     
+    currentImagesState = [];
+    currentVideosState = [];
+    currentCoverState = null;
+    switchMediaMode('photos');
+    renderSavedMediaGrid();
+    updateQuotaPreview();
+
+    // Reset tabs to first tab
+    const firstTab = new bootstrap.Tab(document.getElementById('tab-specs-btn'));
+    firstTab.show();
+
+    calculatePricePreview();
+}
+
+// Edit Category Modal Populator
+function handleEditCategory(btn) {
+    const d = btn.dataset;
+    document.getElementById('catForm').reset();
+    document.getElementById('catFormId').value = d.id;
+    document.getElementById('catFormName').value = d.name || '';
+    document.getElementById('catFormPrice').value = d.price || '';
+    document.getElementById('catFormOrigPrice').value = d.origPrice || '';
+    document.getElementById('catFormTaxInc').checked = (d.taxInc === '1');
+    document.getElementById('catFormCustomTax').value = d.customTax || '';
+    document.getElementById('catFormShowBanner').checked = (d.showBanner === '1');
+    document.getElementById('catFormBannerBadge').value = d.bannerBadge || '';
+    document.getElementById('catFormCoverUrl').value = d.coverUrl || '';
+    document.getElementById('catFormOcc').value = d.occ || '2';
+    document.getElementById('catFormAdults').value = d.adults || '2';
+    document.getElementById('catFormChildren').value = d.children || '1';
+    document.getElementById('catFormBed').value = d.bed || 'King Bed';
+    document.getElementById('catFormSize').value = d.size || '350';
+    document.getElementById('catFormDesc').value = d.desc || '';
+    document.getElementById('catFormAmenities').value = d.amenities || '';
+
+    // Cover
+    currentCoverState = d.coverImg || d.coverUrl || null;
+    if (currentCoverState) {
+        previewCoverUrl(currentCoverState);
+    } else {
+        document.getElementById('coverPreviewWrap').style.display = 'none';
+    }
+
+    // Videos
+    currentVideosState = [];
+    for (let i = 1; i <= 5; i++) {
+        document.getElementById(`catVideoUrl_${i}`).value = '';
+    }
+    if (d.videos) {
+        try {
+            const vids = JSON.parse(d.videos);
+            if (Array.isArray(vids)) {
+                currentVideosState = vids;
+            }
+        } catch (e) {
+            console.error("Error parsing category videos:", e);
+        }
+    }
+
+    // Gallery images
+    currentImagesState = [];
+    if (d.images) {
+        try {
+            const imgs = JSON.parse(d.images);
+            if (Array.isArray(imgs)) {
+                currentImagesState = imgs;
+            }
+        } catch (e) {
+            console.error("Error parsing category images:", e);
+        }
+    }
+
+    switchMediaMode('photos');
+    renderSavedMediaGrid();
+    updateQuotaPreview();
+
+    document.getElementById('catModalTitle').innerHTML = '<i class="fa-solid fa-pen-to-square text-primary me-2"></i>Edit Room Category: ' + (d.name || '');
+
+    // Reset tabs to first tab
+    const firstTab = new bootstrap.Tab(document.getElementById('tab-specs-btn'));
+    firstTab.show();
+
+    calculatePricePreview();
+
     const modal = new bootstrap.Modal(document.getElementById('addCategoryModal'));
     modal.show();
 }
 
-// Reset on modal hide
-document.getElementById('addCategoryModal').addEventListener('hidden.bs.modal', function () {
-    document.getElementById('catFormId').value = '';
-    document.getElementById('catFormName').value = '';
-    document.getElementById('catFormPrice').value = '';
-    document.getElementById('catFormDesc').value = '';
-    document.getElementById('catFormAmenities').value = '';
-    document.getElementById('catModalTitle').innerHTML = '<i class="fa-solid fa-tags text-primary me-2"></i>Add Room Category';
-});
+// Render the compact Media Assets Grid in Right Column
+function renderSavedMediaGrid() {
+    const grid = document.getElementById('savedMediaGrid');
+    const countEl = document.getElementById('savedMediaCount');
+    grid.innerHTML = '';
+
+    let totalSaved = currentImagesState.length + currentVideosState.length + (currentCoverState ? 1 : 0);
+    countEl.innerText = totalSaved;
+
+    if (totalSaved === 0) {
+        grid.innerHTML = `<div class="col-12 text-center text-muted py-4"><i class="fa-solid fa-photo-film fs-3 d-block opacity-25 mb-1"></i><small>No media attached yet.<br>Upload photos or videos on the left.</small></div>`;
+        return;
+    }
+
+    // Render Cover Image if exists
+    if (currentCoverState) {
+        const col = document.createElement('div');
+        col.className = 'col-4 col-sm-4';
+        col.innerHTML = `
+            <div class="media-tile h-100 border-warning">
+                <div class="position-relative">
+                    <img src="${currentCoverState}" class="media-tile-thumb" alt="Cover">
+                    <span class="badge bg-warning text-dark position-absolute top-0 start-0 m-1 fw-bold" style="font-size: 0.58rem;">
+                        <i class="fa-solid fa-star"></i> Cover
+                    </span>
+                </div>
+                <div class="text-truncate text-muted text-center mt-1" style="font-size: 0.65rem;">Primary Cover</div>
+            </div>
+        `;
+        grid.appendChild(col);
+    }
+
+    // Render Gallery Images
+    currentImagesState.forEach(img => {
+        const col = document.createElement('div');
+        col.className = 'col-4 col-sm-4';
+        col.id = `media-img-${img.id}`;
+        col.innerHTML = `
+            <div class="media-tile h-100">
+                <div class="position-relative">
+                    <img src="${img.url}" class="media-tile-thumb" alt="Photo">
+                    <button type="button" class="media-tile-del" onclick="deleteCategoryPhoto(${img.id})" title="Delete Photo">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="d-flex align-items-center justify-content-between mt-1">
+                    <span class="badge bg-dark bg-opacity-75 text-white" style="font-size: 0.58rem;">WebP</span>
+                    <button type="button" class="btn btn-xs btn-outline-warning text-dark py-0 px-1" style="font-size: 0.62rem;" onclick="setAsCategoryCover(${img.id}, '${img.url}')" title="Set as primary cover">
+                        Cover
+                    </button>
+                </div>
+            </div>
+        `;
+        grid.appendChild(col);
+    });
+
+    // Render Videos
+    currentVideosState.forEach((vid, vIdx) => {
+        const col = document.createElement('div');
+        col.className = 'col-4 col-sm-4';
+        col.id = `media-vid-${vIdx}`;
+        col.innerHTML = `
+            <div class="media-tile h-100 border-danger-subtle">
+                <div class="position-relative">
+                    <div class="media-tile-vid">
+                        <i class="fa-solid fa-circle-play"></i>
+                    </div>
+                    <button type="button" class="media-tile-del" onclick="deleteCategoryVideo(${vIdx})" title="Delete Video">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="d-flex align-items-center justify-content-between mt-1">
+                    <span class="badge bg-danger text-white text-truncate" style="font-size: 0.58rem; max-width: 50px;">Video</span>
+                    <a href="${vid.url}" target="_blank" class="btn btn-xs btn-outline-danger py-0 px-1 text-decoration-none" style="font-size: 0.62rem;">
+                        Play
+                    </a>
+                </div>
+            </div>
+        `;
+        grid.appendChild(col);
+    });
+}
+
+// Media Quota & Limits Calculator
+function updateQuotaPreview() {
+    const savedCount = currentImagesState.length + currentVideosState.length + (currentCoverState ? 1 : 0);
+    
+    // Count pending new uploads
+    const newCover = (document.getElementById('catFormCoverFile').files.length > 0 || document.getElementById('catFormCoverUrl').value.trim() !== '') ? 1 : 0;
+    const newPhotos = document.getElementById('catFormGalleryFiles').files.length;
+    const newUrls = document.getElementById('catFormGalleryUrls').value.split('\n').map(s => s.trim()).filter(Boolean).length;
+    const newVideosUpload = document.getElementById('catFormVideoFiles').files.length;
+    
+    let newVideoLinks = 0;
+    for (let i = 1; i <= 5; i++) {
+        if (document.getElementById(`catVideoUrl_${i}`).value.trim() !== '') newVideoLinks++;
+    }
+
+    const pendingCount = (currentCoverState ? 0 : newCover) + newPhotos + newUrls + newVideosUpload + newVideoLinks;
+    const totalCount = Math.min(MAX_MEDIA, savedCount + pendingCount);
+
+    // Update Quota Bar
+    document.getElementById('quotaUsedText').innerText = totalCount;
+    document.getElementById('tabMediaBadge').innerText = `${totalCount}/10`;
+    
+    const pct = Math.round((totalCount / MAX_MEDIA) * 100);
+    const pBar = document.getElementById('quotaProgressBar');
+    pBar.style.width = pct + '%';
+
+    if (totalCount >= 10) {
+        pBar.className = 'progress-bar bg-danger';
+        document.getElementById('quotaBadge').className = 'badge px-2.5 py-1 text-white fw-bold bg-danger';
+    } else if (totalCount >= 7) {
+        pBar.className = 'progress-bar bg-warning';
+        document.getElementById('quotaBadge').className = 'badge px-2.5 py-1 text-dark fw-bold bg-warning';
+    } else {
+        pBar.className = 'progress-bar bg-primary';
+        document.getElementById('quotaBadge').className = 'badge px-2.5 py-1 text-white fw-bold bg-dark';
+    }
+}
+
+// Make a gallery photo the primary cover image via AJAX
+function setAsCategoryCover(imageId, imageUrl) {
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const url = "{% url 'hotel_admin:categories' restaurant_slug=rslug %}images/" + imageId + "/set-cover/";
+
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'ok') {
+            currentCoverState = data.new_cover_url || imageUrl;
+            currentImagesState = currentImagesState.filter(img => img.id !== imageId);
+            renderSavedMediaGrid();
+            updateQuotaPreview();
+        }
+    })
+    .catch(err => {
+        console.error("Error setting cover:", err);
+    });
+}
+
+// Delete individual gallery photo via AJAX
+function deleteCategoryPhoto(photoId) {
+    if (!confirm("Are you sure you want to remove this photo?")) return;
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const deleteUrl = "{% url 'hotel_admin:categories' restaurant_slug=rslug %}images/" + photoId + "/delete/";
+
+    fetch(deleteUrl, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'ok') {
+            currentImagesState = currentImagesState.filter(img => img.id !== photoId);
+            renderSavedMediaGrid();
+            updateQuotaPreview();
+        }
+    })
+    .catch(err => {
+        console.error("Error deleting image:", err);
+    });
+}
+
+// Delete video from category via AJAX
+function deleteCategoryVideo(vIdx) {
+    const catId = document.getElementById('catFormId').value;
+    if (!catId) {
+        currentVideosState.splice(vIdx, 1);
+        renderSavedMediaGrid();
+        updateQuotaPreview();
+        return;
+    }
+
+    if (!confirm("Are you sure you want to remove this video?")) return;
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const deleteUrl = "{% url 'hotel_admin:categories' restaurant_slug=rslug %}" + catId + "/videos/" + vIdx + "/delete/";
+
+    fetch(deleteUrl, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'ok') {
+            currentVideosState.splice(vIdx, 1);
+            renderSavedMediaGrid();
+            updateQuotaPreview();
+        }
+    })
+    .catch(err => {
+        console.error("Error deleting video:", err);
+    });
+}
+
+// Live Price & Banner Preview Calculator
+function calculatePricePreview() {
+    const name = document.getElementById('catFormName').value || 'Executive Deluxe Suite';
+    const price = parseFloat(document.getElementById('catFormPrice').value) || 4500.00;
+    const origPrice = parseFloat(document.getElementById('catFormOrigPrice').value) || 0;
+    const isTaxInc = document.getElementById('catFormTaxInc').checked;
+    const customTax = parseFloat(document.getElementById('catFormCustomTax').value);
+    const showBanner = document.getElementById('catFormShowBanner').checked;
+    const bannerBadge = document.getElementById('catFormBannerBadge').value || '⭐ Best Seller';
+
+    // Name & Price
+    document.getElementById('previewName').innerText = name;
+    document.getElementById('previewPrice').innerText = '₹' + price.toFixed(2);
+
+    // Rack rate & discount
+    if (origPrice > price) {
+        document.getElementById('previewOrigPrice').style.display = 'inline';
+        document.getElementById('previewOrigPrice').innerText = '₹' + origPrice.toFixed(2);
+        const disc = Math.round(((origPrice - price) / origPrice) * 100);
+        document.getElementById('previewDiscountBadge').style.display = 'inline-block';
+        document.getElementById('previewDiscountBadge').innerText = disc + '% OFF';
+        document.getElementById('previewDiscountBadge').className = 'badge bg-success';
+    } else {
+        document.getElementById('previewOrigPrice').style.display = 'none';
+        document.getElementById('previewDiscountBadge').style.display = 'none';
+    }
+
+    // Banner badge
+    const badgeEl = document.getElementById('previewBadge');
+    if (showBanner) {
+        badgeEl.style.display = 'inline-block';
+        badgeEl.innerText = bannerBadge;
+    } else {
+        badgeEl.style.display = 'none';
+    }
+
+    // Tax calculation
+    let taxRatePercent = 12;
+    if (!isNaN(customTax) && customTax > 0) {
+        taxRatePercent = customTax;
+    } else {
+        taxRatePercent = (price <= 7500) ? 12 : 18;
+    }
+    document.getElementById('calcGstRate').innerText = taxRatePercent;
+
+    const rateFrac = taxRatePercent / 100;
+    let baseTariff = 0;
+    let taxAmount = 0;
+    let total = 0;
+
+    if (isTaxInc) {
+        total = price;
+        baseTariff = price / (1 + rateFrac);
+        taxAmount = total - baseTariff;
+        document.getElementById('previewTaxModeBadge').innerText = 'Tax Inclusive (All GST Included)';
+        document.getElementById('previewTaxModeBadge').className = 'badge bg-success-subtle text-success';
+    } else {
+        baseTariff = price;
+        taxAmount = price * rateFrac;
+        total = baseTariff + taxAmount;
+        document.getElementById('previewTaxModeBadge').innerText = 'Tax Exclusive (+ ' + taxRatePercent + '% GST)';
+        document.getElementById('previewTaxModeBadge').className = 'badge bg-info-subtle text-info';
+    }
+
+    document.getElementById('calcBase').innerText = '₹' + baseTariff.toFixed(2);
+    document.getElementById('calcGst').innerText = '₹' + taxAmount.toFixed(2);
+    document.getElementById('calcTotal').innerText = '₹' + total.toFixed(2);
+}
+
+// Quick Chip for Amenities
+function addAmenity(amenity) {
+    const input = document.getElementById('catFormAmenities');
+    const cur = input.value.split(',').map(s => s.trim()).filter(Boolean);
+    if (!cur.includes(amenity)) {
+        cur.push(amenity);
+        input.value = cur.join(', ');
+    }
+}
+
+// Quick Chip for Banner Badges
+function setBannerBadge(text) {
+    document.getElementById('catFormShowBanner').checked = true;
+    document.getElementById('catFormBannerBadge').value = text;
+    calculatePricePreview();
+}
+
+// Cover image previews
+function previewCoverFile(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('coverPreviewImg').src = e.target.result;
+            document.getElementById('coverPreviewWrap').style.display = 'block';
+            currentCoverState = e.target.result;
+            renderSavedMediaGrid();
+            updateQuotaPreview();
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+function previewCoverUrl(url) {
+    if (url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/media/'))) {
+        document.getElementById('coverPreviewImg').src = url;
+        document.getElementById('coverPreviewWrap').style.display = 'block';
+        currentCoverState = url;
+        renderSavedMediaGrid();
+        updateQuotaPreview();
+    } else {
+        document.getElementById('coverPreviewWrap').style.display = 'none';
+        currentCoverState = null;
+        renderSavedMediaGrid();
+        updateQuotaPreview();
+    }
+}
 </script>
 {% endblock %}

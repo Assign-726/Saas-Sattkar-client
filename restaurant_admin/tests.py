@@ -595,4 +595,157 @@ class TableBulkAddTests(TestCase):
         self.assertEqual(table.rotation, 90)
 
 
+class StaffManagementTests(TestCase):
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name="Royal Palace", slug="royal-palace")
+        self.branch = RestaurantBranch.objects.create(restaurant=self.restaurant, name="Main Outlet", slug="main-outlet")
+        self.admin_user = User.objects.create_user(username="manager1", password="Password123!", is_staff=True)
+        self.admin_profile = RestaurantUser.objects.create(
+            user=self.admin_user,
+            restaurant=self.restaurant,
+            branch=self.branch,
+            role=RestaurantUser.Role.RESTAURANT_ADMIN,
+            is_primary_admin=True,
+        )
 
+    def test_staff_list_accessible_to_manager(self):
+        self.client.force_login(self.admin_user)
+        url = reverse('restaurant_admin:staff_list', kwargs={'restaurant_slug': self.restaurant.slug})
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Staff & Sub-Roles Management")
+
+    def test_manager_creates_cashier_staff(self):
+        self.client.force_login(self.admin_user)
+        url = reverse('restaurant_admin:staff_create', kwargs={'restaurant_slug': self.restaurant.slug})
+        post_data = {
+            'username': 'cashier_ramesh',
+            'first_name': 'Ramesh',
+            'last_name': 'Kumar',
+            'password': 'CashierSecret123',
+            'pos_pin': '4321',
+            'role': RestaurantUser.Role.CASHIER,
+            'branch_id': str(self.branch.id),
+            'can_apply_discounts': 'on',
+            'can_issue_refunds': 'on',
+            # can_view_analytics omitted -> False
+        }
+        resp = self.client.post(url, post_data)
+        self.assertEqual(resp.status_code, 302)
+
+        # Verify created user in DB
+        created_user = User.objects.get(username='cashier_ramesh')
+        self.assertTrue(created_user.is_staff)
+        self.assertEqual(created_user.first_name, 'Ramesh')
+
+        ru = RestaurantUser.objects.get(user=created_user)
+        self.assertEqual(ru.role, RestaurantUser.Role.CASHIER)
+        self.assertEqual(ru.pos_pin, '4321')
+        self.assertTrue(ru.can_apply_discounts)
+        self.assertFalse(ru.can_view_analytics)
+        self.assertEqual(ru.created_by, self.admin_user)
+
+    def test_cashier_is_restricted_from_analytics(self):
+        cashier_user = User.objects.create_user(username="cashier1", password="Password123!", is_staff=True)
+        RestaurantUser.objects.create(
+            user=cashier_user,
+            restaurant=self.restaurant,
+            branch=self.branch,
+            role=RestaurantUser.Role.CASHIER,
+            can_view_analytics=False,
+        )
+        self.client.force_login(cashier_user)
+        analytics_url = reverse('restaurant_admin:sales_analytics', kwargs={'restaurant_slug': self.restaurant.slug})
+        resp = self.client.get(analytics_url)
+        # Should be redirected to transaction desk
+        self.assertEqual(resp.status_code, 302)
+        expected_url = reverse('restaurant_admin:transaction_desk_create', kwargs={'restaurant_slug': self.restaurant.slug})
+        self.assertEqual(resp.url, expected_url)
+
+    def test_branch_admin_does_not_see_other_branch_staff_or_admins(self):
+        # Create second branch and its users
+        branch2 = RestaurantBranch.objects.create(restaurant=self.restaurant, name="Second Outlet", slug="second-outlet")
+        manager2 = User.objects.create_user(username="manager_branch2", password="Password123!", is_staff=True)
+        RestaurantUser.objects.create(
+            user=manager2,
+            restaurant=self.restaurant,
+            branch=branch2,
+            role=RestaurantUser.Role.RESTAURANT_ADMIN,
+        )
+        cashier2 = User.objects.create_user(username="cashier_branch2", password="Password123!", is_staff=True)
+        RestaurantUser.objects.create(
+            user=cashier2,
+            restaurant=self.restaurant,
+            branch=branch2,
+            role=RestaurantUser.Role.CASHIER,
+        )
+
+        # Login as manager1 (self.branch)
+        self.client.force_login(self.admin_user)
+        url = reverse('restaurant_admin:staff_list', kwargs={'restaurant_slug': self.restaurant.slug})
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+
+        # Should NOT contain other branch admin or other branch staff
+        self.assertNotContains(resp, "manager_branch2")
+        self.assertNotContains(resp, "cashier_branch2")
+        # Should NOT contain self admin in the staff list
+        self.assertNotContains(resp, "manager1")
+
+        # available_branches in context should only contain self.branch
+        self.assertEqual(list(resp.context['available_branches']), [self.branch])
+        self.assertFalse(resp.context['is_gm'])
+
+    def test_club_admin_can_access_staff_and_create_gate_scanner(self):
+        club_user = User.objects.create_user(username="club_mgr", password="Password123!", is_staff=True)
+        RestaurantUser.objects.create(
+            user=club_user,
+            restaurant=self.restaurant,
+            branch=self.branch,
+            role=RestaurantUser.Role.CLUB_ADMIN,
+        )
+
+        self.client.force_login(club_user)
+        list_url = reverse('restaurant_admin:staff_list', kwargs={'restaurant_slug': self.restaurant.slug})
+        resp = self.client.get(list_url)
+        self.assertEqual(resp.status_code, 200)
+
+        create_url = reverse('restaurant_admin:staff_create', kwargs={'restaurant_slug': self.restaurant.slug})
+        resp_create_get = self.client.get(create_url)
+        self.assertEqual(resp_create_get.status_code, 200)
+        allowed_roles = [r[0] for r in resp_create_get.context['allowed_roles']]
+        self.assertEqual(allowed_roles, [RestaurantUser.Role.GATE_SCANNER])
+
+        # Create gate scanner
+        post_data = {
+            'username': 'scanner_ram',
+            'first_name': 'Ram',
+            'password': 'ScannerPass123!',
+            'pos_pin': '9988',
+            'role': RestaurantUser.Role.GATE_SCANNER,
+            'branch_id': str(self.branch.id),
+        }
+        resp_post = self.client.post(create_url, post_data)
+        self.assertEqual(resp_post.status_code, 302)
+
+        created_scanner = RestaurantUser.objects.get(user__username='scanner_ram')
+        self.assertEqual(created_scanner.role, RestaurantUser.Role.GATE_SCANNER)
+        self.assertEqual(created_scanner.branch, self.branch)
+        self.assertEqual(created_scanner.created_by, club_user)
+
+    def test_hotel_admin_redirects_to_native_hotel_staff(self):
+        hotel_user = User.objects.create_user(username="hotel_mgr", password="Password123!", is_staff=True)
+        RestaurantUser.objects.create(
+            user=hotel_user,
+            restaurant=self.restaurant,
+            branch=self.branch,
+            role=RestaurantUser.Role.HOTEL_ADMIN,
+        )
+
+        self.client.force_login(hotel_user)
+        list_url = reverse('restaurant_admin:staff_list', kwargs={'restaurant_slug': self.restaurant.slug})
+        resp = self.client.get(list_url)
+        # Should redirect to hotel_admin:staff_list
+        self.assertEqual(resp.status_code, 302)
+        expected_url = reverse('hotel_admin:staff_list', kwargs={'restaurant_slug': self.restaurant.slug})
+        self.assertEqual(resp.url, expected_url)

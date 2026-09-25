@@ -16,6 +16,9 @@ urlpatterns = [
     # Room Categories & Tariffs
     path('categories/', views_admin.categories_view, name='categories'),
     path('categories/create-edit/', views_admin.category_create_edit_action, name='category_create_edit'),
+    path('categories/images/<int:image_id>/delete/', views_admin.category_delete_image_action, name='category_delete_image'),
+    path('categories/images/<int:image_id>/set-cover/', views_admin.category_set_cover_action, name='category_set_cover'),
+    path('categories/<int:category_id>/videos/<int:video_idx>/delete/', views_admin.category_delete_video_action, name='category_delete_video'),
 
     # Bookings & Guest Folios
     path('bookings/', views_admin.bookings_view, name='bookings'),
@@ -24,6 +27,14 @@ urlpatterns = [
     path('bookings/<int:booking_id>/check-out/', views_admin.booking_check_out_action, name='booking_check_out'),
     path('bookings/<int:booking_id>/cancel/', views_admin.booking_cancel_action, name='booking_cancel'),
 
+    # Hotel Staff & Operations Team (PMS-native)
+    path('staff/', views_admin.staff_list_view, name='staff_list'),
+    path('staff/create/', views_admin.staff_create_view, name='staff_create'),
+    path('staff/<int:user_id>/edit/', views_admin.staff_edit_view, name='staff_edit'),
+    path('staff/<int:user_id>/toggle-active/', views_admin.staff_toggle_active_view, name='staff_toggle_active'),
+    path('staff/<int:user_id>/delete/', views_admin.staff_delete_view, name='staff_delete'),
+
     # Hotel Configuration & Settings
     path('settings/', views_admin.hotel_settings_view, name='settings'),
+    path('settings/test-email/', views_admin.hotel_test_email_view, name='test_email'),
 ]

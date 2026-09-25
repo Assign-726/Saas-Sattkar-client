@@ -559,6 +559,10 @@ class PublicBranchAvailabilityView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, branch_id=None):
+        from restaurant_project import constants
+        if not getattr(constants, 'ENABLE_HOTEL_MODULE', True):
+            return Response({"error": "Hotel & Rooms PMS module is globally disabled in system configuration."}, status=403)
+
         # Resolve branch by ID or query param
         branch = None
         if branch_id:
@@ -640,19 +644,31 @@ class PublicBranchAvailabilityView(APIView):
                 base_rate = cat.base_price_per_night
                 room_charges = base_rate * Decimal(nights)
 
-                # Determine tax rate based on HotelSettings
-                if h_settings and not h_settings.enable_dynamic_gst:
+                # Determine tax rate: category custom tax override or branch HotelSettings
+                if cat.custom_tax_rate is not None:
+                    tax_rate = (cat.custom_tax_rate / Decimal('100'))
+                elif h_settings and not h_settings.enable_dynamic_gst:
                     tax_rate = (h_settings.tax_rate / Decimal('100'))
                 else:
                     tax_rate = Decimal('0.12') if base_rate <= 7500 else Decimal('0.18')
 
-                tax_amount = round(room_charges * tax_rate, 2)
-
-                service_charge = Decimal('0.00')
-                if h_settings and h_settings.service_charge_percent > 0:
-                    service_charge = round(room_charges * (h_settings.service_charge_percent / Decimal('100')), 2)
-
-                grand_total = room_charges + tax_amount + service_charge
+                if cat.price_is_tax_inclusive:
+                    # Base price already includes tax
+                    tax_divisor = Decimal('1') + tax_rate
+                    net_room_charges = round(room_charges / tax_divisor, 2)
+                    tax_amount = round(room_charges - net_room_charges, 2)
+                    service_charge = Decimal('0.00')
+                    if h_settings and h_settings.service_charge_percent > 0:
+                        service_charge = round(net_room_charges * (h_settings.service_charge_percent / Decimal('100')), 2)
+                    grand_total = room_charges + service_charge
+                    display_room_charges = net_room_charges
+                else:
+                    tax_amount = round(room_charges * tax_rate, 2)
+                    service_charge = Decimal('0.00')
+                    if h_settings and h_settings.service_charge_percent > 0:
+                        service_charge = round(room_charges * (h_settings.service_charge_percent / Decimal('100')), 2)
+                    grand_total = room_charges + tax_amount + service_charge
+                    display_room_charges = room_charges
 
                 name_lower = cat.name.lower()
                 is_non_ac = 'non-ac' in name_lower or 'non ac' in name_lower
@@ -664,7 +680,7 @@ class PublicBranchAvailabilityView(APIView):
                 elif 'suite' in name_lower or 'penthouse' in name_lower:
                     cat_type = 'suite'
 
-                is_featured = bool(base_rate >= Decimal('8000') or 'presidential' in name_lower or 'royal' in name_lower)
+                is_featured = bool(cat.show_on_banner or base_rate >= Decimal('8000') or 'presidential' in name_lower or 'royal' in name_lower)
 
                 available_categories.append({
                     "id": cat.id,
@@ -672,6 +688,11 @@ class PublicBranchAvailabilityView(APIView):
                     "slug": cat.slug,
                     "description": cat.description,
                     "base_price_per_night": str(cat.base_price_per_night),
+                    "price_is_tax_inclusive": cat.price_is_tax_inclusive,
+                    "original_price_per_night": str(cat.original_price_per_night) if cat.original_price_per_night else None,
+                    "discount_percent": cat.discount_percent,
+                    "show_on_banner": cat.show_on_banner,
+                    "banner_badge_text": cat.banner_badge_text,
                     "max_occupancy": cat.max_occupancy,
                     "max_adults": cat.max_adults,
                     "max_children": cat.max_children,
@@ -682,10 +703,12 @@ class PublicBranchAvailabilityView(APIView):
                     "is_featured": is_featured,
                     "amenities": cat.amenities,
                     "effective_image": cat.effective_image_url,
+                    "all_images": cat.all_images_list,
+                    "video_links": cat.video_links_list,
                     "available_rooms_count": avail_count,
                     "available_room_ids": list(available_rooms.values_list('id', flat=True)),
                     "nights": nights,
-                    "estimated_room_charges": str(room_charges),
+                    "estimated_room_charges": str(display_room_charges),
                     "estimated_taxes": str(tax_amount),
                     "estimated_service_charge": str(service_charge),
                     "estimated_grand_total": str(grand_total),
@@ -716,6 +739,10 @@ class PublicBookingCreateView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
+        from restaurant_project import constants
+        if not getattr(constants, 'ENABLE_HOTEL_MODULE', True):
+            return Response({"error": "Hotel & Rooms PMS module is globally disabled in system configuration."}, status=403)
+
         data = request.data
         category_id = data.get('category_id') or data.get('room_id')
         room_id = data.get('actual_room_id') or (data.get('room_id') if not category_id else None)

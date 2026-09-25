@@ -53,8 +53,8 @@ def resolve_user_redirect(request, user, next_url=None):
         first_r = Restaurant.objects.first()
         restaurant_slug = first_r.slug if first_r else 'default'
 
-    # 1. Hotel Admin: ALWAYS route to Hotel PMS (unless next_url is specifically a hotel_admin subpath)
-    if user_role == 'HOTEL_ADMIN':
+    # 1. Hotel Admin & Front Desk: Route to Hotel PMS Dashboard
+    if user_role in ['HOTEL_ADMIN', 'FRONT_DESK']:
         if next_url and '/hotel-admin/' in next_url and url_has_allowed_host_and_scheme(
             url=next_url,
             allowed_hosts={request.get_host()},
@@ -63,7 +63,11 @@ def resolve_user_redirect(request, user, next_url=None):
             return next_url
         return reverse_lazy('hotel_admin:dashboard', kwargs={'restaurant_slug': restaurant_slug})
 
-    # 2. Club Admin: Route to Club Events
+    # 2. Housekeeping: Route to Hotel Rooms list
+    if user_role == 'HOUSEKEEPING':
+        return reverse_lazy('hotel_admin:rooms', kwargs={'restaurant_slug': restaurant_slug})
+
+    # 3. Club Admin: Route to Club Events
     if user_role == 'CLUB_ADMIN':
         if next_url and '/club-events/' in next_url and url_has_allowed_host_and_scheme(
             url=next_url,
@@ -73,7 +77,23 @@ def resolve_user_redirect(request, user, next_url=None):
             return next_url
         return reverse_lazy('restaurant_admin:club_events_list', kwargs={'restaurant_slug': restaurant_slug})
 
-    # 3. General Manager: Full access across modules (can navigate to either Hotel PMS or Restaurant POS)
+    # 4. Gate Scanner: Route directly to QR Gate Scanner
+    if user_role == 'GATE_SCANNER':
+        return reverse_lazy('restaurant_admin:club_gate_scanner', kwargs={'restaurant_slug': restaurant_slug})
+
+    # 5. Kitchen: Route directly to Kitchen Display System (KDS)
+    if user_role == 'KITCHEN':
+        return reverse_lazy('restaurant_admin:kitchen_kds', kwargs={'restaurant_slug': restaurant_slug})
+
+    # 6. Cashier: Route directly to POS Transaction Desk
+    if user_role == 'CASHIER':
+        return reverse_lazy('restaurant_admin:transaction_desk_create', kwargs={'restaurant_slug': restaurant_slug})
+
+    # 7. Waiter / Captain: Route directly to Dining Floor Plan
+    if user_role == 'WAITER':
+        return reverse_lazy('restaurant_admin:floor_plan_dashboard', kwargs={'restaurant_slug': restaurant_slug})
+
+    # 8. General Manager: Full access across modules (can navigate to either Hotel PMS or Restaurant POS)
     if user_role == 'GENERAL_MANAGER':
         if next_url and not next_url.startswith('/super/') and url_has_allowed_host_and_scheme(
             url=next_url,
@@ -83,7 +103,7 @@ def resolve_user_redirect(request, user, next_url=None):
             return next_url
         return reverse_lazy('restaurant_admin:dashboard', kwargs={'restaurant_slug': restaurant_slug})
 
-    # 4. Restaurant Admin: Route to Restaurant POS (blocks /hotel-admin/ in next_url)
+    # 9. Restaurant Admin: Route to Restaurant POS (blocks /hotel-admin/ in next_url)
     if next_url and not next_url.startswith('/hotel-admin/') and not next_url.startswith('/super/') and url_has_allowed_host_and_scheme(
         url=next_url,
         allowed_hosts={request.get_host()},
@@ -127,10 +147,20 @@ class CustomLoginView(BaseLoginView):
             slug = self._user_restaurant_slug(request.user)
             if slug:
                 user_role = getattr(request.user, 'role', 'RESTAURANT_ADMIN')
-                if user_role == 'HOTEL_ADMIN':
+                if user_role in ['HOTEL_ADMIN', 'FRONT_DESK']:
                     return redirect('hotel_admin:dashboard', restaurant_slug=slug)
+                elif user_role == 'HOUSEKEEPING':
+                    return redirect('hotel_admin:rooms', restaurant_slug=slug)
                 elif user_role == 'CLUB_ADMIN':
                     return redirect('restaurant_admin:club_events_list', restaurant_slug=slug)
+                elif user_role == 'GATE_SCANNER':
+                    return redirect('restaurant_admin:club_gate_scanner', restaurant_slug=slug)
+                elif user_role == 'KITCHEN':
+                    return redirect('restaurant_admin:kitchen_kds', restaurant_slug=slug)
+                elif user_role == 'CASHIER':
+                    return redirect('restaurant_admin:transaction_desk_create', restaurant_slug=slug)
+                elif user_role == 'WAITER':
+                    return redirect('restaurant_admin:floor_plan_dashboard', restaurant_slug=slug)
                 return redirect('restaurant_admin:dashboard', restaurant_slug=slug)
             if request.user.is_superuser or request.user.is_staff:
                 return redirect('super_admin:dashboard')
@@ -142,7 +172,7 @@ class CustomLoginView(BaseLoginView):
         """
         user = form.get_user()
         
-        # Check user's 2FA preference (ON by default)
+        # Check user's 2FA preference (ON by default for management, OFF for operational sub-roles)
         user_2fa_active = True
         try:
             from super_admin.models import UserSecuritySetting
@@ -150,7 +180,11 @@ class CustomLoginView(BaseLoginView):
             if sec_setting is not None:
                 user_2fa_active = sec_setting.is_2fa_enabled
             else:
-                user_2fa_active = True
+                user_role = getattr(user, 'role', None)
+                if user_role in ['CASHIER', 'KITCHEN', 'WAITER', 'HOUSEKEEPING', 'GATE_SCANNER']:
+                    user_2fa_active = False
+                else:
+                    user_2fa_active = True
         except Exception:
             user_2fa_active = True
 

@@ -21,7 +21,7 @@ class RestaurantBranchSerializer(serializers.ModelSerializer):
             'map_iframe_url', 'facebook_url', 'instagram_url', 'twitter_url', 'youtube_url',
             'enable_customer_ordering', 'enable_online_payment', 'enable_pay_at_counter',
             'enforce_operating_hours', 'opening_time', 'closing_time', 'closed_message', 'weekly_schedule',
-            'operating_status', 'has_club_module'
+            'operating_status', 'has_club_module','has_hotel_module'
         ]
 
     def get_address(self, obj):

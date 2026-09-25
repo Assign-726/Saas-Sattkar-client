@@ -514,24 +514,28 @@
         }
     </style>
     {% block extra_css %}{% endblock %}
+    {% block extra_head %}{% endblock %}
 </head>
 <body>
 
     <!-- Dedicated Hotel Sidebar -->
     <aside class="pms-sidebar" id="pmsSidebar">
         <div class="pms-sidebar-header">
-            <a href="{% url 'hotel_admin:dashboard' restaurant_slug=rslug %}" class="pms-brand">
+            <a href="{% if is_housekeeping %}{% url 'hotel_admin:rooms' restaurant_slug=rslug %}{% else %}{% url 'hotel_admin:dashboard' restaurant_slug=rslug %}{% endif %}" class="pms-brand">
                 <div class="pms-brand-icon">
-                    <i class="fa-solid fa-hotel"></i>
+                    <i class="fa-solid {% if is_housekeeping %}fa-broom{% elif is_front_desk %}fa-bell-concierge{% else %}fa-hotel{% endif %}"></i>
                 </div>
                 <div class="d-flex flex-column overflow-hidden">
                     <span class="pms-brand-title text-truncate">{{ current_branch.name|default:current_restaurant.name }}</span>
-                    <span class="pms-badge-hotel">Hotel PMS Desk</span>
+                    <span class="pms-badge-hotel">
+                        {% if is_housekeeping %}Housekeeping Desk{% elif is_front_desk %}Front Desk PMS{% else %}Hotel PMS Desk{% endif %}
+                    </span>
                 </div>
             </a>
         </div>
 
         <div class="pms-nav-container">
+            {% if show_front_desk_ops %}
             <div class="pms-section-title">Front Desk Operations</div>
             <a href="{% url 'hotel_admin:dashboard' restaurant_slug=rslug %}" class="pms-nav-link {% if active_menu == 'dashboard' %}active{% endif %}">
                 <div class="pms-nav-link-content">
@@ -549,34 +553,62 @@
             <a href="{% url 'hotel_admin:bookings' restaurant_slug=rslug %}" class="pms-nav-link {% if active_menu == 'bookings' %}active{% endif %}">
                 <div class="pms-nav-link-content">
                     <i class="fa-solid fa-bell-concierge"></i>
-                    <span>Guest Folios & Bookings</span>
+                    <span>Guest Folios &amp; Bookings</span>
                 </div>
             </a>
+            {% endif %}
 
-            <div class="pms-section-title mt-3">Inventory & Housekeeping</div>
+            {% if is_housekeeping %}
+            <div class="pms-section-title">Housekeeping Operations</div>
             <a href="{% url 'hotel_admin:rooms' restaurant_slug=rslug %}" class="pms-nav-link {% if active_menu == 'rooms' %}active{% endif %}">
                 <div class="pms-nav-link-content">
-                    <i class="fa-solid fa-bed"></i>
-                    <span>Rooms & Housekeeping</span>
+                    <i class="fa-solid fa-broom"></i>
+                    <span>Rooms &amp; Housekeeping</span>
                 </div>
                 {% if cleaning_count %}
                 <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill px-2 py-0.5" style="font-size: 0.68rem;">{{ cleaning_count }} Dirty</span>
                 {% endif %}
             </a>
+            {% else %}
+            <div class="pms-section-title mt-3">Inventory &amp; Housekeeping</div>
+            <a href="{% url 'hotel_admin:rooms' restaurant_slug=rslug %}" class="pms-nav-link {% if active_menu == 'rooms' %}active{% endif %}">
+                <div class="pms-nav-link-content">
+                    <i class="fa-solid fa-bed"></i>
+                    <span>Rooms &amp; Housekeeping</span>
+                </div>
+                {% if cleaning_count %}
+                <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill px-2 py-0.5" style="font-size: 0.68rem;">{{ cleaning_count }} Dirty</span>
+                {% endif %}
+            </a>
+            {% if show_room_categories %}
             <a href="{% url 'hotel_admin:categories' restaurant_slug=rslug %}" class="pms-nav-link {% if active_menu == 'categories' %}active{% endif %}">
                 <div class="pms-nav-link-content">
                     <i class="fa-solid fa-tags"></i>
-                    <span>Room Categories & Tariffs</span>
+                    <span>Room Categories &amp; Tariffs</span>
                 </div>
             </a>
+            {% endif %}
+            {% endif %}
 
+            {% if show_hotel_config %}
             <div class="pms-section-title mt-3">Hotel Configuration</div>
+            {% if show_hotel_settings %}
             <a href="{% url 'hotel_admin:settings' restaurant_slug=rslug %}" class="pms-nav-link {% if active_menu == 'settings' %}active{% endif %}">
                 <div class="pms-nav-link-content">
                     <i class="fa-solid fa-sliders"></i>
                     <span>Hotel Settings</span>
                 </div>
             </a>
+            {% endif %}
+            {% if show_hotel_staff %}
+            <a href="{% url 'hotel_admin:staff_list' restaurant_slug=rslug %}" class="pms-nav-link {% if active_menu == 'staff' %}active{% endif %}">
+                <div class="pms-nav-link-content">
+                    <i class="fa-solid fa-users-gear"></i>
+                    <span>Staff &amp; Roles</span>
+                </div>
+            </a>
+            {% endif %}
+            {% endif %}
 
             {% if is_general_manager %}
             <div class="pms-section-title mt-4 text-warning">Venue Switcher</div>
@@ -598,7 +630,9 @@
                     </div>
                     <div class="overflow-hidden" style="font-size: 0.78rem;">
                         <strong class="d-block text-white text-truncate">{{ user.username }}</strong>
-                        <span class="text-white-50" style="font-size: 0.68rem;">{{ user_role|title }}</span>
+                        <span class="text-white-50" style="font-size: 0.68rem;">
+                            {% if is_housekeeping %}Housekeeping{% elif is_front_desk %}Front Desk{% elif is_general_manager %}General Manager{% else %}Hotel Admin{% endif %}
+                        </span>
                     </div>
                 </div>
                 <a href="{% url 'logout' %}" class="btn btn-sm btn-outline-danger p-1 px-2 rounded-2" title="Sign Out">
@@ -692,11 +726,13 @@
                 </div>
                 {% endif %}
 
+                {% if can_create_reservation %}
                 <!-- Quick New Reservation Trigger Button -->
                 <button type="button" class="btn btn-pms-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#newBookingModal">
                     <i class="fa-solid fa-plus"></i>
                     <span class="d-none d-sm-inline">New Reservation</span>
                 </button>
+                {% endif %}
             </div>
         </header>
 

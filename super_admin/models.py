@@ -355,6 +355,51 @@ class RestaurantBranch(models.Model):
     instagram_url = models.URLField(blank=True, default="")
     twitter_url = models.URLField(blank=True, default="")
     youtube_url = models.URLField(blank=True, default="")
+
+    # Branch Custom SMTP / Mailing Credentials
+    email_is_active = models.BooleanField(
+        default=True,
+        verbose_name="Enable Branch Custom SMTP",
+        help_text="Use branch-specific email account for outgoing emails instead of Super Admin email"
+    )
+    email_sender_name = models.CharField(
+        max_length=150,
+        blank=True,
+        default="",
+        verbose_name="Email Sender Display Name",
+        help_text="Name displayed as sender (e.g. 'Royal Dine & Club')"
+    )
+    email_host_user = models.EmailField(
+        blank=True,
+        default="",
+        verbose_name="SMTP Username / Sender Email",
+        help_text="e.g. branch.restaurant@gmail.com"
+    )
+    email_host_password = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="SMTP Password / App Password",
+        help_text="16-character Google App Password or SMTP password"
+    )
+    email_host = models.CharField(
+        max_length=150,
+        default="smtp.gmail.com",
+        blank=True,
+        verbose_name="SMTP Host Server"
+    )
+    email_port = models.PositiveIntegerField(
+        default=587,
+        verbose_name="SMTP Port"
+    )
+    email_use_tls = models.BooleanField(
+        default=True,
+        verbose_name="Use TLS"
+    )
+    email_use_ssl = models.BooleanField(
+        default=False,
+        verbose_name="Use SSL"
+    )
     
     # Feature gating: Club & Events Ticketing module
     has_club_module = models.BooleanField(
@@ -668,10 +713,23 @@ class DocumentSeries(models.Model):
 
 class RestaurantUser(models.Model):
     class Role(models.TextChoices):
+        # 1. Management Roles
         GENERAL_MANAGER = 'GENERAL_MANAGER', 'General Manager'
         RESTAURANT_ADMIN = 'RESTAURANT_ADMIN', 'Restaurant Admin'
         HOTEL_ADMIN = 'HOTEL_ADMIN', 'Hotel Admin'
         CLUB_ADMIN = 'CLUB_ADMIN', 'Club Admin'
+
+        # 2. Restaurant & F&B Sub-Roles
+        CASHIER = 'CASHIER', 'Cashier / Biller'
+        KITCHEN = 'KITCHEN', 'Kitchen / KDS Station'
+        WAITER = 'WAITER', 'Waiter / Captain'
+
+        # 3. Hotel Sub-Roles
+        FRONT_DESK = 'FRONT_DESK', 'Hotel Front Desk'
+        HOUSEKEEPING = 'HOUSEKEEPING', 'Housekeeping Staff'
+
+        # 4. Club & Events Sub-Roles
+        GATE_SCANNER = 'GATE_SCANNER', 'Gate Scanner / Door Staff'
 
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='restaurant_profile')
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='admins')
@@ -685,14 +743,82 @@ class RestaurantUser(models.Model):
     is_primary_admin = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Granular Permissions (For Sub-Roles & Operational Staff)
+    can_apply_discounts = models.BooleanField(
+        default=True,
+        help_text="Permission to apply manual discounts on bills"
+    )
+    can_issue_refunds = models.BooleanField(
+        default=True,
+        help_text="Permission to cancel orders or issue credit notes"
+    )
+    can_manage_menu = models.BooleanField(
+        default=True,
+        help_text="Permission to add or modify menu items, prices, and categories"
+    )
+    can_manage_settings = models.BooleanField(
+        default=True,
+        help_text="Permission to modify venue/branch settings"
+    )
+    can_view_analytics = models.BooleanField(
+        default=True,
+        help_text="Permission to view sales analytics and financial reports"
+    )
+    can_view_inventory = models.BooleanField(
+        default=True,
+        help_text="Permission to access stock, purchase register, and adjustments"
+    )
+    pos_pin = models.CharField(
+        max_length=8,
+        blank=True,
+        null=True,
+        help_text="Quick 4-6 digit numeric PIN for fast terminal access"
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_staff_profiles'
+    )
+
     class Meta:
         unique_together = ('user', 'restaurant')
-        verbose_name = 'Restaurant Admin'
-        verbose_name_plural = 'Restaurant Admins'
+        verbose_name = 'Restaurant Staff & Admin'
+        verbose_name_plural = 'Restaurant Staff & Admins'
 
     def __str__(self):
         branch_str = f" ({self.branch.name})" if self.branch else ""
         return f"{self.user.username} [{self.get_role_display()}] -> {self.restaurant.name}{branch_str}"
+
+    @property
+    def is_management(self):
+        return self.role in [
+            self.Role.GENERAL_MANAGER,
+            self.Role.RESTAURANT_ADMIN,
+            self.Role.HOTEL_ADMIN,
+            self.Role.CLUB_ADMIN,
+        ]
+
+    @property
+    def is_sub_role(self):
+        return not self.is_management
+
+    @property
+    def is_pos_staff(self):
+        return self.role in [self.Role.RESTAURANT_ADMIN, self.Role.CASHIER, self.Role.WAITER, self.Role.GENERAL_MANAGER]
+
+    @property
+    def is_kitchen_staff(self):
+        return self.role in [self.Role.KITCHEN, self.Role.RESTAURANT_ADMIN, self.Role.GENERAL_MANAGER]
+
+    @property
+    def is_hotel_staff(self):
+        return self.role in [self.Role.HOTEL_ADMIN, self.Role.FRONT_DESK, self.Role.HOUSEKEEPING, self.Role.GENERAL_MANAGER]
+
+    @property
+    def is_club_staff(self):
+        return self.role in [self.Role.CLUB_ADMIN, self.Role.GATE_SCANNER, self.Role.GENERAL_MANAGER]
 
 
 def _user_role(self):

@@ -1,0 +1,462 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block title %}Staff & Permissions Management - {{ restaurant.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .role-badge {
+        font-size: 0.76rem;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .role-badge-gm { background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; }
+    .role-badge-restro { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+    .role-badge-hotel { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+    .role-badge-club { background: #faf5ff; color: #7e22ce; border: 1px solid #e9d5ff; }
+    .role-badge-cashier { background: #fefce8; color: #a16207; border: 1px solid #fef08a; }
+    .role-badge-kitchen { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+    .role-badge-waiter { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+    .role-badge-frontdesk { background: #f0f9ff; color: #0284c7; border: 1px solid #bae6fd; }
+    .role-badge-housekeeping { background: #f8fafc; color: #475569; border: 1px solid #cbd5e1; }
+    .role-badge-gatescanner { background: #fdf4ff; color: #a21caf; border: 1px solid #f5d0fe; }
+
+    .perm-pill {
+        font-size: 0.7rem;
+        padding: 2px 7px;
+        border-radius: 4px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        margin: 1px;
+    }
+    .perm-pill.granted { background: #ecfdf5; color: #059669; }
+    .perm-pill.denied { background: #fef2f2; color: #dc2626; opacity: 0.6; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 px-md-4 py-3">
+
+    <!-- Header Section -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+        <div>
+            {% if is_club_user %}
+            <div class="mb-2">
+                <a href="{% url 'restaurant_admin:club_events_list' restaurant_slug=rslug %}" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 rounded-pill px-3">
+                    <i class="fas fa-ticket-alt text-warning"></i>
+                    <span>Back to Club Events</span>
+                </a>
+            </div>
+            {% elif is_hotel_user %}
+            <div class="mb-2">
+                <a href="{% url 'hotel_admin:dashboard' restaurant_slug=rslug %}" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 rounded-pill px-3">
+                    <i class="fa-solid fa-hotel text-primary"></i>
+                    <span>Back to Hotel PMS</span>
+                </a>
+            </div>
+            {% endif %}
+            <div class="d-flex align-items-center gap-2">
+                <h1 class="h3 fw-bold text-dark mb-0">
+                    {% if is_club_user %}Club Staff & Door Pass Security
+                    {% elif is_hotel_user %}Hotel Staff & Operations Team
+                    {% else %}Staff & Sub-Roles Management{% endif %}
+                </h1>
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-1">
+                    {{ staff_members|length }} Members
+                </span>
+            </div>
+            <p class="text-muted small mb-0 mt-1">
+                {% if is_club_user %}
+                Manage door bouncers and gate scanners who verify QR ticket passes at entry checkpoints.
+                {% elif is_hotel_user %}
+                Manage front desk receptionists and housekeeping room attendants for this property.
+                {% else %}
+                Create and manage cashiers, kitchen staff, and waiters for your outlet with fine-grained access permissions.
+                {% endif %}
+            </p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <a href="{% url 'restaurant_admin:staff_create' restaurant_slug=rslug %}" class="btn btn-primary d-inline-flex align-items-center gap-2 shadow-sm">
+                <i class="bi bi-person-plus-fill"></i>
+                <span class="fw-semibold">Add Staff Member</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Staff Role Breakdown Cards -->
+    <div class="row g-3 mb-4">
+        {% if is_club_user %}
+        <div class="col-12 col-md-6 col-lg-4">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #4f46e5 !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small text-uppercase fw-bold" style="font-size: 0.7rem;">Active Club Staff</div>
+                        <div class="fs-4 fw-bold text-dark">{{ staff_members|length }}</div>
+                    </div>
+                    <div class="rounded-circle bg-primary-subtle text-primary p-2 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                        <i class="bi bi-people-fill fs-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-6 col-lg-4">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #9333ea !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small text-uppercase fw-bold" style="font-size: 0.7rem;">Door Pass Scanners</div>
+                        <div class="small text-muted">Gate & Bouncers</div>
+                    </div>
+                    <div class="rounded-circle bg-purple-subtle text-purple p-2 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; background: #faf5ff; color: #9333ea;">
+                        <i class="bi bi-shield-check fs-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% elif is_hotel_user %}
+        <div class="col-12 col-md-4">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #4f46e5 !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small text-uppercase fw-bold" style="font-size: 0.7rem;">Total Hotel Staff</div>
+                        <div class="fs-4 fw-bold text-dark">{{ staff_members|length }}</div>
+                    </div>
+                    <div class="rounded-circle bg-primary-subtle text-primary p-2 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                        <i class="fa-solid fa-users fs-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #0284c7 !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small text-uppercase fw-bold" style="font-size: 0.7rem;">Front Desk</div>
+                        <div class="small text-muted">Reception & Check-in</div>
+                    </div>
+                    <div class="rounded-circle bg-info-subtle text-info p-2 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                        <i class="fa-solid fa-concierge-bell fs-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-md-4">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #64748b !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small text-uppercase fw-bold" style="font-size: 0.7rem;">Housekeeping</div>
+                        <div class="small text-muted">Room Maintenance</div>
+                    </div>
+                    <div class="rounded-circle bg-secondary-subtle text-secondary p-2 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                        <i class="fa-solid fa-broom fs-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-6 col-lg-3">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #4f46e5 !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small text-uppercase fw-bold" style="font-size: 0.7rem;">Active Staff</div>
+                        <div class="fs-4 fw-bold text-dark">{{ staff_members|length }}</div>
+                    </div>
+                    <div class="rounded-circle bg-primary-subtle text-primary p-2 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                        <i class="bi bi-people-fill fs-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #ca8a04 !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small text-uppercase fw-bold" style="font-size: 0.7rem;">Point of Sale</div>
+                        <div class="small text-muted">Cashiers & Waiters</div>
+                    </div>
+                    <div class="rounded-circle bg-warning-subtle text-warning p-2 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                        <i class="bi bi-cash-stack fs-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #ea580c !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small text-uppercase fw-bold" style="font-size: 0.7rem;">Kitchen Stations</div>
+                        <div class="small text-muted">Chefs & KDS</div>
+                    </div>
+                    <div class="rounded-circle bg-orange-subtle text-orange p-2 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; background: #fff7ed; color: #ea580c;">
+                        <i class="bi bi-display fs-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #9333ea !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small text-uppercase fw-bold" style="font-size: 0.7rem;">Waiters & Captains</div>
+                        <div class="small text-muted">Dining Service</div>
+                    </div>
+                    <div class="rounded-circle bg-purple-subtle text-purple p-2 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; background: #faf5ff; color: #9333ea;">
+                        <i class="bi bi-person-lines-fill fs-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Filters Bar -->
+    <div class="card border-0 shadow-sm mb-4" style="border-radius: 12px;">
+        <div class="card-body p-3">
+            <form method="get" class="row g-2 align-items-center">
+                {% if roles|length > 1 %}
+                <div class="col-12 col-md-4">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-light border-end-0"><i class="bi bi-funnel"></i></span>
+                        <select name="role" class="form-select border-start-0" onchange="this.form.submit()">
+                            <option value="">-- All Permitted Roles --</option>
+                            {% for r_val, r_lbl in roles %}
+                            <option value="{{ r_val }}" {% if selected_role == r_val %}selected{% endif %}>{{ r_lbl }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                {% endif %}
+                {% if is_gm and available_branches|length > 1 %}
+                <div class="col-12 col-md-4">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-light border-end-0"><i class="bi bi-geo-alt"></i></span>
+                        <select name="branch" class="form-select border-start-0" onchange="this.form.submit()">
+                            <option value="">-- All Branch Outlets --</option>
+                            {% for b in available_branches %}
+                            <option value="{{ b.id }}" {% if selected_branch == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                {% endif %}
+                <div class="col-12 col-md-auto ms-auto d-flex gap-2">
+                    {% if selected_role or selected_branch %}
+                    <a href="{% url 'restaurant_admin:staff_list' restaurant_slug=rslug %}" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-x-circle me-1"></i> Clear Filters
+                    </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Staff Members Directory Table -->
+    <div class="card border-0 shadow-sm" style="border-radius: 14px; overflow: hidden;">
+        <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+            <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                <i class="bi bi-people text-primary"></i> Team Accounts Directory
+            </h6>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size: 0.86rem;">
+                <thead class="table-light text-uppercase text-secondary" style="font-size: 0.72rem; letter-spacing: 0.05em;">
+                    <tr>
+                        <th class="ps-3 py-3">User & Credentials</th>
+                        <th class="py-3">Assigned Sub-Role</th>
+                        <th class="py-3">Assigned Outlet</th>
+                        <th class="py-3">Permission Privileges</th>
+                        <th class="py-3">Security & Status</th>
+                        <th class="py-3">Created Details</th>
+                        <th class="text-end pe-3 py-3">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in staff_members %}
+                    <tr>
+                        <!-- User Name & Username -->
+                        <td class="ps-3 py-3">
+                            <div class="d-flex align-items-center gap-2.5">
+                                <div class="rounded-circle bg-light border text-dark fw-bold d-flex align-items-center justify-content-center"
+                                     style="width: 36px; height: 36px; font-size: 0.85rem;">
+                                    {{ s.user.username|slice:":1"|upper }}
+                                </div>
+                                <div>
+                                    <div class="fw-bold text-dark">
+                                        {% if s.user.first_name %}{{ s.user.first_name }} {{ s.user.last_name }}{% else %}{{ s.user.username }}{% endif %}
+                                    </div>
+                                    <div class="small text-muted font-monospace" style="font-size: 0.78rem;">
+                                        @{{ s.user.username }}
+                                        {% if s.pos_pin %}
+                                        <span class="badge bg-light text-secondary border ms-1" title="POS PIN Code"><i class="bi bi-key-fill"></i> PIN: {{ s.pos_pin }}</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+
+                        <!-- Role Badge -->
+                        <td>
+                            {% if s.role == 'GENERAL_MANAGER' %}
+                            <span class="role-badge role-badge-gm"><i class="bi bi-gem"></i> General Manager</span>
+                            {% elif s.role == 'RESTAURANT_ADMIN' %}
+                            <span class="role-badge role-badge-restro"><i class="bi bi-shield-check"></i> Restaurant Admin</span>
+                            {% elif s.role == 'HOTEL_ADMIN' %}
+                            <span class="role-badge role-badge-hotel"><i class="bi bi-building"></i> Hotel Admin</span>
+                            {% elif s.role == 'CLUB_ADMIN' %}
+                            <span class="role-badge role-badge-club"><i class="bi bi-ticket-perforated"></i> Club Admin</span>
+                            {% elif s.role == 'CASHIER' %}
+                            <span class="role-badge role-badge-cashier"><i class="bi bi-cash"></i> Cashier / Biller</span>
+                            {% elif s.role == 'KITCHEN' %}
+                            <span class="role-badge role-badge-kitchen"><i class="bi bi-fire"></i> Kitchen (KDS)</span>
+                            {% elif s.role == 'WAITER' %}
+                            <span class="role-badge role-badge-waiter"><i class="bi bi-person-badge"></i> Waiter / Captain</span>
+                            {% elif s.role == 'FRONT_DESK' %}
+                            <span class="role-badge role-badge-frontdesk"><i class="bi bi-person-workspace"></i> Front Desk</span>
+                            {% elif s.role == 'HOUSEKEEPING' %}
+                            <span class="role-badge role-badge-housekeeping"><i class="bi bi-brush"></i> Housekeeping</span>
+                            {% elif s.role == 'GATE_SCANNER' %}
+                            <span class="role-badge role-badge-gatescanner"><i class="bi bi-qr-code-scan"></i> Gate Scanner</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ s.get_role_display }}</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Outlet / Branch -->
+                        <td>
+                            {% if s.branch %}
+                            <div class="fw-semibold text-dark">{{ s.branch.name }}</div>
+                            <span class="badge bg-light text-muted border" style="font-size: 0.68rem;">Branch-Locked</span>
+                            {% else %}
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                                <i class="bi bi-asterisk"></i> All Branches (Primary)
+                            </span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Permissions Summary -->
+                        <td>
+                            <div class="d-flex flex-wrap gap-1" style="max-width: 280px;">
+                                {% if s.role == 'GATE_SCANNER' %}
+                                <span class="perm-pill {% if s.can_view_analytics %}granted{% else %}denied{% endif %}" title="View Ticket Sales & Pricing">
+                                    <i class="bi {% if s.can_view_analytics %}bi-check-circle-fill{% else %}bi-x-circle{% endif %}"></i> Sales & Prices
+                                </span>
+                                <span class="perm-pill {% if s.can_issue_refunds %}granted{% else %}denied{% endif %}" title="Undo Door Check-Ins">
+                                    <i class="bi {% if s.can_issue_refunds %}bi-check-circle-fill{% else %}bi-x-circle{% endif %}"></i> Undo Check-in
+                                </span>
+                                <span class="perm-pill {% if s.can_apply_discounts %}granted{% else %}denied{% endif %}" title="Issue Door / Walk-in Passes">
+                                    <i class="bi {% if s.can_apply_discounts %}bi-check-circle-fill{% else %}bi-x-circle{% endif %}"></i> Door Passes
+                                </span>
+                                <span class="perm-pill {% if s.can_manage_menu %}granted{% else %}denied{% endif %}" title="View Pass QR Codes">
+                                    <i class="bi {% if s.can_manage_menu %}bi-check-circle-fill{% else %}bi-x-circle{% endif %}"></i> QR Passes
+                                </span>
+                                {% elif s.role == 'KITCHEN' %}
+                                <span class="perm-pill {% if s.can_view_analytics %}granted{% else %}denied{% endif %}" title="View Analytics & Reports">
+                                    <i class="bi {% if s.can_view_analytics %}bi-check-circle-fill{% else %}bi-x-circle{% endif %}"></i> Analytics
+                                </span>
+                                <span class="perm-pill {% if s.can_view_inventory %}granted{% else %}denied{% endif %}" title="Access Stock & Inventory">
+                                    <i class="bi {% if s.can_view_inventory %}bi-check-circle-fill{% else %}bi-x-circle{% endif %}"></i> Inventory
+                                </span>
+                                <span class="perm-pill {% if s.can_manage_menu %}granted{% else %}denied{% endif %}" title="Manage Menu Availability">
+                                    <i class="bi {% if s.can_manage_menu %}bi-check-circle-fill{% else %}bi-x-circle{% endif %}"></i> Menu
+                                </span>
+                                {% elif s.role == 'WAITER' %}
+                                <span class="perm-pill {% if s.can_apply_discounts %}granted{% else %}denied{% endif %}" title="Apply Discounts">
+                                    <i class="bi {% if s.can_apply_discounts %}bi-check-circle-fill{% else %}bi-x-circle{% endif %}"></i> Discount
+                                </span>
+                                <span class="perm-pill {% if s.can_manage_menu %}granted{% else %}denied{% endif %}" title="View Menu & Prices">
+                                    <i class="bi {% if s.can_manage_menu %}bi-check-circle-fill{% else %}bi-x-circle{% endif %}"></i> Menu
+                                </span>
+                                <span class="perm-pill {% if s.can_view_analytics %}granted{% else %}denied{% endif %}" title="View Sales Analytics">
+                                    <i class="bi {% if s.can_view_analytics %}bi-check-circle-fill{% else %}bi-x-circle{% endif %}"></i> Analytics
+                                </span>
+                                {% else %}
+                                <span class="perm-pill {% if s.can_apply_discounts %}granted{% else %}denied{% endif %}" title="Discount Permission">
+                                    <i class="bi {% if s.can_apply_discounts %}bi-check-circle-fill{% else %}bi-x-circle{% endif %}"></i> Discount
+                                </span>
+                                <span class="perm-pill {% if s.can_issue_refunds %}granted{% else %}denied{% endif %}" title="Credit Note / Refund Permission">
+                                    <i class="bi {% if s.can_issue_refunds %}bi-check-circle-fill{% else %}bi-x-circle{% endif %}"></i> Refund
+                                </span>
+                                <span class="perm-pill {% if s.can_manage_menu %}granted{% else %}denied{% endif %}" title="Menu Edit Permission">
+                                    <i class="bi {% if s.can_manage_menu %}bi-check-circle-fill{% else %}bi-x-circle{% endif %}"></i> Menu
+                                </span>
+                                <span class="perm-pill {% if s.can_view_analytics %}granted{% else %}denied{% endif %}" title="View Financial Analytics">
+                                    <i class="bi {% if s.can_view_analytics %}bi-check-circle-fill{% else %}bi-x-circle{% endif %}"></i> Analytics
+                                </span>
+                                <span class="perm-pill {% if s.can_view_inventory %}granted{% else %}denied{% endif %}" title="View Stock & Costs">
+                                    <i class="bi {% if s.can_view_inventory %}bi-check-circle-fill{% else %}bi-x-circle{% endif %}"></i> Inventory
+                                </span>
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        <!-- Status & 2FA -->
+                        <td>
+                            <form method="post" action="{% url 'restaurant_admin:staff_toggle_active' restaurant_slug=rslug pk=s.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                {% if s.user.is_active %}
+                                <button type="submit" class="btn btn-sm btn-outline-success border-0 px-2 py-0.5 rounded-pill" title="Click to Deactivate">
+                                    <i class="bi bi-circle-fill fs-8 me-1 text-success"></i> Active
+                                </button>
+                                {% else %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger border-0 px-2 py-0.5 rounded-pill" title="Click to Activate">
+                                    <i class="bi bi-x-circle-fill fs-8 me-1 text-danger"></i> Inactive
+                                </button>
+                                {% endif %}
+                            </form>
+                            <div class="mt-1" style="font-size: 0.72rem;">
+                                {% if s.user.security_setting and s.user.security_setting.is_2fa_enabled %}
+                                <span class="text-primary fw-semibold"><i class="bi bi-shield-lock-fill"></i> 2FA OTP ON</span>
+                                {% else %}
+                                <span class="text-muted"><i class="bi bi-shield-slash"></i> 2FA OFF</span>
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        <!-- Created By & Date -->
+                        <td class="small text-muted">
+                            <div>{{ s.created_at|date:"M d, Y" }}</div>
+                            {% if s.created_by %}
+                            <div style="font-size: 0.72rem;">by @{{ s.created_by.username }}</div>
+                            {% endif %}
+                        </td>
+
+                        <!-- Action Buttons -->
+                        <td class="text-end pe-3">
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'restaurant_admin:staff_edit' restaurant_slug=rslug pk=s.pk %}" class="btn btn-light border" title="Edit Staff & Permissions">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% if s.user != request.user and not s.user.is_superuser %}
+                                <a href="{% url 'restaurant_admin:staff_delete' restaurant_slug=rslug pk=s.pk %}"
+                                   class="btn btn-light border text-danger"
+                                   onclick="return confirm('Are you sure you want to permanently delete staff member {{ s.user.username }}?');"
+                                   title="Delete Account">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="bi bi-people display-6 d-block mb-2 text-secondary opacity-50"></i>
+                            <div class="fw-semibold">No staff members found matching this filter.</div>
+                            <div class="small">Click "Add Staff Member" above to create your cashiers, cooks, or door security.</div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

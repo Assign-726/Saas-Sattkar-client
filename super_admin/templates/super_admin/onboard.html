@@ -1572,7 +1572,8 @@
       gst_registration_type: "R5",
       is_hotel_tariff_7500_plus: false,
       e_invoicing_enabled: false,
-      has_club_module: false
+      has_club_module: false,
+      has_hotel_module: false
     };
 
     branches.push(newBranch);
@@ -1663,6 +1664,9 @@
             {% endif %}
             {% if ENABLE_CLUB_EVENTS_MODULE %}
             ${b.has_club_module ? `<span class="badge-tag" style="background: #f3e8ff; color: #7e22ce; padding: 3px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; border: 1px solid #d8b4fe;"><i class="fa-solid fa-ticket"></i> Club Events Active</span>` : ''}
+            {% endif %}
+            {% if ENABLE_HOTEL_MODULE %}
+            ${b.has_hotel_module ? `<span class="badge-tag" style="background: #e0f2fe; color: #0369a1; padding: 3px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; border: 1px solid #bae6fd;"><i class="fa-solid fa-hotel"></i> Hotel & Rooms Active</span>` : ''}
             {% endif %}
           </div>
 
@@ -1783,6 +1787,30 @@
                     <i class="fa-solid fa-check"></i> Enabled
                   </button>
                   <button type="button" class="toggle-btn ${!b.has_club_module ? 'active' : ''}" style="flex: 1;" onclick="setBranchClubModule(${idx}, false)">
+                    Disabled
+                  </button>
+                </div>
+              </div>
+            </div>
+            {% endif %}
+
+            {% if ENABLE_HOTEL_MODULE %}
+            <!-- Hotel & Rooms PMS Module Permission Toggle -->
+            <div class="form-group full-width" style="margin-top: 8px; padding: 14px 16px; background: #f0f9ff; border: 1.5px solid #7dd3fc; border-radius: 12px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                <div>
+                  <label class="form-label" style="font-size: 14px; font-weight: 700; color: #0369a1; margin-bottom: 2px; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-hotel" style="color: #0284c7; font-size: 15px;"></i> Enable Hotel & Rooms PMS Module
+                  </label>
+                  <span class="form-hint" style="color: #0284c7; font-size: 12px; line-height: 1.4; display: block;">
+                    Grants this branch permission to manage front desk, tape chart, room categories, live room inventory, bookings, and guest folios.
+                  </span>
+                </div>
+                <div class="toggle-group" style="width: 100%; max-width: 220px; border-color: #7dd3fc;">
+                  <button type="button" class="toggle-btn ${b.has_hotel_module ? 'active' : ''}" style="flex: 1; ${b.has_hotel_module ? 'background-color: #0284c7 !important; color: #ffffff !important;' : ''}" onclick="setBranchHotelModule(${idx}, true)">
+                    <i class="fa-solid fa-check"></i> Enabled
+                  </button>
+                  <button type="button" class="toggle-btn ${!b.has_hotel_module ? 'active' : ''}" style="flex: 1;" onclick="setBranchHotelModule(${idx}, false)">
                     Disabled
                   </button>
                 </div>
@@ -1930,6 +1958,31 @@
           console.log(data.message);
         }
       }).catch(err => console.warn('Club module instant toggle warning:', err));
+    }
+  }
+
+  function setBranchHotelModule(idx, val) {
+    syncBranchesFromDOM();
+    branches[idx].has_hotel_module = val;
+    renderBranchCards();
+    const branchesJsonElem = document.getElementById("branches_json");
+    if (branchesJsonElem) branchesJsonElem.value = JSON.stringify(branches);
+
+    // If branch already exists in DB, persist immediately via AJAX
+    if (branches[idx].id) {
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+      fetch(`/super/api/branches/${branches[idx].id}/toggle-hotel-module/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ has_hotel_module: val })
+      }).then(res => res.json()).then(data => {
+        if (data.success) {
+          console.log('Hotel module updated successfully:', data);
+        }
+      }).catch(err => console.warn('Hotel module instant toggle warning:', err));
     }
   }
 

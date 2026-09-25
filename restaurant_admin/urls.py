@@ -3,6 +3,7 @@ from restaurant_admin import views
 from restaurant_admin import views_reservations
 from restaurant_admin import floor_plan_views
 from restaurant_admin import views_events
+from restaurant_admin import views_staff
 
 app_name = 'restaurant_admin'
 
@@ -22,6 +23,7 @@ urlpatterns = [
     path('', views.dashboard, name='dashboard'),
     path('analytics/', views.sales_analytics, name='sales_analytics'),
     path('settings/', views.settings_view, name='settings'),
+    path('settings/test-email/', views.restaurant_test_email_view, name='test_email'),
     path('settings/custom-charges/save/', views.custom_charge_save, name='custom_charge_save'),
     path('settings/custom-charges/<int:pk>/delete/', views.custom_charge_delete, name='custom_charge_delete'),
     
@@ -176,4 +178,11 @@ urlpatterns = [
     path('club-events/<int:event_id>/ticket-grid/api/', views_events.club_ticket_grid_api, name='club_ticket_grid_api'),
     path('club-events/gate-scanner/', views_events.club_gate_scanner, name='club_gate_scanner'),
     path('club-events/<int:event_id>/gate-scanner/', views_events.club_gate_scanner, name='club_gate_scanner_event'),
+
+    # Staff & Permissions Management
+    path('staff/', views_staff.staff_list, name='staff_list'),
+    path('staff/create/', views_staff.staff_create, name='staff_create'),
+    path('staff/<int:pk>/edit/', views_staff.staff_edit, name='staff_edit'),
+    path('staff/<int:pk>/toggle-active/', views_staff.staff_toggle_active, name='staff_toggle_active'),
+    path('staff/<int:pk>/delete/', views_staff.staff_delete, name='staff_delete'),
 ]

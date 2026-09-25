@@ -68,5 +68,8 @@ ENABLE_CLUB_EVENTS_MODULE = _get_env_bool(
     _get_env_bool('ENABLE_CLUB_MODULE', True)
 )
 
-
-
+# Controls whether Hotel & Rooms PMS Module is enabled and visible in Super Admin / system
+ENABLE_HOTEL_MODULE = _get_env_bool(
+    'ENABLE_HOTEL_MODULE',
+    _get_env_bool('ENABLE_HOTEL_PMS_MODULE', True)
+)
