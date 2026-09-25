@@ -890,7 +890,10 @@ class RestaurantBranchComplianceForm(forms.ModelForm):
             'fssai_license_no', 'vat_tin', 'excise_license_no',
             'vat_beer_rate', 'vat_imfl_rate', 'vat_wine_rate',
             'latitude', 'longitude', 'geofence_radius_meters', 'enforce_geofence',
-            'enforce_operating_hours', 'opening_time', 'closing_time', 'closed_message', 'weekly_schedule'
+            'enforce_operating_hours', 'opening_time', 'closing_time', 'closed_message', 'weekly_schedule',
+            # Branch Custom SMTP / Mailing
+            'email_is_active', 'email_sender_name', 'email_host_user', 'email_host_password',
+            'email_host', 'email_port', 'email_use_tls', 'email_use_ssl'
         ]
         widgets = {
             'service_charge_percentage': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'placeholder': '0.00'}),
@@ -909,12 +912,21 @@ class RestaurantBranchComplianceForm(forms.ModelForm):
             'closing_time': forms.TimeInput(attrs={'type': 'time', 'class': 'form-control'}),
             'closed_message': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Doors open at 11:00 AM. Thank you for your patience!'}),
             'weekly_schedule': forms.HiddenInput(),
+            
+            'email_is_active': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
+            'email_sender_name': forms.TextInput(attrs={'placeholder': 'e.g. Royal Dine & Lounge'}),
+            'email_host_user': forms.EmailInput(attrs={'placeholder': 'e.g. branch@gmail.com'}),
+            'email_host_password': forms.PasswordInput(render_value=True, attrs={'class': 'font-mono', 'placeholder': '16-character App Password'}),
+            'email_host': forms.TextInput(attrs={'class': 'font-mono', 'placeholder': 'smtp.gmail.com'}),
+            'email_port': forms.NumberInput(attrs={'class': 'font-mono', 'placeholder': '587'}),
+            'email_use_tls': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
+            'email_use_ssl': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields:
-            if field in ['enforce_geofence', 'enforce_operating_hours']:
+            if field in ['enforce_geofence', 'enforce_operating_hours', 'email_is_active', 'email_use_tls', 'email_use_ssl']:
                 self.fields[field].widget.attrs.update({'class': 'form-check-input'})
             elif field == 'weekly_schedule':
                 pass

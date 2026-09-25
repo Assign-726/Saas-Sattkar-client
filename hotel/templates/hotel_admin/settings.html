@@ -149,6 +149,11 @@
                 <i class="fa-solid fa-file-invoice me-1.5 text-warning"></i> Invoicing &amp; Receipts
             </button>
         </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-email" type="button" role="tab">
+                <i class="fa-solid fa-envelope me-1.5 text-danger"></i> Email &amp; SMTP
+            </button>
+        </li>
     </ul>
 
     <!-- Tab Contents -->
@@ -484,6 +489,134 @@
 
         </div>
 
+        <!-- ========================================== -->
+        <!-- TAB 5: HOTEL CUSTOM SMTP / EMAIL SETTINGS  -->
+        <!-- ========================================== -->
+        <div class="tab-pane fade" id="tab-email" role="tabpanel">
+            <div class="settings-section-card">
+                <div class="settings-card-header">
+                    <div>
+                        <h6 class="fw-bold mb-0 text-dark">
+                            <i class="fa-solid fa-envelope-open-text text-danger me-2"></i>Hotel Outgoing Email &amp; SMTP Configuration
+                        </h6>
+                        <small class="text-muted">Configure hotel-specific SMTP credentials (e.g. Gmail App Password) for booking confirmations, guest folios, and PMS notifications.</small>
+                    </div>
+                    <div class="form-check form-switch m-0 d-flex align-items-center gap-2">
+                        {{ form.email_is_active }}
+                        <label class="form-check-label fw-bold small text-dark" for="{{ form.email_is_active.id_for_label }}">
+                            Enable Hotel SMTP
+                        </label>
+                    </div>
+                </div>
+                <div class="settings-card-body">
+                    <!-- Status / Guide Alert -->
+                    <div class="p-3 mb-4 rounded-3 border d-flex align-items-start gap-3" style="background: #F8FAFC;">
+                        <div class="text-primary mt-1" style="font-size: 1.25rem;">
+                            <i class="fa-solid fa-circle-info"></i>
+                        </div>
+                        <div class="small text-muted flex-grow-1">
+                            <strong class="text-dark d-block mb-1">Branch Isolation &amp; Delivery Routing</strong>
+                            When <strong class="text-dark">enabled</strong>, room booking confirmations, guest folios, and PMS alerts will be dispatched directly from your hotel's customized email address and SMTP server.
+                            If <strong class="text-dark">disabled</strong>, all emails will automatically fall back to the Super Admin's global email service without service interruption.
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <!-- Sender Display Name -->
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted fw-bold">Sender Display Name</label>
+                            {{ form.email_sender_name }}
+                            <small class="text-muted">The name shown in the guest's inbox (e.g., <em>The Grand Royal Palace</em>)</small>
+                        </div>
+
+                        <!-- Sender Email Address -->
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted fw-bold">Sender Email Address (Username)</label>
+                            {{ form.email_host_user }}
+                            <small class="text-muted">e.g. <code>reservations@grandroyal.com</code> or Gmail account</small>
+                        </div>
+
+                        <!-- SMTP App Password -->
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted fw-bold">SMTP Password / Google App Password</label>
+                            <div class="input-group">
+                                {{ form.email_host_password }}
+                                <button class="btn btn-outline-secondary" type="button" onclick="toggleSecretVisibility('{{ form.email_host_password.id_for_label }}');">
+                                    <i class="fa-solid fa-eye" id="toggle-icon-{{ form.email_host_password.id_for_label }}"></i>
+                                </button>
+                            </div>
+                            <small class="text-muted">For Gmail, generate a 16-character <strong>App Password</strong> in Google Account Security.</small>
+                        </div>
+
+                        <!-- SMTP Host -->
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted fw-bold">SMTP Host Server</label>
+                            {{ form.email_host }}
+                            <small class="text-muted">Default: <code>smtp.gmail.com</code></small>
+                        </div>
+
+                        <!-- SMTP Port -->
+                        <div class="col-md-2">
+                            <label class="form-label small text-muted fw-bold">Port</label>
+                            {{ form.email_port }}
+                            <small class="text-muted">Default: <code>587</code></small>
+                        </div>
+
+                        <!-- TLS & SSL Security Toggles -->
+                        <div class="col-md-6">
+                            <div class="p-3 bg-light rounded-3 d-flex align-items-center justify-content-between">
+                                <div>
+                                    <strong class="d-block small text-dark">Use TLS Encryption</strong>
+                                    <span class="text-muted" style="font-size: 0.75rem;">Recommended for Port 587 (Standard Gmail SMTP)</span>
+                                </div>
+                                <div class="form-check form-switch m-0">
+                                    {{ form.email_use_tls }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="p-3 bg-light rounded-3 d-flex align-items-center justify-content-between">
+                                <div>
+                                    <strong class="d-block small text-dark">Use SSL Encryption</strong>
+                                    <span class="text-muted" style="font-size: 0.75rem;">Required for Port 465 (Direct SSL)</span>
+                                </div>
+                                <div class="form-check form-switch m-0">
+                                    {{ form.email_use_ssl }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live Test Email Box -->
+                    <div class="p-3 border rounded-3 bg-white mt-4">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-2">
+                            <div>
+                                <h6 class="fw-bold mb-1 text-dark">
+                                    <i class="fa-solid fa-paper-plane text-primary me-1.5"></i>Test Outgoing Email Connection
+                                </h6>
+                                <p class="text-muted small mb-0">Verify your Google App Password and SMTP handshake before saving.</p>
+                            </div>
+                        </div>
+
+                        <div class="row g-2 align-items-center mt-1">
+                            <div class="col-md-6">
+                                <input type="email" id="hotelTestRecipient" class="form-control form-control-sm" placeholder="Enter recipient email (e.g. your personal email)" value="{{ request.user.email|default:'' }}">
+                            </div>
+                            <div class="col-md-auto">
+                                <button type="button" class="btn btn-outline-primary btn-sm px-3 fw-semibold rounded-pill" id="btnHotelTestEmail" onclick="sendHotelTestEmail();">
+                                    <i class="fa-solid fa-vial me-1"></i> Send Test Email
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="hotelTestEmailResult" class="mt-3" style="display: none;"></div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <!-- Floating Sticky Save Bar -->
@@ -584,6 +717,81 @@
             document.getElementById('test-step-loading').style.display = 'none';
             document.getElementById('test-step-success').style.display = 'block';
         }, 1200);
+    }
+
+    function sendHotelTestEmail() {
+        const btn = document.getElementById('btnHotelTestEmail');
+        const resDiv = document.getElementById('hotelTestEmailResult');
+        const recipientInput = document.getElementById('hotelTestRecipient');
+        const recipient = recipientInput ? recipientInput.value.trim() : '';
+
+        const senderNameInput = document.getElementById('id_email_sender_name');
+        const hostUserInput = document.getElementById('id_email_host_user');
+        const hostPasswordInput = document.getElementById('id_email_host_password');
+        const hostInput = document.getElementById('id_email_host');
+        const portInput = document.getElementById('id_email_port');
+        const useTlsInput = document.getElementById('id_email_use_tls');
+        const useSslInput = document.getElementById('id_email_use_ssl');
+
+        const senderName = senderNameInput ? senderNameInput.value.trim() : '';
+        const hostUser = hostUserInput ? hostUserInput.value.trim() : '';
+        const hostPassword = hostPasswordInput ? hostPasswordInput.value.trim() : '';
+        const host = hostInput ? hostInput.value.trim() : 'smtp.gmail.com';
+        const port = portInput ? portInput.value.trim() : '587';
+        const useTls = useTlsInput ? useTlsInput.checked : true;
+        const useSsl = useSslInput ? useSslInput.checked : false;
+
+        if (!hostUser || !hostPassword) {
+            resDiv.style.display = 'block';
+            resDiv.innerHTML = '<div class="alert alert-warning py-2 px-3 small mb-0"><i class="fa-solid fa-triangle-exclamation me-1"></i> Please enter both SMTP Username (Email) and Password (App Password) before testing.</div>';
+            return;
+        }
+
+        if (!recipient) {
+            resDiv.style.display = 'block';
+            resDiv.innerHTML = '<div class="alert alert-warning py-2 px-3 small mb-0"><i class="fa-solid fa-triangle-exclamation me-1"></i> Please specify a test recipient email address.</div>';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span> Connecting...';
+        resDiv.style.display = 'block';
+        resDiv.innerHTML = '<div class="alert alert-info py-2 px-3 small mb-0"><i class="fa-solid fa-circle-notch fa-spin me-1"></i> Establishing SMTP connection and sending test email...</div>';
+
+        const formData = new FormData();
+        formData.append('email_host', host);
+        formData.append('email_port', port);
+        formData.append('email_host_user', hostUser);
+        formData.append('email_host_password', hostPassword);
+        formData.append('email_use_tls', useTls);
+        formData.append('email_use_ssl', useSsl);
+        formData.append('email_sender_name', senderName);
+        formData.append('test_recipient', recipient);
+
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]') ? document.querySelector('[name=csrfmiddlewaretoken]').value : '';
+
+        fetch("{% url 'hotel_admin:test_email' restaurant_slug=current_restaurant.slug %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            },
+            body: formData
+        })
+        .then(response => response.json().then(data => ({ status: response.status, body: data })))
+        .then(({ status, body }) => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-vial me-1"></i> Send Test Email';
+            if (body.success) {
+                resDiv.innerHTML = `<div class="alert alert-success py-2 px-3 small mb-0"><i class="fa-solid fa-circle-check me-1"></i> <strong>Success!</strong> ${body.message}</div>`;
+            } else {
+                resDiv.innerHTML = `<div class="alert alert-danger py-2 px-3 small mb-0"><i class="fa-solid fa-circle-xmark me-1"></i> <strong>Failed:</strong> ${body.message}</div>`;
+            }
+        })
+        .catch(err => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-vial me-1"></i> Send Test Email';
+            resDiv.innerHTML = `<div class="alert alert-danger py-2 px-3 small mb-0"><i class="fa-solid fa-triangle-exclamation me-1"></i> Network error: ${err.message}</div>`;
+        });
     }
 </script>
 {% endblock %}

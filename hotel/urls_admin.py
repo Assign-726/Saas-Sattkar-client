@@ -36,4 +36,5 @@ urlpatterns = [
 
     # Hotel Configuration & Settings
     path('settings/', views_admin.hotel_settings_view, name='settings'),
+    path('settings/test-email/', views_admin.hotel_test_email_view, name='test_email'),
 ]

@@ -252,3 +252,78 @@ class EmailOTPAuthTests(TestCase):
         expected_url = reverse('restaurant_admin:dashboard', kwargs={'restaurant_slug': 'royal-palace'})
         self.assertEqual(login_resp.url, expected_url)
 
+    def test_dynamic_mail_connection_resolution(self):
+        from core.emails import get_mail_connection_and_sender, send_test_email
+        from super_admin.models import RestaurantBranch
+        from hotel.models import HotelSettings
+
+        # 1. Without branch / hotel settings -> falls back to system global
+        conn, from_email, source = get_mail_connection_and_sender()
+        self.assertEqual(source, "System Global SMTP")
+
+        # 1b. Verify email_is_active defaults to True on new records
+        default_b = RestaurantBranch.objects.create(restaurant=self.restaurant, name="Default Test Branch")
+        self.assertTrue(default_b.email_is_active)
+        default_h = HotelSettings.objects.create(branch=default_b)
+        self.assertTrue(default_h.email_is_active)
+
+        # 2. Branch with email_is_active = False -> falls back to system global
+        branch = RestaurantBranch.objects.create(
+            restaurant=self.restaurant,
+            name="Jaipur Branch",
+            email_is_active=False,
+            email_host_user="branch@jaipur.com",
+            email_host_password="password123"
+        )
+        conn, from_email, source = get_mail_connection_and_sender(branch=branch)
+        self.assertEqual(source, "System Global SMTP")
+
+        # 3. Branch with email_is_active = True -> resolves branch SMTP
+        branch.email_is_active = True
+        branch.email_sender_name = "Royal Jaipur"
+        branch.save()
+        conn, from_email, source = get_mail_connection_and_sender(branch=branch)
+        self.assertIn("Branch Custom SMTP", source)
+        self.assertIn("branch@jaipur.com", from_email)
+        self.assertIn("Royal Jaipur", from_email)
+
+        # 4. HotelSettings with email_is_active = True -> takes precedence for hotel operations
+        hotel_settings = HotelSettings.objects.create(
+            branch=branch,
+            hotel_name="Royal Palace Hotel",
+            email_is_active=True,
+            email_sender_name="Royal Palace Desk",
+            email_host_user="reservations@royalhotel.com",
+            email_host_password="hotelpassword123"
+        )
+        conn, from_email, source = get_mail_connection_and_sender(branch=branch, hotel_settings=hotel_settings)
+        self.assertIn("Hotel Custom SMTP", source)
+        self.assertIn("reservations@royalhotel.com", from_email)
+        self.assertIn("Royal Palace Desk", from_email)
+
+        # 5. Test send_test_email validation
+        success, err = send_test_email(
+            host="smtp.gmail.com",
+            port=587,
+            username="",
+            password="",
+            use_tls=True,
+            use_ssl=False,
+            recipient_email="test@example.com"
+        )
+        self.assertFalse(success)
+        self.assertIn("required", err.lower())
+
+    def test_branch_test_email_endpoint(self):
+        self.client.force_login(self.user)
+        resp = self.client.post(reverse('restaurant_admin:test_email', kwargs={'restaurant_slug': 'royal-palace'}), {
+            'email_host': 'smtp.gmail.com',
+            'email_port': '587',
+            'email_host_user': '',
+            'email_host_password': '',
+            'test_recipient': 'test@domain.com'
+        })
+        self.assertEqual(resp.status_code, 400)
+        data = resp.json()
+        self.assertFalse(data['success'])
+

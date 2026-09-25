@@ -23,6 +23,7 @@ urlpatterns = [
     path('', views.dashboard, name='dashboard'),
     path('analytics/', views.sales_analytics, name='sales_analytics'),
     path('settings/', views.settings_view, name='settings'),
+    path('settings/test-email/', views.restaurant_test_email_view, name='test_email'),
     path('settings/custom-charges/save/', views.custom_charge_save, name='custom_charge_save'),
     path('settings/custom-charges/<int:pk>/delete/', views.custom_charge_delete, name='custom_charge_delete'),
     

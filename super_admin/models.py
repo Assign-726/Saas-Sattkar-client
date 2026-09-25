@@ -355,6 +355,51 @@ class RestaurantBranch(models.Model):
     instagram_url = models.URLField(blank=True, default="")
     twitter_url = models.URLField(blank=True, default="")
     youtube_url = models.URLField(blank=True, default="")
+
+    # Branch Custom SMTP / Mailing Credentials
+    email_is_active = models.BooleanField(
+        default=True,
+        verbose_name="Enable Branch Custom SMTP",
+        help_text="Use branch-specific email account for outgoing emails instead of Super Admin email"
+    )
+    email_sender_name = models.CharField(
+        max_length=150,
+        blank=True,
+        default="",
+        verbose_name="Email Sender Display Name",
+        help_text="Name displayed as sender (e.g. 'Royal Dine & Club')"
+    )
+    email_host_user = models.EmailField(
+        blank=True,
+        default="",
+        verbose_name="SMTP Username / Sender Email",
+        help_text="e.g. branch.restaurant@gmail.com"
+    )
+    email_host_password = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="SMTP Password / App Password",
+        help_text="16-character Google App Password or SMTP password"
+    )
+    email_host = models.CharField(
+        max_length=150,
+        default="smtp.gmail.com",
+        blank=True,
+        verbose_name="SMTP Host Server"
+    )
+    email_port = models.PositiveIntegerField(
+        default=587,
+        verbose_name="SMTP Port"
+    )
+    email_use_tls = models.BooleanField(
+        default=True,
+        verbose_name="Use TLS"
+    )
+    email_use_ssl = models.BooleanField(
+        default=False,
+        verbose_name="Use SSL"
+    )
     
     # Feature gating: Club & Events Ticketing module
     has_club_module = models.BooleanField(

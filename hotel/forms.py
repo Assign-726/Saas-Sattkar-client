@@ -35,6 +35,15 @@ class HotelSettingsForm(forms.ModelForm):
             'invoice_prefix',
             'invoice_footer_notes',
             'currency_symbol',
+            # Custom SMTP & Mailing
+            'email_is_active',
+            'email_sender_name',
+            'email_host_user',
+            'email_host_password',
+            'email_host',
+            'email_port',
+            'email_use_tls',
+            'email_use_ssl',
         ]
         widgets = {
             'hotel_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Sharma Luxury Suites & Hotel'}),
@@ -65,4 +74,13 @@ class HotelSettingsForm(forms.ModelForm):
             'invoice_prefix': forms.TextInput(attrs={'class': 'form-control font-mono', 'placeholder': 'e.g. INV-HTL'}),
             'invoice_footer_notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Footer note printed on guest receipts...'}),
             'currency_symbol': forms.TextInput(attrs={'class': 'form-control', 'style': 'max-width: 100px;'}),
+
+            'email_is_active': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
+            'email_sender_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. Sharma Luxury Suites & Hotel'}),
+            'email_host_user': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'e.g. reservations@sharmahotel.com or gmail ID'}),
+            'email_host_password': forms.PasswordInput(render_value=True, attrs={'class': 'form-control font-mono', 'placeholder': '16-character App Password'}),
+            'email_host': forms.TextInput(attrs={'class': 'form-control font-mono', 'placeholder': 'smtp.gmail.com'}),
+            'email_port': forms.NumberInput(attrs={'class': 'form-control font-mono', 'placeholder': '587'}),
+            'email_use_tls': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
+            'email_use_ssl': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
         }

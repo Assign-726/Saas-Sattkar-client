@@ -983,6 +983,40 @@ def hotel_settings_view(request, restaurant_slug, ctx):
     })
 
 
+@hotel_admin_required
+def hotel_test_email_view(request, restaurant_slug, ctx):
+    """
+    Live test dispatcher for hotel custom SMTP credentials.
+    Accepts POST parameters via AJAX, verifies SMTP connection, and sends a test email.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Invalid request method.'}, status=405)
+
+    from core.emails import send_test_email
+
+    host = request.POST.get('email_host', 'smtp.gmail.com')
+    port = request.POST.get('email_port', 587)
+    username = request.POST.get('email_host_user', '')
+    password = request.POST.get('email_host_password', '')
+    use_tls = request.POST.get('email_use_tls') in ['true', 'True', '1', 'on']
+    use_ssl = request.POST.get('email_use_ssl') in ['true', 'True', '1', 'on']
+    recipient = request.POST.get('test_recipient', '').strip() or request.user.email
+    sender_name = request.POST.get('email_sender_name', '').strip() or "Hotel PMS"
+
+    success, message = send_test_email(
+        host=host,
+        port=port,
+        username=username,
+        password=password,
+        use_tls=use_tls,
+        use_ssl=use_ssl,
+        recipient_email=recipient,
+        sender_name=sender_name
+    )
+
+    return JsonResponse({'success': success, 'message': message}, status=200 if success else 400)
+
+
 # ==============================================================================
 # HOTEL STAFF & OPERATIONS TEAM MANAGEMENT (PMS-NATIVE)
 # ==============================================================================

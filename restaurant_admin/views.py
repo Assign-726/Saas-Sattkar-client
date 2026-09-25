@@ -6094,6 +6094,41 @@ def settings_view(request, restaurant_slug=None):
 
 @login_required
 @user_passes_test(is_admin)
+def restaurant_test_email_view(request, restaurant_slug=None):
+    """
+    Live test dispatcher for restaurant branch custom SMTP credentials.
+    Accepts POST parameters via AJAX, verifies SMTP connection, and sends a test email.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Invalid request method.'}, status=405)
+
+    from core.emails import send_test_email
+
+    host = request.POST.get('email_host', 'smtp.gmail.com')
+    port = request.POST.get('email_port', 587)
+    username = request.POST.get('email_host_user', '')
+    password = request.POST.get('email_host_password', '')
+    use_tls = request.POST.get('email_use_tls') in ['true', 'True', '1', 'on']
+    use_ssl = request.POST.get('email_use_ssl') in ['true', 'True', '1', 'on']
+    recipient = request.POST.get('test_recipient', '').strip() or request.user.email
+    sender_name = request.POST.get('email_sender_name', '').strip() or "Restaurant Portal"
+
+    success, message = send_test_email(
+        host=host,
+        port=port,
+        username=username,
+        password=password,
+        use_tls=use_tls,
+        use_ssl=use_ssl,
+        recipient_email=recipient,
+        sender_name=sender_name
+    )
+
+    return JsonResponse({'success': success, 'message': message}, status=200 if success else 400)
+
+
+@login_required
+@user_passes_test(is_admin)
 def custom_charge_save(request, restaurant_slug=None):
     restaurant = resolve_restaurant(request, restaurant_slug)
     if not isinstance(restaurant, Restaurant):

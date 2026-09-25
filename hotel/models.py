@@ -435,6 +435,51 @@ class HotelSettings(models.Model):
     )
     currency_symbol = models.CharField(max_length=10, default="₹", verbose_name="Currency Symbol")
 
+    # Hotel Custom SMTP / Mailing Credentials
+    email_is_active = models.BooleanField(
+        default=True,
+        verbose_name="Enable Hotel Custom SMTP",
+        help_text="Use hotel-specific email account for guest confirmations and invoices"
+    )
+    email_sender_name = models.CharField(
+        max_length=150,
+        blank=True,
+        default="",
+        verbose_name="Hotel Sender Display Name",
+        help_text="Name displayed to guests (e.g. 'Royal Heritage Palace')"
+    )
+    email_host_user = models.EmailField(
+        blank=True,
+        default="",
+        verbose_name="Hotel SMTP Email Address",
+        help_text="e.g. reservations@royalheritage.com or hotel.jaipur@gmail.com"
+    )
+    email_host_password = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Hotel SMTP Password / App Password",
+        help_text="16-character Google App Password or SMTP password"
+    )
+    email_host = models.CharField(
+        max_length=150,
+        default="smtp.gmail.com",
+        blank=True,
+        verbose_name="SMTP Host"
+    )
+    email_port = models.PositiveIntegerField(
+        default=587,
+        verbose_name="SMTP Port"
+    )
+    email_use_tls = models.BooleanField(
+        default=True,
+        verbose_name="Use TLS"
+    )
+    email_use_ssl = models.BooleanField(
+        default=False,
+        verbose_name="Use SSL"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
