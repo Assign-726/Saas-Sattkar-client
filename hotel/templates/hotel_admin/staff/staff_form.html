@@ -1,0 +1,300 @@
+{% extends 'hotel_admin/base_hotel.html' %}
+{% load static %}
+
+{% block title %}{% if is_edit %}Edit Hotel Staff (@{{ target_user.username }}){% else %}Add Hotel Staff Member{% endif %} | {{ current_restaurant.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-card {
+        background: #FFFFFF;
+        border: 1px solid var(--pms-border);
+        border-radius: 16px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        overflow: hidden;
+    }
+    .form-card-header {
+        padding: 1.15rem 1.5rem;
+        background: rgba(248, 250, 252, 0.7);
+        border-bottom: 1px solid var(--pms-border);
+    }
+    .form-card-body {
+        padding: 1.5rem;
+    }
+    .role-option-card {
+        border: 1.5px solid var(--pms-border);
+        border-radius: 12px;
+        padding: 1rem;
+        cursor: pointer;
+        transition: all 0.18s ease;
+        background: #FFFFFF;
+    }
+    .role-option-card:hover {
+        border-color: #93C5FD;
+        background: #F8FAFC;
+    }
+    .role-option-card.selected {
+        border-color: var(--pms-primary);
+        background: rgba(37, 99, 235, 0.04);
+    }
+    .form-label {
+        font-weight: 600;
+        font-size: 0.82rem;
+        color: #334155;
+        margin-bottom: 0.35rem;
+    }
+    .form-control, .form-select {
+        border-radius: 8px;
+        border: 1px solid #CBD5E1;
+        padding: 0.55rem 0.85rem;
+        font-size: 0.88rem;
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: var(--pms-primary);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0" style="max-width: 900px;">
+    <!-- Navigation Back Link -->
+    <div class="mb-3">
+        <a href="{% url 'hotel_admin:staff_list' restaurant_slug=rslug %}" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 rounded-pill px-3">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span>Back to Staff Directory</span>
+        </a>
+    </div>
+
+    <!-- Header -->
+    <div class="mb-4">
+        <h4 class="fw-bold text-dark mb-1">
+            {% if is_edit %}Edit Hotel Staff Account{% else %}Create Hotel Staff Member{% endif %}
+        </h4>
+        <p class="text-muted small mb-0">
+            {% if is_edit %}
+            Modify account details and role permissions for <strong class="text-dark">@{{ target_user.username }}</strong>.
+            {% else %}
+            Provision a new Front Desk receptionist or Housekeeping room attendant for <strong class="text-dark">{{ current_branch.name|default:current_restaurant.name }}</strong>.
+            {% endif %}
+        </p>
+    </div>
+
+    <!-- Error Alert -->
+    {% if errors.general %}
+    <div class="alert alert-danger alert-dismissible fade show rounded-3 mb-4 d-flex align-items-center gap-2" role="alert">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <div>{{ errors.general }}</div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+
+    <form method="POST" novalidate>
+        {% csrf_token %}
+
+        <div class="form-card mb-4">
+            <div class="form-card-header">
+                <div class="fw-bold text-dark d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-user-shield text-primary"></i>
+                    <span>Account Credentials & Identity</span>
+                </div>
+            </div>
+            <div class="form-card-body">
+                <div class="row g-3">
+                    <!-- Username -->
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="id_username">
+                            Username <span class="text-danger">*</span>
+                        </label>
+                        {% if is_edit %}
+                        <input type="text" class="form-control bg-light font-mono" id="id_username" value="{{ form_data.username }}" readonly disabled>
+                        <small class="text-muted fs-xs">Usernames cannot be changed once created.</small>
+                        {% else %}
+                        <input type="text" name="username" id="id_username" class="form-control font-mono {% if errors.username %}is-invalid{% endif %}" 
+                               value="{{ form_data.username }}" placeholder="e.g. frontdesk_sam" required autocomplete="off">
+                        {% if errors.username %}
+                        <div class="invalid-feedback">{{ errors.username }}</div>
+                        {% endif %}
+                        <small class="text-muted fs-xs">Unique handle used to sign into Hotel PMS.</small>
+                        {% endif %}
+                    </div>
+
+                    <!-- Password -->
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="id_password">
+                            Password {% if not is_edit %}<span class="text-danger">*</span>{% endif %}
+                        </label>
+                        <input type="password" name="password" id="id_password" class="form-control {% if errors.password %}is-invalid{% endif %}" 
+                               placeholder="{% if is_edit %}Leave blank to keep current password{% else %}Min. 6 characters{% endif %}" 
+                               {% if not is_edit %}required{% endif %} autocomplete="new-password">
+                        {% if errors.password %}
+                        <div class="invalid-feedback">{{ errors.password }}</div>
+                        {% endif %}
+                        <small class="text-muted fs-xs">
+                            {% if is_edit %}Enter new password only if resetting.{% else %}Must be at least 6 characters.{% endif %}
+                        </small>
+                    </div>
+
+                    <!-- First Name -->
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="id_first_name">First Name</label>
+                        <input type="text" name="first_name" id="id_first_name" class="form-control" 
+                               value="{{ form_data.first_name }}" placeholder="e.g. Priya">
+                    </div>
+
+                    <!-- Last Name -->
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="id_last_name">Last Name</label>
+                        <input type="text" name="last_name" id="id_last_name" class="form-control" 
+                               value="{{ form_data.last_name }}" placeholder="e.g. Sharma">
+                    </div>
+
+                    <!-- Email -->
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="id_email">Email Address</label>
+                        <input type="email" name="email" id="id_email" class="form-control {% if errors.email %}is-invalid{% endif %}" 
+                               value="{{ form_data.email }}" placeholder="e.g. staff@hotel.com">
+                        {% if errors.email %}
+                        <div class="invalid-feedback">{{ errors.email }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Phone -->
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="id_phone">Phone / Mobile</label>
+                        <input type="text" name="phone" id="id_phone" class="form-control" 
+                               value="{{ form_data.phone }}" placeholder="e.g. +91 98765 43210">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-card mb-4">
+            <div class="form-card-header">
+                <div class="fw-bold text-dark d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-briefcase text-primary"></i>
+                    <span>Role Assignment & Property Access</span>
+                </div>
+            </div>
+            <div class="form-card-body">
+                <!-- Role Selection -->
+                <div class="mb-4">
+                    <label class="form-label d-block mb-2">
+                        Assigned Hotel Role <span class="text-danger">*</span>
+                    </label>
+                    <div class="row g-3">
+                        <div class="col-12 col-md-6">
+                            <label class="role-option-card d-block {% if form_data.role == 'FRONT_DESK' %}selected{% endif %}" for="role_fd">
+                                <div class="d-flex align-items-start gap-2.5">
+                                    <input type="radio" name="role" id="role_fd" value="FRONT_DESK" class="form-check-input mt-1" 
+                                           {% if form_data.role == 'FRONT_DESK' %}checked{% endif %}>
+                                    <div>
+                                        <div class="fw-bold text-dark d-flex align-items-center gap-1.5">
+                                            <i class="fa-solid fa-bell-concierge text-info"></i>
+                                            <span>Front Desk Receptionist</span>
+                                        </div>
+                                        <p class="text-muted small mb-0 mt-1">
+                                            Access to guest bookings, check-in, check-out, tape chart timeline, and guest folios.
+                                        </p>
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="role-option-card d-block {% if form_data.role == 'HOUSEKEEPING' %}selected{% endif %}" for="role_hk">
+                                <div class="d-flex align-items-start gap-2.5">
+                                    <input type="radio" name="role" id="role_hk" value="HOUSEKEEPING" class="form-check-input mt-1" 
+                                           {% if form_data.role == 'HOUSEKEEPING' %}checked{% endif %}>
+                                    <div>
+                                        <div class="fw-bold text-dark d-flex align-items-center gap-1.5">
+                                            <i class="fa-solid fa-broom text-warning"></i>
+                                            <span>Housekeeping Attendant</span>
+                                        </div>
+                                        <p class="text-muted small mb-0 mt-1">
+                                            Access to real-time room readiness status board, turnover queue, and cleaning updates.
+                                        </p>
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    {% if errors.role %}
+                    <div class="text-danger small mt-1">{{ errors.role }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="row g-3">
+                    <!-- Property Branch Assignment -->
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="id_branch_id">Property Outlet</label>
+                        {% if is_general_manager and hotel_branches|length > 1 %}
+                        <select name="branch_id" id="id_branch_id" class="form-select">
+                            {% for b in hotel_branches %}
+                            <option value="{{ b.id }}" {% if form_data.branch_id == b.id|stringformat:"s" %}selected{% endif %}>
+                                {{ b.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted fs-xs">As General Manager, you can assign this staff member to any hotel property.</small>
+                        {% else %}
+                        <div class="p-2.5 bg-light border rounded-3 d-flex align-items-center justify-content-between">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="fa-solid fa-hotel text-primary"></i>
+                                <span class="fw-semibold text-dark">{{ current_branch.name|default:current_restaurant.name }}</span>
+                            </div>
+                            <span class="badge bg-secondary-subtle text-secondary font-mono fs-xs">Branch-Locked</span>
+                        </div>
+                        <input type="hidden" name="branch_id" value="{{ current_branch.id }}">
+                        <small class="text-muted fs-xs">Staff account is strictly bound to this property outlet.</small>
+                        {% endif %}
+                    </div>
+
+                    <!-- Quick Switch PIN -->
+                    <div class="col-12 col-md-6">
+                        <label class="form-label" for="id_pos_pin">Quick Switch Desk PIN</label>
+                        <input type="text" name="pos_pin" id="id_pos_pin" maxlength="4" class="form-control font-mono {% if errors.pos_pin %}is-invalid{% endif %}" 
+                               value="{{ form_data.pos_pin }}" placeholder="e.g. 1234">
+                        {% if errors.pos_pin %}
+                        <div class="invalid-feedback">{{ errors.pos_pin }}</div>
+                        {% endif %}
+                        <small class="text-muted fs-xs">Optional 4-digit numeric PIN for quick station unlock.</small>
+                    </div>
+                </div>
+
+                <hr class="my-4 text-muted opacity-25">
+
+                <!-- Account Status Switch -->
+                <div class="form-check form-switch d-flex align-items-center gap-2">
+                    <input class="form-check-input ms-0 mt-0" type="checkbox" name="is_active" id="id_is_active" {% if form_data.is_active %}checked{% endif %}>
+                    <label class="form-check-label fw-semibold text-dark mb-0 ms-2" for="id_is_active">
+                        Account Active
+                        <span class="d-block text-muted fw-normal fs-xs">If unchecked, this user will be immediately blocked from signing into the system.</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Submit & Cancel Bar -->
+        <div class="d-flex align-items-center justify-content-end gap-2.5">
+            <a href="{% url 'hotel_admin:staff_list' restaurant_slug=rslug %}" class="btn btn-light border px-4 py-2">
+                Cancel
+            </a>
+            <button type="submit" class="btn btn-pms-primary shadow px-4 py-2 d-inline-flex align-items-center gap-2">
+                <i class="fa-solid {% if is_edit %}fa-floppy-disk{% else %}fa-user-check{% endif %}"></i>
+                <span>{% if is_edit %}Save Changes{% else %}Create Staff Member{% endif %}</span>
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+    // Radio button dynamic styling
+    document.querySelectorAll('input[name="role"]').forEach(function(radio) {
+        radio.addEventListener('change', function() {
+            document.querySelectorAll('.role-option-card').forEach(function(card) {
+                card.classList.remove('selected');
+            });
+            this.closest('.role-option-card').classList.add('selected');
+        });
+    });
+</script>
+{% endblock %}

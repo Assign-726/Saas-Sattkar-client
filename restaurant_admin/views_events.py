@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.db import transaction, models
 from django.urls import reverse
 
-from super_admin.models import Restaurant, RestaurantBranch
+from super_admin.models import Restaurant, RestaurantBranch, RestaurantUser
 from events.models import ClubEvent, TicketType, EventBooking
 from core.models import Zone, Table
 from restaurant_admin.views import resolve_restaurant, get_active_branch, is_admin
@@ -378,6 +378,17 @@ def club_guestlist(request, restaurant_slug, event_id=None):
 
     ticket_tiers = selected_event.ticket_types.filter(is_active=True) if selected_event else []
 
+    profile = getattr(request.user, 'restaurant_profile', None)
+    user_role = getattr(request.user, 'role', None) or (profile.role if profile else 'RESTAURANT_ADMIN')
+    user_role = user_role or 'RESTAURANT_ADMIN'
+    is_scanner = (user_role == RestaurantUser.Role.GATE_SCANNER or user_role == 'GATE_SCANNER')
+
+    # Granular permission flags for Gate Scanner
+    can_view_sales = not is_scanner or getattr(profile, 'can_view_analytics', False)
+    can_undo_checkin = not is_scanner or getattr(profile, 'can_issue_refunds', False)
+    can_issue_passes = not is_scanner or getattr(profile, 'can_apply_discounts', False)
+    can_view_qr = not is_scanner or getattr(profile, 'can_manage_menu', False)
+
     context = {
         'restaurant': restaurant,
         'current_branch': branch,
@@ -394,6 +405,11 @@ def club_guestlist(request, restaurant_slug, event_id=None):
         'checked_in_filter': checked_in_filter,
         'tier_filter': tier_filter,
         'active_menu': 'club_guestlist',
+        'is_scanner': is_scanner,
+        'can_view_sales': can_view_sales,
+        'can_undo_checkin': can_undo_checkin,
+        'can_issue_passes': can_issue_passes,
+        'can_view_qr': can_view_qr,
     }
     return render(request, 'restaurant_admin/events/guestlist.html', context)
 
@@ -403,6 +419,12 @@ def club_guestlist(request, restaurant_slug, event_id=None):
 @club_module_required
 def club_manual_booking_create(request, restaurant_slug, event_id):
     """Handles manual walk-in cash or complimentary ticket generation from Guestlist or Ticket Grid."""
+    profile = getattr(request.user, 'restaurant_profile', None)
+    user_role = getattr(request.user, 'role', None) or (profile.role if profile else 'RESTAURANT_ADMIN')
+    if (user_role == RestaurantUser.Role.GATE_SCANNER or user_role == 'GATE_SCANNER') and not getattr(profile, 'can_apply_discounts', False):
+        messages.error(request, "Permission denied: Gate Scanners do not have permission to issue door passes.")
+        return redirect('restaurant_admin:club_guestlist_event', restaurant_slug=restaurant_slug, event_id=event_id)
+
     restaurant = resolve_restaurant(request, restaurant_slug)
     branch = get_active_branch(request, restaurant)
     event = ClubEvent.objects.filter(pk=event_id, branch__restaurant=restaurant).select_related('branch').first()
@@ -476,7 +498,17 @@ def club_booking_toggle_checkin(request, restaurant_slug, booking_id):
     branch = get_active_branch(request, restaurant)
     booking = get_object_or_404(EventBooking, pk=booking_id, event__branch=branch)
 
+    user_role = getattr(request.user, 'role', None)
+    if not user_role and hasattr(request.user, 'restaurant_profile'):
+        user_role = request.user.restaurant_profile.role
+
+    profile = getattr(request.user, 'restaurant_profile', None)
+
     if booking.checked_in:
+        # Gate scanner cannot undo check-in unless granted permission
+        if (user_role == RestaurantUser.Role.GATE_SCANNER or user_role == 'GATE_SCANNER') and not getattr(profile, 'can_issue_refunds', False):
+            messages.error(request, "Permission denied: Gate scanners do not have permission to undo attendee check-in.")
+            return redirect('restaurant_admin:club_guestlist_event', restaurant_slug=restaurant.slug, event_id=booking.event_id)
         booking.checked_in = False
         booking.checked_in_at = None
         booking.checked_in_by = None

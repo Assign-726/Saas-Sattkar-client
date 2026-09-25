@@ -227,7 +227,7 @@ class RestaurantAdminCreateForm(forms.Form):
     password = forms.CharField(widget=forms.PasswordInput, label="Password*")
     restaurant = forms.ModelChoiceField(queryset=Restaurant.objects.all(), label="Assigned Business / Restaurant*")
     branch = forms.ModelChoiceField(queryset=RestaurantBranch.objects.all(), required=False, label="Assigned Branch Outlet (Optional)", help_text="Optional: Restrict admin to a specific branch")
-    role = forms.ChoiceField(choices=RestaurantUser.Role.choices, initial=RestaurantUser.Role.RESTAURANT_ADMIN, label="User Role")
+    role = forms.ChoiceField(choices=RestaurantUser.Role.choices, initial=RestaurantUser.Role.RESTAURANT_ADMIN, required=False, label="User Role")
     is_primary_admin = forms.BooleanField(required=False, initial=False, label="Designate as Primary Admin")
     is_2fa_enabled = forms.BooleanField(required=False, initial=True, label="Enable Two-Factor Authentication (OTP on Login)")
 
@@ -973,7 +973,7 @@ class RestaurantAdminUpdateForm(forms.Form):
     password = forms.CharField(widget=forms.PasswordInput, required=False, label="New Password (optional)")
     restaurant = forms.ModelChoiceField(queryset=Restaurant.objects.all(), label="Assigned Business / Restaurant*")
     branch = forms.ModelChoiceField(queryset=RestaurantBranch.objects.all(), required=False, label="Assigned Branch Outlet (Optional)", help_text="Optional: Restrict admin to a specific branch")
-    role = forms.ChoiceField(choices=RestaurantUser.Role.choices, initial=RestaurantUser.Role.RESTAURANT_ADMIN, label="User Role")
+    role = forms.ChoiceField(choices=RestaurantUser.Role.choices, initial=RestaurantUser.Role.RESTAURANT_ADMIN, required=False, label="User Role")
     is_primary_admin = forms.BooleanField(required=False, initial=False, label="Designate as Primary Admin")
     is_2fa_enabled = forms.BooleanField(required=False, initial=True, label="Enable Two-Factor Authentication (OTP on Login)")
 

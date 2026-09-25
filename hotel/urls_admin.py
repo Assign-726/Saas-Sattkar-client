@@ -27,6 +27,13 @@ urlpatterns = [
     path('bookings/<int:booking_id>/check-out/', views_admin.booking_check_out_action, name='booking_check_out'),
     path('bookings/<int:booking_id>/cancel/', views_admin.booking_cancel_action, name='booking_cancel'),
 
+    # Hotel Staff & Operations Team (PMS-native)
+    path('staff/', views_admin.staff_list_view, name='staff_list'),
+    path('staff/create/', views_admin.staff_create_view, name='staff_create'),
+    path('staff/<int:user_id>/edit/', views_admin.staff_edit_view, name='staff_edit'),
+    path('staff/<int:user_id>/toggle-active/', views_admin.staff_toggle_active_view, name='staff_toggle_active'),
+    path('staff/<int:user_id>/delete/', views_admin.staff_delete_view, name='staff_delete'),
+
     # Hotel Configuration & Settings
     path('settings/', views_admin.hotel_settings_view, name='settings'),
 ]

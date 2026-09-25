@@ -37,19 +37,93 @@ class BranchContextMiddleware:
                 # RBAC Isolation:
                 user_role = getattr(user, 'role', None) or profile.role
                 if not user.is_superuser:
-                    # 1. Hotel Admin is strictly isolated from Restaurant POS
-                    if user_role == 'HOTEL_ADMIN' and request.path.startswith('/dashboard/'):
+                    # 1. Hotel Roles isolation (Front Desk & Housekeeping locked to PMS; Hotel Admin operates in Hotel PMS)
+                    if user_role in ['HOTEL_ADMIN', 'FRONT_DESK', 'HOUSEKEEPING'] and request.path.startswith('/dashboard/'):
                         from django.shortcuts import redirect
                         slug = restaurant.slug if restaurant else 'default'
-                        return redirect('hotel_admin:dashboard', restaurant_slug=slug)
+                        if user_role == 'HOUSEKEEPING':
+                            return redirect('hotel_admin:rooms', restaurant_slug=slug)
+                        if user_role == 'FRONT_DESK':
+                            return redirect('hotel_admin:dashboard', restaurant_slug=slug)
+                        if user_role == 'HOTEL_ADMIN':
+                            if request.path.startswith(f'/dashboard/{slug}/staff/'):
+                                return redirect('hotel_admin:staff_list', restaurant_slug=slug)
+                            elif not request.path.endswith('/logout/'):
+                                return redirect('hotel_admin:dashboard', restaurant_slug=slug)
 
-                    # 2. Club Admin is strictly directed to Club Events
+                    # 2. Gate Scanner Isolation (strictly door scanner & attendee guestlist)
+                    if user_role == 'GATE_SCANNER' and request.path.startswith('/dashboard/'):
+                        slug = restaurant.slug if restaurant else 'default'
+                        scanner_prefix = f'/dashboard/{slug}/club-events/gate-scanner/'
+                        is_allowed = (
+                            request.path.startswith(scanner_prefix) or
+                            f'/dashboard/{slug}/club-events/guestlist/' in request.path or
+                            '/guestlist/' in request.path or
+                            '/booking/' in request.path or
+                            '/api/' in request.path or
+                            request.path.endswith('/logout/')
+                        )
+                        if not is_allowed:
+                            from django.shortcuts import redirect
+                            return redirect('restaurant_admin:club_gate_scanner', restaurant_slug=slug)
+
+                    # 3. Club Admin is directed to Club Events and Staff Management (Gate Scanners)
                     if user_role == 'CLUB_ADMIN' and request.path.startswith('/dashboard/'):
                         slug = restaurant.slug if restaurant else 'default'
                         club_prefix = f'/dashboard/{slug}/club-events/'
-                        if not request.path.startswith(club_prefix) and not '/api/' in request.path and not request.path.endswith('/switch-branch/'):
+                        staff_prefix = f'/dashboard/{slug}/staff/'
+                        if not request.path.startswith(club_prefix) and not request.path.startswith(staff_prefix) and not '/api/' in request.path and not request.path.endswith('/switch-branch/') and not request.path.endswith('/logout/'):
                             from django.shortcuts import redirect
                             return redirect('restaurant_admin:club_events_list', restaurant_slug=slug)
+
+                    # 4. Kitchen KDS Isolation & Permitted Features
+                    if user_role == 'KITCHEN' and request.path.startswith('/dashboard/'):
+                        slug = restaurant.slug if restaurant else 'default'
+                        kds_prefix = f'/dashboard/{slug}/kitchen/'
+                        is_kitchen_allowed = (
+                            request.path.startswith(kds_prefix) or
+                            request.path.startswith('/api/') or
+                            request.path.endswith('/logout/') or
+                            (getattr(profile, 'can_view_analytics', False) and request.path.startswith(f'/dashboard/{slug}/analytics/')) or
+                            (getattr(profile, 'can_view_inventory', False) and any(request.path.startswith(p) for p in [
+                                f'/dashboard/{slug}/inventory/',
+                                f'/dashboard/{slug}/purchases/',
+                                f'/dashboard/{slug}/parties/',
+                                f'/dashboard/{slug}/challans/',
+                            ])) or
+                            (getattr(profile, 'can_manage_menu', False) and request.path.startswith(f'/dashboard/{slug}/menu/')) or
+                            (getattr(profile, 'can_manage_settings', False) and request.path.startswith(f'/dashboard/{slug}/settings/'))
+                        )
+                        if not is_kitchen_allowed:
+                            from django.shortcuts import redirect
+                            return redirect('restaurant_admin:kitchen_kds', restaurant_slug=slug)
+
+                    # 5. Cashier & Waiter restrictions (respect granular permissions)
+                    if user_role in ['CASHIER', 'WAITER'] and request.path.startswith('/dashboard/'):
+                        slug = restaurant.slug if restaurant else 'default'
+                        restricted_paths = [f'/dashboard/{slug}/staff/']
+                        if not getattr(profile, 'can_view_analytics', False):
+                            restricted_paths.append(f'/dashboard/{slug}/analytics/')
+                        if not getattr(profile, 'can_manage_settings', False):
+                            restricted_paths.append(f'/dashboard/{slug}/settings/')
+                        if not getattr(profile, 'can_view_inventory', False):
+                            restricted_paths.extend([
+                                f'/dashboard/{slug}/inventory/',
+                                f'/dashboard/{slug}/purchases/',
+                                f'/dashboard/{slug}/parties/',
+                                f'/dashboard/{slug}/challans/',
+                            ])
+                        if not getattr(profile, 'can_manage_menu', False):
+                            restricted_paths.append(f'/dashboard/{slug}/menu/')
+
+                        if any(request.path.startswith(p) for p in restricted_paths):
+                            from django.shortcuts import redirect
+                            try:
+                                from django.contrib import messages
+                                messages.warning(request, "Staff accounts do not have permission to access management settings or analytics.")
+                            except Exception:
+                                pass
+                            return redirect('restaurant_admin:transaction_desk_create', restaurant_slug=slug)
 
                 # 1. Branch-locked admin (e.g. a single-outlet manager)
                 if profile.branch:

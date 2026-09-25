@@ -12,9 +12,11 @@ from django.urls import reverse
 from django.http import JsonResponse, HttpResponseForbidden
 from django.contrib import messages
 from django.utils import timezone
+from django.db import transaction
 from django.db.models import Q, Sum, Count
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.contrib.auth.models import User, Group
 
 from super_admin.models import Restaurant, RestaurantBranch, RestaurantUser
 from hotel.models import RoomCategory, Room, RoomBooking, HotelSettings, RoomCategoryImage
@@ -113,8 +115,25 @@ def get_hotel_context(request, restaurant_slug):
                     request.session[f'active_branch_{restaurant.id}'] = active_branch.id
 
     available_branches = restaurant.branches.all()
-    user_role = getattr(user, 'role', 'HOTEL_ADMIN')
+    user_role = getattr(user, 'role', None)
+    if not user_role and profile:
+        user_role = profile.role
+    user_role = user_role or 'HOTEL_ADMIN'
+
     is_general_manager = (user_role == 'GENERAL_MANAGER' or user.is_superuser)
+    is_hotel_admin = (user_role == 'HOTEL_ADMIN' or is_general_manager)
+    is_front_desk = (user_role == 'FRONT_DESK')
+    is_housekeeping = (user_role == 'HOUSEKEEPING')
+
+    # Feature Group Visibility Flags for Hotel PMS:
+    show_front_desk_ops = (is_hotel_admin or is_front_desk) and not is_housekeeping
+    show_rooms_board = True
+    show_room_categories = is_hotel_admin
+    show_hotel_config = is_hotel_admin
+    show_hotel_settings = is_hotel_admin
+    show_hotel_staff = is_hotel_admin
+    can_create_reservation = (is_hotel_admin or is_front_desk) and not is_housekeeping
+    can_manage_physical_rooms = is_hotel_admin
 
     return {
         'restaurant': restaurant,
@@ -124,6 +143,17 @@ def get_hotel_context(request, restaurant_slug):
         'rslug': restaurant.slug,
         'user_role': user_role,
         'is_general_manager': is_general_manager,
+        'is_hotel_admin': is_hotel_admin,
+        'is_front_desk': is_front_desk,
+        'is_housekeeping': is_housekeeping,
+        'show_front_desk_ops': show_front_desk_ops,
+        'show_rooms_board': show_rooms_board,
+        'show_room_categories': show_room_categories,
+        'show_hotel_config': show_hotel_config,
+        'show_hotel_settings': show_hotel_settings,
+        'show_hotel_staff': show_hotel_staff,
+        'can_create_reservation': can_create_reservation,
+        'can_manage_physical_rooms': can_manage_physical_rooms,
     }
 
 
@@ -151,14 +181,18 @@ def hotel_admin_required(view_func):
             )
             return redirect('restaurant_admin:dashboard', restaurant_slug=restaurant_slug)
 
-        # If user is strictly a RESTAURANT_ADMIN without superuser permissions, deny access
-        if not request.user.is_superuser and user_role not in ['HOTEL_ADMIN', 'GENERAL_MANAGER']:
+        # If user is not authorized for Hotel PMS, deny access
+        if not request.user.is_superuser and user_role not in ['HOTEL_ADMIN', 'GENERAL_MANAGER', 'FRONT_DESK', 'HOUSEKEEPING']:
             messages.error(
                 request,
                 "Access restricted: Your account does not have Hotel PMS permissions. "
                 "You have been redirected to the Restaurant Admin portal."
             )
             return redirect('restaurant_admin:dashboard', restaurant_slug=restaurant_slug)
+
+        # Housekeeping role is strictly locked to Room Status view
+        if user_role == 'HOUSEKEEPING' and not request.path.endswith('/rooms/') and not '/rooms/' in request.path:
+            return redirect('hotel_admin:rooms', restaurant_slug=restaurant_slug)
 
         ctx = get_hotel_context(request, restaurant_slug)
         branch = ctx['current_branch']
@@ -374,6 +408,10 @@ def categories_view(request, restaurant_slug, ctx):
     Room Categories / Types Configuration View:
     Deluxe Suite, Royal Villa, etc. with base price, max occupancy, and amenities.
     """
+    if not ctx['show_room_categories']:
+        messages.error(request, "Permission denied: Only Hotel Administrators can manage room categories and tariffs.")
+        return redirect('hotel_admin:rooms' if ctx['is_housekeeping'] else 'hotel_admin:dashboard', restaurant_slug=restaurant_slug)
+
     branch = ctx['current_branch']
     categories = RoomCategory.objects.filter(branch=branch).prefetch_related('rooms', 'images').order_by('name') if branch else []
 
@@ -528,6 +566,10 @@ def room_create_edit_action(request, restaurant_slug, ctx):
     """
     Create or edit a physical room inventory item.
     """
+    if not ctx['can_manage_physical_rooms']:
+        messages.error(request, "Permission denied: Only Hotel Administrators can add or edit physical rooms.")
+        return redirect('hotel_admin:rooms', restaurant_slug=restaurant_slug)
+
     branch = ctx['current_branch']
     if request.method == 'POST':
         room_id = request.POST.get('room_id')
@@ -911,6 +953,10 @@ def hotel_settings_view(request, restaurant_slug, ctx):
     - Hotel Property Info & Check-in / Check-out Timings
     - Guest Receipt / Invoice Formatting
     """
+    if not ctx['show_hotel_settings']:
+        messages.error(request, "Permission denied: Only Hotel Administrators can configure hotel settings.")
+        return redirect('hotel_admin:rooms' if ctx['is_housekeeping'] else 'hotel_admin:dashboard', restaurant_slug=restaurant_slug)
+
     branch = ctx['current_branch']
     if not branch:
         messages.error(request, "No active hotel branch found.")
@@ -935,3 +981,386 @@ def hotel_settings_view(request, restaurant_slug, ctx):
         'settings_obj': settings_obj,
         'form': form,
     })
+
+
+# ==============================================================================
+# HOTEL STAFF & OPERATIONS TEAM MANAGEMENT (PMS-NATIVE)
+# ==============================================================================
+
+@hotel_admin_required
+def staff_list_view(request, restaurant_slug, ctx):
+    """
+    Hotel Staff & Operations Team Directory (PMS-native):
+    Strictly scoped to Front Desk Receptionists (FRONT_DESK) and Housekeeping Attendants (HOUSEKEEPING).
+    Non-GM Hotel Admins are strictly scoped to their assigned hotel branch.
+    """
+    user_role = ctx['user_role']
+    is_gm = ctx['is_general_manager']
+    branch = ctx['current_branch']
+    restaurant = ctx['restaurant']
+
+    # Security check: Only Hotel Admin and GM can view staff management
+    if user_role not in ['HOTEL_ADMIN', 'GENERAL_MANAGER'] and not request.user.is_superuser:
+        messages.error(request, "Permission denied: Staff management requires Hotel Administrator access.")
+        return redirect('hotel_admin:dashboard', restaurant_slug=restaurant_slug)
+
+    # Base queryset strictly limited to Hotel operational roles
+    staff_qs = RestaurantUser.objects.filter(
+        restaurant=restaurant,
+        role__in=[RestaurantUser.Role.FRONT_DESK, RestaurantUser.Role.HOUSEKEEPING]
+    ).select_related('user', 'branch', 'created_by')
+
+    # Branch scoping: HOTEL_ADMIN is strictly locked to their branch
+    if not is_gm:
+        if branch:
+            staff_qs = staff_qs.filter(branch=branch)
+        else:
+            staff_qs = staff_qs.none()
+    else:
+        # GM can optionally filter by branch if provided
+        branch_filter = request.GET.get('branch_id')
+        if branch_filter and str(branch_filter).isdigit():
+            staff_qs = staff_qs.filter(branch_id=int(branch_filter))
+
+    # Metric counts (before role/search filters)
+    total_staff = staff_qs.count()
+    front_desk_count = staff_qs.filter(role=RestaurantUser.Role.FRONT_DESK).count()
+    housekeeping_count = staff_qs.filter(role=RestaurantUser.Role.HOUSEKEEPING).count()
+
+    # Search filter
+    search_query = request.GET.get('q', '').strip()
+    if search_query:
+        staff_qs = staff_qs.filter(
+            Q(user__first_name__icontains=search_query) |
+            Q(user__last_name__icontains=search_query) |
+            Q(user__username__icontains=search_query) |
+            Q(user__email__icontains=search_query) |
+            Q(pos_pin__icontains=search_query)
+        )
+
+    # Role filter
+    role_filter = request.GET.get('role', '').strip()
+    if role_filter in [RestaurantUser.Role.FRONT_DESK, RestaurantUser.Role.HOUSEKEEPING]:
+        staff_qs = staff_qs.filter(role=role_filter)
+
+    staff_members = staff_qs.order_by('-created_at')
+
+    # Available hotel branches for GM
+    hotel_branches = restaurant.branches.filter(has_hotel_module=True) if is_gm else ([branch] if branch else [])
+
+    return render(request, 'hotel_admin/staff/staff_list.html', {
+        **ctx,
+        'active_menu': 'staff',
+        'staff_members': staff_members,
+        'total_staff': total_staff,
+        'front_desk_count': front_desk_count,
+        'housekeeping_count': housekeeping_count,
+        'search_query': search_query,
+        'role_filter': role_filter,
+        'hotel_branches': hotel_branches,
+        'selected_branch_id': request.GET.get('branch_id', ''),
+    })
+
+
+@hotel_admin_required
+def staff_create_view(request, restaurant_slug, ctx):
+    """
+    Create a new Hotel PMS staff member (Front Desk Receptionist or Housekeeping Attendant).
+    """
+    user_role = ctx['user_role']
+    is_gm = ctx['is_general_manager']
+    branch = ctx['current_branch']
+    restaurant = ctx['restaurant']
+
+    if user_role not in ['HOTEL_ADMIN', 'GENERAL_MANAGER'] and not request.user.is_superuser:
+        messages.error(request, "Permission denied: Staff creation requires Hotel Administrator access.")
+        return redirect('hotel_admin:dashboard', restaurant_slug=restaurant_slug)
+
+    allowed_roles = [
+        (RestaurantUser.Role.FRONT_DESK, 'Front Desk Receptionist (Check-in, Check-out, Bookings)'),
+        (RestaurantUser.Role.HOUSEKEEPING, 'Housekeeping Attendant (Room Cleaning & Maintenance)'),
+    ]
+
+    hotel_branches = restaurant.branches.filter(has_hotel_module=True) if is_gm else ([branch] if branch else [])
+
+    errors = {}
+    form_data = {
+        'username': '',
+        'first_name': '',
+        'last_name': '',
+        'email': '',
+        'phone': '',
+        'pos_pin': '',
+        'role': RestaurantUser.Role.FRONT_DESK,
+        'branch_id': str(branch.id) if branch else '',
+        'is_active': True,
+    }
+
+    if request.method == 'POST':
+        form_data['username'] = request.POST.get('username', '').strip()
+        form_data['first_name'] = request.POST.get('first_name', '').strip()
+        form_data['last_name'] = request.POST.get('last_name', '').strip()
+        form_data['email'] = request.POST.get('email', '').strip()
+        form_data['phone'] = request.POST.get('phone', '').strip()
+        password = request.POST.get('password', '').strip()
+        form_data['pos_pin'] = request.POST.get('pos_pin', '').strip()
+        form_data['role'] = request.POST.get('role', '').strip()
+        form_data['branch_id'] = request.POST.get('branch_id', '').strip()
+        form_data['is_active'] = request.POST.get('is_active') == 'on'
+
+        # Validation
+        if not form_data['username']:
+            errors['username'] = "Username is required."
+        elif User.objects.filter(username__iexact=form_data['username']).exists():
+            errors['username'] = "This username is already taken. Please choose another."
+
+        if not password:
+            errors['password'] = "Password is required."
+        elif len(password) < 6:
+            errors['password'] = "Password must be at least 6 characters."
+
+        valid_roles = [r[0] for r in allowed_roles]
+        if form_data['role'] not in valid_roles:
+            errors['role'] = "Please select a valid Hotel PMS role."
+
+        if form_data['pos_pin'] and (not form_data['pos_pin'].isdigit() or len(form_data['pos_pin']) != 4):
+            errors['pos_pin'] = "Quick Switch PIN must be exactly 4 digits."
+
+        # Target branch
+        if is_gm and form_data['branch_id'] and form_data['branch_id'].isdigit():
+            target_branch = restaurant.branches.filter(id=int(form_data['branch_id']), has_hotel_module=True).first()
+            if not target_branch:
+                target_branch = branch
+        else:
+            target_branch = branch
+
+        if not target_branch:
+            errors['branch'] = "No valid hotel branch is assigned."
+
+        if not errors:
+            try:
+                with transaction.atomic():
+                    new_user = User.objects.create_user(
+                        username=form_data['username'],
+                        email=form_data['email'],
+                        password=password,
+                        first_name=form_data['first_name'],
+                        last_name=form_data['last_name'],
+                    )
+                    new_user.is_staff = True
+                    new_user.is_active = form_data['is_active']
+                    new_user.save()
+
+                    try:
+                        grp, _ = Group.objects.get_or_create(name="RestaurantAdmin")
+                        new_user.groups.add(grp)
+                    except Exception:
+                        pass
+
+                    ru = RestaurantUser.objects.create(
+                        user=new_user,
+                        restaurant=restaurant,
+                        branch=target_branch,
+                        role=form_data['role'],
+                        is_primary_admin=False,
+                        pos_pin=form_data['pos_pin'] or None,
+                        created_by=request.user,
+                    )
+
+                messages.success(request, f"Hotel staff member '{new_user.get_full_name() or new_user.username}' created successfully.")
+                return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+            except Exception as e:
+                errors['general'] = f"Failed to create staff member: {str(e)}"
+
+    return render(request, 'hotel_admin/staff/staff_form.html', {
+        **ctx,
+        'active_menu': 'staff',
+        'is_edit': False,
+        'allowed_roles': allowed_roles,
+        'hotel_branches': hotel_branches,
+        'form_data': form_data,
+        'errors': errors,
+    })
+
+
+@hotel_admin_required
+def staff_edit_view(request, restaurant_slug, ctx, user_id):
+    """
+    Edit an existing Hotel staff member (Front Desk Receptionist or Housekeeping Attendant).
+    """
+    user_role = ctx['user_role']
+    is_gm = ctx['is_general_manager']
+    branch = ctx['current_branch']
+    restaurant = ctx['restaurant']
+
+    if user_role not in ['HOTEL_ADMIN', 'GENERAL_MANAGER'] and not request.user.is_superuser:
+        messages.error(request, "Permission denied: Staff editing requires Hotel Administrator access.")
+        return redirect('hotel_admin:dashboard', restaurant_slug=restaurant_slug)
+
+    target_profile = get_object_or_404(
+        RestaurantUser.objects.select_related('user', 'branch'),
+        user_id=user_id,
+        restaurant=restaurant
+    )
+
+    # Security: Ensure target is a hotel staff role
+    if target_profile.role not in [RestaurantUser.Role.FRONT_DESK, RestaurantUser.Role.HOUSEKEEPING]:
+        messages.error(request, "Unauthorized: Only Hotel PMS staff (Front Desk & Housekeeping) can be edited from Hotel PMS.")
+        return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+    # Security: Non-GM cannot edit staff of other branches
+    if not is_gm and target_profile.branch_id != (branch.id if branch else None):
+        messages.error(request, "Unauthorized: You can only edit staff in your assigned property.")
+        return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+    allowed_roles = [
+        (RestaurantUser.Role.FRONT_DESK, 'Front Desk Receptionist (Check-in, Check-out, Bookings)'),
+        (RestaurantUser.Role.HOUSEKEEPING, 'Housekeeping Attendant (Room Cleaning & Maintenance)'),
+    ]
+    hotel_branches = restaurant.branches.filter(has_hotel_module=True) if is_gm else ([branch] if branch else [])
+
+    errors = {}
+    target_user = target_profile.user
+    form_data = {
+        'username': target_user.username,
+        'first_name': target_user.first_name,
+        'last_name': target_user.last_name,
+        'email': target_user.email,
+        'phone': '',
+        'pos_pin': target_profile.pos_pin or '',
+        'role': target_profile.role,
+        'branch_id': str(target_profile.branch_id or ''),
+        'is_active': target_user.is_active,
+    }
+
+    if request.method == 'POST':
+        form_data['first_name'] = request.POST.get('first_name', '').strip()
+        form_data['last_name'] = request.POST.get('last_name', '').strip()
+        form_data['email'] = request.POST.get('email', '').strip()
+        form_data['phone'] = request.POST.get('phone', '').strip()
+        password = request.POST.get('password', '').strip()
+        form_data['pos_pin'] = request.POST.get('pos_pin', '').strip()
+        form_data['role'] = request.POST.get('role', '').strip()
+        form_data['branch_id'] = request.POST.get('branch_id', '').strip()
+        form_data['is_active'] = request.POST.get('is_active') == 'on'
+
+        if password and len(password) < 6:
+            errors['password'] = "New password must be at least 6 characters."
+
+        valid_roles = [r[0] for r in allowed_roles]
+        if form_data['role'] not in valid_roles:
+            errors['role'] = "Please select a valid Hotel PMS role."
+
+        if form_data['pos_pin'] and (not form_data['pos_pin'].isdigit() or len(form_data['pos_pin']) != 4):
+            errors['pos_pin'] = "Quick Switch PIN must be exactly 4 digits."
+
+        if not errors:
+            try:
+                with transaction.atomic():
+                    target_user.first_name = form_data['first_name']
+                    target_user.last_name = form_data['last_name']
+                    target_user.email = form_data['email']
+                    target_user.is_active = form_data['is_active']
+                    if password:
+                        target_user.set_password(password)
+                    target_user.save()
+
+                    target_profile.role = form_data['role']
+                    target_profile.pos_pin = form_data['pos_pin'] or None
+
+                    if is_gm and form_data['branch_id'] and form_data['branch_id'].isdigit():
+                        new_branch = restaurant.branches.filter(id=int(form_data['branch_id']), has_hotel_module=True).first()
+                        if new_branch:
+                            target_profile.branch = new_branch
+
+                    target_profile.save()
+
+                messages.success(request, f"Staff account @{target_user.username} updated successfully.")
+                return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+            except Exception as e:
+                errors['general'] = f"Failed to update staff member: {str(e)}"
+
+    return render(request, 'hotel_admin/staff/staff_form.html', {
+        **ctx,
+        'active_menu': 'staff',
+        'is_edit': True,
+        'target_user': target_user,
+        'target_profile': target_profile,
+        'allowed_roles': allowed_roles,
+        'hotel_branches': hotel_branches,
+        'form_data': form_data,
+        'errors': errors,
+    })
+
+
+@hotel_admin_required
+def staff_toggle_active_view(request, restaurant_slug, ctx, user_id):
+    """Toggle active status for a Hotel staff member."""
+    if request.method != 'POST':
+        return HttpResponseForbidden("POST method required")
+
+    user_role = ctx['user_role']
+    is_gm = ctx['is_general_manager']
+    branch = ctx['current_branch']
+    restaurant = ctx['restaurant']
+
+    if user_role not in ['HOTEL_ADMIN', 'GENERAL_MANAGER'] and not request.user.is_superuser:
+        messages.error(request, "Permission denied.")
+        return redirect('hotel_admin:dashboard', restaurant_slug=restaurant_slug)
+
+    target_profile = get_object_or_404(RestaurantUser, user_id=user_id, restaurant=restaurant)
+
+    if target_profile.user == request.user:
+        messages.error(request, "You cannot deactivate your own administrative account.")
+        return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+    if target_profile.role not in [RestaurantUser.Role.FRONT_DESK, RestaurantUser.Role.HOUSEKEEPING]:
+        messages.error(request, "Unauthorized to toggle non-hotel staff.")
+        return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+    if not is_gm and target_profile.branch_id != (branch.id if branch else None):
+        messages.error(request, "Unauthorized: Staff belongs to another property.")
+        return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+    new_state = not target_profile.user.is_active
+    target_profile.user.is_active = new_state
+    target_profile.user.save()
+
+    status_str = "activated" if new_state else "deactivated"
+    messages.success(request, f"Staff member @{target_profile.user.username} has been {status_str}.")
+    return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+
+@hotel_admin_required
+def staff_delete_view(request, restaurant_slug, ctx, user_id):
+    """Delete a Hotel staff member."""
+    if request.method != 'POST':
+        return HttpResponseForbidden("POST method required")
+
+    user_role = ctx['user_role']
+    is_gm = ctx['is_general_manager']
+    branch = ctx['current_branch']
+    restaurant = ctx['restaurant']
+
+    if user_role not in ['HOTEL_ADMIN', 'GENERAL_MANAGER'] and not request.user.is_superuser:
+        messages.error(request, "Permission denied.")
+        return redirect('hotel_admin:dashboard', restaurant_slug=restaurant_slug)
+
+    target_profile = get_object_or_404(RestaurantUser, user_id=user_id, restaurant=restaurant)
+
+    if target_profile.user == request.user:
+        messages.error(request, "You cannot delete your own administrative account.")
+        return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+    if target_profile.role not in [RestaurantUser.Role.FRONT_DESK, RestaurantUser.Role.HOUSEKEEPING]:
+        messages.error(request, "Unauthorized to delete non-hotel staff.")
+        return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+    if not is_gm and target_profile.branch_id != (branch.id if branch else None):
+        messages.error(request, "Unauthorized: Staff belongs to another property.")
+        return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+    username = target_profile.user.username
+    target_profile.user.delete()
+    messages.success(request, f"Staff member @{username} has been permanently deleted.")
+    return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)

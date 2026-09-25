@@ -355,3 +355,169 @@ class HotelModuleTests(TestCase):
         # Redirected to restaurant_admin:dashboard
         self.assertEqual(resp.status_code, 302)
         self.assertIn(f'/dashboard/{self.restaurant.slug}/', resp.url)
+
+    def test_hotel_admin_staff_management(self):
+        """
+        Verify Hotel PMS-native staff management:
+        - View staff directory inside hotel-admin
+        - Create Front Desk & Housekeeping staff
+        - Toggle active status
+        """
+        self.client.force_login(self.hotel_admin_user)
+
+        # 1. Staff directory
+        resp_list = self.client.get(f'/hotel-admin/{self.restaurant.slug}/staff/')
+        self.assertEqual(resp_list.status_code, 200)
+        self.assertContains(resp_list, "Hotel Staff & Operations Team")
+        self.assertEqual(resp_list.context['active_menu'], 'staff')
+
+        # 2. Staff create GET
+        resp_create = self.client.get(f'/hotel-admin/{self.restaurant.slug}/staff/create/')
+        self.assertEqual(resp_create.status_code, 200)
+        allowed_roles = [r[0] for r in resp_create.context['allowed_roles']]
+        self.assertIn(RestaurantUser.Role.FRONT_DESK, allowed_roles)
+        self.assertIn(RestaurantUser.Role.HOUSEKEEPING, allowed_roles)
+        self.assertNotIn(RestaurantUser.Role.CASHIER, allowed_roles)
+
+        # 3. Staff create POST
+        post_data = {
+            'username': 'hotel_fd_priya',
+            'first_name': 'Priya',
+            'last_name': 'Sharma',
+            'email': 'priya@hotel.com',
+            'password': 'PriyaPassword123!',
+            'pos_pin': '1234',
+            'role': RestaurantUser.Role.FRONT_DESK,
+            'is_active': 'on',
+        }
+        resp_post = self.client.post(f'/hotel-admin/{self.restaurant.slug}/staff/create/', post_data)
+        self.assertEqual(resp_post.status_code, 302)
+        self.assertIn(f'/hotel-admin/{self.restaurant.slug}/staff/', resp_post.url)
+
+        # Verify created staff in DB
+        created_ru = RestaurantUser.objects.get(user__username='hotel_fd_priya')
+        self.assertEqual(created_ru.role, RestaurantUser.Role.FRONT_DESK)
+        self.assertEqual(created_ru.branch, self.branch)
+        self.assertEqual(created_ru.pos_pin, '1234')
+        self.assertTrue(created_ru.user.is_active)
+
+        # 4. Toggle active status POST
+        toggle_url = f'/hotel-admin/{self.restaurant.slug}/staff/{created_ru.user.id}/toggle-active/'
+        resp_toggle = self.client.post(toggle_url)
+        self.assertEqual(resp_toggle.status_code, 302)
+        created_ru.user.refresh_from_db()
+        self.assertFalse(created_ru.user.is_active)
+
+    def test_hotel_admin_visiting_restaurant_staff_redirects_to_hotel_staff(self):
+        """
+        Verify that if a HOTEL_ADMIN attempts to access the restaurant admin staff URL,
+        they are seamlessly redirected to their native Hotel PMS staff management.
+        """
+        self.client.force_login(self.hotel_admin_user)
+        resp = self.client.get(f'/dashboard/{self.restaurant.slug}/staff/')
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn(f'/hotel-admin/{self.restaurant.slug}/staff/', resp.url)
+
+    def test_housekeeping_sidebar_and_feature_isolation(self):
+        """
+        Verify that a HOUSEKEEPING user:
+        1. Only sees 'Housekeeping Operations' -> 'Rooms & Housekeeping' in the sidebar.
+        2. All other groups (Front Desk Operations, Room Categories, Hotel Configuration) are hidden.
+        3. '+ New Reservation' and '+ Add Physical Room' are completely hidden.
+        4. Direct URL access to dashboard, categories, settings is blocked/redirected.
+        5. Updating room status is allowed.
+        """
+        hk_user = User.objects.create_user(username="hk_ramesh", password="Password123!", is_staff=True)
+        RestaurantUser.objects.create(
+            user=hk_user,
+            restaurant=self.restaurant,
+            branch=self.branch,
+            role=RestaurantUser.Role.HOUSEKEEPING,
+        )
+
+        self.client.force_login(hk_user)
+
+        # 1. Rooms page access
+        resp_rooms = self.client.get(f'/hotel-admin/{self.restaurant.slug}/rooms/')
+        self.assertEqual(resp_rooms.status_code, 200)
+        self.assertTrue(resp_rooms.context['is_housekeeping'])
+        self.assertFalse(resp_rooms.context['show_front_desk_ops'])
+        self.assertFalse(resp_rooms.context['show_room_categories'])
+        self.assertFalse(resp_rooms.context['show_hotel_config'])
+        self.assertFalse(resp_rooms.context['can_create_reservation'])
+        self.assertFalse(resp_rooms.context['can_manage_physical_rooms'])
+
+        # Sidebar content checks
+        self.assertContains(resp_rooms, "Housekeeping Operations")
+        self.assertContains(resp_rooms, "Rooms &amp; Housekeeping")
+        self.assertContains(resp_rooms, "Housekeeping Desk")
+
+        # Hidden elements checks
+        self.assertNotContains(resp_rooms, "Front Desk Operations")
+        self.assertNotContains(resp_rooms, "Front Desk Overview")
+        self.assertNotContains(resp_rooms, "Tape Chart Timeline")
+        self.assertNotContains(resp_rooms, "Guest Folios &amp; Bookings")
+        self.assertNotContains(resp_rooms, "Room Categories &amp; Tariffs")
+        self.assertNotContains(resp_rooms, "Hotel Settings")
+        self.assertNotContains(resp_rooms, "Staff &amp; Roles")
+        self.assertNotContains(resp_rooms, "Add Physical Room")
+        self.assertNotContains(resp_rooms, "New Reservation")
+
+        # 2. Blocked from dashboard
+        resp_dash = self.client.get(f'/hotel-admin/{self.restaurant.slug}/', follow=False)
+        self.assertEqual(resp_dash.status_code, 302)
+        self.assertIn('/rooms/', resp_dash.url)
+
+        # 3. Blocked from categories
+        resp_cats = self.client.get(f'/hotel-admin/{self.restaurant.slug}/categories/', follow=False)
+        self.assertEqual(resp_cats.status_code, 302)
+        self.assertIn('/rooms/', resp_cats.url)
+
+        # 4. Blocked from settings
+        resp_set = self.client.get(f'/hotel-admin/{self.restaurant.slug}/settings/', follow=False)
+        self.assertEqual(resp_set.status_code, 302)
+        self.assertIn('/rooms/', resp_set.url)
+
+        # 5. Can update room status
+        status_url = f'/hotel-admin/{self.restaurant.slug}/rooms/{self.room101.id}/status/'
+        resp_status = self.client.post(status_url, {'status': Room.RoomStatus.CLEANING})
+        self.assertEqual(resp_status.status_code, 302)
+        self.room101.refresh_from_db()
+        self.assertEqual(self.room101.status, Room.RoomStatus.CLEANING)
+
+    def test_front_desk_sidebar_and_feature_isolation(self):
+        """
+        Verify that a FRONT_DESK user:
+        1. Sees Front Desk Operations and Rooms & Housekeeping.
+        2. Does NOT see Room Categories & Tariffs or Hotel Configuration.
+        3. Can take New Reservations, but cannot Add Physical Rooms.
+        """
+        fd_user = User.objects.create_user(username="fd_anita", password="Password123!", is_staff=True)
+        RestaurantUser.objects.create(
+            user=fd_user,
+            restaurant=self.restaurant,
+            branch=self.branch,
+            role=RestaurantUser.Role.FRONT_DESK,
+        )
+
+        self.client.force_login(fd_user)
+
+        resp_dash = self.client.get(f'/hotel-admin/{self.restaurant.slug}/')
+        self.assertEqual(resp_dash.status_code, 200)
+        self.assertTrue(resp_dash.context['is_front_desk'])
+        self.assertTrue(resp_dash.context['show_front_desk_ops'])
+        self.assertFalse(resp_dash.context['show_room_categories'])
+        self.assertFalse(resp_dash.context['show_hotel_config'])
+        self.assertTrue(resp_dash.context['can_create_reservation'])
+        self.assertFalse(resp_dash.context['can_manage_physical_rooms'])
+
+        self.assertContains(resp_dash, "Front Desk Operations")
+        self.assertContains(resp_dash, "Front Desk Overview")
+        self.assertContains(resp_dash, "Tape Chart Timeline")
+        self.assertContains(resp_dash, "Guest Folios &amp; Bookings")
+        self.assertContains(resp_dash, "Rooms &amp; Housekeeping")
+        self.assertContains(resp_dash, "New Reservation")
+
+        self.assertNotContains(resp_dash, "Room Categories &amp; Tariffs")
+        self.assertNotContains(resp_dash, "Hotel Settings")
+        self.assertNotContains(resp_dash, "Staff &amp; Roles")

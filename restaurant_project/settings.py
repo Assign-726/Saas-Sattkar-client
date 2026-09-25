@@ -104,8 +104,8 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'restaurant_admin.middleware.BranchContextMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'restaurant_admin.middleware.BranchContextMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
