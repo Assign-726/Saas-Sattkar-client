@@ -628,7 +628,14 @@ class RestaurantSettingsForm(forms.ModelForm):
         fields = [
             'cgst_percentage', 'sgst_percentage', 'service_charge_percentage', 'notification_sound',
             'bill_template', 'kot_template',
-            'enable_customer_ordering', 'enable_online_payment', 'enable_pay_at_counter', 'razorpay_key_id', 'razorpay_key_secret'
+            'enable_customer_ordering', 'enable_online_payment', 'enable_pay_at_counter', 'razorpay_key_id', 'razorpay_key_secret',
+            # Tally Accounting Voucher Export Settings
+            'tally_voucher_type', 'tally_voucher_number_source', 'tally_change_mode',
+            'tally_cash_ledger', 'tally_upi_ledger', 'tally_card_ledger',
+            'tally_online_ledger', 'tally_zomato_ledger', 'tally_swiggy_ledger', 'tally_credit_ledger',
+            'tally_sales_ledger', 'tally_liquor_sales_ledger',
+            'tally_cgst_ledger', 'tally_sgst_ledger', 'tally_vat_ledger',
+            'tally_discount_ledger', 'tally_extra_charges_ledger', 'tally_round_off_ledger',
         ]
         widgets = {
             'cgst_percentage': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
@@ -639,6 +646,8 @@ class RestaurantSettingsForm(forms.ModelForm):
             'kot_template': forms.Select(attrs={'class': 'form-select'}),
             'razorpay_key_id': forms.TextInput(attrs={'placeholder': 'rzp_test_...'}),
             'razorpay_key_secret': forms.PasswordInput(render_value=True, attrs={'placeholder': 'Razorpay Key Secret'}),
+            'tally_voucher_number_source': forms.Select(attrs={'class': 'form-select form-select-sm'}),
+            'tally_change_mode': forms.Select(attrs={'class': 'form-select form-select-sm'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -646,12 +655,25 @@ class RestaurantSettingsForm(forms.ModelForm):
         for field in ['cgst_percentage', 'sgst_percentage', 'service_charge_percentage', 'razorpay_key_id', 'razorpay_key_secret']:
             if field in self.fields:
                 self.fields[field].widget.attrs.update({'class': 'form-control'})
-        for field in ['bill_template', 'kot_template']:
+        for field in ['bill_template', 'kot_template', 'tally_voucher_number_source', 'tally_change_mode']:
             if field in self.fields:
                 self.fields[field].widget.attrs.update({'class': 'form-select'})
         for field in ['enable_customer_ordering', 'enable_online_payment', 'enable_pay_at_counter']:
             if field in self.fields:
                 self.fields[field].widget.attrs.update({'class': 'form-check-input'})
+        # Tally text fields
+        tally_text_fields = [
+            'tally_voucher_type',
+            'tally_cash_ledger', 'tally_upi_ledger', 'tally_card_ledger',
+            'tally_online_ledger', 'tally_zomato_ledger', 'tally_swiggy_ledger', 'tally_credit_ledger',
+            'tally_sales_ledger', 'tally_liquor_sales_ledger',
+            'tally_cgst_ledger', 'tally_sgst_ledger', 'tally_vat_ledger',
+            'tally_discount_ledger', 'tally_extra_charges_ledger', 'tally_round_off_ledger',
+        ]
+        for field in tally_text_fields:
+            if field in self.fields:
+                self.fields[field].widget.attrs.update({'class': 'form-control form-control-sm'})
+
 
     def clean(self):
         cleaned = super().clean()

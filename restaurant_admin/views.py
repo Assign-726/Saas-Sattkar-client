@@ -4224,6 +4224,320 @@ def order_records(request, restaurant_slug=None):
     })
 
 
+def _export_tally_vouchers(request, restaurant):
+    """
+    Generate a TallyPrime-compatible Accounting Voucher Excel export.
+
+    Sheet name : "Accounting Voucher"  (Tally's standard import sheet)
+    Columns    : Voucher Date | Voucher Type Name | Voucher Number |
+                 Ledger Name | Ledger Amount | Ledger Amount Dr/Cr | Change Mode
+
+    Each billed order produces multiple rows (one per Dr/Cr ledger entry).
+    Dr total == Cr total is validated per voucher; export aborts on mismatch.
+    """
+    from decimal import Decimal, ROUND_HALF_UP
+    from core.models import RestaurantSettings
+    from django.http import HttpResponse
+
+    # ── Settings ──────────────────────────────────────────────────────────
+    settings_obj = RestaurantSettings.get_settings(restaurant)
+
+    VOUCHER_TYPE   = (settings_obj.tally_voucher_type or 'Sales').strip()
+    CHANGE_MODE    = (settings_obj.tally_change_mode or 'Accounting Invoice').strip()
+    VNO_SOURCE     = (settings_obj.tally_voucher_number_source or 'order_number').strip()
+
+    # Ledger name lookup
+    PAYMENT_LEDGER_MAP = {
+        'cash':   (settings_obj.tally_cash_ledger   or 'Cash A/c').strip(),
+        'upi':    (settings_obj.tally_upi_ledger    or 'UPI A/c').strip(),
+        'card':   (settings_obj.tally_card_ledger   or 'Card A/c').strip(),
+        'O':      (settings_obj.tally_online_ledger or 'Online Order A/c').strip(),
+        'online': (settings_obj.tally_online_ledger or 'Online Order A/c').strip(),
+        'zomato': (settings_obj.tally_zomato_ledger or 'Zomato A/c').strip(),
+        'swiggy': (settings_obj.tally_swiggy_ledger or 'Swiggy A/c').strip(),
+        'credit': (settings_obj.tally_credit_ledger or 'Sundry Debtors').strip(),
+        'C':      (settings_obj.tally_cash_ledger   or 'Cash A/c').strip(),   # Pay-at-counter → Cash
+    }
+    SALES_LEDGER         = (settings_obj.tally_sales_ledger         or 'Sales @ 5%').strip()
+    LIQUOR_SALES_LEDGER  = (settings_obj.tally_liquor_sales_ledger  or 'Liquor Sales A/c').strip()
+    CGST_LEDGER          = (settings_obj.tally_cgst_ledger          or 'Output CGST').strip()
+    SGST_LEDGER          = (settings_obj.tally_sgst_ledger          or 'Output SGST').strip()
+    VAT_LEDGER           = (settings_obj.tally_vat_ledger           or 'Output VAT').strip()
+    DISCOUNT_LEDGER      = (settings_obj.tally_discount_ledger      or 'Discount Allowed on Sales').strip()
+    EXTRA_LEDGER         = (settings_obj.tally_extra_charges_ledger or 'Extra Charges / Packaging A/c').strip()
+    ROUND_OFF_LEDGER     = (settings_obj.tally_round_off_ledger     or 'Round Off').strip()
+    CREDIT_LEDGER        = (settings_obj.tally_credit_ledger        or 'Sundry Debtors').strip()
+
+    ZERO = Decimal('0.00')
+    Q2   = Decimal('0.01')
+
+    def q(val):
+        """Quantize to 2 decimal places."""
+        return Decimal(str(val or 0)).quantize(Q2, rounding=ROUND_HALF_UP)
+
+    # ── Queryset: Strict filter — only valid billed orders ────────────────
+    # Start from the UI-active filters (date range, order type, search, etc.)
+    base_qs = _filter_order_queryset(request, restaurant)
+    # Always exclude Draft, Cancelled, Failed-payment, and Refunded orders
+    tally_qs = base_qs.exclude(
+        status__in=['DRAFT', 'C']
+    ).exclude(
+        payment_status__in=['refunded']
+    ).select_related('table', 'restaurant', 'branch', 'party').prefetch_related(
+        'items', 'items__menu_item'
+    ).order_by('order_time', 'id')
+
+    # ── Build all rows ─────────────────────────────────────────────────────
+    all_rows = []   # list of dicts with keys: date, vtype, vno, ledger, amount, drcr, mode
+
+    errors = []
+
+    for order in tally_qs:
+        b = order.calculate_bill_breakdown()
+
+        # -- Voucher header values --
+        voucher_date = format_local_time(order.order_time, '%d-%m-%Y')
+        if VNO_SOURCE == 'invoice_number':
+            voucher_no = order.food_invoice_number or order.order_number
+        else:
+            voucher_no = order.order_number
+
+        final_total = q(b['final_total'])
+        if final_total <= ZERO:
+            continue   # skip zero-value orders silently
+
+        order_rows = []  # collect rows for this voucher before validating
+
+        # ── STEP A: Payment / Party rows → Dr ─────────────────────────────
+        is_credit_order = (
+            order.payment_method == 'credit' or
+            (order.party and order.payment_status in ['unpaid', 'partially_paid'])
+        )
+
+        if is_credit_order:
+            # B2B / Credit: single Dr row to the party ledger
+            party_name = None
+            if order.party:
+                party_name = (order.party.name or '').strip()
+            if not party_name or party_name.lower() in ['guest', 'walk-in', 'walk-in guest', 'walkin']:
+                party_name = (order.customer_name or '').strip() or CREDIT_LEDGER
+            order_rows.append({'ledger': party_name, 'amount': final_total, 'drcr': 'Dr'})
+
+        elif order.payment_method == 'split' and isinstance(order.payments, list) and order.payments:
+            # Split payment: one Dr row per payment entry
+            for entry in order.payments:
+                method = str(entry.get('method', 'cash')).lower()
+                amt    = q(entry.get('amount', 0))
+                if amt <= ZERO:
+                    continue
+                ledger = PAYMENT_LEDGER_MAP.get(method, PAYMENT_LEDGER_MAP['cash'])
+                order_rows.append({'ledger': ledger, 'amount': amt, 'drcr': 'Dr'})
+
+        else:
+            # Single payment mode
+            method = (order.payment_method or 'cash').strip()
+            ledger = PAYMENT_LEDGER_MAP.get(method, PAYMENT_LEDGER_MAP.get('cash', 'Cash A/c'))
+            order_rows.append({'ledger': ledger, 'amount': final_total, 'drcr': 'Dr'})
+
+        # ── STEP B: Discount → Dr (pre-tax gross sales approach) ──────────
+        discount = q(b['discount_amount'])
+        if discount > ZERO:
+            order_rows.append({'ledger': DISCOUNT_LEDGER, 'amount': discount, 'drcr': 'Dr'})
+
+        # ── STEP C: Sales → Cr ────────────────────────────────────────────
+        # Service charge + custom charges are merged into the sales taxable value
+        # (matching the "Taxable value" line on the printed bill), NOT separate rows.
+        food_subtotal   = q(b['food_subtotal'])
+        liquor_subtotal = q(b['liquor_subtotal'])
+        service_charge  = q(b.get('service_charge', 0))
+
+        custom_charges_total = ZERO
+        for cc in (b.get('custom_charges_list') or []):
+            custom_charges_total += q(cc.get('amount', 0))
+
+        # Taxable value = food items + service charge + all custom charges
+        food_taxable = food_subtotal + service_charge + custom_charges_total
+
+        if food_taxable > ZERO:
+            order_rows.append({'ledger': SALES_LEDGER, 'amount': food_taxable, 'drcr': 'Cr'})
+
+        if liquor_subtotal > ZERO:
+            order_rows.append({'ledger': LIQUOR_SALES_LEDGER, 'amount': liquor_subtotal, 'drcr': 'Cr'})
+
+        # ── STEP D: Tax rows → Cr ─────────────────────────────────────────
+        cgst = q(b['cgst'])
+        sgst = q(b['sgst'])
+        vat  = q(b['vat'])
+
+        if cgst > ZERO:
+            order_rows.append({'ledger': CGST_LEDGER, 'amount': cgst, 'drcr': 'Cr'})
+        if sgst > ZERO:
+            order_rows.append({'ledger': SGST_LEDGER, 'amount': sgst, 'drcr': 'Cr'})
+        if vat > ZERO:
+            order_rows.append({'ledger': VAT_LEDGER, 'amount': vat, 'drcr': 'Cr'})
+
+        # ── STEP E: Dynamic Round-Off row ─────────────────────────────────
+        total_dr = sum(r['amount'] for r in order_rows if r['drcr'] == 'Dr')
+        total_cr = sum(r['amount'] for r in order_rows if r['drcr'] == 'Cr')
+        diff     = q(total_dr - total_cr)
+
+        if abs(diff) > Decimal('1.00'):
+            errors.append(
+                f"Voucher {voucher_no}: Dr ({total_dr}) and Cr ({total_cr}) differ by ₹{abs(diff)} "
+                f"— exceeds ₹1.00 tolerance. Export aborted."
+            )
+            break
+
+        if diff > ZERO:
+            # Dr > Cr → add Cr round-off to balance
+            order_rows.append({'ledger': ROUND_OFF_LEDGER, 'amount': abs(diff), 'drcr': 'Cr'})
+        elif diff < ZERO:
+            # Dr < Cr → add Dr round-off to balance
+            order_rows.append({'ledger': ROUND_OFF_LEDGER, 'amount': abs(diff), 'drcr': 'Dr'})
+
+        # ── STEP F: Final sanity check (Dr == Cr) ─────────────────────────
+        final_dr = sum(r['amount'] for r in order_rows if r['drcr'] == 'Dr')
+        final_cr = sum(r['amount'] for r in order_rows if r['drcr'] == 'Cr')
+        if final_dr != final_cr:
+            errors.append(
+                f"Voucher {voucher_no}: Dr ({final_dr}) ≠ Cr ({final_cr}) after round-off. "
+                f"Export aborted."
+            )
+            break
+
+        # Stamp header fields onto every row for this voucher
+        for row in order_rows:
+            row.update({
+                'date':       voucher_date,
+                'vtype':      VOUCHER_TYPE,
+                'vno':        voucher_no,
+                'mode':       CHANGE_MODE,
+            })
+        all_rows.extend(order_rows)
+
+    # ── Return error if any voucher failed validation ──────────────────────
+    if errors:
+        msg = "; ".join(errors)
+        return HttpResponse(
+            f"<h3 style='color:red;font-family:sans-serif'>Tally Export Error</h3>"
+            f"<p style='font-family:monospace'>{msg}</p>"
+            f"<p><a href='javascript:history.back()'>← Go Back</a></p>",
+            status=422,
+            content_type='text/html'
+        )
+
+    # ── Build Excel workbook ───────────────────────────────────────────────
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Accounting Voucher"   # TallyPrime REQUIRES this exact sheet name
+
+    # TallyPrime standard Sales Voucher import columns (14 columns matching SalesFormat)
+    HEADER_COLS = [
+        "Voucher Date",              # A
+        "Voucher Type Name",         # B
+        "Voucher Number",            # C
+        "Buyer/Supplier - Address",  # D  — blank (not stored per order)
+        "Buyer/Supplier - Pincode",  # E  — blank
+        "Ledger Name",               # F
+        "Ledger Amount",             # G
+        "Ledger Amount Dr/Cr",       # H
+        "Item Name",                 # I  — blank (ledger-only voucher)
+        "Billed Quantity",           # J  — blank
+        "Item Rate",                 # K  — blank
+        "Item Rate per",             # L  — blank
+        "Item Amount",               # M  — blank
+        "Change Mode",               # N
+    ]
+
+    # Header row styling
+    header_fill   = PatternFill(start_color="1F4E79", end_color="1F4E79", fill_type="solid")
+    header_font   = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+    yellow_fill   = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+    yellow_font   = Font(name="Calibri", size=10, bold=True, color="7F6000")
+    thin_border = Border(
+        left=Side(style='thin', color='D1D5DB'),
+        right=Side(style='thin', color='D1D5DB'),
+        top=Side(style='thin', color='D1D5DB'),
+        bottom=Side(style='thin', color='D1D5DB'),
+    )
+    data_font = Font(name="Calibri", size=10)
+    dr_fill   = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
+    cr_fill   = PatternFill(start_color="ECFDF5", end_color="ECFDF5", fill_type="solid")
+
+    # Columns that TallyPrime highlights yellow (Ledger Name, Amount, Dr/Cr)
+    YELLOW_COLS = {6, 7, 8}   # 1-indexed: F, G, H
+
+    ws.append(HEADER_COLS)
+    for col_idx, _ in enumerate(HEADER_COLS, start=1):
+        cell = ws.cell(row=1, column=col_idx)
+        if col_idx in YELLOW_COLS:
+            cell.fill = yellow_fill
+            cell.font = yellow_font
+        else:
+            cell.fill = header_fill
+            cell.font = header_font
+        cell.border    = thin_border
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    # Data rows
+    for row_data in all_rows:
+        is_dr = (row_data['drcr'] == 'Dr')
+        ws.append([
+            row_data['date'],                      # A  Voucher Date
+            row_data['vtype'],                     # B  Voucher Type Name
+            row_data['vno'],                       # C  Voucher Number
+            '',                                    # D  Buyer/Supplier - Address
+            '',                                    # E  Buyer/Supplier - Pincode
+            row_data['ledger'],                    # F  Ledger Name
+            float(row_data['amount']),             # G  Ledger Amount
+            row_data['drcr'],                      # H  Ledger Amount Dr/Cr
+            '',                                    # I  Item Name
+            '',                                    # J  Billed Quantity
+            '',                                    # K  Item Rate
+            '',                                    # L  Item Rate per
+            '',                                    # M  Item Amount
+            row_data['mode'],                      # N  Change Mode
+        ])
+        row_idx  = ws.max_row
+        row_fill = dr_fill if is_dr else cr_fill
+        for col_idx in range(1, len(HEADER_COLS) + 1):
+            cell        = ws.cell(row=row_idx, column=col_idx)
+            cell.font   = data_font
+            cell.border = thin_border
+            cell.fill   = row_fill
+            if col_idx == 7:    # G: Ledger Amount → right-aligned number
+                cell.number_format = '#,##0.00'
+                cell.alignment = Alignment(horizontal="right")
+            elif col_idx == 8:  # H: Dr/Cr → bold, coloured, centered
+                cell.font  = Font(name="Calibri", size=10, bold=True,
+                                  color="1E40AF" if is_dr else "065F46")
+                cell.alignment = Alignment(horizontal="center")
+            else:
+                cell.alignment = Alignment(horizontal="left")
+
+    # Auto column widths (14 columns: A through N)
+    from openpyxl.utils import get_column_letter
+    col_widths = [12, 16, 18, 28, 14, 36, 14, 18, 16, 14, 12, 12, 12, 20]
+    for i, width in enumerate(col_widths, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = width
+
+    ws.freeze_panes = "A2"   # freeze header
+
+    # Build filename and response
+    filename = (
+        f"Tally_Vouchers_{restaurant.slug}_{timezone.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    )
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
+
+
 @login_required
 @user_passes_test(is_admin)
 def order_records_export(request, restaurant_slug=None):
@@ -4233,6 +4547,11 @@ def order_records_export(request, restaurant_slug=None):
         from django.http import HttpResponseForbidden
         return HttpResponseForbidden("No restaurant associated with this account.")
 
+    # ── Dispatch: Tally Accounting Voucher export ──────────────────────────
+    if request.GET.get('format') == 'tally':
+        return _export_tally_vouchers(request, restaurant)
+
+    # ── Standard 18-column analytics export (existing behaviour) ──────────
     orders_qs = _filter_order_queryset(request, restaurant)
 
     headers = [

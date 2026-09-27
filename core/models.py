@@ -1175,6 +1175,54 @@ class RestaurantSettings(models.Model):
         help_text="4-digit authorization PIN for voids and credit notes"
     )
 
+    # ─────────────────────────────────────────────────────────────────────────
+    # Tally Accounting Voucher Export Settings
+    # ─────────────────────────────────────────────────────────────────────────
+    class TallyVoucherNumberSource(models.TextChoices):
+        ORDER_NUMBER   = 'order_number',   'Order Number (ORD-0001)'
+        INVOICE_NUMBER = 'invoice_number', 'GST Invoice Number (INV-2026-0001)'
+
+    class TallyChangeMode(models.TextChoices):
+        ACCOUNTING_INVOICE = 'Accounting Invoice', 'Accounting Invoice'
+        AS_VOUCHER         = 'As Voucher',         'As Voucher'
+
+    # Voucher configuration
+    tally_voucher_type = models.CharField(
+        max_length=50, default='Sales',
+        help_text="TallyPrime voucher type name (e.g. 'Sales' or 'POS Sales')"
+    )
+    tally_voucher_number_source = models.CharField(
+        max_length=20,
+        choices=TallyVoucherNumberSource.choices,
+        default=TallyVoucherNumberSource.ORDER_NUMBER,
+        help_text="Column used as the Voucher Number in TallyPrime import"
+    )
+    tally_change_mode = models.CharField(
+        max_length=30,
+        choices=TallyChangeMode.choices,
+        default=TallyChangeMode.ACCOUNTING_INVOICE,
+        help_text="TallyPrime 'Change Mode' column value"
+    )
+
+    # Dr Ledger names (Payment / Debit side)
+    tally_cash_ledger         = models.CharField(max_length=100, default='Cash A/c',            help_text="Ledger name for Cash payments in TallyPrime")
+    tally_upi_ledger          = models.CharField(max_length=100, default='UPI A/c',             help_text="Ledger name for UPI payments in TallyPrime")
+    tally_card_ledger         = models.CharField(max_length=100, default='Card A/c',            help_text="Ledger name for Card payments in TallyPrime")
+    tally_online_ledger       = models.CharField(max_length=100, default='Online Order A/c',    help_text="Ledger name for Online (Razorpay) payments in TallyPrime")
+    tally_zomato_ledger       = models.CharField(max_length=100, default='Zomato A/c',          help_text="Ledger name for Zomato aggregator orders in TallyPrime")
+    tally_swiggy_ledger       = models.CharField(max_length=100, default='Swiggy A/c',          help_text="Ledger name for Swiggy aggregator orders in TallyPrime")
+    tally_credit_ledger       = models.CharField(max_length=100, default='Sundry Debtors',      help_text="Ledger name for Credit / Party receivable in TallyPrime")
+
+    # Cr Ledger names (Sales / Tax / Charges side)
+    tally_sales_ledger        = models.CharField(max_length=100, default='Sales @ 5%',          help_text="Ledger name for Food Sales in TallyPrime")
+    tally_liquor_sales_ledger = models.CharField(max_length=100, default='Liquor Sales A/c',    help_text="Ledger name for Liquor / VAT Sales in TallyPrime")
+    tally_cgst_ledger         = models.CharField(max_length=100, default='Output CGST',         help_text="Ledger name for Output CGST in TallyPrime")
+    tally_sgst_ledger         = models.CharField(max_length=100, default='Output SGST',         help_text="Ledger name for Output SGST in TallyPrime")
+    tally_vat_ledger          = models.CharField(max_length=100, default='Output VAT',          help_text="Ledger name for Output VAT (Liquor) in TallyPrime")
+    tally_discount_ledger     = models.CharField(max_length=100, default='Discount Allowed on Sales',      help_text="Ledger name for Discount Dr rows in TallyPrime")
+    tally_extra_charges_ledger= models.CharField(max_length=100, default='Extra Charges / Packaging A/c', help_text="Ledger name for packaging/service extra charges in TallyPrime")
+    tally_round_off_ledger    = models.CharField(max_length=100, default='Round Off',           help_text="Ledger name for Round Off Dr/Cr in TallyPrime")
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

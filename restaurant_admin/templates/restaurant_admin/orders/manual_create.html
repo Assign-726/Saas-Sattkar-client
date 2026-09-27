@@ -146,7 +146,8 @@
      right. A number that's always 1-2 digits needs a fixed, small width. */
   .covInput{width:28px;border:none;background:none;color:var(--ink);font:inherit;
      font-weight:600;font-size:13px;text-align:center;padding:0;cursor:pointer;outline:none}
-  .covInput:focus{cursor:text;background:var(--brand-tint);border-radius:4px}
+  .covInput:focus{cursor:text;background-color:#fef9e7 !important;border:1.5px solid #f39c12 !important;border-radius:4px;box-shadow:0 0 0 2px rgba(243, 156, 18, 0.22) !important;color:#1a1815 !important}
+  .covWrap:focus-within{background-color:#fef9e7 !important;border-color:#f39c12 !important;border-radius:6px}
   .covStep:active{transform:scale(.9)}
   .cl{font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink3);font-weight:600}
   .cv{font-weight:600;font-size:13px}
@@ -165,19 +166,76 @@
   /* ── ENTRY ROW ────────────────────────────────────────── */
   .erow{background:var(--surface);border-bottom:1px solid var(--line);padding:10px 12px 8px}
   .fields{display:grid;grid-template-columns:1fr 84px 104px 138px;gap:8px;align-items:end}
+  .fld{position:relative}
   .fld label{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.09em;
              color:var(--ink3);font-weight:600;margin-bottom:4px}
   .fld input{width:100%;border:1px solid var(--line);border-radius:7px;padding:10px 11px;
              font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:500;outline:none;
-             background:var(--canvas);color:var(--ink);caret-color:var(--brand);
+             background:var(--canvas);color:var(--ink);caret-color:#1a1815;
              transition:border-color .12s,background-color .12s,box-shadow .12s}
   .fld input::placeholder{color:var(--ink3)}
-  /* landing on a field selects its value — made a solid, unmissable block
-     (Tally's reverse-video style) rather than a faint tint, since a single
-     digit like "1" is otherwise too small to read as "selected" */
-  .fld input::selection,.covInput::selection,.in::selection{background:var(--brand);color:var(--brand-on)}
-  .fld input:focus{border-color:var(--brand);background:var(--surface);
-                   box-shadow:0 0 0 3px var(--brand-glow)}
+
+  /* Tally Block Highlight (Reverse Video) - solid dark navy block cursor */
+  .fld input::selection,
+  .covInput::selection,
+  .in::selection,
+  .ddSearch::selection,
+  .pos-container input::selection,
+  .pos-container textarea::selection,
+  .veil input::selection,
+  .veil textarea::selection,
+  .modal input::selection,
+  .modal textarea::selection,
+  #settleModal input::selection,
+  ::selection {
+    background-color: #2c3e50 !important;
+    color: #ffffff !important;
+  }
+
+  /* Tally Warm Yellow Focus Highlight - exactly as in Receipt Creation */
+  .fld input:focus,
+  .covInput:focus,
+  .in:focus,
+  .ddSearch:focus,
+  .pos-container input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="hidden"]):focus,
+  .pos-container select:focus,
+  .pos-container textarea:focus,
+  .veil input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="hidden"]):focus,
+  .veil select:focus,
+  .veil textarea:focus,
+  .modal input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="hidden"]):focus,
+  .modal select:focus,
+  .modal textarea:focus,
+  #settleModal input:focus,
+  #settleModal select:focus {
+    border-color: #f39c12 !important;
+    background-color: #fef9e7 !important;
+    box-shadow: 0 0 0 3px rgba(243, 156, 18, 0.22) !important;
+    color: #1a1815 !important;
+  }
+
+  /* Tally Bold Block Cursor for empty focused fields (e.g. #fItem initial load) */
+  .fld.is-empty-focused::after {
+    content: '';
+    position: absolute;
+    left: 12px;
+    bottom: 11px;
+    width: 9.5px;
+    height: 19px;
+    background-color: #2c3e50;
+    pointer-events: none;
+    z-index: 5;
+    border-radius: 1px;
+    animation: tallyBlockCursorBlink 1.06s steps(1) infinite;
+  }
+  .fld.is-empty-focused input {
+    caret-color: transparent !important;
+  }
+  @keyframes tallyBlockCursorBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
   /* Tally's landed-field cursor: Hide default thin caret when armed / blinking block cursor is active */
   input.landed,
   .fld input[data-armed="1"],
@@ -385,8 +443,8 @@
     letter-spacing:.08em;color:var(--ink3);font-weight:700}
   .ddGroup:first-child{margin-top:0}
   .ddSearch{width:100%;border:1px solid var(--line);border-radius:7px;padding:8px 10px;font:inherit;
-    font-size:12.5px;margin-bottom:5px;outline:none;background:var(--canvas);color:var(--ink)}
-  .ddSearch:focus{border-color:var(--brand);background:var(--surface)}
+    font-size:12.5px;margin-bottom:5px;outline:none;background:var(--canvas);color:var(--ink);caret-color:#1a1815}
+  .ddSearch:focus{border-color:#f39c12 !important;background-color:#fef9e7 !important;box-shadow:0 0 0 3px rgba(243, 156, 18, 0.22) !important;color:#1a1815 !important}
 
   /* ── MODALS ───────────────────────────────────────────── */
   .veil{position:fixed;inset:0;background:rgba(20,22,28,.55);display:flex;align-items:center;
@@ -414,8 +472,8 @@
   .mini.p kbd{background:rgba(255,255,255,.2);color:var(--brand-on);border-color:transparent}
   .mini.danger{color:var(--stop);border-color:var(--stop)}
   .in{width:100%;padding:11px;border:1px solid var(--line);border-radius:7px;font:inherit;
-      font-size:14px;outline:none;background:var(--canvas);color:var(--ink);caret-color:var(--brand)}
-  .in:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-glow);background:var(--surface)}
+      font-size:14px;outline:none;background:var(--canvas);color:var(--ink);caret-color:#1a1815}
+  .in:focus{border-color:#f39c12 !important;box-shadow:0 0 0 3px rgba(243, 156, 18, 0.22) !important;background-color:#fef9e7 !important;color:#1a1815 !important}
   .in.mono{font-family:'IBM Plex Mono',monospace;letter-spacing:.04em}
   .lb{font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink3);font-weight:600;
       display:block;margin-bottom:5px;margin-top:14px}
@@ -1009,12 +1067,33 @@
 document.addEventListener("DOMContentLoaded", function() {
     // 1. TALLY INPUT ENGINE (Blinking Caret & Replace-on-type)
     let blinkTimer = null;
+    function updateEmptyCursor(el) {
+        if (!el) return;
+        const parentFld = el.closest('.fld');
+        if (!parentFld) return;
+        if (document.activeElement === el && (!el.value || el.value === "")) {
+            parentFld.classList.add('is-empty-focused');
+        } else {
+            parentFld.classList.remove('is-empty-focused');
+        }
+    }
+
     function startBlink(el) {
-        if(blinkTimer) clearInterval(blinkTimer);
-        if(!el || el.value === "") { 
-            if(el) el.dataset.armed = "0"; 
+        if(blinkTimer) {
+            clearInterval(blinkTimer);
+            blinkTimer = null;
+        }
+        if(!el) return;
+
+        updateEmptyCursor(el);
+        if(!el.value || el.value === "") { 
+            el.dataset.armed = "0"; 
             return; 
         }
+
+        const parentFld = el.closest('.fld');
+        if(parentFld) parentFld.classList.remove('is-empty-focused');
+
         el.dataset.armed = "1";
         let on = true;
         try { el.setSelectionRange(0, 1); } catch(e){}
@@ -1039,15 +1118,20 @@ document.addEventListener("DOMContentLoaded", function() {
             clearInterval(blinkTimer);
             blinkTimer = null;
         }
+        const parentFld = el.closest('.fld');
+        if(parentFld) {
+            parentFld.classList.remove('is-empty-focused');
+        }
     }
 
-    const inputs = ['fItem', 'fQty', 'fRate'];
+    const inputs = ['fItem', 'fQty', 'fRate', 'vCov'];
     inputs.forEach(id => {
         let el = document.getElementById(id);
         if(!el) return;
         
         el.addEventListener("focus", function() {
-            if (el.value.length > 0) {
+            updateEmptyCursor(el);
+            if (el.value && el.value.length > 0) {
                 el.dataset.armed = "1";
             }
             setTimeout(() => startBlink(el), 10);
@@ -1059,6 +1143,14 @@ document.addEventListener("DOMContentLoaded", function() {
 
         el.addEventListener("mousedown", function() {
             disarm(id);
+        });
+
+        el.addEventListener("input", function() {
+            updateEmptyCursor(el);
+        });
+
+        el.addEventListener("keyup", function() {
+            updateEmptyCursor(el);
         });
         
         el.addEventListener("keydown", function(e) {
@@ -1086,6 +1178,8 @@ document.addEventListener("DOMContentLoaded", function() {
                 return;
             }
             if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                const parentFld = this.closest('.fld');
+                if (parentFld) parentFld.classList.remove('is-empty-focused');
                 if (isEditing) {
                     disarm(id);
                     this.value = '';
@@ -1225,7 +1319,7 @@ document.addEventListener("DOMContentLoaded", function() {
           <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569; margin-bottom:6px;">
             Item Name <span style="color:#EF4444;">*</span>
           </label>
-          <input type="text" name="name" id="quick-item-name" required placeholder="e.g. Butter Chicken, Paneer Tikka" style="width:100%; height:40px; padding:0 14px; font-size:13.5px; font-weight:600; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; transition:border-color .15s, box-shadow .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#2563EB';this.style.boxShadow='0 0 0 3px rgba(37,99,235,0.15)'" onblur="this.style.borderColor='#CBD5E1';this.style.boxShadow='none'">
+          <input type="text" name="name" id="quick-item-name" required placeholder="e.g. Butter Chicken, Paneer Tikka" style="width:100%; height:40px; padding:0 14px; font-size:13.5px; font-weight:600; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; transition:border-color .15s, box-shadow .15s, background-color .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#f39c12';this.style.backgroundColor='#fef9e7';this.style.boxShadow='0 0 0 3px rgba(243,156,18,0.22)'" onblur="this.style.borderColor='#CBD5E1';this.style.backgroundColor='#FFFFFF';this.style.boxShadow='none'">
         </div>
 
         <!-- 2-Col Grid: Category & Price -->
@@ -1236,7 +1330,7 @@ document.addEventListener("DOMContentLoaded", function() {
               Category
             </label>
             <div style="position:relative;">
-              <select name="category" id="quick-item-category" style="width:100%; height:40px; padding:0 30px 0 12px; font-size:13px; font-weight:500; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; appearance:none; -webkit-appearance:none; cursor:pointer; transition:border-color .15s, box-shadow .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#2563EB';this.style.boxShadow='0 0 0 3px rgba(37,99,235,0.15)'" onblur="this.style.borderColor='#CBD5E1';this.style.boxShadow='none'">
+              <select name="category" id="quick-item-category" style="width:100%; height:40px; padding:0 30px 0 12px; font-size:13px; font-weight:500; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; appearance:none; -webkit-appearance:none; cursor:pointer; transition:border-color .15s, box-shadow .15s, background-color .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#f39c12';this.style.backgroundColor='#fef9e7';this.style.boxShadow='0 0 0 3px rgba(243,156,18,0.22)'" onblur="this.style.borderColor='#CBD5E1';this.style.backgroundColor='#FFFFFF';this.style.boxShadow='none'">
                 <option value="">-- Select Category --</option>
                 {% for cat in categories %}
                 <option value="{{ cat.id }}">{{ cat.name }}</option>
@@ -1255,7 +1349,7 @@ document.addEventListener("DOMContentLoaded", function() {
             </label>
             <div style="position:relative; display:flex; align-items:center;">
               <span style="position:absolute; left:12px; font-size:14px; font-weight:700; color:#64748B; pointer-events:none;">₹</span>
-              <input type="number" step="0.01" min="0" name="price" id="quick-item-price" required placeholder="0.00" style="width:100%; height:40px; padding:0 12px 0 28px; font-size:14.5px; font-weight:700; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; transition:border-color .15s, box-shadow .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#2563EB';this.style.boxShadow='0 0 0 3px rgba(37,99,235,0.15)'" onblur="this.style.borderColor='#CBD5E1';this.style.boxShadow='none'">
+              <input type="number" step="0.01" min="0" name="price" id="quick-item-price" required placeholder="0.00" style="width:100%; height:40px; padding:0 12px 0 28px; font-size:14.5px; font-weight:700; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; transition:border-color .15s, box-shadow .15s, background-color .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#f39c12';this.style.backgroundColor='#fef9e7';this.style.boxShadow='0 0 0 3px rgba(243,156,18,0.22)'" onblur="this.style.borderColor='#CBD5E1';this.style.backgroundColor='#FFFFFF';this.style.boxShadow='none'">
             </div>
           </div>
         </div>
@@ -1267,7 +1361,7 @@ document.addEventListener("DOMContentLoaded", function() {
             <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569; margin-bottom:6px;">
               Fast POS Code <span style="font-size:10px; color:#94A3B8; font-weight:500;">(Optional)</span>
             </label>
-            <input type="text" name="short_code" id="quick-item-code" placeholder="e.g. 101, NAAN" style="width:100%; height:40px; padding:0 12px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; font-weight:600; text-transform:uppercase; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; transition:border-color .15s, box-shadow .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#2563EB';this.style.boxShadow='0 0 0 3px rgba(37,99,235,0.15)'" onblur="this.style.borderColor='#CBD5E1';this.style.boxShadow='none'">
+            <input type="text" name="short_code" id="quick-item-code" placeholder="e.g. 101, NAAN" style="width:100%; height:40px; padding:0 12px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; font-weight:600; text-transform:uppercase; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; transition:border-color .15s, box-shadow .15s, background-color .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#f39c12';this.style.backgroundColor='#fef9e7';this.style.boxShadow='0 0 0 3px rgba(243,156,18,0.22)'" onblur="this.style.borderColor='#CBD5E1';this.style.backgroundColor='#FFFFFF';this.style.boxShadow='none'">
           </div>
 
           <!-- Tax Type -->
@@ -1276,7 +1370,7 @@ document.addEventListener("DOMContentLoaded", function() {
               Tax Type / Rate <span style="color:#EF4444;">*</span>
             </label>
             <div style="position:relative;">
-              <select name="tax_type" id="quick-item-tax" required style="width:100%; height:40px; padding:0 30px 0 12px; font-size:12px; font-weight:600; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; appearance:none; -webkit-appearance:none; cursor:pointer; transition:border-color .15s, box-shadow .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#2563EB';this.style.boxShadow='0 0 0 3px rgba(37,99,235,0.15)'" onblur="this.style.borderColor='#CBD5E1';this.style.boxShadow='none'">
+              <select name="tax_type" id="quick-item-tax" required style="width:100%; height:40px; padding:0 30px 0 12px; font-size:12px; font-weight:600; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; appearance:none; -webkit-appearance:none; cursor:pointer; transition:border-color .15s, box-shadow .15s, background-color .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#f39c12';this.style.backgroundColor='#fef9e7';this.style.boxShadow='0 0 0 3px rgba(243,156,18,0.22)'" onblur="this.style.borderColor='#CBD5E1';this.style.backgroundColor='#FFFFFF';this.style.boxShadow='none'">
                 <option value="GST_FOOD" selected>GST 5% (Meals / Beverages)</option>
                 {% if current_branch and current_branch.serves_alcohol %}
                 <option value="VAT_BEER">Beer VAT (State Rate)</option>
@@ -1302,7 +1396,7 @@ document.addEventListener("DOMContentLoaded", function() {
           <label style="display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#475569; margin-bottom:6px;">
             Description / Kitchen Note <span style="font-size:10px; color:#94A3B8; font-weight:500;">(Optional)</span>
           </label>
-          <textarea name="description" id="quick-item-desc" rows="2" placeholder="Item description, spice notes or ingredients..." style="width:100%; padding:9px 12px; font-size:12.5px; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; resize:none; transition:border-color .15s, box-shadow .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#2563EB';this.style.boxShadow='0 0 0 3px rgba(37,99,235,0.15)'" onblur="this.style.borderColor='#CBD5E1';this.style.boxShadow='none'"></textarea>
+          <textarea name="description" id="quick-item-desc" rows="2" placeholder="Item description, spice notes or ingredients..." style="width:100%; padding:9px 12px; font-size:12.5px; color:#0F172A; background:#FFFFFF; border:1.5px solid #CBD5E1; border-radius:10px; outline:none; resize:none; transition:border-color .15s, box-shadow .15s, background-color .15s; box-sizing:border-box;" onfocus="this.style.borderColor='#f39c12';this.style.backgroundColor='#fef9e7';this.style.boxShadow='0 0 0 3px rgba(243,156,18,0.22)'" onblur="this.style.borderColor='#CBD5E1';this.style.backgroundColor='#FFFFFF';this.style.boxShadow='none'"></textarea>
         </div>
 
         <!-- Toggles Section: Available & Tax Inclusive -->
