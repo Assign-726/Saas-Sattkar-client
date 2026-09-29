@@ -59,6 +59,34 @@ class Restaurant(models.Model):
         help_text="PENDING / SYNCED / FAILED"
     )
 
+    # Master Dashboard Module Entitlements & Remote Feature Flags
+    feature_website_pages = models.BooleanField(
+        default=True,
+        verbose_name="Website CMS Module",
+        help_text="Controls SHOW_WEBSITE_PAGES (Public website, menu showcase & CMS)"
+    )
+    feature_alcohol_vat = models.BooleanField(
+        default=True,
+        verbose_name="Alcohol & VAT Module",
+        help_text="Controls ENABLE_ALCOHOL_VAT (Liquor billing & State VAT)"
+    )
+    feature_club_events = models.BooleanField(
+        default=True,
+        verbose_name="Club & Events Module",
+        help_text="Controls ENABLE_CLUB_EVENTS_MODULE (Nightclub passes & live events)"
+    )
+    feature_hotel_pms = models.BooleanField(
+        default=True,
+        verbose_name="Hotel PMS Module",
+        help_text="Controls ENABLE_HOTEL_MODULE (Hotel rooms & front-desk PMS)"
+    )
+    features_last_synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Features Last Synced At",
+        help_text="Timestamp when module flags were last refreshed from Master Admin"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -220,13 +248,32 @@ class Restaurant(models.Model):
             resp = requests.post(url, data=body_json, headers=headers, timeout=10)
             data = resp.json()
             if resp.ok and data.get("license_key"):
-                Restaurant.objects.filter(pk=self.pk).update(
-                    master_license_key=data["license_key"],
-                    master_sync_status="SYNCED",
-                )
+                from django.utils import timezone
+                update_fields = {
+                    "master_license_key": data["license_key"],
+                    "master_sync_status": "SYNCED",
+                }
+                modules = data.get("modules")
+                if isinstance(modules, dict):
+                    if "SHOW_WEBSITE_PAGES" in modules:
+                        update_fields["feature_website_pages"] = bool(modules["SHOW_WEBSITE_PAGES"])
+                        self.feature_website_pages = update_fields["feature_website_pages"]
+                    if "ENABLE_ALCOHOL_VAT" in modules:
+                        update_fields["feature_alcohol_vat"] = bool(modules["ENABLE_ALCOHOL_VAT"])
+                        self.feature_alcohol_vat = update_fields["feature_alcohol_vat"]
+                    if "ENABLE_CLUB_EVENTS_MODULE" in modules:
+                        update_fields["feature_club_events"] = bool(modules["ENABLE_CLUB_EVENTS_MODULE"])
+                        self.feature_club_events = update_fields["feature_club_events"]
+                    if "ENABLE_HOTEL_MODULE" in modules:
+                        update_fields["feature_hotel_pms"] = bool(modules["ENABLE_HOTEL_MODULE"])
+                        self.feature_hotel_pms = update_fields["feature_hotel_pms"]
+                    update_fields["features_last_synced_at"] = timezone.now()
+                    self.features_last_synced_at = update_fields["features_last_synced_at"]
+
+                Restaurant.objects.filter(pk=self.pk).update(**update_fields)
                 self.master_license_key = data["license_key"]
                 self.master_sync_status = "SYNCED"
-                logger.info(f"[MasterPanel] Synced '{self.name}' - key: {data['license_key']}")
+                logger.info(f"[MasterPanel] Synced '{self.name}' - key: {data['license_key']}, modules: {modules}")
             else:
                 Restaurant.objects.filter(pk=self.pk).update(master_sync_status="FAILED")
                 self.master_sync_status = "FAILED"

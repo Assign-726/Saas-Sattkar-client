@@ -648,18 +648,20 @@ def get_pos_active_orders(restaurant, active_branch=None):
             else:
                 elapsed_str = f"{tot_sec // 86400}d"
 
+        is_draft = (ord_obj.status == Order.OrderStatus.DRAFT)
         num = ord_obj.branch_order_number or ord_obj.id
         ord_type = ord_obj.order_type or 'dine_in'
         if ord_type == 'dine_in':
-            title = f"Dine-in #{num}"
             if ord_obj.table:
-                title = f"Dine-in {ord_obj.table.name}"
+                title = f"Dine-in {ord_obj.table.name}" + (" (Draft)" if is_draft else "")
             elif ord_obj.table_number:
-                title = f"Dine-in T-{ord_obj.table_number}"
+                title = f"Dine-in T-{ord_obj.table_number}" + (" (Draft)" if is_draft else "")
+            else:
+                title = "Dine-in (Draft)" if is_draft else f"Dine-in #{num}"
         elif ord_type == 'takeaway':
-            title = f"Takeaway #{num}"
+            title = "Takeaway (Draft)" if is_draft else f"Takeaway #{num}"
         else:
-            title = f"Delivery #{num}"
+            title = "Delivery (Draft)" if is_draft else f"Delivery #{num}"
 
         items_count = ord_obj.items.count()
 
@@ -794,9 +796,61 @@ def order_create_manual(request, restaurant_slug=None):
             order_type = raw_order_type or Order.OrderType.DINE_IN
 
         payment_method = data.get('payment_method') or Order.PaymentMethod.CASH
-        payment_status = data.get('payment_status') or Order.PaymentStatus.PAID
+        payment_status = data.get('payment_status') or Order.PaymentStatus.UNPAID
         action = data.get('action', 'save')
         order_id = data.get('order_id') or data.get('existing_order_id')
+
+        # Determine items data & count of valid items early
+        items_data = data.get('items')
+        if not items_data and not is_json:
+            item_ids = request.POST.getlist('item_id')
+            quantities = request.POST.getlist('quantity')
+            unit_prices = request.POST.getlist('unit_price')
+            items_data = []
+            for idx, item_id in enumerate(item_ids):
+                qty = quantities[idx] if idx < len(quantities) else 1
+                u_price = unit_prices[idx] if idx < len(unit_prices) else 0
+                items_data.append({
+                    'menu_item_id': item_id,
+                    'quantity': qty,
+                    'unit_price': u_price
+                })
+
+        valid_items_count = len([i for i in (items_data or []) if int(i.get('quantity') or 0) > 0]) if isinstance(items_data, list) else 0
+
+        # Guard: Cannot fire KOT or Settle an order with no items
+        if action in ['settle_order', 'print_close', 'fire_kot', 'save_kot'] and valid_items_count == 0:
+            if is_json:
+                return JsonResponse({'success': False, 'error': 'Cannot process, send to kitchen, or settle an order with no items.'}, status=400)
+            messages.error(request, 'Cannot process, send to kitchen, or settle an order with no items.')
+            return redirect(request.path)
+
+        # Guard: If all items removed from an unsent draft order, delete/cancel the draft order from DB
+        if order_id and valid_items_count == 0:
+            existing_ord = Order.objects.filter(pk=order_id, restaurant=restaurant).first()
+            if existing_ord and existing_ord.status == Order.OrderStatus.DRAFT:
+                existing_ord.items.all().delete()
+                existing_ord.delete()
+                active_b = get_active_branch(request, restaurant)
+                return JsonResponse({
+                    'success': True,
+                    'order_deleted': True,
+                    'order_id': None,
+                    'message': 'Empty draft order cleared.',
+                    'active_orders': get_pos_active_orders(restaurant, active_b)
+                })
+            else:
+                if is_json:
+                    return JsonResponse({'success': False, 'error': 'Cannot remove all items from an active or confirmed order. Please void items or cancel the order.'}, status=400)
+                messages.error(request, 'Cannot remove all items from an active or confirmed order.')
+                return redirect(request.path)
+
+        # Guard: Cannot create a brand new order with no items
+        if not order_id and valid_items_count == 0:
+            if is_json:
+                return JsonResponse({'success': False, 'error': 'Cannot create an empty order. Please add items.'}, status=400)
+            messages.error(request, 'Cannot create an empty order. Please add items.')
+            return redirect(request.path)
 
         def safe_decimal(val, default='0.00'):
             try:
@@ -837,27 +891,28 @@ def order_create_manual(request, restaurant_slug=None):
             paid_amount_val = safe_decimal(data.get('paid_amount'))
             if paid_amount_val > 0:
                 valid_payments = [{'method': payment_method, 'amount': float(paid_amount_val)}]
-        elif action in ['settle_order', 'print_close'] or data.get('payment_status') == 'paid':
+        elif (action in ['settle_order', 'print_close'] or data.get('payment_status') == 'paid') and grand_total_val > Decimal('0.00'):
             paid_amount_val = max(Decimal('0.00'), grand_total_val - advance_amount_input)
             valid_payments = [{'method': payment_method, 'amount': float(paid_amount_val)}]
         else:
             paid_amount_val = Decimal('0.00')
             valid_payments = []
 
-        # If user settled via settle_order / print_close with non-credit method, ensure it doesn't fall through to unpaid
-        if (action in ['settle_order', 'print_close'] or data.get('payment_status') == 'paid') and payment_method != 'credit':
+        if (action in ['settle_order', 'print_close'] or data.get('payment_status') == 'paid') and payment_method != 'credit' and grand_total_val > Decimal('0.00'):
             if paid_amount_val <= Decimal('0.00'):
                 paid_amount_val = max(Decimal('0.00'), grand_total_val - advance_amount_input)
                 valid_payments = [{'method': payment_method, 'amount': float(paid_amount_val)}]
 
         due_amount_val = max(Decimal('0.00'), grand_total_val - advance_amount_input - paid_amount_val)
 
-        if due_amount_val <= Decimal('0.00'):
+        if valid_items_count == 0 or grand_total_val <= Decimal('0.00'):
+            initial_payment_status = Order.PaymentStatus.UNPAID
+            due_amount_val = Decimal('0.00')
+            paid_amount_val = Decimal('0.00')
+            valid_payments = []
+        elif due_amount_val <= Decimal('0.00') and (paid_amount_val > 0 or advance_amount_input >= grand_total_val):
             initial_payment_status = Order.PaymentStatus.PAID
             due_amount_val = Decimal('0.00')
-            if not valid_payments and grand_total_val > advance_amount_input:
-                paid_amount_val = max(Decimal('0.00'), grand_total_val - advance_amount_input)
-                valid_payments = [{'method': payment_method, 'amount': float(paid_amount_val)}]
         elif (paid_amount_val + advance_amount_input) > Decimal('0.00'):
             initial_payment_status = Order.PaymentStatus.PARTIALLY_PAID
         else:
@@ -873,18 +928,26 @@ def order_create_manual(request, restaurant_slug=None):
                 initial_status = Order.OrderStatus.COMPLETED
             else:
                 initial_status = Order.OrderStatus.SERVED
+        elif action in ['update_order', 'void_item']:
+            if order_id:
+                existing_ord = Order.objects.filter(pk=order_id, restaurant=restaurant).first()
+                initial_status = existing_ord.status if existing_ord else Order.OrderStatus.DRAFT
+            else:
+                initial_status = Order.OrderStatus.DRAFT
         else:
             initial_status = Order.OrderStatus.PENDING
 
-        # Document Sequence & Invoice Number handling
+        # Document Sequence & Invoice Number handling: NEVER assign for 0-item or 0-total orders!
         gstin_no = (data.get('gstin_no') or data.get('gstin') or data.get('invoice_number') or '').strip()
         excise_bill_no = (data.get('excise_bill_no') or data.get('excise') or data.get('vat_bill_no') or '').strip()
 
-        should_assign_invoice_number = (
-            action in ['settle_order', 'print_close', 'save_invoice', 'save_food_invoice', 'save_liquor_invoice', 'save_combined_invoice'] or
-            data.get('payment_status') == 'paid' or
-            initial_payment_status == Order.PaymentStatus.PAID
-        )
+        if valid_items_count == 0 or grand_total_val <= Decimal('0.00'):
+            should_assign_invoice_number = False
+        else:
+            should_assign_invoice_number = (
+                action in ['settle_order', 'print_close', 'save_invoice', 'save_food_invoice', 'save_liquor_invoice', 'save_combined_invoice'] or
+                (action not in ['update_order', 'void_item', 'fire_kot', 'save_kot'] and (data.get('payment_status') == 'paid' or initial_payment_status == Order.PaymentStatus.PAID))
+            )
 
         active_branch = get_active_branch(request, restaurant)
         sales_seq_info = get_document_sequence_info(restaurant, 'sales', branch=active_branch)
@@ -893,6 +956,14 @@ def order_create_manual(request, restaurant_slug=None):
         if should_assign_invoice_number and sales_seq_info['mode'] in ['automatic', 'manual_override'] and not gstin_no:
             try:
                 gstin_no = get_and_increment_document_number(restaurant, 'sales', branch=active_branch, user_input_no=gstin_no, exclude_pk=order_id)
+            except ValidationError as ve:
+                if is_json:
+                    return JsonResponse({'success': False, 'error': str(ve)}, status=400)
+                messages.error(request, str(ve))
+                return redirect(request.path)
+        elif gstin_no:
+            try:
+                validate_unique_document_number(restaurant, 'sales', gstin_no, branch=active_branch, exclude_pk=order_id)
             except ValidationError as ve:
                 if is_json:
                     return JsonResponse({'success': False, 'error': str(ve)}, status=400)
@@ -1326,6 +1397,15 @@ def order_create_manual(request, restaurant_slug=None):
             elif any(k in c_name_lower for k in ['liquor', 'bar', 'spirit', 'whiskey', 'vodka', 'rum', 'cocktail']):
                 tax_type = 'VAT_IMFL'
 
+        v_data = mi.variants_json
+        if isinstance(v_data, str):
+            try:
+                v_data = json.loads(v_data)
+            except Exception:
+                v_data = []
+        if not isinstance(v_data, list):
+            v_data = []
+
         menu_items_list.append({
             'id': mi.id,
             'name': mi.name,
@@ -1335,7 +1415,8 @@ def order_create_manual(request, restaurant_slug=None):
             'category_name': cat_name,
             'image_url': img_url,
             'tax_type': tax_type,
-            'is_tax_inclusive': mi.is_tax_inclusive
+            'is_tax_inclusive': mi.is_tax_inclusive,
+            'variants': v_data,
         })
 
     categories_list = [{'id': c.id, 'name': c.name} for c in categories_qs]
@@ -1637,11 +1718,25 @@ def pos_sync_draft_items_api(request, restaurant_slug=None):
     round_off_amount_val = safe_dec(data.get('round_off_amount'))
     grand_total_val = safe_dec(data.get('grand_total'))
 
+    items_data = data.get('items', [])
+    valid_items = [it for it in (items_data if isinstance(items_data, list) else []) if (it.get('menu_item_id') or it.get('id')) and int(it.get('quantity') or 0) > 0]
+
+    # Guard: Never auto-create a draft order in DB if there are no items
+    if not order_id and not valid_items:
+        return JsonResponse({
+            'success': True,
+            'order_id': None,
+            'order_number': None,
+            'message': 'No items to sync for new order.'
+        })
+
     from django.db import transaction
     with transaction.atomic():
         if order_id:
             order = Order.objects.filter(pk=order_id, restaurant=restaurant).first()
             if not order:
+                if not valid_items:
+                    return JsonResponse({'success': True, 'order_id': None, 'order_number': None})
                 order = Order.objects.create(
                     restaurant=restaurant,
                     branch=active_branch,
@@ -1656,6 +1751,16 @@ def pos_sync_draft_items_api(request, restaurant_slug=None):
                     guest_count=int(guest_count) if guest_count else 2
                 )
             else:
+                if not valid_items and order.status == Order.OrderStatus.DRAFT:
+                    OrderItem.objects.filter(order=order).delete()
+                    order.delete()
+                    return JsonResponse({
+                        'success': True,
+                        'order_deleted': True,
+                        'order_id': None,
+                        'order_number': None,
+                        'active_orders': get_pos_active_orders(restaurant, active_branch)
+                    })
                 order.customer_name = customer_name
                 order.phone = phone
                 order.notes = notes
@@ -1665,6 +1770,8 @@ def pos_sync_draft_items_api(request, restaurant_slug=None):
                 if guest_count:
                     order.guest_count = int(guest_count)
         else:
+            if not valid_items:
+                return JsonResponse({'success': True, 'order_id': None, 'order_number': None})
             order = Order.objects.create(
                 restaurant=restaurant,
                 branch=active_branch,
@@ -1680,7 +1787,6 @@ def pos_sync_draft_items_api(request, restaurant_slug=None):
             )
 
         # 1. Sync items first using bulk_create to avoid intermediate individual item save triggers
-        items_data = data.get('items', [])
         if isinstance(items_data, list):
             OrderItem.objects.filter(order=order).delete()
             new_items = []
@@ -2022,6 +2128,15 @@ def order_edit_manual(request, pk, restaurant_slug=None):
             elif any(k in c_name_lower for k in ['liquor', 'bar', 'spirit', 'whiskey', 'vodka', 'rum', 'cocktail']):
                 tax_type = 'VAT_IMFL'
 
+        v_data = mi.variants_json
+        if isinstance(v_data, str):
+            try:
+                v_data = json.loads(v_data)
+            except Exception:
+                v_data = []
+        if not isinstance(v_data, list):
+            v_data = []
+
         menu_items_list.append({
             'id': mi.id,
             'name': mi.name,
@@ -2031,7 +2146,8 @@ def order_edit_manual(request, pk, restaurant_slug=None):
             'category_name': cat_name,
             'image_url': img_url,
             'tax_type': tax_type,
-            'is_tax_inclusive': mi.is_tax_inclusive
+            'is_tax_inclusive': mi.is_tax_inclusive,
+            'variants': v_data,
         })
 
     categories_list = [{'id': c.id, 'name': c.name} for c in categories_qs]
@@ -7907,6 +8023,15 @@ def transaction_desk_create(request, restaurant_slug=None):
             elif any(k in c_name_lower for k in ['liquor', 'bar', 'spirit', 'whiskey', 'vodka', 'rum', 'cocktail']):
                 tax_type = 'VAT_IMFL'
 
+        v_data = mi.variants_json
+        if isinstance(v_data, str):
+            try:
+                v_data = json.loads(v_data)
+            except Exception:
+                v_data = []
+        if not isinstance(v_data, list):
+            v_data = []
+
         menu_items_list.append({
             'id': mi.id,
             'name': mi.name,
@@ -7915,7 +8040,8 @@ def transaction_desk_create(request, restaurant_slug=None):
             'category_name': cat_name,
             'image_url': img_url,
             'tax_type': tax_type,
-            'is_tax_inclusive': mi.is_tax_inclusive
+            'is_tax_inclusive': mi.is_tax_inclusive,
+            'variants': v_data,
         })
 
     categories_list = [{'id': c.id, 'name': c.name} for c in categories_qs]

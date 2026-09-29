@@ -17,6 +17,20 @@ def app_constants(request):
         except Exception:
             pass
 
+    # Dynamic Master Admin Module Entitlements
+    restaurant = getattr(request, 'restaurant', None)
+    if not restaurant:
+        try:
+            from super_admin.models import Restaurant
+            restaurant = Restaurant.objects.first()
+        except Exception:
+            restaurant = None
+
+    show_website = constants.is_module_enabled('SHOW_WEBSITE_PAGES', restaurant)
+    enable_alcohol = constants.is_module_enabled('ENABLE_ALCOHOL_VAT', restaurant)
+    enable_club = constants.is_module_enabled('ENABLE_CLUB_EVENTS_MODULE', restaurant)
+    enable_hotel = constants.is_module_enabled('ENABLE_HOTEL_MODULE', restaurant)
+
     return {
         'APP_NAME': constants.APP_NAME,
         'APP_NAME_PREFIX': constants.APP_NAME_PREFIX,
@@ -27,14 +41,14 @@ def app_constants(request):
         'MAX_ALLOWED_BRANCHES': constants.MAX_ALLOWED_BRANCHES,
         'DEFAULT_CURRENCY': constants.DEFAULT_CURRENCY,
         'DEFAULT_STATE': constants.DEFAULT_STATE,
-        'SHOW_WEBSITE_PAGES': constants.SHOW_WEBSITE_PAGES,
-        'ENABLE_WEBSITE_CMS': constants.SHOW_WEBSITE_PAGES,
-        'ENABLE_ALCOHOL_VAT': constants.ENABLE_ALCOHOL_VAT,
-        'SHOW_ALCOHOL_MODULE': constants.ENABLE_ALCOHOL_VAT,
-        'ENABLE_CLUB_EVENTS_MODULE': constants.ENABLE_CLUB_EVENTS_MODULE,
-        'SHOW_CLUB_EVENTS_MODULE': constants.ENABLE_CLUB_EVENTS_MODULE,
-        'ENABLE_HOTEL_MODULE': constants.ENABLE_HOTEL_MODULE,
-        'SHOW_HOTEL_MODULE': constants.ENABLE_HOTEL_MODULE,
+        'SHOW_WEBSITE_PAGES': show_website,
+        'ENABLE_WEBSITE_CMS': show_website,
+        'ENABLE_ALCOHOL_VAT': enable_alcohol,
+        'SHOW_ALCOHOL_MODULE': enable_alcohol,
+        'ENABLE_CLUB_EVENTS_MODULE': enable_club,
+        'SHOW_CLUB_EVENTS_MODULE': enable_club,
+        'ENABLE_HOTEL_MODULE': enable_hotel,
+        'SHOW_HOTEL_MODULE': enable_hotel,
         'UNREAD_INQUIRIES_COUNT': unread_inquiries,
         'PENDING_APPLICATIONS_COUNT': pending_applications,
     }
