@@ -18,6 +18,7 @@ class MasterBillingService:
 
     @staticmethod
     def get_config():
+        # Prefer configured URL, fallback to localhost:3000
         master_url = getattr(settings, 'MASTER_DASHBOARD_URL', None) or os.environ.get('MASTER_DASHBOARD_URL', 'http://localhost:3000')
         master_secret = getattr(settings, 'MASTER_API_SECRET', None) or os.environ.get('MASTER_API_SECRET', 'T9@fK!xR!!72m$Qv%Lp&6Za!Wc@3Ns')
         return master_url.rstrip('/'), master_secret
@@ -69,6 +70,20 @@ class MasterBillingService:
 
         try:
             resp = requests.get(endpoint, params=params, headers=headers, timeout=3)
+            
+            # If production URL returned no modules or failed, and DEBUG is active, try local Master Admin
+            if (resp.status_code != 200 or not (resp.json().get('modules'))) and getattr(settings, 'DEBUG', False) and master_url != 'http://localhost:3000':
+                try:
+                    local_endpoint = "http://localhost:3000/api/billing/subscription"
+                    local_resp = requests.get(local_endpoint, params=params, headers=headers, timeout=2)
+                    if local_resp.status_code == 200:
+                        local_data = local_resp.json()
+                        if local_data.get('status') == 'success' and local_data.get('modules'):
+                            resp = local_resp
+                            master_url = "http://localhost:3000"
+                except Exception:
+                    pass
+
             if resp.status_code == 200:
                 data = resp.json()
                 if data.get('status') == 'success':
@@ -93,6 +108,33 @@ class MasterBillingService:
                                 logger.info(f"[MasterBillingService] Auto-bound license key '{master_key}' to '{restaurant.name}'")
                             except Exception as db_err:
                                 logger.warning(f"[MasterBillingService] Could not persist license key to local DB: {db_err}")
+
+                    # Sync remote module entitlements from Master Admin
+                    modules = data.get('modules') or {}
+                    if restaurant and modules and isinstance(modules, dict):
+                        try:
+                            from django.utils import timezone
+                            from super_admin.models import Restaurant
+                            mod_updates = {}
+                            if 'SHOW_WEBSITE_PAGES' in modules:
+                                mod_updates['feature_website_pages'] = bool(modules['SHOW_WEBSITE_PAGES'])
+                                restaurant.feature_website_pages = mod_updates['feature_website_pages']
+                            if 'ENABLE_ALCOHOL_VAT' in modules:
+                                mod_updates['feature_alcohol_vat'] = bool(modules['ENABLE_ALCOHOL_VAT'])
+                                restaurant.feature_alcohol_vat = mod_updates['feature_alcohol_vat']
+                            if 'ENABLE_CLUB_EVENTS_MODULE' in modules:
+                                mod_updates['feature_club_events'] = bool(modules['ENABLE_CLUB_EVENTS_MODULE'])
+                                restaurant.feature_club_events = mod_updates['feature_club_events']
+                            if 'ENABLE_HOTEL_MODULE' in modules:
+                                mod_updates['feature_hotel_pms'] = bool(modules['ENABLE_HOTEL_MODULE'])
+                                restaurant.feature_hotel_pms = mod_updates['feature_hotel_pms']
+                            if mod_updates:
+                                mod_updates['features_last_synced_at'] = timezone.now()
+                                restaurant.features_last_synced_at = mod_updates['features_last_synced_at']
+                                Restaurant.objects.filter(pk=restaurant.pk).update(**mod_updates)
+                                logger.info(f"[MasterBillingService] Synced modules for '{restaurant.name}': {mod_updates}")
+                        except Exception as mod_err:
+                            logger.warning(f"[MasterBillingService] Could not persist modules to DB: {mod_err}")
 
                     # Normalize plan fields so price and monthly_fee are consistently available
                     if 'available_plans' in data and isinstance(data['available_plans'], list):
@@ -196,10 +238,19 @@ class MasterBillingService:
             email = getattr(restaurant, 'email', '') or ""
             phone = getattr(restaurant, 'phone', '') or ""
 
+        from restaurant_project import constants
+        modules = {
+            "SHOW_WEBSITE_PAGES": getattr(restaurant, 'feature_website_pages', constants._DEFAULT_SHOW_WEBSITE_PAGES) if restaurant else constants._DEFAULT_SHOW_WEBSITE_PAGES,
+            "ENABLE_ALCOHOL_VAT": getattr(restaurant, 'feature_alcohol_vat', constants._DEFAULT_ENABLE_ALCOHOL_VAT) if restaurant else constants._DEFAULT_ENABLE_ALCOHOL_VAT,
+            "ENABLE_CLUB_EVENTS_MODULE": getattr(restaurant, 'feature_club_events', constants._DEFAULT_ENABLE_CLUB_EVENTS_MODULE) if restaurant else constants._DEFAULT_ENABLE_CLUB_EVENTS_MODULE,
+            "ENABLE_HOTEL_MODULE": getattr(restaurant, 'feature_hotel_pms', constants._DEFAULT_ENABLE_HOTEL_MODULE) if restaurant else constants._DEFAULT_ENABLE_HOTEL_MODULE,
+        }
+
         return {
             "status": "offline",
             "connection_status": "OFFLINE",
             "message": "Master Admin is currently not connected or unreachable.",
+            "modules": modules,
             "client": {
                 "business_name": business_name or "Registered Business",
                 "legal_name": legal_name,

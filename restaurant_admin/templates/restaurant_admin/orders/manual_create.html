@@ -165,7 +165,7 @@
 
   /* ── ENTRY ROW ────────────────────────────────────────── */
   .erow{background:var(--surface);border-bottom:1px solid var(--line);padding:10px 12px 8px}
-  .fields{display:grid;grid-template-columns:1fr 84px 104px 138px;gap:8px;align-items:end}
+  .fields{display:grid;grid-template-columns:1fr 84px 104px;gap:8px;align-items:end}
   .fld{position:relative}
   .fld label{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.09em;
              color:var(--ink3);font-weight:600;margin-bottom:4px}
@@ -392,15 +392,15 @@
             color:var(--canvas);opacity:.7;font-weight:600}
   .grand .v{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:700;color:var(--canvas)}
   .acts{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:5px 12px 7px;background:var(--canvas);flex:0 0 auto!important}
-  .btn{display:flex;flex-direction:column;align-items:center;gap:2px;border:1px solid var(--line);
+  .acts .btn{display:flex;flex-direction:column;align-items:center;gap:2px;border:1px solid var(--line);
        border-radius:7px;padding:7px 6px;cursor:pointer;font-weight:600;font-size:12px;
        transition:.12s;background:var(--surface)}
-  .btn:hover:not(:disabled){border-color:var(--brand);background:var(--brand-tint)}
-  .btn:active:not(:disabled){transform:scale(.97)}
-  .btn:disabled{opacity:.5;cursor:not-allowed}
-  .btn.s{background:var(--brand);color:var(--brand-on);border-color:var(--brand)}
-  .btn.s:hover:not(:disabled){filter:brightness(1.1);background:var(--brand)}
-  .btn.s kbd{background:rgba(255,255,255,.2);color:var(--brand-on);border-color:transparent}
+  .acts .btn:hover:not(:disabled){border-color:var(--brand);background:var(--brand-tint)}
+  .acts .btn:active:not(:disabled){transform:scale(.97)}
+  .acts .btn:disabled{opacity:.5;cursor:not-allowed}
+  .acts .btn.s{background:var(--brand);color:var(--brand-on);border-color:var(--brand)}
+  .acts .btn.s:hover:not(:disabled){filter:brightness(1.1);background:var(--brand)}
+  .acts .btn.s kbd{background:rgba(255,255,255,.2);color:var(--brand-on);border-color:transparent}
   .flyer{position:fixed;z-index:80;pointer-events:none;background:var(--brand);color:var(--brand-on);
          border-radius:7px;padding:7px 13px;font-family:'IBM Plex Mono',monospace;font-size:13px;
          font-weight:700;white-space:nowrap}
@@ -587,11 +587,10 @@
     .tiles{grid-template-columns:repeat(auto-fill,minmax(115px,1fr))}
     .cbar{display:none}
 
-    .fields{grid-template-columns:110px 1fr 1fr;grid-template-areas:"item item item" "qty rate amt";row-gap:6px}
+    .fields{grid-template-columns:1fr 1fr;grid-template-areas:"item item" "qty rate";row-gap:6px}
     #wItem{grid-area:item}
     #wQty{grid-area:qty}
     #wRate{grid-area:rate}
-    .lineamt{grid-area:amt}
     .qtyWrap input{padding:8px 2px}
 
     .pos-container{height:auto;max-height:none;overflow:visible;padding-bottom:80px}
@@ -911,6 +910,51 @@
     font-family: 'IBM Plex Mono', monospace;
   }
 
+  /* POS Variant & Add-on Modal Styles */
+  .pos-vm-size-card:hover {
+    border-color: #818CF8 !important;
+    background: #FAF5FF !important;
+    transform: translateY(-1px);
+  }
+  .pos-vm-size-card.selected {
+    border-color: #4F46E5 !important;
+    background: #F5F3FF !important;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.15);
+  }
+  .pos-vm-extra-row:hover {
+    border-color: #93C5FD !important;
+    background: #F8FAFC !important;
+  }
+  .pos-vm-extra-row.selected {
+    border-color: #3B82F6 !important;
+    background: #EFF6FF !important;
+  }
+  .pos-vm-chip:hover {
+    background: #F1F5F9 !important;
+    border-color: #94A3B8 !important;
+  }
+  .pos-cart-variant-badge {
+    background: #EEF2FF;
+    color: #3730A3;
+    border: 1px solid #C7D2FE;
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .pos-tile-var-badge {
+    font-size: 9px;
+    font-weight: 800;
+    background: #EEF2FF;
+    color: #4338CA;
+    border: 1px solid #C7D2FE;
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-top: 3px;
+    display: inline-block;
+  }
 </style>
 
 <!-- JSON Data Islands for POS -->
@@ -1021,7 +1065,6 @@
           </div>
           <div class="fld" id="wRate"><label>Rate</label>
             <input id="fRate" class="num" placeholder="&mdash;" oninput="posCalcDraft()" onkeydown="window.posRateKeyDown(event)" aria-label="Rate" inputmode="decimal" enterkeyhint="done"></div>
-          <div class="lineamt" id="fAmt">0.00</div>
         </div>
         <button type="button" class="addBtn" id="addBtn" onclick="posCommitDraft()" disabled>Add to order</button>
         <div class="ehint">
@@ -1200,18 +1243,15 @@ document.addEventListener("DOMContentLoaded", function() {
             // Flow logic
             if (e.key === 'Enter') {
                 e.preventDefault();
-                if(id === 'fItem') {
-                    // Triggers the first/active item in the dropdown
-                    if(document.activeElement === el) {
-                        const suggestions = document.querySelectorAll('#menu-search-suggestions .combobox-item');
-                        if (suggestions.length > 0) {
-                            const activeItem = document.querySelector('#menu-search-suggestions .combobox-item.active') || suggestions[0];
-                            activeItem.click();
-                        } else {
-                            document.getElementById('fQty').focus();
-                        }
-                    }
-                } else if(id === 'fQty' || id === 'fRate') {
+                if (document.getElementById('posVariantModalVeil')) {
+                    const addBtn = document.getElementById('posVmAddBtn');
+                    if (addBtn) addBtn.click();
+                    return;
+                }
+                if (id === 'fItem') {
+                    // Handled exclusively by posSearchKeyDown
+                    return;
+                } else if (id === 'fQty' || id === 'fRate') {
                     window.posCommitDraft();
                 }
             } else if (id === 'fQty') {
@@ -2665,23 +2705,33 @@ document.addEventListener("DOMContentLoaded", function() {
         state.orderDiscount = null;
       }
 
-      state.cart = (existingOrder.items || []).map(i => ({
-        id: i.id,
-        name: i.name,
-        quantity: i.quantity,
-        unit_price: parseFloat(i.unit_price) || 0,
-        price: parseFloat(i.unit_price) || 0,
-        tax_type: i.tax_type,
-        category_name: i.category_name,
-        is_tax_inclusive: !!i.is_tax_inclusive,
-        discount_type: i.discount_type || 'flat',
-        discount_value: parseFloat(i.discount_value) || 0,
-        discount_amount: parseFloat(i.discount_amount) || 0,
-        discount_reason: i.discount_reason || '',
-        note: i.notes || i.note || '',
-        notes: i.notes || i.note || '',
-        sent: !!i.sent
-      }));
+      state.cart = (existingOrder.items || []).map((i, idx) => {
+        const itemNote = i.notes || i.note || '';
+        let vName = '';
+        if (itemNote.startsWith('[')) {
+          const m = itemNote.match(/^\[(.*?)\]/);
+          if (m && m[1]) vName = m[1];
+        }
+        return {
+          cart_line_id: 'cl_ex_' + (i.id || 'item') + '_' + idx + '_' + Math.floor(Math.random() * 100000),
+          id: i.id,
+          name: i.name,
+          quantity: i.quantity,
+          unit_price: parseFloat(i.unit_price) || 0,
+          price: parseFloat(i.unit_price) || 0,
+          tax_type: i.tax_type,
+          category_name: i.category_name,
+          is_tax_inclusive: !!i.is_tax_inclusive,
+          discount_type: i.discount_type || 'flat',
+          discount_value: parseFloat(i.discount_value) || 0,
+          discount_amount: parseFloat(i.discount_amount) || 0,
+          discount_reason: i.discount_reason || '',
+          note: itemNote,
+          notes: itemNote,
+          variant_name: vName,
+          sent: !!i.sent
+        };
+      });
 
       const custNameEl = document.getElementById('cust-name');
       const custPhoneEl = document.getElementById('cust-phone');
@@ -2947,10 +2997,16 @@ document.addEventListener("DOMContentLoaded", function() {
            const out = item.availability === false;
            const codeVal = item.short_code || item.id;
            const codeStr = `<div class="c font-monospace fw-bold">${escapeHtml(codeVal)}</div>`;
+           let variants = item.variants || [];
+           if (typeof variants === 'string') {
+             try { variants = JSON.parse(variants); } catch(e) { variants = []; }
+           }
+           const hasVariants = Array.isArray(variants) && variants.length > 0;
+           const varLabel = hasVariants ? ` <span class="badge" style="background:#EEF2FF; color:#4338CA; border:1px solid #C7D2FE; font-size:10px; font-weight:700; padding:2px 6px; border-radius:4px; margin-left:6px;">${variants.length} Options</span>` : '';
            searchHtml += `<div class="row ${ix === (state.menuSelIndex || 0) ? 'sel' : ''} ${out ? 'out' : ''}" onclick="window.posTileClick(${item.id})">
               ${codeStr}
-              <div class="n">${escapeHtml(item.name)}${out ? ' <span class="soldout" style="color:#d32f2f; margin-left:6px;">Sold out</span>' : ''}</div>
-              <div class="p">${item.price.toFixed(2)}</div>
+              <div class="n">${escapeHtml(item.name)}${varLabel}${out ? ' <span class="soldout" style="color:#d32f2f; margin-left:6px;">Sold out</span>' : ''}</div>
+              <div class="p">₹${item.price.toFixed(2)}${hasVariants ? '<span style="color:#6366F1; font-weight:700;">+</span>' : ''}</div>
            </div>`;
         });
         menuGrid.innerHTML = searchHtml;
@@ -3020,12 +3076,19 @@ document.addEventListener("DOMContentLoaded", function() {
           const out = item.availability === false;
           const codeVal = item.short_code || item.id;
           const codeStr = `<span class="tc">${escapeHtml(codeVal)}</span>`;
+          let variants = item.variants || [];
+          if (typeof variants === 'string') {
+            try { variants = JSON.parse(variants); } catch(e) { variants = []; }
+          }
+          const hasVariants = Array.isArray(variants) && variants.length > 0;
+          const varBadge = hasVariants ? `<span class="pos-tile-var-badge">${variants.length} Options</span>` : '';
           
           html += `
-            <button type="button" class="tile ${out ? 'out' : ''}" ${out ? 'disabled' : `onclick="window.posTileClick(${item.id})"`}>
+            <button type="button" class="tile ${out ? 'out' : ''} ${hasVariants ? 'has-variants' : ''}" ${out ? 'disabled' : `onclick="window.posTileClick(${item.id})"`}>
               ${codeStr}
               <span class="tn">${escapeHtml(item.name)}${out ? ' <span class="soldout" style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(255,255,255,0.7);display:flex;align-items:center;justify-content:center;font-weight:bold;color:#d32f2f">Sold Out</span>' : ''}</span>
-              <span class="tp">₹${item.price.toFixed(2)}</span>
+              ${varBadge}
+              <span class="tp">₹${item.price.toFixed(2)}${hasVariants ? '<span style="color:#6366F1; font-weight:700; margin-left:2px;">+</span>' : ''}</span>
             </button>
           `;
         });
@@ -3153,18 +3216,45 @@ document.addEventListener("DOMContentLoaded", function() {
       })(t0);
     };
 
+    // Find cart item safely by cart_line_id, index, or item id
+    function findCartItem(idOrLineId, cartIdx = null) {
+      if (!state.cart || !state.cart.length) return null;
+      if (typeof cartIdx === 'number' && cartIdx >= 0 && cartIdx < state.cart.length) {
+        return state.cart[cartIdx];
+      }
+      let found = state.cart.find(c => c.cart_line_id && String(c.cart_line_id) === String(idOrLineId));
+      if (!found) {
+        found = state.cart.find(c => String(c.id) === String(idOrLineId));
+      }
+      return found;
+    }
+    window.findCartItem = findCartItem;
+
     // Cart operations
-    function addToCart(item, qty = 1, customPrice = null) {
+    function addToCart(item, qty = 1, customPrice = null, customNote = '', variantName = '', selectedAddons = []) {
       snapshotCart();
       const quantityToAdd = Math.max(1, parseInt(qty) || 1);
       const priceToUse = customPrice !== null ? parseFloat(customPrice) : parseFloat(item.price);
-      const existing = state.cart.find(c => String(c.id) === String(item.id) && !c.sent && Math.abs((c.unit_price || 0) - priceToUse) < 0.01 && !(parseFloat(c.discount_value || 0) > 0) && !c.note);
+      const noteToUse = (customNote !== undefined && customNote !== null) ? String(customNote).trim() : (item.note || '');
+      const vName = variantName || item.variant_name || '';
+
+      const existing = state.cart.find(c => 
+        String(c.id) === String(item.id) && 
+        !c.sent && 
+        Math.abs((c.unit_price || 0) - priceToUse) < 0.01 && 
+        !(parseFloat(c.discount_value || 0) > 0) && 
+        (c.note || '') === noteToUse &&
+        (c.variant_name || '') === vName
+      );
+
       if (existing) {
         existing.quantity += quantityToAdd;
         existing.pulse = true;
         window.SFX && window.SFX.merge();
       } else {
+        const cartLineId = 'cl_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
         state.cart.push({
+          cart_line_id: cartLineId,
           id: item.id,
           name: item.name,
           unit_price: priceToUse,
@@ -3175,12 +3265,16 @@ document.addEventListener("DOMContentLoaded", function() {
           discount_type: 'flat',
           discount_value: 0,
           discount_amount: 0,
-          note: item.note || '',
+          note: noteToUse,
+          notes: noteToUse,
+          variant_name: vName,
+          selected_addons: selectedAddons || [],
           sent: false,
           fresh: true
         });
         window.SFX && window.SFX.add();
-        window.flyToCart && window.flyToCart(quantityToAdd + " × " + item.name);
+        const flyLabel = quantityToAdd + " × " + item.name + (vName ? " (" + vName + ")" : "");
+        window.flyToCart && window.flyToCart(flyLabel);
       }
 
       // Ensure appropriate cart tab (food vs bar) is activated
@@ -3192,8 +3286,8 @@ document.addEventListener("DOMContentLoaded", function() {
 
     window.addToCartGlobal = addToCart;
 
-    function updateQty(id, delta) {
-      const item = state.cart.find(c => String(c.id) === String(id));
+    function updateQty(id, delta, cartIdx = null) {
+      const item = findCartItem(id, cartIdx);
       if (!item) return;
       if (item.sent) {
         window.SFX && window.SFX.err && window.SFX.err();
@@ -3204,7 +3298,7 @@ document.addEventListener("DOMContentLoaded", function() {
       item.quantity += delta;
       item.pulse = true;
       if (item.quantity <= 0) {
-        state.cart = state.cart.filter(c => String(c.id) !== String(id));
+        state.cart = state.cart.filter(c => c !== item);
         window.SFX && window.SFX.back();
       } else {
         window.SFX && window.SFX.merge();
@@ -3212,8 +3306,8 @@ document.addEventListener("DOMContentLoaded", function() {
       renderCart();
     }
 
-    function setQty(id, qty) {
-      const item = state.cart.find(c => String(c.id) === String(id));
+    function setQty(id, qty, cartIdx = null) {
+      const item = findCartItem(id, cartIdx);
       if (!item) return;
       if (item.sent) {
         window.SFX && window.SFX.err && window.SFX.err();
@@ -3224,7 +3318,7 @@ document.addEventListener("DOMContentLoaded", function() {
       item.quantity = Math.max(0, parseInt(qty) || 0);
       item.pulse = true;
       if (item.quantity === 0) {
-        state.cart = state.cart.filter(c => String(c.id) !== String(id));
+        state.cart = state.cart.filter(c => c !== item);
         window.SFX && window.SFX.back();
       } else {
         window.SFX && window.SFX.merge();
@@ -3269,27 +3363,32 @@ document.addEventListener("DOMContentLoaded", function() {
     }
     window.exitCart = exitCart;
 
-    function removeFromCart(id) {
-      const item = state.cart.find(c => String(c.id) === String(id));
+    function removeFromCart(id, cartIdx = null) {
+      const item = findCartItem(id, cartIdx);
       if (item && item.sent) {
         openVoidModal(item);
         return;
       }
       snapshotCart();
-      state.cart = state.cart.filter(c => String(c.id) !== String(id));
+      if (item) {
+        state.cart = state.cart.filter(c => c !== item);
+      } else {
+        state.cart = state.cart.filter(c => String(c.id) !== String(id));
+      }
       window.SFX && window.SFX.back();
       if (posCartSel >= state.cart.length) {
         posCartSel = Math.max(0, state.cart.length - 1);
       }
       if (state.cart.length === 0) {
         posCartMode = false;
-      }
-      renderCart();
-      toast(`Removed ${item ? item.name : 'item'} — Ctrl+Z brings it back.`);
-
-      if (state.activeOrderId) {
+        if (state.activeOrderId) {
+          submitOrder('update_order');
+        }
+      } else if (state.activeOrderId) {
         submitOrder('update_order');
       }
+      renderCart();
+      toast(`Removed ${item ? item.name + (item.variant_name ? ' (' + item.variant_name + ')' : '') : 'item'} — Ctrl+Z brings it back.`);
     }
     window.removeFromCart = removeFromCart;
     window.setQty = setQty;
@@ -3432,6 +3531,19 @@ document.addEventListener("DOMContentLoaded", function() {
         alert(item.name + ' is sold out');
         return;
       }
+      window.draftItem = null;
+      let variants = item.variants || [];
+      if (typeof variants === 'string') {
+        try { variants = JSON.parse(variants); } catch(e) { variants = []; }
+      }
+      if (Array.isArray(variants) && variants.length > 0) {
+        const fItem = document.getElementById('fItem');
+        if (fItem) fItem.value = '';
+        if (typeof window.openVariantModal === 'function') {
+          window.openVariantModal(item);
+          return;
+        }
+      }
       addToCart(item);
       const fItem = document.getElementById('fItem');
       if (fItem) {
@@ -3492,17 +3604,36 @@ document.addEventListener("DOMContentLoaded", function() {
           if (item.sweep !== undefined) {
             row.style.animationDelay = `${item.sweep * 55}ms`;
           }
-          row.id = `cart-row-${item.id}`;
+          const lineId = item.cart_line_id || item.id;
+          row.id = `cart-row-${lineId}`;
           row.tabIndex = 0;
+
+          let variantBadge = '';
+          if (item.variant_name) {
+            variantBadge = `<span class="pos-cart-variant-badge">${escapeHtml(item.variant_name)}</span>`;
+          } else if (item.note && item.note.startsWith('[')) {
+            const m = item.note.match(/^\[(.*?)\]/);
+            if (m && m[1]) {
+              variantBadge = `<span class="pos-cart-variant-badge">${escapeHtml(m[1])}</span>`;
+            }
+          }
+
+          let noteText = item.note || '';
+          let noteSubtext = noteText;
+          if (noteSubtext.startsWith('[') && noteSubtext.includes(']')) {
+            noteSubtext = noteSubtext.substring(noteSubtext.indexOf(']') + 1).trim();
+          }
+
           row.innerHTML = `
             <div class="q" title="Edit quantity">${item.quantity}</div>
             <div class="cn" style="display:flex; flex-direction:column; justify-content:center; min-width:0; overflow:hidden;">
               <div style="display:flex; align-items:center; gap:5px; min-width:0; overflow:hidden;">
                 <span class="cntxt" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1 1 auto; font-weight:600; font-size:12.5px; color:#1A1815;" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+                ${variantBadge}
                 ${item.sent ? '<span class="st" style="font-size:8px; font-weight:700; color:#166534; background:#DCFCE7; border:1px solid #BBF7D0; padding:1.5px 5px; border-radius:4px; letter-spacing:.04em; white-space:nowrap; flex-shrink:0;">✓ SENT</span>' : ''}
                 ${itemDiscount > 0 ? `<span class="dc" style="font-size:9.5px; color:#B45309; font-weight:700; flex-shrink:0;">-${item.discount_type==='percentage'?discVal+'%':'₹'+discVal.toFixed(2)}</span>` : ''}
               </div>
-              ${item.note ? `<span class="mod" style="display:block; font-size:10px; color:#57524A; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;">${escapeHtml(item.note)}</span>` : ''}
+              ${noteSubtext ? `<span class="mod" style="display:block; font-size:10px; color:#57524A; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;">↳ ${escapeHtml(noteSubtext)}</span>` : (noteText ? `<span class="mod" style="display:block; font-size:10px; color:#57524A; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;">↳ ${escapeHtml(noteText)}</span>` : '')}
             </div>
             <div class="ca" title="Add / edit discount">₹${netLineTotal.toFixed(2)}</div>
             <button type="button" class="rm${item.sent ? ' sent' : ''}" title="${item.sent ? 'Void' : 'Remove'}" aria-label="${item.sent ? 'Void ' : 'Remove '}${escapeHtml(item.name)}">&times;</button>
@@ -3512,19 +3643,19 @@ document.addEventListener("DOMContentLoaded", function() {
             if (e.target.closest('.rm')) {
               e.preventDefault();
               e.stopPropagation();
-              removeFromCart(item.id);
+              removeFromCart(lineId, index);
               return;
             }
             if (e.target.closest('.mod')) {
               e.preventDefault();
               e.stopPropagation();
-              openItemNoteModal(item.id);
+              openItemNoteModal(lineId, index);
               return;
             }
             if (e.target.closest('.ca')) {
               e.preventDefault();
               e.stopPropagation();
-              openItemDiscountModal(item.id);
+              openItemDiscountModal(lineId, index);
               return;
             }
             if (e.target.closest('.q')) {
@@ -3534,8 +3665,8 @@ document.addEventListener("DOMContentLoaded", function() {
                 toast("Already sent — Del voids it instead.", true);
                 return;
               }
-              const q = prompt('Edit Quantity for ' + item.name + ':', item.quantity);
-              if (q !== null) setQty(item.id, q);
+              const q = prompt('Edit Quantity for ' + item.name + (item.variant_name ? ' (' + item.variant_name + ')' : '') + ':', item.quantity);
+              if (q !== null) setQty(lineId, q, index);
               return;
             }
             enterCart(index);
@@ -3546,7 +3677,7 @@ document.addEventListener("DOMContentLoaded", function() {
             rmBtn.addEventListener('click', (e) => {
               e.preventDefault();
               e.stopPropagation();
-              removeFromCart(item.id);
+              removeFromCart(lineId, index);
             });
           }
 
@@ -3975,11 +4106,12 @@ document.addEventListener("DOMContentLoaded", function() {
       const topSubEl = document.getElementById('topOrderSub');
       const topBadgeEl = document.getElementById('topOrderBadge');
 
-      let currentTitle = 'Takeaway #0';
+      let currentTitle = 'Dine-in (Draft)';
       const curId = state.activeOrderId;
-      const curNum = state.activeOrderNumber || (curId ? `ORD-${String(curId).padStart(4, '0')}` : '');
+      const isDraftOrder = !state.activeOrderNumber || String(state.activeOrderNumber).toLowerCase().includes('draft') || state.status === 'DRAFT' || state.status === 'draft';
+      const curNum = state.activeOrderNumber || (curId ? (isDraftOrder ? `Draft #${curId}` : `ORD-${String(curId).padStart(4, '0')}`) : '');
 
-      if (curId) {
+      if (curId && !isDraftOrder) {
         if (state.orderType === 'dine_in') {
           const tblName = state.tableName || (state.tableId ? document.querySelector(`#table-id option[value="${state.tableId}"]`)?.textContent?.split('(')[0]?.trim() : '');
           currentTitle = tblName ? `Dine-in ${tblName}` : `Dine-in #${curNum || curId}`;
@@ -3991,7 +4123,10 @@ document.addEventListener("DOMContentLoaded", function() {
       } else {
         if (state.orderType === 'takeaway') currentTitle = 'Takeaway (Draft)';
         else if (state.orderType === 'delivery') currentTitle = 'Delivery (Draft)';
-        else currentTitle = 'Dine-in (Draft)';
+        else {
+          const tblName = state.tableName || (state.tableId ? document.querySelector(`#table-id option[value="${state.tableId}"]`)?.textContent?.split('(')[0]?.trim() : '');
+          currentTitle = tblName ? `Dine-in ${tblName} (Draft)` : 'Dine-in (Draft)';
+        }
       }
 
       if (topTitleEl) topTitleEl.textContent = currentTitle;
@@ -4000,7 +4135,7 @@ document.addEventListener("DOMContentLoaded", function() {
         topSubEl.textContent = `${lines} · ₹${(state.grandTotal || 0).toFixed(2)} · ${totalOpen} open`;
       }
       if (topBadgeEl) {
-        topBadgeEl.textContent = curNum || (curId ? `ORD-${String(curId).padStart(4, '0')}` : 'DRAFT');
+        topBadgeEl.textContent = isDraftOrder ? 'DRAFT' : (curNum || 'ORD');
       }
 
       // Group active orders
@@ -4175,8 +4310,10 @@ document.addEventListener("DOMContentLoaded", function() {
 
     // ── CREATE NEW ORDER (F7) ──
     window.posCreateNewOrder = function() {
+      clearTimeout(autoSyncTimer);
       state.activeOrderId = null;
       state.activeOrderNumber = null;
+      state.isDraft = false;
       state.customerName = '';
       state.phone = '';
       state.notes = '';
@@ -4228,7 +4365,8 @@ document.addEventListener("DOMContentLoaded", function() {
     window.scheduleDraftSync = scheduleDraftSync;
 
     function performDraftSync() {
-      if (state.cart.length === 0 && !state.activeOrderId) {
+      // Do not sync if cart has no items and no active order exists
+      if ((!state.cart || state.cart.length === 0) && !state.activeOrderId) {
         return;
       }
 
@@ -4273,9 +4411,19 @@ document.addEventListener("DOMContentLoaded", function() {
       })
       .then(res => res.json())
       .then(data => {
+        if (data.order_deleted) {
+          state.activeOrderId = null;
+          state.activeOrderNumber = null;
+          state.cart = [];
+          renderCart();
+          renderTopOrderDropdown();
+          window.history.replaceState(null, '', window.location.pathname);
+          return;
+        }
         if (data.success && data.order_id) {
           state.activeOrderId = data.order_id;
           state.activeOrderNumber = data.order_number;
+          state.isDraft = true;
           if (data.active_orders) {
             window.activeOrders = data.active_orders;
             activeOrders = data.active_orders;
@@ -4409,8 +4557,8 @@ document.addEventListener("DOMContentLoaded", function() {
 
     // Open Settlement Modal Event Listener (F10 / Settle button)
     document.getElementById('btn-open-settle-modal')?.addEventListener('click', () => {
-      if (state.cart.length === 0 && !state.activeOrderId) {
-        alert('Please add items to cart or select an active order to settle.');
+      if (!state.cart || state.cart.length === 0) {
+        alert('Cannot settle an order with no items. Please add items to the cart.');
         return;
       }
       openSettlementModal();
@@ -4596,6 +4744,10 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     function openSettlementModal() {
+      if (!state.cart || state.cart.length === 0) {
+        alert('Cannot settle an order with no items. Please add items to the cart.');
+        return;
+      }
       const netPayable = Math.max(0, state.grandTotal - (state.advanceAmountPaid || 0));
 
       const titleEl = document.getElementById('settleGrandTitle');
@@ -4757,6 +4909,10 @@ document.addEventListener("DOMContentLoaded", function() {
     };
 
     window.finalizeSettlement = function(printBill = true) {
+      if (!state.cart || state.cart.length === 0) {
+        alert('Cannot settle an order with no items.');
+        return;
+      }
       const netPayable = Math.max(0, state.grandTotal - (state.advanceAmountPaid || 0));
       let paidAmt = 0;
       let dueAmt = 0;
@@ -4875,6 +5031,10 @@ document.addEventListener("DOMContentLoaded", function() {
 
     // Core Submit Logic
     function submitOrder(action, extraData = {}) {
+      if (['fire_kot', 'save_kot', 'settle_order', 'print_close'].includes(action) && (!state.cart || state.cart.length === 0)) {
+        alert('Cannot process or settle an order with no items. Please add items to the cart.');
+        return;
+      }
       if (window._isSubmitting) return;
       window._isSubmitting = true;
 
@@ -4909,10 +5069,10 @@ document.addEventListener("DOMContentLoaded", function() {
         table_id: tableIdVal,
         order_type: orderTypeVal,
         payment_method: extraData.payment_method || state.paymentMethod,
-        payment_status: extraData.payment_status || (action === 'fire_kot' ? 'unpaid' : 'paid'),
+        payment_status: extraData.payment_status || (['settle_order', 'print_close'].includes(action) ? 'paid' : (state.paymentStatus || 'unpaid')),
         payments: extraData.payments || [],
-        paid_amount: extraData.paid_amount || (action === 'fire_kot' ? '0.00' : state.grandTotal.toFixed(2)),
-        due_amount: extraData.due_amount || (action === 'fire_kot' ? state.grandTotal.toFixed(2) : '0.00'),
+        paid_amount: extraData.paid_amount || (['settle_order', 'print_close'].includes(action) ? (state.grandTotal > 0 ? state.grandTotal.toFixed(2) : '0.00') : '0.00'),
+        due_amount: extraData.due_amount || (['settle_order', 'print_close'].includes(action) ? '0.00' : state.grandTotal.toFixed(2)),
         billing_mode: state.billingMode,
         excise_bill_no: extraData.excise_bill_no || state.exciseBillNo,
         gstin_no: extraData.gstin_no || state.gstinNo,
@@ -4981,6 +5141,17 @@ document.addEventListener("DOMContentLoaded", function() {
             if (data.active_orders) {
               activeOrders = data.active_orders;
               renderActiveOrders();
+            }
+
+            if (data.order_deleted) {
+              state.activeOrderId = null;
+              state.activeOrderNumber = null;
+              state.cart = [];
+              renderCart();
+              renderTopOrderDropdown();
+              window.history.replaceState(null, '', window.location.pathname);
+              toast('Draft order removed.');
+              return;
             }
 
             if (action === 'void_item' || action === 'update_order') {
@@ -6435,8 +6606,8 @@ document.addEventListener("DOMContentLoaded", function() {
     "No butter", "Less oil", "Serve first", "Pack separately"
   ];
 
-  window.openItemNoteModal = function(itemId) {
-    const item = (window.state && window.state.cart) ? window.state.cart.find(i => i.id === itemId) : null;
+  window.openItemNoteModal = function(itemId, cartIdx = null) {
+    const item = (typeof window.findCartItem === 'function') ? window.findCartItem(itemId, cartIdx) : ((window.state && window.state.cart) ? window.state.cart.find(i => i.id === itemId) : null);
     if (!item) return;
 
     const oldVeil = document.getElementById('posItemNoteVeil');
@@ -6566,8 +6737,8 @@ document.addEventListener("DOMContentLoaded", function() {
   };
 
   // Item Discount Modal (Pixel-perfect pos-terminal style)
-  window.openItemDiscountModal = function(itemId) {
-    const item = (window.state && window.state.cart) ? window.state.cart.find(i => i.id === itemId) : null;
+  window.openItemDiscountModal = function(itemId, cartIdx = null) {
+    const item = (typeof window.findCartItem === 'function') ? window.findCartItem(itemId, cartIdx) : ((window.state && window.state.cart) ? window.state.cart.find(i => i.id === itemId) : null);
     if (!item) return;
 
     const uPrice = parseFloat(item.unit_price || item.price) || 0;
@@ -6936,6 +7107,24 @@ document.addEventListener("DOMContentLoaded", function() {
       }
     }
 
+    const variantVeil = document.getElementById('posVariantModalVeil');
+    if (variantVeil && variantVeil.style.display !== 'none') {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        const closeBtn = variantVeil.querySelector('.pos-vm-close-btn');
+        if (closeBtn) closeBtn.click();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        const addBtn = document.getElementById('posVmAddBtn');
+        if (addBtn) addBtn.click();
+        return;
+      }
+    }
+
     const settleVeil = document.getElementById('posSettleVeil');
     if (settleVeil && settleVeil.style.display !== 'none') {
       if (e.key === 'Escape') {
@@ -7120,10 +7309,454 @@ document.addEventListener("DOMContentLoaded", function() {
     }
   };
 
-  window.posTileClick = function(itemId) {
-    const allItems = (typeof window.getPosMenuItems === 'function') ? window.getPosMenuItems() : ((window.posMenuItems && window.posMenuItems.length > 0) ? window.posMenuItems : []);
-    const item = allItems.find(i => String(i.id) === String(itemId));
+  // ── VARIANT & ADD-ON SELECTION MODAL ────────────────────────────────
+  window.openVariantModal = function(item) {
     if (!item) return;
+    let rawVariants = item.variants || [];
+    if (typeof rawVariants === 'string') {
+      try { rawVariants = JSON.parse(rawVariants); } catch(e) { rawVariants = []; }
+    }
+    if (!Array.isArray(rawVariants) || rawVariants.length === 0) {
+      if (typeof window.addToCartGlobal === 'function') window.addToCartGlobal(item);
+      return;
+    }
+
+    // Always clear draft row and search states when opening variant modal
+    window.draftItem = null;
+    const searchInput = document.getElementById('fItem');
+    const fQty = document.getElementById('fQty');
+    const fRate = document.getElementById('fRate');
+    if (searchInput) {
+      searchInput.value = '';
+      searchInput.blur();
+    }
+    if (fQty) {
+      fQty.value = '1';
+      fQty.blur();
+    }
+    if (fRate) {
+      fRate.value = '';
+      fRate.blur();
+    }
+    if (window.posState) window.posState.searchQuery = '';
+    if (window.state) window.state.searchQuery = '';
+    if (typeof window.posCalcDraft === 'function') window.posCalcDraft();
+
+    const sizes = [];
+    const extras = [];
+    rawVariants.forEach((v, idx) => {
+      if (!v) return;
+      const vType = String(v.type || 'Size').toLowerCase();
+      const vName = String(v.name || '').trim();
+      const vPrice = parseFloat(v.price !== undefined && v.price !== '' ? v.price : item.price) || 0;
+      if (!vName && vPrice === 0) return;
+
+      const obj = {
+        index: idx,
+        type: v.type || 'Size',
+        name: vName || `Option ${idx + 1}`,
+        price: vPrice
+      };
+
+      if (vType === 'extra' || vType.includes('add') || vType === 'topping') {
+        extras.push(obj);
+      } else {
+        sizes.push(obj);
+      }
+    });
+
+    let activeSize = null;
+    if (sizes.length > 0) {
+      const exactMatch = sizes.find(s => Math.abs(s.price - parseFloat(item.price)) < 0.01);
+      activeSize = exactMatch || sizes[0];
+    }
+
+    const selectedExtraIndices = new Set();
+    let currentQty = 1;
+
+    const oldVeil = document.getElementById('posVariantModalVeil');
+    if (oldVeil) oldVeil.remove();
+
+    const veil = document.createElement('div');
+    veil.id = 'posVariantModalVeil';
+    veil.className = 'veil pos-variant-veil';
+    veil.style.cssText = 'position:fixed; inset:0; background:rgba(15,23,42,.62); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:10000; padding:16px; animation:fade .14s ease-out;';
+
+    const card = document.createElement('div');
+    card.className = 'pos-variant-card shadow-2xl';
+    card.style.cssText = 'background:#FFFFFF; border:1px solid #E2E8F0; border-radius:18px; max-width:540px; width:100%; display:flex; flex-direction:column; box-shadow:0 25px 60px -15px rgba(0,0,0,.3); overflow:hidden; font-family:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; animation:modalPop .28s cubic-bezier(.16,1,.3,1); max-height:90vh;';
+
+    function calcTotals() {
+      let unitPrice = activeSize ? activeSize.price : parseFloat(item.price);
+      extras.forEach(ex => {
+        if (selectedExtraIndices.has(ex.index)) {
+          unitPrice += ex.price;
+        }
+      });
+      const totalPrice = unitPrice * currentQty;
+      return { unitPrice, totalPrice };
+    }
+
+    function renderModalContents() {
+      const { unitPrice, totalPrice } = calcTotals();
+
+      let sizesHtml = '';
+      if (sizes.length > 0) {
+        sizesHtml = `
+          <div class="pos-vm-section" style="margin-bottom:18px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <span style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:#475569;">Select Size / Portion <span style="color:#DC2626;">*</span></span>
+              <span style="font-size:10.5px; font-weight:700; color:#4338CA; background:#EEF2FF; padding:1px 6px; border-radius:4px;">1 Required</span>
+            </div>
+            <div class="pos-vm-sizes-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px;">
+              ${sizes.map((s, sIdx) => {
+                const isSel = (activeSize && activeSize.index === s.index);
+                return `
+                  <div class="pos-vm-size-card ${isSel ? 'selected' : ''}" data-index="${s.index}" data-shortcut="${sIdx + 1}" style="cursor:pointer; border:2px solid ${isSel ? '#4F46E5' : '#E2E8F0'}; background:${isSel ? '#F5F3FF' : '#FFFFFF'}; border-radius:12px; padding:12px; transition:all .15s ease; position:relative;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span style="font-size:10px; font-weight:800; color:${isSel ? '#4F46E5' : '#94A3B8'}; background:${isSel ? '#EDE9FE' : '#F1F5F9'}; padding:1px 5px; border-radius:4px; font-family:'IBM Plex Mono',monospace;">${sIdx + 1}</span>
+                      ${isSel ? '<span style="color:#4F46E5; font-size:13px;"><i class="bi bi-check-circle-fill"></i></span>' : '<span style="width:13px; height:13px; border-radius:50%; border:1.5px solid #CBD5E1; display:inline-block;"></span>'}
+                    </div>
+                    <div style="font-size:13.5px; font-weight:700; color:${isSel ? '#1E1B4B' : '#1E293B'}; margin-top:6px;">${escapeHtml(s.name)}</div>
+                    <div style="font-size:13px; font-weight:800; color:${isSel ? '#4F46E5' : '#0F172A'}; font-family:'IBM Plex Mono',monospace; margin-top:2px;">₹${s.price.toFixed(2)}</div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      let extrasHtml = '';
+      if (extras.length > 0) {
+        extrasHtml = `
+          <div class="pos-vm-section" style="margin-bottom:18px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <span style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:#475569;">Add-ons & Extras</span>
+              <span style="font-size:10.5px; font-weight:600; color:#64748B; background:#F1F5F9; padding:1px 6px; border-radius:4px;">Optional</span>
+            </div>
+            <div class="pos-vm-extras-grid" style="display:flex; flex-direction:column; gap:8px;">
+              ${extras.map(ex => {
+                const isChecked = selectedExtraIndices.has(ex.index);
+                return `
+                  <label class="pos-vm-extra-row ${isChecked ? 'selected' : ''}" data-index="${ex.index}" style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border:1.5px solid ${isChecked ? '#3B82F6' : '#E2E8F0'}; background:${isChecked ? '#EFF6FF' : '#FFFFFF'}; border-radius:10px; cursor:pointer; transition:all .15s ease;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                      <input type="checkbox" class="pos-vm-extra-cb" data-index="${ex.index}" ${isChecked ? 'checked' : ''} style="width:16px; height:16px; accent-color:#3B82F6; cursor:pointer;">
+                      <span style="font-size:13px; font-weight:600; color:#1E293B;">${escapeHtml(ex.name)}</span>
+                    </div>
+                    <span style="font-size:12.5px; font-weight:800; color:${isChecked ? '#2563EB' : '#475569'}; font-family:'IBM Plex Mono',monospace;">+₹${ex.price.toFixed(2)}</span>
+                  </label>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      card.innerHTML = `
+        <div class="pos-vm-header" style="padding:18px 24px 14px; border-bottom:1px solid #E2E8F0; display:flex; justify-content:space-between; align-items:flex-start; background:#FAFAFA;">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <h3 style="font-family:'Bricolage Grotesque',sans-serif; font-size:18px; font-weight:800; margin:0; color:#0F172A;">${escapeHtml(item.name)}</h3>
+              <span style="font-size:11px; font-weight:700; color:#6366F1; background:#EEF2FF; padding:2px 8px; border-radius:6px;">${escapeHtml(item.category_name || 'Item')}</span>
+            </div>
+            <div style="font-size:12px; color:#64748B; margin-top:3px;">
+              Code: <strong style="font-family:'IBM Plex Mono',monospace; color:#334155;">${escapeHtml(item.short_code || item.id)}</strong> &middot; Default: ₹${parseFloat(item.price).toFixed(2)}
+            </div>
+          </div>
+          <button type="button" class="pos-vm-close-btn" style="border:none; background:#F1F5F9; color:#64748B; width:30px; height:30px; border-radius:50%; font-size:18px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:.15s;" title="Close (Esc)">&times;</button>
+        </div>
+
+        <div class="pos-vm-body" style="padding:18px 24px; overflow-y:auto; flex:1 1 auto; max-height:55vh;">
+          ${sizesHtml}
+          ${extrasHtml}
+
+          <!-- Cooking Note & Quick Chips -->
+          <div style="margin-top:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <span style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:#64748B;">Special Cooking Instruction</span>
+            </div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
+              ${["Less Spicy", "Extra Crispy", "No Onion/Garlic", "Pack Separately"].map(chip => `
+                <button type="button" class="pos-vm-chip" data-text="${escapeHtml(chip)}" style="border:1px solid #CBD5E1; background:#FFF; border-radius:6px; padding:3px 9px; font-size:11px; font-weight:600; color:#334155; cursor:pointer; transition:.1s;">+ ${escapeHtml(chip)}</button>
+              `).join('')}
+            </div>
+            <input type="text" id="posVmNoteInput" placeholder="e.g. Extra hot, cut into 6 slices" onkeydown="if(event.key==='Enter'){event.preventDefault(); event.stopPropagation(); document.getElementById('posVmAddBtn')?.click();}" style="width:100%; border:1.5px solid #CBD5E1; border-radius:8px; padding:8px 12px; font-size:13px; color:#1E293B; outline:none; transition:.15s;">
+          </div>
+        </div>
+
+        <div class="pos-vm-footer" style="padding:14px 24px; border-top:1px solid #E2E8F0; background:#F8FAFC; display:flex; align-items:center; justify-content:space-between; gap:16px;">
+          <!-- Quantity Stepper -->
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:11px; font-weight:800; text-transform:uppercase; color:#64748B;">QTY</span>
+            <div style="display:inline-flex; align-items:center; border:1.5px solid #CBD5E1; border-radius:8px; background:#FFF; overflow:hidden;">
+              <button type="button" id="posVmQtyDec" style="border:none; background:#FFF; width:32px; height:32px; font-weight:700; font-size:15px; cursor:pointer; color:#334155; transition:.1s;">&minus;</button>
+              <span id="posVmQtyVal" style="width:34px; text-align:center; font-weight:800; font-size:14px; font-family:'IBM Plex Mono',monospace; color:#0F172A;">${currentQty}</span>
+              <button type="button" id="posVmQtyInc" style="border:none; background:#FFF; width:32px; height:32px; font-weight:700; font-size:15px; cursor:pointer; color:#334155; transition:.1s;">+</button>
+            </div>
+          </div>
+
+          <!-- Total & Confirm -->
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="text-align:right;">
+              <div style="font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:#64748B;">Item Total</div>
+              <div id="posVmTotalText" style="font-size:18px; font-weight:800; color:#0F172A; font-family:'IBM Plex Mono',monospace;">₹${totalPrice.toFixed(2)}</div>
+            </div>
+            <button type="button" id="posVmAddBtn" style="border:none; background:#2F3E9E; color:#FFFFFF; font-weight:700; font-size:13.5px; padding:10px 22px; border-radius:9px; cursor:pointer; display:inline-flex; align-items:center; gap:8px; box-shadow:0 4px 12px rgba(47,62,158,.25); transition:all .15s ease;">
+              <span>Add to Order</span>
+              <kbd style="background:rgba(255,255,255,.2); color:#FFF; padding:1px 5px; border-radius:4px; font-size:11px; font-weight:700; font-family:'IBM Plex Mono',monospace;">↵</kbd>
+            </button>
+          </div>
+        </div>
+      `;
+
+      attachModalEvents();
+    }
+
+    function attachModalEvents() {
+      const closeBtn = card.querySelector('.pos-vm-close-btn');
+      if (closeBtn) closeBtn.onclick = closeModal;
+
+      card.querySelectorAll('.pos-vm-size-card').forEach(sc => {
+        sc.onclick = function() {
+          const idx = parseInt(this.dataset.index);
+          const found = sizes.find(s => s.index === idx);
+          if (found) {
+            activeSize = found;
+            renderModalContents();
+          }
+        };
+      });
+
+      card.querySelectorAll('.pos-vm-extra-row').forEach(er => {
+        er.onclick = function(e) {
+          if (e.target.tagName.toLowerCase() === 'input') return;
+          const idx = parseInt(this.dataset.index);
+          if (selectedExtraIndices.has(idx)) {
+            selectedExtraIndices.delete(idx);
+          } else {
+            selectedExtraIndices.add(idx);
+          }
+          renderModalContents();
+        };
+      });
+
+      card.querySelectorAll('.pos-vm-extra-cb').forEach(cb => {
+        cb.onchange = function() {
+          const idx = parseInt(this.dataset.index);
+          if (this.checked) {
+            selectedExtraIndices.add(idx);
+          } else {
+            selectedExtraIndices.delete(idx);
+          }
+          renderModalContents();
+        };
+      });
+
+      card.querySelectorAll('.pos-vm-chip').forEach(chip => {
+        chip.onclick = function() {
+          const inp = document.getElementById('posVmNoteInput');
+          if (inp) {
+            const txt = this.dataset.text;
+            if (inp.value.trim()) {
+              if (!inp.value.includes(txt)) inp.value = inp.value.trim() + ', ' + txt;
+            } else {
+              inp.value = txt;
+            }
+          }
+        };
+      });
+
+      const decBtn = card.querySelector('#posVmQtyDec');
+      const incBtn = card.querySelector('#posVmQtyInc');
+      if (decBtn) {
+        decBtn.onclick = function() {
+          if (currentQty > 1) {
+            currentQty--;
+            renderModalContents();
+          }
+        };
+      }
+      if (incBtn) {
+        incBtn.onclick = function() {
+          currentQty++;
+          renderModalContents();
+        };
+      }
+
+      const addBtn = card.querySelector('#posVmAddBtn');
+      if (addBtn) addBtn.onclick = commitSelection;
+    }
+
+    function closeModal() {
+      window.removeEventListener('keydown', handleKeyDown, true);
+      veil.remove();
+      window.draftItem = null;
+      setTimeout(() => {
+        const fItem = document.getElementById('fItem');
+        const fQty = document.getElementById('fQty');
+        const fRate = document.getElementById('fRate');
+        if (fItem) {
+          fItem.value = '';
+          if (window.posSearchInput) window.posSearchInput('');
+          fItem.focus();
+          try { fItem.select(); } catch(e){}
+        }
+        if (fQty) fQty.value = '1';
+        if (fRate) fRate.value = '';
+        if (typeof window.posCalcDraft === 'function') window.posCalcDraft();
+      }, 40);
+    }
+
+    function commitSelection() {
+      const { unitPrice } = calcTotals();
+      const noteInput = document.getElementById('posVmNoteInput');
+      const userInstruction = noteInput ? noteInput.value.trim() : '';
+
+      const variantName = activeSize ? activeSize.name : '';
+      const chosenExtras = extras.filter(ex => selectedExtraIndices.has(ex.index));
+      
+      let noteParts = [];
+      if (variantName) {
+        noteParts.push(`[${variantName}]`);
+      }
+      if (chosenExtras.length > 0) {
+        noteParts.push(chosenExtras.map(e => `+${e.name} (₹${e.price.toFixed(2)})`).join(', '));
+      }
+      if (userInstruction) {
+        noteParts.push(`* ${userInstruction}`);
+      }
+      const finalNote = noteParts.join(' ');
+
+      window.draftItem = null;
+      if (typeof window.addToCartGlobal === 'function') {
+        window.addToCartGlobal(item, currentQty, unitPrice, finalNote, variantName, chosenExtras);
+      }
+
+      closeModal();
+    }
+
+    const modalOpenedAt = Date.now();
+
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+        closeModal();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+        // Prevent committing on the same Enter keystroke that opened the modal
+        if (Date.now() - modalOpenedAt < 60) {
+          return;
+        }
+        commitSelection();
+        return;
+      }
+      if (/^[1-9]$/.test(e.key) && document.activeElement?.id !== 'posVmNoteInput') {
+        const num = parseInt(e.key) - 1;
+        if (num >= 0 && num < sizes.length) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+          activeSize = sizes[num];
+          renderModalContents();
+          return;
+        }
+      }
+      if ((e.key === 'ArrowRight' || e.key === 'ArrowDown') && document.activeElement?.id !== 'posVmNoteInput' && sizes.length > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+        const curIdx = sizes.findIndex(s => s === activeSize);
+        const nextIdx = (curIdx + 1) % sizes.length;
+        activeSize = sizes[nextIdx];
+        renderModalContents();
+        return;
+      }
+      if ((e.key === 'ArrowLeft' || e.key === 'ArrowUp') && document.activeElement?.id !== 'posVmNoteInput' && sizes.length > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+        const curIdx = sizes.findIndex(s => s === activeSize);
+        const prevIdx = (curIdx - 1 + sizes.length) % sizes.length;
+        activeSize = sizes[prevIdx];
+        renderModalContents();
+        return;
+      }
+      if (e.key === '+' || e.key === '=') {
+        if (document.activeElement?.id !== 'posVmNoteInput') {
+          e.preventDefault();
+          e.stopPropagation();
+          if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+          currentQty++;
+          renderModalContents();
+          return;
+        }
+      }
+      if (e.key === '-' || e.key === '_') {
+        if (document.activeElement?.id !== 'posVmNoteInput') {
+          e.preventDefault();
+          e.stopPropagation();
+          if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+          if (currentQty > 1) {
+            currentQty--;
+            renderModalContents();
+            return;
+          }
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown, true);
+
+    veil.addEventListener('click', function(e) {
+      if (e.target === veil) {
+        closeModal();
+      }
+    });
+
+    veil.appendChild(card);
+    document.body.appendChild(veil);
+
+    renderModalContents();
+
+    card.tabIndex = -1;
+    setTimeout(() => {
+      try { card.focus(); } catch(e){}
+    }, 10);
+  };
+
+  window.posTileClick = function(itemIdOrObj) {
+    const allItems = (typeof window.getPosMenuItems === 'function') ? window.getPosMenuItems() : ((window.posMenuItems && window.posMenuItems.length > 0) ? window.posMenuItems : []);
+    const item = typeof itemIdOrObj === 'object' ? itemIdOrObj : allItems.find(i => String(i.id) === String(itemIdOrObj));
+    if (!item) return;
+
+    if (item.availability === false || item.is_available === false) {
+      alert(item.name + ' is sold out');
+      return;
+    }
+
+    window.draftItem = null;
+    let variants = item.variants || [];
+    if (typeof variants === 'string') {
+      try { variants = JSON.parse(variants); } catch(e) { variants = []; }
+    }
+    if (Array.isArray(variants) && variants.length > 0) {
+      const fItem = document.getElementById('fItem');
+      if (fItem) {
+        fItem.value = '';
+        fItem.blur();
+      }
+      if (typeof window.openVariantModal === 'function') {
+        window.openVariantModal(item);
+        return;
+      }
+    }
 
     if (typeof window.addToCartGlobal === 'function') {
       window.addToCartGlobal(item, 1);
@@ -7131,12 +7764,24 @@ document.addEventListener("DOMContentLoaded", function() {
 
     const fItem = document.getElementById('fItem');
     if (fItem) {
+      fItem.value = '';
       fItem.focus();
-      try { fItem.select(); } catch(e){}
     }
   };
 
   window.posSearchKeyDown = function(event) {
+    if (document.getElementById('posVariantModalVeil')) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+        const addBtn = document.getElementById('posVmAddBtn');
+        if (addBtn) addBtn.click();
+        return;
+      }
+      return;
+    }
+
     const searchInput = document.getElementById('fItem');
     const q = (searchInput?.value || '').trim().toLowerCase();
     const allItems = (typeof window.getPosMenuItems === 'function') ? window.getPosMenuItems() : ((window.posMenuItems && window.posMenuItems.length > 0) ? window.posMenuItems : []);
@@ -7200,10 +7845,29 @@ document.addEventListener("DOMContentLoaded", function() {
 
     if (event.key === 'Enter') {
       event.preventDefault();
+      event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === 'function') {
+        event.stopImmediatePropagation();
+      }
       if (filtered.length > 0) {
         const curIdx = (window.posState && window.posState.menuSelIndex !== undefined && window.posState.menuSelIndex < filtered.length) ? window.posState.menuSelIndex : 0;
         const selItem = filtered[curIdx];
         if (selItem) {
+          let variants = selItem.variants || [];
+          if (typeof variants === 'string') {
+            try { variants = JSON.parse(variants); } catch(e) { variants = []; }
+          }
+          if (Array.isArray(variants) && variants.length > 0) {
+            window.draftItem = null;
+            if (searchInput) searchInput.value = '';
+            if (window.posState) window.posState.searchQuery = '';
+            if (window.state) window.state.searchQuery = '';
+            if (typeof window.renderMenuGlobal === 'function') window.renderMenuGlobal();
+            if (typeof window.openVariantModal === 'function') {
+              window.openVariantModal(selItem);
+              return;
+            }
+          }
           window.draftItem = selItem;
           if (searchInput) searchInput.value = selItem.name;
           const fRate = document.getElementById('fRate');
@@ -7317,6 +7981,21 @@ document.addEventListener("DOMContentLoaded", function() {
   window.posLockDraft = function(itemOrId) {
     let item = typeof itemOrId === 'object' ? itemOrId : (window.getPosMenuItems() || []).find(i => String(i.id) === String(itemOrId));
     if (!item) return;
+
+    window.draftItem = null;
+    let variants = item.variants || [];
+    if (typeof variants === 'string') {
+      try { variants = JSON.parse(variants); } catch(e) { variants = []; }
+    }
+    if (Array.isArray(variants) && variants.length > 0) {
+      const fItem = document.getElementById('fItem');
+      if (fItem) fItem.value = '';
+      if (typeof window.openVariantModal === 'function') {
+        window.openVariantModal(item);
+        return;
+      }
+    }
+
     window.draftItem = item;
     const fItem = document.getElementById('fItem');
     const fQty = document.getElementById('fQty');
@@ -7332,16 +8011,7 @@ document.addEventListener("DOMContentLoaded", function() {
   };
 
   window.posCalcDraft = function() {
-    const qty = parseFloat(document.getElementById('fQty')?.value) || 0;
-    const rate = parseFloat(document.getElementById('fRate')?.value) || 0;
-    const amtEl = document.getElementById('fAmt');
     const btn = document.getElementById('addBtn');
-    
-    const amt = qty * rate;
-    if (amtEl) {
-      amtEl.textContent = window.draftItem ? '₹' + amt.toFixed(2) : '0.00';
-      amtEl.className = window.draftItem && amt > 0 ? 'pos-amt pos-lineamt pos-live' : 'pos-amt pos-lineamt';
-    }
     if (btn) btn.disabled = !window.draftItem;
   };
 
@@ -7355,6 +8025,28 @@ document.addEventListener("DOMContentLoaded", function() {
 
   window.posCommitDraft = function() {
     if (!window.draftItem) return;
+    if (document.getElementById('posVariantModalVeil')) return;
+
+    let variants = window.draftItem.variants || [];
+    if (typeof variants === 'string') {
+      try { variants = JSON.parse(variants); } catch(e) { variants = []; }
+    }
+    if (Array.isArray(variants) && variants.length > 0) {
+      const itemToOpen = window.draftItem;
+      window.draftItem = null;
+      const fItem = document.getElementById('fItem');
+      const fQty = document.getElementById('fQty');
+      const fRate = document.getElementById('fRate');
+      if (fItem) fItem.value = '';
+      if (fQty) fQty.value = '1';
+      if (fRate) fRate.value = '';
+      if (typeof posCalcDraft === 'function') posCalcDraft();
+      if (typeof window.openVariantModal === 'function') {
+        window.openVariantModal(itemToOpen);
+        return;
+      }
+    }
+
     const qty = parseFloat(document.getElementById('fQty')?.value) || 1;
     const rate = parseFloat(document.getElementById('fRate')?.value) || parseFloat(window.draftItem.price);
     

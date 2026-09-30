@@ -459,6 +459,8 @@ class Order(models.Model):
 
     @property
     def order_number(self):
+        if (self.status == self.OrderStatus.DRAFT or self.status == 'DRAFT') and not self.branch_order_number:
+            return f"Draft #{self.id}"
         num = self.branch_order_number if self.branch_order_number is not None else self.id
         return f"ORD-{num:04d}" if num else ""
 
@@ -699,11 +701,12 @@ class Order(models.Model):
         if not self.security_token:
             self.security_token = str(uuid.uuid4())
 
-        # Auto-assign branch_order_number per restaurant if missing
+        # Auto-assign branch_order_number per restaurant if missing (only for confirmed/non-draft orders)
         if not self.branch_order_number and self.restaurant:
-            with transaction.atomic():
-                max_num = Order.objects.filter(restaurant=self.restaurant).aggregate(Max('branch_order_number'))['branch_order_number__max'] or 0
-                self.branch_order_number = max_num + 1
+            if self.status != self.OrderStatus.DRAFT and self.status != 'DRAFT':
+                with transaction.atomic():
+                    max_num = Order.objects.filter(restaurant=self.restaurant).aggregate(Max('branch_order_number'))['branch_order_number__max'] or 0
+                    self.branch_order_number = max_num + 1
 
         # Sync table_number from Table object if present
         if self.table and not self.table_number:

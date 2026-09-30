@@ -50,26 +50,73 @@ DEFAULT_STATE = os.environ.get('DEFAULT_STATE', 'Rajasthan')
 # ==========================================
 # 4. Feature Flags / Module Toggles
 # ==========================================
-# Controls whether Website CMS / Landing Page module is enabled and visible
-SHOW_WEBSITE_PAGES = _get_env_bool(
+# Module defaults loaded from environment (.env) as resilient fallback
+_DEFAULT_SHOW_WEBSITE_PAGES = _get_env_bool(
     'SHOW_WEBSITE_PAGES',
     _get_env_bool('ENABLE_WEBSITE_CMS', _get_env_bool('ENABLE_LANDING_PAGE', True))
 )
-
-# Controls whether Alcohol Service & State VAT module is enabled and visible
-ENABLE_ALCOHOL_VAT = _get_env_bool(
+_DEFAULT_ENABLE_ALCOHOL_VAT = _get_env_bool(
     'ENABLE_ALCOHOL_VAT',
     _get_env_bool('ENABLE_LIQUOR_VAT', _get_env_bool('ENABLE_ALCOHOL_SERVICE', True))
 )
-
-# Controls whether Club & Events Ticketing Module is enabled and visible in Super Admin / system
-ENABLE_CLUB_EVENTS_MODULE = _get_env_bool(
+_DEFAULT_ENABLE_CLUB_EVENTS_MODULE = _get_env_bool(
     'ENABLE_CLUB_EVENTS_MODULE',
     _get_env_bool('ENABLE_CLUB_MODULE', True)
 )
-
-# Controls whether Hotel & Rooms PMS Module is enabled and visible in Super Admin / system
-ENABLE_HOTEL_MODULE = _get_env_bool(
+_DEFAULT_ENABLE_HOTEL_MODULE = _get_env_bool(
     'ENABLE_HOTEL_MODULE',
     _get_env_bool('ENABLE_HOTEL_PMS_MODULE', True)
 )
+
+
+def is_module_enabled(module_name: str, restaurant=None) -> bool:
+    """
+    Dynamically checks if a module is active for a restaurant.
+    Prioritizes real-time database state synced from Master Admin.
+    Falls back to .env defaults if offline or not yet synced.
+    """
+    target = restaurant
+    if target is None:
+        try:
+            from super_admin.models import Restaurant
+            target = Restaurant.objects.first()
+        except Exception:
+            target = None
+
+    name = module_name.upper()
+    if name in ('SHOW_WEBSITE_PAGES', 'ENABLE_WEBSITE_CMS', 'WEBSITE'):
+        if target and hasattr(target, 'feature_website_pages') and target.feature_website_pages is not None:
+            return bool(target.feature_website_pages)
+        return _DEFAULT_SHOW_WEBSITE_PAGES
+
+    if name in ('ENABLE_ALCOHOL_VAT', 'SHOW_ALCOHOL_MODULE', 'ALCOHOL'):
+        if target and hasattr(target, 'feature_alcohol_vat') and target.feature_alcohol_vat is not None:
+            return bool(target.feature_alcohol_vat)
+        return _DEFAULT_ENABLE_ALCOHOL_VAT
+
+    if name in ('ENABLE_CLUB_EVENTS_MODULE', 'SHOW_CLUB_EVENTS_MODULE', 'CLUB'):
+        if target and hasattr(target, 'feature_club_events') and target.feature_club_events is not None:
+            return bool(target.feature_club_events)
+        return _DEFAULT_ENABLE_CLUB_EVENTS_MODULE
+
+    if name in ('ENABLE_HOTEL_MODULE', 'SHOW_HOTEL_MODULE', 'HOTEL'):
+        if target and hasattr(target, 'feature_hotel_pms') and target.feature_hotel_pms is not None:
+            return bool(target.feature_hotel_pms)
+        return _DEFAULT_ENABLE_HOTEL_MODULE
+
+    return True
+
+
+def __getattr__(name: str):
+    """
+    PEP 562: Dynamically resolve module toggles against Master Admin state in DB.
+    """
+    if name in ('SHOW_WEBSITE_PAGES', 'ENABLE_WEBSITE_CMS'):
+        return is_module_enabled('SHOW_WEBSITE_PAGES')
+    if name in ('ENABLE_ALCOHOL_VAT', 'SHOW_ALCOHOL_MODULE'):
+        return is_module_enabled('ENABLE_ALCOHOL_VAT')
+    if name in ('ENABLE_CLUB_EVENTS_MODULE', 'SHOW_CLUB_EVENTS_MODULE'):
+        return is_module_enabled('ENABLE_CLUB_EVENTS_MODULE')
+    if name in ('ENABLE_HOTEL_MODULE', 'SHOW_HOTEL_MODULE'):
+        return is_module_enabled('ENABLE_HOTEL_MODULE')
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

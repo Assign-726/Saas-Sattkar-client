@@ -69,6 +69,20 @@ def landing_index(request):
 
 @superuser_required
 def dashboard(request):
+    # Auto-refresh live subscription & feature flags from Master Admin
+    restaurant = Restaurant.objects.first()
+    if restaurant:
+        try:
+            now = timezone.now()
+            # Fast refresh if never synced or synced > 5 seconds ago or manual sync
+            if request.GET.get('sync') or not restaurant.features_last_synced_at or (now - restaurant.features_last_synced_at).total_seconds() > 5:
+                MasterBillingService.fetch_subscription_details(restaurant)
+                if request.GET.get('sync'):
+                    messages.success(request, "Live modules and subscription refreshed from Master Admin.")
+                    return redirect('super_admin:dashboard')
+        except Exception as sync_err:
+            logger.warning(f"[Dashboard] Subscription sync skipped: {sync_err}")
+
     restaurants = Restaurant.objects.all().prefetch_related('branches', 'branches__gst_registration').order_by('name')
     admins = RestaurantUser.objects.select_related('user', 'restaurant', 'branch').order_by('restaurant__name', 'user__username')
     total_branches = sum(r.branches.count() for r in restaurants)
