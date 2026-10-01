@@ -4,6 +4,7 @@ from restaurant_admin import views_reservations
 from restaurant_admin import floor_plan_views
 from restaurant_admin import views_events
 from restaurant_admin import views_staff
+from restaurant_admin import views_hrms
 
 app_name = 'restaurant_admin'
 
@@ -185,4 +186,29 @@ urlpatterns = [
     path('staff/<int:pk>/edit/', views_staff.staff_edit, name='staff_edit'),
     path('staff/<int:pk>/toggle-active/', views_staff.staff_toggle_active, name='staff_toggle_active'),
     path('staff/<int:pk>/delete/', views_staff.staff_delete, name='staff_delete'),
+
+    # Phase 1: Fast-Track Daily Muster Roll & Department Shift Allocation
+    path('staff/attendance/', views_hrms.muster_roll_view, name='muster_roll'),
+    path('staff/attendance/api/mark-all-present/', views_hrms.api_mark_all_present, name='api_mark_all_present'),
+    path('staff/attendance/api/save/', views_hrms.api_save_single_attendance, name='api_save_single_attendance'),
+
+    # Ground Staff Directory (Chefs, Stewards, Housekeeping - No Django User required)
+    path('staff/ground-staff/', views_hrms.ground_staff_list, name='ground_staff_list'),
+    path('staff/ground-staff/create/', views_hrms.ground_staff_create, name='ground_staff_create'),
+    path('staff/ground-staff/<int:pk>/edit/', views_hrms.ground_staff_edit, name='ground_staff_edit'),
+    path('staff/ground-staff/<int:pk>/toggle-active/', views_hrms.ground_staff_toggle_active, name='ground_staff_toggle_active'),
+
+    # Phase 2: Automated Monthly Payroll Engine & Salary Slips
+    path('staff/payroll/', views_hrms.payroll_dashboard, name='payroll_dashboard'),
+    path('staff/payroll/api/generate/', views_hrms.api_generate_monthly_payroll, name='api_generate_monthly_payroll'),
+    path('staff/payroll/<int:pk>/update-adjustment/', views_hrms.api_update_payroll_adjustment, name='api_update_payroll_adjustment'),
+    path('staff/payroll/api/finalize-all/', views_hrms.api_finalize_all_payroll, name='api_finalize_all_payroll'),
+    path('staff/payroll/<int:pk>/salary-slip/', views_hrms.salary_slip_view, name='salary_slip_view'),
+
+    # Phase 3: Operational Task SOP Board
+    path('staff/sop/', views_hrms.sop_dashboard_view, name='sop_dashboard'),
+    path('staff/sop/api/toggle-status/', views_hrms.api_toggle_sop_task_status, name='api_toggle_sop_task_status'),
+    path('staff/sop/api/seed-defaults/', views_hrms.api_seed_default_sops, name='api_seed_default_sops'),
+    path('staff/sop/api/create-task/', views_hrms.api_create_sop_task, name='api_create_sop_task'),
+    path('staff/sop/<int:pk>/delete/', views_hrms.api_delete_sop_task, name='api_delete_sop_task'),
 ]
