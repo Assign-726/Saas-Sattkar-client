@@ -1,7 +1,9 @@
 from rest_framework import serializers
 from decimal import Decimal
 from django.utils import timezone
-from hotel.models import RoomCategory, Room, RoomBooking
+from django.db import transaction
+from hotel.models import RoomCategory, Room, RoomBooking, CabServicePackage, FleetVehicle, CabBooking, HotelSettings
+
 
 
 class RoomCategorySerializer(serializers.ModelSerializer):
@@ -34,6 +36,8 @@ class RoomCategorySerializer(serializers.ModelSerializer):
             'bed_type',
             'room_size_sqft',
             'amenities',
+            'includes_free_transfer',
+            'transfer_type',
             'cover_image',
             'cover_image_url',
             'effective_image',
@@ -181,6 +185,8 @@ class PublicAvailabilityCategorySerializer(serializers.ModelSerializer):
             'bed_type',
             'room_size_sqft',
             'amenities',
+            'includes_free_transfer',
+            'transfer_type',
             'effective_image',
             'all_images',
             'video_links',
@@ -191,3 +197,409 @@ class PublicAvailabilityCategorySerializer(serializers.ModelSerializer):
             'estimated_taxes',
             'estimated_grand_total',
         ]
+
+
+# ==============================================================================
+# TRAVEL DESK & CAB MANAGEMENT SERIALIZERS
+# ==============================================================================
+
+class CabServicePackageSerializer(serializers.ModelSerializer):
+    branch_name = serializers.ReadOnlyField(source='branch.name')
+    service_type_display = serializers.ReadOnlyField(source='get_service_type_display')
+    vehicle_category_display = serializers.ReadOnlyField(source='get_vehicle_category_display')
+
+    class Meta:
+        model = CabServicePackage
+        fields = [
+            'id',
+            'branch',
+            'branch_name',
+            'title',
+            'service_type',
+            'service_type_display',
+            'vehicle_category',
+            'vehicle_category_display',
+            'base_price',
+            'included_km',
+            'included_hours',
+            'itinerary_description',
+            'is_active',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class FleetVehicleSerializer(serializers.ModelSerializer):
+    branch_name = serializers.ReadOnlyField(source='branch.name')
+    vehicle_category_display = serializers.ReadOnlyField(source='get_vehicle_category_display')
+    status_display = serializers.ReadOnlyField(source='get_status_display')
+
+    class Meta:
+        model = FleetVehicle
+        fields = [
+            'id',
+            'branch',
+            'branch_name',
+            'vehicle_number',
+            'vehicle_category',
+            'vehicle_category_display',
+            'driver_name',
+            'driver_phone',
+            'is_vendor_vehicle',
+            'status',
+            'status_display',
+            'notes',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class CabBookingSerializer(serializers.ModelSerializer):
+    branch_name = serializers.ReadOnlyField(source='branch.name')
+    room_booking_code = serializers.ReadOnlyField(source='room_booking.booking_id')
+    guest_name = serializers.ReadOnlyField(source='room_booking.guest_name')
+    guest_phone = serializers.ReadOnlyField(source='room_booking.guest_phone')
+    guest_email = serializers.ReadOnlyField(source='room_booking.guest_email')
+    room_number = serializers.ReadOnlyField(source='room_booking.room.room_number')
+    package_title = serializers.ReadOnlyField(source='package.title')
+    package_service_type = serializers.ReadOnlyField(source='package.service_type')
+    package_vehicle_category = serializers.ReadOnlyField(source='package.get_vehicle_category_display')
+    payment_status_display = serializers.ReadOnlyField(source='get_payment_status_display')
+    trip_status_display = serializers.ReadOnlyField(source='get_trip_status_display')
+    assigned_vehicle_details = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CabBooking
+        fields = [
+            'id',
+            'booking_id',
+            'branch',
+            'branch_name',
+            'room_booking',
+            'room_booking_code',
+            'guest_name',
+            'guest_phone',
+            'guest_email',
+            'room_number',
+            'package',
+            'package_title',
+            'package_service_type',
+            'package_vehicle_category',
+            'assigned_vehicle',
+            'assigned_vehicle_details',
+            'is_complimentary',
+            'pickup_datetime',
+            'pickup_location',
+            'drop_location',
+            'flight_or_train_number',
+            'base_amount',
+            'tax_amount',
+            'total_amount',
+            'payment_status',
+            'payment_status_display',
+            'trip_status',
+            'trip_status_display',
+            'guest_notes',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'booking_id', 'branch', 'created_at', 'updated_at']
+
+    def get_assigned_vehicle_details(self, obj):
+        if not obj.assigned_vehicle:
+            return None
+        v = obj.assigned_vehicle
+        return {
+            'id': v.id,
+            'vehicle_number': v.vehicle_number,
+            'vehicle_category': v.vehicle_category,
+            'vehicle_category_display': v.get_vehicle_category_display(),
+            'driver_name': v.driver_name,
+            'driver_phone': v.driver_phone,
+            'is_vendor_vehicle': v.is_vendor_vehicle,
+            'status': v.status,
+            'status_display': v.get_status_display(),
+        }
+
+
+def generate_razorpay_order_id(branch, grand_total, receipt_id):
+    """
+    Creates Razorpay order for online payment.
+    Falls back to deterministic order ID if credentials not configured or offline.
+    """
+    import requests
+    from django.conf import settings
+    from core.models import RestaurantSettings
+
+    key_id = None
+    key_secret = None
+
+    h_settings = getattr(branch, 'hotel_settings', None) or HotelSettings.get_settings(branch)
+    if h_settings and h_settings.razorpay_key_id and h_settings.razorpay_key_secret:
+        key_id = h_settings.razorpay_key_id.strip()
+        key_secret = h_settings.razorpay_key_secret.strip()
+
+    if (not key_id or not key_secret) and branch.restaurant:
+        r_settings = RestaurantSettings.get_settings(branch.restaurant)
+        if r_settings and r_settings.razorpay_key_id and r_settings.razorpay_key_secret:
+            key_id = r_settings.razorpay_key_id.strip()
+            key_secret = r_settings.razorpay_key_secret.strip()
+
+    if not key_id or not key_secret:
+        key_id = getattr(settings, 'RAZORPAY_KEY_ID', None)
+        key_secret = getattr(settings, 'RAZORPAY_KEY_SECRET', None)
+
+    amount_paise = int(round(grand_total * Decimal('100')))
+    if key_id and key_secret and amount_paise > 0:
+        try:
+            url = "https://api.razorpay.com/v1/orders"
+            payload = {
+                "amount": amount_paise,
+                "currency": "INR",
+                "receipt": str(receipt_id)[:40],
+                "payment_capture": 1,
+            }
+            resp = requests.post(url, auth=(key_id, key_secret), json=payload, timeout=8)
+            if resp.status_code in [200, 201]:
+                return resp.json().get('id'), key_id
+        except Exception:
+            pass
+
+    return f"order_htl_{receipt_id.lower()}", (key_id or "rzp_test_placeholder")
+
+
+class PublicCabBookingItemSerializer(serializers.Serializer):
+    package_id = serializers.IntegerField(required=True)
+    pickup_datetime = serializers.DateTimeField(required=True)
+    pickup_location = serializers.CharField(max_length=255, required=True)
+    drop_location = serializers.CharField(max_length=255, required=True)
+    flight_or_train_number = serializers.CharField(max_length=50, required=False, allow_blank=True, default='')
+    guest_notes = serializers.CharField(required=False, allow_blank=True, default='')
+    is_complimentary = serializers.BooleanField(required=False, default=False)
+
+
+class PublicHotelCheckoutSerializer(serializers.Serializer):
+    """
+    Unified atomic checkout serializer:
+    - Locks room inventory with select_for_update()
+    - Creates RoomBooking record (PENDING)
+    - Validates and creates linked CabBooking records (with complimentary override if eligible)
+    - Generates Razorpay Order ID for combined grand total
+    """
+    branch_id = serializers.IntegerField(required=False, allow_null=True)
+    category_id = serializers.IntegerField(required=True)
+    check_in_date = serializers.DateField(required=True)
+    check_out_date = serializers.DateField(required=True)
+    guest_name = serializers.CharField(max_length=150, required=True)
+    guest_email = serializers.EmailField(required=False, allow_blank=True, default='')
+    guest_phone = serializers.CharField(max_length=30, required=True)
+    num_guests = serializers.IntegerField(required=False, default=1, min_value=1)
+    special_requests = serializers.CharField(required=False, allow_blank=True, default='')
+    payment_method = serializers.CharField(required=False, default='ONLINE_RAZORPAY')
+    upi_transaction_ref = serializers.CharField(required=False, allow_blank=True, default='')
+    cab_bookings = PublicCabBookingItemSerializer(many=True, required=False, default=[])
+
+    def to_internal_value(self, data):
+        mutable_data = data.copy() if hasattr(data, 'copy') else dict(data)
+        # Normalize alternative keys and casing
+        if 'cab_Bookings' in mutable_data and 'cab_bookings' not in mutable_data:
+            mutable_data['cab_bookings'] = mutable_data['cab_Bookings']
+        if 'room_id' in mutable_data and 'category_id' not in mutable_data:
+            mutable_data['category_id'] = mutable_data['room_id']
+        if 'check_in' in mutable_data and 'check_in_date' not in mutable_data:
+            mutable_data['check_in_date'] = mutable_data['check_in']
+        if 'check_out' in mutable_data and 'check_out_date' not in mutable_data:
+            mutable_data['check_out_date'] = mutable_data['check_out']
+        if 'customer_name' in mutable_data and 'guest_name' not in mutable_data:
+            mutable_data['guest_name'] = mutable_data['customer_name']
+        if 'phone' in mutable_data and 'guest_phone' not in mutable_data:
+            mutable_data['guest_phone'] = mutable_data['phone']
+        if 'email' in mutable_data and 'guest_email' not in mutable_data:
+            mutable_data['guest_email'] = mutable_data['email']
+        if 'adults' in mutable_data and 'num_guests' not in mutable_data:
+            mutable_data['num_guests'] = mutable_data['adults']
+        if 'notes' in mutable_data and 'special_requests' not in mutable_data:
+            mutable_data['special_requests'] = mutable_data['notes']
+        return super().to_internal_value(mutable_data)
+
+    def validate(self, data):
+        check_in = data.get('check_in_date')
+        check_out = data.get('check_out_date')
+        if check_out <= check_in:
+            raise serializers.ValidationError({"check_out_date": "Check-out date must be strictly after check-in date."})
+
+        category_id = data.get('category_id')
+        try:
+            category = RoomCategory.objects.get(id=category_id, is_active=True)
+        except RoomCategory.DoesNotExist:
+            raise serializers.ValidationError({"category_id": f"Active Room Category with ID {category_id} does not exist."})
+
+        branch = category.branch
+        if not getattr(branch, 'has_hotel_module', False):
+            raise serializers.ValidationError("Hotel module is not active for this branch.")
+
+        data['category_obj'] = category
+        data['branch_obj'] = branch
+        return data
+
+    def create(self, validated_data):
+        category = validated_data['category_obj']
+        branch = validated_data['branch_obj']
+        check_in_date = validated_data['check_in_date']
+        check_out_date = validated_data['check_out_date']
+        guest_name = validated_data['guest_name']
+        guest_email = validated_data.get('guest_email')
+        if not guest_email or '@' not in guest_email:
+            guest_email = f"guest.{guest_name.lower().replace(' ', '')[:6]}@sharmahotel.internal"
+        guest_phone = validated_data['guest_phone']
+        num_guests = validated_data.get('num_guests', 1)
+        special_requests = validated_data.get('special_requests', '')
+        payment_method = validated_data.get('payment_method', 'ONLINE_RAZORPAY')
+        upi_ref = validated_data.get('upi_transaction_ref', '') or ''
+        cab_bookings_data = validated_data.get('cab_bookings', [])
+
+        with transaction.atomic():
+            # 1. Lock room inventory using select_for_update()
+            candidate_rooms = Room.objects.select_for_update().filter(
+                category=category,
+                branch=branch,
+                is_active=True
+            ).order_by('room_number')
+
+            booked_room_ids = RoomBooking.objects.filter(
+                room__in=candidate_rooms,
+                booking_status__in=[RoomBooking.BookingStatus.RESERVED, RoomBooking.BookingStatus.CHECKED_IN],
+                check_in_date__lt=check_out_date,
+                check_out_date__gt=check_in_date,
+            ).values_list('room_id', flat=True)
+
+            target_room = candidate_rooms.exclude(id__in=booked_room_ids).first()
+            if not target_room:
+                raise serializers.ValidationError({
+                    "room": "No available rooms in this category for the selected dates. Please choose different dates or category."
+                })
+
+            # Calculate room pricing & taxes
+            nights = max(1, (check_out_date - check_in_date).days)
+            base_rate = category.base_price_per_night
+            room_charges = base_rate * Decimal(nights)
+            h_settings = getattr(branch, 'hotel_settings', None) or HotelSettings.get_settings(branch)
+
+            if category.custom_tax_rate is not None:
+                room_tax_rate = category.custom_tax_rate / Decimal('100')
+            elif h_settings and not h_settings.enable_dynamic_gst:
+                room_tax_rate = h_settings.tax_rate / Decimal('100')
+            else:
+                room_tax_rate = Decimal('0.12') if base_rate <= 7500 else Decimal('0.18')
+
+            if category.price_is_tax_inclusive:
+                net_room_charges = round(room_charges / (Decimal('1') + room_tax_rate), 2)
+                room_tax_amount = round(room_charges - net_room_charges, 2)
+                room_grand_total = room_charges
+                room_total_charges = net_room_charges
+            else:
+                room_tax_amount = round(room_charges * room_tax_rate, 2)
+                room_grand_total = room_charges + room_tax_amount
+                room_total_charges = room_charges
+
+            # 2. Create the RoomBooking record (PENDING)
+            room_booking = RoomBooking.objects.create(
+                room=target_room,
+                branch=branch,
+                guest_name=guest_name,
+                guest_email=guest_email,
+                guest_phone=guest_phone,
+                check_in_date=check_in_date,
+                check_out_date=check_out_date,
+                num_guests=num_guests,
+                total_room_charges=room_total_charges,
+                taxes=room_tax_amount,
+                grand_total=room_grand_total,
+                booking_status=RoomBooking.BookingStatus.RESERVED,
+                payment_status=RoomBooking.PaymentStatus.PENDING,
+                payment_method=payment_method,
+                special_requests=special_requests,
+                upi_transaction_ref=upi_ref,
+            )
+
+            # 3. Validate and create linked CabBooking records
+            created_cabs = []
+            paid_cabs_total = Decimal('0.00')
+
+            for item in cab_bookings_data:
+                package_id = item.get('package_id')
+                package = CabServicePackage.objects.filter(id=package_id, branch=branch, is_active=True).first()
+                if not package:
+                    package = CabServicePackage.objects.filter(id=package_id, is_active=True).first()
+                if not package:
+                    raise serializers.ValidationError({
+                        "cab_bookings": f"Cab service package with ID {package_id} not found or inactive."
+                    })
+
+                # Check complimentary eligibility:
+                # Only AIRPORT_TRANSFER qualifies for complimentary; TOURISM_PACKAGE is ALWAYS a paid upsell
+                qualifies_complimentary = False
+                if (
+                    package.service_type == CabServicePackage.ServiceType.AIRPORT_TRANSFER
+                    and category.includes_free_transfer
+                    and category.transfer_type != 'NONE'
+                ):
+                    qualifies_complimentary = True
+
+                if qualifies_complimentary:
+                    cab_base = Decimal('0.00')
+                    cab_tax = Decimal('0.00')
+                    cab_total = Decimal('0.00')
+                    cab_payment_status = CabBooking.PaymentStatus.COMPLIMENTARY
+                    is_comp = True
+                else:
+                    cab_base = package.base_price
+                    # Transport dynamic tax (5% GST)
+                    transport_tax_rate = Decimal('0.05')
+                    cab_tax = round(cab_base * transport_tax_rate, 2)
+                    cab_total = cab_base + cab_tax
+                    cab_payment_status = CabBooking.PaymentStatus.PENDING
+                    is_comp = False
+                    paid_cabs_total += cab_total
+
+                cab_booking = CabBooking.objects.create(
+                    branch=branch,
+                    room_booking=room_booking,
+                    package=package,
+                    is_complimentary=is_comp,
+                    pickup_datetime=item['pickup_datetime'],
+                    pickup_location=item['pickup_location'],
+                    drop_location=item['drop_location'],
+                    flight_or_train_number=item.get('flight_or_train_number', ''),
+                    base_amount=cab_base,
+                    tax_amount=cab_tax,
+                    total_amount=cab_total,
+                    payment_status=cab_payment_status,
+                    trip_status=CabBooking.TripStatus.SCHEDULED,
+                    guest_notes=item.get('guest_notes', ''),
+                )
+                created_cabs.append(cab_booking)
+
+            # 4. Generate single combined Razorpay Order ID
+            combined_grand_total = room_booking.grand_total + paid_cabs_total
+            razorpay_order_id, razorpay_key_id = generate_razorpay_order_id(
+                branch=branch,
+                grand_total=combined_grand_total,
+                receipt_id=room_booking.booking_id
+            )
+
+            return {
+                'room_booking': room_booking,
+                'cab_bookings': created_cabs,
+                'room_charges': room_booking.total_room_charges,
+                'room_taxes': room_booking.taxes,
+                'room_total': room_booking.grand_total,
+                'cab_total': paid_cabs_total,
+                'grand_total': combined_grand_total,
+                'razorpay_order_id': razorpay_order_id,
+                'razorpay_key_id': razorpay_key_id,
+                'currency': 'INR',
+            }
+

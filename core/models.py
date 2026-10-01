@@ -818,7 +818,7 @@ class Order(models.Model):
             self.inventory_deducted = False
             self.save(update_fields=['inventory_deducted'])
 
-    def calculate_bill_breakdown(self, bill_type='combined'):
+    def calculate_bill_breakdown(self, bill_type='combined', items_override=None):
         from decimal import Decimal
         food_subtotal = Decimal('0.00')
         beer_subtotal = Decimal('0.00')
@@ -866,7 +866,8 @@ class Order(models.Model):
         vat_wine_pct = Decimal(str(branch_obj.vat_wine_rate if branch_obj else 60.00)) if bill_type != 'food' else Decimal('0.00')
         vat_gen_pct = Decimal(str(getattr(settings_obj, 'vat_percentage', 20) or 20)) if bill_type != 'food' else Decimal('0.00')
 
-        for item in self.items.all():
+        items_iterable = items_override if items_override is not None else self.items.all()
+        for item in items_iterable:
             line_total = item.subtotal
             ttype = item.menu_item.tax_type if item.menu_item else MenuItem.TaxType.GST_FOOD
             is_inclusive = item.menu_item.is_tax_inclusive if item.menu_item else False
@@ -924,7 +925,10 @@ class Order(models.Model):
             discount = Decimal(str(self.discount_amount))
         elif self.coupon:
             try:
-                discount = Decimal(str(self.coupon.calculate_discount(gross_subtotal)))
+                if self.coupon.is_valid_for(gross_subtotal, restaurant=self.restaurant):
+                    discount = Decimal(str(self.coupon.calculate_discount(gross_subtotal)))
+                else:
+                    discount = Decimal('0.00')
             except Exception:
                 discount = Decimal('0.00')
         discount = max(Decimal('0.00'), min(discount, gross_subtotal))

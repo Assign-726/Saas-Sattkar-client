@@ -34,6 +34,17 @@ urlpatterns = [
     path('staff/<int:user_id>/toggle-active/', views_admin.staff_toggle_active_view, name='staff_toggle_active'),
     path('staff/<int:user_id>/delete/', views_admin.staff_delete_view, name='staff_delete'),
 
+    # Travel Desk & Cab Management
+    path('cabs/', views_admin.cabs_dispatch_view, name='cabs_dispatch'),
+    path('cabs/packages/create-edit/', views_admin.cab_package_create_edit_action, name='cab_package_create_edit'),
+    path('cabs/packages/<int:package_id>/delete/', views_admin.cab_package_delete_action, name='cab_package_delete'),
+    path('cabs/fleet/create-edit/', views_admin.cab_fleet_create_edit_action, name='cab_fleet_create_edit'),
+    path('cabs/fleet/<int:vehicle_id>/delete/', views_admin.cab_fleet_delete_action, name='cab_fleet_delete'),
+    path('cabs/bookings/<int:cab_id>/assign-driver/', views_admin.cab_assign_driver_action, name='cab_assign_driver'),
+    path('cabs/bookings/<int:cab_id>/reschedule/', views_admin.cab_reschedule_action, name='cab_reschedule'),
+    path('cabs/bookings/<int:cab_id>/status/', views_admin.cab_status_action, name='cab_status'),
+    path('cabs/bookings/manual-create/', views_admin.cab_manual_create_action, name='cab_manual_create'),
+
     # Hotel Configuration & Settings
     path('settings/', views_admin.hotel_settings_view, name='settings'),
     path('settings/test-email/', views_admin.hotel_test_email_view, name='test_email'),
