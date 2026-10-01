@@ -21,6 +21,8 @@
     <link rel="stylesheet" href="{% static 'restaurant_admin/css/admin.css' %}">
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Alpine.js for lightweight reactive data grids -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
     <script>
         if (localStorage.getItem('sidebar_collapsed') === 'true') {
             document.documentElement.classList.add('sidebar-collapsed');
@@ -1170,14 +1172,61 @@
                 {% endif %}
 
                 {% if show_staff %}
-                <!-- Standalone Item: Staff & Sub-Roles -->
-                <div class="sidebar-single-nav">
-                    <a class="nav-link {% if active_menu == 'staff' %}active{% endif %}"
-                        href="{% url 'restaurant_admin:staff_list' restaurant_slug=rslug %}"
-                        title="Staff & Sub-Roles Management">
-                        <i class="bi bi-people-gear"></i>
-                        <span>Staff & Roles</span>
-                    </a>
+                <!-- Group: Staff & Operations Management -->
+                <div class="sidebar-group">
+                    <div class="sidebar-group-header {% if active_group == 'staff_operations' or active_menu == 'staff' or active_menu == 'attendance_muster' or active_menu == 'payroll_dashboard' or active_menu == 'sop_dashboard' or active_menu == 'ground_staff_directory' %}open active-group{% endif %}"
+                        data-group-target="#group-staff-ops">
+                        <div class="group-title">
+                            <i class="bi bi-people-gear"></i>
+                            <span>Staff & Operations</span>
+                        </div>
+                        <i class="fas fa-chevron-down group-chevron"></i>
+                    </div>
+                    <div class="sidebar-group-content {% if active_group == 'staff_operations' or active_menu == 'staff' or active_menu == 'attendance_muster' or active_menu == 'payroll_dashboard' or active_menu == 'sop_dashboard' or active_menu == 'ground_staff_directory' %}show{% endif %}"
+                        id="group-staff-ops">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'attendance_muster' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:muster_roll' restaurant_slug=rslug %}"
+                                    title="Fast-Track Daily Muster Roll">
+                                    <i class="bi bi-calendar2-check"></i>
+                                    <span>Daily Muster Roll</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'payroll_dashboard' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:payroll_dashboard' restaurant_slug=rslug %}"
+                                    title="Automated Payroll Engine & Salary Slips">
+                                    <i class="bi bi-cash-coin"></i>
+                                    <span>Payroll & Slips</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'sop_dashboard' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:sop_dashboard' restaurant_slug=rslug %}"
+                                    title="Hospitality SOP & Daily Duty Checklist">
+                                    <i class="bi bi-clipboard2-check"></i>
+                                    <span>Daily SOP Board</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'ground_staff_directory' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:ground_staff_list' restaurant_slug=rslug %}"
+                                    title="Ground Staff Profiles & Shift Allocation">
+                                    <i class="bi bi-person-lines-fill"></i>
+                                    <span>Ground Staff</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'staff' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:staff_list' restaurant_slug=rslug %}"
+                                    title="System Logins, PINs & Roles">
+                                    <i class="bi bi-shield-lock"></i>
+                                    <span>Logins & Roles</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
                 {% endif %}
 

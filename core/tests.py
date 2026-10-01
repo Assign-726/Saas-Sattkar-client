@@ -417,4 +417,91 @@ class DocumentSequenceSettingTests(TestCase):
         info2 = get_document_sequence_info(self.restaurant, 'vat_bill', branch=branch_vdn)
         self.assertEqual(info2['next_number'], 'VAT/VDN/0101/2026')
 
+    def test_vat_surcharge_and_effective_tax_rate(self):
+        from decimal import Decimal
+        from core.models import MenuItem, Order, OrderItem, Table
+        from super_admin.models import RestaurantBranch
+
+        branch = RestaurantBranch.objects.create(
+            restaurant=self.restaurant,
+            name="Excise Branch",
+            slug="excise-branch",
+            serves_alcohol=True,
+            vat_beer_rate=Decimal('20.00'),
+            vat_imfl_rate=Decimal('30.00'),
+            vat_wine_rate=Decimal('20.00'),
+            vat_gen_pct=Decimal('25.00'),
+            vat_surcharge_name="Cow Cess",
+            vat_surcharge_pct=Decimal('10.00'),
+        )
+
+        table = Table.objects.create(restaurant=self.restaurant, branch=branch, name="Bar T1", table_number=99)
+
+        # 1. Forward test with exclusive items
+        beer_item = MenuItem.objects.create(
+            restaurant=self.restaurant,
+            branch=branch,
+            name="Craft Beer",
+            price=Decimal('100.00'),
+            tax_type=MenuItem.TaxType.VAT_BEER,
+            is_tax_inclusive=False
+        )
+        imfl_item = MenuItem.objects.create(
+            restaurant=self.restaurant,
+            branch=branch,
+            name="Single Malt",
+            price=Decimal('200.00'),
+            tax_type=MenuItem.TaxType.VAT_IMFL,
+            is_tax_inclusive=False
+        )
+
+        order = Order.objects.create(restaurant=self.restaurant, branch=branch, table=table)
+        OrderItem.objects.create(order=order, menu_item=beer_item, quantity=1, unit_price=Decimal('100.00'))
+        OrderItem.objects.create(order=order, menu_item=imfl_item, quantity=1, unit_price=Decimal('200.00'))
+
+        breakdown = order.calculate_bill_breakdown()
+        # Beer VAT Base = 100 * 20% = 20.00
+        # IMFL VAT Base = 200 * 30% = 60.00
+        # Total Base VAT = 20 + 60 = 80.00
+        # VAT Surcharge = 80 * 10% = 8.00
+        # Total Liquor Tax = 80 + 8 = 88.00
+        self.assertEqual(breakdown['beer_vat'], Decimal('20.00'))
+        self.assertEqual(breakdown['imfl_vat'], Decimal('60.00'))
+        self.assertEqual(breakdown['total_base_vat'], Decimal('80.00'))
+        self.assertEqual(breakdown['vat_surcharge_name'], "Cow Cess")
+        self.assertEqual(breakdown['vat_surcharge'], Decimal('8.00'))
+        self.assertEqual(breakdown['vat'], Decimal('88.00'))
+        self.assertEqual(breakdown['final_total'], Decimal('388.00'))
+
+        # Serializer test
+        from core.serializers import OrderSerializer
+        serializer_data = OrderSerializer(order).data
+        self.assertEqual(serializer_data['bill_breakdown']['vat_surcharge_name'], "Cow Cess")
+        self.assertEqual(serializer_data['bill_breakdown']['vat_surcharge'], 8.0)
+
+        # 2. Reverse extraction test with tax-inclusive item
+        # Beer VAT = 20%, Surcharge = 10% -> Effective VAT Rate = 20 + (20 * 10 / 100) = 22%
+        # Price = 122.00 inclusive. Base should reverse to exactly 100.00!
+        beer_inclusive = MenuItem.objects.create(
+            restaurant=self.restaurant,
+            branch=branch,
+            name="Inclusive Beer",
+            price=Decimal('122.00'),
+            tax_type=MenuItem.TaxType.VAT_BEER,
+            is_tax_inclusive=True
+        )
+        order_inc = Order.objects.create(restaurant=self.restaurant, branch=branch, table=table)
+        OrderItem.objects.create(order=order_inc, menu_item=beer_inclusive, quantity=1, unit_price=Decimal('122.00'))
+
+        breakdown_inc = order_inc.calculate_bill_breakdown()
+        self.assertEqual(breakdown_inc['beer_subtotal'], Decimal('100.00'))
+        self.assertEqual(breakdown_inc['beer_vat'], Decimal('20.00'))
+        self.assertEqual(breakdown_inc['total_base_vat'], Decimal('20.00'))
+        self.assertEqual(breakdown_inc['vat_surcharge_name'], "Cow Cess")
+        self.assertEqual(breakdown_inc['vat_surcharge'], Decimal('2.00'))
+        self.assertEqual(breakdown_inc['vat'], Decimal('22.00'))
+        self.assertEqual(breakdown_inc['final_total'], Decimal('122.00'))
+
+
+
 

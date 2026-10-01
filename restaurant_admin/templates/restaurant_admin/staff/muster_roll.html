@@ -1,0 +1,598 @@
+{% extends 'restaurant_admin/base.html' %}
+{% load static %}
+
+{% block title %}Daily Muster Roll Attendance - {{ restaurant.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .muster-table th {
+        font-size: 0.76rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-weight: 700;
+        color: #4b5563;
+        background-color: #f8fafc;
+        vertical-align: middle;
+        white-space: nowrap;
+        padding: 0.75rem 0.65rem;
+    }
+    .muster-table td {
+        vertical-align: middle;
+        padding: 0.55rem 0.65rem;
+        font-size: 0.85rem;
+    }
+    .muster-row:hover {
+        background-color: #f8fafc;
+    }
+    .badge-dept {
+        font-size: 0.72rem;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 6px;
+    }
+    .badge-dept-kitchen { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+    .badge-dept-bar { background: #faf5ff; color: #7e22ce; border: 1px solid #e9d5ff; }
+    .badge-dept-floor { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+    .badge-dept-housekeeping { background: #f0f9ff; color: #0369a1; border: 1px solid #bae6fd; }
+    .badge-dept-frontdesk { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .badge-dept-security { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+    .badge-dept-general { background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; }
+
+    .status-select {
+        font-weight: 700;
+        border-radius: 6px;
+        font-size: 0.82rem;
+        padding: 0.35rem 0.6rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .status-select.status-PRESENT { background-color: #ecfdf5; color: #047857; border: 1.5px solid #10b981; }
+    .status-select.status-ABSENT { background-color: #fef2f2; color: #dc2626; border: 1.5px solid #ef4444; }
+    .status-select.status-HALF_DAY { background-color: #fffbeb; color: #b45309; border: 1.5px solid #f59e0b; }
+    .status-select.status-PAID_LEAVE { background-color: #eff6ff; color: #1d4ed8; border: 1.5px solid #3b82f6; }
+    .status-select.status-WEEKLY_OFF { background-color: #f5f3ff; color: #6d28d9; border: 1.5px solid #8b5cf6; }
+    .status-select.status-UNPAID_LEAVE { background-color: #f3f4f6; color: #4b5563; border: 1.5px solid #9ca3af; }
+    .status-select.status-UNMARKED { background-color: #ffffff; color: #9ca3af; border: 1.5px dashed #cbd5e1; }
+
+    .save-indicator {
+        width: 22px;
+        height: 22px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        font-size: 0.75rem;
+    }
+    .save-indicator.saved { background: #dcfce7; color: #15803d; }
+    .save-indicator.saving { background: #fef3c7; color: #b45309; }
+    .save-indicator.error { background: #fee2e2; color: #b91c1c; }
+
+    .avatar-circle {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.8rem;
+        color: #ffffff;
+        background: linear-gradient(135deg, #6366f1, #4f46e5);
+        flex-shrink: 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 px-md-4 py-3" x-data="musterRollApp()">
+
+    <!-- Top Navigation Header -->
+    {% include 'restaurant_admin/staff/includes/staff_nav.html' %}
+
+    <!-- Page Title & Date Controller Header -->
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-4">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <h1 class="h3 fw-bold text-dark mb-0">Fast-Track Daily Muster Roll</h1>
+                <span class="badge bg-primary text-white rounded-pill px-3 py-1" style="font-size: 0.78rem;">
+                    {{ total_active_staff }} Active Staff
+                </span>
+            </div>
+            <p class="text-muted small mb-0 mt-1">
+                Spreadsheet-style daily ground staff timekeeping. Mark entire crew in one click, handle split shifts & overtime.
+            </p>
+        </div>
+
+        <!-- Date Navigator Controls -->
+        <div class="d-flex align-items-center gap-2 flex-wrap bg-white p-1.5 rounded-pill shadow-xs border">
+            <a href="?date={{ prev_date_str }}{% if selected_department != 'ALL' %}&department={{ selected_department }}{% endif %}" 
+               class="btn btn-sm btn-light rounded-circle p-1.5" title="Previous Day">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+
+            <div class="d-flex align-items-center gap-1.5 px-2">
+                <i class="bi bi-calendar-event text-primary"></i>
+                <input type="date" 
+                       class="form-control form-control-sm border-0 fw-semibold bg-transparent p-0" 
+                       style="width: 130px; font-size: 0.85rem;" 
+                       value="{{ selected_date_str }}"
+                       @change="changeDate($event.target.value)">
+            </div>
+
+            <a href="?date={{ next_date_str }}{% if selected_department != 'ALL' %}&department={{ selected_department }}{% endif %}" 
+               class="btn btn-sm btn-light rounded-circle p-1.5" title="Next Day">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+
+            {% if not is_today %}
+            <a href="?date={% now 'Y-m-d' %}{% if selected_department != 'ALL' %}&department={{ selected_department }}{% endif %}" 
+               class="btn btn-sm btn-outline-primary rounded-pill px-2.5 py-0.5" style="font-size: 0.76rem;">
+                Today
+            </a>
+            {% endif %}
+
+            <!-- Batch Action Button -->
+            <button type="button" 
+                    class="btn btn-sm btn-success rounded-pill px-3 py-1 fw-semibold d-inline-flex align-items-center gap-1 shadow-xs"
+                    @click="markAllPresent()"
+                    :disabled="isBatchMarking">
+                <i class="bi bi-check-all" x-show="!isBatchMarking"></i>
+                <span class="spinner-border spinner-border-sm" x-show="isBatchMarking" style="width: 0.8rem; height: 0.8rem;"></span>
+                <span>Mark All Present</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Live KPI Summary Counters -->
+    <div class="row g-3 mb-4">
+        <!-- Present -->
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #10b981 !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem; letter-spacing: 0.03em;">Present (P)</div>
+                        <div class="h3 fw-bold text-success mb-0 mt-1" x-text="metrics.present">{{ present_count }}</div>
+                    </div>
+                    <div class="rounded-circle p-2 bg-success-subtle text-success">
+                        <i class="bi bi-person-check-fill fs-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Absent -->
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #ef4444 !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem; letter-spacing: 0.03em;">Absent (A)</div>
+                        <div class="h3 fw-bold text-danger mb-0 mt-1" x-text="metrics.absent">{{ absent_count }}</div>
+                    </div>
+                    <div class="rounded-circle p-2 bg-danger-subtle text-danger">
+                        <i class="bi bi-person-x-fill fs-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Half Day -->
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #f59e0b !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem; letter-spacing: 0.03em;">Half Day (HD)</div>
+                        <div class="h3 fw-bold text-warning mb-0 mt-1" x-text="metrics.half_day">{{ half_day_count }}</div>
+                    </div>
+                    <div class="rounded-circle p-2 bg-warning-subtle text-warning">
+                        <i class="bi bi-clock-history fs-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leaves & Offs -->
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #8b5cf6 !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem; letter-spacing: 0.03em;">Weekly Off / Leave</div>
+                        <div class="h3 fw-bold text-purple mb-0 mt-1" style="color: #8b5cf6;" x-text="metrics.leave + metrics.weekly_off">
+                            {{ leave_count|add:weekly_off_count }}
+                        </div>
+                    </div>
+                    <div class="rounded-circle p-2 bg-purple-subtle text-purple" style="background: #f5f3ff; color: #8b5cf6;">
+                        <i class="bi bi-cup-hot-fill fs-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- OT Hours -->
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #06b6d4 !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem; letter-spacing: 0.03em;">Overtime Logged</div>
+                        <div class="h3 fw-bold text-info mb-0 mt-1" x-text="metrics.total_ot + ' hrs'">{{ total_ot_hours_today }} hrs</div>
+                    </div>
+                    <div class="rounded-circle p-2 bg-info-subtle text-info">
+                        <i class="bi bi-stopwatch-fill fs-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendance Completion -->
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #3b82f6 !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem; letter-spacing: 0.03em;">Marked Progress</div>
+                        <div class="h3 fw-bold text-primary mb-0 mt-1">
+                            <span x-text="metrics.marked">{{ marked_count }}</span>/<span x-text="metrics.total_staff">{{ total_active_staff }}</span>
+                        </div>
+                    </div>
+                    <div class="rounded-circle p-2 bg-primary-subtle text-primary">
+                        <i class="bi bi-clipboard2-check-fill fs-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Department Shift Filter Tabs & Search Bar -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-3">
+        <!-- Department Pills -->
+        <div class="d-flex align-items-center gap-1.5 flex-wrap">
+            <a href="?date={{ selected_date_str }}&department=ALL" 
+               class="btn btn-sm {% if selected_department == 'ALL' or not selected_department %}btn-dark text-white{% else %}btn-outline-secondary bg-white text-dark{% endif %} rounded-pill px-3 py-1 fw-semibold" style="font-size: 0.8rem;">
+                All Departments ({{ total_active_staff }})
+            </a>
+            {% for d in dept_counts %}
+            <a href="?date={{ selected_date_str }}&department={{ d.code }}" 
+               class="btn btn-sm {% if selected_department == d.code %}btn-dark text-white{% else %}btn-outline-secondary bg-white text-dark{% endif %} rounded-pill px-3 py-1 fw-semibold" style="font-size: 0.8rem;">
+                {{ d.label }} ({{ d.total }})
+            </a>
+            {% endfor %}
+        </div>
+
+        <!-- Search input & New Staff button -->
+        <div class="d-flex align-items-center gap-2 w-100 w-md-auto">
+            <form method="get" class="d-flex align-items-center gap-2 flex-grow-1">
+                <input type="hidden" name="date" value="{{ selected_date_str }}">
+                <input type="hidden" name="department" value="{{ selected_department }}">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" name="q" value="{{ search_query }}" class="form-control border-start-0" placeholder="Search staff by name or ID...">
+                </div>
+            </form>
+
+            <a href="{% url 'restaurant_admin:ground_staff_create' restaurant_slug=rslug %}" class="btn btn-sm btn-primary rounded-pill px-3 text-nowrap d-inline-flex align-items-center gap-1">
+                <i class="bi bi-plus-lg"></i>
+                <span class="d-none d-sm-inline">Add Staff</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Fast-Track Muster Roll Spreadsheet Data Grid -->
+    <div class="card border-0 shadow-sm bg-white" style="border-radius: 12px; overflow: hidden;">
+        <div class="table-responsive">
+            <table class="table muster-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th style="width: 250px;">Staff Member</th>
+                        <th style="width: 140px;">Department & Shift</th>
+                        <th style="width: 170px;">Attendance Status</th>
+                        <th style="width: 160px;">Shift Type Worked</th>
+                        <th style="width: 110px;">In / Out Time</th>
+                        <th style="width: 100px;">OT Hours</th>
+                        <th style="width: 110px;">Penalty (₹)</th>
+                        <th>Duty Notes / Reason</th>
+                        <th style="width: 45px; text-align: center;">Save</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in grid_rows %}
+                    <tr class="muster-row" 
+                        x-data="rowItem({
+                            staffId: {{ row.staff.id }},
+                            name: '{{ row.staff.name|escapejs }}',
+                            date: '{{ selected_date_str }}',
+                            status: '{{ row.status|default:"" }}',
+                            shiftType: '{{ row.shift_type|default:row.staff.default_shift }}',
+                            checkIn: '{{ row.check_in }}',
+                            checkOut: '{{ row.check_out }}',
+                            otHours: {{ row.ot_hours|default:0.0 }},
+                            penalty: {{ row.penalty_amount|default:0.0 }},
+                            notes: '{{ row.notes|escapejs }}',
+                            defaultShift: '{{ row.staff.default_shift }}'
+                        })"
+                        :key="staffId">
+                        
+                        <!-- Staff Profile Column -->
+                        <td>
+                            <div class="d-flex align-items-center gap-2.5">
+                                <div class="avatar-circle">
+                                    {{ row.staff.name|slice:":1"|upper }}
+                                </div>
+                                <div class="lh-sm">
+                                    <div class="fw-bold text-dark text-truncate" style="max-width: 160px;">{{ row.staff.name }}</div>
+                                    <div class="text-muted d-flex align-items-center gap-1.5" style="font-size: 0.75rem;">
+                                        <span class="badge bg-light text-secondary border px-1.5 py-0.5 rounded">{{ row.staff.employee_id }}</span>
+                                        <span>{{ row.staff.designation }}</span>
+                                    </div>
+                                    <div class="text-muted small" style="font-size: 0.72rem;">
+                                        Base: ₹{{ row.staff.monthly_base_salary|floatformat:0 }}/mo · {{ row.staff.standard_shift_hours }}h shift
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+
+                        <!-- Department & Default Shift Column -->
+                        <td>
+                            <div>
+                                <span class="badge badge-dept badge-dept-{{ row.staff.department|lower }} mb-1">
+                                    {{ row.staff.get_department_display }}
+                                </span>
+                                <div class="text-muted" style="font-size: 0.73rem;">
+                                    Def: <strong class="text-dark">{{ row.staff.get_default_shift_display|slice:":12" }}...</strong>
+                                </div>
+                            </div>
+                        </td>
+
+                        <!-- Status Selector Column (Instant Alpine Auto-Save) -->
+                        <td>
+                            <select class="form-select form-select-sm status-select" 
+                                    :class="'status-' + (status || 'UNMARKED')"
+                                    x-model="status" 
+                                    @change="autoSave()">
+                                <option value="" disabled :selected="!status">-- Mark Status --</option>
+                                {% for s_code, s_label in attendance_statuses %}
+                                <option value="{{ s_code }}">{{ s_label }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+
+                        <!-- Shift Type Worked Column -->
+                        <td>
+                            <select class="form-select form-select-sm" 
+                                    style="font-size: 0.8rem; border-radius: 6px;"
+                                    x-model="shiftType" 
+                                    @change="autoSave()">
+                                {% for sh_code, sh_label in shift_types %}
+                                <option value="{{ sh_code }}">{{ sh_label }}</option>
+                                {% endfor %}
+                            </select>
+                        </td>
+
+                        <!-- Check In / Check Out -->
+                        <td>
+                            <div class="d-flex flex-column gap-1">
+                                <input type="time" class="form-control form-control-sm p-1" style="font-size: 0.75rem; border-radius: 4px;"
+                                       x-model="checkIn" @change="autoSave()" title="In Time">
+                                <input type="time" class="form-control form-control-sm p-1" style="font-size: 0.75rem; border-radius: 4px;"
+                                       x-model="checkOut" @change="autoSave()" title="Out Time">
+                            </div>
+                        </td>
+
+                        <!-- OT Hours Input -->
+                        <td>
+                            <div class="input-group input-group-sm">
+                                <input type="number" 
+                                       step="0.5" 
+                                       min="0" 
+                                       max="16" 
+                                       class="form-control form-control-sm text-end fw-semibold text-info" 
+                                       style="border-radius: 6px;"
+                                       x-model.number="otHours" 
+                                       @change="autoSave()">
+                                <span class="input-group-text px-1 text-muted" style="font-size: 0.72rem;">hrs</span>
+                            </div>
+                        </td>
+
+                        <!-- Penalty Input -->
+                        <td>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text px-1 text-muted" style="font-size: 0.72rem;">₹</span>
+                                <input type="number" 
+                                       step="50" 
+                                       min="0" 
+                                       class="form-control form-control-sm text-end fw-semibold text-danger" 
+                                       style="border-radius: 6px;"
+                                       x-model.number="penalty" 
+                                       @change="autoSave()">
+                            </div>
+                        </td>
+
+                        <!-- Notes Input -->
+                        <td>
+                            <input type="text" 
+                                   class="form-control form-control-sm" 
+                                   style="font-size: 0.8rem; border-radius: 6px;" 
+                                   placeholder="Reason / Notes..." 
+                                   x-model="notes" 
+                                   @blur="autoSave()">
+                        </td>
+
+                        <!-- Auto-Save Status Icon -->
+                        <td class="text-center">
+                            <span class="save-indicator" :class="saveState" :title="saveTooltip">
+                                <i class="bi bi-check-lg" x-show="saveState === 'saved'"></i>
+                                <span class="spinner-border spinner-border-sm" x-show="saveState === 'saving'" style="width: 0.75rem; height: 0.75rem;"></span>
+                                <i class="bi bi-exclamation-triangle" x-show="saveState === 'error'"></i>
+                                <i class="bi bi-circle text-muted" style="font-size: 0.6rem;" x-show="saveState === 'idle'"></i>
+                            </span>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-5">
+                            <div class="text-muted">
+                                <i class="bi bi-people fs-1 text-secondary opacity-50 mb-2"></i>
+                                <p class="mb-2">No staff members found matching this filter.</p>
+                                <a href="{% url 'restaurant_admin:ground_staff_create' restaurant_slug=rslug %}" class="btn btn-sm btn-primary rounded-pill px-3">
+                                    <i class="bi bi-person-plus-fill me-1"></i>Add Staff Member
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Quick Footer Action Bar -->
+    <div class="d-flex justify-content-between align-items-center mt-3 text-muted small">
+        <div>
+            <i class="bi bi-shield-check text-success me-1"></i>All modifications auto-save dynamically via AJAX without full-page reloads.
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" onclick="window.print()">
+                <i class="bi bi-printer me-1"></i>Print Muster Sheet
+            </button>
+            <a href="{% url 'restaurant_admin:payroll_dashboard' restaurant_slug=rslug %}" class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                <i class="bi bi-calculator me-1"></i>Review Monthly Payroll
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function musterRollApp() {
+        return {
+            selectedDate: '{{ selected_date_str }}',
+            selectedDepartment: '{{ selected_department }}',
+            isBatchMarking: false,
+            metrics: {
+                present: parseInt("{{ present_count|default:0 }}", 10),
+                absent: parseInt("{{ absent_count|default:0 }}", 10),
+                half_day: parseInt("{{ half_day_count|default:0 }}", 10),
+                leave: parseInt("{{ leave_count|default:0 }}", 10),
+                weekly_off: parseInt("{{ weekly_off_count|default:0 }}", 10),
+                total_ot: parseFloat("{{ total_ot_hours_today|default:0 }}"),
+                marked: parseInt("{{ marked_count|default:0 }}", 10),
+                total_staff: parseInt("{{ total_active_staff|default:0 }}", 10)
+            },
+            changeDate(newDate) {
+                if (newDate) {
+                    let deptParam = this.selectedDepartment && this.selectedDepartment !== 'ALL' ? '&department=' + this.selectedDepartment : '';
+                    window.location.href = '?date=' + newDate + deptParam;
+                }
+            },
+            async markAllPresent() {
+                if (!confirm("Are you sure you want to mark all active staff as 'Present' for " + this.selectedDate + "?")) {
+                    return;
+                }
+                this.isBatchMarking = true;
+                try {
+                    const response = await fetch("{% url 'restaurant_admin:api_mark_all_present' restaurant_slug=rslug %}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken'),
+                        },
+                        body: JSON.stringify({
+                            date: this.selectedDate,
+                            department: this.selectedDepartment
+                        })
+                    });
+                    const res = await response.json();
+                    if (res.success) {
+                        window.location.reload();
+                    } else {
+                        alert(res.error || 'Failed to mark attendance.');
+                    }
+                } catch (e) {
+                    alert('Network error while marking all present: ' + e.message);
+                } finally {
+                    this.isBatchMarking = false;
+                }
+            }
+        };
+    }
+
+    function rowItem(initial) {
+        return {
+            staffId: initial.staffId,
+            name: initial.name,
+            date: initial.date,
+            status: initial.status,
+            shiftType: initial.shiftType,
+            checkIn: initial.checkIn,
+            checkOut: initial.checkOut,
+            otHours: initial.otHours,
+            penalty: initial.penalty,
+            notes: initial.notes,
+            saveState: initial.status ? 'saved' : 'idle',
+            saveTooltip: initial.status ? 'Saved' : 'Unsaved',
+            async autoSave() {
+                if (!this.status) return;
+                this.saveState = 'saving';
+                this.saveTooltip = 'Saving...';
+                try {
+                    const res = await fetch("{% url 'restaurant_admin:api_save_single_attendance' restaurant_slug=rslug %}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: JSON.stringify({
+                            staff_id: this.staffId,
+                            date: this.date,
+                            status: this.status,
+                            shift_type: this.shiftType,
+                            check_in_time: this.checkIn,
+                            check_out_time: this.checkOut,
+                            ot_hours: this.otHours,
+                            penalty_amount: this.penalty,
+                            notes: this.notes
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        this.saveState = 'saved';
+                        this.saveTooltip = 'Saved at ' + new Date().toLocaleTimeString();
+                        // Update parent metrics
+                        if (data.summary) {
+                            const app = this.$root._x_dataStack ? this.$root._x_dataStack[0] : null;
+                            if (app && app.metrics) {
+                                app.metrics.present = data.summary.present;
+                                app.metrics.absent = data.summary.absent;
+                                app.metrics.half_day = data.summary.half_day;
+                                app.metrics.leave = data.summary.leave;
+                                app.metrics.weekly_off = data.summary.weekly_off;
+                                app.metrics.total_ot = data.summary.total_ot;
+                                app.metrics.marked = data.summary.marked;
+                            }
+                        }
+                    } else {
+                        this.saveState = 'error';
+                        this.saveTooltip = data.error || 'Failed to save';
+                    }
+                } catch (e) {
+                    this.saveState = 'error';
+                    this.saveTooltip = e.message;
+                }
+            }
+        };
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
+{% endblock %}

@@ -374,6 +374,11 @@
                 <span>• Liquor (Excise Base)</span>
                 <span>&#8377;{{ liquor_subtotal|floatformat:2 }}</span>
             </div>
+            {% elif liquor_subtotal > 0 %}
+            <div class="od-total-row text-muted" style="font-size:0.82rem; padding-left:8px;">
+                <span>• Liquor Subtotal (Excise Base)</span>
+                <span>&#8377;{{ liquor_subtotal|floatformat:2 }}</span>
+            </div>
             {% endif %}
 
             <!-- 1. Taxable Additions: Service Charge & Taxable Custom Charges -->
@@ -434,6 +439,12 @@
             <div class="od-total-row" style="color: #c2410c;">
                 <span>🍾 Liquor VAT ({{ vat_percentage|floatformat:1 }}%)</span>
                 <span>&#8377;{{ gen_vat|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            {% if vat_surcharge > 0 %}
+            <div class="od-total-row" style="color: #c2410c;">
+                <span>🏷️ {{ vat_surcharge_name|default:'VAT Surcharge' }} ({{ vat_surcharge_percentage|floatformat:1 }}%)</span>
+                <span>&#8377;{{ vat_surcharge|floatformat:2 }}</span>
             </div>
             {% endif %}
 
@@ -597,11 +608,11 @@
             {% endfor %}
             {% endif %}
 
+            {% if food_subtotal > 0 and liquor_subtotal > 0 %}
             <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; border-top:1px dashed #E3DFD7; margin-top:4px; padding-top:4px; font-weight:600;">
-              <span>Taxable value</span>
+              <span>Food Taxable (GST)</span>
               <span>₹{{ gst_base|floatformat:2 }}</span>
             </div>
-
             {% if cgst_amount and cgst_amount > 0 %}
             <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
               <span>CGST @ {{ cgst_percentage|floatformat:1 }}%</span>
@@ -613,6 +624,33 @@
               <span>SGST @ {{ sgst_percentage|floatformat:1 }}%</span>
               <span>₹{{ sgst_amount|floatformat:2 }}</span>
             </div>
+            {% endif %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; border-top:1px dashed #E3DFD7; margin-top:4px; padding-top:4px; font-weight:600;">
+              <span>Liquor Subtotal (VAT Base)</span>
+              <span>₹{{ liquor_subtotal|floatformat:2 }}</span>
+            </div>
+            {% elif liquor_subtotal > 0 %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; border-top:1px dashed #E3DFD7; margin-top:4px; padding-top:4px; font-weight:600;">
+              <span>Liquor Subtotal (Taxable)</span>
+              <span>₹{{ liquor_subtotal|floatformat:2 }}</span>
+            </div>
+            {% else %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; border-top:1px dashed #E3DFD7; margin-top:4px; padding-top:4px; font-weight:600;">
+              <span>Taxable value</span>
+              <span>₹{{ gst_base|floatformat:2 }}</span>
+            </div>
+            {% if cgst_amount and cgst_amount > 0 %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+              <span>CGST @ {{ cgst_percentage|floatformat:1 }}%</span>
+              <span>₹{{ cgst_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            {% if sgst_amount and sgst_amount > 0 %}
+            <div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
+              <span>SGST @ {{ sgst_percentage|floatformat:1 }}%</span>
+              <span>₹{{ sgst_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
             {% endif %}
 
             {% if custom_charges_list %}
