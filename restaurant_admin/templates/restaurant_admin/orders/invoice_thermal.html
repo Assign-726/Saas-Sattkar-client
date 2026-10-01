@@ -258,13 +258,12 @@
     {% endfor %}
     {% endif %}
 
-    <!-- 2. Taxable Value -->
+    <!-- 2. Taxable Value & GST -->
+    {% if food_subtotal > 0 and liquor_subtotal > 0 %}
     <div class="pRow bold" style="border-top: 1px dashed #000; margin-top: 4px; padding-top: 3px;">
-      <span>Taxable value</span>
+      <span>Taxable (Food GST)</span>
       <span>{{ gst_base|floatformat:2 }}</span>
     </div>
-
-    <!-- 3. Taxes -->
     {% if cgst_amount and cgst_amount > 0 and bill_type != 'liquor' %}
     <div class="pRow">
       <span>CGST @ {{ cgst_percentage|floatformat:1 }}%</span>
@@ -276,6 +275,33 @@
       <span>SGST @ {{ sgst_percentage|floatformat:1 }}%</span>
       <span>{{ sgst_amount|floatformat:2 }}</span>
     </div>
+    {% endif %}
+    <div class="pRow bold" style="border-top: 1px dashed #000; margin-top: 4px; padding-top: 3px;">
+      <span>Taxable (Liquor VAT)</span>
+      <span>{{ liquor_subtotal|floatformat:2 }}</span>
+    </div>
+    {% elif liquor_subtotal > 0 %}
+    <div class="pRow bold" style="border-top: 1px dashed #000; margin-top: 4px; padding-top: 3px;">
+      <span>Taxable value (Liquor)</span>
+      <span>{{ liquor_subtotal|floatformat:2 }}</span>
+    </div>
+    {% else %}
+    <div class="pRow bold" style="border-top: 1px dashed #000; margin-top: 4px; padding-top: 3px;">
+      <span>Taxable value</span>
+      <span>{{ gst_base|floatformat:2 }}</span>
+    </div>
+    {% if cgst_amount and cgst_amount > 0 and bill_type != 'liquor' %}
+    <div class="pRow">
+      <span>CGST @ {{ cgst_percentage|floatformat:1 }}%</span>
+      <span>{{ cgst_amount|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+    {% if sgst_amount and sgst_amount > 0 and bill_type != 'liquor' %}
+    <div class="pRow">
+      <span>SGST @ {{ sgst_percentage|floatformat:1 }}%</span>
+      <span>{{ sgst_amount|floatformat:2 }}</span>
+    </div>
+    {% endif %}
     {% endif %}
 
     {% if beer_vat and beer_vat > 0 and bill_type != 'food' %}
@@ -300,6 +326,12 @@
     <div class="pRow">
       <span>State VAT @ {{ vat_percentage|floatformat:1 }}%</span>
       <span>{{ gen_vat|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+    {% if vat_surcharge and vat_surcharge > 0 and bill_type != 'food' %}
+    <div class="pRow">
+      <span>{{ vat_surcharge_name|default:'VAT Surcharge' }} @ {{ vat_surcharge_percentage|floatformat:1 }}%</span>
+      <span>{{ vat_surcharge|floatformat:2 }}</span>
     </div>
     {% endif %}
 

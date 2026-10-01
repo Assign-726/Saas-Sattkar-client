@@ -861,10 +861,33 @@ class Order(models.Model):
         else:
             service_pct = Decimal(str(settings_obj.service_charge_percentage or 0)) if bill_type != 'liquor' else Decimal('0.00')
 
-        vat_beer_pct = Decimal(str(branch_obj.vat_beer_rate if branch_obj else 60.00)) if bill_type != 'food' else Decimal('0.00')
-        vat_imfl_pct = Decimal(str(branch_obj.vat_imfl_rate if branch_obj else 65.00)) if bill_type != 'food' else Decimal('0.00')
-        vat_wine_pct = Decimal(str(branch_obj.vat_wine_rate if branch_obj else 60.00)) if bill_type != 'food' else Decimal('0.00')
-        vat_gen_pct = Decimal(str(getattr(settings_obj, 'vat_percentage', 20) or 20)) if bill_type != 'food' else Decimal('0.00')
+        vat_beer_pct = Decimal(str(branch_obj.vat_beer_rate if branch_obj and getattr(branch_obj, 'vat_beer_rate', None) is not None else 60.00)) if bill_type != 'food' else Decimal('0.00')
+        vat_imfl_pct = Decimal(str(branch_obj.vat_imfl_rate if branch_obj and getattr(branch_obj, 'vat_imfl_rate', None) is not None else 65.00)) if bill_type != 'food' else Decimal('0.00')
+        vat_wine_pct = Decimal(str(branch_obj.vat_wine_rate if branch_obj and getattr(branch_obj, 'vat_wine_rate', None) is not None else 60.00)) if bill_type != 'food' else Decimal('0.00')
+
+        # General liquor rate: check branch.vat_gen_pct -> settings.vat_gen_pct -> settings.vat_percentage -> 20.00
+        b_gen = getattr(branch_obj, 'vat_gen_pct', None) if branch_obj else None
+        s_gen = getattr(settings_obj, 'vat_gen_pct', None) or getattr(settings_obj, 'vat_percentage', None)
+        gen_rate_val = b_gen if b_gen is not None else (s_gen if s_gen is not None else Decimal('20.00'))
+        vat_gen_pct = Decimal(str(gen_rate_val)) if bill_type != 'food' else Decimal('0.00')
+
+        # VAT surcharge / Cess percentage: branch.vat_surcharge_pct -> settings.vat_surcharge_pct -> 0.00
+        b_sur = getattr(branch_obj, 'vat_surcharge_pct', None) if branch_obj else None
+        s_sur = getattr(settings_obj, 'vat_surcharge_pct', None)
+        sur_rate_val = b_sur if b_sur is not None else (s_sur if s_sur is not None else Decimal('0.00'))
+        vat_surcharge_pct = Decimal(str(sur_rate_val)) if bill_type != 'food' else Decimal('0.00')
+
+        # VAT surcharge name (e.g. 'Cow Cess', 'State Surcharge')
+        b_sur_name = getattr(branch_obj, 'vat_surcharge_name', None) if branch_obj else None
+        s_sur_name = getattr(settings_obj, 'vat_surcharge_name', None)
+        vat_surcharge_name = (b_sur_name or s_sur_name or 'VAT Surcharge').strip()
+        if not vat_surcharge_name:
+            vat_surcharge_name = 'VAT Surcharge'
+
+        def get_effective_vat(base_rate):
+            if vat_surcharge_pct > Decimal('0.00'):
+                return base_rate + ((base_rate * vat_surcharge_pct) / Decimal('100.00'))
+            return base_rate
 
         items_iterable = items_override if items_override is not None else self.items.all()
         for item in items_iterable:
@@ -872,16 +895,16 @@ class Order(models.Model):
             ttype = item.menu_item.tax_type if item.menu_item else MenuItem.TaxType.GST_FOOD
             is_inclusive = item.menu_item.is_tax_inclusive if item.menu_item else False
 
-            # For tax-inclusive items, reverse-calculate to extract the base taxable value
+            # For tax-inclusive items, reverse-calculate using effective rate
             if is_inclusive:
                 if ttype == MenuItem.TaxType.VAT_BEER:
-                    rate = vat_beer_pct
+                    rate = get_effective_vat(vat_beer_pct)
                 elif ttype == MenuItem.TaxType.VAT_IMFL:
-                    rate = vat_imfl_pct
+                    rate = get_effective_vat(vat_imfl_pct)
                 elif ttype == MenuItem.TaxType.VAT_WINE:
-                    rate = vat_wine_pct
+                    rate = get_effective_vat(vat_wine_pct)
                 elif ttype == MenuItem.TaxType.VAT_LIQUOR:
-                    rate = vat_gen_pct
+                    rate = get_effective_vat(vat_gen_pct)
                 else:
                     rate = cgst_pct + sgst_pct
                 # Taxable Value = (Inclusive Amount × 100) / (100 + Tax Rate)
@@ -1000,11 +1023,16 @@ class Order(models.Model):
         cgst = ((gst_base * cgst_pct) / Decimal('100')).quantize(Decimal('0.01'))
         sgst = ((gst_base * sgst_pct) / Decimal('100')).quantize(Decimal('0.01'))
 
+        # Base VAT per category
         beer_vat = ((discounted_beer * vat_beer_pct) / Decimal('100')).quantize(Decimal('0.01')) if bill_type != 'food' else Decimal('0.00')
         imfl_vat = ((discounted_imfl * vat_imfl_pct) / Decimal('100')).quantize(Decimal('0.01')) if bill_type != 'food' else Decimal('0.00')
         wine_vat = ((discounted_wine * vat_wine_pct) / Decimal('100')).quantize(Decimal('0.01')) if bill_type != 'food' else Decimal('0.00')
         gen_vat = ((discounted_gen_liquor * vat_gen_pct) / Decimal('100')).quantize(Decimal('0.01')) if bill_type != 'food' else Decimal('0.00')
-        vat_amount = beer_vat + imfl_vat + wine_vat + gen_vat
+        
+        # Sum Base VAT & Apply Surcharge
+        total_base_vat = beer_vat + imfl_vat + wine_vat + gen_vat
+        vat_surcharge = ((total_base_vat * vat_surcharge_pct) / Decimal('100')).quantize(Decimal('0.01')) if bill_type != 'food' else Decimal('0.00')
+        vat_amount = total_base_vat + vat_surcharge
 
         from decimal import ROUND_HALF_UP
         raw_total = net_subtotal + service_charge + custom_charges_total + cgst + sgst + vat_amount
@@ -1033,13 +1061,18 @@ class Order(models.Model):
             'vat_beer_percentage': vat_beer_pct,
             'vat_imfl_percentage': vat_imfl_pct,
             'vat_wine_percentage': vat_wine_pct,
+            'vat_gen_percentage': vat_gen_pct,
             'vat_percentage': vat_gen_pct,
+            'vat_surcharge_name': vat_surcharge_name,
+            'vat_surcharge_percentage': vat_surcharge_pct,
             'cgst': cgst.quantize(Decimal('0.01')),
             'sgst': sgst.quantize(Decimal('0.01')),
             'beer_vat': beer_vat.quantize(Decimal('0.01')),
             'imfl_vat': imfl_vat.quantize(Decimal('0.01')),
             'wine_vat': wine_vat.quantize(Decimal('0.01')),
             'gen_vat': gen_vat.quantize(Decimal('0.01')),
+            'total_base_vat': total_base_vat.quantize(Decimal('0.01')),
+            'vat_surcharge': vat_surcharge.quantize(Decimal('0.01')),
             'vat': vat_amount.quantize(Decimal('0.01')),
             'raw_total': raw_total.quantize(Decimal('0.01')),
             'round_off_amount': round_off_amount,
@@ -1144,6 +1177,9 @@ class RestaurantSettings(models.Model):
     sgst_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="SGST percentage e.g. 2.50")
     service_charge_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="Service charge percentage e.g. 5.00")
     vat_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=20.00, help_text="VAT percentage for liquor e.g. 20.00")
+    vat_gen_pct = models.DecimalField(max_digits=5, decimal_places=2, default=20.00, help_text="General/unclassified liquor rate")
+    vat_surcharge_name = models.CharField(max_length=100, default='VAT Surcharge', blank=True, help_text="State-specific name for VAT surcharge/cess e.g. Cow Cess, Surcharge")
+    vat_surcharge_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="Government Cess/Surcharge applied on VAT amount")
     service_charge_taxable = models.BooleanField(default=True, help_text="If true, service charge is included in GST base")
     coupon_applies_before_tax = models.BooleanField(default=True, help_text="If true, coupon discount is applied before tax calculation")
     notification_sound = models.FileField(upload_to='sounds/', blank=True, null=True)

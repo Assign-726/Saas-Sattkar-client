@@ -150,6 +150,11 @@
         <i class="bi bi-wallet2"></i>
         <span>Ordering & Payments</span>
       </button>
+      <button type="button" class="settings-tab-btn" id="tab-btn-tally"
+        onclick="switchBranchSettingsTab('tally')">
+        <i class="bi bi-journal-text"></i>
+        <span>Tally &amp; Accounting</span>
+      </button>
       <button type="button" class="settings-tab-btn" id="tab-btn-email" onclick="switchBranchSettingsTab('email')">
         <i class="bi bi-envelope-at"></i>
         <span>Email &amp; SMTP</span>
@@ -280,7 +285,7 @@
                     </div>
                   </div>
 
-                  <div class="row g-3">
+                  <div class="row g-3 mb-3">
                     <div class="col-md-4">
                       <label class="form-label fw-medium">Beer VAT Rate (%)</label>
                       {{ branch_form.vat_beer_rate }}
@@ -303,6 +308,33 @@
                       {% endif %}
                     </div>
                   </div>
+
+                  <div class="row g-3">
+                    <div class="col-md-4">
+                      <label class="form-label fw-medium">General Liquor VAT Rate (%)</label>
+                      {{ branch_form.vat_gen_pct }}
+                      {% if branch_form.vat_gen_pct.errors %}
+                      <div class="text-danger small">{{ branch_form.vat_gen_pct.errors|join:', ' }}</div>
+                      {% endif %}
+                      <div class="form-text small text-muted">Rate for unclassified liquor (VAT_LIQUOR).</div>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label fw-medium">Surcharge / Cess Name</label>
+                      {{ branch_form.vat_surcharge_name }}
+                      {% if branch_form.vat_surcharge_name.errors %}
+                      <div class="text-danger small">{{ branch_form.vat_surcharge_name.errors|join:', ' }}</div>
+                      {% endif %}
+                      <div class="form-text small text-muted">State cess name e.g. <code>Cow Cess</code>, <code>Surcharge</code>.</div>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label fw-medium">Surcharge / Cess Rate (%)</label>
+                      {{ branch_form.vat_surcharge_pct }}
+                      {% if branch_form.vat_surcharge_pct.errors %}
+                      <div class="text-danger small">{{ branch_form.vat_surcharge_pct.errors|join:', ' }}</div>
+                      {% endif %}
+                      <div class="form-text small text-muted">Rate applied on calculated base VAT.</div>
+                    </div>
+                  </div>
                   <div class="form-text text-muted mt-2">
                     Alcoholic beverages are billed separately under state VAT/excise regulations.
                   </div>
@@ -322,129 +354,136 @@
       </div>
 
       <!-- ========================================== -->
-      <!-- TALLY ACCOUNTING VOUCHER EXPORT SETTINGS  -->
-      <!-- (inside pane-tax so it saves with the same form) -->
+      <!-- TAB 6: TALLY ACCOUNTING VOUCHER EXPORT SETTINGS -->
       <!-- ========================================== -->
-      <div class="card border-0 shadow-sm mb-4" id="pane-tally-settings">
-        <div class="card-header bg-white border-bottom py-3">
-          <h5 class="card-title mb-0 fw-bold">
-            <i class="bi bi-journal-text me-2 text-primary"></i>
-            Tally Accounting Voucher Export Settings
-          </h5>
-          <div class="text-muted small mt-1">
-            Configure ledger names and voucher format for TallyPrime import via <strong>Export to Tally</strong> on the
-            Order Records page.
-            Your Chartered Accountant can update these anytime — no code changes needed.
-          </div>
-        </div>
-        <div class="card-body p-4">
-
-          <!-- Voucher Configuration -->
-          <h6 class="fw-bold text-dark mb-3"><i class="bi bi-gear me-2 text-secondary"></i>Voucher Configuration</h6>
-          <div class="row g-3 mb-4">
-            <div class="col-md-4">
-              <label class="form-label fw-medium">Voucher Type Name</label>
-              {{ form.tally_voucher_type }}
-              <div class="form-text text-muted">e.g. <code>Sales</code> or <code>POS Sales</code></div>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-medium">Voucher Number Source</label>
-              {{ form.tally_voucher_number_source }}
-              <div class="form-text text-muted">Which field becomes the Voucher No. column in TallyPrime</div>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-medium">Change Mode</label>
-              {{ form.tally_change_mode }}
-              <div class="form-text text-muted">TallyPrime "Change Mode" column value</div>
+      <div id="pane-tally" class="settings-tab-pane">
+        <div class="card border-0 shadow-sm mb-4" id="pane-tally-settings">
+          <div class="card-header bg-white border-bottom py-3">
+            <h5 class="card-title mb-0 fw-bold">
+              <i class="bi bi-journal-text me-2 text-primary"></i>
+              Tally Accounting Voucher Export Settings
+            </h5>
+            <div class="text-muted small mt-1">
+              Configure ledger names and voucher format for TallyPrime import via <strong>Export to Tally</strong> on the
+              Order Records page.
+              Your Chartered Accountant can update these anytime — no code changes needed.
             </div>
           </div>
+          <div class="card-body p-4">
 
-          <!-- Dr Ledgers (Payment Side) -->
-          <h6 class="fw-bold text-dark mb-3 pt-2 border-top"><i class="bi bi-arrow-down-circle me-2 text-warning"></i>Dr
-            Ledger Names (Payment / Debit Side)</h6>
-          <div class="row g-3 mb-4">
-            <div class="col-md-3">
-              <label class="form-label fw-medium">Cash Ledger</label>
-              {{ form.tally_cash_ledger }}
+            <!-- Voucher Configuration -->
+            <h6 class="fw-bold text-dark mb-3"><i class="bi bi-gear me-2 text-secondary"></i>Voucher Configuration</h6>
+            <div class="row g-3 mb-4">
+              <div class="col-md-4">
+                <label class="form-label fw-medium">Voucher Type Name</label>
+                {{ form.tally_voucher_type }}
+                <div class="form-text text-muted">e.g. <code>Sales</code> or <code>POS Sales</code></div>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-medium">Voucher Number Source</label>
+                {{ form.tally_voucher_number_source }}
+                <div class="form-text text-muted">Which field becomes the Voucher No. column in TallyPrime</div>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-medium">Change Mode</label>
+                {{ form.tally_change_mode }}
+                <div class="form-text text-muted">TallyPrime "Change Mode" column value</div>
+              </div>
             </div>
-            <div class="col-md-3">
-              <label class="form-label fw-medium">UPI Ledger</label>
-              {{ form.tally_upi_ledger }}
+
+            <!-- Dr Ledgers (Payment Side) -->
+            <h6 class="fw-bold text-dark mb-3 pt-2 border-top"><i class="bi bi-arrow-down-circle me-2 text-warning"></i>Dr
+              Ledger Names (Payment / Debit Side)</h6>
+            <div class="row g-3 mb-4">
+              <div class="col-md-3">
+                <label class="form-label fw-medium">Cash Ledger</label>
+                {{ form.tally_cash_ledger }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-medium">UPI Ledger</label>
+                {{ form.tally_upi_ledger }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-medium">Card Ledger</label>
+                {{ form.tally_card_ledger }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-medium">Online (Razorpay) Ledger</label>
+                {{ form.tally_online_ledger }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-medium">Zomato Ledger</label>
+                {{ form.tally_zomato_ledger }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-medium">Swiggy Ledger</label>
+                {{ form.tally_swiggy_ledger }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-medium">Credit / Sundry Debtors Ledger</label>
+                {{ form.tally_credit_ledger }}
+                <div class="form-text text-muted">Used for B2B party or unpaid orders</div>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-medium">Discount Given Ledger</label>
+                {{ form.tally_discount_ledger }}
+              </div>
             </div>
-            <div class="col-md-3">
-              <label class="form-label fw-medium">Card Ledger</label>
-              {{ form.tally_card_ledger }}
+
+            <!-- Cr Ledgers (Sales & Tax Side) -->
+            <h6 class="fw-bold text-dark mb-3 pt-2 border-top"><i class="bi bi-arrow-up-circle me-2 text-success"></i>Cr
+              Ledger Names (Sales / Tax / Charges Side)</h6>
+            <div class="row g-3 mb-4">
+              <div class="col-md-3">
+                <label class="form-label fw-medium">Food Sales Ledger</label>
+                {{ form.tally_sales_ledger }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-medium">Liquor / VAT Sales Ledger</label>
+                {{ form.tally_liquor_sales_ledger }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-medium">Output CGST Ledger</label>
+                {{ form.tally_cgst_ledger }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-medium">Output SGST Ledger</label>
+                {{ form.tally_sgst_ledger }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-medium">Output VAT Ledger (Liquor)</label>
+                {{ form.tally_vat_ledger }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-medium">Extra Charges / Packaging Ledger</label>
+                {{ form.tally_extra_charges_ledger }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-medium">Round Off Ledger</label>
+                {{ form.tally_round_off_ledger }}
+                <div class="form-text text-muted">Used for Dr or Cr rounding (dynamic)</div>
+              </div>
             </div>
-            <div class="col-md-3">
-              <label class="form-label fw-medium">Online (Razorpay) Ledger</label>
-              {{ form.tally_online_ledger }}
+
+            <!-- Info note -->
+            <div class="alert alert-info py-2 px-3 small d-flex gap-2 align-items-start mb-0">
+              <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+              <span>
+                <strong>How to use:</strong> Go to <em>Order Records &amp; Analytics</em> → click
+                <strong>Export to Tally</strong>. Apply date filters first to limit the period.
+                The exported <code>.xlsx</code> sheet is named <code>Accounting Voucher</code>
+                and is ready for <strong>TallyPrime → Data → Import Vouchers</strong>.
+                Dr == Cr balance is validated per voucher before export.
+              </span>
             </div>
-            <div class="col-md-3">
-              <label class="form-label fw-medium">Zomato Ledger</label>
-              {{ form.tally_zomato_ledger }}
+
+            <div class="d-flex justify-content-end mt-4 pt-3 border-top">
+              <button type="submit" class="btn btn-primary px-4 fw-semibold">
+                <i class="bi bi-check2-circle me-1"></i> Save Tally Settings
+              </button>
             </div>
-            <div class="col-md-3">
-              <label class="form-label fw-medium">Swiggy Ledger</label>
-              {{ form.tally_swiggy_ledger }}
-            </div>
-            <div class="col-md-3">
-              <label class="form-label fw-medium">Credit / Sundry Debtors Ledger</label>
-              {{ form.tally_credit_ledger }}
-              <div class="form-text text-muted">Used for B2B party or unpaid orders</div>
-            </div>
-            <div class="col-md-3">
-              <label class="form-label fw-medium">Discount Given Ledger</label>
-              {{ form.tally_discount_ledger }}
-            </div>
+
           </div>
-
-          <!-- Cr Ledgers (Sales & Tax Side) -->
-          <h6 class="fw-bold text-dark mb-3 pt-2 border-top"><i class="bi bi-arrow-up-circle me-2 text-success"></i>Cr
-            Ledger Names (Sales / Tax / Charges Side)</h6>
-          <div class="row g-3 mb-4">
-            <div class="col-md-3">
-              <label class="form-label fw-medium">Food Sales Ledger</label>
-              {{ form.tally_sales_ledger }}
-            </div>
-            <div class="col-md-3">
-              <label class="form-label fw-medium">Liquor / VAT Sales Ledger</label>
-              {{ form.tally_liquor_sales_ledger }}
-            </div>
-            <div class="col-md-3">
-              <label class="form-label fw-medium">Output CGST Ledger</label>
-              {{ form.tally_cgst_ledger }}
-            </div>
-            <div class="col-md-3">
-              <label class="form-label fw-medium">Output SGST Ledger</label>
-              {{ form.tally_sgst_ledger }}
-            </div>
-            <div class="col-md-3">
-              <label class="form-label fw-medium">Output VAT Ledger (Liquor)</label>
-              {{ form.tally_vat_ledger }}
-            </div>
-            <div class="col-md-3">
-              <label class="form-label fw-medium">Extra Charges / Packaging Ledger</label>
-              {{ form.tally_extra_charges_ledger }}
-            </div>
-            <div class="col-md-3">
-              <label class="form-label fw-medium">Round Off Ledger</label>
-              {{ form.tally_round_off_ledger }}
-              <div class="form-text text-muted">Used for Dr or Cr rounding (dynamic)</div>
-            </div>
-          </div>
-
-          <!-- Info note -->
-          <div class="alert alert-info py-2 px-3 small d-flex gap-2 align-items-start mb-0">
-            <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
-            <span>
-              <strong>How to use:</strong> Go to <em>Order Records &amp; Analytics</em> → click
-              <strong>Export to Tally</strong>. Apply date filters first to limit the period.
-              The exported <code>.xlsx</code> sheet is named <code>Accounting Voucher</code>
-              and is ready for <strong>TallyPrime → Data → Import Vouchers</strong>.
-              Dr == Cr balance is validated per voucher before export.
-            </span>
-          </div>
-
         </div>
       </div>
 
@@ -1722,7 +1761,7 @@
     }
   }
 
-  const initialErrorTab = "{% if form.bill_template.errors or form.kot_template.errors %}printing{% elif branch_form.email_host_user.errors or branch_form.email_host_password.errors or branch_form.email_host.errors or branch_form.email_port.errors %}email{% elif form.enable_customer_ordering.errors or form.enable_pay_at_counter.errors or form.enable_online_payment.errors or form.razorpay_key_id.errors or form.razorpay_key_secret.errors or form.notification_sound.errors or branch_form.opening_time.errors or branch_form.closing_time.errors %}ordering{% elif form.cgst_percentage.errors or form.sgst_percentage.errors or form.service_charge_percentage.errors or branch_form.fssai_license_no.errors or branch_form.vat_tin.errors or branch_form.excise_license_no.errors %}tax{% endif %}";
+  const initialErrorTab = "{% if form.bill_template.errors or form.kot_template.errors %}printing{% elif branch_form.email_host_user.errors or branch_form.email_host_password.errors or branch_form.email_host.errors or branch_form.email_port.errors %}email{% elif form.enable_customer_ordering.errors or form.enable_pay_at_counter.errors or form.enable_online_payment.errors or form.razorpay_key_id.errors or form.razorpay_key_secret.errors or form.notification_sound.errors or branch_form.opening_time.errors or branch_form.closing_time.errors %}ordering{% elif form.tally_voucher_type.errors or form.tally_sales_ledger.errors %}tally{% elif form.cgst_percentage.errors or form.sgst_percentage.errors or form.service_charge_percentage.errors or branch_form.fssai_license_no.errors or branch_form.vat_tin.errors or branch_form.excise_license_no.errors %}tax{% endif %}";
 
   let settingsTallyEngine = null;
   let chargeModalTallyEngine = null;

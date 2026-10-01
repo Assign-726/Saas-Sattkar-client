@@ -372,6 +372,9 @@ class RestaurantBranch(models.Model):
     vat_beer_rate = models.DecimalField(max_digits=5, decimal_places=2, default=60.00, verbose_name="Beer VAT Rate (%)")
     vat_imfl_rate = models.DecimalField(max_digits=5, decimal_places=2, default=65.00, verbose_name="IMFL VAT Rate (%)")
     vat_wine_rate = models.DecimalField(max_digits=5, decimal_places=2, default=60.00, verbose_name="Wine VAT Rate (%)")
+    vat_gen_pct = models.DecimalField(max_digits=5, decimal_places=2, default=20.00, verbose_name="General Liquor VAT Rate (%)", help_text="General/unclassified liquor rate")
+    vat_surcharge_name = models.CharField(max_length=100, default='VAT Surcharge', blank=True, verbose_name="VAT Surcharge / Cess Name", help_text="State-specific name for VAT surcharge/cess e.g. Cow Cess, Surcharge")
+    vat_surcharge_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="VAT Surcharge / Cess (%)", help_text="Government Cess/Surcharge applied on the VAT amount")
 
     # Legacy / fallback fields
     gstin = models.CharField(max_length=15, blank=True)

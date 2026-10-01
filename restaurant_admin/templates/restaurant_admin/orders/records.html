@@ -1627,30 +1627,41 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>`;
         });
 
-        // Taxable Value
-        const gstBase = parseFloat(ord.gst_base || ord.subtotal || ord.food_subtotal) || 0;
-        rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; border-top:1px dashed #E3DFD7; margin-top:4px; padding-top:4px; font-weight:600;">
-            <span>Taxable value</span>
-            <span>₹${gstBase.toFixed(2)}</span>
-        </div>`;
+        // Taxable Value & Taxes
+        const gstBase = parseFloat(ord.gst_base || ord.food_subtotal) || 0;
+        const liqBase = parseFloat(ord.liquor_subtotal) || 0;
 
-        // Taxes
-        const cgstAmt = parseFloat(ord.cgst || ord.cgst_amount) || (parseFloat(ord.tax_amount) ? (parseFloat(ord.tax_amount) / 2) : 0);
-        const sgstAmt = parseFloat(ord.sgst || ord.sgst_amount) || (parseFloat(ord.tax_amount) ? (parseFloat(ord.tax_amount) / 2) : 0);
-        const cgstPct = ord.cgst_percentage || 2.5;
-        const sgstPct = ord.sgst_percentage || 2.5;
-
-        if (cgstAmt > 0) {
-            rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
-                <span>CGST @ ${cgstPct}%</span>
-                <span>₹${cgstAmt.toFixed(2)}</span>
+        if (gstBase > 0 && liqBase > 0) {
+            rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; border-top:1px dashed #E3DFD7; margin-top:4px; padding-top:4px; font-weight:600;">
+                <span>Food Taxable (GST)</span>
+                <span>₹${gstBase.toFixed(2)}</span>
             </div>`;
-        }
-        if (sgstAmt > 0) {
-            rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
-                <span>SGST @ ${sgstPct}%</span>
-                <span>₹${sgstAmt.toFixed(2)}</span>
+            if (cgstAmt > 0) {
+                rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;"><span>CGST @ ${cgstPct}%</span><span>₹${cgstAmt.toFixed(2)}</span></div>`;
+            }
+            if (sgstAmt > 0) {
+                rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;"><span>SGST @ ${sgstPct}%</span><span>₹${sgstAmt.toFixed(2)}</span></div>`;
+            }
+            rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; border-top:1px dashed #E3DFD7; margin-top:4px; padding-top:4px; font-weight:600;">
+                <span>Liquor Subtotal (VAT Base)</span>
+                <span>₹${liqBase.toFixed(2)}</span>
             </div>`;
+        } else if (liqBase > 0) {
+            rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; border-top:1px dashed #E3DFD7; margin-top:4px; padding-top:4px; font-weight:600;">
+                <span>Liquor Subtotal (Taxable)</span>
+                <span>₹${liqBase.toFixed(2)}</span>
+            </div>`;
+        } else {
+            rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; border-top:1px dashed #E3DFD7; margin-top:4px; padding-top:4px; font-weight:600;">
+                <span>Taxable value</span>
+                <span>₹${(gstBase || parseFloat(ord.subtotal) || 0).toFixed(2)}</span>
+            </div>`;
+            if (cgstAmt > 0) {
+                rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;"><span>CGST @ ${cgstPct}%</span><span>₹${cgstAmt.toFixed(2)}</span></div>`;
+            }
+            if (sgstAmt > 0) {
+                rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;"><span>SGST @ ${sgstPct}%</span><span>₹${sgstAmt.toFixed(2)}</span></div>`;
+            }
         }
 
         // Non-taxable Custom Charges (Placed below taxes)

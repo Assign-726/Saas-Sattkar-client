@@ -260,6 +260,18 @@
   .browse::-webkit-scrollbar-thumb,.cart::-webkit-scrollbar-thumb{background:var(--ink3);border-radius:9px;
     border:3px solid var(--surface);background-clip:padding-box}
   .browse::-webkit-scrollbar-thumb:hover,.cart::-webkit-scrollbar-thumb:hover{background:var(--ink2)}
+  
+  /* ── POS DEPARTMENT / MODE SWITCHER (ALL / FOOD / BAR) ─────── */
+  .pos-dept-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px 8px;border-bottom:1px solid var(--line,#E3DFD7);background:var(--canvas,#FAF9F6);position:sticky;top:0;z-index:3}
+  .pos-dept-group{display:inline-flex;background:var(--surface,#FFF);border:1px solid var(--line,#E3DFD7);border-radius:10px;padding:3px;gap:3px;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+  .pos-dept-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border:none;border-radius:7px;background:transparent;color:var(--ink2,#4A443B);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s ease}
+  .pos-dept-btn:hover{color:var(--ink,#1A1815);background:rgba(0,0,0,0.04)}
+  .pos-dept-btn.active{background:#2F3E9E;color:#FFFFFF;box-shadow:0 2px 6px rgba(47,62,158,0.28)}
+  .pos-dept-btn.bar-mode.active{background:#9333EA;color:#FFFFFF;box-shadow:0 2px 6px rgba(147,51,234,0.28)}
+  .pos-dept-btn .dept-badge{display:inline-block;padding:1px 6px;border-radius:99px;font-size:10px;font-weight:700;line-height:1.2;background:rgba(0,0,0,0.08);color:inherit}
+  .pos-dept-btn.active .dept-badge{background:rgba(255,255,255,0.24);color:#FFFFFF}
+  .pos-dept-hint{display:flex;align-items:center;gap:6px}
+
   .cats{display:flex;gap:6px;padding:12px 12px 2px;flex-wrap:wrap}
   .cat{padding:6px 13px;border-radius:99px;border:1px solid var(--line);background:var(--surface);
        cursor:pointer;font-size:11.5px;font-weight:600;color:var(--ink3);transition:.12s}
@@ -970,7 +982,7 @@
 <script id="active-branch-gstin-data" type="application/json">{{ active_branch_gstin_json|safe }}</script>
 <script id="gst-seq-info-data" type="application/json">{{ gst_seq_info_json|default:'{"mode":"automatic","next_number":"","readonly":true}'|safe }}</script>
 <script id="excise-seq-info-data" type="application/json">{{ excise_seq_info_json|default:'{"mode":"automatic","next_number":"","readonly":true}'|safe }}</script>
-<span id="serves-alcohol-data" style="display:none;">{% if current_branch and current_branch.serves_alcohol %}true{% else %}false{% endif %}</span>
+<span id="serves-alcohol-data" style="display:none;">{% if current_branch and current_branch.serves_alcohol %}true{% elif branch_obj and branch_obj.serves_alcohol %}true{% else %}false{% endif %}</span>
 
 <div class="pos-container">
 
@@ -1906,7 +1918,7 @@ document.addEventListener("DOMContentLoaded", function() {
   (function () {
     let menuItems = [];
     let topSellingIds = [];
-    let defaultTaxSettings = { "cgst_pct": 2.5, "sgst_pct": 2.5, "vat_beer_pct": 60, "vat_imfl_pct": 65, "vat_wine_pct": 60, "vat_gen_pct": 20 };
+    let defaultTaxSettings = { "cgst_pct": 2.5, "sgst_pct": 2.5, "vat_beer_pct": 60, "vat_imfl_pct": 65, "vat_wine_pct": 60, "vat_gen_pct": 20, "vat_surcharge_pct": 0, "vat_surcharge_name": "VAT Surcharge" };
     let activeTaxSettings = { ...defaultTaxSettings };
     let existingOrder = null;
     let activeOrders = [];
@@ -1980,7 +1992,7 @@ document.addEventListener("DOMContentLoaded", function() {
       menuItems = JSON.parse(document.getElementById('menu-items-data')?.textContent || '[]');
       categoriesData = JSON.parse(document.getElementById('categories-data')?.textContent || '[]');
       topSellingIds = JSON.parse(document.getElementById('top-selling-data')?.textContent || '[]');
-      defaultTaxSettings = JSON.parse(document.getElementById('tax-settings-data')?.textContent || '{"cgst_pct":2.5,"sgst_pct":2.5,"vat_beer_pct":60,"vat_imfl_pct":65,"vat_wine_pct":60,"vat_gen_pct":20}');
+      defaultTaxSettings = JSON.parse(document.getElementById('tax-settings-data')?.textContent || '{"cgst_pct":2.5,"sgst_pct":2.5,"vat_beer_pct":60,"vat_imfl_pct":65,"vat_wine_pct":60,"vat_gen_pct":20,"vat_surcharge_pct":0,"vat_surcharge_name":"VAT Surcharge"}');
       activeTaxSettings = { ...defaultTaxSettings };
       existingOrder = JSON.parse(document.getElementById('existing-order-data')?.textContent || 'null');
       activeOrders = JSON.parse(document.getElementById('active-orders-data')?.textContent || '[]');
@@ -2463,9 +2475,23 @@ document.addEventListener("DOMContentLoaded", function() {
       });
     });
 
+    const hasAnyLiquorItems = Array.isArray(menuItems) && menuItems.some(i => {
+      const tt = i.tax_type || '';
+      if (['VAT_BEER', 'VAT_IMFL', 'VAT_WINE', 'VAT_LIQUOR'].includes(tt)) return true;
+      const cname = (i.category_name || '').toLowerCase();
+      return ['beer', 'wine', 'liquor', 'bar', 'spirit', 'whiskey', 'whisky', 'vodka', 'rum'].some(k => cname.includes(k));
+    });
+    const servesAlcoholVal = ((document.getElementById('serves-alcohol-data')?.textContent || '').trim() === 'true') || hasAnyLiquorItems;
+
+    let savedViewMode = null;
+    try { savedViewMode = localStorage.getItem('pos_view_mode'); } catch(e){}
+    const initialViewMode = (savedViewMode === 'food' || savedViewMode === 'bar' || savedViewMode === 'all')
+      ? savedViewMode
+      : (hasAnyLiquorItems ? 'all' : 'food');
+
     const state = {
-      servesAlcohol: (document.getElementById('serves-alcohol-data')?.textContent || '').trim() === 'true',
-      viewMode: 'food',
+      servesAlcohol: servesAlcoholVal,
+      viewMode: initialViewMode,
       cartTab: 'food',
       customerName: '',
       phone: '',
@@ -2503,6 +2529,19 @@ document.addEventListener("DOMContentLoaded", function() {
     };
     window.posState = state;
     window.posMenuItems = menuItems;
+
+    window.switchPosViewMode = function(mode) {
+      if (!mode) return;
+      state.viewMode = mode;
+      state.selectedCategory = 'all';
+      try { localStorage.setItem('pos_view_mode', mode); } catch(e){}
+      if (typeof renderMenu === 'function') renderMenu();
+      const fItem = document.getElementById('fItem');
+      if (fItem) {
+        fItem.focus();
+        try { fItem.select(); } catch(e){}
+      }
+    };
 
     window.detachAdvanceReceipt = function() {
       state.receiptNo = '';
@@ -2546,6 +2585,7 @@ document.addEventListener("DOMContentLoaded", function() {
     const inputImflVat = document.getElementById('input-vat-imfl-rate');
     const inputWineVat = document.getElementById('input-vat-wine-rate');
     const inputGenVat = document.getElementById('input-vat-gen-rate');
+    const inputVatSurcharge = document.getElementById('input-vat-surcharge-rate');
 
     function syncTaxInputs() {
       if (inputCgst) inputCgst.value = activeTaxSettings.cgst_pct;
@@ -2554,6 +2594,7 @@ document.addEventListener("DOMContentLoaded", function() {
       if (inputImflVat) inputImflVat.value = activeTaxSettings.vat_imfl_pct;
       if (inputWineVat) inputWineVat.value = activeTaxSettings.vat_wine_pct;
       if (inputGenVat) inputGenVat.value = activeTaxSettings.vat_gen_pct;
+      if (inputVatSurcharge) inputVatSurcharge.value = activeTaxSettings.vat_surcharge_pct || 0;
     }
     syncTaxInputs();
 
@@ -2647,6 +2688,7 @@ document.addEventListener("DOMContentLoaded", function() {
         activeTaxSettings.vat_imfl_pct = parseFloat(inputImflVat.value) || 0;
         activeTaxSettings.vat_wine_pct = parseFloat(inputWineVat.value) || 0;
         activeTaxSettings.vat_gen_pct = parseFloat(inputGenVat.value) || 0;
+        if (inputVatSurcharge) activeTaxSettings.vat_surcharge_pct = parseFloat(inputVatSurcharge.value) || 0;
         renderCart();
       });
     });
@@ -2905,11 +2947,14 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     // Helper to identify food vs liquor items
-    function isLiquorTaxType(tt, cname) {
+    function isLiquorTaxType(tt, cname, iname) {
       if (['VAT_BEER', 'VAT_IMFL', 'VAT_WINE', 'VAT_LIQUOR'].includes(tt)) return true;
-      if (cname) {
-        const lower = cname.toLowerCase();
-        if (['beer', 'wine', 'liquor', 'bar', 'spirit', 'whiskey', 'vodka', 'rum', 'cocktail'].some(k => lower.includes(k))) return true;
+      const lowerCat = String(cname || '').toLowerCase();
+      if (['beer', 'wine', 'liquor', 'bar', 'spirit', 'whiskey', 'whisky', 'vodka', 'rum', 'cocktail', 'scotch', 'gin', 'tequila', 'brandy'].some(k => lowerCat.includes(k))) return true;
+      const lowerName = String(iname || '').toLowerCase();
+      if (['beer', 'wine', 'whiskey', 'whisky', 'vodka', 'rum', 'scotch', 'single malt', 'tequila'].some(k => lowerName.includes(k))) {
+        if (tt && tt !== 'GST_FOOD') return true;
+        if (['beer', 'wine', 'scotch', 'whiskey', 'whisky', 'vodka', 'rum'].some(k => lowerName.includes(k))) return true;
       }
       return false;
     }
@@ -2920,9 +2965,19 @@ document.addEventListener("DOMContentLoaded", function() {
       if (!menuGrid) return;
 
       const q = (state.searchQuery || '').trim().toLowerCase();
+
+      // Count items per department
+      const allCount = menuItems.length;
+      let foodCount = 0;
+      let liquorCount = 0;
+      menuItems.forEach(item => {
+        if (isLiquorTaxType(item.tax_type, item.category_name, item.name)) liquorCount++;
+        else foodCount++;
+      });
+      const hasAlcoholDepartment = liquorCount > 0 || state.servesAlcohol;
       
       const filtered = menuItems.filter(item => {
-        const isLiquor = isLiquorTaxType(item.tax_type, item.category_name);
+        const isLiquor = isLiquorTaxType(item.tax_type, item.category_name, item.name);
 
         // 1. If user is actively searching in search bar: Search across ALL menu items (Food & Alcohol/Bar)!
         if (q.length > 0) {
@@ -2930,7 +2985,7 @@ document.addEventListener("DOMContentLoaded", function() {
           return shortCode === q || shortCode.startsWith(q) || shortCode.includes(q) || item.name.toLowerCase().includes(q) || (item.category_name && item.category_name.toLowerCase().includes(q));
         }
 
-        // 2. If user is NOT searching: Respect current category & viewMode (Food vs Bar) tabs
+        // 2. If user is NOT searching: Respect current category & viewMode (All vs Food vs Bar)
         if (state.selectedCategory === 'all') {
           if (state.viewMode === 'food' && isLiquor) return false;
           if (state.viewMode === 'bar' && !isLiquor) return false;
@@ -2943,7 +2998,11 @@ document.addEventListener("DOMContentLoaded", function() {
           return topSellingIds.map(String).includes(String(item.id));
         }
 
-        return String(item.category_id) === String(state.selectedCategory);
+        // Specific category selected
+        if (String(item.category_id) !== String(state.selectedCategory)) return false;
+        if (state.viewMode === 'food' && isLiquor) return false;
+        if (state.viewMode === 'bar' && !isLiquor) return false;
+        return true;
       }).sort((a, b) => {
         if (q.length > 0) {
           const codeA = String(a.short_code || a.id || '').toLowerCase();
@@ -3017,6 +3076,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
       // Render Dynamic Real Categories
       const isBarMode = state.viewMode === 'bar';
+      const isFoodMode = state.viewMode === 'food';
       const availableCategories = [];
 
       // Add categories from real categoriesData passed from backend
@@ -3025,8 +3085,10 @@ document.addEventListener("DOMContentLoaded", function() {
           if (c && c.name && !availableCategories.some(existing => String(existing.id) === String(c.id))) {
             const hasItemsInMode = menuItems.some(item => {
               if (String(item.category_id) !== String(c.id)) return false;
-              const isLiquor = isLiquorTaxType(item.tax_type, item.category_name);
-              return isBarMode ? isLiquor : !isLiquor;
+              const isLiquor = isLiquorTaxType(item.tax_type, item.category_name, item.name);
+              if (isBarMode) return isLiquor;
+              if (isFoodMode) return !isLiquor;
+              return true;
             });
             if (hasItemsInMode) {
               availableCategories.push({ id: String(c.id), name: c.name });
@@ -3037,8 +3099,12 @@ document.addEventListener("DOMContentLoaded", function() {
 
       // Also harvest any distinct category from menuItems not yet in the list
       menuItems.forEach(item => {
-        const isLiquor = isLiquorTaxType(item.tax_type, item.category_name);
-        if (isBarMode ? isLiquor : !isLiquor) {
+        const isLiquor = isLiquorTaxType(item.tax_type, item.category_name, item.name);
+        let matchMode = true;
+        if (isBarMode) matchMode = isLiquor;
+        else if (isFoodMode) matchMode = !isLiquor;
+
+        if (matchMode) {
           if (item.category_id && item.category_name && item.category_id !== 'undefined') {
             if (!availableCategories.some(existing => String(existing.id) === String(item.category_id))) {
               availableCategories.push({ id: String(item.category_id), name: item.category_name });
@@ -3047,7 +3113,36 @@ document.addEventListener("DOMContentLoaded", function() {
         }
       });
 
-      let html = '<div class="cats">';
+      let html = '';
+      if (hasAlcoholDepartment) {
+        html += `
+        <div class="pos-dept-bar">
+          <div class="pos-dept-group" role="tablist">
+            <button type="button" class="pos-dept-btn ${state.viewMode === 'all' ? 'active' : ''}" onclick="window.switchPosViewMode('all')" title="View all menu items">
+              <span>🍽️</span>
+              <span>All Menu</span>
+              <span class="dept-badge">${allCount}</span>
+            </button>
+            <button type="button" class="pos-dept-btn ${state.viewMode === 'food' ? 'active' : ''}" onclick="window.switchPosViewMode('food')" title="View Food & Beverage items (GST)">
+              <span>🍔</span>
+              <span>Food (GST)</span>
+              <span class="dept-badge">${foodCount}</span>
+            </button>
+            <button type="button" class="pos-dept-btn bar-mode ${state.viewMode === 'bar' ? 'active' : ''}" onclick="window.switchPosViewMode('bar')" title="View Bar & Liquor items (VAT)">
+              <span>🍷</span>
+              <span>Bar & Liquor (VAT)</span>
+              <span class="dept-badge">${liquorCount}</span>
+            </button>
+          </div>
+          <div class="pos-dept-hint">
+            <span class="badge" style="background:${state.viewMode === 'bar' ? '#FAF5FF;color:#7E22CE;border:1px solid #D8B4FE;' : (state.viewMode === 'food' ? '#EEF2FF;color:#2F3E9E;border:1px solid #C7D2FE;' : '#F5F5F4;color:#44403C;border:1px solid #E7E5E4;')}font-weight:600;font-size:11px;padding:4px 8px;border-radius:6px;">
+              ${state.viewMode === 'bar' ? '🍷 Bar Active' : (state.viewMode === 'food' ? '🍔 Food Active' : '🍽️ All Active')}
+            </span>
+          </div>
+        </div>`;
+      }
+
+      html += '<div class="cats">';
       html += `<button type="button" class="cat ${state.selectedCategory === 'all' ? 'on' : ''}" onclick="window.filterByCategory('all')">All</button>`;
       html += `<button type="button" class="cat ${state.selectedCategory === 'top_selling' ? 'on' : ''}" onclick="window.filterByCategory('top_selling')">⭐ Top Selling</button>`;
       availableCategories.forEach(cat => {
@@ -3060,6 +3155,10 @@ document.addEventListener("DOMContentLoaded", function() {
       else if (state.selectedCategory !== 'all') {
          const found = availableCategories.find(c => String(c.id) === String(state.selectedCategory));
          if (found) catTitle = found.name;
+      } else {
+        if (state.viewMode === 'bar') catTitle = "Bar & Liquor Items";
+        else if (state.viewMode === 'food') catTitle = "Food & Beverage Items";
+        else catTitle = "All Menu Items";
       }
       
       html += `<div class="hd">${catTitle}<i></i></div>`;
@@ -3739,13 +3838,20 @@ document.addEventListener("DOMContentLoaded", function() {
         // For tax-inclusive items, reverse-calculate to extract the base taxable value
         let baseLineTotal = netLineTotal;
         if (item.is_tax_inclusive) {
-          let taxRate = 0;
-          if (tt === 'VAT_BEER') taxRate = activeTaxSettings.vat_beer_pct || 0;
-          else if (tt === 'VAT_IMFL') taxRate = activeTaxSettings.vat_imfl_pct || 0;
-          else if (tt === 'VAT_WINE') taxRate = activeTaxSettings.vat_wine_pct || 0;
-          else if (tt === 'VAT_LIQUOR') taxRate = activeTaxSettings.vat_gen_pct || 0;
-          else taxRate = (activeTaxSettings.cgst_pct || 0) + (activeTaxSettings.sgst_pct || 0);
-          // Taxable Value = (Inclusive Amount × 100) / (100 + Tax Rate)
+          let baseRate = 0;
+          let isLiquor = false;
+          if (tt === 'VAT_BEER') { baseRate = activeTaxSettings.vat_beer_pct || 0; isLiquor = true; }
+          else if (tt === 'VAT_IMFL') { baseRate = activeTaxSettings.vat_imfl_pct || 0; isLiquor = true; }
+          else if (tt === 'VAT_WINE') { baseRate = activeTaxSettings.vat_wine_pct || 0; isLiquor = true; }
+          else if (tt === 'VAT_LIQUOR') { baseRate = activeTaxSettings.vat_gen_pct || 0; isLiquor = true; }
+          else { baseRate = (activeTaxSettings.cgst_pct || 0) + (activeTaxSettings.sgst_pct || 0); }
+
+          let taxRate = baseRate;
+          if (isLiquor) {
+            const surchargePct = activeTaxSettings.vat_surcharge_pct || 0;
+            taxRate = baseRate + ((baseRate * surchargePct) / 100);
+          }
+          // Taxable Value = (Inclusive Amount × 100) / (100 + Effective Tax Rate)
           if (taxRate > 0) {
             baseLineTotal = (netLineTotal * 100) / (100 + taxRate);
           }
@@ -3844,8 +3950,10 @@ document.addEventListener("DOMContentLoaded", function() {
       const imflVat = discountedImflSubtotal * ((activeTaxSettings.vat_imfl_pct || 0) / 100);
       const wineVat = discountedWineSubtotal * ((activeTaxSettings.vat_wine_pct || 0) / 100);
       const genVat = discountedGenLiquorSubtotal * ((activeTaxSettings.vat_gen_pct || 0) / 100);
+      const totalBaseVat = beerVat + imflVat + wineVat + genVat;
+      const vatSurcharge = totalBaseVat * ((activeTaxSettings.vat_surcharge_pct || 0) / 100);
+      const totalVat = totalBaseVat + vatSurcharge;
       const totalGst = cgst + sgst;
-      const totalVat = beerVat + imflVat + wineVat + genVat;
       const taxTotal = totalGst + totalVat;
 
       const rawTotal = subtotal + serviceChargeAmount + customChargesTotal + taxTotal;
@@ -3901,21 +4009,37 @@ document.addEventListener("DOMContentLoaded", function() {
         </div>`;
       });
 
-      // 2. TAXABLE VALUE
-      totHtml += `<div class="tr em"><span>Taxable value</span><b>₹${gstFoodBase.toFixed(2)}</b></div>`;
+      // 2. TAXABLE BASES & TAXES (Food GST and/or Liquor VAT)
+      const hasFoodItems = discountedFoodSubtotal > 0 || taxableCustomChargesBase > 0 || (isServiceChargeTaxable && serviceChargeAmount > 0);
+      const hasLiquorItems = discountedLiquorSubtotal > 0;
 
-      // 3. TAXES (GST & VATs)
-      if (discountedFoodSubtotal > 0 || taxableCustomChargesBase > 0 || (isServiceChargeTaxable && serviceChargeAmount > 0)) {
+      if (hasFoodItems && hasLiquorItems) {
+        // COMBINED ORDER: Show both Food (GST) and Liquor (VAT) subtotals and taxes
+        totHtml += `<div class="tr em"><span>Food Taxable (GST)</span><b>₹${gstFoodBase.toFixed(2)}</b></div>`;
         if (cgst > 0) totHtml += `<div class="tr"><span>CGST @ ${activeTaxSettings.cgst_pct}%</span><b>₹${cgst.toFixed(2)}</b></div>`;
         if (sgst > 0) totHtml += `<div class="tr"><span>SGST @ ${activeTaxSettings.sgst_pct}%</span><b>₹${sgst.toFixed(2)}</b></div>`;
-      }
 
-      // Alcohol VATs
-      if (discountedLiquorSubtotal > 0) {
+        totHtml += `<div class="tr em" style="margin-top:5px; border-top:1px dashed #E3DFD7; padding-top:4px;"><span>Liquor Subtotal (VAT Base)</span><b>₹${discountedLiquorSubtotal.toFixed(2)}</b></div>`;
         if (beerVat > 0) totHtml += `<div class="tr"><span>Beer VAT @ ${activeTaxSettings.vat_beer_pct}%</span><b>₹${beerVat.toFixed(2)}</b></div>`;
         if (imflVat > 0) totHtml += `<div class="tr"><span>IMFL VAT @ ${activeTaxSettings.vat_imfl_pct}%</span><b>₹${imflVat.toFixed(2)}</b></div>`;
         if (wineVat > 0) totHtml += `<div class="tr"><span>Wine VAT @ ${activeTaxSettings.vat_wine_pct}%</span><b>₹${wineVat.toFixed(2)}</b></div>`;
         if (genVat > 0) totHtml += `<div class="tr"><span>Liquor VAT @ ${activeTaxSettings.vat_gen_pct}%</span><b>₹${genVat.toFixed(2)}</b></div>`;
+        const surLabel = activeTaxSettings.vat_surcharge_name || 'VAT Surcharge';
+        if (vatSurcharge > 0) totHtml += `<div class="tr"><span>${escapeHtml(surLabel)} @ ${activeTaxSettings.vat_surcharge_pct}%</span><b>₹${vatSurcharge.toFixed(2)}</b></div>`;
+      } else if (hasLiquorItems) {
+        // LIQUOR ONLY: Show Liquor Subtotal as the taxable base (never show Taxable value ₹0.00!)
+        totHtml += `<div class="tr em"><span>Liquor Subtotal (Taxable)</span><b>₹${discountedLiquorSubtotal.toFixed(2)}</b></div>`;
+        if (beerVat > 0) totHtml += `<div class="tr"><span>Beer VAT @ ${activeTaxSettings.vat_beer_pct}%</span><b>₹${beerVat.toFixed(2)}</b></div>`;
+        if (imflVat > 0) totHtml += `<div class="tr"><span>IMFL VAT @ ${activeTaxSettings.vat_imfl_pct}%</span><b>₹${imflVat.toFixed(2)}</b></div>`;
+        if (wineVat > 0) totHtml += `<div class="tr"><span>Wine VAT @ ${activeTaxSettings.vat_wine_pct}%</span><b>₹${wineVat.toFixed(2)}</b></div>`;
+        if (genVat > 0) totHtml += `<div class="tr"><span>Liquor VAT @ ${activeTaxSettings.vat_gen_pct}%</span><b>₹${genVat.toFixed(2)}</b></div>`;
+        const surLabel = activeTaxSettings.vat_surcharge_name || 'VAT Surcharge';
+        if (vatSurcharge > 0) totHtml += `<div class="tr"><span>${escapeHtml(surLabel)} @ ${activeTaxSettings.vat_surcharge_pct}%</span><b>₹${vatSurcharge.toFixed(2)}</b></div>`;
+      } else {
+        // FOOD ONLY (or Empty Cart)
+        totHtml += `<div class="tr em"><span>Taxable value</span><b>₹${gstFoodBase.toFixed(2)}</b></div>`;
+        if (cgst > 0) totHtml += `<div class="tr"><span>CGST @ ${activeTaxSettings.cgst_pct}%</span><b>₹${cgst.toFixed(2)}</b></div>`;
+        if (sgst > 0) totHtml += `<div class="tr"><span>SGST @ ${activeTaxSettings.sgst_pct}%</span><b>₹${sgst.toFixed(2)}</b></div>`;
       }
 
       // 4. NON-TAXABLE CHARGES (Rendered below taxes so they are not confused with taxable items)
@@ -4029,6 +4153,8 @@ document.addEventListener("DOMContentLoaded", function() {
           if (imflVat > 0) appendTaxRow(dynamicTaxContainer, `IMFL VAT (${(activeTaxSettings.vat_imfl_pct || 65)}%)`, imflVat);
           if (wineVat > 0) appendTaxRow(dynamicTaxContainer, `Wine VAT (${(activeTaxSettings.vat_wine_pct || 60)}%)`, wineVat);
           if (genVat > 0) appendTaxRow(dynamicTaxContainer, `Liquor VAT (${(activeTaxSettings.vat_gen_pct || 20)}%)`, genVat);
+          const surLabelBox = activeTaxSettings.vat_surcharge_name || 'VAT Surcharge';
+          if (vatSurcharge > 0) appendTaxRow(dynamicTaxContainer, `${surLabelBox} (${(activeTaxSettings.vat_surcharge_pct || 0)}%)`, vatSurcharge);
         }
       }
       if (taxTotalEl) taxTotalEl.textContent = `₹${taxTotal.toFixed(2)}`;
@@ -4808,29 +4934,42 @@ document.addEventListener("DOMContentLoaded", function() {
           });
         }
 
-        // 2. TAXABLE VALUE
-        rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; border-top:1px dashed #E3DFD7; margin-top:4px; padding-top:4px; font-weight:600;">
-          <span>Taxable value</span>
-          <span>₹${(state.gstBase || state.foodSubtotal || state.subtotal).toFixed(2)}</span>
-        </div>`;
+        // 2. TAXABLE VALUES & TAXES
+        const hasFood = (state.gstBase > 0 || state.foodSubtotal > 0 || cgstAmt > 0 || sgstAmt > 0);
+        const hasLiquor = (state.liquorSubtotal > 0);
 
-        // 3. TAXES (CGST, SGST & Alcohol VATs)
-        const cgstPct = (activeTaxSettings && activeTaxSettings.cgst_pct) ? activeTaxSettings.cgst_pct : 2.5;
-        const sgstPct = (activeTaxSettings && activeTaxSettings.sgst_pct) ? activeTaxSettings.sgst_pct : 2.5;
-        const cgstAmt = (state.cgst !== undefined) ? state.cgst : (state.taxAmount ? (state.taxAmount / 2) : 0);
-        const sgstAmt = (state.sgst !== undefined) ? state.sgst : (state.taxAmount ? (state.taxAmount / 2) : 0);
+        if (hasFood && hasLiquor) {
+          rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; border-top:1px dashed #E3DFD7; margin-top:4px; padding-top:4px; font-weight:600;">
+            <span>Food Taxable (GST)</span>
+            <span>₹${(state.gstBase || state.foodSubtotal || 0).toFixed(2)}</span>
+          </div>`;
+          if (cgstAmt > 0) {
+            rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;"><span>CGST @ ${cgstPct}%</span><span>₹${cgstAmt.toFixed(2)}</span></div>`;
+          }
+          if (sgstAmt > 0) {
+            rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;"><span>SGST @ ${sgstPct}%</span><span>₹${sgstAmt.toFixed(2)}</span></div>`;
+          }
 
-        if (cgstAmt > 0) {
-          rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
-            <span>CGST @ ${cgstPct}%</span>
-            <span>₹${cgstAmt.toFixed(2)}</span>
+          rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; border-top:1px dashed #E3DFD7; margin-top:4px; padding-top:4px; font-weight:600;">
+            <span>Liquor Subtotal (VAT Base)</span>
+            <span>₹${state.liquorSubtotal.toFixed(2)}</span>
           </div>`;
-        }
-        if (sgstAmt > 0) {
-          rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;">
-            <span>SGST @ ${sgstPct}%</span>
-            <span>₹${sgstAmt.toFixed(2)}</span>
+        } else if (hasLiquor) {
+          rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; border-top:1px dashed #E3DFD7; margin-top:4px; padding-top:4px; font-weight:600;">
+            <span>Liquor Subtotal (Taxable)</span>
+            <span>₹${state.liquorSubtotal.toFixed(2)}</span>
           </div>`;
+        } else {
+          rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0; border-top:1px dashed #E3DFD7; margin-top:4px; padding-top:4px; font-weight:600;">
+            <span>Taxable value</span>
+            <span>₹${(state.gstBase || state.foodSubtotal || state.subtotal).toFixed(2)}</span>
+          </div>`;
+          if (cgstAmt > 0) {
+            rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;"><span>CGST @ ${cgstPct}%</span><span>₹${cgstAmt.toFixed(2)}</span></div>`;
+          }
+          if (sgstAmt > 0) {
+            rowsHtml += `<div class="rr" style="display:flex; justify-content:space-between; padding:2px 0;"><span>SGST @ ${sgstPct}%</span><span>₹${sgstAmt.toFixed(2)}</span></div>`;
+          }
         }
 
         // 4. NON-TAXABLE ADDITIONS (Placed BELOW taxes so it's clear no tax is applied on them)

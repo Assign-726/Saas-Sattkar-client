@@ -1378,7 +1378,13 @@ def order_create_manual(request, restaurant_slug=None):
     vat_beer_pct = float(branch_obj.vat_beer_rate if branch_obj and getattr(branch_obj, 'vat_beer_rate', None) is not None else 60.00)
     vat_imfl_pct = float(branch_obj.vat_imfl_rate if branch_obj and getattr(branch_obj, 'vat_imfl_rate', None) is not None else 65.00)
     vat_wine_pct = float(branch_obj.vat_wine_rate if branch_obj and getattr(branch_obj, 'vat_wine_rate', None) is not None else 60.00)
-    vat_gen_pct = float(getattr(settings_obj, 'vat_percentage', 20.00) or 20.00)
+    b_gen_val = getattr(branch_obj, 'vat_gen_pct', None) if branch_obj else None
+    s_gen_val = getattr(settings_obj, 'vat_gen_pct', None) or getattr(settings_obj, 'vat_percentage', None)
+    vat_gen_pct = float(b_gen_val if b_gen_val is not None else (s_gen_val if s_gen_val is not None else 20.00))
+    b_sur_val = getattr(branch_obj, 'vat_surcharge_pct', None) if branch_obj else None
+    s_sur_val = getattr(settings_obj, 'vat_surcharge_pct', None)
+    vat_surcharge_pct = float(b_sur_val if b_sur_val is not None else (s_sur_val if s_sur_val is not None else 0.00))
+    vat_surcharge_name = (getattr(branch_obj, 'vat_surcharge_name', None) or getattr(settings_obj, 'vat_surcharge_name', None) or 'VAT Surcharge').strip() or 'VAT Surcharge'
 
     menu_items_list = []
     for mi in menu_items_qs:
@@ -1565,6 +1571,8 @@ def order_create_manual(request, restaurant_slug=None):
             'vat_imfl_pct': vat_imfl_pct,
             'vat_wine_pct': vat_wine_pct,
             'vat_gen_pct': vat_gen_pct,
+            'vat_surcharge_pct': vat_surcharge_pct,
+            'vat_surcharge_name': vat_surcharge_name,
             'service_charge_pct': service_charge_pct_val,
             'service_charge_taxable': getattr(settings_obj, 'service_charge_taxable', True),
         }),
@@ -1584,6 +1592,8 @@ def order_create_manual(request, restaurant_slug=None):
         'excise_seq_info_json': json.dumps(excise_seq_info),
         'active_menu': 'order_create_manual',
         'restaurant': restaurant,
+        'current_branch': branch_obj,
+        'branch_obj': branch_obj,
     })
 
 
@@ -2109,7 +2119,13 @@ def order_edit_manual(request, pk, restaurant_slug=None):
     vat_beer_pct = float(branch_obj.vat_beer_rate if branch_obj and getattr(branch_obj, 'vat_beer_rate', None) is not None else 60.00)
     vat_imfl_pct = float(branch_obj.vat_imfl_rate if branch_obj and getattr(branch_obj, 'vat_imfl_rate', None) is not None else 65.00)
     vat_wine_pct = float(branch_obj.vat_wine_rate if branch_obj and getattr(branch_obj, 'vat_wine_rate', None) is not None else 60.00)
-    vat_gen_pct = float(getattr(settings_obj, 'vat_percentage', 20.00) or 20.00)
+    b_gen_val2 = getattr(branch_obj, 'vat_gen_pct', None) if branch_obj else None
+    s_gen_val2 = getattr(settings_obj, 'vat_gen_pct', None) or getattr(settings_obj, 'vat_percentage', None)
+    vat_gen_pct = float(b_gen_val2 if b_gen_val2 is not None else (s_gen_val2 if s_gen_val2 is not None else 20.00))
+    b_sur_val2 = getattr(branch_obj, 'vat_surcharge_pct', None) if branch_obj else None
+    s_sur_val2 = getattr(settings_obj, 'vat_surcharge_pct', None)
+    vat_surcharge_pct = float(b_sur_val2 if b_sur_val2 is not None else (s_sur_val2 if s_sur_val2 is not None else 0.00))
+    vat_surcharge_name = (getattr(branch_obj, 'vat_surcharge_name', None) or getattr(settings_obj, 'vat_surcharge_name', None) or 'VAT Surcharge').strip() or 'VAT Surcharge'
 
     menu_items_list = []
     for mi in menu_items_qs:
@@ -2243,6 +2259,8 @@ def order_edit_manual(request, pk, restaurant_slug=None):
             'vat_imfl_pct': vat_imfl_pct,
             'vat_wine_pct': vat_wine_pct,
             'vat_gen_pct': vat_gen_pct,
+            'vat_surcharge_pct': vat_surcharge_pct,
+            'vat_surcharge_name': vat_surcharge_name,
             'service_charge_pct': float(settings_obj.service_charge_percentage or 0),
             'service_charge_taxable': getattr(settings_obj, 'service_charge_taxable', True),
         }),
@@ -2256,6 +2274,8 @@ def order_edit_manual(request, pk, restaurant_slug=None):
         'order': order,
         'active_menu': 'order_create_manual',
         'restaurant': restaurant,
+        'current_branch': active_branch,
+        'branch_obj': active_branch,
     })
 
 
@@ -4993,6 +5013,11 @@ def order_detail(request, pk, restaurant_slug=None):
         'vat_imfl_percentage': breakdown['vat_imfl_percentage'],
         'vat_wine_percentage': breakdown['vat_wine_percentage'],
         'vat_percentage': breakdown['vat_percentage'],
+        'vat_gen_percentage': breakdown.get('vat_gen_percentage', breakdown['vat_percentage']),
+        'vat_surcharge_name': breakdown.get('vat_surcharge_name', 'VAT Surcharge'),
+        'vat_surcharge_percentage': breakdown.get('vat_surcharge_percentage', Decimal('0.00')),
+        'total_base_vat': breakdown.get('total_base_vat', Decimal('0.00')),
+        'vat_surcharge': breakdown.get('vat_surcharge', Decimal('0.00')),
         'custom_charges_total': breakdown.get('custom_charges_total', Decimal('0.00')),
         'custom_charges_list': breakdown.get('custom_charges_list', []),
         'service_amount': breakdown['service_charge'],
@@ -5415,6 +5440,11 @@ def order_invoice(request, pk, restaurant_slug=None):
         'vat_imfl_percentage': breakdown['vat_imfl_percentage'],
         'vat_wine_percentage': breakdown['vat_wine_percentage'],
         'vat_percentage': breakdown['vat_percentage'],
+        'vat_gen_percentage': breakdown.get('vat_gen_percentage', breakdown['vat_percentage']),
+        'vat_surcharge_name': breakdown.get('vat_surcharge_name', 'VAT Surcharge'),
+        'vat_surcharge_percentage': breakdown.get('vat_surcharge_percentage', Decimal('0.00')),
+        'total_base_vat': breakdown.get('total_base_vat', Decimal('0.00')),
+        'vat_surcharge': breakdown.get('vat_surcharge', Decimal('0.00')),
         'cgst_amount': breakdown['cgst'],
         'sgst_amount': breakdown['sgst'],
         'service_amount': breakdown['service_charge'],
@@ -8004,7 +8034,13 @@ def transaction_desk_create(request, restaurant_slug=None):
     vat_beer_pct = float(branch_obj.vat_beer_rate if branch_obj and getattr(branch_obj, 'vat_beer_rate', None) is not None else 60.00)
     vat_imfl_pct = float(branch_obj.vat_imfl_rate if branch_obj and getattr(branch_obj, 'vat_imfl_rate', None) is not None else 65.00)
     vat_wine_pct = float(branch_obj.vat_wine_rate if branch_obj and getattr(branch_obj, 'vat_wine_rate', None) is not None else 60.00)
-    vat_gen_pct = float(getattr(settings_obj, 'vat_percentage', 20.00) or 20.00)
+    b_gen_val3 = getattr(branch_obj, 'vat_gen_pct', None) if branch_obj else None
+    s_gen_val3 = getattr(settings_obj, 'vat_gen_pct', None) or getattr(settings_obj, 'vat_percentage', None)
+    vat_gen_pct = float(b_gen_val3 if b_gen_val3 is not None else (s_gen_val3 if s_gen_val3 is not None else 20.00))
+    b_sur_val3 = getattr(branch_obj, 'vat_surcharge_pct', None) if branch_obj else None
+    s_sur_val3 = getattr(settings_obj, 'vat_surcharge_pct', None)
+    vat_surcharge_pct = float(b_sur_val3 if b_sur_val3 is not None else (s_sur_val3 if s_sur_val3 is not None else 0.00))
+    vat_surcharge_name = (getattr(branch_obj, 'vat_surcharge_name', None) or getattr(settings_obj, 'vat_surcharge_name', None) or 'VAT Surcharge').strip() or 'VAT Surcharge'
 
     menu_items_list = []
     for mi in menu_items_qs:
@@ -8226,6 +8262,8 @@ def transaction_desk_create(request, restaurant_slug=None):
             'vat_imfl_pct': vat_imfl_pct,
             'vat_wine_pct': vat_wine_pct,
             'vat_gen_pct': vat_gen_pct,
+            'vat_surcharge_pct': vat_surcharge_pct,
+            'vat_surcharge_name': vat_surcharge_name,
             'service_charge_pct': float(branch_obj.service_charge_percentage if (branch_obj and branch_obj.service_charge_percentage is not None) else (settings_obj.service_charge_percentage or 0)),
             'service_charge_taxable': getattr(settings_obj, 'service_charge_taxable', True),
         }),

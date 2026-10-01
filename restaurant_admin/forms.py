@@ -911,6 +911,7 @@ class RestaurantBranchComplianceForm(forms.ModelForm):
             'service_charge_percentage',
             'fssai_license_no', 'vat_tin', 'excise_license_no',
             'vat_beer_rate', 'vat_imfl_rate', 'vat_wine_rate',
+            'vat_gen_pct', 'vat_surcharge_name', 'vat_surcharge_pct',
             'latitude', 'longitude', 'geofence_radius_meters', 'enforce_geofence',
             'enforce_operating_hours', 'opening_time', 'closing_time', 'closed_message', 'weekly_schedule',
             # Branch Custom SMTP / Mailing
@@ -925,6 +926,9 @@ class RestaurantBranchComplianceForm(forms.ModelForm):
             'vat_beer_rate': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
             'vat_imfl_rate': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
             'vat_wine_rate': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
+            'vat_gen_pct': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
+            'vat_surcharge_name': forms.TextInput(attrs={'placeholder': 'e.g. Cow Cess, Surcharge'}),
+            'vat_surcharge_pct': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
             'latitude': forms.NumberInput(attrs={'step': '0.000001', 'placeholder': 'e.g. 19.076090'}),
             'longitude': forms.NumberInput(attrs={'step': '0.000001', 'placeholder': 'e.g. 72.877426'}),
             'geofence_radius_meters': forms.NumberInput(attrs={'min': '10', 'max': '5000', 'placeholder': '100'}),
