@@ -19,7 +19,16 @@ from django.core.files.storage import default_storage
 from django.contrib.auth.models import User, Group
 
 from super_admin.models import Restaurant, RestaurantBranch, RestaurantUser
-from hotel.models import RoomCategory, Room, RoomBooking, HotelSettings, RoomCategoryImage
+from hotel.models import (
+    RoomCategory,
+    Room,
+    RoomBooking,
+    HotelSettings,
+    RoomCategoryImage,
+    CabServicePackage,
+    FleetVehicle,
+    CabBooking,
+)
 from hotel.forms import HotelSettingsForm
 
 
@@ -651,6 +660,12 @@ def category_create_edit_action(request, restaurant_slug, ctx):
         show_on_banner = request.POST.get('show_on_banner') in ['true', 'on', '1', True]
         banner_badge_text = request.POST.get('banner_badge_text', '').strip()
 
+        # Complimentary Airport / Station Transfers
+        includes_free_transfer = request.POST.get('includes_free_transfer') in ['true', 'on', '1', True]
+        transfer_type = request.POST.get('transfer_type', 'NONE').upper()
+        if transfer_type not in ['NONE', 'PICKUP_ONLY', 'DROP_ONLY', 'BOTH']:
+            transfer_type = 'NONE'
+
         # Image URLs
         cover_image_url = request.POST.get('cover_image_url', '').strip()
 
@@ -681,6 +696,8 @@ def category_create_edit_action(request, restaurant_slug, ctx):
             category.custom_tax_rate = custom_tax_rate
             category.show_on_banner = show_on_banner
             category.banner_badge_text = banner_badge_text
+            category.includes_free_transfer = includes_free_transfer
+            category.transfer_type = transfer_type
         else:
             category = RoomCategory(
                 branch=branch,
@@ -698,6 +715,8 @@ def category_create_edit_action(request, restaurant_slug, ctx):
                 custom_tax_rate=custom_tax_rate,
                 show_on_banner=show_on_banner,
                 banner_badge_text=banner_badge_text,
+                includes_free_transfer=includes_free_transfer,
+                transfer_type=transfer_type,
             )
             category.save()
 
@@ -1398,3 +1417,427 @@ def staff_delete_view(request, restaurant_slug, ctx, user_id):
     target_profile.user.delete()
     messages.success(request, f"Staff member @{username} has been permanently deleted.")
     return redirect('hotel_admin:staff_list', restaurant_slug=restaurant_slug)
+
+
+# ==============================================================================
+# TRAVEL DESK & CAB MANAGEMENT PMS VIEWS
+# ==============================================================================
+
+@hotel_admin_required
+def cabs_dispatch_view(request, restaurant_slug, ctx):
+    """
+    Hotel Travel Desk PMS Interface:
+    - Daily Chronological Dispatch Board with quick driver assignment
+    - Fleet & Driver Management (In-house and Outsourced vendor cabs)
+    - Transfer & Tourism Packages Catalog
+    """
+    branch = ctx['current_branch']
+    if not branch or not getattr(branch, 'has_hotel_module', False):
+        return render(request, 'hotel_admin/feature_disabled.html', ctx)
+
+    today = timezone.localdate()
+    date_str = request.GET.get('date', today.isoformat())
+    try:
+        selected_date = datetime.date.fromisoformat(date_str)
+    except ValueError:
+        selected_date = today
+
+    service_filter = request.GET.get('service_type', '')
+    status_filter = request.GET.get('status', '')
+    unassigned_filter = request.GET.get('unassigned_only', '')
+
+    all_day_qs = CabBooking.objects.filter(
+        branch=branch,
+        pickup_datetime__date=selected_date
+    ).select_related('room_booking', 'room_booking__room', 'package', 'assigned_vehicle')
+
+    # Summary metrics for the day
+    total_count = all_day_qs.count()
+    unassigned_count = all_day_qs.filter(
+        Q(assigned_vehicle__isnull=True) | Q(trip_status=CabBooking.TripStatus.SCHEDULED)
+    ).exclude(trip_status=CabBooking.TripStatus.CANCELLED).count()
+    assigned_count = all_day_qs.filter(trip_status=CabBooking.TripStatus.DRIVER_ASSIGNED).count()
+    en_route_count = all_day_qs.filter(trip_status=CabBooking.TripStatus.EN_ROUTE).count()
+    completed_count = all_day_qs.filter(trip_status=CabBooking.TripStatus.COMPLETED).count()
+    cancelled_count = all_day_qs.filter(trip_status=CabBooking.TripStatus.CANCELLED).count()
+
+    filtered_qs = all_day_qs
+    if service_filter:
+        filtered_qs = filtered_qs.filter(package__service_type=service_filter)
+    if status_filter:
+        filtered_qs = filtered_qs.filter(trip_status=status_filter)
+    if unassigned_filter in ['true', '1']:
+        filtered_qs = filtered_qs.filter(
+            Q(assigned_vehicle__isnull=True) | Q(trip_status=CabBooking.TripStatus.SCHEDULED)
+        ).exclude(trip_status=CabBooking.TripStatus.CANCELLED)
+
+    bookings = filtered_qs.order_by('pickup_datetime')
+
+    fleet_vehicles = FleetVehicle.objects.filter(branch=branch).order_by('vehicle_category', 'vehicle_number')
+    available_vehicles = fleet_vehicles.filter(status=FleetVehicle.VehicleStatus.AVAILABLE)
+    packages = CabServicePackage.objects.filter(branch=branch).order_by('service_type', 'title')
+
+    # Active room bookings for front desk quick booking
+    active_room_bookings = RoomBooking.objects.filter(
+        branch=branch,
+        booking_status__in=[RoomBooking.BookingStatus.RESERVED, RoomBooking.BookingStatus.CHECKED_IN]
+    ).select_related('room', 'room__category').order_by('-created_at')[:40]
+
+    ctx.update({
+        'active_menu': 'cabs',
+        'page_title': 'Travel Desk & Cab Dispatch',
+        'selected_date': selected_date,
+        'selected_date_str': selected_date.isoformat(),
+        'service_filter': service_filter,
+        'status_filter': status_filter,
+        'unassigned_filter': unassigned_filter,
+        'bookings': bookings,
+        'total_count': total_count,
+        'unassigned_count': unassigned_count,
+        'assigned_count': assigned_count,
+        'en_route_count': en_route_count,
+        'completed_count': completed_count,
+        'cancelled_count': cancelled_count,
+        'fleet_vehicles': fleet_vehicles,
+        'available_vehicles': available_vehicles,
+        'packages': packages,
+        'active_room_bookings': active_room_bookings,
+    })
+    return render(request, 'hotel_admin/cabs_dashboard.html', ctx)
+
+
+@hotel_admin_required
+def cab_package_create_edit_action(request, restaurant_slug, ctx):
+    """Create or update a CabServicePackage offering."""
+    if request.method != 'POST':
+        return HttpResponseForbidden("POST required")
+
+    branch = ctx['current_branch']
+    package_id = request.POST.get('package_id')
+    title = request.POST.get('title', '').strip()
+    service_type = request.POST.get('service_type', 'AIRPORT_TRANSFER')
+    vehicle_category = request.POST.get('vehicle_category', 'SEDAN')
+    base_price = request.POST.get('base_price', '0')
+    included_km = request.POST.get('included_km', '0')
+    included_hours = request.POST.get('included_hours', '0')
+    itinerary_description = request.POST.get('itinerary_description', '').strip()
+    is_active = request.POST.get('is_active') in ['true', '1', 'on']
+
+    if not title:
+        messages.error(request, "Package title is required.")
+        return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
+
+    try:
+        price_val = Decimal(base_price)
+        km_val = int(included_km) if included_km else 0
+        hrs_val = int(included_hours) if included_hours else 0
+    except Exception:
+        messages.error(request, "Invalid numeric values for price, km, or hours.")
+        return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
+
+    if package_id:
+        pkg = get_object_or_404(CabServicePackage, id=package_id, branch=branch)
+        pkg.title = title
+        pkg.service_type = service_type
+        pkg.vehicle_category = vehicle_category
+        pkg.base_price = price_val
+        pkg.included_km = km_val
+        pkg.included_hours = hrs_val
+        pkg.itinerary_description = itinerary_description
+        pkg.is_active = is_active
+        pkg.save()
+        messages.success(request, f"Package '{title}' updated successfully.")
+    else:
+        CabServicePackage.objects.create(
+            branch=branch,
+            title=title,
+            service_type=service_type,
+            vehicle_category=vehicle_category,
+            base_price=price_val,
+            included_km=km_val,
+            included_hours=hrs_val,
+            itinerary_description=itinerary_description,
+            is_active=is_active,
+        )
+        messages.success(request, f"New package '{title}' created successfully.")
+
+    return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
+
+
+@hotel_admin_required
+def cab_package_delete_action(request, restaurant_slug, ctx, package_id):
+    """Delete a CabServicePackage offering."""
+    if request.method != 'POST':
+        return HttpResponseForbidden("POST required")
+
+    branch = ctx['current_branch']
+    pkg = get_object_or_404(CabServicePackage, id=package_id, branch=branch)
+    title = pkg.title
+    pkg.delete()
+    messages.success(request, f"Package '{title}' deleted successfully.")
+    return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
+
+
+@hotel_admin_required
+def cab_fleet_create_edit_action(request, restaurant_slug, ctx):
+    """Register or update a FleetVehicle and driver."""
+    if request.method != 'POST':
+        return HttpResponseForbidden("POST required")
+
+    branch = ctx['current_branch']
+    vehicle_id = request.POST.get('vehicle_id')
+    vehicle_number = request.POST.get('vehicle_number', '').strip().upper()
+    vehicle_category = request.POST.get('vehicle_category', 'SEDAN')
+    driver_name = request.POST.get('driver_name', '').strip()
+    driver_phone = request.POST.get('driver_phone', '').strip()
+    is_vendor = request.POST.get('is_vendor_vehicle') in ['true', '1', 'on']
+    status_val = request.POST.get('status', 'AVAILABLE')
+    notes = request.POST.get('notes', '').strip()
+
+    if not vehicle_number or not driver_name or not driver_phone:
+        messages.error(request, "Vehicle number, driver name, and driver phone are required.")
+        return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
+
+    if vehicle_id:
+        v = get_object_or_404(FleetVehicle, id=vehicle_id, branch=branch)
+        v.vehicle_number = vehicle_number
+        v.vehicle_category = vehicle_category
+        v.driver_name = driver_name
+        v.driver_phone = driver_phone
+        v.is_vendor_vehicle = is_vendor
+        v.status = status_val
+        v.notes = notes
+        v.save()
+        messages.success(request, f"Vehicle '{vehicle_number}' updated successfully.")
+    else:
+        if FleetVehicle.objects.filter(branch=branch, vehicle_number=vehicle_number).exists():
+            messages.error(request, f"Vehicle number '{vehicle_number}' is already registered for this branch.")
+            return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
+
+        FleetVehicle.objects.create(
+            branch=branch,
+            vehicle_number=vehicle_number,
+            vehicle_category=vehicle_category,
+            driver_name=driver_name,
+            driver_phone=driver_phone,
+            is_vendor_vehicle=is_vendor,
+            status=status_val,
+            notes=notes,
+        )
+        messages.success(request, f"Vehicle '{vehicle_number}' registered successfully.")
+
+    return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
+
+
+@hotel_admin_required
+def cab_fleet_delete_action(request, restaurant_slug, ctx, vehicle_id):
+    """Delete a vehicle from the fleet inventory."""
+    if request.method != 'POST':
+        return HttpResponseForbidden("POST required")
+
+    branch = ctx['current_branch']
+    v = get_object_or_404(FleetVehicle, id=vehicle_id, branch=branch)
+    num = v.vehicle_number
+    v.delete()
+    messages.success(request, f"Vehicle '{num}' deleted from fleet.")
+    return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
+
+
+@hotel_admin_required
+def cab_assign_driver_action(request, restaurant_slug, ctx, cab_id):
+    """Assign an existing vehicle OR quick-add an outsourced vendor cab."""
+    if request.method != 'POST':
+        return HttpResponseForbidden("POST required")
+
+    from hotel.views import send_driver_assignment_notification
+    branch = ctx['current_branch']
+    booking = get_object_or_404(CabBooking, id=cab_id, branch=branch)
+
+    quick_add = request.POST.get('quick_add_vendor') in ['true', '1', 'on'] or request.POST.get('action') == 'quick_vendor'
+    target_vehicle = None
+
+    if quick_add:
+        v_num = request.POST.get('vehicle_number', '').strip().upper()
+        d_name = request.POST.get('driver_name', '').strip()
+        d_phone = request.POST.get('driver_phone', '').strip()
+        v_cat = request.POST.get('vehicle_category') or (booking.package.vehicle_category if booking.package else 'SEDAN')
+
+        if not v_num or not d_name or not d_phone:
+            messages.error(request, "Outsourced vendor cab requires license plate, driver name, and phone number.")
+            return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
+
+        target_vehicle, _ = FleetVehicle.objects.get_or_create(
+            branch=branch,
+            vehicle_number=v_num,
+            defaults={
+                'driver_name': d_name,
+                'driver_phone': d_phone,
+                'vehicle_category': v_cat,
+                'is_vendor_vehicle': True,
+                'status': FleetVehicle.VehicleStatus.AVAILABLE,
+            }
+        )
+        target_vehicle.driver_name = d_name
+        target_vehicle.driver_phone = d_phone
+        target_vehicle.is_vendor_vehicle = True
+        target_vehicle.save()
+    else:
+        v_id = request.POST.get('vehicle_id')
+        if not v_id:
+            messages.error(request, "Please select a vehicle to assign.")
+            return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
+        target_vehicle = get_object_or_404(FleetVehicle, id=v_id, branch=branch)
+
+    # Release old vehicle if different
+    if booking.assigned_vehicle and booking.assigned_vehicle.id != target_vehicle.id:
+        old_v = booking.assigned_vehicle
+        other_active = CabBooking.objects.filter(
+            assigned_vehicle=old_v,
+            trip_status__in=[CabBooking.TripStatus.DRIVER_ASSIGNED, CabBooking.TripStatus.EN_ROUTE]
+        ).exclude(pk=booking.pk).exists()
+        if not other_active:
+            old_v.status = FleetVehicle.VehicleStatus.AVAILABLE
+            old_v.save(update_fields=['status', 'updated_at'])
+
+    booking.assigned_vehicle = target_vehicle
+    booking.trip_status = CabBooking.TripStatus.DRIVER_ASSIGNED
+    booking.save(update_fields=['assigned_vehicle', 'trip_status', 'updated_at'])
+
+    target_vehicle.status = FleetVehicle.VehicleStatus.ON_TRIP
+    target_vehicle.save(update_fields=['status', 'updated_at'])
+
+    send_driver_assignment_notification(booking, target_vehicle)
+    messages.success(request, f"Driver {target_vehicle.driver_name} ({target_vehicle.vehicle_number}) assigned to ride {booking.booking_id}.")
+
+    date_param = booking.pickup_datetime.strftime('%Y-%m-%d')
+    return redirect(f"{reverse('hotel_admin:cabs_dispatch', kwargs={'restaurant_slug': restaurant_slug})}?date={date_param}")
+
+
+@hotel_admin_required
+def cab_reschedule_action(request, restaurant_slug, ctx, cab_id):
+    """Edit pickup datetime or flight/train number for delayed flights without touching billing."""
+    if request.method != 'POST':
+        return HttpResponseForbidden("POST required")
+
+    branch = ctx['current_branch']
+    booking = get_object_or_404(CabBooking, id=cab_id, branch=branch)
+
+    new_pickup_dt_str = request.POST.get('pickup_datetime')
+    if new_pickup_dt_str:
+        try:
+            new_dt = datetime.datetime.fromisoformat(new_pickup_dt_str)
+            if timezone.is_naive(new_dt):
+                new_dt = timezone.make_aware(new_dt)
+            booking.pickup_datetime = new_dt
+        except Exception:
+            messages.error(request, "Invalid datetime format.")
+            return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
+
+    if 'flight_or_train_number' in request.POST:
+        booking.flight_or_train_number = request.POST.get('flight_or_train_number', '').strip()
+    if 'pickup_location' in request.POST and request.POST.get('pickup_location'):
+        booking.pickup_location = request.POST.get('pickup_location').strip()
+    if 'drop_location' in request.POST and request.POST.get('drop_location'):
+        booking.drop_location = request.POST.get('drop_location').strip()
+
+    booking.save(update_fields=['pickup_datetime', 'flight_or_train_number', 'pickup_location', 'drop_location', 'updated_at'])
+    messages.success(request, f"Ride schedule for {booking.booking_id} updated successfully.")
+
+    date_param = booking.pickup_datetime.strftime('%Y-%m-%d')
+    return redirect(f"{reverse('hotel_admin:cabs_dispatch', kwargs={'restaurant_slug': restaurant_slug})}?date={date_param}")
+
+
+@hotel_admin_required
+def cab_status_action(request, restaurant_slug, ctx, cab_id):
+    """Quick update trip status (EN_ROUTE, COMPLETED, CANCELLED)."""
+    if request.method != 'POST':
+        return HttpResponseForbidden("POST required")
+
+    branch = ctx['current_branch']
+    booking = get_object_or_404(CabBooking, id=cab_id, branch=branch)
+    new_status = request.POST.get('status', '').upper()
+
+    if new_status in CabBooking.TripStatus.values:
+        booking.trip_status = new_status
+        booking.save(update_fields=['trip_status', 'updated_at'])
+
+        if new_status in [CabBooking.TripStatus.COMPLETED, CabBooking.TripStatus.CANCELLED]:
+            if booking.assigned_vehicle:
+                v = booking.assigned_vehicle
+                other_active = CabBooking.objects.filter(
+                    assigned_vehicle=v,
+                    trip_status__in=[CabBooking.TripStatus.DRIVER_ASSIGNED, CabBooking.TripStatus.EN_ROUTE]
+                ).exclude(pk=booking.pk).exists()
+                if not other_active:
+                    v.status = FleetVehicle.VehicleStatus.AVAILABLE
+                    v.save(update_fields=['status', 'updated_at'])
+
+        messages.success(request, f"Ride status set to {booking.get_trip_status_display()}.")
+
+    date_param = booking.pickup_datetime.strftime('%Y-%m-%d')
+    return redirect(f"{reverse('hotel_admin:cabs_dispatch', kwargs={'restaurant_slug': restaurant_slug})}?date={date_param}")
+
+
+@hotel_admin_required
+def cab_manual_create_action(request, restaurant_slug, ctx):
+    """Front Desk manual cab / tour booking for an in-house guest."""
+    if request.method != 'POST':
+        return HttpResponseForbidden("POST required")
+
+    branch = ctx['current_branch']
+    room_booking_id = request.POST.get('room_booking_id')
+    package_id = request.POST.get('package_id')
+    pickup_dt_str = request.POST.get('pickup_datetime')
+    pickup_loc = request.POST.get('pickup_location', '').strip()
+    drop_loc = request.POST.get('drop_location', '').strip()
+    flight_train = request.POST.get('flight_or_train_number', '').strip()
+    is_comp = request.POST.get('is_complimentary') in ['true', '1', 'on']
+    payment_status_val = request.POST.get('payment_status', 'ADDED_TO_FOLIO')
+
+    if not room_booking_id or not package_id or not pickup_dt_str or not pickup_loc or not drop_loc:
+        messages.error(request, "Room, package, pickup datetime, and locations are required.")
+        return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
+
+    room_booking = get_object_or_404(RoomBooking, id=room_booking_id, branch=branch)
+    package = get_object_or_404(CabServicePackage, id=package_id, branch=branch)
+
+    try:
+        p_dt = datetime.datetime.fromisoformat(pickup_dt_str)
+        if timezone.is_naive(p_dt):
+            p_dt = timezone.make_aware(p_dt)
+    except Exception:
+        messages.error(request, "Invalid pickup datetime format.")
+        return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
+
+    if is_comp and package.service_type == CabServicePackage.ServiceType.AIRPORT_TRANSFER:
+        base = Decimal('0.00')
+        tax = Decimal('0.00')
+        tot = Decimal('0.00')
+        pay_st = CabBooking.PaymentStatus.COMPLIMENTARY
+        comp_flag = True
+    else:
+        base = package.base_price
+        tax = round(base * Decimal('0.05'), 2)
+        tot = base + tax
+        pay_st = payment_status_val if payment_status_val in CabBooking.PaymentStatus.values else CabBooking.PaymentStatus.ADDED_TO_FOLIO
+        comp_flag = False
+
+    cb = CabBooking.objects.create(
+        branch=branch,
+        room_booking=room_booking,
+        package=package,
+        is_complimentary=comp_flag,
+        pickup_datetime=p_dt,
+        pickup_location=pickup_loc,
+        drop_location=drop_loc,
+        flight_or_train_number=flight_train,
+        base_amount=base,
+        tax_amount=tax,
+        total_amount=tot,
+        payment_status=pay_st,
+        trip_status=CabBooking.TripStatus.SCHEDULED,
+    )
+    messages.success(request, f"Ride {cb.booking_id} successfully created for Room {room_booking.room.room_number} ({room_booking.guest_name}).")
+    date_param = p_dt.strftime('%Y-%m-%d')
+    return redirect(f"{reverse('hotel_admin:cabs_dispatch', kwargs={'restaurant_slug': restaurant_slug})}?date={date_param}")
+

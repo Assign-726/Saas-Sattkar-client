@@ -79,3 +79,7 @@ class IsHotelAdminOrManager(permissions.BasePermission):
             return True
 
         return bool(getattr(branch, 'has_hotel_module', False))
+
+
+# Alias for explicit Travel Desk & Cab Management specification
+IsActiveHotelAdmin = IsHotelAdminOrManager

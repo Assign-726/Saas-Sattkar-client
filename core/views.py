@@ -405,20 +405,21 @@ class OrderViewSet(viewsets.ModelViewSet):
         from decimal import Decimal
         import json, urllib.request, base64
         # pyrefly: ignore [missing-import]
-        from .models import Coupon, MenuItem, RestaurantSettings
-        from super_admin.models import Restaurant
+        from .models import Coupon, MenuItem, RestaurantSettings, Order, OrderItem
+        from super_admin.models import Restaurant, RestaurantBranch
 
         data = request.data if isinstance(request.data, dict) else {}
         items_data = data.get('items') or []
         coupon_code = (data.get('coupon_code') or '').strip().upper()
         restaurant_id = data.get('restaurant_id')
         restaurant_slug = data.get('restaurant_slug')
+        order_type = data.get('order_type') or 'takeaway'
 
         if not items_data:
             return Response({'error': 'No menu items provided'}, status=status.HTTP_400_BAD_REQUEST)
 
         restaurant = None
-        subtotal = Decimal('0')
+        mock_items = []
         for item in items_data:
             item_id = item.get('menu_item')
             qty = int(item.get('quantity') or 1)
@@ -429,7 +430,43 @@ class OrderViewSet(viewsets.ModelViewSet):
                 restaurant = menu_item.restaurant
             elif restaurant.id != menu_item.restaurant_id:
                 return Response({'error': 'All items must belong to the same restaurant'}, status=status.HTTP_400_BAD_REQUEST)
-            subtotal += Decimal(str(menu_item.price)) * qty
+
+            raw_unit_price = item.get('unit_price')
+            variant_name = str(item.get('variant_name') or '').strip().lower()
+            resolved_unit_price = Decimal(str(menu_item.price))
+
+            v_data = getattr(menu_item, 'variants_json', []) or []
+            if isinstance(v_data, str):
+                try:
+                    v_data = json.loads(v_data)
+                except Exception:
+                    v_data = []
+
+            if isinstance(v_data, list) and v_data:
+                matched_v = None
+                if variant_name:
+                    for v in v_data:
+                        if str(v.get('name', '')).strip().lower() == variant_name:
+                            matched_v = v
+                            break
+                if matched_v and matched_v.get('price') is not None:
+                    resolved_unit_price = Decimal(str(matched_v['price']))
+                elif raw_unit_price is not None:
+                    try:
+                        rup = Decimal(str(raw_unit_price))
+                        variant_prices = [Decimal(str(v.get('price'))) for v in v_data if v.get('price') is not None]
+                        if rup in variant_prices:
+                            resolved_unit_price = rup
+                    except Exception:
+                        pass
+            
+            mock_items.append(
+                OrderItem(
+                    menu_item=menu_item,
+                    quantity=qty,
+                    unit_price=resolved_unit_price
+                )
+            )
 
         if not restaurant and restaurant_id:
             restaurant = Restaurant.objects.filter(id=restaurant_id).first()
@@ -460,48 +497,25 @@ class OrderViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-        # Compute taxes & service charges
-        if settings_obj and settings_obj.cgst_percentage is not None:
-            cgst_pct = Decimal(str(settings_obj.cgst_percentage))
-        elif branch:
-            if branch.gst_registration_type == 'R18' or branch.is_hotel_tariff_7500_plus:
-                cgst_pct = Decimal('9.00')
-            elif branch.gst_registration_type in ['C', 'U']:
-                cgst_pct = Decimal('0.00')
-            else:
-                cgst_pct = Decimal('2.50')
-        else:
-            cgst_pct = Decimal('2.50')
-
-        if settings_obj and settings_obj.sgst_percentage is not None:
-            sgst_pct = Decimal(str(settings_obj.sgst_percentage))
-        elif branch:
-            if branch.gst_registration_type == 'R18' or branch.is_hotel_tariff_7500_plus:
-                sgst_pct = Decimal('9.00')
-            elif branch.gst_registration_type in ['C', 'U']:
-                sgst_pct = Decimal('0.00')
-            else:
-                sgst_pct = Decimal('2.50')
-        else:
-            sgst_pct = Decimal('2.50')
-
-        service_pct = Decimal(str(settings_obj.service_charge_percentage or 0))
-
-        cgst_amt = (subtotal * cgst_pct) / Decimal('100')
-        sgst_amt = (subtotal * sgst_pct) / Decimal('100')
-        service_amt = (subtotal * service_pct) / Decimal('100')
-        taxes_and_charges = cgst_amt + sgst_amt + service_amt
-
-        # Calculate coupon discount if applicable
-        discount = Decimal('0')
+        # Coupon lookup
+        coupon = None
         if coupon_code:
             coupon_qs = Coupon.objects.filter(code__iexact=coupon_code)
             coupon = coupon_qs.filter(restaurant=restaurant).first() or coupon_qs.filter(restaurant__isnull=True).first()
-            if coupon and coupon.is_valid_for(subtotal, restaurant=restaurant):
-                discount = coupon.calculate_discount(subtotal)
-                discount = max(Decimal('0'), min(discount, subtotal))
 
-        total_amount = max(Decimal('0'), subtotal + taxes_and_charges - discount)
+        temp_order = Order(
+            restaurant=restaurant,
+            branch=branch,
+            order_type=order_type,
+            coupon=coupon
+        )
+        if 'waive_service_charge' in data:
+            temp_order.waive_service_charge = bool(data.get('waive_service_charge'))
+
+        breakdown = temp_order.calculate_bill_breakdown(items_override=mock_items)
+        total_amount = breakdown['final_total']
+        discount = breakdown['discount_amount']
+        subtotal = breakdown['gross_subtotal']
         amount_in_paise = int(round(total_amount * 100))
 
         # Call Razorpay API to generate razorpay_order_id without inserting an Order in DB
@@ -528,6 +542,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                         'amount_paise': amount_in_paise,
                         'total_amount': str(total_amount),
                         'discount_amount': str(discount),
+                        'bill_breakdown': breakdown,
                     })
                 else:
                     return Response({'error': 'Failed to create Razorpay payment order'}, status=status.HTTP_400_BAD_REQUEST)

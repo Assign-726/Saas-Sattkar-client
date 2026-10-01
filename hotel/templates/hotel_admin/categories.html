@@ -244,6 +244,11 @@
                             <i class="fa-solid fa-crown me-1 text-danger"></i>{{ c.banner_badge_text|default:"Banner Feature" }}
                         </span>
                         {% endif %}
+                        {% if c.includes_free_transfer %}
+                        <span class="badge bg-success text-white fw-bold shadow-sm" style="font-size: 0.7rem;" title="Free Airport Transfer">
+                            <i class="fa-solid fa-taxi me-1"></i>Free Transfer
+                        </span>
+                        {% endif %}
                     </div>
                     <div class="d-flex gap-1">
                         {% if c.all_images_list|length > 0 %}
@@ -360,6 +365,8 @@
                     data-custom-tax="{{ c.custom_tax_rate|default:'' }}"
                     data-show-banner="{% if c.show_on_banner %}1{% else %}0{% endif %}"
                     data-banner-badge="{{ c.banner_badge_text|default:''|escape }}"
+                    data-free-transfer="{% if c.includes_free_transfer %}1{% else %}0{% endif %}"
+                    data-transfer-type="{{ c.transfer_type }}"
                     data-cover-url="{{ c.cover_image_url|default:''|escape }}"
                     data-cover-img="{% if c.cover_image %}{{ c.cover_image.url }}{% endif %}"
                     data-occ="{{ c.max_occupancy }}"
@@ -555,6 +562,24 @@
                                                 <span class="quick-chip" onclick="setBannerBadge('🔥 Hot Deal')">🔥 Hot Deal</span>
                                                 <span class="quick-chip" onclick="setBannerBadge('👑 Luxury Pick')">👑 Luxury Pick</span>
                                             </div>
+                                        </div>
+
+                                        <!-- Complimentary Travel Desk Transfers -->
+                                        <hr class="my-2 text-muted">
+                                        <div class="form-check form-switch mb-1.5">
+                                            <input class="form-check-input" type="checkbox" role="switch" name="includes_free_transfer" id="catFormFreeTransfer" onchange="document.getElementById('transferTypeBlock').style.display = this.checked ? 'block' : 'none'">
+                                            <label class="form-check-label fw-bold text-dark small" for="catFormFreeTransfer">
+                                                <i class="fa-solid fa-taxi text-primary me-1"></i>Complimentary Airport / Station Transfer
+                                            </label>
+                                        </div>
+                                        <div id="transferTypeBlock" style="display: none;" class="mb-2">
+                                            <label class="form-label small fw-semibold mb-1">Transfer Benefit Tier</label>
+                                            <select name="transfer_type" id="catFormTransferType" class="form-select form-select-sm">
+                                                <option value="NONE">None</option>
+                                                <option value="PICKUP_ONLY">Pickup Only</option>
+                                                <option value="DROP_ONLY">Drop Only</option>
+                                                <option value="BOTH">Both (Free Pickup &amp; Drop)</option>
+                                            </select>
                                         </div>
                                     </div>
                                 </div>
@@ -802,6 +827,10 @@ function handleEditCategory(btn) {
     document.getElementById('catFormCustomTax').value = d.customTax || '';
     document.getElementById('catFormShowBanner').checked = (d.showBanner === '1');
     document.getElementById('catFormBannerBadge').value = d.bannerBadge || '';
+    const hasFreeTransfer = (d.freeTransfer === '1');
+    document.getElementById('catFormFreeTransfer').checked = hasFreeTransfer;
+    document.getElementById('catFormTransferType').value = d.transferType || 'NONE';
+    document.getElementById('transferTypeBlock').style.display = hasFreeTransfer ? 'block' : 'none';
     document.getElementById('catFormCoverUrl').value = d.coverUrl || '';
     document.getElementById('catFormOcc').value = d.occ || '2';
     document.getElementById('catFormAdults').value = d.adults || '2';

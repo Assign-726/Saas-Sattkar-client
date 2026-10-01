@@ -94,10 +94,19 @@ urlpatterns = [
     path('api/events/', include(('events.urls', 'events'), namespace='events')),
     path('api/hotel/', include(('hotel.urls', 'hotel'), namespace='hotel')),
     path('api/public/branches/<int:branch_id>/availability/', include('hotel.urls_public')),
+    path('api/public/hotel/<int:branch_id>/cab-packages/', views_hotel.PublicCabPackagesView.as_view(), name='api_public_hotel_cab_packages_branch'),
+    path('api/public/hotel/cab-packages/', views_hotel.PublicCabPackagesView.as_view(), name='api_public_hotel_cab_packages'),
+    path('api/public/hotel/checkout/', views_hotel.PublicHotelCheckoutView.as_view(), name='api_public_hotel_checkout'),
     
     # Public Hotel / Rooms Booking Engine endpoints
     path('api/rooms/', views_hotel.PublicBranchAvailabilityView.as_view(), name='api_rooms_availability'),
     path('api/rooms/bookings/', views_hotel.PublicBookingCreateView.as_view(), name='api_rooms_bookings'),
+    path('api/rooms/checkout/', views_hotel.PublicHotelCheckoutView.as_view(), name='api_rooms_checkout'),
+    path('api/rooms/verify-payment/', views_hotel.PublicHotelVerifyPaymentView.as_view(), name='api_rooms_verify_payment'),
+    path('api/rooms/cancel-unpaid/', views_hotel.PublicHotelCancelUnpaidView.as_view(), name='api_rooms_cancel_unpaid'),
+    path('api/public/hotel/verify-payment/', views_hotel.PublicHotelVerifyPaymentView.as_view(), name='api_public_hotel_verify_payment'),
+    path('api/public/hotel/cancel-unpaid/', views_hotel.PublicHotelCancelUnpaidView.as_view(), name='api_public_hotel_cancel_unpaid'),
+
 
     # API Token Authentication
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),

@@ -82,6 +82,24 @@ class RoomCategory(models.Model):
         help_text="List of up to 5 video links/embed objects: [{'url': '...', 'title': '...'}]"
     )
 
+    # Travel Desk & Complimentary Transfers
+    includes_free_transfer = models.BooleanField(
+        default=False,
+        verbose_name="Includes Free Airport / Station Transfer",
+        help_text="If checked, guests booking this tier receive complimentary pickup, drop, or both"
+    )
+    transfer_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('NONE', 'None'),
+            ('PICKUP_ONLY', 'Pickup Only'),
+            ('DROP_ONLY', 'Drop Only'),
+            ('BOTH', 'Both'),
+        ],
+        default='NONE',
+        verbose_name="Complimentary Transfer Type"
+    )
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -289,6 +307,10 @@ class RoomBooking(models.Model):
         default=PaymentStatus.PENDING
     )
     payment_method = models.CharField(max_length=50, default="PAY_AT_DESK", blank=True)
+    razorpay_order_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="Razorpay Order ID")
+    razorpay_payment_id = models.CharField(max_length=100, blank=True, null=True, verbose_name="Razorpay Payment ID")
+    razorpay_signature = models.CharField(max_length=255, blank=True, null=True, verbose_name="Razorpay Signature")
+    upi_transaction_ref = models.CharField(max_length=100, blank=True, null=True, verbose_name="UPI UTR / Ref Number")
     booking_status = models.CharField(
         max_length=20,
         choices=BookingStatus.choices,
@@ -506,3 +528,257 @@ class HotelSettings(models.Model):
             }
         )
         return settings_obj
+
+
+class CabServicePackage(models.Model):
+    """
+    Catalog for airport/station transfers, local sightseeing/tourism packages,
+    and point-to-point transfers.
+    """
+    class ServiceType(models.TextChoices):
+        AIRPORT_TRANSFER = 'AIRPORT_TRANSFER', 'Airport Transfer'
+        TOURISM_PACKAGE = 'TOURISM_PACKAGE', 'Tourism / Sightseeing Package'
+        POINT_TO_POINT = 'POINT_TO_POINT', 'Point to Point Ride'
+
+    class VehicleCategory(models.TextChoices):
+        SEDAN = 'SEDAN', 'Sedan (Dzire / Etios)'
+        SUV = 'SUV', 'SUV (Innova / Ertiga)'
+        LUXURY_VAN = 'LUXURY_VAN', 'Luxury Van'
+        TEMPO_TRAVELLER = 'TEMPO_TRAVELLER', 'Tempo Traveller'
+
+    branch = models.ForeignKey(
+        'super_admin.RestaurantBranch',
+        on_delete=models.CASCADE,
+        related_name='cab_packages'
+    )
+    title = models.CharField(max_length=200, verbose_name="Package Title")
+    service_type = models.CharField(
+        max_length=30,
+        choices=ServiceType.choices,
+        default=ServiceType.AIRPORT_TRANSFER,
+        verbose_name="Service Type"
+    )
+    vehicle_category = models.CharField(
+        max_length=30,
+        choices=VehicleCategory.choices,
+        default=VehicleCategory.SEDAN,
+        verbose_name="Vehicle Category"
+    )
+    base_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Base Price (₹)"
+    )
+    included_km = models.PositiveIntegerField(
+        default=0,
+        blank=True,
+        null=True,
+        verbose_name="Included Distance (km)",
+        help_text="Included kilometers (e.g. 80 km)"
+    )
+    included_hours = models.PositiveIntegerField(
+        default=0,
+        blank=True,
+        null=True,
+        verbose_name="Included Duration (Hours)",
+        help_text="Included duration in hours (e.g. 8 hours)"
+    )
+    itinerary_description = models.TextField(
+        blank=True,
+        verbose_name="Itinerary / Description",
+        help_text="Package itinerary, sightseeing spots, or route details"
+    )
+    is_active = models.BooleanField(default=True, verbose_name="Is Active")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['title']
+        verbose_name = 'Cab Service Package'
+        verbose_name_plural = 'Cab Service Packages'
+
+    def __str__(self):
+        return f"{self.title} ({self.get_vehicle_category_display()}) - ₹{self.base_price}"
+
+
+class FleetVehicle(models.Model):
+    """
+    Fleet Vehicle inventory tracking hotel-owned and outsourced vendor agency cabs.
+    """
+    class VehicleStatus(models.TextChoices):
+        AVAILABLE = 'AVAILABLE', 'Available'
+        ON_TRIP = 'ON_TRIP', 'On Trip'
+        MAINTENANCE = 'MAINTENANCE', 'Maintenance'
+
+    branch = models.ForeignKey(
+        'super_admin.RestaurantBranch',
+        on_delete=models.CASCADE,
+        related_name='fleet_vehicles'
+    )
+    vehicle_number = models.CharField(max_length=50, verbose_name="Vehicle License Number")
+    vehicle_category = models.CharField(
+        max_length=30,
+        choices=CabServicePackage.VehicleCategory.choices,
+        default=CabServicePackage.VehicleCategory.SEDAN,
+        verbose_name="Vehicle Category"
+    )
+    driver_name = models.CharField(max_length=150, verbose_name="Driver Name")
+    driver_phone = models.CharField(max_length=30, verbose_name="Driver Contact Phone")
+    is_vendor_vehicle = models.BooleanField(
+        default=False,
+        verbose_name="Is Vendor / Outsourced Vehicle",
+        help_text="Checked if sourced from an external taxi agency or third-party vendor"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=VehicleStatus.choices,
+        default=VehicleStatus.AVAILABLE,
+        verbose_name="Operational Status"
+    )
+    notes = models.TextField(blank=True, verbose_name="Notes")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['vehicle_number']
+        verbose_name = 'Fleet Vehicle'
+        verbose_name_plural = 'Fleet Vehicles'
+        unique_together = ('branch', 'vehicle_number')
+
+    def __str__(self):
+        v_type = "Vendor" if self.is_vendor_vehicle else "In-House"
+        return f"{self.vehicle_number} [{self.get_vehicle_category_display()}] - {self.driver_name} ({v_type})"
+
+
+class CabBooking(models.Model):
+    """
+    Cab reservation & dispatch tracking. Foreign-keyed to RoomBooking.
+    """
+    class PaymentStatus(models.TextChoices):
+        COMPLIMENTARY = 'COMPLIMENTARY', 'Complimentary'
+        PAID = 'PAID', 'Paid'
+        ADDED_TO_FOLIO = 'ADDED_TO_FOLIO', 'Added to Folio'
+        PENDING = 'PENDING', 'Pending'
+
+    class TripStatus(models.TextChoices):
+        SCHEDULED = 'SCHEDULED', 'Scheduled'
+        DRIVER_ASSIGNED = 'DRIVER_ASSIGNED', 'Driver Assigned'
+        EN_ROUTE = 'EN_ROUTE', 'En Route'
+        COMPLETED = 'COMPLETED', 'Completed'
+        CANCELLED = 'CANCELLED', 'Cancelled'
+
+    booking_id = models.CharField(max_length=50, unique=True, editable=False)
+    branch = models.ForeignKey(
+        'super_admin.RestaurantBranch',
+        on_delete=models.CASCADE,
+        related_name='cab_bookings'
+    )
+    room_booking = models.ForeignKey(
+        RoomBooking,
+        on_delete=models.CASCADE,
+        related_name='cab_bookings'
+    )
+    package = models.ForeignKey(
+        CabServicePackage,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cab_bookings'
+    )
+    assigned_vehicle = models.ForeignKey(
+        FleetVehicle,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cab_bookings'
+    )
+    is_complimentary = models.BooleanField(
+        default=False,
+        verbose_name="Is Complimentary (₹0)"
+    )
+    pickup_datetime = models.DateTimeField(verbose_name="Pickup Date & Time")
+    pickup_location = models.CharField(max_length=255, verbose_name="Pickup Location")
+    drop_location = models.CharField(max_length=255, verbose_name="Drop Location")
+    flight_or_train_number = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        verbose_name="Flight / Train Number"
+    )
+    base_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Base Fare (₹)"
+    )
+    tax_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Tax / GST (₹)"
+    )
+    total_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        verbose_name="Total Fare (₹)"
+    )
+    payment_status = models.CharField(
+        max_length=20,
+        choices=PaymentStatus.choices,
+        default=PaymentStatus.PENDING,
+        verbose_name="Payment Status"
+    )
+    trip_status = models.CharField(
+        max_length=20,
+        choices=TripStatus.choices,
+        default=TripStatus.SCHEDULED,
+        verbose_name="Trip Status"
+    )
+    guest_notes = models.TextField(blank=True, verbose_name="Guest Notes")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['pickup_datetime']
+        verbose_name = 'Cab Booking'
+        verbose_name_plural = 'Cab Bookings'
+
+    def __str__(self):
+        return f"{self.booking_id}: {self.pickup_location} -> {self.drop_location} ({self.get_trip_status_display()})"
+
+    def save(self, *args, **kwargs):
+        if not self.booking_id:
+            self.booking_id = f"CB-HTL-{uuid.uuid4().hex[:8].upper()}"
+        if not self.branch_id and self.room_booking:
+            self.branch = self.room_booking.branch
+        super().save(*args, **kwargs)
+
+
+# Signal for Room Cancellation Cascade
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+@receiver(post_save, sender=RoomBooking)
+def cascade_cancel_cab_bookings(sender, instance, **kwargs):
+    """
+    If a RoomBooking is cancelled, automatically trigger cancellation of
+    all linked CabBooking records and release any assigned FleetVehicle.
+    """
+    if instance.booking_status == RoomBooking.BookingStatus.CANCELLED:
+        linked_cabs = instance.cab_bookings.exclude(trip_status=CabBooking.TripStatus.CANCELLED)
+        for cab in linked_cabs:
+            if cab.assigned_vehicle:
+                vehicle = cab.assigned_vehicle
+                # Release vehicle if no other active ride is assigned to it
+                other_active = CabBooking.objects.filter(
+                    assigned_vehicle=vehicle,
+                    trip_status__in=[CabBooking.TripStatus.DRIVER_ASSIGNED, CabBooking.TripStatus.EN_ROUTE]
+                ).exclude(pk=cab.pk).exists()
+                if not other_active and vehicle.status == FleetVehicle.VehicleStatus.ON_TRIP:
+                    vehicle.status = FleetVehicle.VehicleStatus.AVAILABLE
+                    vehicle.save(update_fields=['status', 'updated_at'])
+            cab.trip_status = CabBooking.TripStatus.CANCELLED
+            cab.save(update_fields=['trip_status', 'updated_at'])
+

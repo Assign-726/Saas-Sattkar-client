@@ -117,11 +117,13 @@ class MenuItemSerializer(serializers.ModelSerializer):
 class OrderItemSerializer(serializers.ModelSerializer):
     menu_item_name = serializers.ReadOnlyField(source='menu_item.name')
     subtotal = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    unit_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    variant_name = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
 
     class Meta:
         model = OrderItem
-        fields = ['id', 'menu_item', 'menu_item_name', 'quantity', 'unit_price', 'subtotal', 'notes', 'kot_batch', 'is_kot_printed']
-        read_only_fields = ['unit_price', 'subtotal', 'kot_batch', 'is_kot_printed']
+        fields = ['id', 'menu_item', 'menu_item_name', 'quantity', 'unit_price', 'subtotal', 'notes', 'kot_batch', 'is_kot_printed', 'variant_name']
+        read_only_fields = ['subtotal', 'kot_batch', 'is_kot_printed']
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -406,11 +408,41 @@ class OrderSerializer(serializers.ModelSerializer):
 
             for item_data in resolved_items:
                 menu_item = item_data['menu_item']
+                raw_unit_price = item_data.get('unit_price')
+                variant_name = str(item_data.get('variant_name') or '').strip().lower()
+                resolved_unit_price = Decimal(str(menu_item.price))
+
+                v_data = getattr(menu_item, 'variants_json', []) or []
+                if isinstance(v_data, str):
+                    import json
+                    try:
+                        v_data = json.loads(v_data)
+                    except Exception:
+                        v_data = []
+
+                if isinstance(v_data, list) and v_data:
+                    matched_v = None
+                    if variant_name:
+                        for v in v_data:
+                            if str(v.get('name', '')).strip().lower() == variant_name:
+                                matched_v = v
+                                break
+                    if matched_v and matched_v.get('price') is not None:
+                        resolved_unit_price = Decimal(str(matched_v['price']))
+                    elif raw_unit_price is not None:
+                        try:
+                            rup = Decimal(str(raw_unit_price))
+                            variant_prices = [Decimal(str(v.get('price'))) for v in v_data if v.get('price') is not None]
+                            if rup in variant_prices:
+                                resolved_unit_price = rup
+                        except Exception:
+                            pass
+
                 OrderItem.objects.create(
                     order=active_order,
                     menu_item=menu_item,
                     quantity=item_data['quantity'],
-                    unit_price=menu_item.price,
+                    unit_price=resolved_unit_price,
                     notes=item_data.get('notes', ''),
                     kot_batch=new_batch_num,
                     is_kot_printed=False,
@@ -441,11 +473,41 @@ class OrderSerializer(serializers.ModelSerializer):
             
             for item_data in resolved_items:
                 menu_item = item_data['menu_item']
+                raw_unit_price = item_data.get('unit_price')
+                variant_name = str(item_data.get('variant_name') or '').strip().lower()
+                resolved_unit_price = Decimal(str(menu_item.price))
+
+                v_data = getattr(menu_item, 'variants_json', []) or []
+                if isinstance(v_data, str):
+                    import json
+                    try:
+                        v_data = json.loads(v_data)
+                    except Exception:
+                        v_data = []
+
+                if isinstance(v_data, list) and v_data:
+                    matched_v = None
+                    if variant_name:
+                        for v in v_data:
+                            if str(v.get('name', '')).strip().lower() == variant_name:
+                                matched_v = v
+                                break
+                    if matched_v and matched_v.get('price') is not None:
+                        resolved_unit_price = Decimal(str(matched_v['price']))
+                    elif raw_unit_price is not None:
+                        try:
+                            rup = Decimal(str(raw_unit_price))
+                            variant_prices = [Decimal(str(v.get('price'))) for v in v_data if v.get('price') is not None]
+                            if rup in variant_prices:
+                                resolved_unit_price = rup
+                        except Exception:
+                            pass
+
                 OrderItem.objects.create(
                     order=order,
                     menu_item=menu_item,
                     quantity=item_data['quantity'],
-                    unit_price=menu_item.price,
+                    unit_price=resolved_unit_price,
                     notes=item_data.get('notes', ''),
                     kot_batch=1,
                     is_kot_printed=False,
