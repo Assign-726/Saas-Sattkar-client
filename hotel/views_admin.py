@@ -720,23 +720,42 @@ def category_create_edit_action(request, restaurant_slug, ctx):
             )
             category.save()
 
+        # Handle Cover Image deletion / update
+        remove_cover = request.POST.get('remove_cover_image') in ['1', 'true', 'on', True]
+        if remove_cover:
+            if category.cover_image:
+                try:
+                    category.cover_image.delete(save=False)
+                except Exception:
+                    pass
+                category.cover_image = None
+            category.cover_image_url = ""
+
         # Handle Cover Image with WebP conversion
         if 'cover_image' in request.FILES:
             converted_cover = optimize_image_to_webp(request.FILES['cover_image'])
             category.cover_image = converted_cover
-        if cover_image_url:
+            category.cover_image_url = ""
+        elif cover_image_url and not remove_cover:
             category.cover_image_url = cover_image_url
 
-        # Existing media count
+        # Existing media count & strict limits
+        MAX_TOTAL_MEDIA = 10
+        MAX_VIDEOS = 2
+
         current_images_count = category.images.count()
         current_videos = list(category.video_links) if isinstance(category.video_links, list) else []
-        current_media_count = current_images_count + len(current_videos) + (1 if category.cover_image or category.cover_image_url else 0)
+        has_cover = bool(category.cover_image or category.cover_image_url)
+        current_media_count = current_images_count + len(current_videos) + (1 if has_cover else 0)
 
-        # Process uploaded video files (Controller: max 25MB, mp4/webm/mov)
+        # Process uploaded video files (Controller: max 25MB, mp4/webm/mov, max 2 videos total)
         uploaded_video_files = request.FILES.getlist('uploaded_videos')
         for v_file in uploaded_video_files:
+            if len(current_videos) >= MAX_VIDEOS:
+                messages.warning(request, f"Video limit reached (max {MAX_VIDEOS} videos allowed). Additional videos were skipped.")
+                break
             if current_media_count >= MAX_TOTAL_MEDIA:
-                messages.warning(request, f"Media limit reached (max {MAX_TOTAL_MEDIA} items). Some videos were skipped.")
+                messages.warning(request, f"Media limit reached (max {MAX_TOTAL_MEDIA} total items). Some videos were skipped.")
                 break
             try:
                 vid_url, vid_size = process_video_file_upload(v_file, max_size_mb=25)
@@ -750,13 +769,15 @@ def category_create_edit_action(request, restaurant_slug, ctx):
             except ValueError as ve:
                 messages.error(request, str(ve))
 
-        # Parse external video URLs (YouTube, Vimeo, MP4 CDN)
+        # Parse external video URLs (YouTube, Vimeo, MP4 CDN) - max 2 videos total
         video_json_raw = request.POST.get('video_links_json', '').strip()
         if video_json_raw:
             try:
                 parsed_vids = json.loads(video_json_raw)
                 if isinstance(parsed_vids, list):
                     for v in parsed_vids:
+                        if len(current_videos) >= MAX_VIDEOS:
+                            break
                         if current_media_count >= MAX_TOTAL_MEDIA:
                             break
                         if isinstance(v, dict) and v.get('url', '').strip():
@@ -771,8 +792,10 @@ def category_create_edit_action(request, restaurant_slug, ctx):
             except Exception:
                 pass
 
-        # Also parse individual video_url_1 .. 5 inputs
-        for i in range(1, 6):
+        # Also parse individual video_url_1 and video_url_2 inputs (max 2 videos total)
+        for i in range(1, 3):
+            if len(current_videos) >= MAX_VIDEOS:
+                break
             if current_media_count >= MAX_TOTAL_MEDIA:
                 break
             v_url = request.POST.get(f'video_url_{i}', '').strip()
@@ -785,15 +808,16 @@ def category_create_edit_action(request, restaurant_slug, ctx):
                 })
                 current_media_count += 1
 
-        category.video_links = current_videos[:MAX_TOTAL_MEDIA]
+        category.video_links = current_videos[:MAX_VIDEOS]
 
-        # External Gallery URLs
+        # External Gallery URLs (Respect total media limit of 10)
         gallery_urls_raw = request.POST.get('gallery_image_urls', '').strip()
         if gallery_urls_raw:
             raw_lines = [u.strip() for u in gallery_urls_raw.replace('\r\n', '\n').split('\n') if u.strip()]
             for line in raw_lines:
                 for part in line.split(','):
                     if current_media_count >= MAX_TOTAL_MEDIA:
+                        messages.warning(request, f"Total media limit reached (max {MAX_TOTAL_MEDIA} items).")
                         break
                     part_clean = part.strip()
                     if part_clean and part_clean.startswith(('http://', 'https://', '/media/')):
@@ -805,7 +829,7 @@ def category_create_edit_action(request, restaurant_slug, ctx):
                         )
                         current_media_count += 1
 
-        # Process multiple uploaded gallery photos (Controller: Auto WebP conversion, max 8MB)
+        # Process multiple uploaded gallery photos (Controller: Auto WebP conversion, max 8MB, max 10 total)
         uploaded_gallery = request.FILES.getlist('gallery_images')
         for idx, file_obj in enumerate(uploaded_gallery, start=1):
             if current_media_count >= MAX_TOTAL_MEDIA:
@@ -831,7 +855,31 @@ def category_create_edit_action(request, restaurant_slug, ctx):
 
 
 @hotel_admin_required
-def category_set_cover_action(request, restaurant_slug, image_id, ctx):
+def category_delete_cover_action(request, restaurant_slug, ctx, category_id):
+    """
+    Media Controller: Remove the primary cover image from a room category.
+    Supports AJAX or normal POST.
+    """
+    branch = ctx['current_branch']
+    category = get_object_or_404(RoomCategory, id=category_id, branch=branch)
+    if category.cover_image:
+        try:
+            category.cover_image.delete(save=False)
+        except Exception:
+            pass
+        category.cover_image = None
+    category.cover_image_url = ""
+    category.save(update_fields=['cover_image', 'cover_image_url', 'updated_at'])
+
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('ajax'):
+        return JsonResponse({'status': 'ok', 'message': 'Cover photo removed'})
+
+    messages.success(request, f"Cover photo removed from '{category.name}'.")
+    return redirect(reverse('hotel_admin:categories', kwargs={'restaurant_slug': restaurant_slug}))
+
+
+@hotel_admin_required
+def category_set_cover_action(request, restaurant_slug, ctx, image_id):
     """
     Media Controller: Make an existing gallery photo the primary category cover.
     """
@@ -855,7 +903,7 @@ def category_set_cover_action(request, restaurant_slug, image_id, ctx):
 
 
 @hotel_admin_required
-def category_delete_video_action(request, restaurant_slug, category_id, video_idx, ctx):
+def category_delete_video_action(request, restaurant_slug, ctx, category_id, video_idx):
     """
     Media Controller: Remove a video from category's video_links by index.
     """
@@ -865,6 +913,14 @@ def category_delete_video_action(request, restaurant_slug, category_id, video_id
 
     if 0 <= video_idx < len(videos):
         removed = videos.pop(video_idx)
+        # If it was an uploaded video file, try to delete it from storage
+        if isinstance(removed, dict) and removed.get('type') == 'uploaded' and removed.get('url'):
+            try:
+                rel_path = removed['url'].replace('/media/', '', 1)
+                if default_storage.exists(rel_path):
+                    default_storage.delete(rel_path)
+            except Exception:
+                pass
         category.video_links = videos
         category.save(update_fields=['video_links', 'updated_at'])
 
@@ -876,7 +932,7 @@ def category_delete_video_action(request, restaurant_slug, category_id, video_id
 
 
 @hotel_admin_required
-def category_delete_image_action(request, restaurant_slug, image_id, ctx):
+def category_delete_image_action(request, restaurant_slug, ctx, image_id):
     """
     Remove an individual gallery photo from a category.
     Supports AJAX or normal POST.
@@ -884,6 +940,11 @@ def category_delete_image_action(request, restaurant_slug, image_id, ctx):
     branch = ctx['current_branch']
     img = get_object_or_404(RoomCategoryImage, id=image_id, category__branch=branch)
     cat_name = img.category.name
+    if img.image:
+        try:
+            img.image.delete(save=False)
+        except Exception:
+            pass
     img.delete()
 
     if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('ajax'):
@@ -1671,10 +1732,16 @@ def cab_fleet_create_edit_action(request, restaurant_slug, ctx):
         except Exception as e:
             messages.warning(request, f"Chauffeur photo upload failed: {e}")
 
-    # Gallery images: Textarea URLs + Local File Uploads (Capped at 10 max)
+    # Gallery images: Existing kept images + Textarea URLs + Local File Uploads (Capped at 10 max)
     MAX_GALLERY_IMAGES = 10
+    existing_gallery = [img.strip() for img in request.POST.getlist('existing_gallery_images') if img.strip()]
     gallery_raw = request.POST.get('gallery_images', '').strip()
-    gallery_images = [img.strip() for img in gallery_raw.replace(',', '\n').splitlines() if img.strip()]
+    new_urls = [img.strip() for img in gallery_raw.replace(',', '\n').splitlines() if img.strip()]
+
+    gallery_images = []
+    for img in existing_gallery + new_urls:
+        if img and img not in gallery_images:
+            gallery_images.append(img)
 
     uploaded_gallery_files = request.FILES.getlist('gallery_image_files')
     if uploaded_gallery_files:
@@ -1693,6 +1760,10 @@ def cab_fleet_create_edit_action(request, restaurant_slug, ctx):
     if len(gallery_images) > MAX_GALLERY_IMAGES:
         gallery_images = gallery_images[:MAX_GALLERY_IMAGES]
         messages.warning(request, f"Gallery images capped at the maximum limit of {MAX_GALLERY_IMAGES} photos.")
+
+    remove_cover = request.POST.get('remove_cover_image') in ['true', '1', 'on']
+    if remove_cover and not ('cover_image_file' in request.FILES and request.FILES['cover_image_file']):
+        cover_image = ''
 
     if cover_image and cover_image not in gallery_images and len(gallery_images) < MAX_GALLERY_IMAGES:
         gallery_images.insert(0, cover_image)
@@ -1788,10 +1859,14 @@ def cab_fleet_create_edit_action(request, restaurant_slug, ctx):
         v.vehicle_category = vehicle_category
         v.tag = tag
         v.description = description
-        if cover_image:
+        if 'cover_image_file' in request.FILES and request.FILES['cover_image_file']:
             v.cover_image = cover_image
-        if gallery_images:
-            v.gallery_images = gallery_images
+        elif remove_cover:
+            v.cover_image = ''
+        elif 'cover_image' in request.POST:
+            v.cover_image = cover_image
+
+        v.gallery_images = gallery_images
         v.passengers = passengers
         v.luggage = luggage
         v.fuel_type = fuel_type
@@ -1881,6 +1956,54 @@ def cab_fleet_delete_action(request, restaurant_slug, ctx, vehicle_id):
     v.delete()
     messages.success(request, f"Vehicle '{num}' deleted from fleet.")
     return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
+
+
+@hotel_admin_required
+def cab_fleet_delete_image_action(request, restaurant_slug, ctx, vehicle_id):
+    """
+    AJAX action to delete a specific photo from vehicle gallery or cover.
+    Removes the image URL from v.gallery_images and if it's the cover, clears or reassigns it.
+    Cleans up the underlying local media file from default_storage if applicable.
+    """
+    if request.method != 'POST':
+        return HttpResponseForbidden("POST required")
+
+    branch = ctx['current_branch']
+    v = get_object_or_404(FleetVehicle, id=vehicle_id, branch=branch)
+
+    image_url = request.POST.get('image_url', '').strip()
+    if not image_url:
+        return JsonResponse({'success': False, 'error': 'No image URL provided'}, status=400)
+
+    # Remove from gallery_images
+    current_gallery = list(v.gallery_images or [])
+    new_gallery = [img for img in current_gallery if img != image_url]
+    v.gallery_images = new_gallery
+
+    # If it was the cover image, update cover
+    was_cover = False
+    if v.cover_image == image_url:
+        was_cover = True
+        v.cover_image = new_gallery[0] if new_gallery else ''
+
+    v.save()
+
+    # If local media file, delete physical file from disk
+    if image_url.startswith('/media/'):
+        rel_path = image_url[len('/media/'):]
+        if default_storage.exists(rel_path):
+            try:
+                default_storage.delete(rel_path)
+            except Exception:
+                pass
+
+    return JsonResponse({
+        'success': True,
+        'message': 'Image deleted successfully.',
+        'remaining_count': len(v.gallery_images),
+        'was_cover': was_cover,
+        'new_cover_image': v.cover_image
+    })
 
 
 @hotel_admin_required

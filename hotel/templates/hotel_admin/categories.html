@@ -217,15 +217,14 @@
 .cat-img-box img { width: 100% !important; height: 145px !important; max-height: 145px !important; object-fit: cover !important; display: block !important; }
 </style>
 
-<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+<div class="page-header">
     <div>
-        <h4 class="fw-bold mb-1 text-dark">Room Categories &amp; Tariffs</h4>
-        <p class="text-muted small mb-0">Configure room types, pricing, tax-inclusive tariffs, WebP media gallery, videos, and banner highlights</p>
+        <h1 class="page-title">Room Categories &amp; Tariffs</h1>
+        <p class="page-subtitle">Configure room types, pricing, tax-inclusive tariffs, media gallery, and banner highlights</p>
     </div>
-    <div>
-        <button type="button" class="btn btn-pms-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#addCategoryModal" onclick="openNewCategoryModal()">
-            <i class="fa-solid fa-plus me-1"></i>
-            <span>Add New Category</span>
+    <div class="page-actions">
+        <button type="button" class="btn-pms-primary" data-bs-toggle="modal" data-bs-target="#addCategoryModal" onclick="openNewCategoryModal()">
+            <i class="fa-solid fa-plus"></i>Add New Category
         </button>
     </div>
 </div>
@@ -333,13 +332,25 @@
                 </div>
 
                 <!-- Compact Media Assets Bar -->
-                {% if c.images.all|length > 0 or c.video_links_list|length > 0 %}
+                {% if c.images.all|length > 0 or c.video_links_list|length > 0 or c.cover_image or c.cover_image_url %}
                 <div class="pt-2 border-top mt-2">
                     <div class="d-flex align-items-center justify-content-between mb-1">
                         <small class="text-muted fw-semibold" style="font-size: 0.72rem;">Media Assets (Max 10)</small>
-                        <small class="text-muted" style="font-size: 0.72rem;">{{ c.images.count|add:c.video_links_list|length }} / 10 items</small>
+                        <small class="text-muted" style="font-size: 0.72rem;">
+                            {% if c.cover_image or c.cover_image_url %}
+                            {{ c.images.count|add:c.video_links_list|length|add:1 }} / 10 items
+                            {% else %}
+                            {{ c.images.count|add:c.video_links_list|length }} / 10 items
+                            {% endif %}
+                        </small>
                     </div>
-                    <div class="d-flex gap-1 overflow-hidden">
+                    <div class="d-flex gap-1 overflow-hidden align-items-center">
+                        {% if c.cover_image or c.cover_image_url %}
+                        <div class="position-relative" title="Cover Photo">
+                            <img src="{{ c.effective_image_url }}" alt="cover" class="rounded border border-warning" style="width: 40px; height: 28px; object-fit: cover;">
+                            <span class="position-absolute top-0 start-0 badge bg-warning text-dark p-0 px-0.5" style="font-size: 0.5rem; line-height: 1;">★</span>
+                        </div>
+                        {% endif %}
                         {% for img in c.images.all|slice:":4" %}
                         <img src="{{ img.effective_url }}" alt="thumb" class="rounded" style="width: 40px; height: 28px; object-fit: cover; border: 1px solid #cbd5e1;">
                         {% endfor %}
@@ -409,6 +420,7 @@
             <form method="POST" action="{% url 'hotel_admin:category_create_edit' restaurant_slug=rslug %}" enctype="multipart/form-data" id="catForm">
                 {% csrf_token %}
                 <input type="hidden" name="category_id" id="catFormId">
+                <input type="hidden" name="remove_cover_image" id="catFormRemoveCover" value="0">
 
                 <!-- Sticky Header -->
                 <div class="modal-header bg-dark text-white px-4 py-2.5">
@@ -643,8 +655,8 @@
                                     <span class="badge bg-light text-secondary border" style="font-size: 0.68rem;" title="Images are auto-converted to WebP">
                                         <i class="fa-solid fa-bolt text-warning me-0.5"></i>Auto WebP (85%)
                                     </span>
-                                    <span class="badge bg-light text-secondary border" style="font-size: 0.68rem;">
-                                        <i class="fa-solid fa-film text-danger me-0.5"></i>Max Video 25MB
+                                    <span class="badge bg-light text-secondary border" style="font-size: 0.68rem;" id="videoQuotaBadge">
+                                        <i class="fa-solid fa-film text-danger me-0.5"></i><span id="videoCountText">0</span>/2 Videos (Max 25MB)
                                     </span>
                                 </div>
                             </div>
@@ -670,9 +682,14 @@
                                         <!-- Sub-panel 1: Photo Uploads -->
                                         <div id="mediaPanelPhotos">
                                             <div class="mb-2">
-                                                <label class="form-label small fw-semibold text-dark mb-0.5">
-                                                    <i class="fa-solid fa-star text-warning me-1"></i>Primary Cover Photo
-                                                </label>
+                                                <div class="d-flex align-items-center justify-content-between mb-0.5">
+                                                    <label class="form-label small fw-semibold text-dark mb-0">
+                                                        <i class="fa-solid fa-star text-warning me-1"></i>Primary Cover Photo
+                                                    </label>
+                                                    <button type="button" class="btn btn-link p-0 text-danger text-decoration-none small" style="font-size: 0.68rem; display: none;" id="btnRemoveCoverDraft" onclick="deleteCategoryCover()">
+                                                        <i class="fa-solid fa-trash me-0.5"></i>Remove
+                                                    </button>
+                                                </div>
                                                 <input type="file" name="cover_image" id="catFormCoverFile" class="form-control form-control-sm" accept="image/*" onchange="previewCoverFile(this)">
                                                 <div class="text-muted" style="font-size: 0.7rem;">Auto-converts to WebP.</div>
                                             </div>
@@ -686,7 +703,12 @@
                                             </div>
 
                                             <div id="coverPreviewWrap" class="mt-1" style="display: none;">
-                                                <small class="text-muted d-block" style="font-size: 0.68rem;">Cover Preview:</small>
+                                                <div class="d-flex align-items-center justify-content-between mb-0.5">
+                                                    <small class="text-muted" style="font-size: 0.68rem;">Cover Preview:</small>
+                                                    <button type="button" class="btn btn-xs btn-outline-danger py-0 px-1" style="font-size: 0.62rem;" onclick="deleteCategoryCover()">
+                                                        <i class="fa-solid fa-xmark me-0.5"></i>Remove
+                                                    </button>
+                                                </div>
                                                 <img id="coverPreviewImg" src="" alt="Cover preview" class="rounded border" style="height: 55px; width: 85px; object-fit: cover;">
                                             </div>
                                         </div>
@@ -694,9 +716,14 @@
                                         <!-- Sub-panel 2: External Photo URLs -->
                                         <div id="mediaPanelUrls" style="display: none;">
                                             <div class="mb-2">
-                                                <label class="form-label small fw-semibold text-dark mb-0.5">
-                                                    <i class="fa-solid fa-star text-warning me-1"></i>External Cover URL
-                                                </label>
+                                                <div class="d-flex align-items-center justify-content-between mb-0.5">
+                                                    <label class="form-label small fw-semibold text-dark mb-0">
+                                                        <i class="fa-solid fa-star text-warning me-1"></i>External Cover URL
+                                                    </label>
+                                                    <button type="button" class="btn btn-link p-0 text-danger text-decoration-none small" style="font-size: 0.68rem; display: none;" id="btnRemoveCoverUrlDraft" onclick="deleteCategoryCover()">
+                                                        <i class="fa-solid fa-trash me-0.5"></i>Remove
+                                                    </button>
+                                                </div>
                                                 <input type="url" name="cover_image_url" id="catFormCoverUrl" class="form-control form-control-sm" placeholder="https://images.unsplash.com/..." oninput="previewCoverUrl(this.value)">
                                             </div>
                                             <div class="mb-1">
@@ -707,35 +734,40 @@
                                             </div>
                                         </div>
 
-                                        <!-- Sub-panel 3: Videos (File + Links) -->
+                                        <!-- Sub-panel 3: Videos (File + Links) - STRICT MAX 2 VIDEOS -->
                                         <div id="mediaPanelVideos" style="display: none;">
-                                            <div class="mb-2">
-                                                <label class="form-label small fw-semibold text-dark mb-0.5">
-                                                    <i class="fa-solid fa-film text-danger me-1"></i>Upload Video File (Max 25MB)
-                                                </label>
-                                                <input type="file" name="uploaded_videos" id="catFormVideoFiles" class="form-control form-control-sm" accept="video/mp4,video/webm,video/quicktime" multiple onchange="updateQuotaPreview()">
-                                                <div class="text-muted" style="font-size: 0.7rem;">Formats: MP4, WebM, MOV.</div>
+                                            <div class="alert alert-light border py-1.5 px-2 mb-2 d-flex align-items-center justify-content-between" style="font-size: 0.72rem;">
+                                                <span><i class="fa-solid fa-circle-info text-primary me-1"></i>Max <strong>2 videos</strong> allowed per category</span>
+                                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle" id="videoCounterPill">0/2 Videos</span>
                                             </div>
 
-                                            <div class="mb-2">
-                                                <label class="form-label small fw-semibold text-dark mb-0.5">
-                                                    <i class="fa-brands fa-youtube text-danger me-1"></i>Or Video URL (YouTube, Vimeo, MP4)
+                                            <div class="mb-2 p-2 rounded-2 border bg-light">
+                                                <label class="form-label small fw-semibold text-dark mb-0.5 d-flex align-items-center justify-content-between">
+                                                    <span><i class="fa-solid fa-film text-danger me-1"></i>Upload Video File (Max 25MB)</span>
+                                                    <span class="text-muted" style="font-size: 0.68rem;">MP4, WebM, MOV</span>
                                                 </label>
-                                                <input type="url" name="video_url_1" id="catVideoUrl_1" class="form-control form-control-sm mb-1" placeholder="https://www.youtube.com/watch?v=..." oninput="updateQuotaPreview()">
-                                                <input type="text" name="video_title_1" id="catVideoTitle_1" class="form-control form-control-sm" placeholder="Video Title (e.g. Master Suite Tour)">
+                                                <input type="file" name="uploaded_videos" id="catFormVideoFiles" class="form-control form-control-sm" accept="video/mp4,video/webm,video/quicktime" multiple onchange="onVideoFilesChanged(this)">
+                                                <div class="text-muted mt-0.5" style="font-size: 0.68rem;">Max 2 videos total across uploads &amp; links.</div>
                                             </div>
 
-                                            <!-- Collapsible extra video slots -->
-                                            <a class="small text-primary text-decoration-none" data-bs-toggle="collapse" href="#extraVidRows" role="button" style="font-size: 0.75rem;">
-                                                <i class="fa-solid fa-plus-circle me-1"></i>More video links...
-                                            </a>
-                                            <div class="collapse mt-1" id="extraVidRows">
-                                                {% for idx in "2345" %}
-                                                <div class="input-group input-group-sm mb-1">
-                                                    <span class="input-group-text py-0" style="font-size: 0.7rem;">#{{ idx }}</span>
-                                                    <input type="url" name="video_url_{{ idx }}" id="catVideoUrl_{{ idx }}" class="form-control" placeholder="Video URL" oninput="updateQuotaPreview()">
+                                            <div class="p-2 rounded-2 border bg-light">
+                                                <div class="small fw-semibold text-dark mb-1.5">
+                                                    <i class="fa-brands fa-youtube text-danger me-1"></i>Or Video URLs (YouTube, Vimeo, MP4)
                                                 </div>
-                                                {% endfor %}
+                                                
+                                                <!-- Video Link 1 -->
+                                                <div class="mb-2">
+                                                    <label class="text-muted small fw-semibold mb-0.5 d-block" style="font-size: 0.68rem;">Video Link #1</label>
+                                                    <input type="url" name="video_url_1" id="catVideoUrl_1" class="form-control form-control-sm mb-1" placeholder="https://www.youtube.com/watch?v=..." oninput="updateQuotaPreview()">
+                                                    <input type="text" name="video_title_1" id="catVideoTitle_1" class="form-control form-control-sm" placeholder="Video Title (e.g. Master Suite Tour)">
+                                                </div>
+
+                                                <!-- Video Link 2 -->
+                                                <div class="mb-1">
+                                                    <label class="text-muted small fw-semibold mb-0.5 d-block" style="font-size: 0.68rem;">Video Link #2</label>
+                                                    <input type="url" name="video_url_2" id="catVideoUrl_2" class="form-control form-control-sm mb-1" placeholder="https://www.youtube.com/watch?v=..." oninput="updateQuotaPreview()">
+                                                    <input type="text" name="video_title_2" id="catVideoTitle_2" class="form-control form-control-sm" placeholder="Video Title (e.g. Balcony &amp; View Tour)">
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -779,6 +811,7 @@
 
 <script>
 const MAX_MEDIA = 10;
+const MAX_VIDEOS = 2;
 let currentImagesState = [];
 let currentVideosState = [];
 let currentCoverState = null;
@@ -798,6 +831,7 @@ function switchMediaMode(mode) {
 function openNewCategoryModal() {
     document.getElementById('catForm').reset();
     document.getElementById('catFormId').value = '';
+    document.getElementById('catFormRemoveCover').value = '0';
     document.getElementById('catModalTitle').innerHTML = '<i class="fa-solid fa-tags text-primary me-2"></i>Add Room Category';
     document.getElementById('coverPreviewWrap').style.display = 'none';
     
@@ -820,6 +854,7 @@ function handleEditCategory(btn) {
     const d = btn.dataset;
     document.getElementById('catForm').reset();
     document.getElementById('catFormId').value = d.id;
+    document.getElementById('catFormRemoveCover').value = '0';
     document.getElementById('catFormName').value = d.name || '';
     document.getElementById('catFormPrice').value = d.price || '';
     document.getElementById('catFormOrigPrice').value = d.origPrice || '';
@@ -848,16 +883,18 @@ function handleEditCategory(btn) {
         document.getElementById('coverPreviewWrap').style.display = 'none';
     }
 
-    // Videos
+    // Videos (Strict Max 2)
     currentVideosState = [];
-    for (let i = 1; i <= 5; i++) {
-        document.getElementById(`catVideoUrl_${i}`).value = '';
-    }
+    document.getElementById('catVideoUrl_1').value = '';
+    document.getElementById('catVideoTitle_1').value = '';
+    document.getElementById('catVideoUrl_2').value = '';
+    document.getElementById('catVideoTitle_2').value = '';
+
     if (d.videos) {
         try {
             const vids = JSON.parse(d.videos);
             if (Array.isArray(vids)) {
-                currentVideosState = vids;
+                currentVideosState = vids.slice(0, MAX_VIDEOS);
             }
         } catch (e) {
             console.error("Error parsing category videos:", e);
@@ -907,10 +944,11 @@ function renderSavedMediaGrid() {
         return;
     }
 
-    // Render Cover Image if exists
+    // Render Cover Image if exists (WITH DELETE BUTTON)
     if (currentCoverState) {
         const col = document.createElement('div');
         col.className = 'col-4 col-sm-4';
+        col.id = 'media-cover-tile';
         col.innerHTML = `
             <div class="media-tile h-100 border-warning">
                 <div class="position-relative">
@@ -918,6 +956,9 @@ function renderSavedMediaGrid() {
                     <span class="badge bg-warning text-dark position-absolute top-0 start-0 m-1 fw-bold" style="font-size: 0.58rem;">
                         <i class="fa-solid fa-star"></i> Cover
                     </span>
+                    <button type="button" class="media-tile-del" onclick="deleteCategoryCover()" title="Delete Cover Photo">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
                 </div>
                 <div class="text-truncate text-muted text-center mt-1" style="font-size: 0.65rem;">Primary Cover</div>
             </div>
@@ -976,48 +1017,154 @@ function renderSavedMediaGrid() {
     });
 }
 
-// Media Quota & Limits Calculator
+// Media Quota & Limits Calculator (Strict Max 10 Total, Max 2 Videos)
 function updateQuotaPreview() {
-    const savedCount = currentImagesState.length + currentVideosState.length + (currentCoverState ? 1 : 0);
-    
-    // Count pending new uploads
-    const newCover = (document.getElementById('catFormCoverFile').files.length > 0 || document.getElementById('catFormCoverUrl').value.trim() !== '') ? 1 : 0;
+    const hasCover = currentCoverState ? 1 : 0;
+    const newCoverFile = document.getElementById('catFormCoverFile').files.length > 0;
+    const newCoverUrl = document.getElementById('catFormCoverUrl').value.trim() !== '';
+    const pendingCover = (!hasCover && (newCoverFile || newCoverUrl)) ? 1 : 0;
+
     const newPhotos = document.getElementById('catFormGalleryFiles').files.length;
     const newUrls = document.getElementById('catFormGalleryUrls').value.split('\n').map(s => s.trim()).filter(Boolean).length;
-    const newVideosUpload = document.getElementById('catFormVideoFiles').files.length;
     
+    const savedVideos = currentVideosState.length;
+    const newVideosUpload = document.getElementById('catFormVideoFiles').files.length;
     let newVideoLinks = 0;
-    for (let i = 1; i <= 5; i++) {
-        if (document.getElementById(`catVideoUrl_${i}`).value.trim() !== '') newVideoLinks++;
+    if (document.getElementById('catVideoUrl_1').value.trim() !== '') newVideoLinks++;
+    if (document.getElementById('catVideoUrl_2').value.trim() !== '') newVideoLinks++;
+
+    const totalVideos = savedVideos + newVideosUpload + newVideoLinks;
+    const totalMedia = hasCover + pendingCover + currentImagesState.length + newPhotos + newUrls + totalVideos;
+
+    // Toggle remove draft cover buttons
+    const btnDraft = document.getElementById('btnRemoveCoverDraft');
+    if (btnDraft) btnDraft.style.display = (currentCoverState || newCoverFile) ? 'inline-block' : 'none';
+    const btnUrlDraft = document.getElementById('btnRemoveCoverUrlDraft');
+    if (btnUrlDraft) btnUrlDraft.style.display = (currentCoverState || newCoverUrl) ? 'inline-block' : 'none';
+
+    // Video badges & counter
+    const vPill = document.getElementById('videoCounterPill');
+    if (vPill) {
+        vPill.innerText = `${totalVideos}/2 Videos`;
+        vPill.className = totalVideos > MAX_VIDEOS ? 'badge bg-danger text-white' : 'badge bg-danger-subtle text-danger border border-danger-subtle';
+    }
+    const vTopBadge = document.getElementById('videoQuotaBadge');
+    if (vTopBadge) {
+        vTopBadge.innerHTML = `<i class="fa-solid fa-film text-danger me-0.5"></i><span id="videoCountText">${totalVideos}</span>/2 Videos (Max 25MB)`;
+        vTopBadge.className = totalVideos > MAX_VIDEOS ? 'badge bg-danger text-white border border-danger' : 'badge bg-light text-secondary border';
     }
 
-    const pendingCount = (currentCoverState ? 0 : newCover) + newPhotos + newUrls + newVideosUpload + newVideoLinks;
-    const totalCount = Math.min(MAX_MEDIA, savedCount + pendingCount);
-
-    // Update Quota Bar
-    document.getElementById('quotaUsedText').innerText = totalCount;
-    document.getElementById('tabMediaBadge').innerText = `${totalCount}/10`;
+    // Media quota badge & bar
+    document.getElementById('quotaUsedText').innerText = totalMedia;
+    document.getElementById('tabMediaBadge').innerText = `${totalMedia}/10`;
     
-    const pct = Math.round((totalCount / MAX_MEDIA) * 100);
+    const pct = Math.min(100, Math.round((totalMedia / MAX_MEDIA) * 100));
     const pBar = document.getElementById('quotaProgressBar');
     pBar.style.width = pct + '%';
 
-    if (totalCount >= 10) {
+    const saveBtn = document.getElementById('btnSaveCategory');
+
+    if (totalVideos > MAX_VIDEOS) {
         pBar.className = 'progress-bar bg-danger';
         document.getElementById('quotaBadge').className = 'badge px-2.5 py-1 text-white fw-bold bg-danger';
-    } else if (totalCount >= 7) {
-        pBar.className = 'progress-bar bg-warning';
-        document.getElementById('quotaBadge').className = 'badge px-2.5 py-1 text-dark fw-bold bg-warning';
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.title = `Exceeded video limit: max ${MAX_VIDEOS} videos allowed. Please remove extra videos before saving.`;
+        }
+    } else if (totalMedia > MAX_MEDIA) {
+        pBar.className = 'progress-bar bg-danger';
+        document.getElementById('quotaBadge').className = 'badge px-2.5 py-1 text-white fw-bold bg-danger';
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.title = `Exceeded media limit: max ${MAX_MEDIA} items allowed. Please remove extra media before saving.`;
+        }
     } else {
-        pBar.className = 'progress-bar bg-primary';
-        document.getElementById('quotaBadge').className = 'badge px-2.5 py-1 text-white fw-bold bg-dark';
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.title = '';
+        }
+        if (totalMedia >= 10) {
+            pBar.className = 'progress-bar bg-danger';
+            document.getElementById('quotaBadge').className = 'badge px-2.5 py-1 text-white fw-bold bg-danger';
+        } else if (totalMedia >= 7) {
+            pBar.className = 'progress-bar bg-warning';
+            document.getElementById('quotaBadge').className = 'badge px-2.5 py-1 text-dark fw-bold bg-warning';
+        } else {
+            pBar.className = 'progress-bar bg-primary';
+            document.getElementById('quotaBadge').className = 'badge px-2.5 py-1 text-white fw-bold bg-dark';
+        }
     }
+}
+
+// Handle video file upload selection check
+function onVideoFilesChanged(input) {
+    const savedVideos = currentVideosState.length;
+    let urlVideos = 0;
+    if (document.getElementById('catVideoUrl_1').value.trim()) urlVideos++;
+    if (document.getElementById('catVideoUrl_2').value.trim()) urlVideos++;
+
+    const maxAllowedNew = Math.max(0, MAX_VIDEOS - savedVideos - urlVideos);
+    if (input.files.length > maxAllowedNew) {
+        alert(`Maximum ${MAX_VIDEOS} videos allowed per category.\nYou already have ${savedVideos + urlVideos} video(s). You can upload at most ${maxAllowedNew} video file(s).`);
+        input.value = '';
+    }
+    updateQuotaPreview();
+}
+
+// Delete Primary Cover Image via AJAX
+function deleteCategoryCover() {
+    if (!confirm("Are you sure you want to remove the cover photo?")) return;
+
+    const catId = document.getElementById('catFormId').value;
+
+    const finalizeCoverRemoval = () => {
+        currentCoverState = null;
+        document.getElementById('catFormCoverFile').value = '';
+        document.getElementById('catFormCoverUrl').value = '';
+        document.getElementById('catFormRemoveCover').value = '1';
+        const pWrap = document.getElementById('coverPreviewWrap');
+        if (pWrap) pWrap.style.display = 'none';
+        const btnDraft = document.getElementById('btnRemoveCoverDraft');
+        if (btnDraft) btnDraft.style.display = 'none';
+        const btnUrlDraft = document.getElementById('btnRemoveCoverUrlDraft');
+        if (btnUrlDraft) btnUrlDraft.style.display = 'none';
+        renderSavedMediaGrid();
+        updateQuotaPreview();
+    };
+
+    if (!catId) {
+        finalizeCoverRemoval();
+        return;
+    }
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const deleteCoverUrl = "{% url 'hotel_admin:category_delete_cover' restaurant_slug=rslug category_id=999999 %}".replace('999999', catId);
+
+    fetch(deleteCoverUrl, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'ok') {
+            finalizeCoverRemoval();
+        } else {
+            alert(data.error || "Failed to remove cover photo.");
+        }
+    })
+    .catch(err => {
+        console.error("Error removing cover photo:", err);
+        finalizeCoverRemoval();
+    });
 }
 
 // Make a gallery photo the primary cover image via AJAX
 function setAsCategoryCover(imageId, imageUrl) {
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-    const url = "{% url 'hotel_admin:categories' restaurant_slug=rslug %}images/" + imageId + "/set-cover/";
+    const url = "{% url 'hotel_admin:category_set_cover' restaurant_slug=rslug image_id=999999 %}".replace('999999', imageId);
 
     fetch(url, {
         method: 'POST',
@@ -1031,6 +1178,7 @@ function setAsCategoryCover(imageId, imageUrl) {
         if (data.status === 'ok') {
             currentCoverState = data.new_cover_url || imageUrl;
             currentImagesState = currentImagesState.filter(img => img.id !== imageId);
+            document.getElementById('catFormRemoveCover').value = '0';
             renderSavedMediaGrid();
             updateQuotaPreview();
         }
@@ -1045,7 +1193,7 @@ function deleteCategoryPhoto(photoId) {
     if (!confirm("Are you sure you want to remove this photo?")) return;
 
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-    const deleteUrl = "{% url 'hotel_admin:categories' restaurant_slug=rslug %}images/" + photoId + "/delete/";
+    const deleteUrl = "{% url 'hotel_admin:category_delete_image' restaurant_slug=rslug image_id=999999 %}".replace('999999', photoId);
 
     fetch(deleteUrl, {
         method: 'POST',
@@ -1080,7 +1228,7 @@ function deleteCategoryVideo(vIdx) {
     if (!confirm("Are you sure you want to remove this video?")) return;
 
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-    const deleteUrl = "{% url 'hotel_admin:categories' restaurant_slug=rslug %}" + catId + "/videos/" + vIdx + "/delete/";
+    const deleteUrl = "{% url 'hotel_admin:category_delete_video' restaurant_slug=rslug category_id=999999 video_idx=888888 %}".replace('999999', catId).replace('888888', vIdx);
 
     fetch(deleteUrl, {
         method: 'POST',

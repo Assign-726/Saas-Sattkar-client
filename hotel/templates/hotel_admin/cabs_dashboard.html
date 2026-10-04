@@ -5,41 +5,112 @@
 {% block extra_css %}
 <style>
     .dispatch-card {
-        border-radius: 12px;
+        border-radius: 14px;
         transition: all 0.2s ease;
     }
     .dispatch-card:hover {
         transform: translateY(-2px);
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
     }
-    .status-badge {
-        font-size: 0.72rem;
-        font-weight: 700;
-        padding: 0.25rem 0.65rem;
-        border-radius: 9999px;
-        letter-spacing: 0.02em;
+    .stat-card-kpi {
+        background: #FFFFFF;
+        border: 1px solid var(--card-border);
+        border-radius: 14px;
+        padding: 1.15rem;
+        transition: all 0.18s ease;
+        display: block;
+        text-decoration: none;
+        color: inherit;
+        position: relative;
+        overflow: hidden;
     }
-    .vehicle-avatar {
-        width: 38px;
-        height: 38px;
-        border-radius: 10px;
-        background: #F1F5F9;
-        color: #334155;
+    .stat-card-kpi:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+        border-color: #cbd5e1;
+        color: inherit;
+    }
+    .stat-card-kpi.active {
+        border-color: var(--brand) !important;
+        box-shadow: 0 0 0 2px var(--brand-glow), 0 8px 24px rgba(99,102,241,0.12) !important;
+        background: #FFFFFF !important;
+    }
+    .stat-card-kpi.active::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--brand), #818cf8);
+    }
+    .stat-card-danger-alert {
+        border-color: rgba(239, 68, 68, 0.4) !important;
+        background: linear-gradient(180deg, #ffffff 0%, #fef2f2 100%) !important;
+    }
+    .stat-card-warning-alert {
+        border-color: rgba(245, 158, 11, 0.4) !important;
+        background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%) !important;
+    }
+    .time-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: #f1f5f9;
+        color: #0f172a;
         font-weight: 700;
-        font-size: 0.88rem;
+        font-size: 0.78rem;
+        font-family: 'JetBrains Mono', monospace;
+        padding: 0.22rem 0.6rem;
+        border-radius: 6px;
+        border: 1px solid #e2e8f0;
+    }
+    .route-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        flex-shrink: 0;
+        margin-top: 5px;
+    }
+    .cab-plate-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        background: #f8fafc;
+        border: 1px solid #cbd5e1;
+        color: #0f172a;
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 700;
+        font-size: 0.72rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 5px;
+        letter-spacing: 0.03em;
+    }
+    .guest-avatar-circle {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
         display: flex;
         align-items: center;
         justify-content: center;
-        flex-shrink: 0;
-        border: 1px solid #E2E8F0;
-    }
-    .time-pill {
-        background: #0F172A;
-        color: #FFFFFF;
         font-weight: 700;
-        font-size: 0.78rem;
-        padding: 0.2rem 0.6rem;
-        border-radius: 6px;
+        font-size: 0.8rem;
+        flex-shrink: 0;
+        background: rgba(99, 102, 241, 0.1);
+        color: var(--brand);
+        border: 1px solid rgba(99, 102, 241, 0.2);
+    }
+    .action-btn-pms {
+        white-space: nowrap;
+        font-size: 0.76rem;
+        font-weight: 600;
+        padding: 0.32rem 0.7rem;
+        border-radius: 7px;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        transition: all 0.15s ease;
     }
 
     /* Modal Dialog Flex & Scrollable Fix (Ensures form never clips and fits on 100% zoom) */
@@ -148,24 +219,24 @@
 
 {% block content %}
 <!-- Page Header -->
-<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+<div class="page-header mb-4">
     <div>
-        <div class="d-flex align-items-center gap-2">
-            <h4 class="fw-bold mb-0 text-dark">Travel Desk &amp; Cab Dispatch</h4>
-            <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-2.5 py-1" style="font-size: 0.72rem;">PMS Module</span>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <h1 class="page-title">Travel Desk &amp; Cab Dispatch</h1>
+            <span class="pill pill-primary"><i class="fa-solid fa-car me-1"></i>Travel &amp; Logistics</span>
         </div>
-        <p class="text-muted small mb-0 mt-1">Manage guest airport transfers, curated tourism packages, fleet dispatch board, and outsourced taxi vendors.</p>
+        <p class="page-subtitle">Manage guest airport transfers, curated tourism packages, fleet dispatch board, and taxi vendors for <strong class="text-dark">{{ current_branch.name|default:current_restaurant.name }}</strong></p>
     </div>
-    <div class="d-flex align-items-center gap-2">
-        <button type="button" class="btn btn-outline-primary d-flex align-items-center gap-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#newPackageModal">
+    <div class="page-actions">
+        <button type="button" class="btn-pms-outline" data-bs-toggle="modal" data-bs-target="#newPackageModal">
             <i class="fa-solid fa-plus"></i>
             <span>Add Package</span>
         </button>
-        <button type="button" class="btn btn-outline-dark d-flex align-items-center gap-2 shadow-sm" data-bs-toggle="modal" data-bs-target="#newVehicleModal">
+        <button type="button" class="btn-pms-outline" data-bs-toggle="modal" data-bs-target="#newVehicleModal">
             <i class="fa-solid fa-car"></i>
             <span>Register Vehicle</span>
         </button>
-        <button type="button" class="btn btn-primary d-flex align-items-center gap-2 shadow-sm px-3" data-bs-toggle="modal" data-bs-target="#manualBookingModal">
+        <button type="button" class="btn-pms-primary" data-bs-toggle="modal" data-bs-target="#manualBookingModal">
             <i class="fa-solid fa-calendar-plus"></i>
             <span>Book Ride for Guest</span>
         </button>
@@ -173,28 +244,28 @@
 </div>
 
 <!-- Tabs Navigation -->
-<ul class="nav nav-pills pms-pills mb-4 gap-2 border-bottom pb-3" id="cabsTab" role="tablist">
+<ul class="nav pms-nav-tabs mb-4" id="cabsTab" role="tablist">
     <li class="nav-item" role="presentation">
-        <button class="nav-link active fw-semibold d-flex align-items-center gap-2 px-3 py-2" id="dispatch-tab" data-bs-toggle="pill" data-bs-target="#dispatch-pane" type="button" role="tab">
+        <button class="nav-link active" id="dispatch-tab" data-bs-toggle="pill" data-bs-target="#dispatch-pane" type="button" role="tab">
             <i class="fa-solid fa-table-list"></i>
             <span>Daily Dispatch Board</span>
             {% if unassigned_count > 0 %}
-            <span class="badge bg-danger rounded-pill px-2 py-0.5" style="font-size: 0.65rem;">{{ unassigned_count }} Urgent</span>
+            <span class="pill pill-danger" style="font-size: 0.65rem; padding: 0.15rem 0.45rem;">{{ unassigned_count }} Urgent</span>
             {% endif %}
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link fw-semibold d-flex align-items-center gap-2 px-3 py-2" id="fleet-tab" data-bs-toggle="pill" data-bs-target="#fleet-pane" type="button" role="tab">
+        <button class="nav-link" id="fleet-tab" data-bs-toggle="pill" data-bs-target="#fleet-pane" type="button" role="tab">
             <i class="fa-solid fa-taxi"></i>
             <span>Fleet &amp; Drivers</span>
-            <span class="badge bg-secondary-subtle text-secondary rounded-pill px-2 py-0.5" style="font-size: 0.65rem;">{{ fleet_vehicles.count }}</span>
+            <span class="pill pill-neutral" style="font-size: 0.65rem; padding: 0.15rem 0.45rem;">{{ fleet_vehicles.count }}</span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link fw-semibold d-flex align-items-center gap-2 px-3 py-2" id="packages-tab" data-bs-toggle="pill" data-bs-target="#packages-pane" type="button" role="tab">
+        <button class="nav-link" id="packages-tab" data-bs-toggle="pill" data-bs-target="#packages-pane" type="button" role="tab">
             <i class="fa-solid fa-route"></i>
             <span>Transfer &amp; Tour Packages</span>
-            <span class="badge bg-secondary-subtle text-secondary rounded-pill px-2 py-0.5" style="font-size: 0.65rem;">{{ packages.count }}</span>
+            <span class="pill pill-neutral" style="font-size: 0.65rem; padding: 0.15rem 0.45rem;">{{ packages.count }}</span>
         </button>
     </li>
 </ul>
@@ -204,298 +275,434 @@
     <!-- TAB 1: DAILY DISPATCH BOARD               -->
     <!-- ========================================== -->
     <div class="tab-pane fade show active" id="dispatch-pane" role="tabpanel">
-        <!-- Quick View Modes & Status Filters -->
-        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-            <a href="?mode=all" class="btn btn-sm {% if filter_mode == 'all' or not filter_mode %}btn-dark shadow-sm{% else %}btn-outline-secondary bg-white{% endif %} rounded-pill px-3">
-                <i class="fa-solid fa-list-check me-1"></i>All Bookings &amp; Inquiries
-                <span class="badge {% if filter_mode == 'all' or not filter_mode %}bg-primary text-white{% else %}bg-secondary text-white{% endif %} rounded-pill ms-1">{{ total_count }}</span>
-            </a>
-            <a href="?mode=today" class="btn btn-sm {% if filter_mode == 'today' %}btn-primary shadow-sm text-white{% else %}btn-outline-secondary bg-white{% endif %} rounded-pill px-3">
-                <i class="fa-solid fa-calendar-day me-1"></i>Today's Dispatch
-                <span class="badge {% if filter_mode == 'today' %}bg-white text-primary{% else %}bg-secondary text-white{% endif %} rounded-pill ms-1">{{ today_count }}</span>
-            </a>
-            <a href="?mode=upcoming" class="btn btn-sm {% if filter_mode == 'upcoming' %}btn-info text-white shadow-sm{% else %}btn-outline-secondary bg-white{% endif %} rounded-pill px-3">
-                <i class="fa-solid fa-clock-rotate-left me-1"></i>Upcoming Rides
-                <span class="badge bg-secondary text-white rounded-pill ms-1">{{ upcoming_count }}</span>
-            </a>
-            <a href="?mode=web_inquiries" class="btn btn-sm {% if filter_mode == 'web_inquiries' %}btn-success shadow-sm text-white{% else %}btn-outline-secondary bg-white{% endif %} rounded-pill px-3">
-                <i class="fa-solid fa-globe me-1"></i>Direct Web Bookings
-                <span class="badge {% if filter_mode == 'web_inquiries' %}bg-white text-success{% else %}bg-secondary text-white{% endif %} rounded-pill ms-1">{{ web_inquiries_count }}</span>
-            </a>
-            <a href="?mode=unassigned" class="btn btn-sm {% if filter_mode == 'unassigned' %}btn-danger shadow-sm text-white{% else %}btn-outline-danger bg-white{% endif %} rounded-pill px-3">
-                <i class="fa-solid fa-triangle-exclamation me-1"></i>Urgent Unassigned
-                <span class="badge {% if filter_mode == 'unassigned' %}bg-white text-danger{% else %}bg-danger text-white{% endif %} rounded-pill ms-1">{{ unassigned_count }}</span>
-            </a>
-            <a href="?mode=completed" class="btn btn-sm {% if filter_mode == 'completed' %}btn-secondary shadow-sm text-white{% else %}btn-outline-secondary bg-white{% endif %} rounded-pill px-3">
-                <i class="fa-solid fa-circle-check me-1"></i>Completed Rides
-                <span class="badge bg-secondary text-white rounded-pill ms-1">{{ completed_count }}</span>
-            </a>
-        </div>
-
-        <!-- Date & Filter Controls -->
-        <div class="card border-0 shadow-sm rounded-4 mb-4">
-            <div class="card-body p-3">
-                <form method="GET" class="row g-2 align-items-center">
-                    {% if filter_mode and filter_mode != 'date' %}
-                    <input type="hidden" name="mode" value="{{ filter_mode }}">
-                    {% endif %}
-                    <div class="col-md-3 col-12">
-                        <div class="input-group input-group-sm">
-                            <span class="input-group-text bg-light border-end-0 text-muted"><i class="fa-solid fa-magnifying-glass"></i></span>
-                            <input type="text" name="q" class="form-control form-control-sm border-start-0" placeholder="Search guest, phone, booking ID, flight #..." value="{{ search_query }}">
-                        </div>
+        <!-- Interactive KPI Command Cards (Direct 1-Click View Filters) -->
+        <div class="row g-2.5 mb-4">
+            <!-- 1. All Bookings -->
+            <div class="col-6 col-md-4 col-xl-2">
+                <a href="?mode=all" class="stat-card-kpi {% if filter_mode == 'all' or not filter_mode %}active{% endif %}" title="View all bookings in dispatch queue">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <span class="stat-label">All Bookings</span>
+                        <i class="fa-solid fa-list-check text-muted" style="font-size: 0.85rem;"></i>
                     </div>
-                    <div class="col-auto">
-                        <label class="form-label small text-muted mb-0 fw-bold">Date:</label>
-                    </div>
-                    <div class="col-auto d-flex align-items-center gap-1">
-                        <input type="date" name="date" class="form-control form-control-sm" value="{{ selected_date_str }}" onchange="this.form.submit()">
-                        {% if selected_date_str %}
-                        <a href="?mode=all" class="btn btn-sm btn-outline-secondary py-1 px-2" title="Clear Date Filter and Show All Bookings"><i class="fa-solid fa-xmark"></i></a>
+                    <div class="stat-value font-mono text-dark">{{ total_all_count }}</div>
+                    <div class="d-flex align-items-center justify-content-between mt-2 pt-1 border-top" style="font-size: 0.72rem;">
+                        <span class="text-muted">Full Queue</span>
+                        {% if filter_mode == 'all' or not filter_mode %}
+                        <span class="pill pill-primary" style="font-size: 0.6rem; padding: 0.05rem 0.35rem;">Active</span>
                         {% endif %}
                     </div>
-                    <div class="col-auto">
-                        <select name="service_type" class="form-select form-select-sm" onchange="this.form.submit()">
-                            <option value="">All Services</option>
-                            <option value="AIRPORT_TRANSFER" {% if service_filter == 'AIRPORT_TRANSFER' %}selected{% endif %}>Airport Transfers</option>
-                            <option value="TOURISM_PACKAGE" {% if service_filter == 'TOURISM_PACKAGE' %}selected{% endif %}>Sightseeing Tours</option>
-                            <option value="POINT_TO_POINT" {% if service_filter == 'POINT_TO_POINT' %}selected{% endif %}>City / Point to Point</option>
-                            <option value="HOURLY_RENTAL" {% if service_filter == 'HOURLY_RENTAL' %}selected{% endif %}>Hourly Rental</option>
-                            <option value="OUTSTATION" {% if service_filter == 'OUTSTATION' %}selected{% endif %}>Outstation</option>
-                        </select>
+                </a>
+            </div>
+
+            <!-- 2. Urgent Unassigned -->
+            <div class="col-6 col-md-4 col-xl-2">
+                <a href="?mode=unassigned" class="stat-card-kpi {% if filter_mode == 'unassigned' %}active{% endif %} {% if unassigned_count > 0 %}stat-card-danger-alert{% endif %}" title="View rides requiring chauffeur assignment">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <span class="stat-label {% if unassigned_count > 0 %}text-danger fw-bold{% endif %}">Needs Driver</span>
+                        {% if unassigned_count > 0 %}
+                        <span class="pill pill-danger" style="font-size: 0.6rem; padding: 0.1rem 0.4rem;">Urgent</span>
+                        {% else %}
+                        <i class="fa-solid fa-circle-check text-success" style="font-size: 0.85rem;"></i>
+                        {% endif %}
                     </div>
-                    <div class="col-auto">
-                        <select name="source" class="form-select form-select-sm" onchange="this.form.submit()">
-                            <option value="">All Origins</option>
-                            <option value="FRONTEND_DIRECT" {% if source_filter == 'FRONTEND_DIRECT' %}selected{% endif %}>Web Direct Bookings</option>
-                            <option value="ROOM_ADDON" {% if source_filter == 'ROOM_ADDON' %}selected{% endif %}>Room Reservation Add-ons</option>
-                            <option value="PMS_FRONT_DESK" {% if source_filter == 'PMS_FRONT_DESK' %}selected{% endif %}>PMS Front Desk</option>
-                        </select>
+                    <div class="stat-value font-mono {% if unassigned_count > 0 %}text-danger{% else %}text-muted{% endif %}">{{ unassigned_count }}</div>
+                    <div class="d-flex align-items-center justify-content-between mt-2 pt-1 border-top" style="font-size: 0.72rem;">
+                        <span class="{% if unassigned_count > 0 %}text-danger fw-semibold{% else %}text-muted{% endif %}">
+                            {% if unassigned_count > 0 %}Pending allocation{% else %}All assigned{% endif %}
+                        </span>
+                        {% if filter_mode == 'unassigned' %}
+                        <span class="pill pill-danger" style="font-size: 0.6rem; padding: 0.05rem 0.35rem;">Active</span>
+                        {% endif %}
                     </div>
-                    <div class="col-auto">
-                        <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
-                            <option value="">All Statuses</option>
-                            <option value="SCHEDULED" {% if status_filter == 'SCHEDULED' %}selected{% endif %}>Scheduled (Unassigned)</option>
-                            <option value="DRIVER_ASSIGNED" {% if status_filter == 'DRIVER_ASSIGNED' %}selected{% endif %}>Driver Assigned</option>
-                            <option value="EN_ROUTE" {% if status_filter == 'EN_ROUTE' %}selected{% endif %}>En Route</option>
-                            <option value="COMPLETED" {% if status_filter == 'COMPLETED' %}selected{% endif %}>Completed</option>
-                            <option value="CANCELLED" {% if status_filter == 'CANCELLED' %}selected{% endif %}>Cancelled</option>
-                        </select>
+                </a>
+            </div>
+
+            <!-- 3. Driver Assigned -->
+            <div class="col-6 col-md-4 col-xl-2">
+                <a href="?status=DRIVER_ASSIGNED" class="stat-card-kpi {% if status_filter == 'DRIVER_ASSIGNED' %}active{% endif %}" title="View confirmed rides with allocated drivers">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <span class="stat-label text-cyan">Driver Assigned</span>
+                        <i class="fa-solid fa-user-check text-cyan" style="font-size: 0.85rem;"></i>
                     </div>
-                    <div class="col-auto">
-                        <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" name="unassigned_only" value="true" id="unassignedOnly" {% if unassigned_filter == 'true' or unassigned_filter == '1' %}checked{% endif %} onchange="this.form.submit()">
-                            <label class="form-check-label small fw-semibold text-danger" for="unassignedOnly">Urgent Unassigned</label>
-                        </div>
+                    <div class="stat-value font-mono" style="color: #0891b2;">{{ assigned_count }}</div>
+                    <div class="d-flex align-items-center justify-content-between mt-2 pt-1 border-top" style="font-size: 0.72rem;">
+                        <span class="text-muted">Chauffeur confirmed</span>
+                        {% if status_filter == 'DRIVER_ASSIGNED' %}
+                        <span class="pill pill-info" style="font-size: 0.6rem; padding: 0.05rem 0.35rem;">Active</span>
+                        {% endif %}
                     </div>
-                    <div class="col-auto ms-auto d-flex gap-1">
-                        <button type="submit" class="btn btn-sm btn-primary">Filter</button>
-                        <a href="{% url 'hotel_admin:cabs_dispatch' restaurant_slug=rslug %}?mode=all" class="btn btn-sm btn-light border text-muted">Reset</a>
+                </a>
+            </div>
+
+            <!-- 4. Active En Route -->
+            <div class="col-6 col-md-4 col-xl-2">
+                <a href="?status=EN_ROUTE" class="stat-card-kpi {% if status_filter == 'EN_ROUTE' %}active{% endif %} {% if en_route_count > 0 %}stat-card-warning-alert{% endif %}" title="View rides currently underway">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <span class="stat-label text-warning">Active En Route</span>
+                        {% if en_route_count > 0 %}
+                        <span class="pill pill-warning" style="font-size: 0.6rem; padding: 0.1rem 0.4rem;">Live</span>
+                        {% else %}
+                        <i class="fa-solid fa-car-side text-muted" style="font-size: 0.85rem;"></i>
+                        {% endif %}
                     </div>
-                </form>
+                    <div class="stat-value font-mono text-warning">{{ en_route_count }}</div>
+                    <div class="d-flex align-items-center justify-content-between mt-2 pt-1 border-top" style="font-size: 0.72rem;">
+                        <span class="text-muted">On road now</span>
+                        {% if status_filter == 'EN_ROUTE' %}
+                        <span class="pill pill-warning" style="font-size: 0.6rem; padding: 0.05rem 0.35rem;">Active</span>
+                        {% endif %}
+                    </div>
+                </a>
+            </div>
+
+            <!-- 5. Direct Web Bookings -->
+            <div class="col-6 col-md-4 col-xl-2">
+                <a href="?mode=web_inquiries" class="stat-card-kpi {% if filter_mode == 'web_inquiries' %}active{% endif %}" title="View direct web bookings from guest portal">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <span class="stat-label text-success">Web Bookings</span>
+                        <i class="fa-solid fa-globe text-success" style="font-size: 0.85rem;"></i>
+                    </div>
+                    <div class="stat-value font-mono text-success">{{ web_inquiries_count }}</div>
+                    <div class="d-flex align-items-center justify-content-between mt-2 pt-1 border-top" style="font-size: 0.72rem;">
+                        <span class="text-muted">Direct Portal</span>
+                        {% if filter_mode == 'web_inquiries' %}
+                        <span class="pill pill-success" style="font-size: 0.6rem; padding: 0.05rem 0.35rem;">Active</span>
+                        {% endif %}
+                    </div>
+                </a>
+            </div>
+
+            <!-- 6. Completed Rides -->
+            <div class="col-6 col-md-4 col-xl-2">
+                <a href="?mode=completed" class="stat-card-kpi {% if filter_mode == 'completed' %}active{% endif %}" title="View finished rides">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <span class="stat-label">Completed</span>
+                        <i class="fa-solid fa-circle-check text-muted" style="font-size: 0.85rem;"></i>
+                    </div>
+                    <div class="stat-value font-mono text-muted">{{ completed_count }}</div>
+                    <div class="d-flex align-items-center justify-content-between mt-2 pt-1 border-top" style="font-size: 0.72rem;">
+                        <span class="text-muted">Finished trips</span>
+                        {% if filter_mode == 'completed' %}
+                        <span class="pill pill-neutral" style="font-size: 0.6rem; padding: 0.05rem 0.35rem;">Active</span>
+                        {% endif %}
+                    </div>
+                </a>
             </div>
         </div>
 
-        <!-- Summary Metric Chips -->
-        <div class="row g-3 mb-4">
-            <div class="col-6 col-md-2">
-                <div class="p-3 bg-white rounded-3 border text-center shadow-sm">
-                    <div class="small text-muted fw-bold text-uppercase">Total Bookings</div>
-                    <div class="h4 fw-bold mb-0 text-dark mt-1">{{ total_count }}</div>
+        <!-- Unified Search & Filter Command Bar -->
+        <div class="pms-card p-3 mb-4 shadow-sm">
+            <form method="GET" class="row g-2 align-items-center">
+                {% if filter_mode and filter_mode != 'date' %}
+                <input type="hidden" name="mode" value="{{ filter_mode }}">
+                {% endif %}
+
+                <!-- Cross-field Search Input -->
+                <div class="col-12 col-md-4 col-xl-4">
+                    <div class="filter-input w-100">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" name="q" placeholder="Search guest name, phone, booking ID, flight #, vehicle..." value="{{ search_query }}">
+                        {% if search_query %}
+                        <a href="?mode={{ filter_mode|default:'all' }}" class="text-muted text-decoration-none" title="Clear search"><i class="fa-solid fa-xmark"></i></a>
+                        {% endif %}
+                    </div>
                 </div>
-            </div>
-            <div class="col-6 col-md-2">
-                <div class="p-3 bg-white rounded-3 border text-center shadow-sm border-success-subtle bg-success-subtle">
-                    <div class="small text-success fw-bold text-uppercase">Web Enquiries</div>
-                    <div class="h4 fw-bold mb-0 text-success mt-1">{{ web_inquiries_count }}</div>
+
+                <!-- Date Picker -->
+                <div class="col-12 col-sm-6 col-md-3 col-xl-2">
+                    <div class="d-flex align-items-center gap-1 w-100">
+                        <input type="date" name="date" class="form-control form-control-sm font-mono" value="{{ selected_date_str }}" onchange="this.form.submit()" title="Filter by date">
+                        {% if selected_date_str %}
+                        <a href="?mode=all" class="btn btn-sm btn-outline-secondary py-1 px-2" title="Clear date filter"><i class="fa-solid fa-xmark"></i></a>
+                        {% endif %}
+                    </div>
                 </div>
-            </div>
-            <div class="col-6 col-md-2">
-                <div class="p-3 bg-white rounded-3 border text-center shadow-sm border-danger-subtle bg-danger-subtle">
-                    <div class="small text-danger fw-bold text-uppercase">Unassigned</div>
-                    <div class="h4 fw-bold mb-0 text-danger mt-1">{{ unassigned_count }}</div>
+
+                <!-- Service Filter -->
+                <div class="col-6 col-sm-3 col-md-2 col-xl-2">
+                    <select name="service_type" class="filter-select w-100" onchange="this.form.submit()">
+                        <option value="">All Services</option>
+                        <option value="AIRPORT_TRANSFER" {% if service_filter == 'AIRPORT_TRANSFER' %}selected{% endif %}>Airport Transfers</option>
+                        <option value="TOURISM_PACKAGE" {% if service_filter == 'TOURISM_PACKAGE' %}selected{% endif %}>Sightseeing Tours</option>
+                        <option value="POINT_TO_POINT" {% if service_filter == 'POINT_TO_POINT' %}selected{% endif %}>Point to Point</option>
+                        <option value="HOURLY_RENTAL" {% if service_filter == 'HOURLY_RENTAL' %}selected{% endif %}>Hourly Rental</option>
+                        <option value="OUTSTATION" {% if service_filter == 'OUTSTATION' %}selected{% endif %}>Outstation</option>
+                    </select>
                 </div>
-            </div>
-            <div class="col-6 col-md-2">
-                <div class="p-3 bg-white rounded-3 border text-center shadow-sm">
-                    <div class="small text-primary fw-bold text-uppercase">Driver Assigned</div>
-                    <div class="h4 fw-bold mb-0 text-primary mt-1">{{ assigned_count }}</div>
+
+                <!-- Origin Source -->
+                <div class="col-6 col-sm-3 col-md-2 col-xl-2">
+                    <select name="source" class="filter-select w-100" onchange="this.form.submit()">
+                        <option value="">All Origins</option>
+                        <option value="FRONTEND_DIRECT" {% if source_filter == 'FRONTEND_DIRECT' %}selected{% endif %}>Web Direct</option>
+                        <option value="ROOM_ADDON" {% if source_filter == 'ROOM_ADDON' %}selected{% endif %}>Room Add-on</option>
+                        <option value="PMS_FRONT_DESK" {% if source_filter == 'PMS_FRONT_DESK' %}selected{% endif %}>Front Desk</option>
+                    </select>
                 </div>
-            </div>
-            <div class="col-6 col-md-2">
-                <div class="p-3 bg-white rounded-3 border text-center shadow-sm">
-                    <div class="small text-warning fw-bold text-uppercase">En Route</div>
-                    <div class="h4 fw-bold mb-0 text-warning mt-1">{{ en_route_count }}</div>
+
+                <!-- Status Filter -->
+                <div class="col-6 col-sm-3 col-md-auto col-xl-1">
+                    <select name="status" class="filter-select w-100" onchange="this.form.submit()">
+                        <option value="">Status</option>
+                        <option value="SCHEDULED" {% if status_filter == 'SCHEDULED' %}selected{% endif %}>Scheduled</option>
+                        <option value="DRIVER_ASSIGNED" {% if status_filter == 'DRIVER_ASSIGNED' %}selected{% endif %}>Assigned</option>
+                        <option value="EN_ROUTE" {% if status_filter == 'EN_ROUTE' %}selected{% endif %}>En Route</option>
+                        <option value="COMPLETED" {% if status_filter == 'COMPLETED' %}selected{% endif %}>Completed</option>
+                        <option value="CANCELLED" {% if status_filter == 'CANCELLED' %}selected{% endif %}>Cancelled</option>
+                    </select>
                 </div>
-            </div>
-            <div class="col-6 col-md-2">
-                <div class="p-3 bg-white rounded-3 border text-center shadow-sm">
-                    <div class="small text-muted fw-bold text-uppercase">Completed</div>
-                    <div class="h4 fw-bold mb-0 text-muted mt-1">{{ completed_count }}</div>
+
+                <!-- Apply & Reset Buttons -->
+                <div class="col-6 col-sm-3 col-md-auto ms-auto d-flex align-items-center gap-1 justify-content-end">
+                    <button type="submit" class="btn-pms-primary py-1 px-3" style="font-size: 0.8rem;">
+                        <i class="fa-solid fa-filter"></i> Apply
+                    </button>
+                    {% if search_query or selected_date_str or service_filter or source_filter or status_filter %}
+                    <a href="{% url 'hotel_admin:cabs_dispatch' restaurant_slug=rslug %}?mode=all" class="btn-pms-outline py-1 px-2.5" style="font-size: 0.8rem;" title="Reset all filters">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </a>
+                    {% endif %}
                 </div>
-            </div>
+            </form>
         </div>
 
         <!-- Chronological Ride List -->
         {% if bookings %}
-        <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
-                        <tr class="small text-uppercase text-muted">
-                            <th class="ps-4">Time &amp; Ride ID</th>
-                            <th>Guest &amp; Origin</th>
-                            <th>Vehicle &amp; Trip Type</th>
-                            <th>Route &amp; Destination</th>
-                            <th>Fare &amp; Billing</th>
-                            <th>Assigned Driver</th>
-                            <th>Status</th>
-                            <th class="text-end pe-4">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for b in bookings %}
-                        <tr>
-                            <td class="ps-4">
-                                <span class="time-pill">{{ b.pickup_datetime|date:"h:i A" }}</span>
-                                <div class="small text-muted font-monospace mt-1">{{ b.booking_id }}</div>
-                                <div class="small text-muted mt-0.5"><i class="fa-solid fa-calendar-day me-1"></i>{{ b.pickup_datetime|date:"M d, Y" }}</div>
-                                {% if b.flight_or_train_number %}
-                                <div class="badge bg-light text-dark border small mt-1">
-                                    <i class="fa-solid fa-plane-departure me-1 text-primary"></i>{{ b.flight_or_train_number }}
+        <div class="pms-table-wrap mb-4 shadow-sm">
+            <table class="pms-table align-middle">
+                <thead>
+                    <tr>
+                        <th class="ps-4" style="min-width: 140px;">Pickup Time</th>
+                        <th style="min-width: 170px;">Guest Details</th>
+                        <th style="min-width: 200px;">Service &amp; Vehicle</th>
+                        <th style="min-width: 260px;">Pickup &amp; Drop Route</th>
+                        <th style="min-width: 130px;">Fare &amp; Billing</th>
+                        <th style="min-width: 190px;">Assigned Chauffeur</th>
+                        <th style="min-width: 120px;">Trip Status</th>
+                        <th class="text-end pe-4" style="min-width: 180px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in bookings %}
+                    <tr>
+                        <!-- 1. Time & ID -->
+                        <td class="ps-4">
+                            <div class="d-flex align-items-center gap-1.5 mb-1">
+                                <span class="time-chip">
+                                    <i class="fa-regular fa-clock text-primary"></i>
+                                    {{ b.pickup_datetime|date:"h:i A" }}
+                                </span>
+                            </div>
+                            <div class="font-mono text-muted" style="font-size: 0.73rem;">#{{ b.booking_id }}</div>
+                            <div class="text-muted" style="font-size: 0.72rem; margin-top: 2px;">
+                                <i class="fa-regular fa-calendar me-1"></i>{{ b.pickup_datetime|date:"M d, Y" }}
+                            </div>
+                            {% if b.flight_or_train_number %}
+                            <div class="mt-1">
+                                <span class="pill pill-neutral font-mono" style="font-size: 0.68rem; padding: 0.15rem 0.45rem;">
+                                    <i class="fa-solid fa-plane-departure text-primary me-1"></i>{{ b.flight_or_train_number }}
+                                </span>
+                            </div>
+                            {% endif %}
+                        </td>
+
+                        <!-- 2. Guest Details -->
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="guest-avatar-circle">
+                                    {{ b.display_guest_name|slice:":1"|upper }}
                                 </div>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <div class="fw-bold text-dark">{{ b.display_guest_name }}</div>
-                                <div class="small text-muted">
-                                    <i class="fa-solid fa-phone me-1"></i>{{ b.display_guest_phone }}
+                                <div class="overflow-hidden">
+                                    <div class="fw-bold text-dark text-truncate" style="font-size: 0.85rem;" title="{{ b.display_guest_name }}">
+                                        {{ b.display_guest_name }}
+                                    </div>
+                                    <a href="tel:{{ b.display_guest_phone }}" class="text-decoration-none text-muted small d-inline-flex align-items-center gap-1 mt-0.5">
+                                        <i class="fa-solid fa-phone text-muted" style="font-size: 0.65rem;"></i>
+                                        <span class="font-mono" style="font-size: 0.74rem;">{{ b.display_guest_phone }}</span>
+                                    </a>
                                 </div>
+                            </div>
+                            <div class="mt-1.5">
                                 {% if b.room_booking %}
-                                <div class="badge bg-secondary-subtle text-secondary small mt-1">
-                                    <i class="fa-solid fa-hotel me-1"></i>Room {{ b.room_booking.room.room_number }} ({{ b.room_booking.room.category.name }})
-                                </div>
+                                <span class="room-chip" style="font-size: 0.67rem; padding: 0.15rem 0.45rem;">
+                                    <i class="fa-solid fa-bed me-1"></i>Room {{ b.room_booking.room.room_number }}
+                                </span>
                                 {% else %}
-                                <div class="badge bg-primary-subtle text-primary border border-primary-subtle small mt-1">
-                                    <i class="fa-solid fa-globe me-1"></i>Direct Web Booking
-                                </div>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <div class="fw-semibold text-dark">{{ b.package_title }}</div>
-                                <div class="small text-muted">{{ b.get_trip_type_display }} &bull; {{ b.passengers }} Guests ({{ b.luggage }} Bags)</div>
-                                {% if b.preferred_chauffeur %}
-                                <div class="small text-primary mt-0.5"><i class="fa-solid fa-user-tie me-1"></i>Prefers: {{ b.preferred_chauffeur }}</div>
-                                {% endif %}
-                                {% if b.duration_hours %}
-                                <div class="small text-info"><i class="fa-solid fa-clock me-1"></i>Duration: {{ b.duration_hours }}h</div>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <div class="small text-truncate" style="max-width: 220px;" title="{{ b.pickup_location }}">
-                                    <i class="fa-solid fa-circle-dot text-success me-1"></i><strong>From:</strong> {{ b.pickup_location }}
-                                </div>
-                                <div class="small text-truncate text-muted mt-1" style="max-width: 220px;" title="{{ b.drop_location }}">
-                                    <i class="fa-solid fa-location-dot text-danger me-1"></i><strong>To:</strong> {{ b.drop_location }}
-                                </div>
-                            </td>
-                            <td>
-                                {% if b.is_complimentary %}
-                                <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill">Complimentary (₹0)</span>
-                                {% else %}
-                                <div class="fw-bold text-dark">₹{{ b.total_amount }}</div>
-                                <span class="badge {% if b.payment_status == 'PAID' %}bg-success-subtle text-success{% elif b.payment_status == 'ADDED_TO_FOLIO' %}bg-info-subtle text-info{% else %}bg-warning-subtle text-warning{% endif %} rounded-pill">
-                                    {{ b.get_payment_status_display }}
+                                <span class="pill pill-info" style="font-size: 0.65rem; padding: 0.12rem 0.45rem;">
+                                    <i class="fa-solid fa-globe me-1"></i>Direct Web
                                 </span>
                                 {% endif %}
-                            </td>
-                            <td>
-                                {% if b.assigned_vehicle %}
-                                <div class="d-flex align-items-center gap-2">
-                                    <div class="vehicle-avatar">
-                                        <i class="fa-solid fa-taxi"></i>
-                                    </div>
+                            </div>
+                        </td>
+
+                        <!-- 3. Service & Vehicle -->
+                        <td>
+                            <div class="fw-bold text-dark" style="font-size: 0.85rem;">{{ b.package_title }}</div>
+                            <div class="small text-muted mt-0.5">
+                                <span class="pill pill-neutral" style="font-size: 0.65rem; padding: 0.1rem 0.4rem;">{{ b.get_trip_type_display }}</span>
+                                <span class="ms-1 font-mono" style="font-size: 0.72rem;">{{ b.passengers }} Guests &bull; {{ b.luggage }} Bags</span>
+                            </div>
+                            {% if b.preferred_chauffeur %}
+                            <div class="small text-primary mt-1" style="font-size: 0.73rem;">
+                                <i class="fa-solid fa-user-tie me-1"></i>Prefers: {{ b.preferred_chauffeur }}
+                            </div>
+                            {% endif %}
+                            {% if b.duration_hours %}
+                            <div class="small text-info mt-0.5" style="font-size: 0.73rem;">
+                                <i class="fa-solid fa-stopwatch me-1"></i>Duration: {{ b.duration_hours }} hrs
+                            </div>
+                            {% endif %}
+                        </td>
+
+                        <!-- 4. Route & Destination (Clear 2-point visual route, no ellipses truncation!) -->
+                        <td>
+                            <div style="min-width: 220px;">
+                                <div class="d-flex align-items-start gap-2 mb-1.5">
+                                    <span class="route-dot bg-success"></span>
                                     <div>
-                                        <div class="fw-bold small text-dark">{{ b.assigned_vehicle.driver_name }}</div>
-                                        <div class="small text-muted">{{ b.assigned_vehicle.vehicle_number }}</div>
-                                        <div class="small text-muted">{{ b.assigned_vehicle.driver_phone }}</div>
+                                        <span class="text-muted text-uppercase fw-bold" style="font-size: 0.65rem; letter-spacing: 0.05em;">From</span>
+                                        <div class="text-dark fw-semibold" style="font-size: 0.8rem; line-height: 1.3;">{{ b.pickup_location }}</div>
                                     </div>
                                 </div>
+                                <div class="d-flex align-items-start gap-2">
+                                    <span class="route-dot bg-danger"></span>
+                                    <div>
+                                        <span class="text-muted text-uppercase fw-bold" style="font-size: 0.65rem; letter-spacing: 0.05em;">To</span>
+                                        <div class="text-muted" style="font-size: 0.78rem; line-height: 1.3;">{{ b.drop_location }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+
+                        <!-- 5. Fare & Billing -->
+                        <td>
+                            {% if b.is_complimentary or b.payment_status == 'COMPLIMENTARY' %}
+                            <div class="fw-bold text-success font-mono" style="font-size: 0.92rem;">₹0.00</div>
+                            <span class="pill pill-success" style="font-size: 0.65rem; padding: 0.12rem 0.45rem;">
+                                <i class="fa-solid fa-gift me-0.5"></i>Complimentary
+                            </span>
+                            {% else %}
+                            <div class="fw-bold text-dark font-mono" style="font-size: 0.92rem;">₹{{ b.total_amount }}</div>
+                            <div class="mt-0.5">
+                                {% if b.payment_status == 'PAID' %}
+                                <span class="pill pill-success" style="font-size: 0.65rem; padding: 0.12rem 0.45rem;">
+                                    <i class="fa-solid fa-circle-check me-0.5"></i>Paid
+                                </span>
+                                {% elif b.payment_status == 'ADDED_TO_FOLIO' %}
+                                <span class="pill pill-primary" style="font-size: 0.65rem; padding: 0.12rem 0.45rem;">
+                                    <i class="fa-solid fa-file-invoice me-0.5"></i>Room Folio
+                                </span>
                                 {% else %}
-                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
-                                    <i class="fa-solid fa-triangle-exclamation me-1"></i>Unassigned
+                                <span class="pill pill-warning" style="font-size: 0.65rem; padding: 0.12rem 0.45rem;">
+                                    <i class="fa-solid fa-clock me-0.5"></i>Pending
                                 </span>
                                 {% endif %}
-                            </td>
-                            <td>
-                                {% if b.trip_status == 'SCHEDULED' %}
-                                <span class="status-badge bg-secondary-subtle text-secondary border border-secondary-subtle">Scheduled</span>
-                                {% elif b.trip_status == 'DRIVER_ASSIGNED' %}
-                                <span class="status-badge bg-primary-subtle text-primary border border-primary-subtle">Assigned</span>
-                                {% elif b.trip_status == 'EN_ROUTE' %}
-                                <span class="status-badge bg-warning-subtle text-warning border border-warning-subtle">En Route</span>
-                                {% elif b.trip_status == 'COMPLETED' %}
-                                <span class="status-badge bg-success-subtle text-success border border-success-subtle">Completed</span>
-                                {% elif b.trip_status == 'CANCELLED' %}
-                                <span class="status-badge bg-danger-subtle text-danger border border-danger-subtle">Cancelled</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-end pe-4">
-                                <div class="d-flex align-items-center justify-content-end gap-1">
-                                    <!-- Booking Checking Modal Trigger -->
-                                    <button class="btn btn-sm btn-outline-info shadow-sm" type="button" data-bs-toggle="modal" data-bs-target="#inspectModal{{ b.id }}" title="View Complete Booking Details &amp; Checking">
-                                        <i class="fa-solid fa-eye me-1"></i>Check
-                                    </button>
+                            </div>
+                            {% endif %}
+                        </td>
 
-                                    <!-- Assign Driver Action -->
-                                    <button class="btn btn-sm btn-outline-primary shadow-sm" type="button" data-bs-toggle="modal" data-bs-target="#assignDriverModal{{ b.id }}" title="Assign Driver or Quick-Add Vendor Cab">
-                                        <i class="fa-solid fa-user-check me-1"></i>Assign
-                                    </button>
-
-                                    <!-- Reschedule Action (Delayed Flights) -->
-                                    <button class="btn btn-sm btn-outline-secondary shadow-sm" type="button" data-bs-toggle="modal" data-bs-target="#rescheduleModal{{ b.id }}" title="Reschedule Ride / Delayed Flight">
-                                        <i class="fa-solid fa-clock"></i>
-                                    </button>
-
-                                    <!-- Trip Status Dropdown -->
-                                    <div class="dropdown">
-                                        <button class="btn btn-sm btn-light border dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                            Status
-                                        </button>
-                                        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
-                                            <li>
-                                                <form method="POST" action="{% url 'hotel_admin:cab_status' restaurant_slug=rslug cab_id=b.id %}">
-                                                    {% csrf_token %}
-                                                    <input type="hidden" name="status" value="EN_ROUTE">
-                                                    <button class="dropdown-item text-warning" type="submit"><i class="fa-solid fa-car-side me-2"></i>Mark En Route</button>
-                                                </form>
-                                            </li>
-                                            <li>
-                                                <form method="POST" action="{% url 'hotel_admin:cab_status' restaurant_slug=rslug cab_id=b.id %}">
-                                                    {% csrf_token %}
-                                                    <input type="hidden" name="status" value="COMPLETED">
-                                                    <button class="dropdown-item text-success" type="submit"><i class="fa-solid fa-check me-2"></i>Mark Completed</button>
-                                                </form>
-                                            </li>
-                                            <li><hr class="dropdown-divider"></li>
-                                            <li>
-                                                <form method="POST" action="{% url 'hotel_admin:cab_payment_status' restaurant_slug=rslug cab_id=b.id %}">
-                                                    {% csrf_token %}
-                                                    <input type="hidden" name="payment_status" value="PAID">
-                                                    <button class="dropdown-item text-success" type="submit"><i class="fa-solid fa-receipt me-2"></i>Mark as Paid</button>
-                                                </form>
-                                            </li>
-                                            <li><hr class="dropdown-divider"></li>
-                                            <li>
-                                                <form method="POST" action="{% url 'hotel_admin:cab_status' restaurant_slug=rslug cab_id=b.id %}" onsubmit="return confirm('Cancel this ride?')">
-                                                    {% csrf_token %}
-                                                    <input type="hidden" name="status" value="CANCELLED">
-                                                    <button class="dropdown-item text-danger" type="submit"><i class="fa-solid fa-xmark me-2"></i>Cancel Ride</button>
-                                                </form>
-                                            </li>
-                                        </ul>
-                                    </div>
+                        <!-- 6. Assigned Chauffeur -->
+                        <td>
+                            {% if b.assigned_vehicle %}
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="rounded-2 d-flex align-items-center justify-content-center bg-primary-subtle text-primary" style="width: 32px; height: 32px; font-size: 0.85rem; flex-shrink: 0;">
+                                    <i class="fa-solid fa-taxi"></i>
                                 </div>
+                                <div class="overflow-hidden">
+                                    <div class="fw-bold text-dark text-truncate" style="font-size: 0.82rem;">{{ b.assigned_vehicle.driver_name }}</div>
+                                    <div class="mt-0.5">
+                                        <span class="cab-plate-badge">{{ b.assigned_vehicle.vehicle_number }}</span>
+                                    </div>
+                                    {% if b.assigned_vehicle.driver_phone %}
+                                    <a href="tel:{{ b.assigned_vehicle.driver_phone }}" class="text-decoration-none text-muted font-mono d-block mt-0.5" style="font-size: 0.72rem;">
+                                        <i class="fa-solid fa-phone me-1" style="font-size: 0.65rem;"></i>{{ b.assigned_vehicle.driver_phone }}
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="d-flex flex-column align-items-start gap-1">
+                                <span class="pill pill-danger" style="font-size: 0.68rem; padding: 0.15rem 0.45rem;">
+                                    <i class="fa-solid fa-triangle-exclamation"></i> Needs Driver
+                                </span>
+                                <button type="button" class="btn btn-sm btn-outline-danger py-0.5 px-2 mt-0.5" style="font-size: 0.7rem; font-weight: 600;" data-bs-toggle="modal" data-bs-target="#assignDriverModal{{ b.id }}">
+                                    <i class="fa-solid fa-user-plus me-1"></i>Assign
+                                </button>
+                            </div>
+                            {% endif %}
+                        </td>
+
+                        <!-- 7. Trip Status -->
+                        <td>
+                            {% if b.trip_status == 'SCHEDULED' %}
+                            <span class="pill pill-neutral"><i class="fa-solid fa-calendar me-1"></i>Scheduled</span>
+                            {% elif b.trip_status == 'DRIVER_ASSIGNED' %}
+                            <span class="pill pill-primary"><i class="fa-solid fa-user-check me-1"></i>Assigned</span>
+                            {% elif b.trip_status == 'EN_ROUTE' %}
+                            <span class="pill pill-warning"><i class="fa-solid fa-car-side me-1"></i>En Route</span>
+                            {% elif b.trip_status == 'COMPLETED' %}
+                            <span class="pill pill-success"><i class="fa-solid fa-check me-1"></i>Completed</span>
+                            {% elif b.trip_status == 'CANCELLED' %}
+                            <span class="pill pill-danger"><i class="fa-solid fa-xmark me-1"></i>Cancelled</span>
+                            {% endif %}
+                        </td>
+
+                        <!-- 8. Actions (Never clipped!) -->
+                        <td class="text-end pe-4">
+                            <div class="d-flex align-items-center justify-content-end gap-1.5 flex-nowrap" style="white-space: nowrap;">
+                                <button class="btn btn-sm btn-outline-secondary action-btn-pms" type="button" data-bs-toggle="modal" data-bs-target="#inspectModal{{ b.id }}" title="View Ride Voucher &amp; Inspection">
+                                    <i class="fa-solid fa-eye text-primary"></i>
+                                    <span>Details</span>
+                                </button>
+                                <button class="btn btn-sm btn-outline-primary action-btn-pms" type="button" data-bs-toggle="modal" data-bs-target="#assignDriverModal{{ b.id }}" title="{% if b.assigned_vehicle %}Reassign Chauffeur{% else %}Assign Chauffeur{% endif %}">
+                                    <i class="fa-solid fa-user-check"></i>
+                                    <span>{% if b.assigned_vehicle %}Reassign{% else %}Assign{% endif %}</span>
+                                </button>
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-light border px-2 py-1 rounded-2" type="button" data-bs-toggle="dropdown" title="More Actions">
+                                        <i class="fa-solid fa-ellipsis-vertical text-muted"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                        <li><div class="dropdown-header">Trip Management</div></li>
+                                        <li>
+                                            <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#rescheduleModal{{ b.id }}">
+                                                <i class="fa-solid fa-clock text-info me-2"></i>Reschedule Ride
+                                            </button>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form method="POST" action="{% url 'hotel_admin:cab_status' restaurant_slug=rslug cab_id=b.id %}">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="status" value="EN_ROUTE">
+                                                <button class="dropdown-item text-warning" type="submit"><i class="fa-solid fa-car-side me-2"></i>Mark En Route</button>
+                                            </form>
+                                        </li>
+                                        <li>
+                                            <form method="POST" action="{% url 'hotel_admin:cab_status' restaurant_slug=rslug cab_id=b.id %}">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="status" value="COMPLETED">
+                                                <button class="dropdown-item text-success" type="submit"><i class="fa-solid fa-circle-check me-2"></i>Mark Completed</button>
+                                            </form>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form method="POST" action="{% url 'hotel_admin:cab_payment_status' restaurant_slug=rslug cab_id=b.id %}">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="payment_status" value="PAID">
+                                                <button class="dropdown-item text-success" type="submit"><i class="fa-solid fa-receipt me-2"></i>Mark as Paid</button>
+                                            </form>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form method="POST" action="{% url 'hotel_admin:cab_status' restaurant_slug=rslug cab_id=b.id %}" onsubmit="return confirm('Cancel this ride?')">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="status" value="CANCELLED">
+                                                <button class="dropdown-item text-danger" type="submit"><i class="fa-solid fa-xmark me-2"></i>Cancel Ride</button>
+                                            </form>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
 
                                 <!-- ================================================= -->
                                 <!-- MODAL: BOOKING INSPECTION & CHECKING (FULL VOUCHER) -->
@@ -791,15 +998,15 @@
                     </tbody>
                 </table>
             </div>
-        </div>
         {% else %}
-        <div class="card border-0 shadow-sm rounded-4 text-center py-5">
-            <div class="card-body">
+        <div class="pms-card text-center py-5">
+            <div class="pms-card-body">
                 <i class="fa-solid fa-car-side fa-3x text-muted opacity-50 mb-3"></i>
                 <h5 class="fw-bold text-dark">No Cab Rides Scheduled</h5>
                 <p class="text-muted small mb-3">There are no guest rides matching your filters for {{ selected_date_str }}.</p>
-                <button type="button" class="btn btn-primary btn-sm px-3" data-bs-toggle="modal" data-bs-target="#manualBookingModal">
-                    Book Ride for Guest
+                <button type="button" class="btn-pms-primary" data-bs-toggle="modal" data-bs-target="#manualBookingModal">
+                    <i class="fa-solid fa-calendar-plus"></i>
+                    <span>Book Ride for Guest</span>
                 </button>
             </div>
         </div>
@@ -811,28 +1018,30 @@
     <!-- ========================================== -->
     <div class="tab-pane fade" id="fleet-pane" role="tabpanel">
         <div class="d-flex align-items-center justify-content-between mb-3">
-            <h6 class="fw-bold mb-0">Registered In-House &amp; Agency Vehicles</h6>
-            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#newVehicleModal">
-                <i class="fa-solid fa-plus me-1"></i>Register Vehicle
+            <div>
+                <h6 class="fw-bold mb-0">Registered In-House &amp; Agency Vehicles</h6>
+                <p class="text-muted small mb-0">Fleet specifications, public pricing, and chauffeur credentials</p>
+            </div>
+            <button type="button" class="btn-pms-primary" data-bs-toggle="modal" data-bs-target="#newVehicleModal">
+                <i class="fa-solid fa-plus"></i><span>Register Vehicle</span>
             </button>
         </div>
 
-        <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
-                        <tr class="small text-uppercase text-muted">
-                            <th class="ps-4">Vehicle &amp; Model</th>
-                            <th>Category &amp; Specs</th>
-                            <th>Chauffeur Profile</th>
-                            <th>Contact Phone</th>
-                            <th>Exp &amp; Rating</th>
-                            <th>Public Pricing</th>
-                            <th>Ownership</th>
-                            <th>Status</th>
-                            <th class="text-end pe-4">Actions</th>
-                        </tr>
-                    </thead>
+        <div class="pms-table-wrap mb-4">
+            <table class="pms-table">
+                <thead>
+                    <tr>
+                        <th class="ps-4">Vehicle &amp; Model</th>
+                        <th>Category &amp; Specs</th>
+                        <th>Chauffeur Profile</th>
+                        <th>Contact Phone</th>
+                        <th>Exp &amp; Rating</th>
+                        <th>Public Pricing</th>
+                        <th>Ownership</th>
+                        <th>Status</th>
+                        <th class="text-end pe-4">Actions</th>
+                    </tr>
+                </thead>
                     <tbody>
                         {% for v in fleet_vehicles %}
                         <tr>
@@ -1056,12 +1265,24 @@
                                                                     <i class="fa-solid fa-image text-primary"></i> Primary Hero Cover Photo
                                                                 </div>
                                                                 {% if v.cover_image %}
-                                                                <div class="d-flex align-items-center gap-3 p-2 bg-light rounded-3 border mb-3">
-                                                                    <img src="{{ v.cover_image }}" alt="Cover" class="rounded-2 border" style="width: 70px; height: 50px; object-fit: cover;">
-                                                                    <div class="small min-w-0 flex-grow-1">
-                                                                        <span class="text-success fw-bold d-block"><i class="fa-solid fa-circle-check me-1"></i>Current Active Cover Photo</span>
-                                                                        <span class="text-muted text-truncate d-block font-monospace" style="font-size: 0.72rem;">{{ v.cover_image }}</span>
+                                                                <div class="d-flex align-items-center justify-content-between p-2.5 bg-light rounded-3 border mb-3" id="activeCoverBox{{ v.id }}">
+                                                                    <div class="d-flex align-items-center gap-3 min-w-0">
+                                                                        <img src="{{ v.cover_image }}" id="currentCoverImg{{ v.id }}" alt="Cover" class="rounded-2 border shadow-sm" style="width: 70px; height: 50px; object-fit: cover;">
+                                                                        <div class="small min-w-0">
+                                                                            <span class="text-success fw-bold d-block" style="font-size: 0.78rem;">
+                                                                                <i class="fa-solid fa-circle-check me-1"></i>Current Active Cover Photo
+                                                                            </span>
+                                                                            <span class="text-muted text-truncate d-block font-monospace" style="font-size: 0.72rem; max-width: 320px;">{{ v.cover_image }}</span>
+                                                                        </div>
                                                                     </div>
+                                                                    <button type="button" class="btn btn-sm btn-outline-danger d-flex align-items-center gap-1.5 px-2.5 py-1" onclick="clearCabCoverPhoto('{{ v.id }}')" title="Remove active cover image">
+                                                                        <i class="fa-solid fa-trash-can"></i>
+                                                                        <span style="font-size: 0.75rem;">Remove Cover</span>
+                                                                    </button>
+                                                                    <input type="hidden" name="remove_cover_image" id="removeCoverInput{{ v.id }}" value="false">
+                                                                </div>
+                                                                <div id="coverRemovedNotice{{ v.id }}" class="alert alert-warning py-1.5 px-3 small rounded-3 d-none mb-3">
+                                                                    <i class="fa-solid fa-triangle-exclamation me-1"></i> Cover photo marked for removal. Upload a new photo below or save changes.
                                                                 </div>
                                                                 {% endif %}
                                                                 <div class="row g-3 align-items-center">
@@ -1096,13 +1317,49 @@
                                                                     </div>
                                                                     <span class="badge bg-secondary-subtle text-secondary rounded-pill px-2.5 py-1" id="galCountEdit{{ v.id }}" style="font-size: 0.72rem;">{% if v.gallery_images %}{{ v.gallery_images|length }}{% else %}0{% endif %} / 10 images</span>
                                                                 </div>
-                                                                {% if v.gallery_images %}
-                                                                <div class="d-flex gap-2 overflow-x-auto py-2 mb-3 bg-light rounded-3 p-2 border">
-                                                                    {% for img_url in v.gallery_images %}
-                                                                    <img src="{{ img_url }}" alt="Gallery thumbnail" class="rounded-2 border shadow-sm" style="width: 58px; height: 42px; object-fit: cover;" title="{{ img_url }}">
-                                                                    {% endfor %}
+                                                                <!-- Gallery Grid with Delete Option -->
+                                                                <div class="p-3 bg-light rounded-3 border mb-3">
+                                                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                                                        <span class="small fw-bold text-muted" style="font-size: 0.75rem;">Currently Uploaded Photos:</span>
+                                                                        <span class="text-muted" style="font-size: 0.7rem;"><i class="fa-solid fa-circle-info text-primary me-1"></i>Click the red trash icon on any photo to remove it.</span>
+                                                                    </div>
+                                                                    
+                                                                    <div class="d-flex flex-wrap gap-2.5 py-1 align-items-center" id="galGrid_{{ v.id }}">
+                                                                        {% for img_url in v.gallery_images %}
+                                                                        <div class="gallery-photo-card position-relative rounded-3 overflow-hidden border shadow-sm" id="galCard_{{ v.id }}_{{ forloop.counter }}" style="width: 110px; height: 85px; background: #fff; flex-shrink: 0; transition: all 0.2s ease;">
+                                                                            <img src="{{ img_url }}" alt="Gallery photo" style="width: 100%; height: 100%; object-fit: cover;" class="d-block">
+                                                                            
+                                                                            {% if img_url == v.cover_image %}
+                                                                            <span class="position-absolute bottom-0 start-0 m-1 badge bg-dark text-white rounded-pill px-1.5 py-0.5 shadow-sm" style="font-size: 0.6rem; opacity: 0.92;">
+                                                                                <i class="fa-solid fa-star text-warning me-0.5"></i>Cover
+                                                                            </span>
+                                                                            {% endif %}
+
+                                                                            <!-- Red Delete Button -->
+                                                                            <button type="button" 
+                                                                                    class="btn btn-danger btn-sm position-absolute top-0 end-0 m-1 rounded-circle p-0 d-flex align-items-center justify-content-center shadow" 
+                                                                                    style="width: 26px; height: 26px; font-size: 0.72rem; line-height: 1; border: 1.5px solid #fff;" 
+                                                                                    title="Delete this photo"
+                                                                                    data-vehicle-id="{{ v.id }}"
+                                                                                    data-index="{{ forloop.counter }}"
+                                                                                    data-image-url="{{ img_url }}"
+                                                                                    data-delete-url="{% url 'hotel_admin:cab_fleet_delete_image' restaurant_slug=rslug vehicle_id=v.id %}"
+                                                                                    onclick="removeCabGalleryPhoto(this.dataset.vehicleId, this.dataset.index, this.dataset.imageUrl, this.dataset.deleteUrl)">
+                                                                                <i class="fa-solid fa-trash-can"></i>
+                                                                            </button>
+                                                                            
+                                                                            <input type="hidden" name="existing_gallery_images" value="{{ img_url }}" id="galInput_{{ v.id }}_{{ forloop.counter }}">
+                                                                        </div>
+                                                                        {% empty %}
+                                                                        <div class="text-muted small py-2 px-1 text-center w-100" id="galEmptyNotice_{{ v.id }}">
+                                                                            <i class="fa-solid fa-image text-secondary opacity-50 me-1"></i> No gallery photos uploaded yet.
+                                                                        </div>
+                                                                        {% endfor %}
+                                                                        <div class="text-muted small py-2 px-1 text-center w-100 d-none" id="galEmptyNoticeDynamic_{{ v.id }}">
+                                                                            <i class="fa-solid fa-image text-secondary opacity-50 me-1"></i> All gallery photos removed. Upload new photos below or save changes.
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
-                                                                {% endif %}
                                                                 <div class="p-3 bg-light rounded-3 border mb-3">
                                                                     <label class="form-label small fw-bold mb-1">Upload Additional Local Photos:</label>
                                                                     <input type="file" name="gallery_image_files" class="form-control form-control-sm" accept="image/*" multiple onchange="validateMaxImages(this, 10, 'galCountEdit{{ v.id }}')">
@@ -1323,7 +1580,6 @@ Spacious Boot Space{% endif %}</textarea>
                     </tbody>
                 </table>
             </div>
-        </div>
     </div>
 
     <!-- ========================================== -->
@@ -1331,21 +1587,24 @@ Spacious Boot Space{% endif %}</textarea>
     <!-- ========================================== -->
     <div class="tab-pane fade" id="packages-pane" role="tabpanel">
         <div class="d-flex align-items-center justify-content-between mb-3">
-            <h6 class="fw-bold mb-0">Active Transfer &amp; Tourism Packages</h6>
-            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#newPackageModal">
-                <i class="fa-solid fa-plus me-1"></i>Add Package
+            <div>
+                <h6 class="fw-bold mb-0">Active Transfer &amp; Tourism Packages</h6>
+                <p class="text-muted small mb-0">Sightseeing tours, airport routes, hourly rentals, and tariffs</p>
+            </div>
+            <button type="button" class="btn-pms-primary" data-bs-toggle="modal" data-bs-target="#newPackageModal">
+                <i class="fa-solid fa-plus"></i><span>Add Package</span>
             </button>
         </div>
 
         <div class="row g-3">
             {% for p in packages %}
             <div class="col-md-4">
-                <div class="card h-100 border-0 shadow-sm rounded-4 p-3 dispatch-card">
+                <div class="pms-card p-3 h-100 d-flex flex-column">
                     <div class="d-flex align-items-start justify-content-between mb-2">
-                        <span class="badge {% if p.service_type == 'AIRPORT_TRANSFER' %}bg-primary-subtle text-primary{% elif p.service_type == 'TOURISM_PACKAGE' %}bg-success-subtle text-success{% else %}bg-secondary-subtle text-secondary{% endif %} rounded-pill px-2.5 py-1">
+                        <span class="pill {% if p.service_type == 'AIRPORT_TRANSFER' %}pill-primary{% elif p.service_type == 'TOURISM_PACKAGE' %}pill-success{% else %}pill-neutral{% endif %}">
                             {{ p.get_service_type_display }}
                         </span>
-                        <div class="h5 fw-bold text-dark mb-0">₹{{ p.base_price }}</div>
+                        <div class="h5 fw-bold text-dark font-mono mb-0">₹{{ p.base_price }}</div>
                     </div>
                     <h5 class="fw-bold text-dark mb-1">{{ p.title }}</h5>
                     <div class="small text-muted mb-2"><i class="fa-solid fa-car me-1 text-primary"></i>Vehicle: <strong>{{ p.get_vehicle_category_display }}</strong></div>
@@ -1357,16 +1616,16 @@ Spacious Boot Space{% endif %}</textarea>
                     {% endif %}
                     <p class="small text-muted mb-3 flex-grow-1">{{ p.itinerary_description|default:"Standard hotel concierge ride package." }}</p>
                     <div class="d-flex justify-content-between align-items-center pt-2 border-top">
-                        <span class="badge {% if p.is_active %}bg-success-subtle text-success{% else %}bg-secondary-subtle text-secondary{% endif %} rounded-pill">
+                        <span class="pill {% if p.is_active %}pill-success{% else %}pill-neutral{% endif %}">
                             {% if p.is_active %}Active Catalog{% else %}Hidden{% endif %}
                         </span>
                         <div class="d-flex gap-1">
-                            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editPackageModal{{ p.id }}">
+                            <button type="button" class="btn-pms-outline py-1 px-2.5" style="font-size:0.78rem;" data-bs-toggle="modal" data-bs-target="#editPackageModal{{ p.id }}">
                                 <i class="fa-solid fa-pen-to-square me-1"></i>Edit
                             </button>
                             <form method="POST" action="{% url 'hotel_admin:cab_package_delete' restaurant_slug=rslug package_id=p.id %}" onsubmit="return confirm('Delete package {{ p.title }}?')">
                                 {% csrf_token %}
-                                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash me-1"></i>Delete</button>
+                                <button type="submit" class="btn btn-sm btn-outline-danger py-1 px-2" style="font-size:0.78rem;"><i class="fa-solid fa-trash me-1"></i>Delete</button>
                             </form>
                         </div>
                     </div>
@@ -2111,6 +2370,92 @@ Spacious Boot Space</textarea>
             prevTab.show();
         }
     }
+
+    // Remove an existing gallery photo with AJAX delete and UI fade-out
+    function removeCabGalleryPhoto(vehicleId, cardIndex, imageUrl, deleteApiUrl) {
+        if (!confirm('Are you sure you want to remove this photo?')) {
+            return;
+        }
+
+        const card = document.getElementById('galCard_' + vehicleId + '_' + cardIndex);
+        const input = document.getElementById('galInput_' + vehicleId + '_' + cardIndex);
+        
+        // Immediate visual cue
+        if (card) {
+            card.style.opacity = '0.35';
+            card.style.transform = 'scale(0.92)';
+        }
+
+        const csrfTokenEl = document.querySelector('#editVehicleModal' + vehicleId + ' [name=csrfmiddlewaretoken]') || document.querySelector('[name=csrfmiddlewaretoken]');
+        const csrfToken = csrfTokenEl ? csrfTokenEl.value : '';
+
+        const formData = new FormData();
+        formData.append('image_url', imageUrl);
+        formData.append('csrfmiddlewaretoken', csrfToken);
+
+        fetch(deleteApiUrl, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (card) card.remove();
+                if (input) input.remove();
+                
+                // Update badge count
+                const badge = document.getElementById('galCountEdit' + vehicleId);
+                if (badge) {
+                    badge.innerText = data.remaining_count + ' / 10 images';
+                }
+
+                // Check remaining cards
+                const grid = document.getElementById('galGrid_' + vehicleId);
+                if (grid) {
+                    const remainingCards = grid.querySelectorAll('.gallery-photo-card');
+                    if (remainingCards.length === 0) {
+                        const notice = document.getElementById('galEmptyNoticeDynamic_' + vehicleId);
+                        if (notice) notice.classList.remove('d-none');
+                    }
+                }
+            } else {
+                alert('Could not remove image: ' + (data.error || 'Server error'));
+                if (card) {
+                    card.style.opacity = '1';
+                    card.style.transform = 'none';
+                }
+            }
+        })
+        .catch(err => {
+            console.error('Delete photo error:', err);
+            // Fallback: remove from DOM and form input so form submission will persist removal
+            if (card) card.remove();
+            if (input) input.remove();
+            const badge = document.getElementById('galCountEdit' + vehicleId);
+            if (badge) {
+                const grid = document.getElementById('galGrid_' + vehicleId);
+                const count = grid ? grid.querySelectorAll('.gallery-photo-card').length : 0;
+                badge.innerText = count + ' / 10 images';
+            }
+        });
+    }
+
+    // Clear active cover photo in edit modal
+    function clearCabCoverPhoto(vehicleId) {
+        const box = document.getElementById('activeCoverBox' + vehicleId);
+        const notice = document.getElementById('coverRemovedNotice' + vehicleId);
+        const hiddenInput = document.getElementById('removeCoverInput' + vehicleId);
+        const textInput = document.querySelector('#editVehicleModal' + vehicleId + ' input[name="cover_image"]');
+
+        if (box) box.classList.add('d-none');
+        if (notice) notice.classList.remove('d-none');
+        if (hiddenInput) hiddenInput.value = 'true';
+        if (textInput) textInput.value = '';
+    }
+
 </script>
 
 {% endblock %}

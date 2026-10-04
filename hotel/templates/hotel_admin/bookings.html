@@ -1,312 +1,246 @@
 {% extends 'hotel_admin/base_hotel.html' %}
-
-{% block title %}Guest Bookings & Folios{% endblock %}
+{% block title %}Guest Folios & Reservations{% endblock %}
 
 {% block extra_css %}
 <style>
-    .guest-avatar {
-        width: 38px;
-        height: 38px;
-        border-radius: 10px;
-        background: #EFF6FF;
-        color: #2563EB;
-        font-weight: 700;
-        font-size: 0.88rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        border: 1px solid #DBEAFE;
-    }
-
-    .room-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        background: #0F172A;
-        color: #FFFFFF;
-        font-weight: 700;
-        font-size: 0.76rem;
-        padding: 0.2rem 0.6rem;
-        border-radius: 6px;
-    }
-
-    /* Printable Hotel Folio Receipt */
     @media print {
-        body * {
-            visibility: hidden;
-        }
-        #printableFolio, #printableFolio * {
-            visibility: visible;
-        }
-        #printableFolio {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            padding: 20px;
-            background: white !important;
-        }
-        .modal-header, .modal-footer {
-            display: none !important;
-        }
+        body * { visibility: hidden; }
+        #printableFolio, #printableFolio * { visibility: visible; }
+        #printableFolio { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; background: white !important; }
+        .modal-header, .modal-footer { display: none !important; }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+<!-- Page Header -->
+<div class="page-header">
     <div>
-        <h4 class="fw-bold mb-1 text-dark">Guest Folios &amp; Reservations</h4>
-        <p class="text-muted small mb-0">Track stay records, guest invoices, advance payments, and check-in / check-out actions</p>
+        <h1 class="page-title">Guest Folios &amp; Reservations</h1>
+        <p class="page-subtitle">Track stay records, invoices, advance payments, and check-in / check-out actions</p>
     </div>
-    <div class="d-flex align-items-center gap-2">
-        <button type="button" class="btn btn-pms-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#newBookingModal">
-            <i class="fa-solid fa-plus"></i>
-            <span>New Reservation</span>
+    <div class="page-actions">
+        <button type="button" class="btn-pms-primary" data-bs-toggle="modal" data-bs-target="#newBookingModal">
+            <i class="fa-solid fa-plus"></i>New Reservation
         </button>
     </div>
 </div>
 
-<!-- Search & Status Filter Bar -->
-<div class="pms-card p-3 mb-4 bg-white">
-    <form method="GET" class="row g-2 align-items-center">
-        <div class="col-md-5">
-            <div class="input-group">
-                <span class="input-group-text bg-light border-end-0"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
-                <input type="text" name="q" value="{{ search_query }}" class="form-control border-start-0" placeholder="Search by guest name, phone, email, booking code, or room #">
-            </div>
+<!-- Search & Filter Bar -->
+<form method="GET">
+    <div class="filter-bar">
+        <div class="filter-input" style="flex:2;min-width:280px;">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" name="q" value="{{ search_query }}" placeholder="Search by guest name, phone, email, booking code, or room #">
         </div>
-        <div class="col-md-3">
-            <select name="status" class="form-select" onchange="this.form.submit()">
-                <option value="">-- All Booking Statuses --</option>
-                <option value="RESERVED" {% if status_filter == 'RESERVED' %}selected{% endif %}>Reserved (Upcoming)</option>
-                <option value="CHECKED_IN" {% if status_filter == 'CHECKED_IN' %}selected{% endif %}>Checked-In (In-House)</option>
-                <option value="CHECKED_OUT" {% if status_filter == 'CHECKED_OUT' %}selected{% endif %}>Checked-Out (Completed)</option>
-                <option value="CANCELLED" {% if status_filter == 'CANCELLED' %}selected{% endif %}>Cancelled</option>
-            </select>
-        </div>
-        <div class="col-md-2">
-            <button type="submit" class="btn btn-primary w-100 fw-semibold">Filter</button>
-        </div>
+        <select name="status" class="filter-select" onchange="this.form.submit()">
+            <option value="">All Booking Statuses</option>
+            <option value="RESERVED" {% if status_filter == 'RESERVED' %}selected{% endif %}>Reserved (Upcoming)</option>
+            <option value="CHECKED_IN" {% if status_filter == 'CHECKED_IN' %}selected{% endif %}>Checked-In (In-House)</option>
+            <option value="CHECKED_OUT" {% if status_filter == 'CHECKED_OUT' %}selected{% endif %}>Checked-Out (Completed)</option>
+            <option value="CANCELLED" {% if status_filter == 'CANCELLED' %}selected{% endif %}>Cancelled</option>
+        </select>
+        <button type="submit" class="btn-pms-primary" style="padding:0.42rem 1rem;"><i class="fa-solid fa-filter"></i>Filter</button>
         {% if search_query or status_filter %}
-        <div class="col-md-2">
-            <a href="{% url 'hotel_admin:bookings' restaurant_slug=rslug %}" class="btn btn-outline-secondary w-100">Clear</a>
-        </div>
+        <a href="{% url 'hotel_admin:bookings' restaurant_slug=rslug %}" class="btn-pms-outline" style="padding:0.42rem 1rem;">
+            <i class="fa-solid fa-xmark"></i>Clear
+        </a>
         {% endif %}
-    </form>
-</div>
+    </div>
+</form>
 
 <!-- Bookings Table -->
-<div class="pms-card overflow-hidden">
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
-            <thead class="table-light">
-                <tr>
-                    <th class="ps-3">Folio ID</th>
-                    <th>Room Unit</th>
-                    <th>Guest Information</th>
-                    <th>Stay Dates</th>
-                    <th>Total &amp; Payment</th>
-                    <th>Status</th>
-                    <th class="text-end pe-3">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for b in bookings %}
-                <tr>
-                    <td class="ps-3">
-                        <span class="fw-bold text-dark font-mono">{{ b.booking_id }}</span>
-                        <small class="d-block text-muted">{{ b.created_at|date:"M d, Y" }}</small>
-                    </td>
-                    <td>
-                        <div class="room-pill mb-1">
-                            <i class="fa-solid fa-door-closed" style="font-size: 0.7rem;"></i>
-                            <span>#{{ b.room.room_number }}</span>
-                        </div>
-                        <small class="d-block text-muted text-truncate" style="max-width: 140px; font-size: 0.72rem;">{{ b.room.category.name }}</small>
-                    </td>
-                    <td>
-                        <div class="d-flex align-items-center gap-2.5">
-                            <div class="guest-avatar">
-                                {{ b.guest_name|slice:":2"|upper }}
-                            </div>
-                            <div>
-                                <span class="fw-bold text-dark d-block">{{ b.guest_name }}</span>
-                                <div class="text-muted font-mono" style="font-size: 0.72rem;">
-                                    <span><i class="fa-solid fa-phone me-1"></i>{{ b.guest_phone }}</span>
-                                    {% if b.guest_email %}&bull; <span>{{ b.guest_email }}</span>{% endif %}
-                                </div>
+<div class="pms-table-wrap">
+    <table class="pms-table">
+        <thead>
+            <tr>
+                <th style="padding-left:1.25rem;">Folio ID</th>
+                <th>Room</th>
+                <th>Guest</th>
+                <th>Stay Dates</th>
+                <th>Total &amp; Payment</th>
+                <th>Status</th>
+                <th style="text-align:right;padding-right:1.25rem;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for b in bookings %}
+            <tr>
+                <td style="padding-left:1.25rem;">
+                    <div class="font-mono fw-bold" style="font-size:0.82rem;color:var(--text-main);">{{ b.booking_id }}</div>
+                    <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.15rem;">{{ b.created_at|date:"d M Y" }}</div>
+                </td>
+                <td>
+                    <span class="room-chip"><i class="fa-solid fa-door-closed" style="font-size:0.65rem;"></i>#{{ b.room.room_number }}</span>
+                    <div style="font-size:0.7rem;color:var(--text-muted);margin-top:0.25rem;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ b.room.category.name }}</div>
+                </td>
+                <td>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="guest-avatar">{{ b.guest_name|slice:":2"|upper }}</div>
+                        <div>
+                            <div class="fw-semibold" style="font-size:0.84rem;">{{ b.guest_name }}</div>
+                            <div class="font-mono" style="font-size:0.7rem;color:var(--text-muted);">
+                                <i class="fa-solid fa-phone" style="font-size:0.65rem;margin-right:0.2rem;"></i>{{ b.guest_phone }}
+                                {% if b.guest_email %}&nbsp;·&nbsp;{{ b.guest_email }}{% endif %}
                             </div>
                         </div>
-                    </td>
-                    <td>
-                        <div class="fw-semibold text-dark font-mono">{{ b.check_in_date|date:"d M Y" }} &rarr; {{ b.check_out_date|date:"d M Y" }}</div>
-                        <span class="badge bg-light text-secondary border px-1.5 py-0.5" style="font-size: 0.68rem;">{{ b.nights_count }} Night{% if b.nights_count > 1 %}s{% endif %} &bull; {{ b.num_guests }} Guest{% if b.num_guests > 1 %}s{% endif %}</span>
-                    </td>
-                    <td>
-                        <div class="fw-bold text-dark font-mono fs-6">₹{{ b.grand_total }}</div>
-                        <span class="badge {% if b.payment_status == 'PAID' %}bg-success-subtle text-success border border-success-subtle{% elif b.payment_status == 'PARTIALLY_PAID' %}bg-info-subtle text-info border border-info-subtle{% else %}bg-warning-subtle text-warning border border-warning-subtle{% endif %} px-2 py-0.5" style="font-size: 0.68rem;">
-                            {{ b.get_payment_status_display }}
-                        </span>
-                    </td>
-                    <td>
-                        {% if b.booking_status == 'CHECKED_IN' %}
-                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1">
-                            <i class="fa-solid fa-circle-check me-1"></i>Checked-In
-                        </span>
-                        {% elif b.booking_status == 'RESERVED' %}
-                        <span class="badge bg-info-subtle text-info border border-info-subtle px-2.5 py-1">
-                            <i class="fa-regular fa-clock me-1"></i>Reserved
-                        </span>
-                        {% elif b.booking_status == 'CHECKED_OUT' %}
-                        <span class="badge bg-secondary-subtle text-secondary border px-2.5 py-1">Checked-Out</span>
-                        {% elif b.booking_status == 'CANCELLED' %}
-                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2.5 py-1">Cancelled</span>
-                        {% endif %}
-                    </td>
-                    <td class="text-end pe-3">
-                        <div class="dropdown">
-                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle rounded-pill px-2.5" type="button" data-bs-toggle="dropdown" style="font-size: 0.75rem;">
-                                Manage
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 rounded-3">
-                                <li>
-                                    <button class="dropdown-item d-flex align-items-center gap-2" type="button"
-                                        data-booking-id="{{ b.booking_id }}"
-                                        data-guest-name="{{ b.guest_name|escape }}"
-                                        data-phone="{{ b.guest_phone }}"
-                                        data-email="{{ b.guest_email|default:'' }}"
-                                        data-room="{{ b.room.room_number }}"
-                                        data-cat="{{ b.room.category.name|escape }}"
-                                        data-checkin="{{ b.check_in_date|date:'Y-m-d' }}"
-                                        data-checkout="{{ b.check_out_date|date:'Y-m-d' }}"
-                                        data-nights="{{ b.nights_count }}"
-                                        data-charges="{{ b.total_room_charges }}"
-                                        data-taxes="{{ b.taxes }}"
-                                        data-total="{{ b.grand_total }}"
-                                        data-payment="{{ b.payment_status }}"
-                                        data-requests="{{ b.special_requests|default:''|escape }}"
-                                        onclick="handleViewFolio(this)">
-                                        <i class="fa-solid fa-file-invoice text-primary"></i> View Folio Invoice
+                    </div>
+                </td>
+                <td>
+                    <div class="font-mono fw-semibold" style="font-size:0.82rem;">{{ b.check_in_date|date:"d M Y" }} → {{ b.check_out_date|date:"d M Y" }}</div>
+                    <span class="pill pill-neutral" style="font-size:0.62rem;margin-top:0.2rem;">{{ b.nights_count }}N · {{ b.num_guests }} Guest{% if b.num_guests > 1 %}s{% endif %}</span>
+                </td>
+                <td>
+                    <div class="font-mono fw-bold" style="font-size:0.9rem;">₹{{ b.grand_total }}</div>
+                    <span class="status-tag {% if b.payment_status == 'PAID' %}tag-paid{% elif b.payment_status == 'PARTIALLY_PAID' %}tag-reserved{% else %}tag-pending{% endif %}" style="margin-top:0.2rem;font-size:0.68rem;">
+                        {{ b.get_payment_status_display }}
+                    </span>
+                </td>
+                <td>
+                    {% if b.booking_status == 'CHECKED_IN' %}
+                    <span class="status-tag tag-checked-in"><i class="fa-solid fa-circle-check"></i>Checked-In</span>
+                    {% elif b.booking_status == 'RESERVED' %}
+                    <span class="status-tag tag-reserved"><i class="fa-regular fa-clock"></i>Reserved</span>
+                    {% elif b.booking_status == 'CHECKED_OUT' %}
+                    <span class="status-tag tag-checked-out">Checked-Out</span>
+                    {% elif b.booking_status == 'CANCELLED' %}
+                    <span class="status-tag tag-cancelled"><i class="fa-solid fa-ban"></i>Cancelled</span>
+                    {% endif %}
+                </td>
+                <td style="text-align:right;padding-right:1.25rem;">
+                    <div class="dropdown">
+                        <button class="btn-pms-outline dropdown-toggle" type="button" data-bs-toggle="dropdown" style="font-size:0.78rem;padding:0.35rem 0.75rem;">
+                            Manage
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <button class="dropdown-item" type="button"
+                                    data-booking-id="{{ b.booking_id }}"
+                                    data-guest-name="{{ b.guest_name|escape }}"
+                                    data-phone="{{ b.guest_phone }}"
+                                    data-email="{{ b.guest_email|default:'' }}"
+                                    data-room="{{ b.room.room_number }}"
+                                    data-cat="{{ b.room.category.name|escape }}"
+                                    data-checkin="{{ b.check_in_date|date:'Y-m-d' }}"
+                                    data-checkout="{{ b.check_out_date|date:'Y-m-d' }}"
+                                    data-nights="{{ b.nights_count }}"
+                                    data-charges="{{ b.total_room_charges }}"
+                                    data-taxes="{{ b.taxes }}"
+                                    data-total="{{ b.grand_total }}"
+                                    data-payment="{{ b.payment_status }}"
+                                    data-requests="{{ b.special_requests|default:''|escape }}"
+                                    onclick="handleViewFolio(this)">
+                                    <i class="fa-solid fa-file-invoice" style="color:var(--brand);"></i>View Folio Invoice
+                                </button>
+                            </li>
+                            {% if b.booking_status == 'RESERVED' %}
+                            <li>
+                                <form method="POST" action="{% url 'hotel_admin:booking_check_in' restaurant_slug=rslug booking_id=b.id %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="dropdown-item"><i class="fa-solid fa-key" style="color:#2563eb;"></i>Check In Guest</button>
+                                </form>
+                            </li>
+                            {% endif %}
+                            {% if b.booking_status == 'CHECKED_IN' %}
+                            <li>
+                                <form method="POST" action="{% url 'hotel_admin:booking_check_out' restaurant_slug=rslug booking_id=b.id %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="dropdown-item"><i class="fa-solid fa-arrow-right-from-bracket" style="color:#d97706;"></i>Check Out Guest</button>
+                                </form>
+                            </li>
+                            {% endif %}
+                            {% if b.booking_status != 'CANCELLED' and b.booking_status != 'CHECKED_OUT' %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form method="POST" action="{% url 'hotel_admin:booking_cancel' restaurant_slug=rslug booking_id=b.id %}">
+                                    {% csrf_token %}
+                                    <button type="submit" class="dropdown-item" style="color:#b91c1c;" onclick="return confirm('Cancel this reservation?');">
+                                        <i class="fa-solid fa-ban"></i>Cancel Reservation
                                     </button>
-                                </li>
-                                {% if b.booking_status == 'RESERVED' %}
-                                <li>
-                                    <form method="POST" action="{% url 'hotel_admin:booking_check_in' restaurant_slug=rslug booking_id=b.id %}">
-                                        {% csrf_token %}
-                                        <button type="submit" class="dropdown-item text-primary d-flex align-items-center gap-2">
-                                            <i class="fa-solid fa-key"></i> Check In Guest
-                                        </button>
-                                    </form>
-                                </li>
-                                {% endif %}
-                                {% if b.booking_status == 'CHECKED_IN' %}
-                                <li>
-                                    <form method="POST" action="{% url 'hotel_admin:booking_check_out' restaurant_slug=rslug booking_id=b.id %}">
-                                        {% csrf_token %}
-                                        <button type="submit" class="dropdown-item text-warning d-flex align-items-center gap-2">
-                                            <i class="fa-solid fa-arrow-right-from-bracket"></i> Check Out Guest
-                                        </button>
-                                    </form>
-                                </li>
-                                {% endif %}
-                                {% if b.booking_status != 'CANCELLED' and b.booking_status != 'CHECKED_OUT' %}
-                                <li><hr class="dropdown-divider"></li>
-                                <li>
-                                    <form method="POST" action="{% url 'hotel_admin:booking_cancel' restaurant_slug=rslug booking_id=b.id %}">
-                                        {% csrf_token %}
-                                        <button type="submit" class="dropdown-item text-danger d-flex align-items-center gap-2" onclick="return confirm('Cancel this reservation?');">
-                                            <i class="fa-solid fa-ban"></i> Cancel Reservation
-                                        </button>
-                                    </form>
-                                </li>
-                                {% endif %}
-                            </ul>
-                        </div>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="7" class="text-center py-5 text-muted">
-                        <i class="fa-solid fa-calendar-xmark fs-2 mb-2 d-block opacity-25"></i>
-                        No reservations found matching your criteria.
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+                                </form>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" style="text-align:center;padding:3rem;color:var(--text-muted);">
+                    <i class="fa-solid fa-calendar-xmark" style="font-size:2rem;opacity:0.2;display:block;margin-bottom:0.75rem;"></i>
+                    No reservations found matching your criteria.
+                    {% if search_query or status_filter %}
+                    <br><a href="{% url 'hotel_admin:bookings' restaurant_slug=rslug %}" style="color:var(--brand);font-size:0.82rem;">Clear filters</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
 
-<!-- Modal: Folio Bill Receipt -->
+<!-- Modal: Folio Invoice -->
 <div class="modal fade" id="folioModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-md modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
-            <div class="modal-header bg-dark text-white px-4 py-3">
+        <div class="modal-content">
+            <div class="modal-header">
                 <div>
-                    <h5 class="modal-title fw-bold text-white mb-0">Guest Folio &amp; Tax Invoice</h5>
-                    <small class="text-white-50 font-mono" id="folioIdDisplay">Code: BK-HTL</small>
+                    <div class="modal-title">Guest Folio &amp; Tax Invoice</div>
+                    <div class="font-mono" style="font-size:0.72rem;color:#94a3b8;" id="folioIdDisplay">Code: BK-HTL</div>
                 </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-4 bg-white" id="printableFolio">
-                <div class="text-center pb-3 border-bottom mb-3">
-                    <h4 class="fw-bold mb-1 text-dark">{{ current_restaurant.name }}</h4>
-                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-0.5">{{ current_branch.name }}</span>
-                    <small class="text-muted d-block mt-1">Official Guest Folio Receipt</small>
+            <div class="modal-body" id="printableFolio">
+                <div style="text-align:center;padding-bottom:1rem;border-bottom:1px solid #e2e8f0;margin-bottom:1rem;">
+                    <div style="font-size:1.1rem;font-weight:700;color:var(--text-main);">{{ current_restaurant.name }}</div>
+                    <span class="pill pill-primary" style="margin:0.3rem 0;">{{ current_branch.name }}</span>
+                    <div style="font-size:0.78rem;color:var(--text-muted);">Official Guest Folio Receipt</div>
                 </div>
-
-                <div class="row g-3 mb-3 small">
+                <div class="row mb-3">
                     <div class="col-6">
-                        <span class="text-muted d-block" style="font-size: 0.72rem;">Guest Details:</span>
-                        <strong class="text-dark fs-6" id="folioGuest">Guest Name</strong>
-                        <div class="text-muted font-mono" id="folioContact">Phone</div>
+                        <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem;">Guest Details</div>
+                        <div class="fw-bold" style="font-size:1rem;" id="folioGuest">Guest Name</div>
+                        <div class="font-mono" style="font-size:0.78rem;color:var(--text-muted);" id="folioContact">Phone</div>
                     </div>
                     <div class="col-6 text-end">
-                        <span class="text-muted d-block" style="font-size: 0.72rem;">Room Assigned:</span>
-                        <strong class="text-primary fs-5 font-mono" id="folioRoom">#101</strong>
-                        <div class="text-muted" id="folioCat">Executive Suite</div>
+                        <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.2rem;">Room Assigned</div>
+                        <div class="font-mono fw-bold" style="font-size:1.2rem;color:var(--brand);" id="folioRoom">#101</div>
+                        <div style="font-size:0.8rem;color:var(--text-muted);" id="folioCat">Suite</div>
                     </div>
                 </div>
-
-                <div class="p-3 bg-light rounded-3 mb-3 small">
-                    <div class="d-flex justify-content-between mb-1">
-                        <span class="text-muted">Stay Duration:</span>
-                        <span class="fw-semibold text-dark font-mono" id="folioDates">Dates</span>
+                <div style="background:#f8fafc;border-radius:10px;padding:0.85rem 1rem;margin-bottom:1rem;">
+                    <div class="d-flex justify-content-between mb-1" style="font-size:0.82rem;">
+                        <span style="color:var(--text-muted);">Stay Duration</span>
+                        <span class="font-mono fw-semibold" id="folioDates">—</span>
                     </div>
-                    <div class="d-flex justify-content-between">
-                        <span class="text-muted">Billed Nights:</span>
-                        <span class="fw-semibold text-dark font-mono" id="folioNights">1 night</span>
+                    <div class="d-flex justify-content-between" style="font-size:0.82rem;">
+                        <span style="color:var(--text-muted);">Billed Nights</span>
+                        <span class="font-mono fw-semibold" id="folioNights">—</span>
                     </div>
                 </div>
-
-                <table class="table table-sm table-borderless mb-3 small">
+                <table style="width:100%;border-collapse:collapse;font-size:0.84rem;margin-bottom:1rem;">
                     <tbody>
                         <tr>
-                            <td class="text-muted">Room Charges</td>
-                            <td class="text-end fw-semibold text-dark font-mono" id="folioRoomCharges">₹0.00</td>
+                            <td style="padding:0.4rem 0;color:var(--text-muted);">Room Charges</td>
+                            <td style="text-align:right;font-weight:600;font-family:'JetBrains Mono',monospace;" id="folioRoomCharges">₹0.00</td>
                         </tr>
                         <tr>
-                            <td class="text-muted">Taxes &amp; GST</td>
-                            <td class="text-end fw-semibold text-dark font-mono" id="folioTaxes">₹0.00</td>
+                            <td style="padding:0.4rem 0;color:var(--text-muted);">Taxes &amp; GST</td>
+                            <td style="text-align:right;font-weight:600;font-family:'JetBrains Mono',monospace;" id="folioTaxes">₹0.00</td>
                         </tr>
-                        <tr class="border-top">
-                            <td class="fw-bold text-dark fs-6 pt-2">Grand Total</td>
-                            <td class="text-end fw-bold text-primary fs-5 pt-2 font-mono" id="folioTotal">₹0.00</td>
+                        <tr style="border-top:2px solid #e2e8f0;">
+                            <td style="padding:0.6rem 0 0;font-weight:700;font-size:0.95rem;">Grand Total</td>
+                            <td style="text-align:right;font-weight:800;font-size:1.1rem;color:var(--brand);font-family:'JetBrains Mono',monospace;padding-top:0.6rem;" id="folioTotal">₹0.00</td>
                         </tr>
                     </tbody>
                 </table>
-
-                <div id="folioReqWrapper" class="small text-muted border-top pt-2">
+                <div id="folioReqWrapper" style="font-size:0.8rem;color:var(--text-muted);border-top:1px solid #e2e8f0;padding-top:0.6rem;">
                     <strong>Special Requests:</strong> <span id="folioReq">None</span>
                 </div>
             </div>
-            <div class="modal-footer bg-light px-4 py-3 d-flex justify-content-between">
-                <button type="button" class="btn btn-outline-secondary rounded-pill px-3" onclick="window.print();">
-                    <i class="fa-solid fa-print me-1.5"></i>Print Invoice
-                </button>
-                <button type="button" class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Close</button>
+            <div class="modal-footer d-flex justify-content-between">
+                <button type="button" class="btn-pms-outline" onclick="window.print()"><i class="fa-solid fa-print"></i>Print Invoice</button>
+                <button type="button" class="btn-pms-outline" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -314,51 +248,64 @@
 
 <!-- Modal: New Reservation -->
 <div class="modal fade" id="newBookingModal" tabindex="-1" aria-labelledby="newBookingModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
             <form method="POST" action="{% url 'hotel_admin:booking_create' restaurant_slug=rslug %}">
                 {% csrf_token %}
-                <div class="modal-header bg-dark text-white px-4 py-3">
-                    <h5 class="modal-title fw-bold text-white mb-0"><i class="fa-solid fa-calendar-plus text-primary me-2"></i>Create New Reservation</h5>
+                <div class="modal-header">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="stat-icon" style="width:34px;height:34px;font-size:0.9rem;background:rgba(99,102,241,0.2);color:#a5b4fc;"><i class="fa-solid fa-calendar-plus"></i></div>
+                        <div>
+                            <div class="modal-title" id="newBookingModalLabel">New Guest Reservation</div>
+                            <div style="font-size:0.73rem;color:#94a3b8;">Create a direct walk-in or advance booking</div>
+                        </div>
+                    </div>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body p-4 bg-light">
-                    <div class="row g-3">
+                <div class="modal-body">
+                    <div class="modal-section-title"><i class="fa-solid fa-bed me-1"></i>Room &amp; Stay Details</div>
+                    <div class="row g-3 mb-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold small">Select Room *</label>
+                            <label class="form-label">Physical Room *</label>
                             <select name="room_id" class="form-select" required>
-                                <option value="">-- Choose Physical Room --</option>
+                                <option value="">— Select Physical Room —</option>
                                 {% for r in rooms %}
-                                <option value="{{ r.id }}">Room {{ r.room_number }} ({{ r.category.name }} - ₹{{ r.category.base_price_per_night }}/nt) [{{ r.get_status_display }}]</option>
+                                <option value="{{ r.id }}">Room #{{ r.room_number }} ({{ r.category.name }}) — ₹{{ r.category.base_price_per_night }}/nt [{{ r.get_status_display }}]</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold small">Number of Guests</label>
+                            <label class="form-label">Number of Guests</label>
                             <input type="number" name="num_guests" class="form-control" value="1" min="1" max="10">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold small">Check-In Date *</label>
+                            <label class="form-label">Check-In Date *</label>
                             <input type="date" name="check_in_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold small">Check-Out Date *</label>
+                            <label class="form-label">Check-Out Date *</label>
                             <input type="date" name="check_out_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
                         </div>
+                    </div>
+                    <div class="modal-section-title"><i class="fa-solid fa-user me-1"></i>Guest Information</div>
+                    <div class="row g-3 mb-3">
                         <div class="col-md-4">
-                            <label class="form-label fw-semibold small">Guest Name *</label>
-                            <input type="text" name="guest_name" class="form-control" placeholder="e.g. John Doe" required>
+                            <label class="form-label">Guest Full Name *</label>
+                            <input type="text" name="guest_name" class="form-control" placeholder="e.g. Rahul Sharma" required>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label fw-semibold small">Phone Number *</label>
-                            <input type="text" name="guest_phone" class="form-control" placeholder="e.g. +91 9876543210" required>
+                            <label class="form-label">Phone Number *</label>
+                            <input type="tel" name="guest_phone" class="form-control" placeholder="+91 98765 43210" required>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label fw-semibold small">Email Address</label>
-                            <input type="email" name="guest_email" class="form-control" placeholder="e.g. guest@example.com">
+                            <label class="form-label">Email Address</label>
+                            <input type="email" name="guest_email" class="form-control" placeholder="guest@example.com">
                         </div>
+                    </div>
+                    <div class="modal-section-title"><i class="fa-solid fa-credit-card me-1"></i>Payment &amp; Notes</div>
+                    <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold small">Payment Status</label>
+                            <label class="form-label">Payment Status</label>
                             <select name="payment_status" class="form-select">
                                 <option value="PENDING">Pending (Pay at Check-In)</option>
                                 <option value="PAID">Paid in Full</option>
@@ -366,16 +313,14 @@
                             </select>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold small">Special Requests / Notes</label>
+                            <label class="form-label">Special Requests / Notes</label>
                             <input type="text" name="special_requests" class="form-control" placeholder="e.g. Extra pillows, late arrival">
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer bg-white border-top px-4 py-3">
-                    <button type="button" class="btn btn-secondary rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-pms-primary px-4 rounded-pill fw-bold shadow-sm">
-                        <i class="fa-solid fa-check me-1"></i>Confirm Reservation
-                    </button>
+                <div class="modal-footer d-flex justify-content-between">
+                    <button type="button" class="btn-pms-outline" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-pms-primary"><i class="fa-solid fa-check"></i>Confirm Reservation</button>
                 </div>
             </form>
         </div>
@@ -384,31 +329,25 @@
 
 <script>
 function handleViewFolio(btn) {
-    const d = btn.dataset;
-    viewFolio(d.bookingId, d.guestName, d.phone, d.email, d.room, d.cat, d.checkin, d.checkout, d.nights, d.charges, d.taxes, d.total, d.payment, d.requests);
-}
-
-function viewFolio(bookingId, guestName, phone, email, roomNum, catName, checkIn, checkOut, nights, charges, taxes, total, paymentStatus, requests) {
-    document.getElementById('folioIdDisplay').innerText = 'Booking: ' + bookingId;
-    document.getElementById('folioGuest').innerText = guestName;
-    document.getElementById('folioContact').innerText = phone + (email ? ' • ' + email : '');
-    document.getElementById('folioRoom').innerText = '#' + roomNum;
-    document.getElementById('folioCat').innerText = catName;
-    document.getElementById('folioDates').innerText = checkIn + ' → ' + checkOut;
-    document.getElementById('folioNights').innerText = nights + ' night(s)';
-    document.getElementById('folioRoomCharges').innerText = '₹' + charges;
-    document.getElementById('folioTaxes').innerText = '₹' + taxes;
-    document.getElementById('folioTotal').innerText = '₹' + total;
-    
-    if (requests && requests.trim()) {
-        document.getElementById('folioReq').innerText = requests;
-        document.getElementById('folioReqWrapper').classList.remove('d-none');
+    var d = btn.dataset;
+    document.getElementById('folioIdDisplay').innerText = 'Booking: ' + d.bookingId;
+    document.getElementById('folioGuest').innerText = d.guestName;
+    document.getElementById('folioContact').innerText = d.phone + (d.email ? ' · ' + d.email : '');
+    document.getElementById('folioRoom').innerText = '#' + d.room;
+    document.getElementById('folioCat').innerText = d.cat;
+    document.getElementById('folioDates').innerText = d.checkin + ' → ' + d.checkout;
+    document.getElementById('folioNights').innerText = d.nights + ' night(s)';
+    document.getElementById('folioRoomCharges').innerText = '₹' + d.charges;
+    document.getElementById('folioTaxes').innerText = '₹' + d.taxes;
+    document.getElementById('folioTotal').innerText = '₹' + d.total;
+    var rw = document.getElementById('folioReqWrapper');
+    if (d.requests && d.requests.trim()) {
+        document.getElementById('folioReq').innerText = d.requests;
+        rw.style.display = '';
     } else {
-        document.getElementById('folioReqWrapper').classList.add('d-none');
+        rw.style.display = 'none';
     }
-
-    const modal = new bootstrap.Modal(document.getElementById('folioModal'));
-    modal.show();
+    new bootstrap.Modal(document.getElementById('folioModal')).show();
 }
 </script>
 {% endblock %}

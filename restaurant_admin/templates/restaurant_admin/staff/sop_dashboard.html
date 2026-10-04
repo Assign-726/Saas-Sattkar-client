@@ -58,6 +58,7 @@
 
 {% block content %}
 <div class="container-fluid px-3 px-md-4 py-3" x-data="sopApp()">
+    {% csrf_token %}
 
     <!-- Top Navigation Header -->
     {% include 'restaurant_admin/staff/includes/staff_nav.html' %}
@@ -519,11 +520,12 @@
                 }
                 try {
                     const url = "{% url 'restaurant_admin:api_delete_sop_task' restaurant_slug=rslug pk=0 %}".replace('/0/', '/' + taskId + '/');
+                    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
                     const res = await fetch(url, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'X-CSRFToken': getCookie('csrftoken')
+                            'X-CSRFToken': csrfToken
                         }
                     });
                     const data = await res.json();
@@ -549,11 +551,12 @@
                 }
                 this.isSeeding = true;
                 try {
+                    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
                     const res = await fetch("{% url 'restaurant_admin:api_seed_default_sops' restaurant_slug=rslug %}", {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'X-CSRFToken': getCookie('csrftoken')
+                            'X-CSRFToken': csrfToken
                         }
                     });
                     const data = await res.json();
@@ -582,6 +585,32 @@
             completedBy: initial.completedBy,
             requiresReading: initial.requiresReading,
             unit: initial.unit,
+            async deleteTask(taskId, title) {
+                const id = taskId || this.taskId;
+                const name = title || 'this task';
+                if (!confirm(`Are you sure you want to permanently delete SOP routine "${name}"?`)) {
+                    return;
+                }
+                try {
+                    const url = "{% url 'restaurant_admin:api_delete_sop_task' restaurant_slug=rslug pk=0 %}".replace('/0/', '/' + id + '/');
+                    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        }
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        alert(data.error || 'Failed to delete task.');
+                    }
+                } catch (e) {
+                    alert('Error deleting task: ' + e.message);
+                }
+            },
             async toggleStatus(newStatus) {
                 this.status = newStatus;
                 await this.syncLog();
@@ -591,11 +620,12 @@
             },
             async syncLog() {
                 try {
+                    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
                     const res = await fetch("{% url 'restaurant_admin:api_toggle_sop_task_status' restaurant_slug=rslug %}", {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'X-CSRFToken': getCookie('csrftoken')
+                            'X-CSRFToken': csrfToken
                         },
                         body: JSON.stringify({
                             task_id: this.taskId,

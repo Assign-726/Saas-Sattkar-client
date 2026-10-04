@@ -59,24 +59,24 @@ class HRMSOperationsTests(TestCase):
         self.client.force_login(self.user)
 
     def test_seed_sample_hospitality_staff(self):
-        """Test that hospitality ground staff are seeded across departments."""
+        """Test that automatic hospitality ground staff seeding is disabled."""
         count = seed_sample_hospitality_staff(self.restaurant, self.branch)
-        self.assertGreaterEqual(count, 5)
-
-        # Check departments exist
-        kitchen_staff = StaffMember.objects.filter(restaurant=self.restaurant, department=Department.KITCHEN)
-        bar_staff = StaffMember.objects.filter(restaurant=self.restaurant, department=Department.BAR)
-        floor_staff = StaffMember.objects.filter(restaurant=self.restaurant, department=Department.FLOOR)
-        hk_staff = StaffMember.objects.filter(restaurant=self.restaurant, department=Department.HOUSEKEEPING)
-
-        self.assertTrue(kitchen_staff.exists())
-        self.assertTrue(bar_staff.exists())
-        self.assertTrue(floor_staff.exists())
-        self.assertTrue(hk_staff.exists())
+        self.assertEqual(count, 0)
 
     def test_mark_all_present_batch_endpoint(self):
         """Test Phase 1: Mark All Present batch creation endpoint."""
-        seed_sample_hospitality_staff(self.restaurant, self.branch)
+        StaffMember.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            name="Chef Test",
+            employee_id="TST-001",
+            department=Department.KITCHEN,
+            designation="Chef",
+            default_shift=ShiftType.GENERAL,
+            monthly_base_salary=Decimal('20000.00'),
+            standard_shift_hours=Decimal('9.0'),
+            is_active=True
+        )
         total_staff = StaffMember.objects.filter(restaurant=self.restaurant).count()
 
         target_date = "2026-10-15"
@@ -306,7 +306,7 @@ class HRMSOperationsTests(TestCase):
         """Test Phase 3: SOP seeding and task verification."""
         # Pre-seed SOP templates
         count = seed_standard_hospitality_sops(self.restaurant, self.branch)
-        self.assertGreaterEqual(count, 8)
+        self.assertEqual(count, 2)
 
         # Retrieve a freezer temp task
         task = DailySOPTask.objects.filter(
