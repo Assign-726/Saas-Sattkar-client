@@ -41,6 +41,108 @@
         padding: 0.2rem 0.6rem;
         border-radius: 6px;
     }
+
+    /* Modal Dialog Flex & Scrollable Fix (Ensures form never clips and fits on 100% zoom) */
+    .modal-dialog-scrollable .modal-content {
+        max-height: calc(100vh - 2.5rem);
+    }
+    .modal-dialog-scrollable .modal-content > form {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+        height: 100%;
+    }
+    .modal-dialog-scrollable .modal-content > form > .modal-body {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        min-height: 0;
+        max-height: calc(86vh - 190px);
+        padding: 1.5rem 1.75rem;
+    }
+    .modal-dialog-scrollable .modal-content > form > .modal-footer {
+        flex-shrink: 0;
+    }
+
+    /* PMS Vehicle Modal Tab Pills */
+    .pms-vehicle-tabs .nav-link {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #475569;
+        background: #F8FAFC;
+        border-radius: 9px;
+        padding: 0.5rem 0.85rem;
+        border: 1px solid #E2E8F0;
+        transition: all 0.15s ease-in-out;
+    }
+    .pms-vehicle-tabs .nav-link:hover {
+        color: #0F172A;
+        background: #EDF2F7;
+        border-color: #CBD5E1;
+    }
+    .pms-vehicle-tabs .nav-link.active {
+        color: #FFFFFF !important;
+        background: #0F172A !important;
+        border-color: #0F172A !important;
+        box-shadow: 0 3px 8px rgba(15, 23, 42, 0.16);
+    }
+    .pms-vehicle-tabs .nav-link.active .badge {
+        background-color: rgba(255, 255, 255, 0.25) !important;
+        color: #FFFFFF !important;
+        border-color: transparent !important;
+    }
+
+    /* Quick Chip Suggestions */
+    .quick-chip {
+        font-size: 0.72rem;
+        font-weight: 500;
+        padding: 0.22rem 0.6rem;
+        background: #FFFFFF;
+        border: 1px solid #CBD5E1;
+        border-radius: 6px;
+        color: #334155;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        user-select: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .quick-chip:hover {
+        background: #EEF2FF;
+        border-color: #818CF8;
+        color: #3730A3;
+        transform: translateY(-1px);
+    }
+    .quick-chip:active {
+        transform: scale(0.97);
+    }
+
+    /* Form section cards inside modal */
+    .modal-form-section {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1.25rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    }
+    .modal-form-section:last-child {
+        margin-bottom: 0;
+    }
+    .modal-section-title {
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: #64748B;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
 </style>
 {% endblock %}
 
@@ -102,22 +204,72 @@
     <!-- TAB 1: DAILY DISPATCH BOARD               -->
     <!-- ========================================== -->
     <div class="tab-pane fade show active" id="dispatch-pane" role="tabpanel">
+        <!-- Quick View Modes & Status Filters -->
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <a href="?mode=all" class="btn btn-sm {% if filter_mode == 'all' or not filter_mode %}btn-dark shadow-sm{% else %}btn-outline-secondary bg-white{% endif %} rounded-pill px-3">
+                <i class="fa-solid fa-list-check me-1"></i>All Bookings &amp; Inquiries
+                <span class="badge {% if filter_mode == 'all' or not filter_mode %}bg-primary text-white{% else %}bg-secondary text-white{% endif %} rounded-pill ms-1">{{ total_count }}</span>
+            </a>
+            <a href="?mode=today" class="btn btn-sm {% if filter_mode == 'today' %}btn-primary shadow-sm text-white{% else %}btn-outline-secondary bg-white{% endif %} rounded-pill px-3">
+                <i class="fa-solid fa-calendar-day me-1"></i>Today's Dispatch
+                <span class="badge {% if filter_mode == 'today' %}bg-white text-primary{% else %}bg-secondary text-white{% endif %} rounded-pill ms-1">{{ today_count }}</span>
+            </a>
+            <a href="?mode=upcoming" class="btn btn-sm {% if filter_mode == 'upcoming' %}btn-info text-white shadow-sm{% else %}btn-outline-secondary bg-white{% endif %} rounded-pill px-3">
+                <i class="fa-solid fa-clock-rotate-left me-1"></i>Upcoming Rides
+                <span class="badge bg-secondary text-white rounded-pill ms-1">{{ upcoming_count }}</span>
+            </a>
+            <a href="?mode=web_inquiries" class="btn btn-sm {% if filter_mode == 'web_inquiries' %}btn-success shadow-sm text-white{% else %}btn-outline-secondary bg-white{% endif %} rounded-pill px-3">
+                <i class="fa-solid fa-globe me-1"></i>Direct Web Bookings
+                <span class="badge {% if filter_mode == 'web_inquiries' %}bg-white text-success{% else %}bg-secondary text-white{% endif %} rounded-pill ms-1">{{ web_inquiries_count }}</span>
+            </a>
+            <a href="?mode=unassigned" class="btn btn-sm {% if filter_mode == 'unassigned' %}btn-danger shadow-sm text-white{% else %}btn-outline-danger bg-white{% endif %} rounded-pill px-3">
+                <i class="fa-solid fa-triangle-exclamation me-1"></i>Urgent Unassigned
+                <span class="badge {% if filter_mode == 'unassigned' %}bg-white text-danger{% else %}bg-danger text-white{% endif %} rounded-pill ms-1">{{ unassigned_count }}</span>
+            </a>
+            <a href="?mode=completed" class="btn btn-sm {% if filter_mode == 'completed' %}btn-secondary shadow-sm text-white{% else %}btn-outline-secondary bg-white{% endif %} rounded-pill px-3">
+                <i class="fa-solid fa-circle-check me-1"></i>Completed Rides
+                <span class="badge bg-secondary text-white rounded-pill ms-1">{{ completed_count }}</span>
+            </a>
+        </div>
+
         <!-- Date & Filter Controls -->
         <div class="card border-0 shadow-sm rounded-4 mb-4">
             <div class="card-body p-3">
                 <form method="GET" class="row g-2 align-items-center">
+                    {% if filter_mode and filter_mode != 'date' %}
+                    <input type="hidden" name="mode" value="{{ filter_mode }}">
+                    {% endif %}
+                    <div class="col-md-3 col-12">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-light border-end-0 text-muted"><i class="fa-solid fa-magnifying-glass"></i></span>
+                            <input type="text" name="q" class="form-control form-control-sm border-start-0" placeholder="Search guest, phone, booking ID, flight #..." value="{{ search_query }}">
+                        </div>
+                    </div>
                     <div class="col-auto">
                         <label class="form-label small text-muted mb-0 fw-bold">Date:</label>
                     </div>
-                    <div class="col-auto">
+                    <div class="col-auto d-flex align-items-center gap-1">
                         <input type="date" name="date" class="form-control form-control-sm" value="{{ selected_date_str }}" onchange="this.form.submit()">
+                        {% if selected_date_str %}
+                        <a href="?mode=all" class="btn btn-sm btn-outline-secondary py-1 px-2" title="Clear Date Filter and Show All Bookings"><i class="fa-solid fa-xmark"></i></a>
+                        {% endif %}
                     </div>
                     <div class="col-auto">
                         <select name="service_type" class="form-select form-select-sm" onchange="this.form.submit()">
-                            <option value="">All Service Types</option>
+                            <option value="">All Services</option>
                             <option value="AIRPORT_TRANSFER" {% if service_filter == 'AIRPORT_TRANSFER' %}selected{% endif %}>Airport Transfers</option>
                             <option value="TOURISM_PACKAGE" {% if service_filter == 'TOURISM_PACKAGE' %}selected{% endif %}>Sightseeing Tours</option>
-                            <option value="POINT_TO_POINT" {% if service_filter == 'POINT_TO_POINT' %}selected{% endif %}>Point to Point</option>
+                            <option value="POINT_TO_POINT" {% if service_filter == 'POINT_TO_POINT' %}selected{% endif %}>City / Point to Point</option>
+                            <option value="HOURLY_RENTAL" {% if service_filter == 'HOURLY_RENTAL' %}selected{% endif %}>Hourly Rental</option>
+                            <option value="OUTSTATION" {% if service_filter == 'OUTSTATION' %}selected{% endif %}>Outstation</option>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <select name="source" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="">All Origins</option>
+                            <option value="FRONTEND_DIRECT" {% if source_filter == 'FRONTEND_DIRECT' %}selected{% endif %}>Web Direct Bookings</option>
+                            <option value="ROOM_ADDON" {% if source_filter == 'ROOM_ADDON' %}selected{% endif %}>Room Reservation Add-ons</option>
+                            <option value="PMS_FRONT_DESK" {% if source_filter == 'PMS_FRONT_DESK' %}selected{% endif %}>PMS Front Desk</option>
                         </select>
                     </div>
                     <div class="col-auto">
@@ -133,11 +285,12 @@
                     <div class="col-auto">
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input" type="checkbox" name="unassigned_only" value="true" id="unassignedOnly" {% if unassigned_filter == 'true' or unassigned_filter == '1' %}checked{% endif %} onchange="this.form.submit()">
-                            <label class="form-check-label small fw-semibold text-danger" for="unassignedOnly">Urgent Unassigned Only</label>
+                            <label class="form-check-label small fw-semibold text-danger" for="unassignedOnly">Urgent Unassigned</label>
                         </div>
                     </div>
-                    <div class="col-auto ms-auto">
-                        <a href="?date={{ selected_date_str }}" class="btn btn-sm btn-light border text-muted">Reset</a>
+                    <div class="col-auto ms-auto d-flex gap-1">
+                        <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+                        <a href="{% url 'hotel_admin:cabs_dispatch' restaurant_slug=rslug %}?mode=all" class="btn btn-sm btn-light border text-muted">Reset</a>
                     </div>
                 </form>
             </div>
@@ -147,8 +300,14 @@
         <div class="row g-3 mb-4">
             <div class="col-6 col-md-2">
                 <div class="p-3 bg-white rounded-3 border text-center shadow-sm">
-                    <div class="small text-muted fw-bold text-uppercase">Total Rides</div>
+                    <div class="small text-muted fw-bold text-uppercase">Total Bookings</div>
                     <div class="h4 fw-bold mb-0 text-dark mt-1">{{ total_count }}</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="p-3 bg-white rounded-3 border text-center shadow-sm border-success-subtle bg-success-subtle">
+                    <div class="small text-success fw-bold text-uppercase">Web Enquiries</div>
+                    <div class="h4 fw-bold mb-0 text-success mt-1">{{ web_inquiries_count }}</div>
                 </div>
             </div>
             <div class="col-6 col-md-2">
@@ -171,14 +330,8 @@
             </div>
             <div class="col-6 col-md-2">
                 <div class="p-3 bg-white rounded-3 border text-center shadow-sm">
-                    <div class="small text-success fw-bold text-uppercase">Completed</div>
-                    <div class="h4 fw-bold mb-0 text-success mt-1">{{ completed_count }}</div>
-                </div>
-            </div>
-            <div class="col-6 col-md-2">
-                <div class="p-3 bg-white rounded-3 border text-center shadow-sm">
-                    <div class="small text-muted fw-bold text-uppercase">Cancelled</div>
-                    <div class="h4 fw-bold mb-0 text-muted mt-1">{{ cancelled_count }}</div>
+                    <div class="small text-muted fw-bold text-uppercase">Completed</div>
+                    <div class="h4 fw-bold mb-0 text-muted mt-1">{{ completed_count }}</div>
                 </div>
             </div>
         </div>
@@ -191,10 +344,10 @@
                     <thead class="table-light">
                         <tr class="small text-uppercase text-muted">
                             <th class="ps-4">Time &amp; Ride ID</th>
-                            <th>Guest &amp; Room</th>
-                            <th>Service &amp; Category</th>
-                            <th>Pickup / Drop Route</th>
-                            <th>Billing &amp; Payment</th>
+                            <th>Guest &amp; Origin</th>
+                            <th>Vehicle &amp; Trip Type</th>
+                            <th>Route &amp; Destination</th>
+                            <th>Fare &amp; Billing</th>
                             <th>Assigned Driver</th>
                             <th>Status</th>
                             <th class="text-end pe-4">Actions</th>
@@ -206,6 +359,7 @@
                             <td class="ps-4">
                                 <span class="time-pill">{{ b.pickup_datetime|date:"h:i A" }}</span>
                                 <div class="small text-muted font-monospace mt-1">{{ b.booking_id }}</div>
+                                <div class="small text-muted mt-0.5"><i class="fa-solid fa-calendar-day me-1"></i>{{ b.pickup_datetime|date:"M d, Y" }}</div>
                                 {% if b.flight_or_train_number %}
                                 <div class="badge bg-light text-dark border small mt-1">
                                     <i class="fa-solid fa-plane-departure me-1 text-primary"></i>{{ b.flight_or_train_number }}
@@ -213,17 +367,29 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <div class="fw-bold text-dark">{{ b.room_booking.guest_name }}</div>
+                                <div class="fw-bold text-dark">{{ b.display_guest_name }}</div>
                                 <div class="small text-muted">
-                                    <i class="fa-solid fa-phone me-1"></i>{{ b.room_booking.guest_phone }}
+                                    <i class="fa-solid fa-phone me-1"></i>{{ b.display_guest_phone }}
                                 </div>
+                                {% if b.room_booking %}
                                 <div class="badge bg-secondary-subtle text-secondary small mt-1">
-                                    Room {{ b.room_booking.room.room_number }} ({{ b.room_booking.room.category.name }})
+                                    <i class="fa-solid fa-hotel me-1"></i>Room {{ b.room_booking.room.room_number }} ({{ b.room_booking.room.category.name }})
                                 </div>
+                                {% else %}
+                                <div class="badge bg-primary-subtle text-primary border border-primary-subtle small mt-1">
+                                    <i class="fa-solid fa-globe me-1"></i>Direct Web Booking
+                                </div>
+                                {% endif %}
                             </td>
                             <td>
-                                <div class="fw-semibold text-dark">{{ b.package.title|default:"Custom Ride" }}</div>
-                                <div class="small text-muted">{{ b.package.get_service_type_display }} &bull; {{ b.package.get_vehicle_category_display }}</div>
+                                <div class="fw-semibold text-dark">{{ b.package_title }}</div>
+                                <div class="small text-muted">{{ b.get_trip_type_display }} &bull; {{ b.passengers }} Guests ({{ b.luggage }} Bags)</div>
+                                {% if b.preferred_chauffeur %}
+                                <div class="small text-primary mt-0.5"><i class="fa-solid fa-user-tie me-1"></i>Prefers: {{ b.preferred_chauffeur }}</div>
+                                {% endif %}
+                                {% if b.duration_hours %}
+                                <div class="small text-info"><i class="fa-solid fa-clock me-1"></i>Duration: {{ b.duration_hours }}h</div>
+                                {% endif %}
                             </td>
                             <td>
                                 <div class="small text-truncate" style="max-width: 220px;" title="{{ b.pickup_location }}">
@@ -276,6 +442,11 @@
                             </td>
                             <td class="text-end pe-4">
                                 <div class="d-flex align-items-center justify-content-end gap-1">
+                                    <!-- Booking Checking Modal Trigger -->
+                                    <button class="btn btn-sm btn-outline-info shadow-sm" type="button" data-bs-toggle="modal" data-bs-target="#inspectModal{{ b.id }}" title="View Complete Booking Details &amp; Checking">
+                                        <i class="fa-solid fa-eye me-1"></i>Check
+                                    </button>
+
                                     <!-- Assign Driver Action -->
                                     <button class="btn btn-sm btn-outline-primary shadow-sm" type="button" data-bs-toggle="modal" data-bs-target="#assignDriverModal{{ b.id }}" title="Assign Driver or Quick-Add Vendor Cab">
                                         <i class="fa-solid fa-user-check me-1"></i>Assign
@@ -308,6 +479,14 @@
                                             </li>
                                             <li><hr class="dropdown-divider"></li>
                                             <li>
+                                                <form method="POST" action="{% url 'hotel_admin:cab_payment_status' restaurant_slug=rslug cab_id=b.id %}">
+                                                    {% csrf_token %}
+                                                    <input type="hidden" name="payment_status" value="PAID">
+                                                    <button class="dropdown-item text-success" type="submit"><i class="fa-solid fa-receipt me-2"></i>Mark as Paid</button>
+                                                </form>
+                                            </li>
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li>
                                                 <form method="POST" action="{% url 'hotel_admin:cab_status' restaurant_slug=rslug cab_id=b.id %}" onsubmit="return confirm('Cancel this ride?')">
                                                     {% csrf_token %}
                                                     <input type="hidden" name="status" value="CANCELLED">
@@ -315,6 +494,189 @@
                                                 </form>
                                             </li>
                                         </ul>
+                                    </div>
+                                </div>
+
+                                <!-- ================================================= -->
+                                <!-- MODAL: BOOKING INSPECTION & CHECKING (FULL VOUCHER) -->
+                                <!-- ================================================= -->
+                                <div class="modal fade text-start" id="inspectModal{{ b.id }}" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                                        <div class="modal-content rounded-4 border-0 shadow">
+                                            <div class="modal-header border-bottom bg-light-subtle px-4 py-3">
+                                                <div>
+                                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill mb-1" style="font-size: 0.7rem;">
+                                                        {{ b.get_source_display }} &bull; {{ b.booking_id }}
+                                                    </span>
+                                                    <h5 class="modal-title fw-bold text-dark mb-0">Booking Inspection &amp; Checking</h5>
+                                                </div>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body p-4">
+                                                <!-- Status Alert Strip -->
+                                                <div class="d-flex align-items-center justify-content-between p-3 rounded-3 mb-4 {% if b.trip_status == 'COMPLETED' %}bg-success-subtle border border-success-subtle{% elif b.trip_status == 'CANCELLED' %}bg-danger-subtle border border-danger-subtle{% elif b.assigned_vehicle %}bg-primary-subtle border border-primary-subtle{% else %}bg-warning-subtle border border-warning-subtle{% endif %}">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <i class="fa-solid {% if b.trip_status == 'COMPLETED' %}fa-circle-check text-success{% elif b.trip_status == 'CANCELLED' %}fa-circle-xmark text-danger{% elif b.assigned_vehicle %}fa-taxi text-primary{% else %}fa-triangle-exclamation text-warning{% endif %} fa-lg"></i>
+                                                        <div>
+                                                            <div class="fw-bold small {% if b.trip_status == 'COMPLETED' %}text-success{% elif b.trip_status == 'CANCELLED' %}text-danger{% elif b.assigned_vehicle %}text-primary{% else %}text-warning-emphasis{% endif %}">
+                                                                Trip Status: {{ b.get_trip_status_display }}
+                                                            </div>
+                                                            <div class="small text-muted">
+                                                                {% if b.assigned_vehicle %}Assigned to {{ b.assigned_vehicle.driver_name }} ({{ b.assigned_vehicle.vehicle_number }}){% else %}Urgent: Driver dispatch required before pickup time.{% endif %}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="text-end">
+                                                        <span class="badge {% if b.payment_status == 'PAID' %}bg-success{% elif b.payment_status == 'ADDED_TO_FOLIO' %}bg-info{% else %}bg-warning text-dark{% endif %} px-2.5 py-1.5">
+                                                            Payment: {{ b.get_payment_status_display }}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="row g-4">
+                                                    <!-- Left: Passenger & Route Details -->
+                                                    <div class="col-md-6 border-end">
+                                                        <h6 class="text-uppercase text-muted fw-bold small mb-3"><i class="fa-solid fa-user me-1 text-primary"></i>Passenger &amp; Stay Info</h6>
+                                                        <div class="p-3 bg-light rounded-3 mb-3">
+                                                            <div class="fw-bold text-dark h6 mb-1">{{ b.display_guest_name }}</div>
+                                                            <div class="small mb-1">
+                                                                <i class="fa-solid fa-phone me-1 text-primary"></i>
+                                                                <a href="tel:{{ b.display_guest_phone }}" class="text-dark fw-semibold text-decoration-none">{{ b.display_guest_phone }}</a>
+                                                            </div>
+                                                            {% if b.display_guest_email %}
+                                                            <div class="small text-muted mb-1">
+                                                                <i class="fa-solid fa-envelope me-1 text-primary"></i>{{ b.display_guest_email }}
+                                                            </div>
+                                                            {% endif %}
+                                                            <div class="small mt-2 pt-2 border-top">
+                                                                {% if b.room_booking %}
+                                                                <span class="badge bg-secondary-subtle text-secondary"><i class="fa-solid fa-hotel me-1"></i>In-House Room {{ b.room_booking.room.room_number }} (Folio: {{ b.room_booking.booking_id }})</span>
+                                                                {% else %}
+                                                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="fa-solid fa-globe me-1"></i>Direct Web Chauffeur Booking</span>
+                                                                {% endif %}
+                                                            </div>
+                                                        </div>
+
+                                                        <h6 class="text-uppercase text-muted fw-bold small mb-3"><i class="fa-solid fa-route me-1 text-primary"></i>Scheduled Journey &amp; Itinerary</h6>
+                                                        <div class="p-3 bg-light rounded-3 mb-3 space-y-2">
+                                                            <div class="small mb-2">
+                                                                <div class="text-muted small fw-bold">PICKUP HUB / ADDRESS</div>
+                                                                <div class="fw-semibold text-dark"><i class="fa-solid fa-circle-dot text-success me-1"></i>{{ b.pickup_location }}</div>
+                                                            </div>
+                                                            <div class="small mb-2">
+                                                                <div class="text-muted small fw-bold">DROP-OFF DESTINATION</div>
+                                                                <div class="fw-semibold text-dark"><i class="fa-solid fa-location-dot text-danger me-1"></i>{{ b.drop_location }}</div>
+                                                            </div>
+                                                            <div class="row g-2 pt-2 border-top small">
+                                                                <div class="col-6">
+                                                                    <span class="text-muted d-block">Scheduled Pickup:</span>
+                                                                    <strong class="text-dark">{{ b.pickup_datetime|date:"M d, Y" }} at {{ b.pickup_datetime|date:"h:i A" }}</strong>
+                                                                </div>
+                                                                <div class="col-6">
+                                                                    <span class="text-muted d-block">Occupancy:</span>
+                                                                    <strong class="text-dark">{{ b.passengers }} Guests &bull; {{ b.luggage }} Bags</strong>
+                                                                </div>
+                                                            </div>
+                                                            {% if b.flight_or_train_number %}
+                                                            <div class="mt-2 pt-2 border-top small">
+                                                                <span class="text-muted">Flight / Train Tracker:</span>
+                                                                <span class="badge bg-dark font-monospace ms-1"><i class="fa-solid fa-plane-departure me-1 text-info"></i>{{ b.flight_or_train_number }}</span>
+                                                            </div>
+                                                            {% endif %}
+                                                        </div>
+
+                                                        {% if b.special_requests %}
+                                                        <div class="p-3 bg-light-subtle border rounded-3 mb-3">
+                                                            <div class="text-muted small fw-bold mb-1"><i class="fa-solid fa-sparkles me-1 text-warning"></i>Special Requests &amp; Amenities:</div>
+                                                            <div class="small text-dark fw-semibold">{{ b.special_requests }}</div>
+                                                        </div>
+                                                        {% endif %}
+                                                    </div>
+
+                                                    <!-- Right: Vehicle, Dispatch & Financials -->
+                                                    <div class="col-md-6">
+                                                        <h6 class="text-uppercase text-muted fw-bold small mb-3"><i class="fa-solid fa-car me-1 text-primary"></i>Vehicle &amp; Chauffeur Dispatch</h6>
+                                                        <div class="p-3 bg-light rounded-3 mb-3">
+                                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                                <div>
+                                                                    <span class="small text-muted d-block">Requested Vehicle Class:</span>
+                                                                    <strong class="text-dark">{{ b.package_title }}</strong>
+                                                                </div>
+                                                                <span class="badge bg-secondary-subtle text-secondary">{{ b.get_trip_type_display }}</span>
+                                                            </div>
+                                                            {% if b.preferred_chauffeur %}
+                                                            <div class="small text-primary mb-2">
+                                                                <i class="fa-solid fa-user-check me-1"></i>Guest Preferred Chauffeur: <strong>{{ b.preferred_chauffeur }}</strong>
+                                                            </div>
+                                                            {% endif %}
+
+                                                            <hr class="my-2">
+
+                                                            {% if b.assigned_vehicle %}
+                                                            <div class="d-flex align-items-center gap-3">
+                                                                {% if b.assigned_vehicle.driver_photo %}
+                                                                <img src="{{ b.assigned_vehicle.driver_photo }}" alt="{{ b.assigned_vehicle.driver_name }}" class="rounded-circle" style="width: 44px; height: 44px; object-fit: cover;">
+                                                                {% else %}
+                                                                <div class="vehicle-avatar"><i class="fa-solid fa-taxi"></i></div>
+                                                                {% endif %}
+                                                                <div>
+                                                                    <div class="fw-bold text-dark">{{ b.assigned_vehicle.driver_name }}</div>
+                                                                    <div class="small text-muted">Vehicle: <strong>{{ b.assigned_vehicle.vehicle_number }}</strong> ({{ b.assigned_vehicle.vehicle_model|default:b.assigned_vehicle.get_vehicle_category_display }})</div>
+                                                                    <div class="small"><a href="tel:{{ b.assigned_vehicle.driver_phone }}" class="text-primary text-decoration-none"><i class="fa-solid fa-phone me-1"></i>{{ b.assigned_vehicle.driver_phone }}</a></div>
+                                                                </div>
+                                                            </div>
+                                                            {% else %}
+                                                            <div class="p-2.5 bg-danger-subtle border border-danger-subtle rounded-3 text-danger small">
+                                                                <i class="fa-solid fa-circle-exclamation me-1"></i>No driver currently assigned to this booking.
+                                                            </div>
+                                                            {% endif %}
+                                                        </div>
+
+                                                        <h6 class="text-uppercase text-muted fw-bold small mb-3"><i class="fa-solid fa-receipt me-1 text-primary"></i>Billing &amp; Payment Checking</h6>
+                                                        <div class="p-3 bg-light rounded-3 mb-3">
+                                                            <div class="d-flex justify-content-between small text-muted mb-1">
+                                                                <span>Base Ride Fare:</span>
+                                                                <span>₹{{ b.base_amount }}</span>
+                                                            </div>
+                                                            <div class="d-flex justify-content-between small text-muted mb-1">
+                                                                <span>Taxes &amp; GST:</span>
+                                                                <span>₹{{ b.tax_amount }}</span>
+                                                            </div>
+                                                            <div class="d-flex justify-content-between fw-bold text-dark h5 pt-2 border-top mb-3">
+                                                                <span>Grand Total:</span>
+                                                                <span class="text-primary">₹{{ b.total_amount }}</span>
+                                                            </div>
+
+                                                            <!-- Quick Payment Status Form -->
+                                                            <form method="POST" action="{% url 'hotel_admin:cab_payment_status' restaurant_slug=rslug cab_id=b.id %}" class="d-flex gap-2 align-items-center pt-2 border-top">
+                                                                {% csrf_token %}
+                                                                <label class="form-label small fw-bold mb-0 text-muted">Update Payment:</label>
+                                                                <select name="payment_status" class="form-select form-select-sm" style="max-width: 160px;">
+                                                                    <option value="PENDING" {% if b.payment_status == 'PENDING' %}selected{% endif %}>Pending</option>
+                                                                    <option value="PAID" {% if b.payment_status == 'PAID' %}selected{% endif %}>Paid (Cash/Online)</option>
+                                                                    <option value="ADDED_TO_FOLIO" {% if b.payment_status == 'ADDED_TO_FOLIO' %}selected{% endif %}>Added to Folio</option>
+                                                                    <option value="COMPLIMENTARY" {% if b.payment_status == 'COMPLIMENTARY' %}selected{% endif %}>Complimentary</option>
+                                                                </select>
+                                                                <button type="submit" class="btn btn-sm btn-outline-dark">Update</button>
+                                                            </form>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer border-top bg-light-subtle d-flex justify-content-between">
+                                                <div class="d-flex gap-2">
+                                                    <button type="button" class="btn btn-sm btn-outline-primary" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#assignDriverModal{{ b.id }}">
+                                                        <i class="fa-solid fa-user-check me-1"></i>{% if b.assigned_vehicle %}Change Driver{% else %}Assign Driver{% endif %}
+                                                    </button>
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal" data-bs-toggle="modal" data-bs-target="#rescheduleModal{{ b.id }}">
+                                                        <i class="fa-solid fa-clock me-1"></i>Reschedule
+                                                    </button>
+                                                </div>
+                                                <div class="d-flex gap-2">
+                                                    <button type="button" class="btn btn-sm btn-light border" data-bs-dismiss="modal">Close</button>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -332,7 +694,7 @@
                                                     <div class="p-3 bg-light rounded-3 mb-3">
                                                         <div class="small text-muted">Ride: <strong>{{ b.pickup_location }} &rarr; {{ b.drop_location }}</strong></div>
                                                         <div class="small text-muted">Pickup Time: <strong>{{ b.pickup_datetime|date:"M d, Y h:i A" }}</strong></div>
-                                                        <div class="small text-muted">Vehicle Required: <strong>{{ b.package.get_vehicle_category_display|default:"Sedan" }}</strong></div>
+                                                        <div class="small text-muted">Vehicle Required: <strong>{{ b.package_vehicle_category }}</strong></div>
                                                     </div>
 
                                                     <!-- Option 1: Available in-house / registered fleet -->
@@ -460,10 +822,12 @@
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr class="small text-uppercase text-muted">
-                            <th class="ps-4">Vehicle Number</th>
-                            <th>Category</th>
-                            <th>Driver Name</th>
+                            <th class="ps-4">Vehicle &amp; Model</th>
+                            <th>Category &amp; Specs</th>
+                            <th>Chauffeur Profile</th>
                             <th>Contact Phone</th>
+                            <th>Exp &amp; Rating</th>
+                            <th>Public Pricing</th>
                             <th>Ownership</th>
                             <th>Status</th>
                             <th class="text-end pe-4">Actions</th>
@@ -473,22 +837,54 @@
                         {% for v in fleet_vehicles %}
                         <tr>
                             <td class="ps-4">
-                                <div class="fw-bold font-monospace text-dark">{{ v.vehicle_number }}</div>
+                                <div class="d-flex align-items-center gap-2.5">
+                                    {% if v.cover_image %}
+                                    <img src="{{ v.cover_image }}" alt="{{ v.vehicle_model }}" class="rounded-3 shadow-sm border" style="width: 50px; height: 38px; object-fit: cover;">
+                                    {% else %}
+                                    <div class="vehicle-avatar" style="width: 44px; height: 36px; border-radius: 8px;"><i class="fa-solid fa-car"></i></div>
+                                    {% endif %}
+                                    <div>
+                                        <div class="fw-bold font-monospace text-dark">{{ v.vehicle_number }}</div>
+                                        <div class="small text-muted fw-semibold">{{ v.vehicle_model|default:v.get_vehicle_category_display }}</div>
+                                        {% if v.tag %}<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-pill" style="font-size: 0.65rem;">{{ v.tag }}</span>{% endif %}
+                                    </div>
+                                </div>
                             </td>
                             <td>
-                                <span class="badge bg-light text-dark border">{{ v.get_vehicle_category_display }}</span>
+                                <span class="badge bg-light text-dark border mb-1">{{ v.get_vehicle_category_display }}</span>
+                                <div class="text-muted" style="font-size: 0.72rem;">
+                                    <i class="fa-solid fa-users me-1 text-primary"></i>{{ v.passengers }} Guests &bull; <i class="fa-solid fa-gas-pump me-1 text-primary"></i>{{ v.fuel_type }}
+                                </div>
                             </td>
                             <td>
-                                <div class="fw-semibold text-dark">{{ v.driver_name }}</div>
+                                <div class="d-flex align-items-center gap-2">
+                                    {% if v.driver_photo %}
+                                    <img src="{{ v.driver_photo }}" alt="{{ v.driver_name }}" class="rounded-circle shadow-sm" style="width: 36px; height: 36px; object-fit: cover;">
+                                    {% else %}
+                                    <div class="vehicle-avatar" style="width: 36px; height: 36px; font-size: 0.75rem;"><i class="fa-solid fa-user"></i></div>
+                                    {% endif %}
+                                    <div>
+                                        <div class="fw-semibold text-dark">{{ v.driver_name }}</div>
+                                        {% if v.driver_title %}<div class="text-muted" style="font-size: 0.72rem;">{{ v.driver_title }}</div>{% endif %}
+                                    </div>
+                                </div>
                             </td>
                             <td>
-                                <a href="tel:{{ v.driver_phone }}" class="text-decoration-none small text-primary">
+                                <a href="tel:{{ v.driver_phone }}" class="text-decoration-none small text-primary fw-semibold">
                                     <i class="fa-solid fa-phone me-1"></i>{{ v.driver_phone }}
                                 </a>
                             </td>
                             <td>
+                                <div class="small fw-semibold text-dark"><i class="fa-solid fa-star text-warning me-1"></i>{{ v.driver_rating }}</div>
+                                <div class="small text-muted">{{ v.driver_experience_years }} yrs exp &bull; {{ v.trips_completed }} rides</div>
+                            </td>
+                            <td>
+                                <div class="small fw-bold text-dark">₹{{ v.base_price_airport }} <span class="text-muted fw-normal" style="font-size: 0.7rem;">airport</span></div>
+                                <div class="text-muted" style="font-size: 0.72rem;">₹{{ v.price_per_km }}/km &bull; ₹{{ v.hourly_rate }}/4h</div>
+                            </td>
+                            <td>
                                 {% if v.is_vendor_vehicle %}
-                                <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill">Outsourced Vendor</span>
+                                <span class="badge bg-warning-subtle text-warning border border-warning-subtle rounded-pill">Outsourced</span>
                                 {% else %}
                                 <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill">Hotel In-House</span>
                                 {% endif %}
@@ -503,17 +899,425 @@
                                 {% endif %}
                             </td>
                             <td class="text-end pe-4">
-                                <form method="POST" action="{% url 'hotel_admin:cab_fleet_delete' restaurant_slug=rslug vehicle_id=v.id %}" onsubmit="return confirm('Remove vehicle {{ v.vehicle_number }}?')" class="d-inline">
-                                    {% csrf_token %}
-                                    <button class="btn btn-sm btn-outline-danger" type="submit" title="Delete vehicle">
-                                        <i class="fa-solid fa-trash"></i>
+                                <div class="d-flex align-items-center justify-content-end gap-1">
+                                    <button type="button" class="btn btn-sm btn-outline-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#editVehicleModal{{ v.id }}" title="Edit Vehicle &amp; Driver Details">
+                                        <i class="fa-solid fa-pen-to-square me-1"></i>Edit
                                     </button>
-                                </form>
-                            </td>
+                                    <form method="POST" action="{% url 'hotel_admin:cab_fleet_delete' restaurant_slug=rslug vehicle_id=v.id %}" onsubmit="return confirm('Remove vehicle {{ v.vehicle_number }}?')" class="d-inline">
+                                        {% csrf_token %}
+                                        <button class="btn btn-sm btn-outline-danger shadow-sm" type="submit" title="Delete vehicle">
+                                            <i class="fa-solid fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+
+                                                                <!-- EDIT VEHICLE MODAL (REDESIGNED TABBED UX) -->
+                                <div class="modal fade text-start" id="editVehicleModal{{ v.id }}" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" style="max-width: 960px;">
+                                        <div class="modal-content rounded-4 border-0 shadow-lg" style="height: 88vh; max-height: 820px;">
+                                            <div class="modal-header border-bottom bg-white px-4 py-3">
+                                                <div class="d-flex align-items-center gap-3">
+                                                    <div class="rounded-3 bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style="width: 42px; height: 42px; font-size: 1.1rem;">
+                                                        <i class="fa-solid fa-pen-to-square"></i>
+                                                    </div>
+                                                    <div>
+                                                        <div class="d-flex align-items-center gap-2">
+                                                            <h5 class="modal-title fw-bold text-dark mb-0">Edit Fleet Vehicle &amp; Chauffeur Profile</h5>
+                                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill font-monospace" style="font-size: 0.72rem;">{{ v.vehicle_number }}</span>
+                                                        </div>
+                                                        <p class="text-muted small mb-0">{{ v.vehicle_model|default:v.get_vehicle_category_display }} &bull; Update specifications, local photos, rates, or driver</p>
+                                                    </div>
+                                                </div>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+
+                                            <!-- Sticky Tab Navigation -->
+                                            <div class="px-4 py-2.5 border-bottom bg-light-subtle">
+                                                <ul class="nav nav-pills pms-vehicle-tabs gap-2 w-100" role="tablist">
+                                                    <li class="nav-item flex-fill text-center">
+                                                        <button class="nav-link w-100 active py-2 d-flex align-items-center justify-content-center gap-2" data-bs-toggle="pill" data-bs-target="#editCabTabVehicle{{ v.id }}" type="button">
+                                                            <i class="fa-solid fa-car"></i>
+                                                            <span>1. Vehicle &amp; Specs</span>
+                                                        </button>
+                                                    </li>
+                                                    <li class="nav-item flex-fill text-center">
+                                                        <button class="nav-link w-100 py-2 d-flex align-items-center justify-content-center gap-2" data-bs-toggle="pill" data-bs-target="#editCabTabMedia{{ v.id }}" type="button">
+                                                            <i class="fa-solid fa-camera"></i>
+                                                            <span>2. Photos &amp; Media</span>
+                                                            <span class="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle px-1.5 py-0.5" style="font-size: 0.65rem;">Max 10</span>
+                                                        </button>
+                                                    </li>
+                                                    <li class="nav-item flex-fill text-center">
+                                                        <button class="nav-link w-100 py-2 d-flex align-items-center justify-content-center gap-2" data-bs-toggle="pill" data-bs-target="#editCabTabFeatures{{ v.id }}" type="button">
+                                                            <i class="fa-solid fa-gem"></i>
+                                                            <span>3. Rates &amp; Luxuries</span>
+                                                        </button>
+                                                    </li>
+                                                    <li class="nav-item flex-fill text-center">
+                                                        <button class="nav-link w-100 py-2 d-flex align-items-center justify-content-center gap-2" data-bs-toggle="pill" data-bs-target="#editCabTabDriver{{ v.id }}" type="button">
+                                                            <i class="fa-solid fa-user-tie"></i>
+                                                            <span>4. Chauffeur &amp; Status</span>
+                                                        </button>
+                                                    </li>
+                                                </ul>
+                                            </div>
+
+                                            <form method="POST" action="{% url 'hotel_admin:cab_fleet_create_edit' restaurant_slug=rslug %}" enctype="multipart/form-data">
+                                                {% csrf_token %}
+                                                <input type="hidden" name="vehicle_id" value="{{ v.id }}">
+                                                <div class="modal-body">
+                                                    <div class="tab-content">
+                                                        <!-- TAB 1: VEHICLE & SPECS -->
+                                                        <div class="tab-pane fade show active" id="editCabTabVehicle{{ v.id }}" role="tabpanel">
+                                                            <div class="modal-form-section">
+                                                                <div class="modal-section-title">
+                                                                    <i class="fa-solid fa-id-card text-primary"></i> 1. Vehicle Identity &amp; Classification
+                                                                </div>
+                                                                <div class="row g-3 mb-3">
+                                                                    <div class="col-md-6">
+                                                                        <label class="form-label small fw-bold">License Plate # <span class="text-danger">*</span></label>
+                                                                        <div class="input-group input-group-sm">
+                                                                            <span class="input-group-text bg-light"><i class="fa-solid fa-barcode text-muted"></i></span>
+                                                                            <input type="text" name="vehicle_number" class="form-control font-monospace text-uppercase" value="{{ v.vehicle_number }}" required>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-md-6">
+                                                                        <label class="form-label small fw-bold">Vehicle Model / Make</label>
+                                                                        <div class="input-group input-group-sm">
+                                                                            <span class="input-group-text bg-light"><i class="fa-solid fa-car text-muted"></i></span>
+                                                                            <input type="text" name="vehicle_model" class="form-control" value="{{ v.vehicle_model }}" placeholder="e.g. BMW 7 Series Executive Limousine">
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="row g-3 mb-3">
+                                                                    <div class="col-md-6">
+                                                                        <label class="form-label small fw-bold">Vehicle Category</label>
+                                                                        <select name="vehicle_category" class="form-select form-select-sm">
+                                                                            <option value="SEDAN" {% if v.vehicle_category == 'SEDAN' %}selected{% endif %}>Luxury Sedan (BMW 7, Mercedes S-Class)</option>
+                                                                            <option value="SUV" {% if v.vehicle_category == 'SUV' %}selected{% endif %}>Executive SUV (Range Rover, Defender)</option>
+                                                                            <option value="LIMOUSINE" {% if v.vehicle_category == 'LIMOUSINE' %}selected{% endif %}>Grand Limousine (Maybach)</option>
+                                                                            <option value="ROYAL_MPV" {% if v.vehicle_category == 'ROYAL_MPV' %}selected{% endif %}>Royal MPV (Toyota Vellfire)</option>
+                                                                            <option value="ELECTRIC" {% if v.vehicle_category == 'ELECTRIC' %}selected{% endif %}>Electric Luxury (Tesla / EQS)</option>
+                                                                            <option value="LUXURY_VAN" {% if v.vehicle_category == 'LUXURY_VAN' %}selected{% endif %}>Luxury Van (Mercedes V-Class)</option>
+                                                                            <option value="TEMPO_TRAVELLER" {% if v.vehicle_category == 'TEMPO_TRAVELLER' %}selected{% endif %}>Tempo Traveller</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="col-md-6">
+                                                                        <label class="form-label small fw-bold">Highlight Tag / Badge</label>
+                                                                        <div class="input-group input-group-sm">
+                                                                            <span class="input-group-text bg-light"><i class="fa-solid fa-tag text-muted"></i></span>
+                                                                            <input type="text" name="tag" class="form-control" value="{{ v.tag|default:'Most Popular' }}" placeholder="e.g. Most Popular, Executive Choice">
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div>
+                                                                    <label class="form-label small fw-bold">Overview / Editorial Description</label>
+                                                                    <textarea name="description" class="form-control form-control-sm" rows="2" placeholder="First-class luxury travel on wheels...">{{ v.description }}</textarea>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="modal-form-section">
+                                                                <div class="modal-section-title">
+                                                                    <i class="fa-solid fa-sliders text-primary"></i> 2. Capacity &amp; Technical Specifications
+                                                                </div>
+                                                                <div class="row g-3">
+                                                                    <div class="col-md-3 col-6">
+                                                                        <label class="form-label small fw-bold"><i class="fa-solid fa-users text-muted me-1"></i>Seats / Guests</label>
+                                                                        <input type="number" min="1" max="50" name="passengers" class="form-control form-control-sm" value="{{ v.passengers }}">
+                                                                    </div>
+                                                                    <div class="col-md-3 col-6">
+                                                                        <label class="form-label small fw-bold"><i class="fa-solid fa-suitcase-rolling text-muted me-1"></i>Luggage Bags</label>
+                                                                        <input type="number" min="0" max="50" name="luggage" class="form-control form-control-sm" value="{{ v.luggage }}">
+                                                                    </div>
+                                                                    <div class="col-md-3 col-6">
+                                                                        <label class="form-label small fw-bold"><i class="fa-solid fa-gas-pump text-muted me-1"></i>Drivetrain</label>
+                                                                        <select name="fuel_type" class="form-select form-select-sm">
+                                                                            <option value="Petrol" {% if v.fuel_type == 'Petrol' %}selected{% endif %}>Petrol</option>
+                                                                            <option value="Diesel" {% if v.fuel_type == 'Diesel' %}selected{% endif %}>Diesel</option>
+                                                                            <option value="Electric" {% if v.fuel_type == 'Electric' %}selected{% endif %}>Electric</option>
+                                                                            <option value="Hybrid" {% if v.fuel_type == 'Hybrid' %}selected{% endif %}>Hybrid</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="col-md-3 col-6">
+                                                                        <label class="form-label small fw-bold"><i class="fa-solid fa-gear text-muted me-1"></i>Transmission</label>
+                                                                        <select name="transmission" class="form-select form-select-sm">
+                                                                            <option value="Automatic" {% if v.transmission == 'Automatic' %}selected{% endif %}>Automatic</option>
+                                                                            <option value="Manual" {% if v.transmission == 'Manual' %}selected{% endif %}>Manual</option>
+                                                                        </select>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <!-- TAB 2: PHOTOS & MEDIA -->
+                                                        <div class="tab-pane fade" id="editCabTabMedia{{ v.id }}" role="tabpanel">
+                                                            <div class="modal-form-section">
+                                                                <div class="modal-section-title">
+                                                                    <i class="fa-solid fa-image text-primary"></i> Primary Hero Cover Photo
+                                                                </div>
+                                                                {% if v.cover_image %}
+                                                                <div class="d-flex align-items-center gap-3 p-2 bg-light rounded-3 border mb-3">
+                                                                    <img src="{{ v.cover_image }}" alt="Cover" class="rounded-2 border" style="width: 70px; height: 50px; object-fit: cover;">
+                                                                    <div class="small min-w-0 flex-grow-1">
+                                                                        <span class="text-success fw-bold d-block"><i class="fa-solid fa-circle-check me-1"></i>Current Active Cover Photo</span>
+                                                                        <span class="text-muted text-truncate d-block font-monospace" style="font-size: 0.72rem;">{{ v.cover_image }}</span>
+                                                                    </div>
+                                                                </div>
+                                                                {% endif %}
+                                                                <div class="row g-3 align-items-center">
+                                                                    <div class="col-md-7">
+                                                                        <label class="form-label small fw-bold">Upload New Cover from Computer:</label>
+                                                                        <input type="file" name="cover_image_file" class="form-control form-control-sm" accept="image/*" onchange="previewLocalImage(this, 'editCoverPreview{{ v.id }}', 'editCoverPlaceholder{{ v.id }}')">
+                                                                        <div class="form-text small mt-1"><i class="fa-solid fa-check text-success me-1"></i>Replaces current cover. Converted to WebP automatically.</div>
+                                                                        <div class="mt-3">
+                                                                            <label class="form-label small text-muted fw-semibold">Or Update Photo URL:</label>
+                                                                            <div class="input-group input-group-sm">
+                                                                                <span class="input-group-text bg-light"><i class="fa-solid fa-link text-muted"></i></span>
+                                                                                <input type="url" name="cover_image" class="form-control" value="{{ v.cover_image }}" placeholder="https://images.unsplash.com/photo-...">
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-md-5">
+                                                                        <div class="border rounded-3 p-2 bg-light text-center d-flex flex-column align-items-center justify-content-center" style="min-height: 120px;">
+                                                                            <img id="editCoverPreview{{ v.id }}" src="" alt="New cover preview" class="img-fluid rounded-2 d-none shadow-sm" style="max-height: 110px; object-fit: cover;">
+                                                                            <div id="editCoverPlaceholder{{ v.id }}" class="text-muted small py-2">
+                                                                                <i class="fa-solid fa-image fa-2x mb-1 d-block text-secondary opacity-50"></i>
+                                                                                New Cover Preview
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="modal-form-section">
+                                                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                                                    <div class="modal-section-title mb-0">
+                                                                        <i class="fa-solid fa-images text-primary"></i> Vehicle Gallery Showcase (Up to 10 Photos Max)
+                                                                    </div>
+                                                                    <span class="badge bg-secondary-subtle text-secondary rounded-pill px-2.5 py-1" id="galCountEdit{{ v.id }}" style="font-size: 0.72rem;">{% if v.gallery_images %}{{ v.gallery_images|length }}{% else %}0{% endif %} / 10 images</span>
+                                                                </div>
+                                                                {% if v.gallery_images %}
+                                                                <div class="d-flex gap-2 overflow-x-auto py-2 mb-3 bg-light rounded-3 p-2 border">
+                                                                    {% for img_url in v.gallery_images %}
+                                                                    <img src="{{ img_url }}" alt="Gallery thumbnail" class="rounded-2 border shadow-sm" style="width: 58px; height: 42px; object-fit: cover;" title="{{ img_url }}">
+                                                                    {% endfor %}
+                                                                </div>
+                                                                {% endif %}
+                                                                <div class="p-3 bg-light rounded-3 border mb-3">
+                                                                    <label class="form-label small fw-bold mb-1">Upload Additional Local Photos:</label>
+                                                                    <input type="file" name="gallery_image_files" class="form-control form-control-sm" accept="image/*" multiple onchange="validateMaxImages(this, 10, 'galCountEdit{{ v.id }}')">
+                                                                    <div class="form-text small mt-1"><i class="fa-solid fa-folder-open text-primary me-1"></i>Select up to 10 local photos. Converted to WebP automatically.</div>
+                                                                </div>
+                                                                <div>
+                                                                    <label class="form-label small fw-bold text-muted mb-1">Additional Gallery URLs (One per line):</label>
+                                                                    <textarea name="gallery_images" class="form-control form-control-sm font-monospace" rows="2" placeholder="https://images.unsplash.com/...&#10;https://images.unsplash.com/..."></textarea>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <!-- TAB 3: RATES & LUXURIES -->
+                                                        <div class="tab-pane fade" id="editCabTabFeatures{{ v.id }}" role="tabpanel">
+                                                            <div class="modal-form-section">
+                                                                <div class="modal-section-title">
+                                                                    <i class="fa-solid fa-indian-rupee-sign text-primary"></i> Transparent Rate Card &amp; Pricing
+                                                                </div>
+                                                                <div class="row g-3">
+                                                                    <div class="col-md-3 col-6">
+                                                                        <label class="form-label small fw-bold">Airport Flat Rate (₹)</label>
+                                                                        <div class="input-group input-group-sm">
+                                                                            <span class="input-group-text bg-light">₹</span>
+                                                                            <input type="number" step="0.01" name="base_price_airport" class="form-control" value="{{ v.base_price_airport }}">
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-md-3 col-6">
+                                                                        <label class="form-label small fw-bold">Per KM Rate (₹)</label>
+                                                                        <div class="input-group input-group-sm">
+                                                                            <span class="input-group-text bg-light">₹</span>
+                                                                            <input type="number" step="0.01" name="price_per_km" class="form-control" value="{{ v.price_per_km }}">
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-md-3 col-6">
+                                                                        <label class="form-label small fw-bold">4-Hr Rental (₹)</label>
+                                                                        <div class="input-group input-group-sm">
+                                                                            <span class="input-group-text bg-light">₹</span>
+                                                                            <input type="number" step="0.01" name="hourly_rate" class="form-control" value="{{ v.hourly_rate }}">
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-md-3 col-6">
+                                                                        <label class="form-label small fw-bold">Full Day 8-Hr (₹)</label>
+                                                                        <div class="input-group input-group-sm">
+                                                                            <span class="input-group-text bg-light">₹</span>
+                                                                            <input type="number" step="0.01" name="full_day_rate" class="form-control" value="{{ v.full_day_rate }}">
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="modal-form-section">
+                                                                <div class="modal-section-title">
+                                                                    <i class="fa-solid fa-route text-primary"></i> Journey Features &amp; Inclusions (One per line)
+                                                                </div>
+                                                                <textarea name="features" id="editCabFeatures{{ v.id }}" class="form-control form-control-sm mb-2" rows="2">{% if v.features %}{% for feat in v.features %}{{ feat }}
+{% endfor %}{% else %}Flight Delay Auto-Tracking
+Airport Meet &amp; Greet
+Complimentary Mineral Water{% endif %}</textarea>
+                                                                <div class="d-flex flex-wrap gap-1 align-items-center">
+                                                                    <span class="text-muted small me-1" style="font-size: 0.72rem;">Quick Add:</span>
+                                                                    <span class="quick-chip" onclick="addQuickChip('Flight Delay Auto-Tracking', 'editCabFeatures{{ v.id }}')">+ Flight Tracking</span>
+                                                                    <span class="quick-chip" onclick="addQuickChip('Airport Meet & Greet', 'editCabFeatures{{ v.id }}')">+ Meet &amp; Greet</span>
+                                                                    <span class="quick-chip" onclick="addQuickChip('Complimentary Mineral Water', 'editCabFeatures{{ v.id }}')">+ Bottled Water</span>
+                                                                    <span class="quick-chip" onclick="addQuickChip('Doorstep Luggage Assistance', 'editCabFeatures{{ v.id }}')">+ Luggage Assistance</span>
+                                                                    <span class="quick-chip" onclick="addQuickChip('Express Highway Tolls Included', 'editCabFeatures{{ v.id }}')">+ Tolls Included</span>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="modal-form-section">
+                                                                <div class="modal-section-title">
+                                                                    <i class="fa-solid fa-couch text-primary"></i> Cabin Luxuries &amp; Amenities (One per line)
+                                                                </div>
+                                                                <textarea name="amenities" id="editCabAmenities{{ v.id }}" class="form-control form-control-sm mb-2" rows="2">{% if v.amenities %}{% for a in v.amenities %}{{ a }}
+{% endfor %}{% else %}Dual Climate Control
+Nappa Leather Seating
+Device Chargers
+Rear Sunshades
+Spacious Boot Space{% endif %}</textarea>
+                                                                <div class="d-flex flex-wrap gap-1 align-items-center">
+                                                                    <span class="text-muted small me-1" style="font-size: 0.72rem;">Quick Add:</span>
+                                                                    <span class="quick-chip" onclick="addQuickChip('Free In-Cab Wi-Fi', 'editCabAmenities{{ v.id }}')">+ Free Wi-Fi</span>
+                                                                    <span class="quick-chip" onclick="addQuickChip('Dual Climate Control', 'editCabAmenities{{ v.id }}')">+ Dual Climate</span>
+                                                                    <span class="quick-chip" onclick="addQuickChip('Nappa Leather Seating', 'editCabAmenities{{ v.id }}')">+ Nappa Leather</span>
+                                                                    <span class="quick-chip" onclick="addQuickChip('Multi-Port Device Chargers', 'editCabAmenities{{ v.id }}')">+ USB-C Chargers</span>
+                                                                    <span class="quick-chip" onclick="addQuickChip('Rear Privacy Sunshades', 'editCabAmenities{{ v.id }}')">+ Privacy Sunshades</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <!-- TAB 4: CHAUFFEUR & DISPATCH -->
+                                                        <div class="tab-pane fade" id="editCabTabDriver{{ v.id }}" role="tabpanel">
+                                                            <div class="modal-form-section">
+                                                                <div class="modal-section-title">
+                                                                    <i class="fa-solid fa-user-tie text-primary"></i> Chauffeur Profile &amp; Contact
+                                                                </div>
+                                                                <div class="row g-3 mb-3">
+                                                                    <div class="col-md-6">
+                                                                        <label class="form-label small fw-bold">Chauffeur Full Name <span class="text-danger">*</span></label>
+                                                                        <div class="input-group input-group-sm">
+                                                                            <span class="input-group-text bg-light"><i class="fa-solid fa-user text-muted"></i></span>
+                                                                            <input type="text" name="driver_name" class="form-control" value="{{ v.driver_name }}" required>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-md-6">
+                                                                        <label class="form-label small fw-bold">Driver Title / Role</label>
+                                                                        <input type="text" name="driver_title" class="form-control form-control-sm" value="{{ v.driver_title|default:'(Lead Captain)' }}" placeholder="e.g. (Lead Captain), Executive Chauffeur">
+                                                                    </div>
+                                                                </div>
+                                                                <div class="row g-3 mb-3">
+                                                                    <div class="col-md-6">
+                                                                        <label class="form-label small fw-bold">Contact Mobile Phone <span class="text-danger">*</span></label>
+                                                                        <div class="input-group input-group-sm">
+                                                                            <span class="input-group-text bg-light"><i class="fa-solid fa-phone text-muted"></i></span>
+                                                                            <input type="text" name="driver_phone" class="form-control" value="{{ v.driver_phone }}" required>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-md-6">
+                                                                        <label class="form-label small fw-bold">Chauffeur Photo (Upload or URL)</label>
+                                                                        <div class="d-flex gap-1.5">
+                                                                            <input type="file" name="driver_photo_file" class="form-control form-control-sm" accept="image/*" title="Upload driver photo from device">
+                                                                            <input type="url" name="driver_photo" class="form-control form-control-sm" value="{{ v.driver_photo }}" placeholder="Or paste photo URL...">
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="row g-3 mb-3">
+                                                                    <div class="col-md-4 col-4">
+                                                                        <label class="form-label small fw-bold">Rating</label>
+                                                                        <div class="input-group input-group-sm">
+                                                                            <span class="input-group-text bg-light"><i class="fa-solid fa-star text-warning"></i></span>
+                                                                            <input type="number" step="0.01" min="1.0" max="5.0" name="driver_rating" class="form-control" value="{{ v.driver_rating }}">
+                                                                        </div>
+                                                                    </div>
+                                                                    <div class="col-md-4 col-4">
+                                                                        <label class="form-label small fw-bold">Exp (Years)</label>
+                                                                        <input type="number" min="0" max="50" name="driver_experience_years" class="form-control form-control-sm" value="{{ v.driver_experience_years }}">
+                                                                    </div>
+                                                                    <div class="col-md-4 col-4">
+                                                                        <label class="form-label small fw-bold">Trips Done</label>
+                                                                        <input type="number" min="0" name="trips_completed" class="form-control form-control-sm" value="{{ v.trips_completed }}">
+                                                                    </div>
+                                                                </div>
+                                                                <div class="row g-3 mb-3">
+                                                                    <div class="col-md-6">
+                                                                        <label class="form-label small fw-bold">Languages Spoken</label>
+                                                                        <input type="text" name="driver_languages" class="form-control form-control-sm" value="{{ v.driver_languages|default:'English, Hindi' }}">
+                                                                    </div>
+                                                                    <div class="col-md-6">
+                                                                        <label class="form-label small fw-bold">Badges &amp; Certifications</label>
+                                                                        <input type="text" name="driver_badges" class="form-control form-control-sm" value="{{ v.driver_badges|default:'Executive Lead, Defensive Driving Certified' }}">
+                                                                    </div>
+                                                                </div>
+                                                                <div>
+                                                                    <label class="form-label small fw-bold">Chauffeur Bio &amp; Protocol Summary</label>
+                                                                    <textarea name="driver_bio" class="form-control form-control-sm" rows="2" placeholder="Professional licensed chauffeur...">{{ v.driver_bio }}</textarea>
+                                                                </div>
+                                                            </div>
+
+                                                            <div class="modal-form-section">
+                                                                <div class="modal-section-title">
+                                                                    <i class="fa-solid fa-traffic-light text-primary"></i> Availability, Dispatch &amp; Notes
+                                                                </div>
+                                                                <div class="row g-3 mb-3">
+                                                                    <div class="col-md-6">
+                                                                        <label class="form-label small fw-bold">Chauffeur Duty Status</label>
+                                                                        <select name="driver_availability" class="form-select form-select-sm">
+                                                                            <option value="Available Now" {% if v.driver_availability == 'Available Now' %}selected{% endif %}>Available Now</option>
+                                                                            <option value="On Duty" {% if v.driver_availability == 'On Duty' %}selected{% endif %}>On Duty</option>
+                                                                            <option value="Reserved" {% if v.driver_availability == 'Reserved' %}selected{% endif %}>Reserved</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="col-md-6">
+                                                                        <label class="form-label small fw-bold">Fleet Vehicle Status</label>
+                                                                        <select name="status" class="form-select form-select-sm">
+                                                                            <option value="AVAILABLE" {% if v.status == 'AVAILABLE' %}selected{% endif %}>Available</option>
+                                                                            <option value="ON_TRIP" {% if v.status == 'ON_TRIP' %}selected{% endif %}>On Trip</option>
+                                                                            <option value="MAINTENANCE" {% if v.status == 'MAINTENANCE' %}selected{% endif %}>Maintenance</option>
+                                                                        </select>
+                                                                    </div>
+                                                                </div>
+                                                                <div class="form-check form-switch mb-3">
+                                                                    <input class="form-check-input" type="checkbox" name="is_vendor_vehicle" value="true" id="vendorVehicleEdit{{ v.id }}" {% if v.is_vendor_vehicle %}checked{% endif %}>
+                                                                    <label class="form-check-label small fw-semibold" for="vendorVehicleEdit{{ v.id }}">Outsourced Third-Party Vendor Cab</label>
+                                                                </div>
+                                                                <div>
+                                                                    <label class="form-label small fw-bold">Private Internal Dispatch Notes</label>
+                                                                    <textarea name="notes" class="form-control form-control-sm" rows="2" placeholder="Private internal dispatch or maintenance notes...">{{ v.notes }}</textarea>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Sticky Footer -->
+                                                <div class="modal-footer border-top bg-light-subtle d-flex justify-content-between px-4 py-3">
+                                                    <button type="button" class="btn btn-light border px-3" data-bs-dismiss="modal">Cancel</button>
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <button type="button" class="btn btn-outline-secondary px-3" onclick="prevModalTab('editVehicleModal{{ v.id }}')">
+                                                            <i class="fa-solid fa-arrow-left me-1"></i> Back
+                                                        </button>
+                                                        <button type="button" class="btn btn-outline-primary px-3" onclick="nextModalTab('editVehicleModal{{ v.id }}')">
+                                                            Next <i class="fa-solid fa-arrow-right ms-1"></i>
+                                                        </button>
+                                                        <button type="submit" class="btn btn-primary px-4 fw-bold shadow-sm">
+                                                            <i class="fa-solid fa-save me-1.5"></i> Save Changes
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div></td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="7" class="text-center py-4 text-muted small">No vehicles registered yet. Click 'Register Vehicle' above.</td>
+                            <td colspan="8" class="text-center py-4 text-muted small">No vehicles registered yet. Click 'Register Vehicle' above.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -556,10 +1360,87 @@
                         <span class="badge {% if p.is_active %}bg-success-subtle text-success{% else %}bg-secondary-subtle text-secondary{% endif %} rounded-pill">
                             {% if p.is_active %}Active Catalog{% else %}Hidden{% endif %}
                         </span>
-                        <form method="POST" action="{% url 'hotel_admin:cab_package_delete' restaurant_slug=rslug package_id=p.id %}" onsubmit="return confirm('Delete package {{ p.title }}?')">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash me-1"></i>Delete</button>
-                        </form>
+                        <div class="d-flex gap-1">
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editPackageModal{{ p.id }}">
+                                <i class="fa-solid fa-pen-to-square me-1"></i>Edit
+                            </button>
+                            <form method="POST" action="{% url 'hotel_admin:cab_package_delete' restaurant_slug=rslug package_id=p.id %}" onsubmit="return confirm('Delete package {{ p.title }}?')">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash me-1"></i>Delete</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- EDIT PACKAGE MODAL -->
+                    <div class="modal fade text-start" id="editPackageModal{{ p.id }}" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content rounded-4 border-0 shadow">
+                                <div class="modal-header border-bottom">
+                                    <h5 class="modal-title fw-bold"><i class="fa-solid fa-route me-2 text-primary"></i>Edit Package &bull; {{ p.title }}</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <form method="POST" action="{% url 'hotel_admin:cab_package_create_edit' restaurant_slug=rslug %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="package_id" value="{{ p.id }}">
+                                    <div class="modal-body p-4">
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold">Package Title:</label>
+                                            <input type="text" name="title" class="form-control" value="{{ p.title }}" required>
+                                        </div>
+                                        <div class="row g-2 mb-3">
+                                            <div class="col-6">
+                                                <label class="form-label small fw-bold">Service Type:</label>
+                                                <select name="service_type" class="form-select form-select-sm">
+                                                    <option value="AIRPORT_TRANSFER" {% if p.service_type == 'AIRPORT_TRANSFER' %}selected{% endif %}>Airport / Station Transfer</option>
+                                                    <option value="TOURISM_PACKAGE" {% if p.service_type == 'TOURISM_PACKAGE' %}selected{% endif %}>Sightseeing / Tourism Tour</option>
+                                                    <option value="POINT_TO_POINT" {% if p.service_type == 'POINT_TO_POINT' %}selected{% endif %}>Point to Point Ride</option>
+                                                    <option value="HOURLY_RENTAL" {% if p.service_type == 'HOURLY_RENTAL' %}selected{% endif %}>Hourly Rental</option>
+                                                    <option value="OUTSTATION" {% if p.service_type == 'OUTSTATION' %}selected{% endif %}>Outstation Scenic Tour</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label small fw-bold">Vehicle Category:</label>
+                                                <select name="vehicle_category" class="form-select form-select-sm">
+                                                    <option value="SEDAN" {% if p.vehicle_category == 'SEDAN' %}selected{% endif %}>Luxury Sedan</option>
+                                                    <option value="SUV" {% if p.vehicle_category == 'SUV' %}selected{% endif %}>Executive SUV</option>
+                                                    <option value="LIMOUSINE" {% if p.vehicle_category == 'LIMOUSINE' %}selected{% endif %}>Grand Limousine</option>
+                                                    <option value="ROYAL_MPV" {% if p.vehicle_category == 'ROYAL_MPV' %}selected{% endif %}>Royal MPV (Vellfire)</option>
+                                                    <option value="ELECTRIC" {% if p.vehicle_category == 'ELECTRIC' %}selected{% endif %}>Electric Luxury (Tesla)</option>
+                                                    <option value="LUXURY_VAN" {% if p.vehicle_category == 'LUXURY_VAN' %}selected{% endif %}>Luxury Van</option>
+                                                    <option value="TEMPO_TRAVELLER" {% if p.vehicle_category == 'TEMPO_TRAVELLER' %}selected{% endif %}>Tempo Traveller</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="row g-2 mb-3">
+                                            <div class="col-4">
+                                                <label class="form-label small fw-bold">Base Price (₹):</label>
+                                                <input type="number" step="0.01" name="base_price" class="form-control form-control-sm" value="{{ p.base_price }}" required>
+                                            </div>
+                                            <div class="col-4">
+                                                <label class="form-label small fw-bold">Included km:</label>
+                                                <input type="number" name="included_km" class="form-control form-control-sm" value="{{ p.included_km }}">
+                                            </div>
+                                            <div class="col-4">
+                                                <label class="form-label small fw-bold">Included Hours:</label>
+                                                <input type="number" name="included_hours" class="form-control form-control-sm" value="{{ p.included_hours }}">
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label small fw-bold">Itinerary / Description:</label>
+                                            <textarea name="itinerary_description" class="form-control form-control-sm" rows="3">{{ p.itinerary_description }}</textarea>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="is_active" value="true" id="pkgActiveEdit{{ p.id }}" {% if p.is_active %}checked{% endif %}>
+                                            <label class="form-check-label small" for="pkgActiveEdit{{ p.id }}">Active in Public Booking Catalog</label>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer border-top">
+                                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                                        <button type="submit" class="btn btn-primary px-4">Update Package</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -584,15 +1465,45 @@
                 {% csrf_token %}
                 <div class="modal-body p-4">
                     <div class="mb-3">
-                        <label class="form-label small fw-bold">Select Active Guest / Room:</label>
-                        <select name="room_booking_id" class="form-select" required>
-                            <option value="">-- Choose Guest Room --</option>
-                            {% for rb in active_room_bookings %}
-                            <option value="{{ rb.id }}">
-                                Room {{ rb.room.room_number }} - {{ rb.guest_name }} ({{ rb.booking_id }})
-                            </option>
-                            {% endfor %}
-                        </select>
+                        <label class="form-label small fw-bold d-block">Passenger Classification:</label>
+                        <div class="btn-group btn-group-sm w-100 mb-2" role="group">
+                            <input type="radio" class="btn-check" name="passenger_mode" id="modeRoom" value="room" checked onchange="document.getElementById('roomGuestSec').style.display='block'; document.getElementById('walkinGuestSec').style.display='none'; document.getElementById('roomBookingSelect').required=true; document.getElementById('walkinName').required=false; document.getElementById('walkinPhone').required=false;">
+                            <label class="btn btn-outline-primary" for="modeRoom"><i class="fa-solid fa-hotel me-1"></i>In-House Hotel Guest</label>
+
+                            <input type="radio" class="btn-check" name="passenger_mode" id="modeWalkin" value="walkin" onchange="document.getElementById('roomGuestSec').style.display='none'; document.getElementById('walkinGuestSec').style.display='block'; document.getElementById('roomBookingSelect').required=false; document.getElementById('walkinName').required=true; document.getElementById('walkinPhone').required=true;">
+                            <label class="btn btn-outline-primary" for="modeWalkin"><i class="fa-solid fa-user me-1"></i>Outside / VIP Walk-in</label>
+                        </div>
+
+                        <!-- Room Guest Selection -->
+                        <div id="roomGuestSec">
+                            <label class="form-label small fw-bold text-muted">Select Active Guest / Room:</label>
+                            <select name="room_booking_id" id="roomBookingSelect" class="form-select">
+                                <option value="">-- Choose In-House Room --</option>
+                                {% for rb in active_room_bookings %}
+                                <option value="{{ rb.id }}">
+                                    Room {{ rb.room.room_number }} - {{ rb.guest_name }} (Folio: {{ rb.booking_id }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Walk-in Guest Selection -->
+                        <div id="walkinGuestSec" style="display: none;" class="p-3 bg-light-subtle rounded-3 border">
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label class="form-label small fw-bold text-muted">Passenger Name:</label>
+                                    <input type="text" name="guest_name" id="walkinName" class="form-control form-control-sm" placeholder="e.g. Vikramaditya">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small fw-bold text-muted">Passenger Phone:</label>
+                                    <input type="text" name="guest_phone" id="walkinPhone" class="form-control form-control-sm" placeholder="10-digit mobile">
+                                </div>
+                                <div class="col-12 mt-1">
+                                    <label class="form-label small text-muted">Email (Optional):</label>
+                                    <input type="email" name="guest_email" class="form-control form-control-sm" placeholder="guest@example.com">
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Cab Package / Service:</label>
@@ -649,61 +1560,393 @@
 </div>
 
 <!-- ========================================== -->
-<!-- MODAL: REGISTER VEHICLE                   -->
+<!-- MODAL: REGISTER VEHICLE (REDESIGNED TABBED UX) -->
 <!-- ========================================== -->
 <div class="modal fade" id="newVehicleModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content rounded-4 border-0 shadow">
-            <div class="modal-header border-bottom">
-                <h5 class="modal-title fw-bold"><i class="fa-solid fa-car me-2 text-dark"></i>Register Fleet Vehicle &amp; Driver</h5>
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" style="max-width: 960px;">
+        <div class="modal-content rounded-4 border-0 shadow-lg" style="height: 88vh; max-height: 820px;">
+            <div class="modal-header border-bottom bg-white px-4 py-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rounded-3 bg-dark text-white d-flex align-items-center justify-content-center" style="width: 42px; height: 42px; font-size: 1.1rem;">
+                        <i class="fa-solid fa-car-side"></i>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0">Register Fleet Vehicle &amp; Chauffeur Profile</h5>
+                        <p class="text-muted small mb-0">Configure vehicle specifications, local photo gallery, transparent rates, and chauffeur credentials.</p>
+                    </div>
+                </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{% url 'hotel_admin:cab_fleet_create_edit' restaurant_slug=rslug %}">
+
+            <!-- Sticky Tab Navigation -->
+            <div class="px-4 py-2.5 border-bottom bg-light-subtle">
+                <ul class="nav nav-pills pms-vehicle-tabs gap-2 w-100" role="tablist">
+                    <li class="nav-item flex-fill text-center">
+                        <button class="nav-link w-100 active py-2 d-flex align-items-center justify-content-center gap-2" data-bs-toggle="pill" data-bs-target="#newCabTabVehicle" type="button">
+                            <i class="fa-solid fa-car"></i>
+                            <span>1. Vehicle &amp; Specs</span>
+                        </button>
+                    </li>
+                    <li class="nav-item flex-fill text-center">
+                        <button class="nav-link w-100 py-2 d-flex align-items-center justify-content-center gap-2" data-bs-toggle="pill" data-bs-target="#newCabTabMedia" type="button">
+                            <i class="fa-solid fa-camera"></i>
+                            <span>2. Photos &amp; Media</span>
+                            <span class="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle px-1.5 py-0.5" style="font-size: 0.65rem;">Max 10</span>
+                        </button>
+                    </li>
+                    <li class="nav-item flex-fill text-center">
+                        <button class="nav-link w-100 py-2 d-flex align-items-center justify-content-center gap-2" data-bs-toggle="pill" data-bs-target="#newCabTabFeatures" type="button">
+                            <i class="fa-solid fa-gem"></i>
+                            <span>3. Rates &amp; Luxuries</span>
+                        </button>
+                    </li>
+                    <li class="nav-item flex-fill text-center">
+                        <button class="nav-link w-100 py-2 d-flex align-items-center justify-content-center gap-2" data-bs-toggle="pill" data-bs-target="#newCabTabDriver" type="button">
+                            <i class="fa-solid fa-user-tie"></i>
+                            <span>4. Chauffeur &amp; Status</span>
+                        </button>
+                    </li>
+                </ul>
+            </div>
+
+            <form method="POST" action="{% url 'hotel_admin:cab_fleet_create_edit' restaurant_slug=rslug %}" enctype="multipart/form-data">
                 {% csrf_token %}
-                <div class="modal-body p-4">
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Vehicle License Plate Number:</label>
-                        <input type="text" name="vehicle_number" class="form-control font-monospace" placeholder="e.g. RJ14 TA 1234" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Vehicle Category:</label>
-                        <select name="vehicle_category" class="form-select">
-                            <option value="SEDAN">Sedan (Dzire / Etios)</option>
-                            <option value="SUV">SUV (Innova / Ertiga)</option>
-                            <option value="LUXURY_VAN">Luxury Van</option>
-                            <option value="TEMPO_TRAVELLER">Tempo Traveller</option>
-                        </select>
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-6">
-                            <label class="form-label small fw-bold">Driver Name:</label>
-                            <input type="text" name="driver_name" class="form-control" placeholder="Driver Full Name" required>
+                <div class="modal-body">
+                    <div class="tab-content">
+                        <!-- TAB 1: VEHICLE & SPECS -->
+                        <div class="tab-pane fade show active" id="newCabTabVehicle" role="tabpanel">
+                            <div class="modal-form-section">
+                                <div class="modal-section-title">
+                                    <i class="fa-solid fa-id-card text-primary"></i> 1. Vehicle Identity &amp; Classification
+                                </div>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold">License Plate # <span class="text-danger">*</span></label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text bg-light"><i class="fa-solid fa-barcode text-muted"></i></span>
+                                            <input type="text" name="vehicle_number" class="form-control font-monospace text-uppercase" placeholder="e.g. DL 01 VIP 0007" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold">Vehicle Model / Make</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text bg-light"><i class="fa-solid fa-car text-muted"></i></span>
+                                            <input type="text" name="vehicle_model" class="form-control" placeholder="e.g. BMW 7 Series Executive Limousine">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold">Vehicle Category</label>
+                                        <select name="vehicle_category" class="form-select form-select-sm">
+                                            <option value="SEDAN" selected>Luxury Sedan (BMW 7, Mercedes S-Class, Audi A8)</option>
+                                            <option value="SUV">Executive SUV (Range Rover, Defender, Fortuner)</option>
+                                            <option value="LIMOUSINE">Grand Limousine (Maybach / Stretch)</option>
+                                            <option value="ROYAL_MPV">Royal MPV (Toyota Vellfire, Kia Carnival)</option>
+                                            <option value="ELECTRIC">Electric Luxury (Tesla Model S / EQS)</option>
+                                            <option value="LUXURY_VAN">Luxury Van (Mercedes V-Class)</option>
+                                            <option value="TEMPO_TRAVELLER">Tempo Traveller (12-16 Seater Luxury)</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold">Highlight Tag / Badge</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text bg-light"><i class="fa-solid fa-tag text-muted"></i></span>
+                                            <input type="text" name="tag" class="form-control" value="Most Popular" placeholder="e.g. Most Popular, Executive Choice, VIP Royal">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="form-label small fw-bold">Overview / Editorial Description</label>
+                                    <textarea name="description" class="form-control form-control-sm" rows="2" placeholder="First-class luxury travel on wheels. Featuring executive lounge seating, whisper-quiet cabin, and priority airport terminal access..."></textarea>
+                                </div>
+                            </div>
+
+                            <div class="modal-form-section">
+                                <div class="modal-section-title">
+                                    <i class="fa-solid fa-sliders text-primary"></i> 2. Capacity &amp; Technical Specifications
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-md-3 col-6">
+                                        <label class="form-label small fw-bold"><i class="fa-solid fa-users text-muted me-1"></i>Seats / Guests</label>
+                                        <input type="number" min="1" max="50" name="passengers" class="form-control form-control-sm" value="4">
+                                    </div>
+                                    <div class="col-md-3 col-6">
+                                        <label class="form-label small fw-bold"><i class="fa-solid fa-suitcase-rolling text-muted me-1"></i>Luggage Bags</label>
+                                        <input type="number" min="0" max="50" name="luggage" class="form-control form-control-sm" value="3">
+                                    </div>
+                                    <div class="col-md-3 col-6">
+                                        <label class="form-label small fw-bold"><i class="fa-solid fa-gas-pump text-muted me-1"></i>Drivetrain</label>
+                                        <select name="fuel_type" class="form-select form-select-sm">
+                                            <option value="Petrol" selected>Petrol</option>
+                                            <option value="Diesel">Diesel</option>
+                                            <option value="Electric">Electric</option>
+                                            <option value="Hybrid">Hybrid</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3 col-6">
+                                        <label class="form-label small fw-bold"><i class="fa-solid fa-gear text-muted me-1"></i>Transmission</label>
+                                        <select name="transmission" class="form-select form-select-sm">
+                                            <option value="Automatic" selected>Automatic</option>
+                                            <option value="Manual">Manual</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-6">
-                            <label class="form-label small fw-bold">Driver Phone:</label>
-                            <input type="text" name="driver_phone" class="form-control" placeholder="10-digit Mobile" required>
+
+                        <!-- TAB 2: PHOTOS & MEDIA (LOCAL UPLOADS & 10 MAX) -->
+                        <div class="tab-pane fade" id="newCabTabMedia" role="tabpanel">
+                            <div class="alert alert-light border rounded-3 p-3 mb-3 d-flex align-items-center gap-3">
+                                <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center flex-shrink-0" style="width: 36px; height: 36px;">
+                                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                                </div>
+                                <div class="small text-muted">
+                                    <strong class="text-dark">High-Resolution Local Uploads Supported:</strong>
+                                    You can upload images directly from your computer or link external URLs. All uploaded photos are automatically optimized and converted to lightweight <strong>WebP</strong> format. Maximum 10 photos total.
+                                </div>
+                            </div>
+
+                            <div class="modal-form-section">
+                                <div class="modal-section-title">
+                                    <i class="fa-solid fa-image text-primary"></i> Primary Hero Cover Photo
+                                </div>
+                                <div class="row g-3 align-items-center">
+                                    <div class="col-md-7">
+                                        <label class="form-label small fw-bold">Upload Cover from Computer:</label>
+                                        <input type="file" name="cover_image_file" class="form-control form-control-sm" accept="image/*" onchange="previewLocalImage(this, 'newCoverPreview', 'newCoverPlaceholder')">
+                                        <div class="form-text small mt-1"><i class="fa-solid fa-check text-success me-1"></i>JPG, PNG, WebP supported. Converted to WebP automatically.</div>
+                                        <div class="mt-3">
+                                            <label class="form-label small text-muted fw-semibold">Or Paste External Image URL:</label>
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text bg-light"><i class="fa-solid fa-link text-muted"></i></span>
+                                                <input type="url" name="cover_image" class="form-control" placeholder="https://images.unsplash.com/photo-...">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <div class="border rounded-3 p-2 bg-light text-center d-flex flex-column align-items-center justify-content-center" style="min-height: 120px;">
+                                            <img id="newCoverPreview" src="" alt="Cover preview" class="img-fluid rounded-2 d-none shadow-sm" style="max-height: 110px; object-fit: cover;">
+                                            <div id="newCoverPlaceholder" class="text-muted small py-2">
+                                                <i class="fa-solid fa-image fa-2x mb-1 d-block text-secondary opacity-50"></i>
+                                                Cover Photo Preview
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="modal-form-section">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <div class="modal-section-title mb-0">
+                                        <i class="fa-solid fa-images text-primary"></i> Vehicle Gallery Showcase (Up to 10 Photos Max)
+                                    </div>
+                                    <span class="badge bg-secondary-subtle text-secondary rounded-pill px-2.5 py-1" id="galCountNew" style="font-size: 0.72rem;">0 / 10 Selected</span>
+                                </div>
+                                <div class="p-3 bg-light rounded-3 border mb-3">
+                                    <label class="form-label small fw-bold mb-1">Select Multiple Local Images:</label>
+                                    <input type="file" name="gallery_image_files" class="form-control form-control-sm" accept="image/*" multiple onchange="validateMaxImages(this, 10, 'galCountNew')">
+                                    <div class="form-text small mt-1"><i class="fa-solid fa-folder-open text-primary me-1"></i>Hold Ctrl/Cmd to select up to 10 photos from local storage at once.</div>
+                                </div>
+                                <div>
+                                    <label class="form-label small fw-bold text-muted mb-1">Additional Gallery URLs (One per line):</label>
+                                    <textarea name="gallery_images" class="form-control form-control-sm font-monospace" rows="2" placeholder="https://images.unsplash.com/...&#10;https://images.unsplash.com/..."></textarea>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-6">
-                            <label class="form-label small fw-bold">Initial Status:</label>
-                            <select name="status" class="form-select form-select-sm">
-                                <option value="AVAILABLE" selected>Available</option>
-                                <option value="ON_TRIP">On Trip</option>
-                                <option value="MAINTENANCE">Maintenance</option>
-                            </select>
+
+                        <!-- TAB 3: RATES & LUXURIES -->
+                        <div class="tab-pane fade" id="newCabTabFeatures" role="tabpanel">
+                            <div class="modal-form-section">
+                                <div class="modal-section-title">
+                                    <i class="fa-solid fa-indian-rupee-sign text-primary"></i> Transparent Rate Card &amp; Pricing
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-md-3 col-6">
+                                        <label class="form-label small fw-bold">Airport Flat Rate (₹)</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text bg-light">₹</span>
+                                            <input type="number" step="0.01" name="base_price_airport" class="form-control" value="2500.00">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 col-6">
+                                        <label class="form-label small fw-bold">Per KM Rate (₹)</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text bg-light">₹</span>
+                                            <input type="number" step="0.01" name="price_per_km" class="form-control" value="35.00">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 col-6">
+                                        <label class="form-label small fw-bold">4-Hr Rental (₹)</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text bg-light">₹</span>
+                                            <input type="number" step="0.01" name="hourly_rate" class="form-control" value="800.00">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3 col-6">
+                                        <label class="form-label small fw-bold">Full Day 8-Hr (₹)</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text bg-light">₹</span>
+                                            <input type="number" step="0.01" name="full_day_rate" class="form-control" value="7500.00">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="modal-form-section">
+                                <div class="modal-section-title">
+                                    <i class="fa-solid fa-route text-primary"></i> Journey Features &amp; Inclusions (One per line)
+                                </div>
+                                <textarea name="features" id="newCabFeatures" class="form-control form-control-sm mb-2" rows="2" placeholder="Flight Delay Auto-Tracking&#10;Airport Meet &amp; Greet&#10;Complimentary Mineral Water">Flight Delay Auto-Tracking
+Airport Meet &amp; Greet
+Complimentary Mineral Water</textarea>
+                                <div class="d-flex flex-wrap gap-1 align-items-center">
+                                    <span class="text-muted small me-1" style="font-size: 0.72rem;">Quick Add:</span>
+                                    <span class="quick-chip" onclick="addQuickChip('Flight Delay Auto-Tracking', 'newCabFeatures')">+ Flight Tracking</span>
+                                    <span class="quick-chip" onclick="addQuickChip('Airport Meet & Greet', 'newCabFeatures')">+ Meet &amp; Greet</span>
+                                    <span class="quick-chip" onclick="addQuickChip('Complimentary Mineral Water', 'newCabFeatures')">+ Bottled Water</span>
+                                    <span class="quick-chip" onclick="addQuickChip('Doorstep Luggage Assistance', 'newCabFeatures')">+ Luggage Assistance</span>
+                                    <span class="quick-chip" onclick="addQuickChip('Express Highway Tolls Included', 'newCabFeatures')">+ Tolls Included</span>
+                                </div>
+                            </div>
+
+                            <div class="modal-form-section">
+                                <div class="modal-section-title">
+                                    <i class="fa-solid fa-couch text-primary"></i> Cabin Luxuries &amp; Amenities (One per line)
+                                </div>
+                                <textarea name="amenities" id="newCabAmenities" class="form-control form-control-sm mb-2" rows="2" placeholder="Dual Climate Control&#10;Nappa Leather Seating&#10;Device Chargers">Dual Climate Control
+Nappa Leather Seating
+Device Chargers
+Rear Sunshades
+Spacious Boot Space</textarea>
+                                <div class="d-flex flex-wrap gap-1 align-items-center">
+                                    <span class="text-muted small me-1" style="font-size: 0.72rem;">Quick Add:</span>
+                                    <span class="quick-chip" onclick="addQuickChip('Free In-Cab Wi-Fi', 'newCabAmenities')">+ Free Wi-Fi</span>
+                                    <span class="quick-chip" onclick="addQuickChip('Dual Climate Control', 'newCabAmenities')">+ Dual Climate</span>
+                                    <span class="quick-chip" onclick="addQuickChip('Nappa Leather Seating', 'newCabAmenities')">+ Nappa Leather</span>
+                                    <span class="quick-chip" onclick="addQuickChip('Multi-Port Device Chargers', 'newCabAmenities')">+ USB-C Chargers</span>
+                                    <span class="quick-chip" onclick="addQuickChip('Rear Privacy Sunshades', 'newCabAmenities')">+ Privacy Sunshades</span>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-6 d-flex align-items-center">
-                            <div class="form-check mt-3">
-                                <input class="form-check-input" type="checkbox" name="is_vendor_vehicle" value="true" id="vendorVehicle">
-                                <label class="form-check-label small fw-bold" for="vendorVehicle">Outsourced Agency Cab</label>
+
+                        <!-- TAB 4: CHAUFFEUR & DISPATCH -->
+                        <div class="tab-pane fade" id="newCabTabDriver" role="tabpanel">
+                            <div class="modal-form-section">
+                                <div class="modal-section-title">
+                                    <i class="fa-solid fa-user-tie text-primary"></i> Chauffeur Profile &amp; Contact
+                                </div>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold">Chauffeur Full Name <span class="text-danger">*</span></label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text bg-light"><i class="fa-solid fa-user text-muted"></i></span>
+                                            <input type="text" name="driver_name" class="form-control" placeholder="e.g. Vikram Malhotra" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold">Driver Title / Role</label>
+                                        <input type="text" name="driver_title" class="form-control form-control-sm" value="(Lead Captain)" placeholder="e.g. (Lead Captain), Executive Chauffeur">
+                                    </div>
+                                </div>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold">Contact Mobile Phone <span class="text-danger">*</span></label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text bg-light"><i class="fa-solid fa-phone text-muted"></i></span>
+                                            <input type="text" name="driver_phone" class="form-control" placeholder="10-digit mobile number" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold">Chauffeur Photo (Upload or URL)</label>
+                                        <div class="d-flex gap-1.5">
+                                            <input type="file" name="driver_photo_file" class="form-control form-control-sm" accept="image/*" title="Upload from computer">
+                                            <input type="url" name="driver_photo" class="form-control form-control-sm" placeholder="Or paste photo URL...">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-4 col-4">
+                                        <label class="form-label small fw-bold">Rating</label>
+                                        <div class="input-group input-group-sm">
+                                            <span class="input-group-text bg-light"><i class="fa-solid fa-star text-warning"></i></span>
+                                            <input type="number" step="0.01" min="1.0" max="5.0" name="driver_rating" class="form-control" value="4.95">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 col-4">
+                                        <label class="form-label small fw-bold">Exp (Years)</label>
+                                        <input type="number" min="0" max="50" name="driver_experience_years" class="form-control form-control-sm" value="5">
+                                    </div>
+                                    <div class="col-md-4 col-4">
+                                        <label class="form-label small fw-bold">Trips Done</label>
+                                        <input type="number" min="0" name="trips_completed" class="form-control form-control-sm" value="150">
+                                    </div>
+                                </div>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold">Languages Spoken</label>
+                                        <input type="text" name="driver_languages" class="form-control form-control-sm" value="English, Hindi" placeholder="English, Hindi, Punjabi">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold">Badges &amp; Certifications</label>
+                                        <input type="text" name="driver_badges" class="form-control form-control-sm" value="Executive Lead, Defensive Driving Certified" placeholder="Executive Lead, Defensive Driving Certified">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="form-label small fw-bold">Chauffeur Bio &amp; Protocol Summary</label>
+                                    <textarea name="driver_bio" class="form-control form-control-sm" rows="2" placeholder="Professional licensed chauffeur operating luxury fleet with verified credentials and VIP protocol training..."></textarea>
+                                </div>
+                            </div>
+
+                            <div class="modal-form-section">
+                                <div class="modal-section-title">
+                                    <i class="fa-solid fa-traffic-light text-primary"></i> Availability, Dispatch &amp; Notes
+                                </div>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold">Chauffeur Duty Status</label>
+                                        <select name="driver_availability" class="form-select form-select-sm">
+                                            <option value="Available Now" selected>Available Now</option>
+                                            <option value="On Duty">On Duty</option>
+                                            <option value="Reserved">Reserved</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold">Vehicle Fleet Status</label>
+                                        <select name="status" class="form-select form-select-sm">
+                                            <option value="AVAILABLE" selected>Available</option>
+                                            <option value="ON_TRIP">On Trip</option>
+                                            <option value="MAINTENANCE">Maintenance</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" name="is_vendor_vehicle" value="true" id="vendorVehicle">
+                                    <label class="form-check-label small fw-semibold" for="vendorVehicle">Outsourced Third-Party Vendor Cab</label>
+                                </div>
+                                <div>
+                                    <label class="form-label small fw-bold">Private Internal Dispatch Notes</label>
+                                    <textarea name="notes" class="form-control form-control-sm" rows="2" placeholder="Private internal dispatch or maintenance notes..."></textarea>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer border-top">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-dark px-4">Save Vehicle</button>
+
+                <!-- Sticky Footer -->
+                <div class="modal-footer border-top bg-light-subtle d-flex justify-content-between px-4 py-3">
+                    <button type="button" class="btn btn-light border px-3" data-bs-dismiss="modal">Cancel</button>
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-outline-secondary px-3" onclick="prevModalTab('newVehicleModal')">
+                            <i class="fa-solid fa-arrow-left me-1"></i> Back
+                        </button>
+                        <button type="button" class="btn btn-outline-primary px-3" onclick="nextModalTab('newVehicleModal')">
+                            Next <i class="fa-solid fa-arrow-right ms-1"></i>
+                        </button>
+                        <button type="submit" class="btn btn-dark px-4 fw-bold shadow-sm">
+                            <i class="fa-solid fa-plus me-1.5"></i> Register Fleet Vehicle
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -725,22 +1968,27 @@
                 <div class="modal-body p-4">
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Package Title:</label>
-                        <input type="text" name="title" class="form-control" placeholder="e.g. Airport Pickup (Sedan) or Full-Day Sightseeing" required>
+                        <input type="text" name="title" class="form-control" placeholder="e.g. Airport Pickup (Sedan) or Royal Sightseeing Tour" required>
                     </div>
                     <div class="row g-2 mb-3">
                         <div class="col-6">
                             <label class="form-label small fw-bold">Service Type:</label>
                             <select name="service_type" class="form-select form-select-sm">
-                                <option value="AIRPORT_TRANSFER">Airport / Station Transfer</option>
+                                <option value="AIRPORT_TRANSFER" selected>Airport / Station Transfer</option>
                                 <option value="TOURISM_PACKAGE">Sightseeing / Tourism Tour</option>
                                 <option value="POINT_TO_POINT">Point to Point Ride</option>
+                                <option value="HOURLY_RENTAL">Hourly Rental Chauffeur</option>
+                                <option value="OUTSTATION">Outstation Scenic Tour</option>
                             </select>
                         </div>
                         <div class="col-6">
                             <label class="form-label small fw-bold">Vehicle Category:</label>
                             <select name="vehicle_category" class="form-select form-select-sm">
-                                <option value="SEDAN">Sedan</option>
-                                <option value="SUV">SUV</option>
+                                <option value="SEDAN" selected>Luxury Sedan</option>
+                                <option value="SUV">Executive SUV</option>
+                                <option value="LIMOUSINE">Grand Limousine</option>
+                                <option value="ROYAL_MPV">Royal MPV (Vellfire)</option>
+                                <option value="ELECTRIC">Electric Luxury (Tesla)</option>
                                 <option value="LUXURY_VAN">Luxury Van</option>
                                 <option value="TEMPO_TRAVELLER">Tempo Traveller</option>
                             </select>
@@ -762,7 +2010,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Itinerary / Description:</label>
-                        <textarea name="itinerary_description" class="form-control form-control-sm" rows="3" placeholder="Spots covered, pickup terms, luggage allowance..."></textarea>
+                        <textarea name="itinerary_description" class="form-control form-control-sm" rows="3" placeholder="Spots covered, route, pickup terms, luggage allowance..."></textarea>
                     </div>
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" name="is_active" value="true" id="pkgActive" checked>
@@ -777,4 +2025,92 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+
+<script>
+    // Max 10 Gallery Images validation
+    function validateMaxImages(input, maxAllowed, badgeId) {
+        if (!input.files) return;
+        const count = input.files.length;
+        const badge = document.getElementById(badgeId);
+        
+        if (count > maxAllowed) {
+            alert('Maximum ' + maxAllowed + ' gallery photos allowed. You selected ' + count + ' files. Please re-select up to 10 images.');
+            input.value = '';
+            if (badge) {
+                badge.innerText = '0 / ' + maxAllowed + ' selected';
+                badge.className = 'badge bg-secondary-subtle text-secondary';
+            }
+            return;
+        }
+        
+        if (badge) {
+            badge.innerText = count + ' / ' + maxAllowed + ' selected';
+            badge.className = count > 0 ? 'badge bg-success-subtle text-success border border-success-subtle' : 'badge bg-secondary-subtle text-secondary';
+        }
+    }
+
+    // Live preview for cover image file
+    function previewLocalImage(input, previewImgId, placeholderId) {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.getElementById(previewImgId);
+                const placeholder = document.getElementById(placeholderId);
+                if (img) {
+                    img.src = e.target.result;
+                    img.classList.remove('d-none');
+                }
+                if (placeholder) {
+                    placeholder.classList.add('d-none');
+                }
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    // Quick add chip to textarea
+    function addQuickChip(chipText, textareaId) {
+        const textarea = document.getElementById(textareaId);
+        if (!textarea) return;
+        let current = textarea.value.trim();
+        let items = current ? current.split(/\r?\n/).map(function(s) { return s.trim(); }) : [];
+        if (!items.includes(chipText)) {
+            items.push(chipText);
+            textarea.value = items.join('\n');
+        }
+    }
+
+    // Step navigation between modal tabs
+    function nextModalTab(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        const tabs = modal.querySelectorAll('.pms-vehicle-tabs .nav-link');
+        let activeIdx = 0;
+        tabs.forEach((tab, idx) => {
+            if (tab.classList.contains('active')) activeIdx = idx;
+        });
+        if (activeIdx < tabs.length - 1) {
+            const nextTab = new bootstrap.Tab(tabs[activeIdx + 1]);
+            nextTab.show();
+        }
+    }
+
+    function prevModalTab(modalId) {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        const tabs = modal.querySelectorAll('.pms-vehicle-tabs .nav-link');
+        let activeIdx = 0;
+        tabs.forEach((tab, idx) => {
+            if (tab.classList.contains('active')) activeIdx = idx;
+        });
+        if (activeIdx > 0) {
+            const prevTab = new bootstrap.Tab(tabs[activeIdx - 1]);
+            prevTab.show();
+        }
+    }
+</script>
+
 {% endblock %}

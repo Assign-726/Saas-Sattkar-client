@@ -107,6 +107,14 @@ urlpatterns = [
     path('api/public/hotel/verify-payment/', views_hotel.PublicHotelVerifyPaymentView.as_view(), name='api_public_hotel_verify_payment'),
     path('api/public/hotel/cancel-unpaid/', views_hotel.PublicHotelCancelUnpaidView.as_view(), name='api_public_hotel_cancel_unpaid'),
 
+    # Public Cab & VIP Chauffeur Service endpoints
+    path('api/cabs/bookings/', views_hotel.PublicCabBookingCreateView.as_view(), name='api_cabs_bookings'),
+    path('api/cabs/bookings/<str:booking_id>/', views_hotel.PublicCabBookingDetailView.as_view(), name='api_cabs_booking_detail'),
+    path('api/cabs/fleet/', views_hotel.PublicCabFleetView.as_view(), name='api_cabs_fleet'),
+    path('api/public/hotel/cabs/book/', views_hotel.PublicCabBookingCreateView.as_view(), name='api_public_hotel_cabs_book'),
+    path('api/public/hotel/cabs/booking/<str:booking_id>/', views_hotel.PublicCabBookingDetailView.as_view(), name='api_public_hotel_cab_detail'),
+    path('api/public/hotel/cabs/fleet/', views_hotel.PublicCabFleetView.as_view(), name='api_public_hotel_cabs_fleet'),
+
 
     # API Token Authentication
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),

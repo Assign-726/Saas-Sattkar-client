@@ -43,6 +43,7 @@ urlpatterns = [
     path('cabs/bookings/<int:cab_id>/assign-driver/', views_admin.cab_assign_driver_action, name='cab_assign_driver'),
     path('cabs/bookings/<int:cab_id>/reschedule/', views_admin.cab_reschedule_action, name='cab_reschedule'),
     path('cabs/bookings/<int:cab_id>/status/', views_admin.cab_status_action, name='cab_status'),
+    path('cabs/bookings/<int:cab_id>/payment-status/', views_admin.cab_payment_status_action, name='cab_payment_status'),
     path('cabs/bookings/manual-create/', views_admin.cab_manual_create_action, name='cab_manual_create'),
 
     # Hotel Configuration & Settings
