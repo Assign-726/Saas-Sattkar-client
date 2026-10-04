@@ -533,17 +533,22 @@ class HotelSettings(models.Model):
 class CabServicePackage(models.Model):
     """
     Catalog for airport/station transfers, local sightseeing/tourism packages,
-    and point-to-point transfers.
+    hourly rentals, and point-to-point transfers.
     """
     class ServiceType(models.TextChoices):
         AIRPORT_TRANSFER = 'AIRPORT_TRANSFER', 'Airport Transfer'
         TOURISM_PACKAGE = 'TOURISM_PACKAGE', 'Tourism / Sightseeing Package'
-        POINT_TO_POINT = 'POINT_TO_POINT', 'Point to Point Ride'
+        POINT_TO_POINT = 'POINT_TO_POINT', 'Point to Point / City Ride'
+        HOURLY_RENTAL = 'HOURLY_RENTAL', 'Hourly Rental'
+        OUTSTATION = 'OUTSTATION', 'Outstation Tour'
 
     class VehicleCategory(models.TextChoices):
-        SEDAN = 'SEDAN', 'Sedan (Dzire / Etios)'
-        SUV = 'SUV', 'SUV (Innova / Ertiga)'
-        LUXURY_VAN = 'LUXURY_VAN', 'Luxury Van'
+        SEDAN = 'SEDAN', 'Luxury Sedan'
+        SUV = 'SUV', 'Executive SUV'
+        LUXURY_VAN = 'LUXURY_VAN', 'Royal MPV / Luxury Van'
+        ROYAL_MPV = 'ROYAL_MPV', 'Royal MPV'
+        ELECTRIC = 'ELECTRIC', 'Electric Luxury'
+        LIMOUSINE = 'LIMOUSINE', 'Grand Limousine'
         TEMPO_TRAVELLER = 'TEMPO_TRAVELLER', 'Tempo Traveller'
 
     branch = models.ForeignKey(
@@ -617,14 +622,53 @@ class FleetVehicle(models.Model):
         related_name='fleet_vehicles'
     )
     vehicle_number = models.CharField(max_length=50, verbose_name="Vehicle License Number")
+    vehicle_model = models.CharField(max_length=150, blank=True, default='', verbose_name="Vehicle Model / Make")
     vehicle_category = models.CharField(
         max_length=30,
         choices=CabServicePackage.VehicleCategory.choices,
         default=CabServicePackage.VehicleCategory.SEDAN,
         verbose_name="Vehicle Category"
     )
+    tag = models.CharField(max_length=100, blank=True, default='Most Popular', verbose_name="Tag / Highlight Badge")
+    description = models.TextField(blank=True, default='', verbose_name="Overview / Editorial Description")
+
+    # Vehicle Media & Gallery
+    cover_image = models.URLField(blank=True, default='', max_length=500, verbose_name="Cover Image URL")
+    gallery_images = models.JSONField(default=list, blank=True, verbose_name="Gallery Images (URLs list)")
+
+    # Vehicle Specifications Matrix
+    passengers = models.PositiveIntegerField(default=4, verbose_name="Max Guests / Seats")
+    luggage = models.PositiveIntegerField(default=3, verbose_name="Luggage Capacity (Bags)")
+    fuel_type = models.CharField(max_length=30, default='Petrol', verbose_name="Fuel Type / Drivetrain")
+    transmission = models.CharField(max_length=30, default='Automatic', verbose_name="Transmission")
+
+    # Journey Features & Cabin Amenities
+    features = models.JSONField(default=list, blank=True, verbose_name="Key Journey Features (List)")
+    amenities = models.JSONField(default=list, blank=True, verbose_name="Cabin Luxuries (List)")
+
+    # Transparent Pricing Structure
+    price_per_km = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('35.00'), verbose_name="Per KM Rate (₹/km)")
+    base_price_airport = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('2500.00'), verbose_name="Airport Flat Rate (₹)")
+    hourly_rate = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('800.00'), verbose_name="Hourly Rate 4h (₹)")
+    full_day_rate = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('7500.00'), verbose_name="Full Day Rate 8h (₹)")
+
+    # Rating & Reviews
+    rating = models.DecimalField(max_digits=3, decimal_places=2, default=Decimal('4.95'), verbose_name="Cab Rating")
+    reviews_count = models.PositiveIntegerField(default=120, verbose_name="Verified Reviews Count")
+
+    # Chauffeur Profile
     driver_name = models.CharField(max_length=150, verbose_name="Driver Name")
+    driver_title = models.CharField(max_length=150, blank=True, default='Executive Chauffeur', verbose_name="Driver Title / Role")
     driver_phone = models.CharField(max_length=30, verbose_name="Driver Contact Phone")
+    driver_photo = models.URLField(blank=True, default='', max_length=500, verbose_name="Driver Photo URL")
+    driver_rating = models.DecimalField(max_digits=3, decimal_places=2, default=Decimal('4.95'), verbose_name="Driver Rating")
+    driver_experience_years = models.PositiveIntegerField(default=5, verbose_name="Experience (Years)")
+    trips_completed = models.PositiveIntegerField(default=150, verbose_name="Trips Completed")
+    driver_bio = models.TextField(blank=True, default='', verbose_name="Chauffeur Bio")
+    driver_languages = models.CharField(max_length=255, blank=True, default='English, Hindi', verbose_name="Languages Spoken (comma separated)")
+    driver_badges = models.CharField(max_length=255, blank=True, default='Executive Lead, Defensive Driving Certified', verbose_name="Badges / Certifications (comma separated)")
+    driver_availability = models.CharField(max_length=30, default='Available Now', verbose_name="Chauffeur Availability")
+
     is_vendor_vehicle = models.BooleanField(
         default=False,
         verbose_name="Is Vendor / Outsourced Vehicle",
@@ -648,12 +692,43 @@ class FleetVehicle(models.Model):
 
     def __str__(self):
         v_type = "Vendor" if self.is_vendor_vehicle else "In-House"
-        return f"{self.vehicle_number} [{self.get_vehicle_category_display()}] - {self.driver_name} ({v_type})"
+        model_str = f" ({self.vehicle_model})" if self.vehicle_model else ""
+        return f"{self.vehicle_number}{model_str} [{self.get_vehicle_category_display()}] - {self.driver_name} ({v_type})"
+
+    @property
+    def features_text(self):
+        if isinstance(self.features, list):
+            return "\n".join(self.features)
+        return str(self.features or '')
+
+    @property
+    def amenities_text(self):
+        if isinstance(self.amenities, list):
+            return "\n".join(self.amenities)
+        return str(self.amenities or '')
+
+    @property
+    def gallery_images_text(self):
+        if isinstance(self.gallery_images, list):
+            return "\n".join(self.gallery_images)
+        return str(self.gallery_images or '')
+
+    @property
+    def languages_list(self):
+        if not self.driver_languages:
+            return ["English", "Hindi"]
+        return [s.strip() for s in self.driver_languages.split(',') if s.strip()]
+
+    @property
+    def badges_list(self):
+        if not self.driver_badges:
+            return ["Executive Lead", "Defensive Driving Certified"]
+        return [s.strip() for s in self.driver_badges.split(',') if s.strip()]
 
 
 class CabBooking(models.Model):
     """
-    Cab reservation & dispatch tracking. Foreign-keyed to RoomBooking.
+    Cab reservation & dispatch tracking. Supports both linked RoomBooking and direct Web/PMS bookings.
     """
     class PaymentStatus(models.TextChoices):
         COMPLIMENTARY = 'COMPLIMENTARY', 'Complimentary'
@@ -668,6 +743,11 @@ class CabBooking(models.Model):
         COMPLETED = 'COMPLETED', 'Completed'
         CANCELLED = 'CANCELLED', 'Cancelled'
 
+    class BookingSource(models.TextChoices):
+        FRONTEND_DIRECT = 'FRONTEND_DIRECT', 'Direct Web Booking'
+        PMS_FRONT_DESK = 'PMS_FRONT_DESK', 'Front Desk Manual Ride'
+        ROOM_ADDON = 'ROOM_ADDON', 'Room Reservation Add-on'
+
     booking_id = models.CharField(max_length=50, unique=True, editable=False)
     branch = models.ForeignKey(
         'super_admin.RestaurantBranch',
@@ -676,7 +756,9 @@ class CabBooking(models.Model):
     )
     room_booking = models.ForeignKey(
         RoomBooking,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name='cab_bookings'
     )
     package = models.ForeignKey(
@@ -693,6 +775,33 @@ class CabBooking(models.Model):
         blank=True,
         related_name='cab_bookings'
     )
+    
+    # Direct Guest Information
+    guest_name = models.CharField(max_length=150, blank=True, default='', verbose_name="Guest / Passenger Name")
+    guest_phone = models.CharField(max_length=30, blank=True, default='', verbose_name="Guest Phone")
+    guest_email = models.EmailField(blank=True, default='', verbose_name="Guest Email")
+
+    # Trip and Vehicle Specifications
+    trip_type = models.CharField(
+        max_length=30,
+        choices=CabServicePackage.ServiceType.choices,
+        default=CabServicePackage.ServiceType.AIRPORT_TRANSFER,
+        verbose_name="Trip Type"
+    )
+    selected_cab_name = models.CharField(max_length=150, blank=True, default='', verbose_name="Selected Vehicle / Class")
+    preferred_chauffeur = models.CharField(max_length=150, blank=True, default='', verbose_name="Preferred Chauffeur")
+    passengers = models.PositiveIntegerField(default=1, verbose_name="Passengers")
+    luggage = models.PositiveIntegerField(default=1, verbose_name="Luggage (Bags)")
+    duration_hours = models.PositiveIntegerField(default=0, blank=True, null=True, verbose_name="Duration (Hours)")
+    special_requests = models.TextField(blank=True, default='', verbose_name="Special Requests & Amenities")
+
+    source = models.CharField(
+        max_length=30,
+        choices=BookingSource.choices,
+        default=BookingSource.FRONTEND_DIRECT,
+        verbose_name="Booking Origin"
+    )
+
     is_complimentary = models.BooleanField(
         default=False,
         verbose_name="Is Complimentary (₹0)"
@@ -748,11 +857,58 @@ class CabBooking(models.Model):
     def __str__(self):
         return f"{self.booking_id}: {self.pickup_location} -> {self.drop_location} ({self.get_trip_status_display()})"
 
+    @property
+    def display_guest_name(self):
+        if self.guest_name:
+            return self.guest_name
+        if self.room_booking and self.room_booking.guest_name:
+            return self.room_booking.guest_name
+        return "Valued Guest"
+
+    @property
+    def display_guest_phone(self):
+        if self.guest_phone:
+            return self.guest_phone
+        if self.room_booking and self.room_booking.guest_phone:
+            return self.room_booking.guest_phone
+        return ""
+
+    @property
+    def display_guest_email(self):
+        if self.guest_email:
+            return self.guest_email
+        if self.room_booking and self.room_booking.guest_email:
+            return self.room_booking.guest_email
+        return ""
+
+    @property
+    def package_title(self):
+        if self.package:
+            return self.package.title
+        if self.selected_cab_name:
+            return self.selected_cab_name
+        return "Custom Transfer"
+
+    @property
+    def package_vehicle_category(self):
+        if self.package:
+            return self.package.get_vehicle_category_display()
+        if self.assigned_vehicle:
+            return self.assigned_vehicle.get_vehicle_category_display()
+        return "Sedan"
+
     def save(self, *args, **kwargs):
         if not self.booking_id:
             self.booking_id = f"CB-HTL-{uuid.uuid4().hex[:8].upper()}"
         if not self.branch_id and self.room_booking:
             self.branch = self.room_booking.branch
+        if self.room_booking:
+            if not self.guest_name and self.room_booking.guest_name:
+                self.guest_name = self.room_booking.guest_name
+            if not self.guest_phone and self.room_booking.guest_phone:
+                self.guest_phone = self.room_booking.guest_phone
+            if not self.guest_email and self.room_booking.guest_email:
+                self.guest_email = self.room_booking.guest_email
         super().save(*args, **kwargs)
 
 

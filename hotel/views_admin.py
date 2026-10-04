@@ -720,23 +720,42 @@ def category_create_edit_action(request, restaurant_slug, ctx):
             )
             category.save()
 
+        # Handle Cover Image deletion / update
+        remove_cover = request.POST.get('remove_cover_image') in ['1', 'true', 'on', True]
+        if remove_cover:
+            if category.cover_image:
+                try:
+                    category.cover_image.delete(save=False)
+                except Exception:
+                    pass
+                category.cover_image = None
+            category.cover_image_url = ""
+
         # Handle Cover Image with WebP conversion
         if 'cover_image' in request.FILES:
             converted_cover = optimize_image_to_webp(request.FILES['cover_image'])
             category.cover_image = converted_cover
-        if cover_image_url:
+            category.cover_image_url = ""
+        elif cover_image_url and not remove_cover:
             category.cover_image_url = cover_image_url
 
-        # Existing media count
+        # Existing media count & strict limits
+        MAX_TOTAL_MEDIA = 10
+        MAX_VIDEOS = 2
+
         current_images_count = category.images.count()
         current_videos = list(category.video_links) if isinstance(category.video_links, list) else []
-        current_media_count = current_images_count + len(current_videos) + (1 if category.cover_image or category.cover_image_url else 0)
+        has_cover = bool(category.cover_image or category.cover_image_url)
+        current_media_count = current_images_count + len(current_videos) + (1 if has_cover else 0)
 
-        # Process uploaded video files (Controller: max 25MB, mp4/webm/mov)
+        # Process uploaded video files (Controller: max 25MB, mp4/webm/mov, max 2 videos total)
         uploaded_video_files = request.FILES.getlist('uploaded_videos')
         for v_file in uploaded_video_files:
+            if len(current_videos) >= MAX_VIDEOS:
+                messages.warning(request, f"Video limit reached (max {MAX_VIDEOS} videos allowed). Additional videos were skipped.")
+                break
             if current_media_count >= MAX_TOTAL_MEDIA:
-                messages.warning(request, f"Media limit reached (max {MAX_TOTAL_MEDIA} items). Some videos were skipped.")
+                messages.warning(request, f"Media limit reached (max {MAX_TOTAL_MEDIA} total items). Some videos were skipped.")
                 break
             try:
                 vid_url, vid_size = process_video_file_upload(v_file, max_size_mb=25)
@@ -750,13 +769,15 @@ def category_create_edit_action(request, restaurant_slug, ctx):
             except ValueError as ve:
                 messages.error(request, str(ve))
 
-        # Parse external video URLs (YouTube, Vimeo, MP4 CDN)
+        # Parse external video URLs (YouTube, Vimeo, MP4 CDN) - max 2 videos total
         video_json_raw = request.POST.get('video_links_json', '').strip()
         if video_json_raw:
             try:
                 parsed_vids = json.loads(video_json_raw)
                 if isinstance(parsed_vids, list):
                     for v in parsed_vids:
+                        if len(current_videos) >= MAX_VIDEOS:
+                            break
                         if current_media_count >= MAX_TOTAL_MEDIA:
                             break
                         if isinstance(v, dict) and v.get('url', '').strip():
@@ -771,8 +792,10 @@ def category_create_edit_action(request, restaurant_slug, ctx):
             except Exception:
                 pass
 
-        # Also parse individual video_url_1 .. 5 inputs
-        for i in range(1, 6):
+        # Also parse individual video_url_1 and video_url_2 inputs (max 2 videos total)
+        for i in range(1, 3):
+            if len(current_videos) >= MAX_VIDEOS:
+                break
             if current_media_count >= MAX_TOTAL_MEDIA:
                 break
             v_url = request.POST.get(f'video_url_{i}', '').strip()
@@ -785,15 +808,16 @@ def category_create_edit_action(request, restaurant_slug, ctx):
                 })
                 current_media_count += 1
 
-        category.video_links = current_videos[:MAX_TOTAL_MEDIA]
+        category.video_links = current_videos[:MAX_VIDEOS]
 
-        # External Gallery URLs
+        # External Gallery URLs (Respect total media limit of 10)
         gallery_urls_raw = request.POST.get('gallery_image_urls', '').strip()
         if gallery_urls_raw:
             raw_lines = [u.strip() for u in gallery_urls_raw.replace('\r\n', '\n').split('\n') if u.strip()]
             for line in raw_lines:
                 for part in line.split(','):
                     if current_media_count >= MAX_TOTAL_MEDIA:
+                        messages.warning(request, f"Total media limit reached (max {MAX_TOTAL_MEDIA} items).")
                         break
                     part_clean = part.strip()
                     if part_clean and part_clean.startswith(('http://', 'https://', '/media/')):
@@ -805,7 +829,7 @@ def category_create_edit_action(request, restaurant_slug, ctx):
                         )
                         current_media_count += 1
 
-        # Process multiple uploaded gallery photos (Controller: Auto WebP conversion, max 8MB)
+        # Process multiple uploaded gallery photos (Controller: Auto WebP conversion, max 8MB, max 10 total)
         uploaded_gallery = request.FILES.getlist('gallery_images')
         for idx, file_obj in enumerate(uploaded_gallery, start=1):
             if current_media_count >= MAX_TOTAL_MEDIA:
@@ -831,7 +855,31 @@ def category_create_edit_action(request, restaurant_slug, ctx):
 
 
 @hotel_admin_required
-def category_set_cover_action(request, restaurant_slug, image_id, ctx):
+def category_delete_cover_action(request, restaurant_slug, ctx, category_id):
+    """
+    Media Controller: Remove the primary cover image from a room category.
+    Supports AJAX or normal POST.
+    """
+    branch = ctx['current_branch']
+    category = get_object_or_404(RoomCategory, id=category_id, branch=branch)
+    if category.cover_image:
+        try:
+            category.cover_image.delete(save=False)
+        except Exception:
+            pass
+        category.cover_image = None
+    category.cover_image_url = ""
+    category.save(update_fields=['cover_image', 'cover_image_url', 'updated_at'])
+
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('ajax'):
+        return JsonResponse({'status': 'ok', 'message': 'Cover photo removed'})
+
+    messages.success(request, f"Cover photo removed from '{category.name}'.")
+    return redirect(reverse('hotel_admin:categories', kwargs={'restaurant_slug': restaurant_slug}))
+
+
+@hotel_admin_required
+def category_set_cover_action(request, restaurant_slug, ctx, image_id):
     """
     Media Controller: Make an existing gallery photo the primary category cover.
     """
@@ -855,7 +903,7 @@ def category_set_cover_action(request, restaurant_slug, image_id, ctx):
 
 
 @hotel_admin_required
-def category_delete_video_action(request, restaurant_slug, category_id, video_idx, ctx):
+def category_delete_video_action(request, restaurant_slug, ctx, category_id, video_idx):
     """
     Media Controller: Remove a video from category's video_links by index.
     """
@@ -865,6 +913,14 @@ def category_delete_video_action(request, restaurant_slug, category_id, video_id
 
     if 0 <= video_idx < len(videos):
         removed = videos.pop(video_idx)
+        # If it was an uploaded video file, try to delete it from storage
+        if isinstance(removed, dict) and removed.get('type') == 'uploaded' and removed.get('url'):
+            try:
+                rel_path = removed['url'].replace('/media/', '', 1)
+                if default_storage.exists(rel_path):
+                    default_storage.delete(rel_path)
+            except Exception:
+                pass
         category.video_links = videos
         category.save(update_fields=['video_links', 'updated_at'])
 
@@ -876,7 +932,7 @@ def category_delete_video_action(request, restaurant_slug, category_id, video_id
 
 
 @hotel_admin_required
-def category_delete_image_action(request, restaurant_slug, image_id, ctx):
+def category_delete_image_action(request, restaurant_slug, ctx, image_id):
     """
     Remove an individual gallery photo from a category.
     Supports AJAX or normal POST.
@@ -884,6 +940,11 @@ def category_delete_image_action(request, restaurant_slug, image_id, ctx):
     branch = ctx['current_branch']
     img = get_object_or_404(RoomCategoryImage, id=image_id, category__branch=branch)
     cat_name = img.category.name
+    if img.image:
+        try:
+            img.image.delete(save=False)
+        except Exception:
+            pass
     img.delete()
 
     if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('ajax'):
@@ -1436,42 +1497,92 @@ def cabs_dispatch_view(request, restaurant_slug, ctx):
         return render(request, 'hotel_admin/feature_disabled.html', ctx)
 
     today = timezone.localdate()
-    date_str = request.GET.get('date', today.isoformat())
-    try:
-        selected_date = datetime.date.fromisoformat(date_str)
-    except ValueError:
-        selected_date = today
+    date_param = request.GET.get('date', '').strip()
+    selected_date = None
+    if date_param:
+        try:
+            selected_date = datetime.date.fromisoformat(date_param)
+        except ValueError:
+            selected_date = None
 
+    search_query = request.GET.get('q', '').strip()
     service_filter = request.GET.get('service_type', '')
     status_filter = request.GET.get('status', '')
+    source_filter = request.GET.get('source', '')
     unassigned_filter = request.GET.get('unassigned_only', '')
+    show_all = request.GET.get('show_all', '') in ['1', 'true']
+    filter_mode = request.GET.get('mode', '').strip().lower()
 
-    all_day_qs = CabBooking.objects.filter(
-        branch=branch,
-        pickup_datetime__date=selected_date
-    ).select_related('room_booking', 'room_booking__room', 'package', 'assigned_vehicle')
+    if not filter_mode:
+        if selected_date:
+            filter_mode = 'date'
+        elif show_all:
+            filter_mode = 'all'
+        else:
+            filter_mode = 'all'  # Default to showing all bookings/inquiries so nothing is missed!
 
-    # Summary metrics for the day
-    total_count = all_day_qs.count()
-    unassigned_count = all_day_qs.filter(
+    base_qs = CabBooking.objects.filter(branch=branch).select_related(
+        'room_booking', 'room_booking__room', 'package', 'assigned_vehicle'
+    )
+
+    # Global metric counts
+    total_all_count = base_qs.count()
+    today_count = base_qs.filter(pickup_datetime__date=today).count()
+    upcoming_count = base_qs.filter(pickup_datetime__date__gte=today).exclude(trip_status=CabBooking.TripStatus.CANCELLED).count()
+    web_inquiries_count = base_qs.filter(source=CabBooking.BookingSource.FRONTEND_DIRECT).count()
+    unassigned_count = base_qs.filter(
         Q(assigned_vehicle__isnull=True) | Q(trip_status=CabBooking.TripStatus.SCHEDULED)
     ).exclude(trip_status=CabBooking.TripStatus.CANCELLED).count()
-    assigned_count = all_day_qs.filter(trip_status=CabBooking.TripStatus.DRIVER_ASSIGNED).count()
-    en_route_count = all_day_qs.filter(trip_status=CabBooking.TripStatus.EN_ROUTE).count()
-    completed_count = all_day_qs.filter(trip_status=CabBooking.TripStatus.COMPLETED).count()
-    cancelled_count = all_day_qs.filter(trip_status=CabBooking.TripStatus.CANCELLED).count()
+    assigned_count = base_qs.filter(trip_status=CabBooking.TripStatus.DRIVER_ASSIGNED).count()
+    en_route_count = base_qs.filter(trip_status=CabBooking.TripStatus.EN_ROUTE).count()
+    completed_count = base_qs.filter(trip_status=CabBooking.TripStatus.COMPLETED).count()
+    cancelled_count = base_qs.filter(trip_status=CabBooking.TripStatus.CANCELLED).count()
 
-    filtered_qs = all_day_qs
+    filtered_qs = base_qs
+
+    if search_query:
+        # Cross-date search across guest name, phone, booking ID, vehicle plate, driver, flight #
+        filtered_qs = filtered_qs.filter(
+            Q(booking_id__icontains=search_query) |
+            Q(guest_name__icontains=search_query) |
+            Q(guest_phone__icontains=search_query) |
+            Q(guest_email__icontains=search_query) |
+            Q(flight_or_train_number__icontains=search_query) |
+            Q(selected_cab_name__icontains=search_query) |
+            Q(preferred_chauffeur__icontains=search_query) |
+            Q(room_booking__guest_name__icontains=search_query) |
+            Q(room_booking__guest_phone__icontains=search_query) |
+            Q(assigned_vehicle__driver_name__icontains=search_query) |
+            Q(assigned_vehicle__vehicle_number__icontains=search_query)
+        )
+    elif filter_mode == 'date' and selected_date:
+        filtered_qs = filtered_qs.filter(pickup_datetime__date=selected_date)
+    elif filter_mode == 'today':
+        filtered_qs = filtered_qs.filter(pickup_datetime__date=today)
+    elif filter_mode == 'upcoming':
+        filtered_qs = filtered_qs.filter(pickup_datetime__date__gte=today).exclude(trip_status=CabBooking.TripStatus.CANCELLED)
+    elif filter_mode == 'unassigned':
+        filtered_qs = filtered_qs.filter(
+            Q(assigned_vehicle__isnull=True) | Q(trip_status=CabBooking.TripStatus.SCHEDULED)
+        ).exclude(trip_status=CabBooking.TripStatus.CANCELLED)
+    elif filter_mode == 'web_inquiries':
+        filtered_qs = filtered_qs.filter(source=CabBooking.BookingSource.FRONTEND_DIRECT)
+    elif filter_mode == 'completed':
+        filtered_qs = filtered_qs.filter(trip_status=CabBooking.TripStatus.COMPLETED)
+    # else 'all' shows all bookings
+
     if service_filter:
-        filtered_qs = filtered_qs.filter(package__service_type=service_filter)
+        filtered_qs = filtered_qs.filter(Q(package__service_type=service_filter) | Q(trip_type=service_filter))
     if status_filter:
         filtered_qs = filtered_qs.filter(trip_status=status_filter)
+    if source_filter:
+        filtered_qs = filtered_qs.filter(source=source_filter)
     if unassigned_filter in ['true', '1']:
         filtered_qs = filtered_qs.filter(
             Q(assigned_vehicle__isnull=True) | Q(trip_status=CabBooking.TripStatus.SCHEDULED)
         ).exclude(trip_status=CabBooking.TripStatus.CANCELLED)
 
-    bookings = filtered_qs.order_by('pickup_datetime')
+    bookings = filtered_qs.order_by('-created_at')
 
     fleet_vehicles = FleetVehicle.objects.filter(branch=branch).order_by('vehicle_category', 'vehicle_number')
     available_vehicles = fleet_vehicles.filter(status=FleetVehicle.VehicleStatus.AVAILABLE)
@@ -1486,13 +1597,22 @@ def cabs_dispatch_view(request, restaurant_slug, ctx):
     ctx.update({
         'active_menu': 'cabs',
         'page_title': 'Travel Desk & Cab Dispatch',
+        'today': today,
+        'today_str': today.isoformat(),
         'selected_date': selected_date,
-        'selected_date_str': selected_date.isoformat(),
+        'selected_date_str': selected_date.isoformat() if selected_date else '',
+        'filter_mode': filter_mode,
+        'search_query': search_query,
         'service_filter': service_filter,
         'status_filter': status_filter,
+        'source_filter': source_filter,
         'unassigned_filter': unassigned_filter,
+        'show_all': show_all or filter_mode == 'all',
         'bookings': bookings,
-        'total_count': total_count,
+        'total_count': total_all_count,
+        'today_count': today_count,
+        'upcoming_count': upcoming_count,
+        'web_inquiries_count': web_inquiries_count,
         'unassigned_count': unassigned_count,
         'assigned_count': assigned_count,
         'en_route_count': en_route_count,
@@ -1580,16 +1700,138 @@ def cab_package_delete_action(request, restaurant_slug, ctx, package_id):
 
 @hotel_admin_required
 def cab_fleet_create_edit_action(request, restaurant_slug, ctx):
-    """Register or update a FleetVehicle and driver."""
+    """Register or update a FleetVehicle and driver with all details."""
     if request.method != 'POST':
         return HttpResponseForbidden("POST required")
 
     branch = ctx['current_branch']
     vehicle_id = request.POST.get('vehicle_id')
     vehicle_number = request.POST.get('vehicle_number', '').strip().upper()
+    vehicle_model = request.POST.get('vehicle_model', '').strip()
     vehicle_category = request.POST.get('vehicle_category', 'SEDAN')
+    tag = request.POST.get('tag', 'Most Popular').strip()
+    description = request.POST.get('description', '').strip()
+    cover_image = request.POST.get('cover_image', '').strip()
+
+    # Local file upload for Primary Cover Image
+    if 'cover_image_file' in request.FILES and request.FILES['cover_image_file']:
+        try:
+            converted_cover = optimize_image_to_webp(request.FILES['cover_image_file'])
+            save_name = default_storage.save(f"hotel/cabs/covers/cab_{uuid.uuid4().hex[:8]}.webp", converted_cover)
+            cover_image = default_storage.url(save_name)
+        except Exception as e:
+            messages.warning(request, f"Cover image upload failed: {e}")
+
+    # Local file upload for Chauffeur Photo
+    driver_photo = request.POST.get('driver_photo', '').strip()
+    if 'driver_photo_file' in request.FILES and request.FILES['driver_photo_file']:
+        try:
+            converted_driver = optimize_image_to_webp(request.FILES['driver_photo_file'])
+            save_name = default_storage.save(f"hotel/cabs/drivers/drv_{uuid.uuid4().hex[:8]}.webp", converted_driver)
+            driver_photo = default_storage.url(save_name)
+        except Exception as e:
+            messages.warning(request, f"Chauffeur photo upload failed: {e}")
+
+    # Gallery images: Existing kept images + Textarea URLs + Local File Uploads (Capped at 10 max)
+    MAX_GALLERY_IMAGES = 10
+    existing_gallery = [img.strip() for img in request.POST.getlist('existing_gallery_images') if img.strip()]
+    gallery_raw = request.POST.get('gallery_images', '').strip()
+    new_urls = [img.strip() for img in gallery_raw.replace(',', '\n').splitlines() if img.strip()]
+
+    gallery_images = []
+    for img in existing_gallery + new_urls:
+        if img and img not in gallery_images:
+            gallery_images.append(img)
+
+    uploaded_gallery_files = request.FILES.getlist('gallery_image_files')
+    if uploaded_gallery_files:
+        for g_file in uploaded_gallery_files:
+            if len(gallery_images) >= MAX_GALLERY_IMAGES:
+                messages.warning(request, f"Gallery capacity reached ({MAX_GALLERY_IMAGES} images maximum). Additional files were skipped.")
+                break
+            try:
+                converted_gal = optimize_image_to_webp(g_file)
+                save_name = default_storage.save(f"hotel/cabs/gallery/cab_gal_{uuid.uuid4().hex[:8]}.webp", converted_gal)
+                gallery_images.append(default_storage.url(save_name))
+            except Exception as e:
+                messages.warning(request, f"Gallery file '{g_file.name}' upload failed: {e}")
+
+    # Ensure max 10 images limit
+    if len(gallery_images) > MAX_GALLERY_IMAGES:
+        gallery_images = gallery_images[:MAX_GALLERY_IMAGES]
+        messages.warning(request, f"Gallery images capped at the maximum limit of {MAX_GALLERY_IMAGES} photos.")
+
+    remove_cover = request.POST.get('remove_cover_image') in ['true', '1', 'on']
+    if remove_cover and not ('cover_image_file' in request.FILES and request.FILES['cover_image_file']):
+        cover_image = ''
+
+    if cover_image and cover_image not in gallery_images and len(gallery_images) < MAX_GALLERY_IMAGES:
+        gallery_images.insert(0, cover_image)
+
+    try:
+        passengers = int(request.POST.get('passengers', 4) or 4)
+    except Exception:
+        passengers = 4
+
+    try:
+        luggage = int(request.POST.get('luggage', 3) or 3)
+    except Exception:
+        luggage = 3
+
+    fuel_type = request.POST.get('fuel_type', 'Petrol').strip()
+    transmission = request.POST.get('transmission', 'Automatic').strip()
+
+    features_raw = request.POST.get('features', '').strip()
+    features = [f.strip() for f in features_raw.replace(',', '\n').splitlines() if f.strip()]
+
+    amenities_raw = request.POST.get('amenities', '').strip()
+    amenities = [a.strip() for a in amenities_raw.replace(',', '\n').splitlines() if a.strip()]
+
+    try:
+        price_per_km = Decimal(request.POST.get('price_per_km', '35.00') or '35.00')
+    except Exception:
+        price_per_km = Decimal('35.00')
+
+    try:
+        base_price_airport = Decimal(request.POST.get('base_price_airport', '2500.00') or '2500.00')
+    except Exception:
+        base_price_airport = Decimal('2500.00')
+
+    try:
+        hourly_rate = Decimal(request.POST.get('hourly_rate', '800.00') or '800.00')
+    except Exception:
+        hourly_rate = Decimal('800.00')
+
+    try:
+        full_day_rate = Decimal(request.POST.get('full_day_rate', '7500.00') or '7500.00')
+    except Exception:
+        full_day_rate = Decimal('7500.00')
+
+    try:
+        cab_rating = Decimal(request.POST.get('rating', '4.95') or '4.95')
+    except Exception:
+        cab_rating = Decimal('4.95')
+
+    try:
+        reviews_count = int(request.POST.get('reviews_count', 120) or 120)
+    except Exception:
+        reviews_count = 120
+
+    # Chauffeur details
     driver_name = request.POST.get('driver_name', '').strip()
+    driver_title = request.POST.get('driver_title', 'Executive Chauffeur').strip()
     driver_phone = request.POST.get('driver_phone', '').strip()
+    driver_rating_str = request.POST.get('driver_rating', '4.95').strip()
+    driver_exp_str = request.POST.get('driver_experience_years', '5').strip()
+    driver_bio = request.POST.get('driver_bio', '').strip()
+    try:
+        trips_completed = int(request.POST.get('trips_completed', 150) or 150)
+    except Exception:
+        trips_completed = 150
+    driver_languages = request.POST.get('driver_languages', 'English, Hindi').strip()
+    driver_badges = request.POST.get('driver_badges', 'Executive Lead, Defensive Driving Certified').strip()
+    driver_availability = request.POST.get('driver_availability', 'Available Now').strip()
+
     is_vendor = request.POST.get('is_vendor_vehicle') in ['true', '1', 'on']
     status_val = request.POST.get('status', 'AVAILABLE')
     notes = request.POST.get('notes', '').strip()
@@ -1598,17 +1840,64 @@ def cab_fleet_create_edit_action(request, restaurant_slug, ctx):
         messages.error(request, "Vehicle number, driver name, and driver phone are required.")
         return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
 
+    try:
+        driver_rating = Decimal(driver_rating_str) if driver_rating_str else Decimal('4.95')
+        driver_exp = int(driver_exp_str) if driver_exp_str else 5
+    except Exception:
+        driver_rating = Decimal('4.95')
+        driver_exp = 5
+
     if vehicle_id:
         v = get_object_or_404(FleetVehicle, id=vehicle_id, branch=branch)
+        # Check duplicate vehicle number if changed
+        if FleetVehicle.objects.filter(branch=branch, vehicle_number=vehicle_number).exclude(pk=v.pk).exists():
+            messages.error(request, f"Vehicle number '{vehicle_number}' is already registered for this branch.")
+            return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
+
         v.vehicle_number = vehicle_number
+        v.vehicle_model = vehicle_model
         v.vehicle_category = vehicle_category
+        v.tag = tag
+        v.description = description
+        if 'cover_image_file' in request.FILES and request.FILES['cover_image_file']:
+            v.cover_image = cover_image
+        elif remove_cover:
+            v.cover_image = ''
+        elif 'cover_image' in request.POST:
+            v.cover_image = cover_image
+
+        v.gallery_images = gallery_images
+        v.passengers = passengers
+        v.luggage = luggage
+        v.fuel_type = fuel_type
+        v.transmission = transmission
+        v.features = features
+        v.amenities = amenities
+        v.price_per_km = price_per_km
+        v.base_price_airport = base_price_airport
+        v.hourly_rate = hourly_rate
+        v.full_day_rate = full_day_rate
+        v.rating = cab_rating
+        v.reviews_count = reviews_count
+
         v.driver_name = driver_name
+        v.driver_title = driver_title
         v.driver_phone = driver_phone
+        if driver_photo:
+            v.driver_photo = driver_photo
+        v.driver_rating = driver_rating
+        v.driver_experience_years = driver_exp
+        v.trips_completed = trips_completed
+        v.driver_bio = driver_bio
+        v.driver_languages = driver_languages
+        v.driver_badges = driver_badges
+        v.driver_availability = driver_availability
+
         v.is_vendor_vehicle = is_vendor
         v.status = status_val
         v.notes = notes
         v.save()
-        messages.success(request, f"Vehicle '{vehicle_number}' updated successfully.")
+        messages.success(request, f"Vehicle '{vehicle_number}' ({vehicle_model or driver_name}) updated successfully.")
     else:
         if FleetVehicle.objects.filter(branch=branch, vehicle_number=vehicle_number).exists():
             messages.error(request, f"Vehicle number '{vehicle_number}' is already registered for this branch.")
@@ -1617,14 +1906,40 @@ def cab_fleet_create_edit_action(request, restaurant_slug, ctx):
         FleetVehicle.objects.create(
             branch=branch,
             vehicle_number=vehicle_number,
+            vehicle_model=vehicle_model,
             vehicle_category=vehicle_category,
+            tag=tag,
+            description=description,
+            cover_image=cover_image,
+            gallery_images=gallery_images,
+            passengers=passengers,
+            luggage=luggage,
+            fuel_type=fuel_type,
+            transmission=transmission,
+            features=features,
+            amenities=amenities,
+            price_per_km=price_per_km,
+            base_price_airport=base_price_airport,
+            hourly_rate=hourly_rate,
+            full_day_rate=full_day_rate,
+            rating=cab_rating,
+            reviews_count=reviews_count,
             driver_name=driver_name,
+            driver_title=driver_title,
             driver_phone=driver_phone,
+            driver_photo=driver_photo,
+            driver_rating=driver_rating,
+            driver_experience_years=driver_exp,
+            trips_completed=trips_completed,
+            driver_bio=driver_bio,
+            driver_languages=driver_languages,
+            driver_badges=driver_badges,
+            driver_availability=driver_availability,
             is_vendor_vehicle=is_vendor,
             status=status_val,
             notes=notes,
         )
-        messages.success(request, f"Vehicle '{vehicle_number}' registered successfully.")
+        messages.success(request, f"Vehicle '{vehicle_number}' ({vehicle_model or driver_name}) registered successfully.")
 
     return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
 
@@ -1641,6 +1956,54 @@ def cab_fleet_delete_action(request, restaurant_slug, ctx, vehicle_id):
     v.delete()
     messages.success(request, f"Vehicle '{num}' deleted from fleet.")
     return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
+
+
+@hotel_admin_required
+def cab_fleet_delete_image_action(request, restaurant_slug, ctx, vehicle_id):
+    """
+    AJAX action to delete a specific photo from vehicle gallery or cover.
+    Removes the image URL from v.gallery_images and if it's the cover, clears or reassigns it.
+    Cleans up the underlying local media file from default_storage if applicable.
+    """
+    if request.method != 'POST':
+        return HttpResponseForbidden("POST required")
+
+    branch = ctx['current_branch']
+    v = get_object_or_404(FleetVehicle, id=vehicle_id, branch=branch)
+
+    image_url = request.POST.get('image_url', '').strip()
+    if not image_url:
+        return JsonResponse({'success': False, 'error': 'No image URL provided'}, status=400)
+
+    # Remove from gallery_images
+    current_gallery = list(v.gallery_images or [])
+    new_gallery = [img for img in current_gallery if img != image_url]
+    v.gallery_images = new_gallery
+
+    # If it was the cover image, update cover
+    was_cover = False
+    if v.cover_image == image_url:
+        was_cover = True
+        v.cover_image = new_gallery[0] if new_gallery else ''
+
+    v.save()
+
+    # If local media file, delete physical file from disk
+    if image_url.startswith('/media/'):
+        rel_path = image_url[len('/media/'):]
+        if default_storage.exists(rel_path):
+            try:
+                default_storage.delete(rel_path)
+            except Exception:
+                pass
+
+    return JsonResponse({
+        'success': True,
+        'message': 'Image deleted successfully.',
+        'remaining_count': len(v.gallery_images),
+        'was_cover': was_cover,
+        'new_cover_image': v.cover_image
+    })
 
 
 @hotel_admin_required
@@ -1780,12 +2143,15 @@ def cab_status_action(request, restaurant_slug, ctx, cab_id):
 
 @hotel_admin_required
 def cab_manual_create_action(request, restaurant_slug, ctx):
-    """Front Desk manual cab / tour booking for an in-house guest."""
+    """Front Desk manual cab / tour booking for an in-house room guest or walk-in/outside passenger."""
     if request.method != 'POST':
         return HttpResponseForbidden("POST required")
 
     branch = ctx['current_branch']
     room_booking_id = request.POST.get('room_booking_id')
+    guest_name = request.POST.get('guest_name', '').strip()
+    guest_phone = request.POST.get('guest_phone', '').strip()
+    guest_email = request.POST.get('guest_email', '').strip()
     package_id = request.POST.get('package_id')
     pickup_dt_str = request.POST.get('pickup_datetime')
     pickup_loc = request.POST.get('pickup_location', '').strip()
@@ -1794,11 +2160,23 @@ def cab_manual_create_action(request, restaurant_slug, ctx):
     is_comp = request.POST.get('is_complimentary') in ['true', '1', 'on']
     payment_status_val = request.POST.get('payment_status', 'ADDED_TO_FOLIO')
 
-    if not room_booking_id or not package_id or not pickup_dt_str or not pickup_loc or not drop_loc:
-        messages.error(request, "Room, package, pickup datetime, and locations are required.")
+    room_booking = None
+    if room_booking_id:
+        room_booking = get_object_or_404(RoomBooking, id=room_booking_id, branch=branch)
+        guest_name = room_booking.guest_name
+        guest_phone = room_booking.guest_phone
+        guest_email = room_booking.guest_email
+        source_val = CabBooking.BookingSource.PMS_FRONT_DESK
+    else:
+        source_val = CabBooking.BookingSource.PMS_FRONT_DESK
+        if not guest_name or not guest_phone:
+            messages.error(request, "Either an in-house room or guest name & phone are required.")
+            return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
+
+    if not package_id or not pickup_dt_str or not pickup_loc or not drop_loc:
+        messages.error(request, "Package, pickup datetime, and locations are required.")
         return redirect('hotel_admin:cabs_dispatch', restaurant_slug=restaurant_slug)
 
-    room_booking = get_object_or_404(RoomBooking, id=room_booking_id, branch=branch)
     package = get_object_or_404(CabServicePackage, id=package_id, branch=branch)
 
     try:
@@ -1819,13 +2197,19 @@ def cab_manual_create_action(request, restaurant_slug, ctx):
         base = package.base_price
         tax = round(base * Decimal('0.05'), 2)
         tot = base + tax
-        pay_st = payment_status_val if payment_status_val in CabBooking.PaymentStatus.values else CabBooking.PaymentStatus.ADDED_TO_FOLIO
+        pay_st = payment_status_val if payment_status_val in CabBooking.PaymentStatus.values else (CabBooking.PaymentStatus.ADDED_TO_FOLIO if room_booking else CabBooking.PaymentStatus.PENDING)
         comp_flag = False
 
     cb = CabBooking.objects.create(
         branch=branch,
         room_booking=room_booking,
+        guest_name=guest_name,
+        guest_phone=guest_phone,
+        guest_email=guest_email,
         package=package,
+        trip_type=package.service_type,
+        selected_cab_name=package.title,
+        source=source_val,
         is_complimentary=comp_flag,
         pickup_datetime=p_dt,
         pickup_location=pickup_loc,
@@ -1837,7 +2221,28 @@ def cab_manual_create_action(request, restaurant_slug, ctx):
         payment_status=pay_st,
         trip_status=CabBooking.TripStatus.SCHEDULED,
     )
-    messages.success(request, f"Ride {cb.booking_id} successfully created for Room {room_booking.room.room_number} ({room_booking.guest_name}).")
+    desc = f"Room {room_booking.room.room_number} ({room_booking.guest_name})" if room_booking else guest_name
+    messages.success(request, f"Ride {cb.booking_id} successfully booked for {desc}.")
     date_param = p_dt.strftime('%Y-%m-%d')
     return redirect(f"{reverse('hotel_admin:cabs_dispatch', kwargs={'restaurant_slug': restaurant_slug})}?date={date_param}")
+
+
+@hotel_admin_required
+def cab_payment_status_action(request, restaurant_slug, ctx, cab_id):
+    """Quick update cab booking payment status (PAID, PENDING, ADDED_TO_FOLIO, COMPLIMENTARY)."""
+    if request.method != 'POST':
+        return HttpResponseForbidden("POST required")
+
+    branch = ctx['current_branch']
+    booking = get_object_or_404(CabBooking, id=cab_id, branch=branch)
+    new_status = request.POST.get('payment_status', '').upper()
+
+    if new_status in CabBooking.PaymentStatus.values:
+        booking.payment_status = new_status
+        booking.save(update_fields=['payment_status', 'updated_at'])
+        messages.success(request, f"Payment status for {booking.booking_id} set to {booking.get_payment_status_display()}.")
+
+    date_param = booking.pickup_datetime.strftime('%Y-%m-%d')
+    return redirect(f"{reverse('hotel_admin:cabs_dispatch', kwargs={'restaurant_slug': restaurant_slug})}?date={date_param}")
+
 

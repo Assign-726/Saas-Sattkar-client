@@ -1,0 +1,433 @@
+{% extends 'hotel_admin/base_hotel.html' %}
+{% load static %}
+
+{% block title %}Monthly Hotel Payroll Engine | {{ current_restaurant.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .payroll-table th {
+        font-size: 0.74rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-weight: 700;
+        color: #475569;
+        background-color: #f8fafc;
+        vertical-align: middle;
+        white-space: nowrap;
+        padding: 0.75rem 0.6rem;
+    }
+    .payroll-table td {
+        vertical-align: middle;
+        padding: 0.55rem 0.6rem;
+        font-size: 0.84rem;
+    }
+    .badge-status-DRAFT { background: #fefce8; color: #a16207; border: 1px solid #fef08a; }
+    .badge-status-FINALIZED { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .badge-status-PAID { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+    .badge-status-ON_HOLD { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+
+    .formula-tag {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.73rem;
+        background-color: #f1f5f9;
+        padding: 2px 6px;
+        border-radius: 4px;
+        color: #334155;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0" x-data="payrollApp()">
+
+    <!-- Sub-Navigation Cockpit Header -->
+    {% include 'hotel_admin/staff/includes/staff_nav.html' %}
+
+    <!-- Page Header & Period Selectors -->
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-4">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <h1 class="h3 fw-bold text-dark mb-0">Hotel Monthly Payroll Engine</h1>
+                <span class="badge text-white rounded-pill px-3 py-1 font-mono" style="background: var(--brand, #6366f1); font-size: 0.78rem;">
+                    {{ selected_month_name }} {{ selected_year }}
+                </span>
+            </div>
+            <p class="text-muted small mb-0 mt-1">
+                Automated hotel payroll computation from muster roll records: payable days, pro-rated base, OT pay, penalty deductions &amp; printable salary vouchers.
+            </p>
+        </div>
+
+        <!-- Period Selector & Action Buttons -->
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <form method="get" class="d-flex align-items-center gap-1.5 bg-white p-1.5 rounded-pill shadow-xs border">
+                <select name="month" class="form-select form-select-sm border-0 fw-semibold bg-transparent py-0 ps-2 pe-4" onchange="this.form.submit()">
+                    {% for m in months_list %}
+                    <option value="{{ m.num }}" {% if selected_month == m.num %}selected{% endif %}>{{ m.name }}</option>
+                    {% endfor %}
+                </select>
+                <select name="year" class="form-select form-select-sm border-0 fw-semibold bg-transparent py-0 ps-2 pe-4" onchange="this.form.submit()">
+                    {% for y in years_list %}
+                    <option value="{{ y }}" {% if selected_year == y %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+
+            <!-- Generate Payroll Engine Button -->
+            <button type="button" 
+                    class="btn btn-sm btn-primary rounded-pill px-3 py-1.5 fw-semibold d-inline-flex align-items-center gap-1.5 shadow-sm"
+                    style="background: var(--brand, #6366f1); border-color: var(--brand, #6366f1);"
+                    @click="generatePayroll()"
+                    :disabled="isGenerating">
+                <i class="fa-solid fa-calculator" x-show="!isGenerating"></i>
+                <span class="spinner-border spinner-border-sm" x-show="isGenerating" style="width: 0.85rem; height: 0.85rem;"></span>
+                <span>{% if total_count == 0 %}Run Payroll Engine{% else %}Recalculate Month{% endif %}</span>
+            </button>
+
+            {% if total_count > 0 and draft_count > 0 %}
+            <button type="button" 
+                    class="btn btn-sm btn-dark rounded-pill px-3 py-1.5 fw-semibold d-inline-flex align-items-center gap-1.5 shadow-xs"
+                    @click="finalizeAll()"
+                    :disabled="isFinalizing">
+                <i class="fa-solid fa-lock" x-show="!isFinalizing"></i>
+                <span class="spinner-border spinner-border-sm" x-show="isFinalizing" style="width: 0.85rem; height: 0.85rem;"></span>
+                <span>Finalize All ({{ draft_count }})</span>
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Math Formula Information Alert Banner -->
+    <div class="card border-0 shadow-xs mb-4 text-dark" style="border-radius: 12px; background: linear-gradient(135deg, #f0fdf4 0%, #eff6ff 100%); border: 1px solid #bbf7d0 !important;">
+        <div class="card-body p-3">
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <i class="fa-solid fa-circle-info text-primary"></i>
+                <strong style="font-size: 0.82rem;">Hotel Payroll Engine Calculation Formula:</strong>
+            </div>
+            <div class="d-flex align-items-center gap-3 flex-wrap small text-secondary" style="font-size: 0.78rem;">
+                <div><span class="formula-tag">Payable Days = Present + Weekly Offs + Paid Leaves + (0.5 × Half Days)</span></div>
+                <div><span class="formula-tag">Base Earned = (Monthly Base / Days in Month) × Payable Days</span></div>
+                <div><span class="formula-tag">OT Amount = Total OT Hours × (Daily Wage / Shift Hours)</span></div>
+                <div><span class="formula-tag">Net Salary = Base Earned + OT Amount - Penalties + Incentives</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Aggregate Monthly Metrics -->
+    <div class="row g-3 mb-4">
+        <!-- Total Net Payable -->
+        <div class="col-6 col-md-4 col-xl-3">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #10b981 !important;">
+                <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem;">Total Net Payout</div>
+                <div class="h3 fw-bold text-success mb-0 mt-1 font-mono">₹{{ total_net_payable|floatformat:2 }}</div>
+                <div class="text-muted small mt-1" style="font-size: 0.72rem;">Final net disbursement</div>
+            </div>
+        </div>
+
+        <!-- Total Base Wage -->
+        <div class="col-6 col-md-4 col-xl-3">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #6366f1 !important;">
+                <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem;">Gross Earned Base</div>
+                <div class="h3 fw-bold mb-0 mt-1 font-mono" style="color: #6366f1;">₹{{ total_gross_disbursed|floatformat:2 }}</div>
+                <div class="text-muted small mt-1" style="font-size: 0.72rem;">Days worked allocation</div>
+            </div>
+        </div>
+
+        <!-- Total OT Pay -->
+        <div class="col-6 col-md-4 col-xl-3">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #06b6d4 !important;">
+                <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem;">Total Overtime Pay</div>
+                <div class="h3 fw-bold text-info mb-0 mt-1 font-mono">₹{{ total_ot_payout|floatformat:2 }}</div>
+                <div class="text-muted small mt-1" style="font-size: 0.72rem;">Calculated at hourly wage</div>
+            </div>
+        </div>
+
+        <!-- Total Penalties / Deductions -->
+        <div class="col-6 col-md-4 col-xl-3">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #ef4444 !important;">
+                <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem;">Total Penalties &amp; Fines</div>
+                <div class="h3 fw-bold text-danger mb-0 mt-1 font-mono">₹{{ total_penalties|floatformat:2 }}</div>
+                <div class="text-muted small mt-1" style="font-size: 0.72rem;">Disciplinary &amp; late cuts</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payroll Table -->
+    <div class="card border-0 shadow-sm bg-white" style="border-radius: 14px; border: 1px solid var(--pms-border) !important; overflow: hidden;">
+        <div class="table-responsive">
+            <table class="table table-hover payroll-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th style="padding-left: 1rem;">Employee &amp; Dept</th>
+                        <th class="text-center">Payable / Total Days</th>
+                        <th class="text-end">Base Wage</th>
+                        <th class="text-end">Earned Base</th>
+                        <th class="text-center">OT Hours</th>
+                        <th class="text-end">OT Pay</th>
+                        <th class="text-end">Penalties</th>
+                        <th class="text-end">Incentives</th>
+                        <th class="text-end fw-bold">Net Salary</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-center" style="width: 140px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in payrolls %}
+                    <tr>
+                        <td style="padding-left: 1rem;">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold" 
+                                     style="width: 32px; height: 32px; background: linear-gradient(135deg, #6366f1, #4f46e5); font-size: 0.8rem;">
+                                    {{ p.staff_member.name|slice:":1"|upper }}
+                                </div>
+                                <div>
+                                    <div class="fw-bold text-dark">{{ p.staff_member.name }}</div>
+                                    <div class="text-muted font-mono" style="font-size: 0.72rem;">
+                                        {{ p.staff_member.employee_id }} • {{ p.staff_member.get_department_display }}
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="text-center font-mono">
+                            <span class="fw-bold text-dark">{{ p.payable_days }}</span> / <span class="text-muted">{{ p.days_in_month }}</span>
+                            <div class="text-muted" style="font-size: 0.68rem;">(P:{{ p.present_days|floatformat:0 }} | WO:{{ p.weekly_offs|floatformat:0 }} | HD:{{ p.half_days }})</div>
+                        </td>
+                        <td class="text-end font-mono text-muted">₹{{ p.monthly_base_salary|floatformat:0 }}</td>
+                        <td class="text-end font-mono fw-semibold text-dark">₹{{ p.base_earned|floatformat:2 }}</td>
+                        <td class="text-center font-mono">{{ p.total_ot_hours }} hrs</td>
+                        <td class="text-end font-mono text-info">₹{{ p.ot_amount|floatformat:2 }}</td>
+                        <td class="text-end font-mono text-danger">{% if p.penalties > 0 %}-₹{{ p.penalties|floatformat:2 }}{% else %}₹0.00{% endif %}</td>
+                        <td class="text-end font-mono text-success">{% if p.incentives > 0 %}+₹{{ p.incentives|floatformat:2 }}{% else %}₹0.00{% endif %}</td>
+                        <td class="text-end font-mono fw-bold text-success fs-6">₹{{ p.net_salary|floatformat:2 }}</td>
+                        <td class="text-center">
+                            <span class="badge badge-status-{{ p.payment_status }} rounded-pill px-2.5 py-1" style="font-size: 0.74rem;">
+                                {{ p.get_payment_status_display }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <div class="d-flex align-items-center justify-content-center gap-1">
+                                <button type="button" class="btn btn-sm btn-light border p-1 px-2 rounded-2" 
+                                        title="Adjust Incentives / Penalties"
+                                        @click="openAdjustmentModal({{ p.id }}, '{{ p.staff_member.name|escapejs }}', {{ p.penalties }}, {{ p.incentives }}, '{{ p.payment_status }}', '{{ p.payment_mode|escapejs }}', '{{ p.remarks|default:''|escapejs }}')">
+                                    <i class="fa-solid fa-sliders" style="font-size: 0.75rem;"></i>
+                                </button>
+                                <a href="{% url 'hotel_admin:salary_slip_view' restaurant_slug=rslug pk=p.id %}" 
+                                   class="btn btn-sm btn-light border p-1 px-2 rounded-2 text-primary" 
+                                   target="_blank" title="Print Salary Slip">
+                                    <i class="fa-solid fa-file-invoice" style="font-size: 0.75rem;"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="11" class="text-center py-5">
+                            <div class="text-muted">
+                                <i class="fa-solid fa-calculator mb-2" style="font-size: 2.5rem; color: #cbd5e1;"></i>
+                                <h6 class="fw-bold text-dark mt-2">No payroll generated for {{ selected_month_name }} {{ selected_year }}</h6>
+                                <p class="small text-muted mb-3">Click 'Run Payroll Engine' to aggregate muster attendance records and calculate monthly payouts.</p>
+                                <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" @click="generatePayroll()" :disabled="isGenerating">
+                                    <i class="fa-solid fa-calculator me-1"></i> Run Payroll Engine Now
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Manager Adjustment Modal -->
+    <div class="modal fade" id="adjustmentModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow" style="border-radius: 14px;">
+                <div class="modal-header border-bottom py-3">
+                    <h5 class="modal-title fw-bold text-dark fs-6">
+                        <i class="fa-solid fa-sliders text-primary me-2"></i>Adjust Payroll: <span x-text="editItem.name"></span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Performance Incentive / Bonus (₹)</label>
+                        <div class="input-group">
+                            <span class="input-group-text">₹</span>
+                            <input type="number" step="50" min="0" class="form-control font-mono" x-model="editItem.incentives">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Penalties / Advance Deductions (₹)</label>
+                        <div class="input-group">
+                            <span class="input-group-text">₹</span>
+                            <input type="number" step="50" min="0" class="form-control font-mono" x-model="editItem.penalties">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Disbursement Status</label>
+                        <select class="form-select" x-model="editItem.paymentStatus">
+                            <option value="DRAFT">Draft (Under Review)</option>
+                            <option value="FINALIZED">Finalized (Ready for Payout)</option>
+                            <option value="PAID">Paid / Disbursed</option>
+                            <option value="ON_HOLD">On Hold</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Remarks / Notes</label>
+                        <textarea class="form-control" rows="2" placeholder="e.g. Festival bonus, uniform deduction..." x-model="editItem.remarks"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-top py-2.5">
+                    <button type="button" class="btn btn-light rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary rounded-pill px-4 fw-semibold" 
+                            @click="saveAdjustment()" 
+                            :disabled="isSavingAdjustment">
+                        <span class="spinner-border spinner-border-sm me-1" x-show="isSavingAdjustment"></span>
+                        Save Adjustment
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function payrollApp() {
+        return {
+            year: parseInt("{{ selected_year|default:0 }}", 10),
+            month: parseInt("{{ selected_month|default:0 }}", 10),
+            isGenerating: false,
+            isFinalizing: false,
+            isSavingAdjustment: false,
+            editItem: {
+                id: null,
+                name: '',
+                penalties: 0,
+                incentives: 0,
+                paymentStatus: 'DRAFT',
+                remarks: ''
+            },
+            modalInstance: null,
+            init() {
+                const el = document.getElementById('adjustmentModal');
+                if (el && window.bootstrap) {
+                    this.modalInstance = new bootstrap.Modal(el);
+                }
+            },
+            async generatePayroll() {
+                this.isGenerating = true;
+                try {
+                    const res = await fetch("{% url 'hotel_admin:api_generate_monthly_payroll' restaurant_slug=rslug %}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: JSON.stringify({
+                            year: this.year,
+                            month: this.month
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        alert(data.error || 'Failed to generate payroll.');
+                    }
+                } catch (e) {
+                    alert('Error running payroll calculation: ' + e.message);
+                } finally {
+                    this.isGenerating = false;
+                }
+            },
+            async finalizeAll() {
+                if (!confirm("Are you sure you want to finalize all payroll records for this month? Finalized slips can be distributed to staff.")) {
+                    return;
+                }
+                this.isFinalizing = true;
+                try {
+                    const res = await fetch("{% url 'hotel_admin:api_finalize_all_payroll' restaurant_slug=rslug %}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: JSON.stringify({
+                            year: this.year,
+                            month: this.month
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        alert(data.error || 'Failed to finalize.');
+                    }
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                } finally {
+                    this.isFinalizing = false;
+                }
+            },
+            openAdjustmentModal(id, name, pen, inc, status, mode, remarks) {
+                this.editItem.id = id;
+                this.editItem.name = name;
+                this.editItem.penalties = pen;
+                this.editItem.incentives = inc;
+                this.editItem.paymentStatus = status;
+                this.editItem.remarks = remarks || '';
+                if (this.modalInstance) {
+                    this.modalInstance.show();
+                } else {
+                    $('#adjustmentModal').modal('show');
+                }
+            },
+            async saveAdjustment() {
+                this.isSavingAdjustment = true;
+                try {
+                    const url = "{% url 'hotel_admin:api_update_payroll_adjustment' restaurant_slug=rslug pk=0 %}".replace('/0/', '/' + this.editItem.id + '/');
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: JSON.stringify({
+                            penalties: this.editItem.penalties,
+                            incentives: this.editItem.incentives,
+                            payment_status: this.editItem.paymentStatus,
+                            remarks: this.editItem.remarks
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        alert(data.error || 'Failed to update adjustment.');
+                    }
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                } finally {
+                    this.isSavingAdjustment = false;
+                }
+            }
+        };
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
+{% endblock %}

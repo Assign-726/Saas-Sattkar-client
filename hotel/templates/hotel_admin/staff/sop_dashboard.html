@@ -1,0 +1,586 @@
+{% extends 'hotel_admin/base_hotel.html' %}
+{% load static %}
+
+{% block title %}Daily Hotel SOP &amp; Operations Board | {{ current_restaurant.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .task-card {
+        border-radius: 12px;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        background: #ffffff;
+        border: 1.5px solid var(--pms-border, #e2e8f0);
+    }
+    .task-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.08);
+    }
+    .task-card.is-completed {
+        border-left: 5px solid #10b981 !important;
+        background: #fcfdfd;
+    }
+    .task-card.is-pending {
+        border-left: 5px solid #6366f1 !important;
+    }
+
+    .badge-critical {
+        background-color: #fee2e2;
+        color: #b91c1c;
+        border: 1px solid #fecaca;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+    }
+
+    .timing-badge {
+        font-size: 0.72rem;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 6px;
+        background-color: #f1f5f9;
+        color: #475569;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0" x-data="sopApp()">
+    {% csrf_token %}
+
+    <!-- Sub-Navigation Header -->
+    {% include 'hotel_admin/staff/includes/staff_nav.html' %}
+
+    <!-- Title and Date Navigation Bar -->
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-4">
+        <div>
+            <div class="d-flex align-items-center gap-2">
+                <h1 class="h3 fw-bold text-dark mb-0">Hotel Operations SOP Board</h1>
+                <span class="badge text-white rounded-pill px-3 py-1 font-mono" style="background: var(--brand, #6366f1); font-size: 0.78rem;">
+                    {{ total_tasks }} Daily Routines
+                </span>
+            </div>
+            <p class="text-muted small mb-0 mt-1">
+                Hotel operational routines for <strong>{{ current_branch.name|default:current_restaurant.name }}</strong>: room turnovers, linen par stock, boiler checks, keycard float &amp; night audit.
+            </p>
+        </div>
+
+        <!-- Date Controls & Quick Seed -->
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <div class="d-flex align-items-center gap-2 bg-white p-1.5 rounded-pill shadow-xs border">
+                <a href="?date={{ prev_date_str }}{% if selected_department != 'ALL' %}&department={{ selected_department }}{% endif %}{% if selected_shift != 'ALL' %}&shift={{ selected_shift }}{% endif %}" 
+                   class="btn btn-sm btn-light rounded-circle p-1.5" title="Previous Day">
+                    <i class="fa-solid fa-chevron-left"></i>
+                </a>
+
+                <div class="d-flex align-items-center gap-1.5 px-2">
+                    <i class="fa-regular fa-calendar-check text-primary"></i>
+                    <input type="date" 
+                           class="form-control form-control-sm border-0 fw-semibold bg-transparent p-0" 
+                           style="width: 130px; font-size: 0.85rem;" 
+                           value="{{ selected_date_str }}"
+                           @change="changeDate($event.target.value)">
+                </div>
+
+                <a href="?date={{ next_date_str }}{% if selected_department != 'ALL' %}&department={{ selected_department }}{% endif %}{% if selected_shift != 'ALL' %}&shift={{ selected_shift }}{% endif %}" 
+                   class="btn btn-sm btn-light rounded-circle p-1.5" title="Next Day">
+                    <i class="fa-solid fa-chevron-right"></i>
+                </a>
+
+                {% if not is_today %}
+                <a href="?date={% now 'Y-m-d' %}{% if selected_department != 'ALL' %}&department={{ selected_department }}{% endif %}" 
+                   class="btn btn-sm btn-outline-primary rounded-pill px-2.5 py-0.5" style="font-size: 0.76rem;">
+                    Today
+                </a>
+                {% endif %}
+            </div>
+
+            <!-- Add New Custom SOP Task Button -->
+            <button type="button" 
+                    class="btn btn-sm btn-primary rounded-pill px-3 py-1.5 d-inline-flex align-items-center gap-1.5 shadow-sm fw-semibold"
+                    style="background: var(--brand, #6366f1); border-color: var(--brand, #6366f1);"
+                    @click="openAddModal()">
+                <i class="fa-solid fa-plus"></i>
+                <span>Add SOP Task</span>
+            </button>
+
+            <button type="button" 
+                    class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1.5 d-inline-flex align-items-center gap-1.5 shadow-xs"
+                    @click="seedDefaults()"
+                    :disabled="isSeeding">
+                <i class="fa-solid fa-rotate-right" x-show="!isSeeding"></i>
+                <span class="spinner-border spinner-border-sm" x-show="isSeeding" style="width: 0.8rem; height: 0.8rem;"></span>
+                <span>Reset / Seed SOPs</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Overall Shift Progress Card -->
+    <div class="card border-0 shadow-sm p-3 mb-4 bg-white" style="border-radius: 14px; border: 1px solid var(--pms-border) !important;">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <div>
+                <span class="text-uppercase fw-bold text-muted small" style="font-size: 0.72rem; letter-spacing: 0.04em;">Hotel Operational Readiness</span>
+                <div class="h4 fw-bold text-dark mb-0 mt-0.5 font-mono">
+                    <span x-text="stats.completed">{{ completed_count }}</span> of <span>{{ total_tasks }}</span> Routines Verified
+                </div>
+            </div>
+            <div class="text-end">
+                <span class="badge fs-6 fw-bold px-3 py-1.5 rounded-pill font-mono" 
+                      style="background: rgba(16,185,129,0.12); color: #059669; border: 1px solid rgba(16,185,129,0.25);">
+                    <span x-text="completionPct">{{ completion_pct }}</span>% Completed
+                </span>
+            </div>
+        </div>
+        <div class="progress" style="height: 9px; border-radius: 6px; background-color: #f1f5f9;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                 role="progressbar" 
+                 :style="'width: ' + completionPct + '%; background-color: #10b981;'" 
+                 aria-valuenow="{{ completion_pct }}" 
+                 aria-valuemin="0" 
+                 aria-valuemax="100">
+            </div>
+        </div>
+        <div class="d-flex align-items-center justify-content-between mt-2 pt-2 border-top text-muted small" style="font-size: 0.78rem;">
+            <div>
+                <i class="fa-solid fa-triangle-exclamation text-danger me-1"></i>
+                <strong>{{ critical_pending_count }} Critical</strong> items pending verification
+            </div>
+            <div>
+                Date: <strong class="font-mono text-dark">{{ selected_date|date:"D, d M Y" }}</strong>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Pills Bar -->
+    <div class="card border-0 shadow-sm mb-4 bg-white" style="border-radius: 12px; border: 1px solid var(--pms-border) !important;">
+        <div class="card-body p-2 p-md-2.5">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <!-- Shift Filter -->
+                <div class="d-flex align-items-center gap-1 flex-wrap">
+                    <span class="text-muted small me-1 fw-semibold"><i class="fa-solid fa-clock me-1"></i>Shift:</span>
+                    <a href="?date={{ selected_date_str }}&shift=ALL{% if selected_department != 'ALL' %}&department={{ selected_department }}{% endif %}" 
+                       class="btn btn-sm {% if selected_shift == 'ALL' %}btn-dark text-white{% else %}btn-light text-dark{% endif %} rounded-pill px-3 py-1 fw-semibold" style="font-size: 0.78rem;">
+                        All Shifts
+                    </a>
+                    {% for s_val, s_lbl in shift_timings %}
+                    <a href="?date={{ selected_date_str }}&shift={{ s_val }}{% if selected_department != 'ALL' %}&department={{ selected_department }}{% endif %}" 
+                       class="btn btn-sm {% if selected_shift == s_val %}btn-dark text-white{% else %}btn-light text-dark{% endif %} rounded-pill px-3 py-1 fw-semibold" style="font-size: 0.78rem;">
+                        {{ s_lbl }}
+                    </a>
+                    {% endfor %}
+                </div>
+
+                <!-- Dept Filter -->
+                <div class="d-flex align-items-center gap-1 flex-wrap">
+                    <span class="text-muted small me-1 fw-semibold"><i class="fa-solid fa-building me-1"></i>Dept:</span>
+                    <a href="?date={{ selected_date_str }}&department=ALL{% if selected_shift != 'ALL' %}&shift={{ selected_shift }}{% endif %}" 
+                       class="btn btn-sm {% if selected_department == 'ALL' %}btn-primary text-white{% else %}btn-light text-dark{% endif %} rounded-pill px-3 py-1 fw-semibold" style="font-size: 0.78rem;">
+                        All
+                    </a>
+                    {% for d_val, d_lbl in departments %}
+                    <a href="?date={{ selected_date_str }}&department={{ d_val }}{% if selected_shift != 'ALL' %}&shift={{ selected_shift }}{% endif %}" 
+                       class="btn btn-sm {% if selected_department == d_val %}btn-primary text-white{% else %}btn-light text-dark{% endif %} rounded-pill px-3 py-1 fw-semibold" style="font-size: 0.78rem;">
+                        {{ d_lbl }}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Cards Grid -->
+    <div class="row g-3">
+        {% for item in sop_items %}
+        <div class="col-12 col-md-6 col-xl-4" 
+             x-data="sopItem({
+                taskId: {{ item.task.id }},
+                date: '{{ selected_date_str }}',
+                isCompleted: {% if item.is_completed %}true{% else %}false{% endif %},
+                numericReading: '{{ item.numeric_reading|default:'' }}',
+                notes: '{{ item.notes|default:''|escapejs }}',
+                completedAt: '{{ item.completed_at_time|default:'' }}',
+                completedBy: '{{ item.completed_by_name|default:''|escapejs }}',
+                requiresReading: {% if item.task.requires_numeric_reading %}true{% else %}false{% endif %},
+                unit: '{{ item.task.unit|default:''|escapejs }}'
+             })">
+            
+            <div class="card task-card p-3 h-100 shadow-sm" :class="isCompleted ? 'is-completed' : 'is-pending'">
+                <!-- Top Row: Badges & Actions -->
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div class="d-flex align-items-center gap-1.5 flex-wrap">
+                        <span class="timing-badge font-mono">{{ item.task.get_shift_timing_display }}</span>
+                        {% if item.task.is_critical %}
+                        <span class="badge badge-critical rounded-pill px-2 py-0.5">Critical</span>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-link text-muted p-0" title="Delete SOP Routine" 
+                                @click="deleteTask({{ item.task.id }}, '{{ item.task.title|escapejs }}')">
+                            <i class="fa-solid fa-trash-can" style="font-size: 0.78rem;"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Task Title & Description -->
+                <h6 class="fw-bold text-dark mb-1 d-flex align-items-start gap-2">
+                    <input type="checkbox" class="form-check-input mt-1 cursor-pointer flex-shrink-0" 
+                           style="width: 1.15rem; height: 1.15rem;" 
+                           x-model="isCompleted" 
+                           @change="toggleCheck()">
+                    <span :class="isCompleted ? 'text-decoration-line-through text-muted' : 'text-dark'">
+                        {{ item.task.title }}
+                    </span>
+                </h6>
+                <p class="text-muted small mb-2" style="font-size: 0.78rem; line-height: 1.4;">
+                    {{ item.task.description|default:item.task.expected_standard }}
+                </p>
+
+                <!-- Standard Benchmark -->
+                {% if item.task.expected_standard %}
+                <div class="mb-2 p-1.5 rounded bg-light border text-secondary" style="font-size: 0.74rem;">
+                    <i class="fa-solid fa-bullseye text-primary me-1"></i>
+                    <strong>Target:</strong> {{ item.task.expected_standard }}
+                </div>
+                {% endif %}
+
+                <!-- Numeric Log Reading Input (if required) -->
+                {% if item.task.requires_numeric_reading %}
+                <div class="input-group input-group-sm mb-2">
+                    <span class="input-group-text bg-light border text-muted" style="font-size: 0.74rem;">Actual Log</span>
+                    <input type="number" step="0.1" class="form-control font-mono" placeholder="Reading..." 
+                           x-model="numericReading" 
+                           @blur="saveReading()">
+                    <span class="input-group-text bg-light border font-mono" style="font-size: 0.74rem;">{{ item.task.unit }}</span>
+                </div>
+                {% endif %}
+
+                <!-- Footer Status & Attendant Timestamp -->
+                <div class="mt-auto pt-2 border-top d-flex align-items-center justify-content-between text-muted" style="font-size: 0.72rem;">
+                    <div>
+                        <template x-if="isCompleted">
+                            <span class="text-success fw-semibold">
+                                <i class="fa-solid fa-check-circle me-1"></i>
+                                Verified <span x-text="completedAt ? '@ ' + completedAt : ''"></span>
+                            </span>
+                        </template>
+                        <template x-if="!isCompleted">
+                            <span class="text-muted">
+                                <i class="fa-regular fa-clock me-1"></i>Pending Verification
+                            </span>
+                        </template>
+                    </div>
+                    <div class="text-truncate" style="max-width: 140px;">
+                        <span x-text="completedBy ? 'by ' + completedBy : ''"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12 text-center py-5">
+            <div class="text-muted">
+                <i class="fa-solid fa-clipboard-check mb-2" style="font-size: 2.5rem; color: #cbd5e1;"></i>
+                <h6 class="fw-bold text-dark mt-2">No SOP tasks assigned for this shift</h6>
+                <p class="small text-muted mb-3">Click 'Reset / Seed SOPs' to load standard hotel operational checklists.</p>
+                <button type="button" class="btn btn-primary rounded-pill px-4 shadow-sm" @click="seedDefaults()">
+                    <i class="fa-solid fa-rotate-right me-1"></i> Seed Hotel Standard SOPs
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Add Custom SOP Modal -->
+    <div class="modal fade" id="addSopModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow" style="border-radius: 14px;">
+                <div class="modal-header border-bottom py-3">
+                    <h5 class="modal-title fw-bold text-dark fs-6">
+                        <i class="fa-solid fa-plus text-primary me-2"></i>Create Custom Hotel SOP Routine
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Task Routine Title <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" placeholder="e.g. Linen Closet Par Count" x-model="newTask.title">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold small">Shift Timing</label>
+                            <select class="form-select" x-model="newTask.shift_timing">
+                                {% for s_val, s_lbl in shift_timings %}
+                                <option value="{{ s_val }}">{{ s_lbl }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold small">Department</label>
+                            <select class="form-select" x-model="newTask.department">
+                                {% for d_val, d_lbl in departments %}
+                                <option value="{{ d_val }}">{{ d_lbl }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Instructions / Description</label>
+                        <textarea class="form-control" rows="2" placeholder="Step-by-step instructions for hotel attendants..." x-model="newTask.description"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small">Expected Standard / Benchmark</label>
+                        <input type="text" class="form-control" placeholder="e.g. Min 50 towels per floor pantry" x-model="newTask.expected_standard">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-8">
+                            <div class="form-check form-switch mt-2">
+                                <input class="form-check-input" type="checkbox" id="reqNumericSwitch" x-model="newTask.requires_numeric_reading">
+                                <label class="form-check-label small fw-semibold" for="reqNumericSwitch">Requires Numeric Log (Reading)</label>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <input type="text" class="form-control form-control-sm" placeholder="Unit (e.g. °C, Rooms)" x-model="newTask.unit" :disabled="!newTask.requires_numeric_reading">
+                        </div>
+                    </div>
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" id="isCritSwitch" x-model="newTask.is_critical">
+                        <label class="form-check-label small fw-semibold text-danger" for="isCritSwitch">High Priority / Critical SOP</label>
+                    </div>
+                </div>
+                <div class="modal-footer border-top py-2.5">
+                    <button type="button" class="btn btn-light rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary rounded-pill px-4 fw-semibold" 
+                            @click="submitNewTask()" 
+                            :disabled="isSubmittingTask">
+                        <span class="spinner-border spinner-border-sm me-1" x-show="isSubmittingTask"></span>
+                        Save Routine
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function sopApp() {
+        return {
+            selectedDate: '{{ selected_date_str }}',
+            selectedDept: '{{ selected_department }}',
+            selectedTiming: '{{ selected_shift }}',
+            totalScoped: parseInt("{{ total_tasks|default:0 }}", 10),
+            completionPct: parseInt("{{ completion_pct|default:0 }}", 10),
+            stats: {
+                completed: parseInt("{{ completed_count|default:0 }}", 10),
+            },
+            isSeeding: false,
+            isSubmittingTask: false,
+            modalInstance: null,
+            newTask: {
+                title: '',
+                shift_timing: 'MORNING_PREP',
+                department: 'HOUSEKEEPING',
+                description: '',
+                expected_standard: '',
+                requires_numeric_reading: false,
+                unit: '',
+                is_critical: false
+            },
+            init() {
+                const el = document.getElementById('addSopModal');
+                if (el && window.bootstrap) {
+                    this.modalInstance = new bootstrap.Modal(el);
+                }
+            },
+            openAddModal() {
+                this.newTask = {
+                    title: '',
+                    shift_timing: 'MORNING_PREP',
+                    department: 'HOUSEKEEPING',
+                    description: '',
+                    expected_standard: '',
+                    requires_numeric_reading: false,
+                    unit: '',
+                    is_critical: false
+                };
+                if (this.modalInstance) {
+                    this.modalInstance.show();
+                } else if (window.$) {
+                    $('#addSopModal').modal('show');
+                }
+            },
+            async submitNewTask() {
+                if (!this.newTask.title.trim()) {
+                    alert('Please enter a task title.');
+                    return;
+                }
+                this.isSubmittingTask = true;
+                try {
+                    const res = await fetch("{% url 'hotel_admin:api_create_sop_task' restaurant_slug=rslug %}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: JSON.stringify(this.newTask)
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        alert(data.error || 'Failed to create SOP task.');
+                    }
+                } catch (e) {
+                    alert('Error creating task: ' + e.message);
+                } finally {
+                    this.isSubmittingTask = false;
+                }
+            },
+            async deleteTask(taskId, title) {
+                if (!confirm(`Are you sure you want to permanently delete SOP routine "${title}"?`)) {
+                    return;
+                }
+                try {
+                    const url = "{% url 'hotel_admin:api_delete_sop_task' restaurant_slug=rslug pk=0 %}".replace('/0/', '/' + taskId + '/');
+                    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        }
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        alert(data.error || 'Failed to delete task.');
+                    }
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                }
+            },
+            changeDate(newDate) {
+                if (newDate) {
+                    let deptParam = this.selectedDept && this.selectedDept !== 'ALL' ? '&department=' + this.selectedDept : '';
+                    let timeParam = this.selectedTiming && this.selectedTiming !== 'ALL' ? '&shift=' + this.selectedTiming : '';
+                    window.location.href = '?date=' + newDate + deptParam + timeParam;
+                }
+            },
+            async seedDefaults() {
+                if (!confirm("Pre-seed standard hotel SOP templates (Checkout Room Turnover, Linen par stock, Public Area Vacuum, Night Audit)?")) {
+                    return;
+                }
+                this.isSeeding = true;
+                try {
+                    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
+                    const res = await fetch("{% url 'hotel_admin:api_seed_default_sops' restaurant_slug=rslug %}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        }
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        alert(data.error || 'Failed to seed SOPs.');
+                    }
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                } finally {
+                    this.isSeeding = false;
+                }
+            }
+        };
+    }
+
+    function sopItem(initial) {
+        return {
+            taskId: initial.taskId,
+            date: initial.date,
+            isCompleted: initial.isCompleted,
+            numericReading: initial.numericReading,
+            notes: initial.notes,
+            completedAt: initial.completedAt,
+            completedBy: initial.completedBy,
+            requiresReading: initial.requiresReading,
+            unit: initial.unit,
+            async deleteTask(taskId, title) {
+                const id = taskId || this.taskId;
+                const name = title || 'this task';
+                if (!confirm(`Are you sure you want to permanently delete SOP routine "${name}"?`)) {
+                    return;
+                }
+                try {
+                    const url = "{% url 'hotel_admin:api_delete_sop_task' restaurant_slug=rslug pk=0 %}".replace('/0/', '/' + id + '/');
+                    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        }
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        alert(data.error || 'Failed to delete task.');
+                    }
+                } catch (e) {
+                    alert('Error deleting task: ' + e.message);
+                }
+            },
+            async toggleCheck() {
+                await this.syncLog();
+            },
+            async saveReading() {
+                await this.syncLog();
+            },
+            async syncLog() {
+                try {
+                    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
+                    const res = await fetch("{% url 'hotel_admin:api_toggle_sop_task_status' restaurant_slug=rslug %}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify({
+                            task_id: this.taskId,
+                            date: this.date,
+                            is_completed: this.isCompleted,
+                            numeric_reading: this.numericReading,
+                            notes: this.notes
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        this.completedAt = data.completed_at;
+                        this.completedBy = data.completed_by;
+                    }
+                } catch (e) {
+                    console.error('Error syncing SOP log:', e);
+                }
+            }
+        };
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
+{% endblock %}

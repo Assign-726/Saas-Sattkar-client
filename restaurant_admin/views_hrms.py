@@ -119,14 +119,6 @@ def muster_roll_view(request, restaurant_slug=None):
 
     total_active_staff = staff_qs.count()
 
-    # Pre-seed sample staff if brand new property with no staff
-    if total_active_staff == 0:
-        seed_sample_hospitality_staff(restaurant, active_branch)
-        staff_qs = StaffMember.objects.filter(restaurant=restaurant, is_active=True)
-        if active_branch:
-            staff_qs = staff_qs.filter(models.Q(branch=active_branch) | models.Q(branch__isnull=True))
-        total_active_staff = staff_qs.count()
-
     if dept_filter and dept_filter != 'ALL':
         staff_qs = staff_qs.filter(department=dept_filter)
 
@@ -998,13 +990,6 @@ def sop_dashboard_view(request, restaurant_slug=None):
     if active_branch:
         task_qs = task_qs.filter(models.Q(branch=active_branch) | models.Q(branch__isnull=True))
 
-    # Pre-seed hospitality SOP templates if none exist for this branch/venue
-    if task_qs.count() == 0:
-        seed_standard_hospitality_sops(restaurant, active_branch)
-        task_qs = DailySOPTask.objects.filter(restaurant=restaurant, is_active=True)
-        if active_branch:
-            task_qs = task_qs.filter(models.Q(branch=active_branch) | models.Q(branch__isnull=True))
-
     total_tasks_count = task_qs.count()
 
     if dept_filter and dept_filter != 'ALL':
@@ -1247,9 +1232,13 @@ def api_delete_sop_task(request, restaurant_slug=None, pk=None):
         return JsonResponse({'success': False, 'error': 'Forbidden'}, status=403)
 
     restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return JsonResponse({'success': False, 'error': 'Invalid venue'}, status=400)
+
     task = get_object_or_404(DailySOPTask, id=pk, restaurant=restaurant)
+    task_title = task.title
     task.delete()
-    return JsonResponse({'success': True, 'message': 'SOP Task deleted successfully.'})
+    return JsonResponse({'success': True, 'message': f"SOP Task '{task_title}' deleted successfully."})
 
 
 
@@ -1258,100 +1247,20 @@ def api_delete_sop_task(request, restaurant_slug=None, pk=None):
 # ==============================================================================
 
 def seed_sample_hospitality_staff(restaurant, branch=None):
-    """Creates realistic ground staff members across Kitchen, Bar, Floor, Housekeeping."""
-    samples = [
-        {
-            'employee_id': 'EMP-101',
-            'name': 'Chef Rajesh Kumar',
-            'department': Department.KITCHEN,
-            'designation': 'Executive Head Chef',
-            'phone': '+91 98201 11223',
-            'default_shift': ShiftType.SPLIT,
-            'monthly_base_salary': Decimal('35000.00'),
-            'standard_shift_hours': Decimal('9.0'),
-        },
-        {
-            'employee_id': 'EMP-102',
-            'name': 'Sunil Verma',
-            'department': Department.KITCHEN,
-            'designation': 'Senior Line Cook (Tandoor)',
-            'phone': '+91 98201 22334',
-            'default_shift': ShiftType.EVENING,
-            'monthly_base_salary': Decimal('22000.00'),
-            'standard_shift_hours': Decimal('9.0'),
-        },
-        {
-            'employee_id': 'EMP-103',
-            'name': 'Vikram Rathore',
-            'department': Department.BAR,
-            'designation': 'Head Mixologist & Bartender',
-            'phone': '+91 98201 33445',
-            'default_shift': ShiftType.EVENING,
-            'monthly_base_salary': Decimal('26000.00'),
-            'standard_shift_hours': Decimal('9.0'),
-        },
-        {
-            'employee_id': 'EMP-104',
-            'name': 'Amit Rawat',
-            'department': Department.FLOOR,
-            'designation': 'Senior Floor Captain',
-            'phone': '+91 98201 44556',
-            'default_shift': ShiftType.SPLIT,
-            'monthly_base_salary': Decimal('20000.00'),
-            'standard_shift_hours': Decimal('9.0'),
-        },
-        {
-            'employee_id': 'EMP-105',
-            'name': 'Deepak Sharma',
-            'department': Department.FLOOR,
-            'designation': 'Dining Room Steward',
-            'phone': '+91 98201 55667',
-            'default_shift': ShiftType.MORNING,
-            'monthly_base_salary': Decimal('16000.00'),
-            'standard_shift_hours': Decimal('9.0'),
-        },
-        {
-            'employee_id': 'EMP-106',
-            'name': 'Manju Devi',
-            'department': Department.HOUSEKEEPING,
-            'designation': 'Head Housekeeper',
-            'phone': '+91 98201 66778',
-            'default_shift': ShiftType.MORNING,
-            'monthly_base_salary': Decimal('18000.00'),
-            'standard_shift_hours': Decimal('8.0'),
-        },
-        {
-            'employee_id': 'EMP-107',
-            'name': 'Ramesh Yadav',
-            'department': Department.HOUSEKEEPING,
-            'designation': 'Room Attendant & Laundry',
-            'phone': '+91 98201 77889',
-            'default_shift': ShiftType.GENERAL,
-            'monthly_base_salary': Decimal('15000.00'),
-            'standard_shift_hours': Decimal('8.0'),
-        },
-    ]
-
-    created_count = 0
-    for s in samples:
-        if not StaffMember.objects.filter(restaurant=restaurant, employee_id=s['employee_id']).exists():
-            StaffMember.objects.create(
-                restaurant=restaurant,
-                branch=branch,
-                is_active=True,
-                joining_date=date.today() - timedelta(days=180),
-                **s
-            )
-            created_count += 1
-    return created_count
+    """
+    Automatic staff seeding disabled as per requirements.
+    Staff members are registered manually by managers.
+    """
+    return 0
 
 
 def seed_standard_hospitality_sops(restaurant, branch=None):
     """
-    Pre-seeds standard hospitality SOPs (Kitchen Morning Prep, Bar Handover, Night Closing checks).
+    Pre-seeds exactly 2 standard hospitality SOPs for the first time
+    (1 Kitchen walk-in temperature check + 1 Dining floor opening inspection).
     """
     templates = [
-        # --- KITCHEN SOPs ---
+        # --- KITCHEN SAMPLE SOP ---
         {
             'department': Department.KITCHEN,
             'shift_timing': SOPShiftTiming.MORNING_PREP,
@@ -1363,72 +1272,7 @@ def seed_standard_hospitality_sops(restaurant, branch=None):
             'is_critical': True,
             'sort_order': 10,
         },
-        {
-            'department': Department.KITCHEN,
-            'shift_timing': SOPShiftTiming.MORNING_PREP,
-            'title': 'Prep Station Sanitization & Cutting Board Check',
-            'description': 'Sanitize stainless steel prep tables with chlorine solution (100ppm). Color-coded boards sterilized.',
-            'expected_standard': 'Red (Raw Meat), Green (Veg), Yellow (Poultry)',
-            'requires_numeric_reading': False,
-            'is_critical': True,
-            'sort_order': 20,
-        },
-        {
-            'department': Department.KITCHEN,
-            'shift_timing': SOPShiftTiming.MORNING_PREP,
-            'title': 'Gas Line & Exhaust Hood Fire Safety Check',
-            'description': 'Verify commercial exhaust hood suction, gas line pressure gauges, and emergency shut-off valves unobstructed.',
-            'expected_standard': 'Main line pressure steady, hood suction clear',
-            'requires_numeric_reading': False,
-            'is_critical': True,
-            'sort_order': 30,
-        },
-        {
-            'department': Department.KITCHEN,
-            'shift_timing': SOPShiftTiming.NIGHT_CLOSING,
-            'title': 'Fryer Oil Filtration & Hot Line Burner Shutdown',
-            'description': 'Filter commercial deep fryer oil, scrub fry vats, turn off all gas burner pilots and hot wells.',
-            'expected_standard': 'All gas valves isolated, fry vats covered',
-            'requires_numeric_reading': False,
-            'is_critical': True,
-            'sort_order': 40,
-        },
-
-        # --- BAR SOPs ---
-        {
-            'department': Department.BAR,
-            'shift_timing': SOPShiftTiming.EVENING_HANDOVER,
-            'title': 'Speed Rail & Premium Spirit Bottle Count',
-            'description': 'Tally open liquor bottle levels and physical bottle counts before evening handover to night bartender.',
-            'expected_standard': 'Match POS inventory consumption vs pour spouts',
-            'requires_numeric_reading': True,
-            'unit': 'Bottles',
-            'is_critical': False,
-            'sort_order': 50,
-        },
-        {
-            'department': Department.BAR,
-            'shift_timing': SOPShiftTiming.MORNING_PREP,
-            'title': 'Draft Beer Line Pressure & Keg Glycol Chiller Audit',
-            'description': 'Inspect CO2/Nitrogen regulator pressure (12-14 PSI) and beer glycol bath temperature (28°F - 32°F).',
-            'expected_standard': '12 - 14 PSI steady, no foaming',
-            'requires_numeric_reading': True,
-            'unit': 'PSI',
-            'is_critical': False,
-            'sort_order': 60,
-        },
-        {
-            'department': Department.BAR,
-            'shift_timing': SOPShiftTiming.NIGHT_CLOSING,
-            'title': 'Bar Glasswasher Sanitization & Fruit Discard',
-            'description': 'Empty glasswasher filter screen, run chemical cycle, discard fresh fruit garnishes, lock liquor speed rail.',
-            'expected_standard': 'Liquor cage locked, speed rails capped',
-            'requires_numeric_reading': False,
-            'is_critical': True,
-            'sort_order': 70,
-        },
-
-        # --- FLOOR / FOH SOPs ---
+        # --- FLOOR / FOH SAMPLE SOP ---
         {
             'department': Department.FLOOR,
             'shift_timing': SOPShiftTiming.MORNING_PREP,
@@ -1437,61 +1281,7 @@ def seed_standard_hospitality_sops(restaurant, branch=None):
             'expected_standard': 'Zero water spots on glassware, tables wobble-free',
             'requires_numeric_reading': False,
             'is_critical': False,
-            'sort_order': 80,
-        },
-        {
-            'department': Department.FLOOR,
-            'shift_timing': SOPShiftTiming.AFTERNOON_SERVICE,
-            'title': 'Guest Restroom Hygiene & Replenishment Audit',
-            'description': 'Inspect male/female restrooms: hand wash dispensers full, paper towels stocked, floor dry and scented.',
-            'expected_standard': 'Checked every 60 minutes during service',
-            'requires_numeric_reading': False,
-            'is_critical': True,
-            'sort_order': 90,
-        },
-        {
-            'department': Department.FLOOR,
-            'shift_timing': SOPShiftTiming.NIGHT_CLOSING,
-            'title': 'POS Terminal Settlement & Cash Drawer Float Audit',
-            'description': 'Batch out all credit card machines, cross-check thermal register roll, lock night cash drop in safe.',
-            'expected_standard': 'Zero discrepancy against day POS summary',
-            'requires_numeric_reading': True,
-            'unit': '₹ Total',
-            'is_critical': True,
-            'sort_order': 100,
-        },
-
-        # --- HOUSEKEEPING / HOTEL SOPs ---
-        {
-            'department': Department.HOUSEKEEPING,
-            'shift_timing': SOPShiftTiming.MORNING_PREP,
-            'title': 'Morning Checkout Room Turnover Priority List',
-            'description': 'Receive checkout list from front desk, assign priority dirty rooms to attendants for 2:00 PM check-in.',
-            'expected_standard': 'Target: Clean & inspected before 13:30',
-            'requires_numeric_reading': True,
-            'unit': 'Rooms',
-            'is_critical': True,
-            'sort_order': 110,
-        },
-        {
-            'department': Department.HOUSEKEEPING,
-            'shift_timing': SOPShiftTiming.AFTERNOON_SERVICE,
-            'title': 'Fresh Linen & Guest Amenity Par Stock Audit',
-            'description': 'Verify clean bedsheets, duvet covers, bath towels, and luxury shampoo kits in floor pantry closets.',
-            'expected_standard': 'Par level 3.0 maintained per floor',
-            'requires_numeric_reading': False,
-            'is_critical': False,
-            'sort_order': 120,
-        },
-        {
-            'department': Department.HOUSEKEEPING,
-            'shift_timing': SOPShiftTiming.NIGHT_CLOSING,
-            'title': 'Public Area Deep Vacuum & Corridor Sanitation Check',
-            'description': 'Vacuum lobby rugs, buff marble tiles, wipe down elevator buttons, and lock linen chutes.',
-            'expected_standard': 'All public zones clean and odor-free',
-            'requires_numeric_reading': False,
-            'is_critical': False,
-            'sort_order': 130,
+            'sort_order': 20,
         },
     ]
 

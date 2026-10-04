@@ -234,6 +234,11 @@ class FleetVehicleSerializer(serializers.ModelSerializer):
     branch_name = serializers.ReadOnlyField(source='branch.name')
     vehicle_category_display = serializers.ReadOnlyField(source='get_vehicle_category_display')
     status_display = serializers.ReadOnlyField(source='get_status_display')
+    languages_list = serializers.ReadOnlyField()
+    badges_list = serializers.ReadOnlyField()
+    features_text = serializers.ReadOnlyField()
+    amenities_text = serializers.ReadOnlyField()
+    gallery_images_text = serializers.ReadOnlyField()
 
     class Meta:
         model = FleetVehicle
@@ -242,10 +247,41 @@ class FleetVehicleSerializer(serializers.ModelSerializer):
             'branch',
             'branch_name',
             'vehicle_number',
+            'vehicle_model',
             'vehicle_category',
             'vehicle_category_display',
+            'tag',
+            'description',
+            'cover_image',
+            'gallery_images',
+            'gallery_images_text',
+            'passengers',
+            'luggage',
+            'fuel_type',
+            'transmission',
+            'features',
+            'features_text',
+            'amenities',
+            'amenities_text',
+            'price_per_km',
+            'base_price_airport',
+            'hourly_rate',
+            'full_day_rate',
+            'rating',
+            'reviews_count',
             'driver_name',
+            'driver_title',
             'driver_phone',
+            'driver_photo',
+            'driver_rating',
+            'driver_experience_years',
+            'trips_completed',
+            'driver_bio',
+            'driver_languages',
+            'languages_list',
+            'driver_badges',
+            'badges_list',
+            'driver_availability',
             'is_vendor_vehicle',
             'status',
             'status_display',
@@ -259,13 +295,15 @@ class FleetVehicleSerializer(serializers.ModelSerializer):
 class CabBookingSerializer(serializers.ModelSerializer):
     branch_name = serializers.ReadOnlyField(source='branch.name')
     room_booking_code = serializers.ReadOnlyField(source='room_booking.booking_id')
-    guest_name = serializers.ReadOnlyField(source='room_booking.guest_name')
-    guest_phone = serializers.ReadOnlyField(source='room_booking.guest_phone')
-    guest_email = serializers.ReadOnlyField(source='room_booking.guest_email')
+    guest_name = serializers.SerializerMethodField()
+    guest_phone = serializers.SerializerMethodField()
+    guest_email = serializers.SerializerMethodField()
     room_number = serializers.ReadOnlyField(source='room_booking.room.room_number')
     package_title = serializers.ReadOnlyField(source='package.title')
     package_service_type = serializers.ReadOnlyField(source='package.service_type')
     package_vehicle_category = serializers.ReadOnlyField(source='package.get_vehicle_category_display')
+    trip_type_display = serializers.ReadOnlyField(source='get_trip_type_display')
+    source_display = serializers.ReadOnlyField(source='get_source_display')
     payment_status_display = serializers.ReadOnlyField(source='get_payment_status_display')
     trip_status_display = serializers.ReadOnlyField(source='get_trip_status_display')
     assigned_vehicle_details = serializers.SerializerMethodField()
@@ -283,6 +321,16 @@ class CabBookingSerializer(serializers.ModelSerializer):
             'guest_phone',
             'guest_email',
             'room_number',
+            'trip_type',
+            'trip_type_display',
+            'selected_cab_name',
+            'preferred_chauffeur',
+            'passengers',
+            'luggage',
+            'duration_hours',
+            'special_requests',
+            'source',
+            'source_display',
             'package',
             'package_title',
             'package_service_type',
@@ -307,6 +355,15 @@ class CabBookingSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'booking_id', 'branch', 'created_at', 'updated_at']
 
+    def get_guest_name(self, obj):
+        return obj.display_guest_name
+
+    def get_guest_phone(self, obj):
+        return obj.display_guest_phone
+
+    def get_guest_email(self, obj):
+        return obj.display_guest_email
+
     def get_assigned_vehicle_details(self, obj):
         if not obj.assigned_vehicle:
             return None
@@ -314,10 +371,14 @@ class CabBookingSerializer(serializers.ModelSerializer):
         return {
             'id': v.id,
             'vehicle_number': v.vehicle_number,
+            'vehicle_model': v.vehicle_model,
             'vehicle_category': v.vehicle_category,
             'vehicle_category_display': v.get_vehicle_category_display(),
             'driver_name': v.driver_name,
             'driver_phone': v.driver_phone,
+            'driver_photo': v.driver_photo,
+            'driver_rating': str(v.driver_rating),
+            'driver_experience_years': v.driver_experience_years,
             'is_vendor_vehicle': v.is_vendor_vehicle,
             'status': v.status,
             'status_display': v.get_status_display(),

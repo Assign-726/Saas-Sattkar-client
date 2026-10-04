@@ -1659,3 +1659,250 @@ class PublicHotelCancelUnpaidView(APIView):
             "booking_id": room_booking.booking_id,
             "booking_status": room_booking.booking_status
         })
+
+
+class PublicCabBookingCreateView(APIView):
+    """
+    POST /api/cabs/bookings/ or /api/public/hotel/cabs/book/
+    Allows public guests to book a luxury cab, airport transfer, hourly rental, or outstation ride
+    directly from the frontend cab service UI.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        data = request.data
+        customer_name = (data.get('customer_name') or '').strip()
+        phone = (data.get('phone') or '').strip()
+        email = (data.get('email') or '').strip()
+        pickup_loc = (data.get('pickup_location') or '').strip()
+        drop_loc = (data.get('drop_location') or '').strip()
+        pickup_date = data.get('pickup_date') or ''
+        pickup_time = data.get('pickup_time') or '10:00'
+        cab_name = data.get('cab_name') or 'VIP Luxury Cab'
+        cab_category_raw = data.get('cab_category') or ''
+        raw_trip_type = (data.get('trip_type') or 'airport').lower()
+        passengers = data.get('passengers') or 1
+        luggage = data.get('luggage') or 1
+        duration_hours = data.get('duration_hours')
+        flight_number = (data.get('flight_number') or '').strip()
+        chauffeur_name = (data.get('chauffeur_name') or '').strip()
+        special_requests = (data.get('special_requests') or '').strip()
+
+        if not customer_name:
+            return Response({"error": "Passenger name is required."}, status=400)
+        if not phone:
+            return Response({"error": "Contact phone number is required."}, status=400)
+        if not pickup_loc:
+            return Response({"error": "Pickup location is required."}, status=400)
+
+        # 1. Resolve Branch
+        branch = None
+        branch_id = data.get('branch_id')
+        branch_slug = data.get('branch_slug')
+        restaurant_slug = data.get('restaurant_slug')
+
+        if branch_id:
+            branch = RestaurantBranch.objects.filter(id=branch_id).first()
+        elif branch_slug:
+            branch = RestaurantBranch.objects.filter(slug=branch_slug).first()
+        elif restaurant_slug:
+            branch = RestaurantBranch.objects.filter(
+                restaurant__slug=restaurant_slug,
+                has_hotel_module=True
+            ).first() or RestaurantBranch.objects.filter(restaurant__slug=restaurant_slug).first()
+
+        if not branch:
+            branch = RestaurantBranch.objects.filter(has_hotel_module=True).first()
+
+        if not branch:
+            branch = RestaurantBranch.objects.first()
+
+        if not branch:
+            return Response({"error": "No hotel branch available for cab booking."}, status=400)
+
+        # 2. Parse pickup datetime
+        try:
+            p_dt = datetime.datetime.strptime(f"{pickup_date} {pickup_time}", "%Y-%m-%d %H:%M")
+            if timezone.is_naive(p_dt):
+                p_dt = timezone.make_aware(p_dt)
+        except Exception:
+            try:
+                p_dt = datetime.datetime.fromisoformat(pickup_date)
+                if timezone.is_naive(p_dt):
+                    p_dt = timezone.make_aware(p_dt)
+            except Exception:
+                p_dt = timezone.now() + datetime.timedelta(hours=2)
+
+        # 3. Map trip type
+        trip_type_map = {
+            'airport': CabServicePackage.ServiceType.AIRPORT_TRANSFER,
+            'city': CabServicePackage.ServiceType.POINT_TO_POINT,
+            'hourly': CabServicePackage.ServiceType.HOURLY_RENTAL,
+            'outstation': CabServicePackage.ServiceType.OUTSTATION,
+        }
+        service_type = trip_type_map.get(raw_trip_type, CabServicePackage.ServiceType.AIRPORT_TRANSFER)
+
+        # 4. Resolve Fleet vehicle or driver assignment
+        assigned_vehicle = None
+        if chauffeur_name and chauffeur_name.lower() not in ['auto', 'auto-assign best', 'nearest available']:
+            first_name = chauffeur_name.split()[0]
+            assigned_vehicle = FleetVehicle.objects.filter(
+                branch=branch,
+                driver_name__icontains=first_name,
+                status=FleetVehicle.VehicleStatus.AVAILABLE
+            ).first()
+
+        if not assigned_vehicle:
+            # Check if any matching vehicle category is available for auto assignment
+            cat_code = CabServicePackage.VehicleCategory.SEDAN
+            upper_cat = cab_category_raw.upper()
+            if 'SUV' in upper_cat:
+                cat_code = CabServicePackage.VehicleCategory.SUV
+            elif 'MPV' in upper_cat or 'ROYAL' in upper_cat:
+                cat_code = CabServicePackage.VehicleCategory.ROYAL_MPV
+            elif 'ELECTRIC' in upper_cat or 'EV' in upper_cat:
+                cat_code = CabServicePackage.VehicleCategory.ELECTRIC
+            elif 'LIMOUSINE' in upper_cat:
+                cat_code = CabServicePackage.VehicleCategory.LIMOUSINE
+
+            assigned_vehicle = FleetVehicle.objects.filter(
+                branch=branch,
+                vehicle_category=cat_code,
+                status=FleetVehicle.VehicleStatus.AVAILABLE
+            ).first()
+
+        trip_status = CabBooking.TripStatus.DRIVER_ASSIGNED if assigned_vehicle else CabBooking.TripStatus.SCHEDULED
+        if assigned_vehicle:
+            assigned_vehicle.status = FleetVehicle.VehicleStatus.ON_TRIP
+            assigned_vehicle.save(update_fields=['status', 'updated_at'])
+
+        # 5. Financials
+        try:
+            total_amt = Decimal(str(data.get('total_estimated_amount') or 0))
+        except Exception:
+            total_amt = Decimal('0.00')
+
+        if total_amt <= 0:
+            total_amt = Decimal('1500.00')
+
+        tax_amt = round(total_amt * Decimal('0.05'), 2)
+        base_amt = total_amt - tax_amt
+
+        # 6. Create booking
+        if not drop_loc and raw_trip_type == 'hourly':
+            drop_loc = 'Flexible City Hourly Destination'
+        elif not drop_loc:
+            drop_loc = 'Resort Main Entrance & Reception'
+
+        booking = CabBooking.objects.create(
+            branch=branch,
+            room_booking=None,
+            guest_name=customer_name,
+            guest_phone=phone,
+            guest_email=email,
+            trip_type=service_type,
+            selected_cab_name=cab_name,
+            preferred_chauffeur=chauffeur_name or '',
+            passengers=int(passengers or 1),
+            luggage=int(luggage or 1),
+            duration_hours=int(duration_hours or 0) if duration_hours else None,
+            special_requests=special_requests,
+            source=CabBooking.BookingSource.FRONTEND_DIRECT,
+            pickup_datetime=p_dt,
+            pickup_location=pickup_loc,
+            drop_location=drop_loc,
+            flight_or_train_number=flight_number,
+            base_amount=base_amt,
+            tax_amount=tax_amt,
+            total_amount=total_amt,
+            payment_status=CabBooking.PaymentStatus.PENDING,
+            trip_status=trip_status,
+            assigned_vehicle=assigned_vehicle,
+        )
+
+        driver_info = {
+            "name": assigned_vehicle.driver_name if assigned_vehicle else (chauffeur_name if chauffeur_name and chauffeur_name.lower() not in ['auto', 'auto-assign best'] else 'VIP Fleet Chauffeur (Dispatched prior to pickup)'),
+            "phone": assigned_vehicle.driver_phone if assigned_vehicle else '+91 98765 43210',
+            "vehicle_number": assigned_vehicle.vehicle_number if assigned_vehicle else 'Assigned upon dispatch',
+            "vehicle_model": assigned_vehicle.vehicle_model if assigned_vehicle and assigned_vehicle.vehicle_model else booking.selected_cab_name,
+        }
+
+        return Response({
+            "success": True,
+            "booking_id": booking.booking_id,
+            "reference": booking.booking_id,
+            "trip_status": booking.trip_status,
+            "trip_status_display": booking.get_trip_status_display(),
+            "pickup_datetime": booking.pickup_datetime.isoformat(),
+            "pickup_date": pickup_date or booking.pickup_datetime.strftime('%Y-%m-%d'),
+            "pickup_time": pickup_time or booking.pickup_datetime.strftime('%H:%M'),
+            "pickup_location": booking.pickup_location,
+            "drop_location": booking.drop_location,
+            "customer_name": booking.guest_name,
+            "phone": booking.guest_phone,
+            "email": booking.guest_email,
+            "cab_name": booking.selected_cab_name,
+            "trip_type": raw_trip_type,
+            "trip_type_label": booking.get_trip_type_display(),
+            "passengers": booking.passengers,
+            "luggage": booking.luggage,
+            "total_amount": float(booking.total_amount),
+            "assigned_driver": driver_info,
+            "message": f"Cab ride booked successfully! Reference: {booking.booking_id}."
+        }, status=status.HTTP_201_CREATED)
+
+
+class PublicCabBookingDetailView(APIView):
+    """
+    GET /api/cabs/bookings/<booking_id>/ or /api/public/hotel/cabs/booking/<booking_id>/
+    Allows public status checking and voucher verification for a cab booking.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, booking_id):
+        booking = CabBooking.objects.filter(booking_id=booking_id).first()
+        if not booking and str(booking_id).isdigit():
+            booking = CabBooking.objects.filter(id=int(booking_id)).first()
+
+        if not booking:
+            return Response({"error": "Cab booking not found."}, status=404)
+
+        data = CabBookingSerializer(booking).data
+        return Response({
+            "success": True,
+            "booking": data
+        })
+
+
+class PublicCabFleetView(APIView):
+    """
+    GET /api/cabs/fleet/
+    Returns active fleet vehicles and chauffeurs for display on the frontend.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        branch_val = request.query_params.get('branch_id') or request.query_params.get('branch_slug') or request.query_params.get('restaurant_slug')
+        branch = None
+        if branch_val:
+            if str(branch_val).isdigit():
+                branch = RestaurantBranch.objects.filter(id=int(branch_val)).first()
+            else:
+                branch = RestaurantBranch.objects.filter(slug=branch_val).first() or RestaurantBranch.objects.filter(restaurant__slug=branch_val, has_hotel_module=True).first()
+
+        if not branch:
+            branch = RestaurantBranch.objects.filter(has_hotel_module=True).first() or RestaurantBranch.objects.first()
+
+        if not branch:
+            return Response({"fleet": [], "packages": []})
+
+        vehicles = FleetVehicle.objects.filter(branch=branch)
+        packages = CabServicePackage.objects.filter(branch=branch, is_active=True)
+
+        return Response({
+            "branch_id": branch.id,
+            "branch_name": branch.name,
+            "fleet": FleetVehicleSerializer(vehicles, many=True).data,
+            "packages": CabServicePackageSerializer(packages, many=True).data,
+        })
+

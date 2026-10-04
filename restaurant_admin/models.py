@@ -244,6 +244,23 @@ class MonthlyPayroll(models.Model):
         raw_net = self.base_earned + self.ot_amount - penalties_val + incentives_val
         self.net_salary = max(Decimal('0.00'), raw_net).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
+    @property
+    def gross_earned(self):
+        """
+        Total gross earnings before deductions = Base Earned + OT Amount + Incentives
+        """
+        base = Decimal(str(self.base_earned or '0.00'))
+        ot = Decimal(str(self.ot_amount or '0.00'))
+        inc = Decimal(str(self.incentives or '0.00'))
+        return (base + ot + inc).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    @property
+    def status(self):
+        return self.payment_status
+
+    def get_status_display(self):
+        return self.get_payment_status_display()
+
 
 class SOPShiftTiming(models.TextChoices):
     MORNING_PREP = 'MORNING_PREP', 'Morning Opening / Prep'

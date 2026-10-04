@@ -42,6 +42,9 @@ urlpatterns = [
     path('public/cancel-unpaid/', views.PublicHotelCancelUnpaidView.as_view(), name='hotel-public-cancel-unpaid'),
     path('public/cab-packages/', views.PublicCabPackagesView.as_view(), name='hotel-public-cab-packages'),
     path('public/<int:branch_id>/cab-packages/', views.PublicCabPackagesView.as_view(), name='hotel-public-cab-packages-branch'),
+    path('public/cabs/book/', views.PublicCabBookingCreateView.as_view(), name='hotel-public-cabs-book'),
+    path('public/cabs/booking/<str:booking_id>/', views.PublicCabBookingDetailView.as_view(), name='hotel-public-cabs-detail'),
+    path('public/cabs/fleet/', views.PublicCabFleetView.as_view(), name='hotel-public-cabs-fleet'),
 
     # Router endpoints (categories, rooms, bookings, cab packages, fleet, cab bookings)
     path('', include(router.urls)),
