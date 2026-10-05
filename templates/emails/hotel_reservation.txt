@@ -1,0 +1,47 @@
+Dear {{ guest_name }},
+
+Thank you for choosing {{ hotel_name }}. Your room reservation has been confirmed!
+
+RESERVATION DETAILS:
+----------------------------------------
+Booking Reference: {{ booking.booking_id }}
+Suite Category: {{ category_name }}
+Allocated Room: {% if booking.room %}Room {{ booking.room.room_number }}{% else %}Assigned upon arrival{% endif %}
+
+Check-In Date: {{ check_in_date }} (From {{ check_in_time }})
+Check-Out Date: {{ check_out_date }} (Until {{ check_out_time }})
+Stay Duration: {{ nights }} Night(s)
+Guests: {{ num_guests }} Guest(s)
+
+BILLING SUMMARY:
+----------------------------------------
+Room Tariff: INR {{ subtotal }}
+Taxes / GST: INR {{ taxes }}
+Total Amount: INR {{ grand_total }}
+Payment Status: {{ payment_status }} ({{ payment_method }})
+
+{% if cabs %}
+LINKED CAB TRANSFERS:
+----------------------------------------
+{% for cab in cabs %}
+- {{ cab.selected_cab_name|default:"Cab Transfer" }} ({{ cab.get_trip_type_display }})
+  Pickup: {{ cab.pickup_location }} -> Drop: {{ cab.drop_location }}
+  Time: {{ cab.pickup_datetime|date:"d M Y, h:i A" }}
+{% endfor %}
+{% endif %}
+
+CHECK-IN GUIDELINES:
+- Government-issued photo ID (Aadhaar / Passport / DL / Voter ID) is mandatory for all adult guests.
+- Standard check-in is at {{ check_in_time }} and check-out is at {{ check_out_time }}.
+{% if cancellation_policy %}
+- Cancellation terms: {{ cancellation_policy }}
+{% endif %}
+
+HOTEL CONTACT:
+{{ hotel_name }}
+{% if hotel_address %}{{ hotel_address }}{% endif %}
+{% if hotel_phone %}Phone: {{ hotel_phone }}{% endif %}
+{% if hotel_email %}Email: {{ hotel_email }}{% endif %}
+
+Warm Regards,
+{{ hotel_name }}

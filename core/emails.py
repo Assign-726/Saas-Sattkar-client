@@ -40,6 +40,14 @@ def get_mail_connection_and_sender(branch=None, hotel_settings=None, sender_name
        
     Returns: (connection, from_email, source_description)
     """
+    global_backend = getattr(settings, 'EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+    # Preserve mock/in-memory test or console backends when explicitly configured in Django settings
+    smtp_backend = (
+        global_backend
+        if any(b in global_backend for b in ['locmem', 'console', 'dummy', 'filebased'])
+        else 'django.core.mail.backends.smtp.EmailBackend'
+    )
+
     # 1. Check HotelSettings
     if hotel_settings and getattr(hotel_settings, 'email_is_active', False):
         user_email = (hotel_settings.email_host_user or '').strip()
@@ -53,7 +61,7 @@ def get_mail_connection_and_sender(branch=None, hotel_settings=None, sender_name
             from_email = f'"{sender_name}" <{user_email}>'
             try:
                 conn = get_connection(
-                    backend='django.core.mail.backends.smtp.EmailBackend',
+                    backend=smtp_backend,
                     host=host,
                     port=port,
                     username=user_email,
@@ -79,7 +87,7 @@ def get_mail_connection_and_sender(branch=None, hotel_settings=None, sender_name
             from_email = f'"{sender_name}" <{user_email}>'
             try:
                 conn = get_connection(
-                    backend='django.core.mail.backends.smtp.EmailBackend',
+                    backend=smtp_backend,
                     host=host,
                     port=port,
                     username=user_email,
@@ -269,3 +277,256 @@ def send_otp_email(user, otp_code, purpose="login", request=None):
             except Exception as retry_exc:
                 logger.error(f"Fallback dispatch also failed: {retry_exc}")
         return False, f"Could not deliver email: {str(exc)}"
+
+
+def send_event_ticket_email(booking, request=None):
+    """
+    Dispatches a branded digital entry pass email with QR code to the guest.
+    Dynamically routes through branch's custom SMTP configuration if available,
+    or falls back to the system global SMTP.
+    """
+    if not booking or not getattr(booking, 'guest_email', None):
+        logger.info(f"Skipping event ticket email: booking '{getattr(booking, 'booking_reference', 'None')}' has no email configured.")
+        return False, "No guest email provided"
+
+    guest_email = (booking.guest_email or '').strip()
+    if '@' not in guest_email or guest_email.endswith('.local') or guest_email.endswith('.internal'):
+        logger.info(f"Skipping event ticket email for {booking.booking_reference}: '{guest_email}' is internal/mock.")
+        return False, "Internal or invalid guest email address."
+
+    # Ensure QR code exists
+    if not booking.booking_qr_code:
+        try:
+            booking.generate_qr_code(force=True)
+            booking.save(update_fields=['booking_qr_code'])
+        except Exception as e:
+            logger.warning(f"Could not generate QR code for {booking.booking_reference}: {e}")
+
+    event = booking.event
+    branch = event.branch if event else None
+    sender_name = (branch.email_sender_name if branch else None) or (branch.name if branch else None) or (event.title if event else "Club & Events Desk")
+
+    # Dates and times
+    start_dt = event.start_datetime if event else None
+    end_dt = event.end_datetime if event else None
+    event_date = start_dt.strftime("%A, %d %B %Y") if start_dt else "Date TBA"
+    start_time = start_dt.strftime("%I:%M %p") if start_dt else ""
+    end_time = end_dt.strftime("%I:%M %p") if end_dt else ""
+
+    venue_name = (event.venue_name if event and event.venue_name else None) or (branch.name if branch else "Event Venue")
+    venue_address = (event.venue_address if event and event.venue_address else None) or (branch.address if branch else "")
+
+    # Frontend pass link
+    frontend_base = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000').rstrip('/')
+    pass_url = f"{frontend_base}/events/pass/{booking.booking_reference}"
+
+    # Check for QR image bytes
+    qr_bytes = None
+    if booking.booking_qr_code:
+        try:
+            booking.booking_qr_code.open('rb')
+            qr_bytes = booking.booking_qr_code.read()
+            booking.booking_qr_code.close()
+        except Exception as qr_err:
+            logger.warning(f"Could not read QR code file for {booking.booking_reference}: {qr_err}")
+
+    subject = f"🎟️ Entry Pass Confirmed: {event.title} (Ref: {booking.booking_reference})"
+    template_html = "emails/event_ticket.html"
+    template_txt = "emails/event_ticket.txt"
+
+    context = {
+        'booking': booking,
+        'event': event,
+        'ticket_type': booking.ticket_type,
+        'guest_name': booking.guest_name,
+        'booking_reference': booking.booking_reference,
+        'security_token': getattr(booking, 'security_token', ''),
+        'quantity': booking.quantity,
+        'total_amount': booking.total_amount,
+        'payment_method_display': booking.get_payment_method_display(),
+        'event_date': event_date,
+        'start_time': start_time,
+        'end_time': end_time,
+        'venue_name': venue_name,
+        'venue_address': venue_address,
+        'pass_url': pass_url,
+        'has_qr_cid': bool(qr_bytes),
+    }
+
+    try:
+        html_content = render_to_string(template_html, context)
+    except Exception as e:
+        logger.warning(f"Could not render HTML email template {template_html}: {e}. Falling back to default text.")
+        html_content = None
+
+    try:
+        text_content = render_to_string(template_txt, context)
+    except Exception:
+        text_content = (
+            f"Hello {booking.guest_name},\n\n"
+            f"Your entry pass for {event.title} has been confirmed!\n"
+            f"Booking Reference: {booking.booking_reference}\n"
+            f"Pass Tier: {booking.ticket_type.name}\n"
+            f"Quantity: {booking.quantity}\n"
+            f"Total: ₹{booking.total_amount}\n\n"
+            f"View your digital pass online: {pass_url}\n\n"
+            f"Regards,\n{venue_name}"
+        )
+
+    connection, from_email, source = get_mail_connection_and_sender(
+        branch=branch,
+        sender_name_override=sender_name
+    )
+    logger.info(f"Dispatching Event Ticket email for {booking.booking_reference} to {guest_email} via {source}")
+
+    recipient_list = [guest_email]
+
+    def _build_and_send(conn, sender):
+        msg = EmailMultiAlternatives(subject, text_content, sender, recipient_list, connection=conn)
+        if html_content:
+            msg.attach_alternative(html_content, "text/html")
+        if qr_bytes:
+            from email.mime.image import MIMEImage
+            qr_mime = MIMEImage(qr_bytes)
+            qr_mime.add_header('Content-ID', '<ticket_qr>')
+            qr_mime.add_header('Content-Disposition', 'inline', filename=f"ticket_{booking.booking_reference}.png")
+            msg.attach(qr_mime)
+        msg.send(fail_silently=False)
+
+    try:
+        _build_and_send(connection, from_email)
+        return True, None
+    except Exception as exc:
+        logger.error(f"Failed to send Event Ticket email to {guest_email} via {source}: {exc}", exc_info=True)
+        if source != "System Global SMTP":
+            try:
+                logger.info(f"Retrying Event Ticket dispatch for {booking.booking_reference} using System Global SMTP fallback.")
+                fallback_from = getattr(settings, 'DEFAULT_FROM_EMAIL', 'webmaster@localhost')
+                if sender_name and '<' not in fallback_from:
+                    fallback_from = f'"{sender_name}" <{fallback_from}>'
+                _build_and_send(get_connection(), fallback_from)
+                return True, None
+            except Exception as retry_exc:
+                logger.error(f"Fallback dispatch for event ticket also failed: {retry_exc}")
+        return False, f"Could not deliver ticket email: {str(exc)}"
+
+
+def send_hotel_booking_email(room_booking, request=None):
+    """
+    Dispatches a branded hotel reservation confirmation voucher to the guest.
+    Dynamically routes through hotel's custom SMTP configuration if available,
+    or falls back to the system global SMTP.
+    """
+    if not room_booking or not getattr(room_booking, 'guest_email', None):
+        logger.info(f"Skipping hotel voucher email: booking '{getattr(room_booking, 'booking_id', 'None')}' has no email configured.")
+        return False, "No guest email provided"
+
+    guest_email = (room_booking.guest_email or '').strip()
+    if '@' not in guest_email or guest_email.endswith('.internal') or guest_email.endswith('.local'):
+        logger.info(f"Skipping hotel voucher email for {room_booking.booking_id}: '{guest_email}' is internal/mock.")
+        return False, "Internal or invalid guest email address."
+
+    branch = room_booking.branch
+    h_settings = getattr(branch, 'hotel_settings', None)
+
+    hotel_name = (h_settings.hotel_name if h_settings and h_settings.hotel_name else None) or (branch.name if branch else "Hotel & Suites")
+    sender_name = (h_settings.email_sender_name if h_settings and h_settings.email_sender_name else None) or hotel_name
+
+    check_in_date = room_booking.check_in_date.strftime("%A, %d %B %Y") if room_booking.check_in_date else ""
+    check_out_date = room_booking.check_out_date.strftime("%A, %d %B %Y") if room_booking.check_out_date else ""
+    check_in_time = h_settings.check_in_time.strftime("%I:%M %p") if (h_settings and h_settings.check_in_time) else "02:00 PM"
+    check_out_time = h_settings.check_out_time.strftime("%I:%M %p") if (h_settings and h_settings.check_out_time) else "11:00 AM"
+
+    hotel_address = (h_settings.address if h_settings and h_settings.address else None) or (branch.address if branch else "")
+    hotel_phone = (h_settings.contact_phone if h_settings and h_settings.contact_phone else None) or (branch.phone if branch else "")
+    hotel_email = (h_settings.contact_email if h_settings and h_settings.contact_email else None) or (branch.email if branch else "")
+    cancellation_policy = h_settings.cancellation_policy if h_settings else ""
+    gstin = h_settings.gstin if h_settings else ""
+
+    category_name = room_booking.room.category.name if (room_booking.room and room_booking.room.category) else "Suite"
+    room_number = room_booking.room.room_number if room_booking.room else "Assigned upon arrival"
+
+    cabs = list(room_booking.cab_bookings.all()) if hasattr(room_booking, 'cab_bookings') else []
+
+    subject = f"🏨 Reservation Confirmed: {room_booking.booking_id} - {hotel_name}"
+    template_html = "emails/hotel_reservation.html"
+    template_txt = "emails/hotel_reservation.txt"
+
+    context = {
+        'booking': room_booking,
+        'hotel_name': hotel_name,
+        'hotel_address': hotel_address,
+        'hotel_phone': hotel_phone,
+        'hotel_email': hotel_email,
+        'gstin': gstin,
+        'guest_name': room_booking.guest_name,
+        'check_in_date': check_in_date,
+        'check_out_date': check_out_date,
+        'check_in_time': check_in_time,
+        'check_out_time': check_out_time,
+        'nights': room_booking.nights_count,
+        'num_guests': room_booking.num_guests,
+        'category_name': category_name,
+        'room_number': room_number,
+        'subtotal': room_booking.total_room_charges,
+        'taxes': room_booking.taxes,
+        'grand_total': room_booking.grand_total,
+        'payment_status': room_booking.payment_status,
+        'payment_method': room_booking.payment_method,
+        'is_paid': (room_booking.payment_status == 'PAID'),
+        'cancellation_policy': cancellation_policy,
+        'cabs': cabs,
+    }
+
+    try:
+        html_content = render_to_string(template_html, context)
+    except Exception as e:
+        logger.warning(f"Could not render HTML email template {template_html}: {e}. Falling back to default text.")
+        html_content = None
+
+    try:
+        text_content = render_to_string(template_txt, context)
+    except Exception:
+        text_content = (
+            f"Dear {room_booking.guest_name},\n\n"
+            f"Your reservation at {hotel_name} is confirmed!\n"
+            f"Booking Reference: {room_booking.booking_id}\n"
+            f"Check-In: {check_in_date} ({check_in_time})\n"
+            f"Check-Out: {check_out_date} ({check_out_time})\n"
+            f"Suite: {category_name} (Room: {room_number})\n"
+            f"Total: ₹{room_booking.grand_total} ({room_booking.payment_status})\n\n"
+            f"Regards,\n{hotel_name}"
+        )
+
+    connection, from_email, source = get_mail_connection_and_sender(
+        branch=branch,
+        hotel_settings=h_settings,
+        sender_name_override=sender_name
+    )
+    logger.info(f"Dispatching Hotel Reservation voucher for {room_booking.booking_id} to {guest_email} via {source}")
+
+    recipient_list = [guest_email]
+
+    def _build_and_send(conn, sender):
+        msg = EmailMultiAlternatives(subject, text_content, sender, recipient_list, connection=conn)
+        if html_content:
+            msg.attach_alternative(html_content, "text/html")
+        msg.send(fail_silently=False)
+
+    try:
+        _build_and_send(connection, from_email)
+        return True, None
+    except Exception as exc:
+        logger.error(f"Failed to send Hotel Reservation email to {guest_email} via {source}: {exc}", exc_info=True)
+        if source != "System Global SMTP":
+            try:
+                logger.info(f"Retrying Hotel Reservation dispatch for {room_booking.booking_id} using System Global SMTP fallback.")
+                fallback_from = getattr(settings, 'DEFAULT_FROM_EMAIL', 'webmaster@localhost')
+                if sender_name and '<' not in fallback_from:
+                    fallback_from = f'"{sender_name}" <{fallback_from}>'
+                _build_and_send(get_connection(), fallback_from)
+                return True, None
+            except Exception as retry_exc:
+                logger.error(f"Fallback dispatch for hotel reservation also failed: {retry_exc}")
+        return False, f"Could not deliver reservation email: {str(exc)}"
+

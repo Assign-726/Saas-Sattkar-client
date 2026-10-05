@@ -51,5 +51,15 @@ def app_constants(request):
         'SHOW_HOTEL_MODULE': enable_hotel,
         'UNREAD_INQUIRIES_COUNT': unread_inquiries,
         'PENDING_APPLICATIONS_COUNT': pending_applications,
+        # Subscription & Overdue Lockout Status
+        'IS_SUBSCRIPTION_LOCKED': bool(restaurant and restaurant.subscription_is_locked),
+        'IS_SUBSCRIPTION_OVERDUE': bool(restaurant and restaurant.subscription_is_overdue),
+        'IS_SUBSCRIPTION_SUSPENDED': bool(restaurant and restaurant.subscription_status == 'SUSPENDED'),
+        'SUBSCRIPTION_GRACE_EXPIRED': bool(restaurant and restaurant.subscription_grace_period_expired),
+        'SUBSCRIPTION_GRACE_DAYS_REMAINING': getattr(restaurant, 'subscription_grace_days_remaining', 0) if restaurant else 0,
+        'SUBSCRIPTION_OVERDUE_DAYS': getattr(restaurant, 'subscription_overdue_days', 0) if restaurant else 0,
+        'SUBSCRIPTION_STATUS': getattr(restaurant, 'subscription_status', 'ACTIVE') if restaurant else 'ACTIVE',
+        'SUBSCRIPTION_PLAN_NAME': getattr(restaurant, 'subscription_plan_name', '') if restaurant else '',
+        'SUBSCRIPTION_NEXT_BILLING_DATE': getattr(restaurant, 'subscription_next_billing_date', None) if restaurant else None,
     }
 

@@ -1018,6 +1018,13 @@ def booking_create_action(request, restaurant_slug, ctx):
             special_requests=special_requests
         )
 
+        # Dispatch hotel reservation voucher email
+        try:
+            from core.emails import send_hotel_booking_email
+            send_hotel_booking_email(booking, request=request)
+        except Exception as email_err:
+            logger.warning(f"Could not send admin booking voucher email for {booking.booking_id}: {email_err}")
+
         messages.success(request, f"Reservation confirmed! Booking ID: {booking.booking_id} for Room {room.room_number}.")
 
     next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug})

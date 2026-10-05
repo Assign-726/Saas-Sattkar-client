@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reservation Confirmation - {{ hotel_name }}</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0b1120;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            color: #334155;
+            -webkit-font-smoothing: antialiased;
+        }
+        .wrapper {
+            width: 100%;
+            table-layout: fixed;
+            background-color: #0b1120;
+            padding: 30px 12px;
+        }
+        .content {
+            max-width: 580px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+        }
+        .header {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f172a 100%);
+            padding: 36px 30px;
+            text-align: center;
+            border-bottom: 4px solid #d4af37;
+        }
+        .tagline {
+            display: inline-block;
+            background: rgba(212, 175, 55, 0.15);
+            border: 1px solid rgba(212, 175, 55, 0.4);
+            color: #facc15;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            padding: 5px 14px;
+            border-radius: 999px;
+            margin-bottom: 12px;
+        }
+        .hotel-title {
+            margin: 0;
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+        .booking-ref-banner {
+            margin-top: 14px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+            display: inline-block;
+            color: #e2e8f0;
+            font-size: 13px;
+        }
+        .booking-ref-banner strong {
+            color: #facc15;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 15px;
+            letter-spacing: 1px;
+        }
+        .body {
+            padding: 32px 30px;
+        }
+        .greeting {
+            font-size: 16px;
+            font-weight: 600;
+            color: #0f172a;
+            margin-bottom: 8px;
+        }
+        .intro-text {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #475569;
+            margin-bottom: 24px;
+        }
+        .stay-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 22px;
+            margin-bottom: 24px;
+        }
+        .status-pill {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            margin-bottom: 14px;
+        }
+        .status-paid {
+            background: #dcfce7;
+            color: #15803d;
+            border: 1px solid #bbf7d0;
+        }
+        .status-pending {
+            background: #fef3c7;
+            color: #b45309;
+            border: 1px solid #fde68a;
+        }
+        .section-title {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #0f172a;
+            margin: 0 0 14px 0;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .grid-2 {
+            display: table;
+            width: 100%;
+            margin-bottom: 12px;
+        }
+        .cell-2 {
+            display: table-cell;
+            width: 50%;
+            vertical-align: top;
+            padding-right: 12px;
+        }
+        .label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            color: #64748b;
+            font-weight: 700;
+            margin-bottom: 3px;
+        }
+        .val {
+            font-size: 14px;
+            color: #0f172a;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .val-sub {
+            font-size: 12px;
+            color: #64748b;
+            font-weight: normal;
+        }
+        .invoice-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 14px;
+            font-size: 13px;
+        }
+        .invoice-table td {
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .invoice-table .total-row td {
+            padding-top: 12px;
+            border-top: 2px solid #cbd5e1;
+            border-bottom: none;
+            font-size: 15px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .total-amount {
+            color: #15803d;
+            font-size: 18px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .cab-box {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+            font-size: 13px;
+            color: #1e40af;
+        }
+        .cab-box strong {
+            display: block;
+            margin-bottom: 6px;
+            color: #1e3a8a;
+            font-size: 13px;
+        }
+        .guideline-box {
+            background-color: #fffbeb;
+            border-left: 4px solid #d4af37;
+            padding: 14px 16px;
+            border-radius: 8px;
+            margin-top: 24px;
+            font-size: 12.5px;
+            line-height: 1.6;
+            color: #92400e;
+        }
+        .guideline-box strong {
+            display: block;
+            margin-bottom: 4px;
+            color: #78350f;
+            font-size: 13px;
+        }
+        .footer {
+            background: #f8fafc;
+            padding: 24px;
+            text-align: center;
+            font-size: 12px;
+            color: #64748b;
+            border-top: 1px solid #e2e8f0;
+        }
+        .footer p {
+            margin: 4px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <div class="content">
+            <!-- Header -->
+            <div class="header">
+                <div class="tagline">Official Reservation Confirmation</div>
+                <h1 class="hotel-title">{{ hotel_name }}</h1>
+                <div class="booking-ref-banner">
+                    Booking Reference: <strong>{{ booking.booking_id }}</strong>
+                </div>
+            </div>
+
+            <!-- Body -->
+            <div class="body">
+                <div class="greeting">Dear {{ guest_name }},</div>
+                <p class="intro-text">
+                    Thank you for choosing <strong>{{ hotel_name }}</strong>. We take great pleasure in confirming your room reservation. Below is your detailed reservation summary and guest voucher.
+                </p>
+
+                <!-- Stay Details -->
+                <div class="stay-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        {% if is_paid %}
+                            <span class="status-pill status-paid">✓ Paid &amp; Guaranteed</span>
+                        {% elif payment_status == 'PENDING' %}
+                            <span class="status-pill status-pending">⏱ Reserved • Pay on Arrival</span>
+                        {% else %}
+                            <span class="status-pill status-pending">{{ payment_status }}</span>
+                        {% endif %}
+                    </div>
+
+                    <h3 class="section-title">Stay &amp; Accommodation Details</h3>
+
+                    <div class="grid-2">
+                        <div class="cell-2">
+                            <div class="label">Check-In Date</div>
+                            <div class="val">{{ check_in_date }}<div class="val-sub">From {{ check_in_time }}</div></div>
+                        </div>
+                        <div class="cell-2">
+                            <div class="label">Check-Out Date</div>
+                            <div class="val">{{ check_out_date }}<div class="val-sub">Until {{ check_out_time }}</div></div>
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="cell-2">
+                            <div class="label">Suite Category</div>
+                            <div class="val">{{ category_name }}</div>
+                        </div>
+                        <div class="cell-2">
+                            <div class="label">Allocated Room</div>
+                            <div class="val" style="color: #b45309;">
+                                {% if booking.room %}Room {{ booking.room.room_number }}{% else %}Assigned upon arrival{% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="cell-2">
+                            <div class="label">Duration</div>
+                            <div class="val">{{ nights }} Night{% if nights > 1 %}s{% endif %}</div>
+                        </div>
+                        <div class="cell-2">
+                            <div class="label">Guests</div>
+                            <div class="val">{{ num_guests }} Guest{% if num_guests > 1 %}s{% endif %}</div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if cabs %}
+                <!-- Linked Cab Transfer Details -->
+                <div class="cab-box">
+                    <strong>🚖 Linked Travel Desk Transfer Reserved:</strong>
+                    {% for cab in cabs %}
+                    <div>
+                        • <strong>{{ cab.selected_cab_name|default:"VIP Chauffeur Cab" }}</strong> ({{ cab.get_trip_type_display }})<br>
+                        &nbsp;&nbsp;Pickup: {{ cab.pickup_location }} &rarr; Drop: {{ cab.drop_location }}<br>
+                        &nbsp;&nbsp;Scheduled Time: {{ cab.pickup_datetime|date:"d M Y, h:i A" }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- Financial / Billing Summary -->
+                <div class="stay-card">
+                    <h3 class="section-title">Billing &amp; Tariff Summary</h3>
+                    <table class="invoice-table">
+                        <tr>
+                            <td style="color: #64748b;">Room Tariff ({{ nights }} Night{% if nights > 1 %}s{% endif %})</td>
+                            <td style="text-align: right; font-weight: 600; color: #0f172a;">₹{{ subtotal }}</td>
+                        </tr>
+                        <tr>
+                            <td style="color: #64748b;">Statutory Indian Hospitality GST</td>
+                            <td style="text-align: right; font-weight: 600; color: #0f172a;">₹{{ taxes }}</td>
+                        </tr>
+                        <tr class="total-row">
+                            <td>Total Reservation Amount</td>
+                            <td style="text-align: right;" class="total-amount">₹{{ grand_total }}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="2" style="font-size: 11px; color: #64748b; padding-top: 6px; border: none;">
+                                Payment Method: <strong>{{ payment_method }}</strong> • Status: <strong>{{ payment_status }}</strong>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- Hotel Policies & Check-In Rules -->
+                <div class="guideline-box">
+                    <strong>Important Check-In Guidelines:</strong>
+                    • <strong>Mandatory Photo ID:</strong> Government-issued photo ID (Aadhaar / Passport / Driving License / Voter ID) is strictly mandatory for every adult guest at check-in.<br>
+                    • <strong>Standard Timings:</strong> Check-in is at {{ check_in_time }} and check-out is at {{ check_out_time }}. Early check-in or late check-out is subject to room availability.<br>
+                    {% if cancellation_policy %}
+                    • <strong>Cancellation Terms:</strong> {{ cancellation_policy }}<br>
+                    {% endif %}
+                    • <strong>Front Desk Hold:</strong> For reservations with payment on arrival, please advise our front desk in case of late evening arrival.
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+                <p><strong>{{ hotel_name }}</strong></p>
+                {% if hotel_address %}<p>{{ hotel_address }}</p>{% endif %}
+                <p>
+                    {% if hotel_phone %}📞 Front Desk: {{ hotel_phone }}{% endif %}
+                    {% if hotel_email %} &nbsp;|&nbsp; ✉️ {{ hotel_email }}{% endif %}
+                </p>
+                {% if gstin %}<p style="font-size: 11px; color: #94a3b8;">GSTIN: {{ gstin }}</p>{% endif %}
+                <p style="margin-top: 14px; font-size: 11px; color: #94a3b8;">
+                    We eagerly look forward to hosting you! Please have this voucher handy upon arrival.
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

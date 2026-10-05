@@ -106,6 +106,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'restaurant_admin.middleware.BranchContextMiddleware',
+    'super_admin.middleware.SuperAdminSubscriptionLockMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 

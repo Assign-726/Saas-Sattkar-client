@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from django.http import JsonResponse, HttpResponse
 import csv
+import logging
 
 from django.core.files.storage import default_storage
 
@@ -50,6 +51,7 @@ from core.models import RestaurantLanding, GalleryImage, TeamMember, Review, Eve
 from super_admin.services import MasterBillingService
 from restaurant_project import constants
 
+logger = logging.getLogger(__name__)
 
 
 def superuser_required(view):

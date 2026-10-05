@@ -87,6 +87,47 @@ class Restaurant(models.Model):
         help_text="Timestamp when module flags were last refreshed from Master Admin"
     )
 
+    # Master Dashboard Subscription & Overdue Lockout Status
+    subscription_status = models.CharField(
+        max_length=20,
+        blank=True,
+        default="ACTIVE",
+        verbose_name="Subscription Status",
+        help_text="ACTIVE / GRACE_PERIOD / SUSPENDED"
+    )
+    subscription_is_overdue = models.BooleanField(
+        default=False,
+        verbose_name="Is Overdue"
+    )
+    subscription_grace_period_expired = models.BooleanField(
+        default=False,
+        verbose_name="Grace Period Expired"
+    )
+    subscription_grace_days_remaining = models.IntegerField(
+        default=0,
+        verbose_name="Grace Days Remaining"
+    )
+    subscription_overdue_days = models.IntegerField(
+        default=0,
+        verbose_name="Overdue Days"
+    )
+    subscription_is_locked = models.BooleanField(
+        default=False,
+        verbose_name="Access Locked",
+        help_text="True if grace period has expired or manually suspended by Master Admin"
+    )
+    subscription_plan_name = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name="Plan Name"
+    )
+    subscription_next_billing_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Next Billing Date"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

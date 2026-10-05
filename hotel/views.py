@@ -1,8 +1,11 @@
 import datetime
+import logging
 from decimal import Decimal
 from django.conf import settings
 from django.db.models import Q, Count
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import authenticate
 from rest_framework import status, viewsets, permissions, serializers
@@ -871,6 +874,13 @@ class PublicBookingCreateView(APIView):
             special_requests=special_requests,
         )
 
+        # Dispatch hotel reservation voucher email
+        try:
+            from core.emails import send_hotel_booking_email
+            send_hotel_booking_email(booking, request=request)
+        except Exception as email_err:
+            logger.warning(f"Could not send hotel booking voucher email for {booking.booking_id}: {email_err}")
+
         return Response({
             "success": True,
             "booking_id": booking.booking_id,
@@ -1498,6 +1508,14 @@ class PublicHotelCheckoutView(APIView):
         room_booking = result['room_booking']
         cabs_data = CabBookingSerializer(result['cab_bookings'], many=True).data
 
+        # For non-gateway flows (Pay at Desk, Direct UPI submission), dispatch voucher immediately
+        if room_booking.payment_method != 'ONLINE_RAZORPAY':
+            try:
+                from core.emails import send_hotel_booking_email
+                send_hotel_booking_email(room_booking, request=request)
+            except Exception as email_err:
+                logger.warning(f"Could not send checkout voucher email for {room_booking.booking_id}: {email_err}")
+
         return Response({
             "success": True,
             "booking_id": room_booking.booking_id,
@@ -1608,6 +1626,13 @@ class PublicHotelVerifyPaymentView(APIView):
         room_booking.cab_bookings.filter(
             payment_status=CabBooking.PaymentStatus.PENDING
         ).update(payment_status=CabBooking.PaymentStatus.PAID)
+
+        # Dispatch verified paid hotel reservation voucher email
+        try:
+            from core.emails import send_hotel_booking_email
+            send_hotel_booking_email(room_booking, request=request)
+        except Exception as email_err:
+            logger.warning(f"Could not send verified hotel booking email for {room_booking.booking_id}: {email_err}")
 
         return Response({
             "success": True,

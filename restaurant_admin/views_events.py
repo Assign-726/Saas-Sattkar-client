@@ -1,7 +1,10 @@
 import json
 import uuid
+import logging
 from decimal import Decimal
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -480,6 +483,13 @@ def club_manual_booking_create(request, restaurant_slug, event_id):
             booking.security_token = booking.generate_security_token()
             booking.generate_qr_code(force=True)
             booking.save(update_fields=['security_token', 'booking_qr_code'])
+
+        # Dispatch event ticket email if guest email was captured
+        try:
+            from core.emails import send_event_ticket_email
+            send_event_ticket_email(booking, request=request)
+        except Exception as email_err:
+            logger.warning(f"Could not send issued pass email for {booking.booking_reference}: {email_err}")
 
         messages.success(request, f"Issued pass {booking.booking_reference} for {guest_name} ({quantity} guest(s)) successfully!")
         if next_url and next_url.startswith('/'):
