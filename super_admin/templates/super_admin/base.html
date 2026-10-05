@@ -895,6 +895,54 @@
                     </button>
                 </div>
                 <nav class="nav">
+                    {% if IS_SUBSCRIPTION_LOCKED %}
+                    <a href="{% url 'super_admin:billing' %}" onclick="handleLockedNavClick(event)" style="opacity: 0.55; cursor: not-allowed; display: flex; align-items: center;" title="Locked: Subscription overdue. Renew to unlock.">
+                        <i class="fa-solid fa-chart-pie"></i>
+                        <span style="flex: 1;">Dashboard</span>
+                        <i class="fa-solid fa-lock" style="font-size: 11px; color: #ef4444;"></i>
+                    </a>
+                    <a href="{% url 'super_admin:billing' %}" onclick="handleLockedNavClick(event)" style="opacity: 0.55; cursor: not-allowed; display: flex; align-items: center;" title="Locked: Subscription overdue. Renew to unlock.">
+                        <i class="fa-solid fa-chart-line"></i>
+                        <span style="flex: 1;">Super Analytics</span>
+                        <i class="fa-solid fa-lock" style="font-size: 11px; color: #ef4444;"></i>
+                    </a>
+                    <a href="{% url 'super_admin:billing' %}" onclick="handleLockedNavClick(event)" style="opacity: 0.55; cursor: not-allowed; display: flex; align-items: center;" title="Locked: Subscription overdue. Renew to unlock.">
+                        <i class="fa-solid fa-user-plus"></i>
+                        <span style="flex: 1;">Onboard</span>
+                        <i class="fa-solid fa-lock" style="font-size: 11px; color: #ef4444;"></i>
+                    </a>
+                    {% if SHOW_WEBSITE_PAGES %}
+                    <a href="{% url 'super_admin:billing' %}" onclick="handleLockedNavClick(event)" style="opacity: 0.55; cursor: not-allowed; display: flex; align-items: center;" title="Locked: Subscription overdue. Renew to unlock.">
+                        <i class="fa-solid fa-window-restore"></i>
+                        <span style="flex: 1;">Website Pages</span>
+                        <i class="fa-solid fa-lock" style="font-size: 11px; color: #ef4444;"></i>
+                    </a>
+                    {% endif %}
+                    <a href="{% url 'super_admin:billing' %}" onclick="handleLockedNavClick(event)" style="opacity: 0.55; cursor: not-allowed; display: flex; align-items: center;" title="Locked: Subscription overdue. Renew to unlock.">
+                        <i class="fa-solid fa-briefcase"></i>
+                        <span style="flex: 1;">Careers & Jobs</span>
+                        <i class="fa-solid fa-lock" style="font-size: 11px; color: #ef4444;"></i>
+                    </a>
+                    <a href="{% url 'super_admin:billing' %}" onclick="handleLockedNavClick(event)" style="opacity: 0.55; cursor: not-allowed; display: flex; align-items: center;" title="Locked: Subscription overdue. Renew to unlock.">
+                        <i class="fa-solid fa-file-lines"></i>
+                        <span style="flex: 1;">Job Applications</span>
+                        <i class="fa-solid fa-lock" style="font-size: 11px; color: #ef4444;"></i>
+                    </a>
+                    <a href="{% url 'super_admin:billing' %}" onclick="handleLockedNavClick(event)" style="opacity: 0.55; cursor: not-allowed; display: flex; align-items: center;" title="Locked: Subscription overdue. Renew to unlock.">
+                        <i class="fa-solid fa-envelope-open-text"></i>
+                        <span style="flex: 1;">Inquiries & Messages</span>
+                        <i class="fa-solid fa-lock" style="font-size: 11px; color: #ef4444;"></i>
+                    </a>
+                    <a href="{% url 'super_admin:billing' %}" onclick="handleLockedNavClick(event)" style="opacity: 0.55; cursor: not-allowed; display: flex; align-items: center;" title="Locked: Subscription overdue. Renew to unlock.">
+                        <i class="fa-solid fa-users"></i>
+                        <span style="flex: 1;">Newsletter Subscribers</span>
+                        <i class="fa-solid fa-lock" style="font-size: 11px; color: #ef4444;"></i>
+                    </a>
+                    <a href="{% url 'super_admin:billing' %}" class="{% if request.resolver_match.url_name == 'billing' or request.resolver_match.url_name == 'billing_invoice' %}active{% endif %}">
+                        <i class="fa-solid fa-credit-card"></i>
+                        <span>Billing & Subscription</span>
+                    </a>
+                    {% else %}
                     <a href="{% url 'super_admin:dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
                         <i class="fa-solid fa-chart-pie"></i>
                         <span>Dashboard</span>
@@ -939,15 +987,24 @@
                         <i class="fa-solid fa-credit-card"></i>
                         <span>Billing & Subscription</span>
                     </a>
+                    {% endif %}
                 </nav>
             </div>
 
             <div style="padding-top: 16px; border-top: 1px solid #1e293b; display: flex; flex-direction: column; gap: 8px;">
                 <nav class="nav" style="margin-top: 0; margin-bottom: 0;">
+                    {% if IS_SUBSCRIPTION_LOCKED %}
+                    <a href="{% url 'super_admin:billing' %}" onclick="handleLockedNavClick(event)" style="opacity: 0.55; cursor: not-allowed; display: flex; align-items: center;" title="Locked: Subscription overdue. Renew to unlock.">
+                        <i class="fa-solid fa-gear"></i>
+                        <span style="flex: 1;">Settings</span>
+                        <i class="fa-solid fa-lock" style="font-size: 11px; color: #ef4444;"></i>
+                    </a>
+                    {% else %}
                     <a href="{% url 'super_admin:setup' %}" class="{% if request.resolver_match.url_name == 'setup' %}active{% endif %}">
                         <i class="fa-solid fa-gear"></i>
                         <span>Settings</span>
                     </a>
+                    {% endif %}
                 </nav>
                 <button type="button" id="superLogoutBtn" class="btn danger" style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; font-weight: 600; color: white; width: 100%; border: none; cursor: pointer; padding: 10px 16px; border-radius: 8px; font-size: 0.9rem;">
                     <i class="fa-solid fa-right-from-bracket"></i>
@@ -958,6 +1015,59 @@
 
         <main class="main">
             <div class="shell">
+                {% if IS_SUBSCRIPTION_OVERDUE and not IS_SUBSCRIPTION_LOCKED %}
+                <!-- ── Grace Period Warning Banner ────────────────────────── -->
+                <div style="background: linear-gradient(90deg, #fffbeb, #fef3c7); border: 1.5px solid #fde68a; border-radius: 14px; padding: 14px 20px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; box-shadow: 0 4px 12px -2px rgba(245, 158, 11, 0.12);">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <div style="width: 40px; height: 40px; border-radius: 10px; background: #fef08a; color: #b45309; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                        </div>
+                        <div>
+                            <div style="font-size: 14px; font-weight: 800; color: #92400e; display: flex; align-items: center; gap: 8px;">
+                                <span class="badge" style="background: #f59e0b; color: #fff; font-size: 10.5px; padding: 2px 8px;">GRACE PERIOD ACTIVE</span>
+                                Plan Renewal Due &bull; {{ SUBSCRIPTION_GRACE_DAYS_REMAINING }} Day(s) Remaining
+                            </div>
+                            <div style="font-size: 12.5px; color: #b45309; margin-top: 3px;">
+                                Your subscription renewal was due on <strong>{{ SUBSCRIPTION_NEXT_BILLING_DATE|date:"d M Y"|default:"the scheduled date" }}</strong>. Please renew your plan before the grace period ends to prevent administrative access lockout.
+                            </div>
+                        </div>
+                    </div>
+                    <a href="{% url 'super_admin:billing' %}" class="btn" style="background: #d97706; border-color: #b45309; font-size: 13px; padding: 8px 16px; white-space: nowrap;">
+                        <i class="fa-solid fa-credit-card"></i> Settle / Extend Plan
+                    </a>
+                </div>
+                {% elif IS_SUBSCRIPTION_LOCKED %}
+                <!-- ── Locked Out / Grace Expired Alert Banner ─────────────── -->
+                <div style="background: linear-gradient(90deg, #fef2f2, #fee2e2); border: 1.5px solid #fecaca; border-radius: 14px; padding: 16px 20px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; box-shadow: 0 4px 16px -2px rgba(239, 68, 68, 0.15);">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <div style="width: 42px; height: 42px; border-radius: 10px; background: #fee2e2; color: #dc2626; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                        </div>
+                        <div>
+                            <div style="font-size: 14px; font-weight: 800; color: #991b1b; display: flex; align-items: center; gap: 8px;">
+                                {% if IS_SUBSCRIPTION_SUSPENDED %}
+                                <span class="badge" style="background: #dc2626; color: #fff; font-size: 10.5px; padding: 2px 8px;">MANUALLY SUSPENDED</span>
+                                Account Suspended by Master Admin
+                                {% else %}
+                                <span class="badge" style="background: #dc2626; color: #fff; font-size: 10.5px; padding: 2px 8px;">OVERDUE &bull; GRACE EXPIRED</span>
+                                Administrative Dashboard Modules Locked
+                                {% endif %}
+                            </div>
+                            <div style="font-size: 12.5px; color: #b91c1c; margin-top: 3px;">
+                                {% if IS_SUBSCRIPTION_SUSPENDED %}
+                                Platform administrator has suspended this account. Access to management modules is locked.
+                                {% else %}
+                                Your plan is <strong>{{ SUBSCRIPTION_OVERDUE_DAYS }} day(s) overdue</strong> and grace period has expired. Only Billing & Invoices are accessible until your plan is extended or renewed.
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn danger" onclick="openOverdueLockModal()" style="font-size: 13px; padding: 9px 18px; white-space: nowrap;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> View Overdue Notice
+                    </button>
+                </div>
+                {% endif %}
+
                 {% block pagebar %}
                 <div class="pagebar">
                     <div class="pagebar-title">{% block header_title %}Super Admin{% endblock %}</div>
@@ -1216,6 +1326,140 @@
                         logoutModal.style.display = 'none';
                     }
                 });
+            }
+        });
+    </script>
+
+    <style>
+        .overdue-modal-header {
+            background: linear-gradient(135deg, #991b1b, #dc2626, #ea580c);
+            padding: 24px 28px;
+            color: #ffffff;
+            position: relative;
+        }
+        .overdue-modal-header.is-suspended {
+            background: linear-gradient(135deg, #7f1d1d, #991b1b);
+        }
+    </style>
+
+    <!-- ── Overdue / Grace Expired Lockout Popup Modal ──────────────────────── -->
+    <div id="overdueLockModal" data-auto-open="{% if IS_SUBSCRIPTION_LOCKED %}1{% else %}0{% endif %}" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(8px); z-index: 999999; align-items: center; justify-content: center; padding: 20px;">
+        <div style="background: #ffffff; width: 100%; max-width: 540px; border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35); overflow: hidden; animation: modalFadeIn 0.25s ease; border: 1.5px solid #e2e8f0; position: relative;">
+            
+            <!-- Modal Accent Header -->
+            <div class="overdue-modal-header {% if IS_SUBSCRIPTION_SUSPENDED %}is-suspended{% endif %}">
+                <div style="display: flex; align-items: center; gap: 14px;">
+                    <div style="width: 48px; height: 48px; border-radius: 12px; background: rgba(255,255,255,0.18); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; font-size: 24px; color: #ffffff; flex-shrink: 0;">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #fecaca; margin-bottom: 2px;">
+                            {% if IS_SUBSCRIPTION_SUSPENDED %}Master Admin Action{% else %}Payment Overdue Notice{% endif %}
+                        </div>
+                        <h2 style="font-size: 1.35rem; font-weight: 800; margin: 0; line-height: 1.2;">
+                            {% if IS_SUBSCRIPTION_SUSPENDED %}Account Suspended by Master Admin{% else %}Subscription Overdue &bull; Grace Period Expired{% endif %}
+                        </h2>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div style="padding: 24px 28px;">
+                <p style="font-size: 14px; color: #334155; line-height: 1.6; margin: 0 0 18px;">
+                    {% if IS_SUBSCRIPTION_SUSPENDED %}
+                    This restaurant account has been <strong>manually suspended</strong> by the platform administrator. Access to administration modules (Dashboard, Onboarding, Analytics, Settings) is locked until the account is reactivated.
+                    {% else %}
+                    Your SaaS subscription plan is <strong>overdue</strong> and the grace period has ended. Administrative access to other modules has been temporarily restricted. Please settle your renewal invoice or submit an extension request to restore access.
+                    {% endif %}
+                </p>
+
+                <!-- Status Card Summary -->
+                <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 14px 18px; margin-bottom: 20px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
+                        <div>
+                            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b;">Current Tier</div>
+                            <div style="font-weight: 800; color: #0f172a; margin-top: 2px;">{{ SUBSCRIPTION_PLAN_NAME|default:"Growth Plan" }}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b;">Lockout Status</div>
+                            <div style="font-weight: 800; color: #dc2626; margin-top: 2px;">
+                                {% if IS_SUBSCRIPTION_SUSPENDED %}SUSPENDED{% else %}Overdue ({{ SUBSCRIPTION_OVERDUE_DAYS }} Days){% endif %}
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b;">Scheduled Renewal</div>
+                            <div style="font-weight: 700; color: #334155; margin-top: 2px;">{{ SUBSCRIPTION_NEXT_BILLING_DATE|date:"d M Y"|default:"27 Sept 2026" }}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b;">Permitted Access</div>
+                            <div style="font-weight: 700; color: #059669; margin-top: 2px;">Billing & Receipts Only</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <button type="button" class="btn" onclick="goToBillingUpgrade()" style="width: 100%; padding: 12px; font-size: 14px; font-weight: 700; justify-content: center; background: #dc2626; border-color: #b91c1c;">
+                        <i class="fa-solid fa-credit-card"></i> Pay / Extend Subscription Now
+                    </button>
+                    {% if request.resolver_match.url_name == 'billing' %}
+                    <button type="button" class="btn secondary" onclick="closeOverdueLockModal()" style="width: 100%; padding: 10px; font-size: 13.5px; justify-content: center;">
+                        Review Invoices & Receipts on Billing Page
+                    </button>
+                    {% else %}
+                    <a href="{% url 'super_admin:billing' %}" class="btn secondary" style="width: 100%; padding: 10px; font-size: 13.5px; justify-content: center; text-decoration: none;">
+                        <i class="fa-solid fa-arrow-right"></i> Go to Billing Portal
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div style="background: #f8fafc; padding: 12px 24px; border-top: 1px solid #e2e8f0; font-size: 11.5px; color: #64748b; text-align: center;">
+                Need assistance? Contact Master Administrator or SaaS Billing Operations.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openOverdueLockModal() {
+            var modal = document.getElementById('overdueLockModal');
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function closeOverdueLockModal() {
+            var modal = document.getElementById('overdueLockModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function handleLockedNavClick(event) {
+            event.preventDefault();
+            openOverdueLockModal();
+        }
+
+        function goToBillingUpgrade() {
+            closeOverdueLockModal();
+            if (window.location.pathname.startsWith('/super/billing/')) {
+                if (typeof openUpgradeModal === 'function') {
+                    openUpgradeModal();
+                }
+            } else {
+                window.location.href = "{% url 'super_admin:billing' %}?open_upgrade=1";
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var modal = document.getElementById('overdueLockModal');
+            if (modal && modal.getAttribute('data-auto-open') === '1') {
+                openOverdueLockModal();
+            }
+
+            var params = new URLSearchParams(window.location.search);
+            if (params.get('overdue_lock') === '1') {
+                openOverdueLockModal();
+            }
+            if (params.get('open_upgrade') === '1') {
+                if (typeof openUpgradeModal === 'function') {
+                    openUpgradeModal();
+                }
             }
         });
     </script>

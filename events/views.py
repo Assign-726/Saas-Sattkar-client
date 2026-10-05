@@ -4,8 +4,11 @@ import urllib.request
 import urllib.error
 import hmac
 import hashlib
+import logging
 from decimal import Decimal
 from datetime import timedelta
+
+logger = logging.getLogger(__name__)
 
 from django.db import transaction, models
 from django.utils import timezone
@@ -204,6 +207,13 @@ class AdminClubEventViewSet(viewsets.ModelViewSet):
             booking.security_token = booking.generate_security_token()
             booking.generate_qr_code(force=True)
             booking.save(update_fields=['security_token', 'booking_qr_code'])
+
+        # Dispatch event ticket pass email if guest email provided
+        try:
+            from core.emails import send_event_ticket_email
+            send_event_ticket_email(booking, request=request)
+        except Exception as email_err:
+            logger.warning(f"Could not send door sale ticket email: {email_err}")
 
         res_serializer = EventBookingSerializer(booking, context={'request': request})
         return Response(res_serializer.data, status=status.HTTP_201_CREATED)
@@ -517,6 +527,13 @@ def public_verify_payment(request):
             'payment_status', 'razorpay_payment_id', 'razorpay_signature',
             'security_token', 'booking_qr_code'
         ])
+
+    # Dispatch branded digital entry pass with QR code to guest email
+    try:
+        from core.emails import send_event_ticket_email
+        send_event_ticket_email(locked_booking, request=request)
+    except Exception as email_err:
+        logger.warning(f"Could not send event ticket pass email for {locked_booking.booking_reference}: {email_err}")
 
     res_data = EventBookingSerializer(locked_booking, context={'request': request}).data
     return Response({

@@ -136,6 +136,46 @@ class MasterBillingService:
                         except Exception as mod_err:
                             logger.warning(f"[MasterBillingService] Could not persist modules to DB: {mod_err}")
 
+                    # Sync remote subscription & overdue lockout state from Master Admin
+                    sub_payload = data.get('subscription') or {}
+                    if restaurant and sub_payload and isinstance(sub_payload, dict):
+                        try:
+                            from super_admin.models import Restaurant
+                            sub_status = sub_payload.get('status', 'ACTIVE')
+                            is_overdue = bool(sub_payload.get('is_overdue', False))
+                            grace_expired = bool(sub_payload.get('grace_period_expired', False))
+                            grace_days_left = int(sub_payload.get('grace_days_remaining', 0) or 0)
+                            overdue_days = int(sub_payload.get('overdue_days', 0) or 0)
+                            is_suspended = (sub_status == 'SUSPENDED')
+                            is_locked = bool(sub_payload.get('is_locked', False) or is_suspended or grace_expired)
+                            plan_name = sub_payload.get('plan_name', '')
+
+                            sub_updates = {
+                                'subscription_status': sub_status,
+                                'subscription_is_overdue': is_overdue,
+                                'subscription_grace_period_expired': grace_expired,
+                                'subscription_grace_days_remaining': grace_days_left,
+                                'subscription_overdue_days': overdue_days,
+                                'subscription_is_locked': is_locked,
+                                'subscription_plan_name': plan_name,
+                            }
+                            next_bill_str = sub_payload.get('next_billing_date')
+                            if next_bill_str:
+                                try:
+                                    from django.utils.dateparse import parse_datetime
+                                    parsed_dt = parse_datetime(next_bill_str)
+                                    if parsed_dt:
+                                        sub_updates['subscription_next_billing_date'] = parsed_dt
+                                except Exception:
+                                    pass
+
+                            Restaurant.objects.filter(pk=restaurant.pk).update(**sub_updates)
+                            for k, v in sub_updates.items():
+                                setattr(restaurant, k, v)
+                            logger.info(f"[MasterBillingService] Synced subscription lock status: is_locked={is_locked}, status={sub_status}, overdue_days={overdue_days}, grace_expired={grace_expired}")
+                        except Exception as sub_err:
+                            logger.warning(f"[MasterBillingService] Could not persist subscription state: {sub_err}")
+
                     # Normalize plan fields so price and monthly_fee are consistently available
                     if 'available_plans' in data and isinstance(data['available_plans'], list):
                         for p in data['available_plans']:
