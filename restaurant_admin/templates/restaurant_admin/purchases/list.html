@@ -209,6 +209,44 @@
     align-items: center;
     gap: 4px;
   }
+
+  /* Quick Preview & Table Links */
+  .po-ref-link {
+    color: #2563eb;
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.15s ease, text-decoration 0.15s ease;
+  }
+  .po-ref-link:hover {
+    color: #1d4ed8;
+    text-decoration: underline;
+  }
+  .btn-action-view {
+    color: #0284c7;
+    background-color: #f0f9ff;
+    border: 1px solid #bae6fd;
+    transition: all 0.15s ease;
+  }
+  .btn-action-view:hover {
+    color: #ffffff;
+    background-color: #0284c7;
+    border-color: #0284c7;
+  }
+  .btn-action-invoice {
+    color: #4f46e5;
+    background-color: #eef2ff;
+    border: 1px solid #c7d2fe;
+    transition: all 0.15s ease;
+  }
+  .btn-action-invoice:hover {
+    color: #ffffff;
+    background-color: #4f46e5;
+    border-color: #4f46e5;
+  }
+  .preview-modal-header {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    color: #ffffff;
+  }
 </style>
 
 <div class="container-fluid">
@@ -287,11 +325,11 @@
     <div class="col-6 col-lg-3">
       <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 kpi-card-hover">
         <div class="d-flex align-items-center gap-3">
-          <div class="rounded-3 bg-primary-subtle text-primary p-3 d-flex align-items-center justify-content-center" style="width:48px;height:48px;font-size:1.3rem;">
-            <i class="bi bi-journal-bookmark-fill"></i>
+          <div class="rounded-3 bg-primary-subtle text-primary p-3 d-flex align-items-center justify-content-center" style="width:50px;height:50px;font-size:1.35rem;">
+            <i class="fas fa-file-invoice"></i>
           </div>
           <div>
-            <span class="text-muted small fw-semibold text-uppercase d-block">Inward Orders</span>
+            <span class="text-muted small fw-semibold text-uppercase d-block" style="letter-spacing: 0.04em;">Inward Orders</span>
             <span class="fs-4 fw-bold text-dark">{{ kpi_total_count }}</span>
           </div>
         </div>
@@ -300,11 +338,11 @@
     <div class="col-6 col-lg-3">
       <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 kpi-card-hover">
         <div class="d-flex align-items-center gap-3">
-          <div class="rounded-3 bg-success-subtle text-success p-3 d-flex align-items-center justify-content-center" style="width:48px;height:48px;font-size:1.3rem;">
-            <i class="bi bi-currency-rupee"></i>
+          <div class="rounded-3 bg-success-subtle text-success p-3 d-flex align-items-center justify-content-center" style="width:50px;height:50px;font-size:1.35rem;">
+            <i class="fas fa-indian-rupee-sign"></i>
           </div>
           <div>
-            <span class="text-muted small fw-semibold text-uppercase d-block">Gross Purchases</span>
+            <span class="text-muted small fw-semibold text-uppercase d-block" style="letter-spacing: 0.04em;">Gross Purchases</span>
             <span class="fs-4 fw-bold text-success">₹{{ kpi_total_spend|floatformat:2 }}</span>
           </div>
         </div>
@@ -313,11 +351,11 @@
     <div class="col-6 col-lg-3">
       <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 kpi-card-hover">
         <div class="d-flex align-items-center gap-3">
-          <div class="rounded-3 bg-info-subtle text-info-emphasis p-3 d-flex align-items-center justify-content-center" style="width:48px;height:48px;font-size:1.3rem;">
-            <i class="bi bi-receipt-cutoff"></i>
+          <div class="rounded-3 bg-info-subtle text-info-emphasis p-3 d-flex align-items-center justify-content-center" style="width:50px;height:50px;font-size:1.35rem;">
+            <i class="fas fa-receipt"></i>
           </div>
           <div>
-            <span class="text-muted small fw-semibold text-uppercase d-block">Input GST Claimable</span>
+            <span class="text-muted small fw-semibold text-uppercase d-block" style="letter-spacing: 0.04em;">Input GST Claimable</span>
             <span class="fs-4 fw-bold text-info-emphasis">₹{{ kpi_total_tax|floatformat:2 }}</span>
           </div>
         </div>
@@ -326,11 +364,11 @@
     <div class="col-6 col-lg-3">
       <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100 kpi-card-hover">
         <div class="d-flex align-items-center gap-3">
-          <div class="rounded-3 bg-danger-subtle text-danger p-3 d-flex align-items-center justify-content-center" style="width:48px;height:48px;font-size:1.3rem;">
-            <i class="bi bi-exclamation-octagon-fill"></i>
+          <div class="rounded-3 bg-danger-subtle text-danger p-3 d-flex align-items-center justify-content-center" style="width:50px;height:50px;font-size:1.35rem;">
+            <i class="fas fa-clock-rotate-left"></i>
           </div>
           <div>
-            <span class="text-muted small fw-semibold text-uppercase d-block">Unpaid Vendor Bills</span>
+            <span class="text-muted small fw-semibold text-uppercase d-block" style="letter-spacing: 0.04em;">Unpaid Vendor Bills</span>
             <span class="fs-4 fw-bold text-danger">{{ kpi_unpaid_count }}</span>
           </div>
         </div>
@@ -339,14 +377,16 @@
   </div>
 
   <!-- Filter Card -->
-  <div class="card shadow-sm border-0 mb-4">
+  <div class="card shadow-sm border-0 mb-4 rounded-3">
     <div class="card-body p-3 p-md-4">
       <form method="get" action="{% url 'restaurant_admin:purchase_list' restaurant_slug=restaurant.slug %}">
         <div class="row g-3 align-items-end">
           <!-- Period Preset Buttons -->
           <div class="col-12 col-xl-4">
-            <label class="form-label fw-bold text-secondary extra-small text-uppercase mb-1">Time Period</label>
-            <div class="btn-group w-100 period-btn-group" role="group">
+            <label class="form-label fw-bold text-secondary extra-small text-uppercase mb-1 d-flex align-items-center gap-1">
+              <i class="fas fa-calendar-day text-primary"></i> Time Period
+            </label>
+            <div class="btn-group w-100 period-btn-group shadow-sm" role="group">
               <a href="{% url 'restaurant_admin:purchase_list' restaurant_slug=restaurant.slug %}" class="btn btn-sm btn-outline-secondary {% if not period_filter and not start_date_filter and not end_date_filter %}active{% endif %}">All</a>
               <a href="?period=today" class="btn btn-sm btn-outline-secondary {% if period_filter == 'today' %}active{% endif %}">Today</a>
               <a href="?period=yesterday" class="btn btn-sm btn-outline-secondary {% if period_filter == 'yesterday' %}active{% endif %}">Yesterday</a>
@@ -358,17 +398,17 @@
           <!-- Custom Date Range -->
           <div class="col-6 col-sm-3 col-xl-2">
             <label class="form-label fw-bold text-secondary extra-small text-uppercase mb-1">From Date</label>
-            <input type="date" name="start_date" value="{{ start_date_filter }}" class="form-control form-control-sm">
+            <input type="date" name="start_date" value="{{ start_date_filter }}" class="form-control form-control-sm rounded-2">
           </div>
           <div class="col-6 col-sm-3 col-xl-2">
             <label class="form-label fw-bold text-secondary extra-small text-uppercase mb-1">To Date</label>
-            <input type="date" name="end_date" value="{{ end_date_filter }}" class="form-control form-control-sm">
+            <input type="date" name="end_date" value="{{ end_date_filter }}" class="form-control form-control-sm rounded-2">
           </div>
 
           <!-- Payment Method -->
           <div class="col-6 col-sm-3 col-xl-2">
             <label class="form-label fw-bold text-secondary extra-small text-uppercase mb-1">Payment Method</label>
-            <select name="payment_method" class="form-select form-select-sm">
+            <select name="payment_method" class="form-select form-select-sm rounded-2">
               <option value="all">All Methods</option>
               <option value="bank_transfer" {% if payment_method_filter == 'bank_transfer' %}selected{% endif %}>Bank Transfer</option>
               <option value="upi" {% if payment_method_filter == 'upi' %}selected{% endif %}>UPI</option>
@@ -380,7 +420,7 @@
           <!-- Payment Status -->
           <div class="col-6 col-sm-3 col-xl-2">
             <label class="form-label fw-bold text-secondary extra-small text-uppercase mb-1">Payment Status</label>
-            <select name="payment_status" class="form-select form-select-sm">
+            <select name="payment_status" class="form-select form-select-sm rounded-2">
               <option value="all">All Statuses</option>
               <option value="paid" {% if payment_status_filter == 'paid' %}selected{% endif %}>Paid</option>
               <option value="unpaid" {% if payment_status_filter == 'unpaid' %}selected{% endif %}>Unpaid</option>
@@ -389,17 +429,17 @@
           </div>
 
           <!-- Search Input & Action Buttons -->
-          <div class="col-12">
+          <div class="col-12 pt-1">
             <div class="d-flex gap-2 flex-wrap align-items-center">
-              <div class="input-group input-group-sm flex-grow-1" style="max-width: 440px;">
-                <span class="input-group-text bg-light text-muted border-end-0"><i class="bi bi-search"></i></span>
+              <div class="input-group input-group-sm flex-grow-1 shadow-sm rounded-2 overflow-hidden" style="max-width: 460px;">
+                <span class="input-group-text bg-light text-muted border-end-0"><i class="fas fa-search"></i></span>
                 <input type="text" name="q" value="{{ search_query }}" class="form-control border-start-0" placeholder="Search supplier, GSTIN, invoice / ref # or PO ID...">
               </div>
-              <button type="submit" class="btn btn-primary btn-sm px-3 fw-semibold">
-                <i class="bi bi-funnel-fill me-1"></i> Apply Filters
+              <button type="submit" class="btn btn-primary btn-sm px-3 fw-semibold shadow-sm d-inline-flex align-items-center gap-1.5">
+                <i class="fas fa-filter"></i> Apply Filters
               </button>
-              <a href="{% url 'restaurant_admin:purchase_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary btn-sm px-3" title="Reset Filters">
-                <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
+              <a href="{% url 'restaurant_admin:purchase_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary btn-sm px-3 shadow-sm d-inline-flex align-items-center gap-1.5" title="Reset Filters">
+                <i class="fas fa-rotate-right"></i> Reset
               </a>
             </div>
           </div>
@@ -438,7 +478,14 @@
           <tbody>
             {% for po in purchases %}
             <tr>
-              <td class="fw-bold text-primary">#{{ po.id }}</td>
+              <td class="fw-bold">
+                <a href="javascript:void(0)" 
+                   onclick="quickPreviewPurchase('{{ po.id }}')" 
+                   class="po-ref-link font-monospace d-inline-flex align-items-center gap-1"
+                   title="Click for Quick Breakdown Preview">
+                  <i class="bi bi-box-arrow-in-up-right small text-primary opacity-75"></i>{% if po.po_number %}{{ po.po_number }}{% else %}#{{ po.id }}{% endif %}
+                </a>
+              </td>
               <td class="text-muted">{{ po.purchase_date|date:"Y-m-d" }}</td>
               <td class="fw-semibold text-dark">{{ po.supplier_name }}</td>
               <td>
@@ -448,7 +495,14 @@
                 <span class="text-muted">-</span>
                 {% endif %}
               </td>
-              <td><span class="fw-semibold font-monospace text-primary">{{ po.invoice_number }}</span></td>
+              <td>
+                <a href="{% url 'restaurant_admin:purchase_invoice' restaurant_slug=restaurant.slug pk=po.id %}" 
+                   class="po-ref-link font-monospace" 
+                   title="View Full Purchase Voucher / Tax Invoice" 
+                   target="_blank">
+                  {{ po.invoice_number }}
+                </a>
+              </td>
               <td>
                 <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">
                   {{ po.items.all|length }} items
@@ -474,18 +528,37 @@
                 <span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i> Partial</span>
                 {% endif %}
               </td>
-              <td class="text-end">
-                <button type="button" class="btn btn-sm btn-outline-primary fw-semibold"
-                        data-id="{{ po.id }}"
-                        data-invoice="{{ po.invoice_number|escapejs }}"
-                        data-date="{{ po.purchase_date|date:'Y-m-d' }}"
-                        data-supplier-name="{{ po.supplier_name|escapejs }}"
-                        data-supplier-gstin="{{ po.supplier_gstin|default:''|escapejs }}"
-                        data-payment-method="{{ po.payment_method }}"
-                        data-payment-status="{{ po.payment_status }}"
-                        onclick="editPurchaseFromBtn(this)">
-                  <i class="bi bi-pencil me-1"></i> Edit
-                </button>
+              <td class="text-end text-nowrap">
+                <div class="d-inline-flex align-items-center gap-1 justify-content-end">
+                  <!-- Quick Preview Breakdown Modal -->
+                  <button type="button" class="btn btn-sm btn-action-view fw-semibold px-2"
+                          onclick="quickPreviewPurchase('{{ po.id }}')"
+                          title="Quick View Items & GST Breakdown">
+                    <i class="bi bi-eye"></i> <span class="d-none d-xl-inline">Preview</span>
+                  </button>
+
+                  <!-- Full Printable Invoice -->
+                  <a href="{% url 'restaurant_admin:purchase_invoice' restaurant_slug=restaurant.slug pk=po.id %}"
+                     class="btn btn-sm btn-action-invoice fw-semibold px-2"
+                     title="View Full Purchase Invoice / Voucher"
+                     target="_blank">
+                    <i class="bi bi-receipt"></i> <span class="d-none d-xl-inline">Invoice</span>
+                  </a>
+
+                  <!-- Edit PO -->
+                  <button type="button" class="btn btn-sm btn-outline-primary fw-semibold px-2"
+                          data-id="{{ po.id }}"
+                          data-invoice="{{ po.invoice_number|escapejs }}"
+                          data-date="{{ po.purchase_date|date:'Y-m-d' }}"
+                          data-supplier-name="{{ po.supplier_name|escapejs }}"
+                          data-supplier-gstin="{{ po.supplier_gstin|default:''|escapejs }}"
+                          data-payment-method="{{ po.payment_method }}"
+                          data-payment-status="{{ po.payment_status }}"
+                          onclick="editPurchaseFromBtn(this)"
+                          title="Edit Purchase Record">
+                    <i class="bi bi-pencil"></i> <span class="d-none d-xl-inline">Edit</span>
+                  </button>
+                </div>
               </td>
             </tr>
             {% empty %}
@@ -509,6 +582,165 @@
     <!-- Pagination -->
     {% include 'restaurant_admin/includes/pagination.html' with page_obj=purchases %}
 
+  </div>
+</div>
+
+<!-- Quick Purchase Preview Modal -->
+<div class="modal fade" id="quickPurchasePreviewModal" tabindex="-1" aria-labelledby="quickPurchasePreviewModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow-lg rounded-3 overflow-hidden">
+      <div class="modal-header preview-modal-header py-3 px-4">
+        <div>
+          <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-primary-subtle text-primary fw-bold font-monospace" id="qpPoIdBadge">PO #--</span>
+            <h5 class="modal-title fw-bold text-white mb-0" id="quickPurchasePreviewModalLabel">Purchase Invoice Breakdown</h5>
+          </div>
+          <small class="text-white-50 mt-1 d-block" id="qpSubtitle">Goods Inward Entry, GST Slabs &amp; Line Items Breakdown</small>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body p-4 bg-light">
+        <!-- Loading State -->
+        <div id="qpLoadingState" class="text-center py-5">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading breakdown...</span>
+          </div>
+          <p class="text-muted mt-2 small">Loading purchase order details...</p>
+        </div>
+
+        <!-- Content State -->
+        <div id="qpContentState" style="display: none;">
+          <!-- Top Info Cards -->
+          <div class="row g-2 mb-3">
+            <div class="col-sm-6">
+              <div class="p-3 bg-white rounded-3 border h-100 shadow-sm">
+                <div class="text-muted extra-small fw-bold text-uppercase mb-1" style="letter-spacing: 0.5px;">Vendor / Supplier Details</div>
+                <div class="fw-bold text-dark fs-6" id="qpSupplierName">--</div>
+                <div class="small text-muted mt-1" id="qpSupplierGstinRow">GSTIN: <span class="font-monospace fw-semibold text-dark" id="qpSupplierGstin">--</span></div>
+                <div class="extra-small text-muted mt-1" id="qpSupplierExtra"></div>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <div class="p-3 bg-white rounded-3 border h-100 shadow-sm">
+                <div class="text-muted extra-small fw-bold text-uppercase mb-1" style="letter-spacing: 0.5px;">Invoice &amp; Settlement</div>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <span class="text-muted small">Bill / Invoice Ref:</span>
+                  <span class="font-monospace fw-bold text-primary" id="qpInvoiceNumber">--</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <span class="text-muted small">Purchase Date:</span>
+                  <span class="fw-semibold text-dark small" id="qpPurchaseDate">--</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                  <span class="text-muted small">Payment Settlement:</span>
+                  <span id="qpPaymentBadges"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Items Table Card -->
+          <div class="card border-0 shadow-sm rounded-3 overflow-hidden mb-3">
+            <div class="card-header bg-white py-2 px-3 border-bottom d-flex justify-content-between align-items-center">
+              <span class="fw-bold small text-secondary text-uppercase" style="letter-spacing: 0.5px;">
+                <i class="bi bi-box-seam me-1 text-primary"></i> Line Items Breakdown
+              </span>
+              <span class="badge bg-light text-secondary border small" id="qpItemsCountBadge">0 items</span>
+            </div>
+            <div class="table-responsive" style="max-height: 260px;">
+              <table class="table table-hover table-sm mb-0 align-middle">
+                <thead class="table-light extra-small text-uppercase text-secondary">
+                  <tr>
+                    <th class="ps-3">Item Description</th>
+                    <th class="text-center">HSN/SAC</th>
+                    <th class="text-center">Qty</th>
+                    <th class="text-end">Unit Rate (₹)</th>
+                    <th class="text-end">Taxable (₹)</th>
+                    <th class="text-center">GST %</th>
+                    <th class="text-end pe-3">Line Total (₹)</th>
+                  </tr>
+                </thead>
+                <tbody id="qpItemsTableBody" class="small">
+                  <!-- Injected via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Tax Summary & Grand Total -->
+          <div class="row g-3">
+            <div class="col-md-7">
+              <div class="p-3 bg-white rounded-3 border shadow-sm h-100">
+                <div class="fw-bold extra-small text-uppercase text-secondary mb-2" style="letter-spacing: 0.5px;">
+                  <i class="bi bi-calculator me-1 text-primary"></i> Input GST Rate Schedule
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-sm table-borderless mb-0 extra-small align-middle">
+                    <thead class="text-muted border-bottom">
+                      <tr>
+                        <th>Tax Slab</th>
+                        <th class="text-end">Taxable (₹)</th>
+                        <th class="text-end">CGST (₹)</th>
+                        <th class="text-end">SGST (₹)</th>
+                        <th class="text-end">IGST (₹)</th>
+                        <th class="text-end">Tax (₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody id="qpTaxSlabsTableBody">
+                      <!-- Injected via JS -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-5">
+              <div class="p-3 bg-white rounded-3 border shadow-sm h-100 d-flex flex-column justify-content-between">
+                <div>
+                  <div class="d-flex justify-content-between py-1 extra-small text-muted">
+                    <span>Taxable Subtotal:</span>
+                    <span class="fw-semibold text-dark font-monospace" id="qpSubtotal">₹0.00</span>
+                  </div>
+                  <div class="d-flex justify-content-between py-1 extra-small text-muted">
+                    <span>Total Input GST:</span>
+                    <span class="fw-semibold text-info-emphasis font-monospace" id="qpTaxAmount">₹0.00</span>
+                  </div>
+                  <div class="d-flex justify-content-between py-1 extra-small text-muted" id="qpRoundOffRow" style="display: none;">
+                    <span>Round Off:</span>
+                    <span class="fw-semibold font-monospace" id="qpRoundOff">₹0.00</span>
+                  </div>
+                </div>
+                <div class="border-top pt-2 mt-2">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <span class="fw-bold text-dark fs-6">Grand Total:</span>
+                    <span class="fw-bold fs-5 text-success font-monospace" id="qpGrandTotal">₹0.00</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Error State -->
+        <div id="qpErrorState" class="text-center py-4" style="display: none;">
+          <div class="text-danger mb-2"><i class="bi bi-exclamation-triangle-fill fs-2"></i></div>
+          <p class="text-danger fw-semibold mb-1" id="qpErrorMessage">Unable to load purchase breakdown.</p>
+          <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="retryQuickPreview()">Retry</button>
+        </div>
+      </div>
+
+      <div class="modal-footer bg-white py-2 px-4 d-flex justify-content-between align-items-center">
+        <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" data-bs-dismiss="modal">
+          Close
+        </button>
+        <div>
+          <a href="#" id="qpFullInvoiceBtn" target="_blank" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold d-inline-flex align-items-center gap-1.5 shadow-sm">
+            <i class="bi bi-printer-fill"></i> View &amp; Print Full Invoice
+          </a>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -581,11 +813,18 @@
 
 <script>
   let editPurchaseModalInstance = null;
+  let quickPreviewModalInstance = null;
+  let currentPreviewPoId = null;
 
   document.addEventListener('DOMContentLoaded', function() {
-    const modalEl = document.getElementById('editPurchaseModal');
-    if (modalEl) {
-      editPurchaseModalInstance = new bootstrap.Modal(modalEl);
+    const editModalEl = document.getElementById('editPurchaseModal');
+    if (editModalEl) {
+      editPurchaseModalInstance = new bootstrap.Modal(editModalEl);
+    }
+
+    const previewModalEl = document.getElementById('quickPurchasePreviewModal');
+    if (previewModalEl) {
+      quickPreviewModalInstance = new bootstrap.Modal(previewModalEl);
     }
 
     // Export Dropdown Click-Toggle for mobile/touch
@@ -605,6 +844,152 @@
       });
     }
   });
+
+  function quickPreviewPurchase(poId) {
+    if (!poId) return;
+    currentPreviewPoId = poId;
+
+    const loadingState = document.getElementById('qpLoadingState');
+    const contentState = document.getElementById('qpContentState');
+    const errorState = document.getElementById('qpErrorState');
+
+    loadingState.style.display = 'block';
+    contentState.style.display = 'none';
+    errorState.style.display = 'none';
+
+    document.getElementById('qpPoIdBadge').textContent = 'PO #' + poId;
+    
+    // Set Invoice button link
+    const baseInvoiceUrl = "{% url 'restaurant_admin:purchase_invoice' restaurant_slug=restaurant.slug pk=0 %}";
+    document.getElementById('qpFullInvoiceBtn').href = baseInvoiceUrl.replace('/0/', '/' + poId + '/');
+
+    if (quickPreviewModalInstance) {
+      quickPreviewModalInstance.show();
+    }
+
+    const apiUrl = baseInvoiceUrl.replace('/0/', '/' + poId + '/') + '?format=json';
+
+    fetch(apiUrl, {
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+    .then(response => {
+      if (!response.ok) throw new Error('Network response was not ok');
+      return response.json();
+    })
+    .then(data => {
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to retrieve breakdown');
+      }
+      renderQuickPreviewData(data);
+      loadingState.style.display = 'none';
+      contentState.style.display = 'block';
+    })
+    .catch(err => {
+      console.error('Quick preview error:', err);
+      loadingState.style.display = 'none';
+      errorState.style.display = 'block';
+      document.getElementById('qpErrorMessage').textContent = err.message || 'Error loading purchase details.';
+    });
+  }
+
+  function retryQuickPreview() {
+    if (currentPreviewPoId) quickPreviewPurchase(currentPreviewPoId);
+  }
+
+  function renderQuickPreviewData(data) {
+    document.getElementById('qpPoIdBadge').textContent = data.po_number ? '#' + data.po_number : 'PO #' + data.po_id;
+    document.getElementById('qpSupplierName').textContent = data.supplier_name || 'Vendor / Cash Supplier';
+    document.getElementById('qpSupplierGstin').textContent = data.supplier_gstin || 'Unregistered / Not Provided';
+    
+    let extraText = '';
+    if (data.supplier_phone) extraText += 'Phone: ' + data.supplier_phone;
+    if (data.supplier_address) extraText += (extraText ? ' • ' : '') + data.supplier_address;
+    document.getElementById('qpSupplierExtra').textContent = extraText;
+
+    document.getElementById('qpInvoiceNumber').textContent = data.invoice_number || '-';
+    document.getElementById('qpPurchaseDate').textContent = data.purchase_date || '-';
+
+    // Payment badges
+    let paymentHtml = `<span class="badge bg-secondary-subtle text-secondary-emphasis me-1">${escapeHtml(data.payment_method || '')}</span>`;
+    const pStatus = (data.payment_status || '').toLowerCase();
+    if (pStatus === 'paid') {
+      paymentHtml += `<span class="badge bg-success">Paid</span>`;
+    } else if (pStatus === 'unpaid') {
+      paymentHtml += `<span class="badge bg-danger">Unpaid</span>`;
+    } else {
+      paymentHtml += `<span class="badge bg-warning text-dark">Partial</span>`;
+    }
+    document.getElementById('qpPaymentBadges').innerHTML = paymentHtml;
+
+    // Items table
+    const itemsTbody = document.getElementById('qpItemsTableBody');
+    itemsTbody.innerHTML = '';
+    const items = data.items || [];
+    document.getElementById('qpItemsCountBadge').textContent = items.length + ' item' + (items.length === 1 ? '' : 's');
+
+    items.forEach(it => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="ps-3">
+          <div class="fw-bold text-dark">${escapeHtml(it.name)}</div>
+          <div class="extra-small text-muted">${escapeHtml(it.category || '')}${it.sku ? ' &bull; SKU: ' + escapeHtml(it.sku) : ''}</div>
+        </td>
+        <td class="text-center font-monospace extra-small text-muted">${escapeHtml(it.hsn_code || '-')}</td>
+        <td class="text-center font-monospace fw-semibold">${it.quantity} <span class="extra-small text-muted">${escapeHtml(it.unit || '')}</span></td>
+        <td class="text-end font-monospace">₹${it.unit_cost.toFixed(2)}</td>
+        <td class="text-end font-monospace fw-semibold">₹${it.taxable_value.toFixed(2)}</td>
+        <td class="text-center">
+          <span class="badge bg-light text-dark border extra-small">${it.gst_rate}%</span>
+          <div class="extra-small text-muted">+₹${it.item_tax.toFixed(2)}</div>
+        </td>
+        <td class="text-end pe-3 font-monospace fw-bold text-dark">₹${it.line_total.toFixed(2)}</td>
+      `;
+      itemsTbody.appendChild(tr);
+    });
+
+    // Tax Slabs table
+    const slabsTbody = document.getElementById('qpTaxSlabsTableBody');
+    slabsTbody.innerHTML = '';
+    const slabs = data.tax_slabs || [];
+    if (slabs.length === 0) {
+      slabsTbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-2">No tax applicable</td></tr>`;
+    } else {
+      slabs.forEach(s => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><span class="badge bg-secondary-subtle text-secondary-emphasis">${s.rate}% GST</span></td>
+          <td class="text-end font-monospace">₹${s.taxable.toFixed(2)}</td>
+          <td class="text-end font-monospace text-muted">${s.cgst > 0 ? '₹' + s.cgst.toFixed(2) : '-'}</td>
+          <td class="text-end font-monospace text-muted">${s.sgst > 0 ? '₹' + s.sgst.toFixed(2) : '-'}</td>
+          <td class="text-end font-monospace text-muted">${s.igst > 0 ? '₹' + s.igst.toFixed(2) : '-'}</td>
+          <td class="text-end font-monospace fw-bold text-info-emphasis">₹${s.tax.toFixed(2)}</td>
+        `;
+        slabsTbody.appendChild(tr);
+      });
+    }
+
+    // Totals
+    document.getElementById('qpSubtotal').textContent = '₹' + data.subtotal.toFixed(2);
+    document.getElementById('qpTaxAmount').textContent = '₹' + data.tax_amount.toFixed(2);
+    document.getElementById('qpGrandTotal').textContent = '₹' + data.grand_total.toFixed(2);
+    
+    const roundOffRow = document.getElementById('qpRoundOffRow');
+    if (Math.abs(data.round_off) > 0.001) {
+      roundOffRow.style.display = 'flex';
+      document.getElementById('qpRoundOff').textContent = (data.round_off > 0 ? '+₹' : '-₹') + Math.abs(data.round_off).toFixed(2);
+    } else {
+      roundOffRow.style.display = 'none';
+    }
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, function(m) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+    });
+  }
 
   function editPurchaseFromBtn(btn) {
     if (!btn) return;

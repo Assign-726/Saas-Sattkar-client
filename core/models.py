@@ -2191,6 +2191,7 @@ class PurchaseOrder(models.Model):
     supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True, related_name='purchase_orders')
     supplier_name = models.CharField(max_length=150)
     supplier_gstin = models.CharField(max_length=50, blank=True, null=True)
+    po_number = models.CharField(max_length=100, blank=True, null=True, help_text="Internal Goods Inward Entry / PO Number")
     invoice_number = models.CharField(max_length=100, help_text="Supplier Bill/Invoice Ref No.")
     purchase_date = models.DateField()
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)

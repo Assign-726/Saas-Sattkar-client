@@ -283,10 +283,22 @@ def inventory_category_list(request, restaurant_slug=None):
     active_branch = get_active_branch(request, restaurant)
     q = request.GET.get('q', '').strip()
 
-    categories_qs = InventoryCategory.objects.filter(restaurant=restaurant)
+    base_qs = InventoryCategory.objects.filter(restaurant=restaurant)
     if active_branch:
-        categories_qs = categories_qs.filter(branch=active_branch)
+        base_qs = base_qs.filter(branch=active_branch)
 
+    total_categories = base_qs.count()
+    subcategories_count = base_qs.filter(parent__isnull=False).count()
+    top_level_count = total_categories - subcategories_count
+
+    items_linked_qs = InventoryItem.objects.filter(restaurant=restaurant, category__isnull=False)
+    if active_branch:
+        items_linked_qs = items_linked_qs.filter(branch=active_branch)
+    total_items_linked_count = items_linked_qs.count()
+
+    distinct_gst_slabs = base_qs.exclude(gst_rate__isnull=True).values_list('gst_rate', flat=True).distinct().count()
+
+    categories_qs = base_qs
     if q:
         categories_qs = categories_qs.filter(Q(name__icontains=q) | Q(hsn_sac_code__icontains=q))
 
@@ -305,6 +317,11 @@ def inventory_category_list(request, restaurant_slug=None):
         'active_menu': 'inventory_categories',
         'search_query': q,
         'restaurant': restaurant,
+        'total_categories': total_categories,
+        'top_level_count': top_level_count,
+        'subcategories_count': subcategories_count,
+        'total_items_linked_count': total_items_linked_count,
+        'distinct_gst_slabs': distinct_gst_slabs,
     })
 
 
@@ -426,9 +443,16 @@ def inventory_list(request, restaurant_slug=None):
     active_branch = get_active_branch(request, restaurant)
 
     q = request.GET.get('q', '').strip()
-    items = InventoryItem.objects.filter(restaurant=restaurant).select_related('category', 'category__parent')
+    base_items = InventoryItem.objects.filter(restaurant=restaurant)
     if active_branch:
-        items = items.filter(branch=active_branch)
+        base_items = base_items.filter(branch=active_branch)
+
+    total_items_count = base_items.count()
+    low_stock_count = base_items.filter(quantity__lte=F('reorder_level')).count()
+    active_items_count = base_items.filter(is_active=True).count()
+    total_inventory_val = sum((it.quantity or 0) * (it.unit_cost or Decimal('0.00')) for it in base_items)
+
+    items = base_items.select_related('category', 'category__parent')
     if q:
         items = items.filter(
             Q(name__icontains=q) |
@@ -455,6 +479,10 @@ def inventory_list(request, restaurant_slug=None):
         'active_menu': 'inventory',
         'search_query': q,
         'restaurant': restaurant,
+        'total_items_count': total_items_count,
+        'low_stock_count': low_stock_count,
+        'active_items_count': active_items_count,
+        'total_inventory_val': total_inventory_val,
     })
 
 @login_required
@@ -2473,10 +2501,34 @@ def inventory_logs(request, restaurant_slug=None):
         return HttpResponseForbidden("No restaurant associated with this account.")
 
     active_branch = get_active_branch(request, restaurant)
-    logs_qs = InventoryTransaction.objects.filter(inventory_item__restaurant=restaurant)
+    base_qs = InventoryTransaction.objects.filter(inventory_item__restaurant=restaurant)
     if active_branch:
-        logs_qs = logs_qs.filter(inventory_item__branch=active_branch)
-    logs_qs = logs_qs.select_related('inventory_item', 'order', 'performed_by').order_by('-created_at')
+        base_qs = base_qs.filter(inventory_item__branch=active_branch)
+
+    total_logs_count = base_qs.count()
+    inward_purchases_count = base_qs.filter(transaction_type='P').count()
+    order_deductions_count = base_qs.filter(transaction_type='O').count()
+    restocks_count = base_qs.filter(transaction_type__in=['R', 'M']).count()
+
+    q = request.GET.get('q', '').strip()
+    type_filter = request.GET.get('type', '').strip()
+    from_date = request.GET.get('from_date', '').strip()
+    to_date = request.GET.get('to_date', '').strip()
+
+    filtered_qs = base_qs
+    if q:
+        filtered_qs = filtered_qs.filter(
+            Q(inventory_item__name__icontains=q) |
+            Q(performed_by__username__icontains=q)
+        )
+    if type_filter:
+        filtered_qs = filtered_qs.filter(transaction_type=type_filter)
+    if from_date:
+        filtered_qs = filtered_qs.filter(created_at__date__gte=from_date)
+    if to_date:
+        filtered_qs = filtered_qs.filter(created_at__date__lte=to_date)
+
+    logs_qs = filtered_qs.select_related('inventory_item', 'order', 'performed_by').order_by('-created_at')
 
     try:
         per_page = int(request.GET.get('per_page', 20))
@@ -2492,6 +2544,14 @@ def inventory_logs(request, restaurant_slug=None):
         'logs': logs,
         'active_menu': 'inventory_logs',
         'restaurant': restaurant,
+        'total_logs_count': total_logs_count,
+        'inward_purchases_count': inward_purchases_count,
+        'order_deductions_count': order_deductions_count,
+        'restocks_count': restocks_count,
+        'search_query': q,
+        'type_filter': type_filter,
+        'from_date': from_date,
+        'to_date': to_date,
     })
 
 
@@ -2798,15 +2858,19 @@ def purchase_create(request, restaurant_slug=None):
             return JsonResponse({'success': False, 'error': err}, status=400) if is_json else (messages.error(request, err) or redirect(request.path))
 
         active_branch = get_active_branch(request, restaurant)
+        user_entry_no = (data.get('entry_no') or '').strip()
+        supplier_invoice_no = (data.get('invoice_number') or '').strip()
         try:
-            invoice_number = get_and_increment_document_number(
+            po_number = get_and_increment_document_number(
                 restaurant=restaurant,
                 document_type='purchase',
                 branch=active_branch,
-                user_input_no=(data.get('entry_no') or data.get('invoice_number') or '').strip()
+                user_input_no=user_entry_no
             )
         except ValidationError as ve:
             return JsonResponse({'success': False, 'error': str(ve)}, status=400) if is_json else (messages.error(request, str(ve)) or redirect(request.path))
+
+        final_invoice_number = supplier_invoice_no or po_number
 
         if not items:
             err = 'Please add at least one inventory item to the purchase list.'
@@ -2896,7 +2960,8 @@ def purchase_create(request, restaurant_slug=None):
                     supplier=supplier,
                     supplier_name=supplier.name,
                     supplier_gstin=supplier.gstin or '',
-                    invoice_number=invoice_number,
+                    po_number=po_number,
+                    invoice_number=final_invoice_number,
                     purchase_date=purchase_date_str,
                     subtotal=subtotal,
                     tax_amount=tax_amount,
@@ -3091,6 +3156,7 @@ def _filter_purchase_queryset(request, restaurant):
         q_filter = (
             Q(supplier_name__icontains=q) |
             Q(supplier_gstin__icontains=q) |
+            Q(po_number__icontains=q) |
             Q(invoice_number__icontains=q)
         )
         clean_num = q.lstrip('#')
@@ -3174,7 +3240,7 @@ def _export_purchase_records_excel(request, restaurant, purchases_qs):
         p_method = po.get_payment_method_display()
 
         ws.append([
-            f"PO-{po.id:04d}",
+            po.po_number or f"PO-{po.id:04d}",
             po.purchase_date.strftime('%Y-%m-%d') if po.purchase_date else '',
             po.supplier_name or 'N/A',
             po.supplier_gstin or '',
@@ -3725,16 +3791,191 @@ def purchase_edit(request, restaurant_slug=None, pk=None):
     return redirect('restaurant_admin:purchase_list', restaurant_slug=restaurant.slug)
 
 
-class MenuListView(ListView):
-    model = MenuItem
-    template_name = 'restaurant_admin/menu/list_new.html'
-    context_object_name = 'menu_items'
-    paginate_by = 20
+@login_required
+@user_passes_test(is_admin)
+def purchase_invoice(request, pk, restaurant_slug=None):
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
 
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        queryset = queryset.select_related('subcategory', 'subcategory__category').order_by('subcategory__category__name', 'subcategory__name', 'name')
-        return queryset
+    po = get_object_or_404(
+        PurchaseOrder.objects.select_related(
+            'restaurant', 'branch', 'party', 'supplier', 'created_by'
+        ).prefetch_related(
+            'items__inventory_item',
+            'items__inventory_item__category',
+        ),
+        pk=pk,
+        restaurant=restaurant,
+    )
+
+    branch = po.branch or restaurant.branches.first()
+    settings_obj = RestaurantSettings.get_settings(restaurant)
+    landing = None
+    try:
+        landing = RestaurantLanding.objects.filter(restaurant=restaurant).first()
+    except Exception:
+        pass
+
+    # Determine intra-state vs inter-state
+    branch_state = (branch.state if branch and hasattr(branch, 'state') else 'Rajasthan') or 'Rajasthan'
+    branch_gstin = (branch.gstin if branch and hasattr(branch, 'gstin') else (settings_obj.gst_number if settings_obj else '')) or ''
+    branch_state_code = branch_gstin[:2] if len(branch_gstin) >= 2 and branch_gstin[:2].isdigit() else '08'
+
+    supplier_gstin = po.supplier_gstin or (po.party.gstin if po.party else '') or ''
+    supplier_state = (po.party.state if po.party and po.party.state else '') or ''
+    supplier_state_code = supplier_gstin[:2] if len(supplier_gstin) >= 2 and supplier_gstin[:2].isdigit() else ''
+
+    if supplier_state_code:
+        is_interstate = (supplier_state_code != branch_state_code)
+    elif supplier_state and branch_state:
+        is_interstate = (supplier_state.strip().lower() != branch_state.strip().lower())
+    else:
+        is_interstate = False
+
+    # Process items and tax breakdown
+    items_breakdown = []
+    tax_slabs = {}
+    total_taxable = Decimal('0.00')
+    total_tax = Decimal('0.00')
+
+    for it in po.items.all():
+        qty = Decimal(str(it.quantity or 0))
+        rate = Decimal(str(it.unit_cost or 0))
+        taxable_val = Decimal(str(it.line_total if it.line_total is not None else (qty * rate)))
+        gst_rate = Decimal(str(it.gst_rate or 0))
+        item_tax = (taxable_val * gst_rate / Decimal('100')).quantize(Decimal('0.01'))
+        line_total = taxable_val + item_tax
+
+        total_taxable += taxable_val
+        total_tax += item_tax
+
+        # Slab grouping
+        slab_key = f"{gst_rate:.2f}"
+        if slab_key not in tax_slabs:
+            tax_slabs[slab_key] = {
+                'rate': gst_rate,
+                'taxable': Decimal('0.00'),
+                'cgst': Decimal('0.00'),
+                'sgst': Decimal('0.00'),
+                'igst': Decimal('0.00'),
+                'tax': Decimal('0.00'),
+            }
+        tax_slabs[slab_key]['taxable'] += taxable_val
+        tax_slabs[slab_key]['tax'] += item_tax
+        if is_interstate:
+            tax_slabs[slab_key]['igst'] += item_tax
+        else:
+            half_tax = (item_tax / Decimal('2')).quantize(Decimal('0.01'))
+            tax_slabs[slab_key]['cgst'] += half_tax
+            tax_slabs[slab_key]['sgst'] += item_tax - half_tax
+
+        hsn = it.hsn_code or (it.inventory_item.effective_hsn_code if hasattr(it.inventory_item, 'effective_hsn_code') else it.inventory_item.hsn_sac_code) or ''
+
+        items_breakdown.append({
+            'item': it,
+            'name': it.inventory_item.name,
+            'unit': it.inventory_item.unit or '',
+            'sku': it.inventory_item.sku or '',
+            'category': it.inventory_item.category.name if it.inventory_item.category else 'Raw Ingredients',
+            'hsn_code': hsn,
+            'quantity': qty,
+            'unit_cost': rate,
+            'taxable_value': taxable_val,
+            'gst_rate': gst_rate,
+            'item_tax': item_tax,
+            'line_total': line_total,
+        })
+
+    # Total taxes split
+    if is_interstate:
+        total_cgst = Decimal('0.00')
+        total_sgst = Decimal('0.00')
+        total_igst = po.tax_amount or total_tax
+    else:
+        total_tax_val = po.tax_amount or total_tax
+        total_cgst = (total_tax_val / Decimal('2')).quantize(Decimal('0.01'))
+        total_sgst = total_tax_val - total_cgst
+        total_igst = Decimal('0.00')
+
+    round_off = (po.grand_total - (total_taxable + (po.tax_amount or total_tax))).quantize(Decimal('0.01'))
+
+    # JSON response for quick modal preview
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json':
+        return JsonResponse({
+            'success': True,
+            'po_id': po.id,
+            'po_number': po.po_number or f"PO-{po.id:04d}",
+            'invoice_number': po.invoice_number,
+            'purchase_date': po.purchase_date.strftime('%Y-%m-%d'),
+            'supplier_name': po.supplier_name,
+            'supplier_gstin': supplier_gstin,
+            'supplier_phone': po.party.phone if po.party else '',
+            'supplier_address': po.party.full_address if po.party else '',
+            'payment_method': po.get_payment_method_display(),
+            'payment_status': po.get_payment_status_display(),
+            'subtotal': float(total_taxable),
+            'tax_amount': float(po.tax_amount or total_tax),
+            'grand_total': float(po.grand_total),
+            'is_interstate': is_interstate,
+            'total_cgst': float(total_cgst),
+            'total_sgst': float(total_sgst),
+            'total_igst': float(total_igst),
+            'round_off': float(round_off),
+            'items': [
+                {
+                    'name': it['name'],
+                    'unit': it['unit'],
+                    'sku': it['sku'],
+                    'category': it['category'],
+                    'hsn_code': it['hsn_code'],
+                    'quantity': float(it['quantity']),
+                    'unit_cost': float(it['unit_cost']),
+                    'taxable_value': float(it['taxable_value']),
+                    'gst_rate': float(it['gst_rate']),
+                    'item_tax': float(it['item_tax']),
+                    'line_total': float(it['line_total']),
+                }
+                for it in items_breakdown
+            ],
+            'tax_slabs': [
+                {
+                    'rate': float(s['rate']),
+                    'taxable': float(s['taxable']),
+                    'cgst': float(s['cgst']),
+                    'sgst': float(s['sgst']),
+                    'igst': float(s['igst']),
+                    'tax': float(s['tax']),
+                }
+                for s in tax_slabs.values()
+            ]
+        })
+
+    # Render full printable purchase invoice voucher
+    return render(request, 'restaurant_admin/purchases/invoice.html', {
+        'restaurant': restaurant,
+        'branch': branch,
+        'settings': settings_obj,
+        'landing': landing,
+        'po': po,
+        'supplier_party': po.party,
+        'supplier_gstin': supplier_gstin,
+        'supplier_state': supplier_state,
+        'branch_state': branch_state,
+        'branch_gstin': branch_gstin,
+        'is_interstate': is_interstate,
+        'items_breakdown': items_breakdown,
+        'tax_slabs': sorted(tax_slabs.values(), key=lambda x: x['rate']),
+        'total_taxable': total_taxable,
+        'total_tax': po.tax_amount or total_tax,
+        'total_cgst': total_cgst,
+        'total_sgst': total_sgst,
+        'total_igst': total_igst,
+        'round_off': round_off,
+        'active_menu': 'purchases',
+    })
+
+
 def dashboard(request, restaurant_slug=None):
     # Check authentication
     if not request.user.is_authenticated:
@@ -8228,13 +8469,30 @@ def challan_list(request, restaurant_slug=None):
     if not isinstance(restaurant, Restaurant):
         return restaurant
 
-    challans = DeliveryChallan.objects.filter(restaurant=restaurant).select_related(
+    base_challans = DeliveryChallan.objects.filter(restaurant=restaurant)
+    total_challans_count = base_challans.count()
+    in_transit_count = base_challans.filter(status='in_transit').count()
+    received_count = base_challans.filter(status='received').count()
+    cancelled_count = base_challans.filter(status='cancelled').count()
+
+    from django.db.models import Sum
+    total_val_agg = base_challans.exclude(status='cancelled').aggregate(total=Sum('total_value'))['total'] or Decimal('0.00')
+
+    challans = base_challans.select_related(
         'from_branch', 'to_branch', 'created_by'
     ).prefetch_related('items__inventory_item', 'items__menu_item').order_by('-dispatch_date', '-created_at')
 
     status_filter = request.GET.get('status', '').strip()
     if status_filter:
         challans = challans.filter(status=status_filter)
+
+    q = request.GET.get('q', '').strip()
+    if q:
+        challans = challans.filter(
+            Q(challan_no__icontains=q) |
+            Q(receiver_name__icontains=q) |
+            Q(receiver_gstin__icontains=q)
+        )
 
     try:
         per_page = int(request.GET.get('per_page', 20))
@@ -8249,6 +8507,12 @@ def challan_list(request, restaurant_slug=None):
         'restaurant': restaurant,
         'active_menu': 'challans',
         'status_filter': status_filter,
+        'search_query': q,
+        'total_challans_count': total_challans_count,
+        'in_transit_count': in_transit_count,
+        'received_count': received_count,
+        'cancelled_count': cancelled_count,
+        'total_transferred_val': total_val_agg,
     })
 
 

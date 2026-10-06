@@ -84,12 +84,12 @@ def validate_unique_document_number(restaurant, document_type, number, branch=No
         duplicate = qs.exists()
 
     elif document_type == 'purchase':
-        qs = PurchaseOrder.objects.filter(restaurant=restaurant, invoice_number__iexact=clean_number)
+        qs = PurchaseOrder.objects.filter(restaurant=restaurant)
         if branch:
             qs = qs.filter(branch=branch)
         if exclude_pk:
             qs = qs.exclude(pk=exclude_pk)
-        duplicate = qs.exists()
+        duplicate = qs.filter(Q(po_number__iexact=clean_number) | Q(invoice_number__iexact=clean_number)).exists()
 
     elif document_type == 'receipt':
         qs = AdvanceReceipt.objects.filter(restaurant=restaurant, receipt_no__iexact=clean_number)

@@ -1,80 +1,164 @@
 {% extends 'restaurant_admin/base.html' %}
-{% block title %}{{ title }}{% endblock %}
+{% block title %}{{ title }} - Restaurant Admin{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-  <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="container-fluid px-0">
+  <!-- Page Header -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-      <h3 class="mb-1 text-dark fw-bold"><i class="bi bi-tag-fill text-primary me-2"></i>{{ title }}</h3>
-      <p class="text-muted small mb-0">Configure dynamic raw material category hierarchy and default input GST tax rules</p>
+      <h4 class="fw-bold mb-1 text-dark d-flex align-items-center gap-2">
+        <span class="badge bg-primary-subtle text-primary p-2 rounded-3"><i class="fas fa-tags fs-5"></i></span>
+        <span>{{ title }}</span>
+      </h4>
+      <p class="text-muted extra-small mb-0">Configure hierarchical raw material classifications and default GST input tax parameters</p>
     </div>
-    <a href="{% url 'restaurant_admin:inventory_category_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
-      <i class="bi bi-arrow-left me-1"></i> Back to Categories
+    <a href="{% url 'restaurant_admin:inventory_category_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary btn-sm rounded-pill px-3 fw-semibold">
+      <i class="fas fa-arrow-left me-1"></i> Back to Categories
     </a>
   </div>
 
-  <div class="card border-0 shadow-sm rounded-3">
-    <div class="card-body p-4">
-      <form method="post" novalidate>
-        {% csrf_token %}
+  <form method="post" novalidate id="categoryForm">
+    {% csrf_token %}
 
-        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-folder2 me-1"></i> 1. Category & Hierarchy Profile</h6>
-        <div class="row g-3 mb-4">
+    <!-- Card 1: Category & Hierarchy Profile -->
+    <div class="card border-0 shadow-sm rounded-3 mb-3">
+      <div class="card-header bg-white py-2.5 px-3 border-bottom d-flex align-items-center gap-2">
+        <i class="fas fa-folder-tree text-primary"></i>
+        <h6 class="fw-bold mb-0 text-dark">1. Category & Hierarchy Profile</h6>
+      </div>
+      <div class="card-body p-3">
+        <div class="row g-3">
           <div class="col-md-6">
-            <label class="form-label fw-semibold text-secondary small">Category Name <span class="text-danger">*</span></label>
-            {{ form.name }}
-            <div class="form-text fs-8 text-muted">e.g., Raw Vegetables, Dairy, Soft Drinks, Packaging Materials</div>
-            {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors|join:", " }}</div>{% endif %}
+            <label class="form-label fw-semibold text-dark extra-small mb-1">
+              Category Name <span class="text-danger">*</span>
+            </label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light border-end-0 text-secondary"><i class="fas fa-tag"></i></span>
+              <div class="flex-grow-1">
+                {{ form.name }}
+              </div>
+            </div>
+            <div class="form-text extra-small text-muted mt-1">e.g., Dairy Products, Raw Vegetables, Packaging & Disposables, Spices</div>
+            {% if form.name.errors %}<div class="text-danger extra-small mt-1">{{ form.name.errors|join:", " }}</div>{% endif %}
           </div>
+
           <div class="col-md-6">
-            <label class="form-label fw-semibold text-secondary small">Parent Category (Optional Subcategory nesting)</label>
-            {{ form.parent }}
-            <div class="form-text fs-8 text-muted">Select a parent category if this item is a sub-category.</div>
-            {% if form.parent.errors %}<div class="text-danger small mt-1">{{ form.parent.errors|join:", " }}</div>{% endif %}
+            <label class="form-label fw-semibold text-secondary extra-small mb-1">
+              Parent Category <span class="text-muted fw-normal">(Optional Hierarchy Nesting)</span>
+            </label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light border-end-0 text-secondary"><i class="fas fa-sitemap"></i></span>
+              <div class="flex-grow-1">
+                {{ form.parent }}
+              </div>
+            </div>
+            <div class="form-text extra-small text-muted mt-1">Select a parent group if this is a subcategory, or leave blank for a root category head</div>
+            {% if form.parent.errors %}<div class="text-danger extra-small mt-1">{{ form.parent.errors|join:", " }}</div>{% endif %}
           </div>
         </div>
-
-        <hr class="my-4">
-        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-percent me-1"></i> 2. Input GST & Tax Configuration Hierarchy</h6>
-        <p class="text-muted small mb-3">Choose whether this category inherits tax rules from its parent category/company defaults or overrides them.</p>
-
-        <div class="row g-3 mb-4">
-          <div class="col-md-3">
-            <label class="form-label fw-semibold text-dark small">Tax Configuration Mode <span class="text-danger">*</span></label>
-            {{ form.tax_configuration }}
-            <div class="form-text fs-8 text-muted">Inherit from Parent or Override.</div>
-            {% if form.tax_configuration.errors %}<div class="text-danger small mt-1">{{ form.tax_configuration.errors|join:", " }}</div>{% endif %}
-          </div>
-          <div class="col-md-3">
-            <label class="form-label fw-semibold text-secondary small">Taxability Type</label>
-            {{ form.taxability_type }}
-            {% if form.taxability_type.errors %}<div class="text-danger small mt-1">{{ form.taxability_type.errors|join:", " }}</div>{% endif %}
-          </div>
-          <div class="col-md-3">
-            <label class="form-label fw-semibold text-secondary small">Default HSN / SAC Code</label>
-            {{ form.hsn_sac_code }}
-            <div class="form-text fs-8 text-muted">4 to 8 digit HSN tariff code.</div>
-            {% if form.hsn_sac_code.errors %}<div class="text-danger small mt-1">{{ form.hsn_sac_code.errors|join:", " }}</div>{% endif %}
-          </div>
-          <div class="col-md-3">
-            <label class="form-label fw-semibold text-secondary small">Default GST Rate (%)</label>
-            {{ form.gst_rate }}
-            <div class="form-text fs-8 text-muted">Standard GST % (e.g. 5, 12, 18).</div>
-            {% if form.gst_rate.errors %}<div class="text-danger small mt-1">{{ form.gst_rate.errors|join:", " }}</div>{% endif %}
-          </div>
-        </div>
-
-        {% if form.non_field_errors %}
-        <div class="alert alert-danger mb-3">{{ form.non_field_errors|join:", " }}</div>
-        {% endif %}
-
-        <div class="d-flex justify-content-end gap-2 pt-3 border-top">
-          <a href="{% url 'restaurant_admin:inventory_category_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary px-4">Cancel</a>
-          <button type="submit" class="btn btn-primary px-4 fw-semibold"><i class="bi bi-check-circle me-1"></i> Save Category</button>
-        </div>
-      </form>
+      </div>
     </div>
-  </div>
+
+    <!-- Card 2: Input GST & Tax Configuration Hierarchy -->
+    <div class="card border-0 shadow-sm rounded-3 mb-3">
+      <div class="card-header bg-white py-2.5 px-3 border-bottom d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-2">
+          <i class="fas fa-percent text-primary"></i>
+          <h6 class="fw-bold mb-0 text-dark">2. Input GST & Statutory Tax Configuration</h6>
+        </div>
+        <span class="badge bg-light text-secondary border font-monospace extra-small">GST Compliance Slabs</span>
+      </div>
+      <div class="card-body p-3">
+        <p class="text-muted extra-small mb-3">
+          Define how inward goods under this category inherit GST tax rates & HSN codes, or specify category-specific overrides.
+        </p>
+
+        <!-- Inheritance Status Banner (Live updated by JS) -->
+        <div id="taxInheritanceNotice" class="alert alert-light border rounded-3 p-3 mb-3 d-flex align-items-center justify-content-between">
+          <div class="d-flex align-items-center gap-2.5">
+            <div class="rounded-circle bg-primary-subtle text-primary p-2 d-flex align-items-center justify-content-center" style="width: 34px; height: 34px;">
+              <i class="fas fa-shield-halved"></i>
+            </div>
+            <div>
+              <div class="fw-bold text-dark extra-small" id="taxInheritanceTitle">Inheriting Statutory Rules</div>
+              <div class="text-muted extra-small" id="taxInheritanceSubtitle">Using parent category or company default tax schedule</div>
+            </div>
+          </div>
+          <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace px-2.5 py-1" id="taxInheritancePill">
+            Inherit Mode
+          </span>
+        </div>
+
+        <div class="row g-3">
+          <!-- Tax Configuration Mode -->
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-dark extra-small mb-1">
+              Configuration Mode <span class="text-danger">*</span>
+            </label>
+            {{ form.tax_configuration }}
+            <div class="form-text extra-small text-muted mt-1">Inherit from parent or Override with custom rules</div>
+            {% if form.tax_configuration.errors %}<div class="text-danger extra-small mt-1">{{ form.tax_configuration.errors|join:", " }}</div>{% endif %}
+          </div>
+
+          <!-- Taxability Type -->
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-secondary extra-small mb-1">
+              Taxability Type
+            </label>
+            {{ form.taxability_type }}
+            <div class="form-text extra-small text-muted mt-1">Taxable, Exempted, or Nil Rated</div>
+            {% if form.taxability_type.errors %}<div class="text-danger extra-small mt-1">{{ form.taxability_type.errors|join:", " }}</div>{% endif %}
+          </div>
+
+          <!-- Default HSN / SAC Code -->
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-secondary extra-small mb-1">
+              Default HSN / SAC Code
+            </label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light border-end-0 text-secondary"><i class="fas fa-barcode"></i></span>
+              <div class="flex-grow-1">
+                {{ form.hsn_sac_code }}
+              </div>
+            </div>
+            <div class="form-text extra-small text-muted mt-1">4 to 8 digit tariff classification code</div>
+            {% if form.hsn_sac_code.errors %}<div class="text-danger extra-small mt-1">{{ form.hsn_sac_code.errors|join:", " }}</div>{% endif %}
+          </div>
+
+          <!-- Default GST Rate (%) -->
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-secondary extra-small mb-1">
+              Default GST Rate (%)
+            </label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light border-end-0 text-secondary"><i class="fas fa-percent"></i></span>
+              <div class="flex-grow-1">
+                {{ form.gst_rate }}
+              </div>
+            </div>
+            <div class="form-text extra-small text-muted mt-1">Standard rate (e.g. 0, 5, 12, 18)</div>
+            {% if form.gst_rate.errors %}<div class="text-danger extra-small mt-1">{{ form.gst_rate.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% if form.non_field_errors %}
+    <div class="alert alert-danger rounded-3 mb-3 extra-small">{{ form.non_field_errors|join:", " }}</div>
+    {% endif %}
+
+    <!-- Action Bar -->
+    <div class="card border-0 shadow-sm rounded-3 mb-4">
+      <div class="card-body p-3 d-flex justify-content-between align-items-center">
+        <a href="{% url 'restaurant_admin:inventory_category_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary btn-sm px-4 fw-semibold rounded-pill">
+          Cancel
+        </a>
+        <button type="submit" class="btn btn-primary btn-sm px-4 fw-semibold rounded-pill shadow-sm">
+          <i class="fas fa-check-circle me-1"></i> Save Stock Category
+        </button>
+      </div>
+    </div>
+  </form>
 </div>
 
 <script>
@@ -84,6 +168,11 @@ document.addEventListener('DOMContentLoaded', function() {
   const taxabilitySelect = document.getElementById('{{ form.taxability_type.id_for_label }}');
   const hsnInput = document.getElementById('{{ form.hsn_sac_code.id_for_label }}');
   const gstInput = document.getElementById('{{ form.gst_rate.id_for_label }}');
+
+  const noticeBox = document.getElementById('taxInheritanceNotice');
+  const noticeTitle = document.getElementById('taxInheritanceTitle');
+  const noticeSubtitle = document.getElementById('taxInheritanceSubtitle');
+  const noticePill = document.getElementById('taxInheritancePill');
 
   let categoryTaxMap = {};
 
@@ -146,6 +235,14 @@ document.addEventListener('DOMContentLoaded', function() {
         gstInput.value = '';
         gstInput.placeholder = `Inherited: ${resolvedGst}`;
       }
+
+      if (noticeBox) {
+        noticeBox.className = 'alert alert-light border rounded-3 p-3 mb-3 d-flex align-items-center justify-content-between';
+        noticeTitle.textContent = `Inheriting Tax Rules: ${resolvedGst} GST | HSN ${resolvedHsn}`;
+        noticeSubtitle.textContent = parentId ? `Derived from parent category rules` : `Derived from company defaults`;
+        noticePill.className = 'badge bg-primary-subtle text-primary border border-primary-subtle font-monospace px-2.5 py-1';
+        noticePill.textContent = 'Inherit Mode';
+      }
     } else {
       if (taxabilitySelect) {
         taxabilitySelect.disabled = false;
@@ -163,6 +260,14 @@ document.addEventListener('DOMContentLoaded', function() {
         gstInput.type = 'number';
         gstInput.placeholder = '0.00';
         gstInput.value = storedGst;
+      }
+
+      if (noticeBox) {
+        noticeBox.className = 'alert alert-warning-subtle border border-warning-subtle rounded-3 p-3 mb-3 d-flex align-items-center justify-content-between';
+        noticeTitle.textContent = 'Custom Tax Rules Active (Override Mode)';
+        noticeSubtitle.textContent = 'Items in this category will strictly apply the HSN and GST rate specified below';
+        noticePill.className = 'badge bg-warning-subtle text-warning-emphasis border border-warning-subtle font-monospace px-2.5 py-1';
+        noticePill.textContent = 'Override Mode';
       }
     }
   }

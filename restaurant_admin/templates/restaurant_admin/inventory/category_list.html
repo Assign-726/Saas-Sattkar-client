@@ -1,108 +1,227 @@
 {% extends 'restaurant_admin/base.html' %}
-{% block title %}Inventory Categories & Subcategories{% endblock %}
+{% block title %}Stock Categories & Taxonomy - Restaurant Admin{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-  <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="container-fluid px-0">
+  <!-- Page Header -->
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
     <div>
-      <h3 class="mb-1 text-dark fw-bold"><i class="bi bi-tags-fill text-primary me-2"></i>Inventory Categories</h3>
-      <p class="text-muted small mb-0">Manage hierarchical raw material & item categories with default HSN/SAC codes and GST tax rates</p>
+      <h4 class="fw-bold mb-1 text-dark d-flex align-items-center gap-2">
+        <span class="badge bg-primary-subtle text-primary p-2 rounded-3"><i class="fas fa-tags fs-5"></i></span>
+        <span>Stock Categories & Taxonomy</span>
+      </h4>
+      <p class="text-muted extra-small mb-0">Manage hierarchical raw material classifications, default HSN/SAC codes, and GST input tax rates</p>
     </div>
-    <div class="d-flex gap-2">
-      <a href="{% url 'restaurant_admin:inventory_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
-        <i class="bi bi-arrow-left me-1"></i> Back to Inventory
+    <div class="d-flex align-items-center gap-2">
+      <a href="{% url 'restaurant_admin:inventory_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary btn-sm rounded-pill px-3 fw-semibold">
+        <i class="fas fa-cubes me-1"></i> Stock Master
       </a>
-      <a href="{% url 'restaurant_admin:inventory_category_add' restaurant_slug=restaurant.slug %}" class="btn btn-primary btn-sm rounded-pill px-3">
-        <i class="bi bi-plus-lg me-1"></i> Add Inventory Category
+      <a href="{% url 'restaurant_admin:inventory_category_add' restaurant_slug=restaurant.slug %}" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold shadow-sm">
+        <i class="fas fa-plus me-1"></i> Add Stock Category
       </a>
     </div>
   </div>
 
-  <form method="get" class="mb-4">
-    <div class="input-group shadow-sm border rounded-pill overflow-hidden bg-white">
-      <span class="input-group-text bg-white border-0 ps-3"><i class="bi bi-search text-muted"></i></span>
-      <input type="text" name="q" value="{{ search_query }}" class="form-control border-0 shadow-none" placeholder="Search categories by name or HSN code...">
-      <button class="btn btn-primary px-4" type="submit">Search</button>
+  <!-- KPI Summary Cards -->
+  <div class="row g-3 mb-3">
+    <!-- Card 1: Total Categories -->
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm rounded-3 h-100 p-3" style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0;">
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <span class="text-secondary text-uppercase fw-bold extra-small tracking-wider">Total Categories</span>
+            <h3 class="fw-bolder mb-0 text-dark mt-1">{{ total_categories|default:"0" }}</h3>
+            <span class="text-muted extra-small">{{ top_level_count|default:"0" }} top-level heads</span>
+          </div>
+          <div class="rounded-3 bg-primary-subtle text-primary p-2.5 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+            <i class="fas fa-tags fs-5"></i>
+          </div>
+        </div>
+      </div>
     </div>
-  </form>
 
-  <div class="card border-0 shadow-sm rounded-3">
+    <!-- Card 2: Subcategories -->
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm rounded-3 h-100 p-3" style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0;">
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <span class="text-secondary text-uppercase fw-bold extra-small tracking-wider">Subcategories</span>
+            <h3 class="fw-bolder mb-0 text-info mt-1">{{ subcategories_count|default:"0" }}</h3>
+            <span class="text-muted extra-small">Nested children groups</span>
+          </div>
+          <div class="rounded-3 bg-info-subtle text-info p-2.5 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+            <i class="fas fa-folder-tree fs-5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 3: Items Linked -->
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm rounded-3 h-100 p-3" style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0;">
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <span class="text-secondary text-uppercase fw-bold extra-small tracking-wider">Items Classified</span>
+            <h3 class="fw-bolder mb-0 text-success mt-1">{{ total_items_linked_count|default:"0" }}</h3>
+            <span class="text-muted extra-small">Raw materials linked</span>
+          </div>
+          <div class="rounded-3 bg-success-subtle text-success p-2.5 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+            <i class="fas fa-boxes-stacked fs-5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 4: GST Slabs -->
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm rounded-3 h-100 p-3" style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0;">
+        <div class="d-flex align-items-center justify-content-between">
+          <div>
+            <span class="text-secondary text-uppercase fw-bold extra-small tracking-wider">GST Tax Slabs</span>
+            <h3 class="fw-bolder mb-0 text-warning mt-1">{{ distinct_gst_slabs|default:"0" }}</h3>
+            <span class="text-muted extra-small">Configured tariff rates</span>
+          </div>
+          <div class="rounded-3 bg-warning-subtle text-warning p-2.5 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px;">
+            <i class="fas fa-percent fs-5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search & Filter Card -->
+  <div class="card border-0 shadow-sm rounded-3 mb-3">
+    <div class="card-body p-2.5 bg-white">
+      <form method="get" class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+        <div class="input-group input-group-sm flex-grow-1" style="max-width: 450px;">
+          <span class="input-group-text bg-light border-end-0 text-secondary ps-3"><i class="fas fa-search"></i></span>
+          <input type="text" name="q" value="{{ search_query }}" class="form-control border-start-0 fw-semibold" placeholder="Search categories by name or HSN code...">
+          {% if search_query %}
+          <a href="{% url 'restaurant_admin:inventory_category_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary px-2" title="Clear search">
+            <i class="fas fa-xmark"></i>
+          </a>
+          {% endif %}
+          <button class="btn btn-primary px-3 fw-semibold" type="submit">Filter</button>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge bg-light text-secondary border font-monospace extra-small px-2.5 py-1.5">
+            <i class="fas fa-list-check me-1 text-primary"></i> Showing {{ categories|length }} of {{ total_categories }} categories
+          </span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Categories Table Card -->
+  <div class="card border-0 shadow-sm rounded-3 overflow-hidden">
     <div class="card-body p-0">
       <div class="table-responsive">
         <table class="table table-hover mb-0 align-middle">
-          <thead class="table-light small text-secondary">
+          <thead class="table-light extra-small text-secondary text-uppercase tracking-wider">
             <tr>
-              <th>Category Name</th>
-              <th>Parent Category</th>
-              <th>Taxability</th>
-              <th>HSN / SAC Code</th>
-              <th>Default GST Rate</th>
-              <th class="text-center">Associated Items</th>
-              <th class="text-end">Actions</th>
+              <th class="ps-3 py-3" style="width: 30%;">Category / Taxonomy Node</th>
+              <th style="width: 18%;">Hierarchy Parent</th>
+              <th style="width: 14%;">Taxability</th>
+              <th style="width: 12%;">HSN / SAC Code</th>
+              <th style="width: 12%;">Default GST Rate</th>
+              <th class="text-center" style="width: 8%;">Items</th>
+              <th class="text-end pe-3" style="width: 6%;">Actions</th>
             </tr>
           </thead>
           <tbody>
             {% for cat in categories %}
             <tr>
-              <td>
-                <div class="fw-bold text-dark fs-6">
+              <!-- Category Name with Tree Indentation -->
+              <td class="ps-3">
+                <div class="d-flex align-items-center">
                   {% if cat.parent %}
-                  <span class="text-muted fw-normal ms-2"><i class="bi bi-arrow-return-right me-1"></i></span>
+                  <span class="text-muted me-2 font-monospace" style="opacity: 0.65;">↳</span>
+                  <div class="rounded-circle bg-light border text-secondary d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 28px; height: 28px; font-size: 0.75rem;">
+                    <i class="far fa-folder-open text-primary"></i>
+                  </div>
+                  <div>
+                    <span class="fw-bold text-dark fs-6">{{ cat.name }}</span>
+                    <span class="badge bg-light text-muted border extra-small ms-1">Subcategory</span>
+                  </div>
+                  {% else %}
+                  <div class="rounded-3 bg-primary-subtle text-primary d-flex align-items-center justify-content-center me-2 flex-shrink-0" style="width: 32px; height: 32px; font-size: 0.85rem;">
+                    <i class="fas fa-folder-closed"></i>
+                  </div>
+                  <div>
+                    <span class="fw-bold text-dark fs-6">{{ cat.name }}</span>
+                    <span class="badge bg-secondary-subtle text-secondary border extra-small ms-1">Primary Head</span>
+                  </div>
                   {% endif %}
-                  {{ cat.name }}
                 </div>
               </td>
+
+              <!-- Parent Category -->
               <td>
                 {% if cat.parent %}
-                <span class="badge bg-secondary-subtle text-secondary border"><i class="bi bi-folder2 me-1"></i>{{ cat.parent.name }}</span>
+                <span class="badge bg-light text-dark border px-2.5 py-1 font-monospace">
+                  <i class="fas fa-diagram-precedence text-secondary me-1"></i>{{ cat.parent.name }}
+                </span>
                 {% else %}
-                <span class="text-muted small"><em>Top-Level Category</em></span>
+                <span class="badge bg-light text-muted border px-2 py-0.5 extra-small">
+                  Root Head
+                </span>
                 {% endif %}
               </td>
+
+              <!-- Taxability -->
               <td>
-                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1">
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1 extra-small">
                   {% if cat.tax_configuration == 'inherit' and cat.effective_taxability %}
-                    {{ cat.effective_taxability|title }} <span class="fw-normal text-muted small">(Inherited)</span>
+                    {{ cat.effective_taxability|title }} <span class="fw-normal text-muted">(Inherited)</span>
                   {% else %}
                     {{ cat.get_taxability_type_display }}
                   {% endif %}
                 </span>
               </td>
+
+              <!-- HSN / SAC Code -->
               <td>
                 {% with hsn=cat.effective_hsn_code %}
                 {% if hsn %}
-                <span class="fw-semibold text-dark font-monospace">{{ hsn }}</span>
+                <span class="badge bg-light text-dark border font-monospace px-2 py-1">{{ hsn }}</span>
                 {% if cat.tax_configuration == 'inherit' %}
-                <span class="badge bg-light text-muted border ms-1">Inherited</span>
+                <span class="badge bg-light text-muted border extra-small ms-0.5">Inherited</span>
                 {% endif %}
                 {% else %}
-                <span class="text-muted small">-</span>
+                <span class="text-muted extra-small">-</span>
                 {% endif %}
                 {% endwith %}
               </td>
+
+              <!-- Default GST Rate -->
               <td>
                 {% with rate=cat.effective_gst_rate %}
-                <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle px-2 py-1 fw-bold">
+                <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle px-2 py-1 fw-bold font-monospace">
                   {{ rate|default:"0" }}% GST
                   {% if cat.tax_configuration == 'inherit' %}
-                  <span class="fw-normal text-muted small">(Inherited)</span>
+                  <span class="fw-normal text-muted extra-small">(Inherited)</span>
                   {% endif %}
                 </span>
                 {% endwith %}
               </td>
+
+              <!-- Associated Items Count -->
               <td class="text-center">
-                <span class="badge rounded-pill bg-light text-dark border px-3">
-                  {{ cat.items.count }} item{% if cat.items.count != 1 %}s{% endif %}
+                <span class="badge bg-light text-dark border px-2.5 py-1 font-monospace fw-semibold" title="{{ cat.items.count }} inventory master items classified">
+                  {{ cat.items.count }}
                 </span>
               </td>
-              <td class="text-end">
+
+              <!-- Actions -->
+              <td class="text-end pe-3">
                 <div class="d-flex justify-content-end gap-1">
-                  <a href="{% url 'restaurant_admin:inventory_category_edit' pk=cat.id restaurant_slug=restaurant.slug %}" class="btn btn-sm btn-outline-primary py-1 px-2" title="Edit Category">
-                    <i class="bi bi-pencil"></i> Edit
+                  <a href="{% url 'restaurant_admin:inventory_category_edit' pk=cat.id restaurant_slug=restaurant.slug %}" class="btn btn-sm btn-outline-primary py-1 px-2 rounded-2" title="Edit Category">
+                    <i class="fas fa-pen-to-square"></i>
                   </a>
                   <form method="post" action="{% url 'restaurant_admin:inventory_category_delete' pk=cat.id restaurant_slug=restaurant.slug %}" onsubmit="return confirm('Are you sure you want to delete category {{ cat.name }}?');" class="d-inline">
                     {% csrf_token %}
-                    <button class="btn btn-sm btn-outline-danger py-1 px-2" title="Delete Category"><i class="bi bi-trash"></i></button>
+                    <button class="btn btn-sm btn-outline-danger py-1 px-2 rounded-2" title="Delete Category"><i class="fas fa-trash-can"></i></button>
                   </form>
                 </div>
               </td>
@@ -110,8 +229,14 @@
             {% empty %}
             <tr>
               <td colspan="7" class="text-center py-5 text-muted">
-                <i class="bi bi-tags display-5 d-block text-secondary mb-2"></i>
-                No inventory categories defined yet. Click <strong>+ Add Inventory Category</strong> to create your first dynamic category.
+                <div class="p-3 bg-light rounded-circle d-inline-block mb-2">
+                  <i class="fas fa-tags fs-1 text-secondary opacity-50"></i>
+                </div>
+                <h6 class="fw-bold text-dark">No inventory categories found</h6>
+                <p class="text-muted small mb-3">Group your raw materials, beverages, and ingredients for statutory GST & inward reporting.</p>
+                <a href="{% url 'restaurant_admin:inventory_category_add' restaurant_slug=restaurant.slug %}" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold">
+                  <i class="fas fa-plus me-1"></i> Add First Stock Category
+                </a>
               </td>
             </tr>
             {% endfor %}

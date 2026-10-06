@@ -103,6 +103,8 @@ urlpatterns = [
     path('purchases/', views.purchase_list, name='purchase_list'),
     path('purchases/export/', views.purchase_records_export, name='purchase_records_export'),
     path('purchases/create/', views.purchase_create, name='purchase_create'),
+    path('purchases/<int:pk>/', views.purchase_invoice, name='purchase_detail'),
+    path('purchases/<int:pk>/invoice/', views.purchase_invoice, name='purchase_invoice'),
     path('purchases/<int:pk>/edit/', views.purchase_edit, name='purchase_edit'),
 
     # Party Management
