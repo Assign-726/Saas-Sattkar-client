@@ -1266,6 +1266,16 @@ class RestaurantSettings(models.Model):
     tally_extra_charges_ledger= models.CharField(max_length=100, default='Extra Charges / Packaging A/c', help_text="Ledger name for packaging/service extra charges in TallyPrime")
     tally_round_off_ledger    = models.CharField(max_length=100, default='Round Off',           help_text="Ledger name for Round Off Dr/Cr in TallyPrime")
 
+    # Tally Purchase Voucher Export Configuration
+    tally_purchase_voucher_type    = models.CharField(max_length=50, default='Purchase',            help_text="TallyPrime voucher type for purchases (e.g. 'Purchase')")
+    tally_purchase_bank_ledger     = models.CharField(max_length=100, default='Bank A/c',           help_text="Ledger name for Bank purchases in TallyPrime")
+    tally_default_purchase_ledger  = models.CharField(max_length=100, default='Purchase A/c',       help_text="Default purchase expense ledger if category is unset")
+    tally_purchase_category_prefix = models.CharField(max_length=50, default='Purchase - ',         help_text="Prefix for category expense ledgers (e.g. 'Purchase - Vegetables')")
+    tally_input_cgst_ledger        = models.CharField(max_length=100, default='Input CGST',          help_text="Ledger name for Input CGST in TallyPrime")
+    tally_input_sgst_ledger        = models.CharField(max_length=100, default='Input SGST',          help_text="Ledger name for Input SGST in TallyPrime")
+    tally_input_igst_ledger        = models.CharField(max_length=100, default='Input IGST',          help_text="Ledger name for Input IGST in TallyPrime")
+    tally_discount_received_ledger = models.CharField(max_length=100, default='Discount Received',  help_text="Ledger name for Discount Received (Cr) in TallyPrime")
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

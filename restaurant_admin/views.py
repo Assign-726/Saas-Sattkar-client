@@ -115,10 +115,12 @@ def get_active_branch(request, restaurant):
     """Returns the currently active branch for the logged in user / request session."""
     if not restaurant:
         return None
-    profile = getattr(request.user, 'restaurant_profile', None)
+    user = getattr(request, 'user', None)
+    profile = getattr(user, 'restaurant_profile', None) if user else None
     if profile and profile.branch:
         return profile.branch
-    branch_id = request.GET.get('branch_id') or request.session.get(f'active_branch_{restaurant.id}') or request.session.get('active_branch_id')
+    session = getattr(request, 'session', {}) or {}
+    branch_id = request.GET.get('branch_id') or session.get(f'active_branch_{restaurant.id}') or session.get('active_branch_id')
     if branch_id and str(branch_id).isdigit():
         branch = restaurant.branches.filter(id=int(branch_id)).first()
         if branch:
@@ -3027,23 +3029,613 @@ def purchase_create(request, restaurant_slug=None):
     })
 
 
-@login_required
-@user_passes_test(is_admin)
-def purchase_list(request, restaurant_slug=None):
-    if restaurant_slug:
-        restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
-    else:
-        try:
-            restaurant = request.user.restaurant_profile.restaurant
-        except RestaurantUser.DoesNotExist:
-            from django.http import HttpResponseForbidden
-            return HttpResponseForbidden("No restaurant associated with this account.")
-
+def _filter_purchase_queryset(request, restaurant):
+    """
+    Filter purchase orders by UI parameters:
+      - period: 'all', 'today', 'yesterday', 'this_week', 'this_month', 'last_month'
+      - start_date, end_date (YYYY-MM-DD)
+      - payment_method: bank_transfer, upi, cash, credit
+      - payment_status: paid, unpaid, partial
+      - q: search query for supplier name, GSTIN, invoice number, or PO ID
+    """
     active_branch = get_active_branch(request, restaurant)
     purchases = PurchaseOrder.objects.filter(restaurant=restaurant)
     if active_branch:
         purchases = purchases.filter(Q(branch=active_branch) | Q(branch__isnull=True))
-    purchases = purchases.select_related('supplier', 'created_by').prefetch_related('items__inventory_item').order_by('-purchase_date', '-id')
+
+    today = timezone.localdate() if hasattr(timezone, 'localdate') else timezone.now().date()
+    period = request.GET.get('period', '').strip().lower()
+    start_date_str = request.GET.get('start_date', '').strip()
+    end_date_str = request.GET.get('end_date', '').strip()
+
+    if start_date_str or end_date_str:
+        if start_date_str:
+            try:
+                sd = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                purchases = purchases.filter(purchase_date__gte=sd)
+            except ValueError:
+                pass
+        if end_date_str:
+            try:
+                ed = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                purchases = purchases.filter(purchase_date__lte=ed)
+            except ValueError:
+                pass
+    elif period:
+        if period == 'today':
+            purchases = purchases.filter(purchase_date=today)
+        elif period == 'yesterday':
+            purchases = purchases.filter(purchase_date=today - timedelta(days=1))
+        elif period == 'this_week':
+            monday = today - timedelta(days=today.weekday())
+            purchases = purchases.filter(purchase_date__gte=monday, purchase_date__lte=today)
+        elif period == 'this_month':
+            first_day = today.replace(day=1)
+            purchases = purchases.filter(purchase_date__gte=first_day, purchase_date__lte=today)
+        elif period == 'last_month':
+            first_of_this_month = today.replace(day=1)
+            last_day_of_last_month = first_of_this_month - timedelta(days=1)
+            first_day_of_last_month = last_day_of_last_month.replace(day=1)
+            purchases = purchases.filter(purchase_date__gte=first_day_of_last_month, purchase_date__lte=last_day_of_last_month)
+
+    pm = request.GET.get('payment_method', '').strip()
+    if pm and pm != 'all':
+        purchases = purchases.filter(payment_method=pm)
+
+    ps = request.GET.get('payment_status', '').strip()
+    if ps and ps != 'all':
+        purchases = purchases.filter(payment_status=ps)
+
+    q = request.GET.get('q', '').strip()
+    if q:
+        q_filter = (
+            Q(supplier_name__icontains=q) |
+            Q(supplier_gstin__icontains=q) |
+            Q(invoice_number__icontains=q)
+        )
+        clean_num = q.lstrip('#')
+        if clean_num.isdigit():
+            q_filter |= Q(id=int(clean_num))
+        purchases = purchases.filter(q_filter)
+
+    return purchases.select_related('supplier', 'party', 'branch', 'created_by').prefetch_related(
+        'items__inventory_item__category'
+    ).order_by('-purchase_date', '-id')
+
+
+def _export_purchase_records_excel(request, restaurant, purchases_qs):
+    """
+    Standard Management Excel export for Purchase Orders & Goods Inward.
+    Produces a 10-column purchase register with business metrics and total summary row.
+    """
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Purchase Register"
+
+    title_font = Font(name="Calibri", size=14, bold=True, color="1F2937")
+    sub_font = Font(name="Calibri", size=9, italic=True, color="6B7280")
+    header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+    header_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+    data_font = Font(name="Calibri", size=10)
+    total_font = Font(name="Calibri", size=10, bold=True, color="1E3A8A")
+    total_fill = PatternFill(start_color="F3F4F6", end_color="F3F4F6", fill_type="solid")
+    thin_border = Border(
+        left=Side(style='thin', color='E5E7EB'),
+        right=Side(style='thin', color='E5E7EB'),
+        top=Side(style='thin', color='E5E7EB'),
+        bottom=Side(style='thin', color='E5E7EB')
+    )
+
+    ws.append([f"Purchase Register & Goods Inward - {restaurant.name}"])
+    ws.cell(row=1, column=1).font = title_font
+
+    period_label = request.GET.get('period') or 'All Time'
+    ws.append([f"Export Date: {timezone.now().strftime('%Y-%m-%d %H:%M')} | Filter Period: {period_label.upper()}"])
+    ws.cell(row=2, column=1).font = sub_font
+    ws.append([])
+
+    headers = [
+        "PO #", "Purchase Date", "Supplier Name", "Supplier GSTIN",
+        "Invoice / Ref No.", "Items Summary", "Subtotal (₹)", "Tax Amount (₹)",
+        "Grand Total (₹)", "Payment Method", "Payment Status"
+    ]
+    ws.append(headers)
+    header_row = 4
+    for col_num in range(1, len(headers) + 1):
+        cell = ws.cell(row=header_row, column=col_num)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    current_row = 5
+    sum_subtotal = Decimal('0.00')
+    sum_tax = Decimal('0.00')
+    sum_grand = Decimal('0.00')
+
+    for po in purchases_qs:
+        items_summary = " | ".join([
+            f"{item.quantity}x {item.inventory_item.name if item.inventory_item else 'Item'}"
+            for item in po.items.all()
+        ]) or "Direct Inward"
+
+        sub_val = Decimal(str(po.subtotal or 0))
+        tax_val = Decimal(str(po.tax_amount or 0))
+        gt_val = Decimal(str(po.grand_total or 0))
+
+        sum_subtotal += sub_val
+        sum_tax += tax_val
+        sum_grand += gt_val
+
+        p_status = po.get_payment_status_display()
+        p_method = po.get_payment_method_display()
+
+        ws.append([
+            f"PO-{po.id:04d}",
+            po.purchase_date.strftime('%Y-%m-%d') if po.purchase_date else '',
+            po.supplier_name or 'N/A',
+            po.supplier_gstin or '',
+            po.invoice_number or '',
+            items_summary,
+            float(sub_val),
+            float(tax_val),
+            float(gt_val),
+            p_method,
+            p_status
+        ])
+
+        for c_idx in range(1, len(headers) + 1):
+            cell = ws.cell(row=current_row, column=c_idx)
+            cell.font = data_font
+            cell.border = thin_border
+            if c_idx in [7, 8, 9]:
+                cell.number_format = '#,##0.00'
+                cell.alignment = Alignment(horizontal="right")
+            elif c_idx in [1, 2, 4, 10, 11]:
+                cell.alignment = Alignment(horizontal="center")
+            else:
+                cell.alignment = Alignment(horizontal="left")
+        current_row += 1
+
+    # Totals row
+    ws.append([
+        "TOTAL", "", "", "", "", "Totals Summary",
+        float(sum_subtotal), float(sum_tax), float(sum_grand), "", ""
+    ])
+    for c_idx in range(1, len(headers) + 1):
+        cell = ws.cell(row=current_row, column=c_idx)
+        cell.font = total_font
+        cell.fill = total_fill
+        cell.border = thin_border
+        if c_idx in [7, 8, 9]:
+            cell.number_format = '#,##0.00'
+            cell.alignment = Alignment(horizontal="right")
+        elif c_idx == 1:
+            cell.alignment = Alignment(horizontal="center")
+
+    col_widths = [12, 14, 26, 18, 18, 36, 14, 14, 16, 16, 14]
+    for i, width in enumerate(col_widths, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = width
+
+    ws.freeze_panes = "A5"
+
+    filename = f"Purchase_Register_{restaurant.slug}_{timezone.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
+
+
+def _export_tally_purchase_vouchers(request, restaurant, purchases_qs):
+    """
+    Exports Purchase Invoices into TallyPrime's standard 14-column Accounting Invoice Excel format.
+    Worksheet title: 'Accounting Voucher'
+    Strictly preserves all 14 standard columns in exact sequence:
+      Col 1: Voucher Date
+      Col 2: Voucher Type Name (Hardcoded 'Purchase')
+      Col 3: Voucher Number (PO/Invoice #)
+      Col 4: Buyer/Supplier - Address (Mandatory for Credit, strictly blank for Cash/Bank/UPI)
+      Col 5: Buyer/Supplier - Pincode (Mandatory for Credit, strictly blank for Cash/Bank/UPI)
+      Col 6: Ledger Name (Dynamic vendor/cash/category/tax/discount/round-off ledger)
+      Col 7: Ledger Amount (Positive decimal float)
+      Col 8: Ledger Amount Dr/Cr (Strictly 'Dr' or 'Cr')
+      Col 9..13: Item Name, Billed Quantity, Item Rate, Item Rate per, Item Amount (Strictly 100% BLANK)
+      Col 14: Change Mode (Hardcoded 'Accounting Invoice')
+
+    Double-entry parity & dynamic balancing rules:
+      - Cr: Supplier Ledger (credit purchases) or Cash/Bank/UPI ledger, plus Discount Received (if any)
+      - Dr: Purchase Expense aggregated by item category, plus Input Tax segregated
+      - Dynamic Round-off: Delta = Total Dr - Total Cr
+        Delta > 0: Add Round Off Cr row
+        Delta < 0: Add Round Off Dr row
+      - Parity assertion: |Total Dr - Total Cr| < 0.001
+      - Separator blank row between distinct vouchers.
+    """
+    from decimal import Decimal, ROUND_HALF_UP
+    from collections import defaultdict
+    import re
+    from core.models import RestaurantSettings
+    from django.http import HttpResponse
+
+    settings_obj = RestaurantSettings.get_settings(restaurant)
+
+    VOUCHER_TYPE = (settings_obj.tally_purchase_voucher_type or 'Purchase').strip()
+    CHANGE_MODE = 'Accounting Invoice'
+
+    CASH_LEDGER = (settings_obj.tally_cash_ledger or 'Cash A/c').strip()
+    UPI_LEDGER = (settings_obj.tally_upi_ledger or 'UPI A/c').strip()
+    BANK_LEDGER = (settings_obj.tally_purchase_bank_ledger or 'Bank A/c').strip()
+    DEFAULT_PURCHASE_LEDGER = (settings_obj.tally_default_purchase_ledger or 'Purchase A/c').strip()
+    raw_prefix = settings_obj.tally_purchase_category_prefix if settings_obj.tally_purchase_category_prefix is not None else 'Purchase - '
+    CAT_PREFIX = (raw_prefix.rstrip() + ' ') if raw_prefix.strip() else 'Purchase - '
+    INPUT_CGST_LEDGER = (settings_obj.tally_input_cgst_ledger or 'Input CGST').strip()
+    INPUT_SGST_LEDGER = (settings_obj.tally_input_sgst_ledger or 'Input SGST').strip()
+    INPUT_IGST_LEDGER = (settings_obj.tally_input_igst_ledger or 'Input IGST').strip()
+    DISCOUNT_RCVD_LEDGER = (settings_obj.tally_discount_received_ledger or 'Discount Received').strip()
+    ROUND_OFF_LEDGER = (settings_obj.tally_round_off_ledger or 'Round Off').strip()
+    CREDIT_LEDGER = (settings_obj.tally_credit_ledger or 'Sundry Creditors').strip()
+
+    ZERO = Decimal('0.00')
+    Q2 = Decimal('0.01')
+
+    def q(val):
+        return Decimal(str(val or 0)).quantize(Q2, rounding=ROUND_HALF_UP)
+
+    # Order vouchers chronologically
+    ordered_purchases = purchases_qs.order_by('purchase_date', 'id')
+
+    # Restaurant/Branch GSTIN state code for IGST vs CGST/SGST determination
+    company_gstin = ''
+    active_branch = get_active_branch(request, restaurant)
+    if active_branch:
+        company_gstin = getattr(active_branch, 'gstin', '') or (active_branch.gst_registration.gstin if getattr(active_branch, 'gst_registration', None) else '')
+    if not company_gstin:
+        company_gstin = getattr(restaurant, 'gstin', '') or ''
+    company_state_code = (company_gstin.strip()[:2] if company_gstin and len(company_gstin.strip()) >= 2 else '').upper()
+
+    all_vouchers_rows = []
+    errors = []
+
+    for po in ordered_purchases:
+        grand_total = q(po.grand_total)
+        if grand_total <= ZERO:
+            continue
+
+        voucher_date = po.purchase_date.strftime('%d-%m-%Y') if po.purchase_date else ''
+        voucher_no = (po.invoice_number or f"PUR-{po.id:03d}").strip()
+
+        # Check if B2B Credit Purchase vs Direct Cash/Bank/UPI
+        is_credit = (
+            po.payment_method == 'credit' or
+            po.payment_status in ['unpaid', 'partial']
+        )
+
+        vendor_addr = ''
+        vendor_pin = ''
+        vendor_ledger = ''
+
+        if is_credit:
+            # Vendor ledger name
+            if po.party and po.party.name:
+                vendor_ledger = po.party.name.strip()
+            elif po.supplier and po.supplier.name:
+                vendor_ledger = po.supplier.name.strip()
+            elif po.supplier_name:
+                vendor_ledger = po.supplier_name.strip()
+            else:
+                vendor_ledger = CREDIT_LEDGER
+
+            # Address & Pincode populated ONLY for credit purchases
+            if po.party:
+                vendor_addr = (po.party.address_line1 or po.party.address or '').strip()
+                vendor_pin = (po.party.pincode or '').strip()
+            if not vendor_addr and po.supplier:
+                vendor_addr = (po.supplier.address or '').strip()
+
+            if not vendor_pin and vendor_addr:
+                m = re.search(r'\b[1-9][0-9]{5}\b', vendor_addr)
+                if m:
+                    vendor_pin = m.group(0)
+        else:
+            # Direct Cash/Bank/UPI -> Address and Pincode strictly 100% BLANK
+            vendor_addr = ''
+            vendor_pin = ''
+            if po.payment_method == 'cash':
+                vendor_ledger = CASH_LEDGER
+            elif po.payment_method == 'upi':
+                vendor_ledger = UPI_LEDGER
+            elif po.payment_method == 'bank_transfer':
+                vendor_ledger = BANK_LEDGER
+            else:
+                vendor_ledger = CASH_LEDGER
+
+        voucher_rows = []
+
+        # ── STEP A: Supplier / Payment row (Cr) ───────────────────────────
+        voucher_rows.append({
+            'ledger': vendor_ledger,
+            'amount': grand_total,
+            'drcr': 'Cr',
+            'addr': vendor_addr,
+            'pin': vendor_pin
+        })
+
+        # ── STEP B: Purchase Expense by Category (Dr) ─────────────────────
+        category_totals = defaultdict(Decimal)
+        items_list = list(po.items.select_related('inventory_item__category').all())
+        total_items_subtotal = ZERO
+
+        if items_list:
+            for itm in items_list:
+                cat = itm.inventory_item.category if (itm.inventory_item and itm.inventory_item.category) else None
+                if cat and cat.expense_account and cat.expense_account.strip():
+                    cat_name = cat.expense_account.strip()
+                elif cat and cat.name and cat.name.strip():
+                    cat_name = f"{CAT_PREFIX}{cat.name.strip()}"
+                else:
+                    cat_name = DEFAULT_PURCHASE_LEDGER
+
+                l_total = q(itm.line_total)
+                category_totals[cat_name] += l_total
+                total_items_subtotal += l_total
+        else:
+            cat_name = DEFAULT_PURCHASE_LEDGER
+            sub_val = q(po.subtotal)
+            category_totals[cat_name] = sub_val
+            total_items_subtotal = sub_val
+
+        for c_ledger, c_amt in category_totals.items():
+            if c_amt > ZERO:
+                voucher_rows.append({
+                    'ledger': c_ledger,
+                    'amount': c_amt,
+                    'drcr': 'Dr',
+                    'addr': vendor_addr,
+                    'pin': vendor_pin
+                })
+
+        # ── STEP C: Input GST Segregation (Dr) ────────────────────────────
+        tax_val = q(po.tax_amount)
+        if tax_val > ZERO:
+            sup_gstin = (po.supplier_gstin or '').strip()
+            sup_state = (sup_gstin[:2] if len(sup_gstin) >= 2 else '').upper()
+            is_interstate = bool(sup_state and company_state_code and sup_state != company_state_code)
+
+            if is_interstate:
+                voucher_rows.append({
+                    'ledger': INPUT_IGST_LEDGER,
+                    'amount': tax_val,
+                    'drcr': 'Dr',
+                    'addr': vendor_addr,
+                    'pin': vendor_pin
+                })
+            else:
+                cgst_amt = (tax_val / Decimal('2.00')).quantize(Q2, rounding=ROUND_HALF_UP)
+                sgst_amt = tax_val - cgst_amt
+                if cgst_amt > ZERO:
+                    voucher_rows.append({
+                        'ledger': INPUT_CGST_LEDGER,
+                        'amount': cgst_amt,
+                        'drcr': 'Dr',
+                        'addr': vendor_addr,
+                        'pin': vendor_pin
+                    })
+                if sgst_amt > ZERO:
+                    voucher_rows.append({
+                        'ledger': INPUT_SGST_LEDGER,
+                        'amount': sgst_amt,
+                        'drcr': 'Dr',
+                        'addr': vendor_addr,
+                        'pin': vendor_pin
+                    })
+
+        # ── STEP D: Discount Received (Cr) ────────────────────────────────
+        theoretical_gross = total_items_subtotal + tax_val
+        discount_received = q(theoretical_gross - grand_total)
+        if discount_received >= Decimal('1.00'):
+            voucher_rows.append({
+                'ledger': DISCOUNT_RCVD_LEDGER,
+                'amount': discount_received,
+                'drcr': 'Cr',
+                'addr': vendor_addr,
+                'pin': vendor_pin
+            })
+
+        # ── STEP E: Dynamic Round-Off Algorithm ───────────────────────────
+        total_dr = sum(r['amount'] for r in voucher_rows if r['drcr'] == 'Dr')
+        total_cr = sum(r['amount'] for r in voucher_rows if r['drcr'] == 'Cr')
+        delta = q(total_dr - total_cr)
+
+        if abs(delta) > Decimal('5.00'):
+            errors.append(
+                f"Voucher {voucher_no}: Dr ({total_dr}) and Cr ({total_cr}) differ by ₹{abs(delta)} "
+                f"— exceeds tolerance. Export aborted."
+            )
+            break
+
+        if delta > ZERO:
+            voucher_rows.append({
+                'ledger': ROUND_OFF_LEDGER,
+                'amount': abs(delta),
+                'drcr': 'Cr',
+                'addr': vendor_addr,
+                'pin': vendor_pin
+            })
+        elif delta < ZERO:
+            voucher_rows.append({
+                'ledger': ROUND_OFF_LEDGER,
+                'amount': abs(delta),
+                'drcr': 'Dr',
+                'addr': vendor_addr,
+                'pin': vendor_pin
+            })
+
+        # ── STEP F: Parity Verification Assertion ─────────────────────────
+        final_dr = sum(r['amount'] for r in voucher_rows if r['drcr'] == 'Dr')
+        final_cr = sum(r['amount'] for r in voucher_rows if r['drcr'] == 'Cr')
+        if abs(final_dr - final_cr) >= Decimal('0.001'):
+            errors.append(
+                f"Voucher {voucher_no}: Dr ({final_dr}) ≠ Cr ({final_cr}) after round-off. Export aborted."
+            )
+            break
+
+        # Sort: Cr rows (Payment/Supplier/Discount/Cr round off) first, then Dr rows
+        voucher_rows.sort(key=lambda r: 0 if r['drcr'] == 'Cr' else 1)
+
+        # Stamp common voucher metadata onto each row
+        for r in voucher_rows:
+            r.update({
+                'date': voucher_date,
+                'vtype': VOUCHER_TYPE,
+                'vno': voucher_no,
+                'mode': CHANGE_MODE
+            })
+
+        all_vouchers_rows.append(voucher_rows)
+
+    if errors:
+        msg = "; ".join(errors)
+        return HttpResponse(
+            f"<h3 style='color:red;font-family:sans-serif'>Tally Purchase Export Error</h3>"
+            f"<p style='font-family:monospace'>{msg}</p>"
+            f"<p><a href='javascript:history.back()'>← Go Back</a></p>",
+            status=422,
+            content_type='text/html'
+        )
+
+    # ── Excel Workbook Generation ─────────────────────────────────────────
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Accounting Voucher"  # Exact sheet title required by TallyPrime
+
+    HEADER_COLS = [
+        "Voucher Date",              # Col 1 (A)
+        "Voucher Type Name",         # Col 2 (B)
+        "Voucher Number",            # Col 3 (C)
+        "Buyer/Supplier - Address",  # Col 4 (D)
+        "Buyer/Supplier - Pincode",  # Col 5 (E)
+        "Ledger Name",               # Col 6 (F)
+        "Ledger Amount",             # Col 7 (G)
+        "Ledger Amount Dr/Cr",       # Col 8 (H)
+        "Item Name",                 # Col 9 (I)
+        "Billed Quantity",           # Col 10 (J)
+        "Item Rate",                 # Col 11 (K)
+        "Item Rate per",             # Col 12 (L)
+        "Item Amount",               # Col 13 (M)
+        "Change Mode",               # Col 14 (N)
+    ]
+
+    header_fill = PatternFill(start_color="F59E0B", end_color="F59E0B", fill_type="solid")
+    header_font = Font(name="Calibri", size=10, bold=True, color="000000")
+    thin_border = Border(
+        left=Side(style='thin', color='D1D5DB'),
+        right=Side(style='thin', color='D1D5DB'),
+        top=Side(style='thin', color='D1D5DB'),
+        bottom=Side(style='thin', color='D1D5DB'),
+    )
+    data_font = Font(name="Calibri", size=10)
+
+    ws.append(HEADER_COLS)
+    for col_idx in range(1, len(HEADER_COLS) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.border = thin_border
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    # Write voucher rows with separator blank row between vouchers
+    total_vouchers = len(all_vouchers_rows)
+    for v_idx, v_rows in enumerate(all_vouchers_rows):
+        for r_data in v_rows:
+            ws.append([
+                r_data['date'],              # A
+                r_data['vtype'],             # B
+                r_data['vno'],               # C
+                r_data['addr'] or '',        # D
+                r_data['pin'] or '',         # E
+                r_data['ledger'],            # F
+                float(r_data['amount']),     # G
+                r_data['drcr'],              # H
+                '',                          # I
+                '',                          # J
+                '',                          # K
+                '',                          # L
+                '',                          # M
+                r_data['mode'],              # N
+            ])
+            r_idx = ws.max_row
+            for col_idx in range(1, len(HEADER_COLS) + 1):
+                cell = ws.cell(row=r_idx, column=col_idx)
+                cell.font = data_font
+                cell.border = thin_border
+                if col_idx == 7: # Amount
+                    cell.number_format = '#,##0.00'
+                    cell.alignment = Alignment(horizontal="right")
+                elif col_idx in [1, 2, 8, 14]:
+                    cell.alignment = Alignment(horizontal="center")
+                    if col_idx == 8:
+                        is_dr = (r_data['drcr'] == 'Dr')
+                        cell.font = Font(name="Calibri", size=10, bold=True, color="1E40AF" if is_dr else "065F46")
+                else:
+                    cell.alignment = Alignment(horizontal="left")
+
+        # Blank separator row between distinct vouchers (per Screenshot 3)
+        if v_idx < total_vouchers - 1:
+            ws.append([''] * len(HEADER_COLS))
+
+    col_widths = [14, 18, 18, 30, 16, 36, 16, 18, 14, 14, 12, 12, 12, 20]
+    for i, width in enumerate(col_widths, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = width
+
+    ws.freeze_panes = "A2"
+
+    filename = f"Tally_Purchases_{restaurant.slug}_{timezone.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
+
+
+@login_required
+@user_passes_test(is_admin)
+def purchase_records_export(request, restaurant_slug=None):
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
+
+    purchases_qs = _filter_purchase_queryset(request, restaurant)
+
+    if request.GET.get('format') == 'tally':
+        return _export_tally_purchase_vouchers(request, restaurant, purchases_qs)
+
+    return _export_purchase_records_excel(request, restaurant, purchases_qs)
+
+
+@login_required
+@user_passes_test(is_admin)
+def purchase_list(request, restaurant_slug=None):
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
+
+    purchases = _filter_purchase_queryset(request, restaurant)
+
+    # Compute KPI totals on filtered purchases
+    kpi_total_count = purchases.count()
+    kpi_total_spend = purchases.aggregate(s=Sum('grand_total'))['s'] or Decimal('0.00')
+    kpi_total_tax = purchases.aggregate(s=Sum('tax_amount'))['s'] or Decimal('0.00')
+    kpi_unpaid_count = purchases.filter(payment_status='unpaid').count()
 
     try:
         per_page = int(request.GET.get('per_page', 20))
@@ -3058,10 +3650,26 @@ def purchase_list(request, restaurant_slug=None):
     except EmptyPage:
         purchases_page = paginator.page(paginator.num_pages)
 
+    get_copy = request.GET.copy()
+    if 'page' in get_copy:
+        del get_copy['page']
+    url_params = get_copy.urlencode()
+
     return render(request, 'restaurant_admin/purchases/list.html', {
         'restaurant': restaurant,
         'purchases': purchases_page,
         'active_menu': 'purchases',
+        'url_params': url_params,
+        'period_filter': request.GET.get('period', ''),
+        'start_date_filter': request.GET.get('start_date', ''),
+        'end_date_filter': request.GET.get('end_date', ''),
+        'payment_method_filter': request.GET.get('payment_method', ''),
+        'payment_status_filter': request.GET.get('payment_status', ''),
+        'search_query': request.GET.get('q', ''),
+        'kpi_total_count': kpi_total_count,
+        'kpi_total_spend': kpi_total_spend,
+        'kpi_total_tax': kpi_total_tax,
+        'kpi_unpaid_count': kpi_unpaid_count,
     })
 
 

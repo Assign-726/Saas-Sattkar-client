@@ -101,6 +101,7 @@ urlpatterns = [
     path('inventory/<int:pk>/adjust/', views.inventory_adjust, name='inventory_adjust'),
     path('inventory/logs/', views.inventory_logs, name='inventory_logs'),
     path('purchases/', views.purchase_list, name='purchase_list'),
+    path('purchases/export/', views.purchase_records_export, name='purchase_records_export'),
     path('purchases/create/', views.purchase_create, name='purchase_create'),
     path('purchases/<int:pk>/edit/', views.purchase_edit, name='purchase_edit'),
 
