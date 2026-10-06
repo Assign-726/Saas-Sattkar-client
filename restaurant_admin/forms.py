@@ -636,6 +636,11 @@ class RestaurantSettingsForm(forms.ModelForm):
             'tally_sales_ledger', 'tally_liquor_sales_ledger',
             'tally_cgst_ledger', 'tally_sgst_ledger', 'tally_vat_ledger',
             'tally_discount_ledger', 'tally_extra_charges_ledger', 'tally_round_off_ledger',
+            # Tally Purchase Voucher Export Settings
+            'tally_purchase_voucher_type', 'tally_purchase_bank_ledger',
+            'tally_default_purchase_ledger', 'tally_purchase_category_prefix',
+            'tally_input_cgst_ledger', 'tally_input_sgst_ledger', 'tally_input_igst_ledger',
+            'tally_discount_received_ledger',
         ]
         widgets = {
             'cgst_percentage': forms.NumberInput(attrs={'step': '0.01', 'min': '0'}),
@@ -669,6 +674,10 @@ class RestaurantSettingsForm(forms.ModelForm):
             'tally_sales_ledger', 'tally_liquor_sales_ledger',
             'tally_cgst_ledger', 'tally_sgst_ledger', 'tally_vat_ledger',
             'tally_discount_ledger', 'tally_extra_charges_ledger', 'tally_round_off_ledger',
+            'tally_purchase_voucher_type', 'tally_purchase_bank_ledger',
+            'tally_default_purchase_ledger', 'tally_purchase_category_prefix',
+            'tally_input_cgst_ledger', 'tally_input_sgst_ledger', 'tally_input_igst_ledger',
+            'tally_discount_received_ledger',
         ]
         for field in tally_text_fields:
             if field in self.fields:

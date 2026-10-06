@@ -1,134 +1,275 @@
 {% extends 'restaurant_admin/base.html' %}
-{% block title %}{{ title }}{% endblock %}
+{% block title %}{{ title }} - Restaurant Admin{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-  <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="container-fluid px-0">
+  <!-- Header Bar -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-      <h3 class="mb-1 text-dark fw-bold"><i class="bi bi-box-seam text-primary me-2"></i>{{ title }}</h3>
-      <p class="text-muted small mb-0">Configure master raw material, beverage, or packaging inventory item specifications and GST rates</p>
+      <h4 class="fw-bold mb-1 text-dark d-flex align-items-center gap-2">
+        <span class="badge bg-primary-subtle text-primary p-2 rounded-3"><i class="fas fa-boxes-stacked fs-5"></i></span>
+        <span>{{ title }}</span>
+      </h4>
+      <p class="text-muted extra-small mb-0">Configure master raw materials, beverages, reorder alerts, and statutory input GST parameters</p>
     </div>
-    <a href="{% url 'restaurant_admin:inventory_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
-      <i class="bi bi-arrow-left me-1"></i> Back to Stock List
+    <a href="{% url 'restaurant_admin:inventory_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary btn-sm rounded-pill px-3 fw-semibold">
+      <i class="fas fa-arrow-left me-1"></i> Back to Stock List
     </a>
   </div>
 
-  <div class="card border-0 shadow-sm rounded-3">
-    <div class="card-body p-4">
-      <form method="post" novalidate>
-        {% csrf_token %}
+  <form method="post" novalidate id="inventoryItemForm">
+    {% csrf_token %}
 
-        <!-- Section 1: Item Basic Profile -->
-        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-info-circle me-1"></i> 1. Item Specifications</h6>
-        <div class="row g-3 mb-4">
+    <!-- Card 1: Item Specifications -->
+    <div class="card border-0 shadow-sm rounded-3 mb-3">
+      <div class="card-header bg-white py-2.5 px-3 border-bottom d-flex align-items-center gap-2">
+        <i class="fas fa-box-archive text-primary"></i>
+        <h6 class="fw-bold mb-0 text-dark">1. Item Specifications & Master Profile</h6>
+      </div>
+      <div class="card-body p-3">
+        <!-- Row 1: Name, SKU, Category -->
+        <div class="row g-3 mb-3">
           <div class="col-md-5">
-            <label class="form-label fw-semibold text-secondary small">Item Name <span class="text-danger">*</span></label>
-            {{ form.name }}
-            {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors|join:", " }}</div>{% endif %}
+            <label class="form-label fw-semibold text-dark extra-small mb-1">
+              Item Name <span class="text-danger">*</span>
+            </label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light border-end-0 text-secondary"><i class="fas fa-box"></i></span>
+              <div class="flex-grow-1">
+                {{ form.name }}
+              </div>
+            </div>
+            {% if form.name.errors %}<div class="text-danger extra-small mt-1">{{ form.name.errors|join:", " }}</div>{% endif %}
           </div>
+
           <div class="col-md-3">
-            <label class="form-label fw-semibold text-secondary small">SKU Code</label>
-            {{ form.sku }}
-            {% if form.sku.errors %}<div class="text-danger small mt-1">{{ form.sku.errors|join:", " }}</div>{% endif %}
+            <label class="form-label fw-semibold text-secondary extra-small mb-1">
+              SKU Code
+            </label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light border-end-0 text-secondary"><i class="fas fa-barcode"></i></span>
+              <div class="flex-grow-1">
+                {{ form.sku }}
+              </div>
+            </div>
+            {% if form.sku.errors %}<div class="text-danger extra-small mt-1">{{ form.sku.errors|join:", " }}</div>{% endif %}
           </div>
+
           <div class="col-md-4">
-            <label class="form-label fw-semibold text-secondary small">Inventory Category</label>
-            {{ form.category }}
-            {% if form.category.errors %}<div class="text-danger small mt-1">{{ form.category.errors|join:", " }}</div>{% endif %}
+            <label class="form-label fw-semibold text-secondary extra-small mb-1">
+              Inventory Category
+            </label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light border-end-0 text-secondary"><i class="fas fa-tags"></i></span>
+              <div class="flex-grow-1">
+                {{ form.category }}
+              </div>
+            </div>
+            {% if form.category.errors %}<div class="text-danger extra-small mt-1">{{ form.category.errors|join:", " }}</div>{% endif %}
           </div>
         </div>
 
-        <div class="row g-3 mb-4">
+        <!-- Row 2: Unit, Quantity, Reorder Level, Is Active -->
+        <div class="row g-3">
           <div class="col-md-3">
-            <label class="form-label fw-semibold text-secondary small">Measurement Unit <span class="text-danger">*</span></label>
-            {{ form.unit }}
-            {% if form.unit.errors %}<div class="text-danger small mt-1">{{ form.unit.errors|join:", " }}</div>{% endif %}
+            <label class="form-label fw-semibold text-dark extra-small mb-1">
+              Measurement Unit <span class="text-danger">*</span>
+            </label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light border-end-0 text-secondary"><i class="fas fa-scale-balanced"></i></span>
+              <div class="flex-grow-1">
+                {{ form.unit }}
+              </div>
+            </div>
+            <div class="form-text extra-small text-muted mt-1">e.g. kg, ltr, pcs, pkt, can</div>
+            {% if form.unit.errors %}<div class="text-danger extra-small mt-1">{{ form.unit.errors|join:", " }}</div>{% endif %}
           </div>
+
           <div class="col-md-3">
-            <label class="form-label fw-semibold text-secondary small">Initial Stock Quantity</label>
-            {{ form.quantity }}
-            {% if form.quantity.errors %}<div class="text-danger small mt-1">{{ form.quantity.errors|join:", " }}</div>{% endif %}
+            <label class="form-label fw-semibold text-secondary extra-small mb-1">
+              Initial Stock Quantity
+            </label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light border-end-0 text-secondary"><i class="fas fa-cubes-stacked"></i></span>
+              <div class="flex-grow-1">
+                {{ form.quantity }}
+              </div>
+            </div>
+            <div class="form-text extra-small text-muted mt-1">Starting balance on hand</div>
+            {% if form.quantity.errors %}<div class="text-danger extra-small mt-1">{{ form.quantity.errors|join:", " }}</div>{% endif %}
           </div>
+
           <div class="col-md-3">
-            <label class="form-label fw-semibold text-secondary small">Low Stock Reorder Alert Level <span class="text-danger">*</span></label>
-            {{ form.reorder_level }}
-            <div class="form-text fs-8 text-muted">Triggers low stock alert when stock drops below or equal to this value.</div>
-            {% if form.reorder_level.errors %}<div class="text-danger small mt-1">{{ form.reorder_level.errors|join:", " }}</div>{% endif %}
+            <label class="form-label fw-semibold text-secondary extra-small mb-1">
+              Reorder Alert Threshold <span class="text-danger">*</span>
+            </label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light border-end-0 text-warning"><i class="fas fa-bell"></i></span>
+              <div class="flex-grow-1">
+                {{ form.reorder_level }}
+              </div>
+            </div>
+            <div class="form-text extra-small text-muted mt-1">Warns when stock falls below this quantity</div>
+            {% if form.reorder_level.errors %}<div class="text-danger extra-small mt-1">{{ form.reorder_level.errors|join:", " }}</div>{% endif %}
           </div>
-          <div class="col-md-3 d-flex align-items-center pt-3">
-            <div class="form-check form-switch bg-light p-3 rounded border w-100">
+
+          <div class="col-md-3 d-flex align-items-center pt-2">
+            <div class="form-check form-switch bg-light p-2.5 rounded-3 border w-100 d-flex align-items-center">
               <div class="ms-4">
                 {{ form.is_active }}
-                <label class="form-check-label fw-semibold small" for="{{ form.is_active.id_for_label }}">Is Active Item</label>
+                <label class="form-check-label fw-semibold extra-small" for="{{ form.is_active.id_for_label }}">
+                  Active in Stock & POS
+                </label>
               </div>
             </div>
           </div>
         </div>
-
-        <!-- Section 2: Costing & Pricing -->
-        <hr class="my-4">
-        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-currency-rupee me-1"></i> 2. Costing & Pricing Rates</h6>
-        <div class="row g-3 mb-4">
-          <div class="col-md-6">
-            <label class="form-label fw-semibold text-secondary small">Default Cost Price (Purchase Rate per Unit ₹)</label>
-            {{ form.cost_price }}
-            <div class="form-text fs-8 text-muted">Default purchase cost rate used during inward purchase entries.</div>
-            {% if form.cost_price.errors %}<div class="text-danger small mt-1">{{ form.cost_price.errors|join:", " }}</div>{% endif %}
-          </div>
-          <div class="col-md-6">
-            <label class="form-label fw-semibold text-secondary small">Selling Price per Unit (Optional ₹)</label>
-            {{ form.selling_price }}
-            <div class="form-text fs-8 text-muted">Applicable if item is sold directly on POS (e.g. bottled beverages).</div>
-            {% if form.selling_price.errors %}<div class="text-danger small mt-1">{{ form.selling_price.errors|join:", " }}</div>{% endif %}
-          </div>
-        </div>
-
-        <!-- Section 3: HSN/SAC & GST Tax Settings -->
-        <hr class="my-4">
-        <h6 class="fw-bold text-primary mb-3"><i class="bi bi-file-earmark-text me-1"></i> 3. HSN/SAC Code & Input GST Tax Settings</h6>
-        <div class="row g-3 mb-3">
-          <div class="col-md-3">
-            <label class="form-label fw-semibold text-dark small">Tax Configuration Mode <span class="text-danger">*</span></label>
-            {{ form.tax_configuration }}
-            <div class="form-text fs-8 text-muted">Inherit from Category or Override.</div>
-            {% if form.tax_configuration.errors %}<div class="text-danger small mt-1">{{ form.tax_configuration.errors|join:", " }}</div>{% endif %}
-          </div>
-          <div class="col-md-3">
-            <label class="form-label fw-semibold text-secondary small">Taxability Type</label>
-            {{ form.taxability_type }}
-            {% if form.taxability_type.errors %}<div class="text-danger small mt-1">{{ form.taxability_type.errors|join:", " }}</div>{% endif %}
-          </div>
-          <div class="col-md-3">
-            <label class="form-label fw-semibold text-secondary small">HSN / SAC Code</label>
-            {{ form.hsn_sac_code }}
-            <div class="form-text fs-8 text-muted">4 to 8 digit HSN classification code for GST compliance.</div>
-            {% if form.hsn_sac_code.errors %}<div class="text-danger small mt-1">{{ form.hsn_sac_code.errors|join:", " }}</div>{% endif %}
-          </div>
-          <div class="col-md-3">
-            <label class="form-label fw-semibold text-secondary small">GST Tax Rate (%)</label>
-            {{ form.gst_rate }}
-            <div class="form-text fs-8 text-muted">Select standard GST rate applicable for input tax credit.</div>
-            {% if form.gst_rate.errors %}<div class="text-danger small mt-1">{{ form.gst_rate.errors|join:", " }}</div>{% endif %}
-          </div>
-        </div>
-
-        <div class="mb-4">
-          <label class="form-label fw-semibold text-secondary small">HSN Item Description / Notes</label>
-          {{ form.hsn_description }}
-          {% if form.hsn_description.errors %}<div class="text-danger small mt-1">{{ form.hsn_description.errors|join:", " }}</div>{% endif %}
-        </div>
-
-        {% if form.non_field_errors %}
-        <div class="alert alert-danger mb-3">{{ form.non_field_errors|join:", " }}</div>
-        {% endif %}
-
-        <div class="d-flex justify-content-end gap-2 pt-3 border-top">
-          <a href="{% url 'restaurant_admin:inventory_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary px-4">Cancel</a>
-          <button type="submit" class="btn btn-primary px-4 fw-semibold"><i class="bi bi-check-circle me-1"></i> Save Inventory Item</button>
-        </div>
-      </form>
+      </div>
     </div>
-  </div>
+
+    <!-- Card 2: Costing & Pricing Rates -->
+    <div class="card border-0 shadow-sm rounded-3 mb-3">
+      <div class="card-header bg-white py-2.5 px-3 border-bottom d-flex align-items-center gap-2">
+        <i class="fas fa-indian-rupee-sign text-primary"></i>
+        <h6 class="fw-bold mb-0 text-dark">2. Costing & Pricing Rates</h6>
+      </div>
+      <div class="card-body p-3">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold text-dark extra-small mb-1">
+              Default Cost Rate (Purchase Rate per Unit ₹)
+            </label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light border-end-0 text-success fw-bold">₹</span>
+              <div class="flex-grow-1">
+                {{ form.cost_price }}
+              </div>
+            </div>
+            <div class="form-text extra-small text-muted mt-1">Pre-filled unit price during inward purchase entry</div>
+            {% if form.cost_price.errors %}<div class="text-danger extra-small mt-1">{{ form.cost_price.errors|join:", " }}</div>{% endif %}
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-semibold text-secondary extra-small mb-1">
+              Direct Selling Price per Unit (Optional ₹)
+            </label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light border-end-0 text-primary fw-bold">₹</span>
+              <div class="flex-grow-1">
+                {{ form.selling_price }}
+              </div>
+            </div>
+            <div class="form-text extra-small text-muted mt-1">Applicable if sold as retail counter item on POS</div>
+            {% if form.selling_price.errors %}<div class="text-danger extra-small mt-1">{{ form.selling_price.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card 3: HSN/SAC & GST Tax Settings -->
+    <div class="card border-0 shadow-sm rounded-3 mb-3">
+      <div class="card-header bg-white py-2.5 px-3 border-bottom d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-2">
+          <i class="fas fa-file-invoice text-primary"></i>
+          <h6 class="fw-bold mb-0 text-dark">3. HSN/SAC Code & Input GST Tax Settings</h6>
+        </div>
+        <span class="badge bg-light text-secondary border font-monospace extra-small">Statutory Inward Tax</span>
+      </div>
+      <div class="card-body p-3">
+        <!-- Inheritance Status Banner (Live updated by JS) -->
+        <div id="itemTaxInheritanceNotice" class="alert alert-light border rounded-3 p-3 mb-3 d-flex align-items-center justify-content-between">
+          <div class="d-flex align-items-center gap-2.5">
+            <div class="rounded-circle bg-primary-subtle text-primary p-2 d-flex align-items-center justify-content-center" style="width: 34px; height: 34px;">
+              <i class="fas fa-shield-halved"></i>
+            </div>
+            <div>
+              <div class="fw-bold text-dark extra-small" id="itemTaxInheritanceTitle">Inheriting Category Tax Schedule</div>
+              <div class="text-muted extra-small" id="itemTaxInheritanceSubtitle">Tax rules inherited from the assigned Inventory Category</div>
+            </div>
+          </div>
+          <span class="badge bg-primary-subtle text-primary border border-primary-subtle font-monospace px-2.5 py-1" id="itemTaxInheritancePill">
+            Inherit Mode
+          </span>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <!-- Tax Configuration Mode -->
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-dark extra-small mb-1">
+              Configuration Mode <span class="text-danger">*</span>
+            </label>
+            {{ form.tax_configuration }}
+            <div class="form-text extra-small text-muted mt-1">Inherit from Category or Override</div>
+            {% if form.tax_configuration.errors %}<div class="text-danger extra-small mt-1">{{ form.tax_configuration.errors|join:", " }}</div>{% endif %}
+          </div>
+
+          <!-- Taxability Type -->
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-secondary extra-small mb-1">
+              Taxability Type
+            </label>
+            {{ form.taxability_type }}
+            <div class="form-text extra-small text-muted mt-1">Taxable, Exempted or Nil Rated</div>
+            {% if form.taxability_type.errors %}<div class="text-danger extra-small mt-1">{{ form.taxability_type.errors|join:", " }}</div>{% endif %}
+          </div>
+
+          <!-- HSN / SAC Code -->
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-secondary extra-small mb-1">
+              HSN / SAC Code
+            </label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light border-end-0 text-secondary"><i class="fas fa-barcode"></i></span>
+              <div class="flex-grow-1">
+                {{ form.hsn_sac_code }}
+              </div>
+            </div>
+            <div class="form-text extra-small text-muted mt-1">4 to 8 digit tariff code</div>
+            {% if form.hsn_sac_code.errors %}<div class="text-danger extra-small mt-1">{{ form.hsn_sac_code.errors|join:", " }}</div>{% endif %}
+          </div>
+
+          <!-- GST Rate -->
+          <div class="col-md-3">
+            <label class="form-label fw-semibold text-secondary extra-small mb-1">
+              GST Tax Rate (%)
+            </label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light border-end-0 text-secondary"><i class="fas fa-percent"></i></span>
+              <div class="flex-grow-1">
+                {{ form.gst_rate }}
+              </div>
+            </div>
+            <div class="form-text extra-small text-muted mt-1">Input credit tax rate %</div>
+            {% if form.gst_rate.errors %}<div class="text-danger extra-small mt-1">{{ form.gst_rate.errors|join:", " }}</div>{% endif %}
+          </div>
+        </div>
+
+        <div>
+          <label class="form-label fw-semibold text-secondary extra-small mb-1">
+            HSN Item Description / Statutory Notes
+          </label>
+          {{ form.hsn_description }}
+          {% if form.hsn_description.errors %}<div class="text-danger extra-small mt-1">{{ form.hsn_description.errors|join:", " }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    {% if form.non_field_errors %}
+    <div class="alert alert-danger rounded-3 mb-3 extra-small">{{ form.non_field_errors|join:", " }}</div>
+    {% endif %}
+
+    <!-- Action Bar -->
+    <div class="card border-0 shadow-sm rounded-3 mb-4">
+      <div class="card-body p-3 d-flex justify-content-between align-items-center">
+        <a href="{% url 'restaurant_admin:inventory_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary btn-sm px-4 fw-semibold rounded-pill">
+          Cancel
+        </a>
+        <button type="submit" class="btn btn-primary btn-sm px-4 fw-semibold rounded-pill shadow-sm">
+          <i class="fas fa-check-circle me-1"></i> Save Stock Master Item
+        </button>
+      </div>
+    </div>
+  </form>
 </div>
 
 <script>
@@ -139,6 +280,11 @@
     const hsnInput = document.getElementById('{{ form.hsn_sac_code.id_for_label }}');
     const gstSelect = document.getElementById('{{ form.gst_rate.id_for_label }}');
 
+    const noticeBox = document.getElementById('itemTaxInheritanceNotice');
+    const noticeTitle = document.getElementById('itemTaxInheritanceTitle');
+    const noticeSubtitle = document.getElementById('itemTaxInheritanceSubtitle');
+    const noticePill = document.getElementById('itemTaxInheritancePill');
+
     let categoryTaxMap = {};
 
     function updateItemTaxUI() {
@@ -146,13 +292,18 @@
       const catId = categorySelect ? categorySelect.value : null;
 
       if (isInherit) {
-        taxabilitySelect.disabled = true;
-        hsnInput.disabled = true;
-        gstSelect.disabled = true;
-
-        taxabilitySelect.classList.add('bg-light');
-        hsnInput.classList.add('bg-light');
-        gstSelect.classList.add('bg-light');
+        if (taxabilitySelect) {
+          taxabilitySelect.disabled = true;
+          taxabilitySelect.classList.add('bg-light');
+        }
+        if (hsnInput) {
+          hsnInput.disabled = true;
+          hsnInput.classList.add('bg-light');
+        }
+        if (gstSelect) {
+          gstSelect.disabled = true;
+          gstSelect.classList.add('bg-light');
+        }
 
         let resolvedGst = "0%";
         let resolvedHsn = "None";
@@ -169,8 +320,8 @@
           resolvedTaxability = "Taxable (Company Default)";
         }
 
-        hsnInput.placeholder = `Inherited: ${resolvedHsn}`;
-        if (gstSelect.options && gstSelect.options.length > 0) {
+        if (hsnInput) hsnInput.placeholder = `Inherited: ${resolvedHsn}`;
+        if (gstSelect && gstSelect.options && gstSelect.options.length > 0) {
           for (let option of gstSelect.options) {
             if (option.value === '') {
               option.text = `Inherited: ${resolvedGst}`;
@@ -179,23 +330,43 @@
             }
           }
         }
+
+        if (noticeBox) {
+          noticeBox.className = 'alert alert-light border rounded-3 p-3 mb-3 d-flex align-items-center justify-content-between';
+          noticeTitle.textContent = `Inheriting Category Rules: ${resolvedGst} GST | HSN ${resolvedHsn}`;
+          noticeSubtitle.textContent = catId ? `Derived from selected inventory category schedule` : `Derived from company defaults`;
+          noticePill.className = 'badge bg-primary-subtle text-primary border border-primary-subtle font-monospace px-2.5 py-1';
+          noticePill.textContent = 'Inherit Mode';
+        }
       } else {
-        taxabilitySelect.disabled = false;
-        hsnInput.disabled = false;
-        gstSelect.disabled = false;
-
-        taxabilitySelect.classList.remove('bg-light');
-        hsnInput.classList.remove('bg-light');
-        gstSelect.classList.remove('bg-light');
-
-        hsnInput.placeholder = '4 to 8 digit HSN tariff code';
-        if (gstSelect.options && gstSelect.options.length > 0) {
-          for (let option of gstSelect.options) {
-            if (option.value === '') {
-              option.text = '-- Select Rate --';
-              break;
+        if (taxabilitySelect) {
+          taxabilitySelect.disabled = false;
+          taxabilitySelect.classList.remove('bg-light');
+        }
+        if (hsnInput) {
+          hsnInput.disabled = false;
+          hsnInput.classList.remove('bg-light');
+          hsnInput.placeholder = '4 to 8 digit HSN tariff code';
+        }
+        if (gstSelect) {
+          gstSelect.disabled = false;
+          gstSelect.classList.remove('bg-light');
+          if (gstSelect.options && gstSelect.options.length > 0) {
+            for (let option of gstSelect.options) {
+              if (option.value === '') {
+                option.text = '-- Select Rate --';
+                break;
+              }
             }
           }
+        }
+
+        if (noticeBox) {
+          noticeBox.className = 'alert alert-warning-subtle border border-warning-subtle rounded-3 p-3 mb-3 d-flex align-items-center justify-content-between';
+          noticeTitle.textContent = 'Custom Tax Rules Active (Override Mode)';
+          noticeSubtitle.textContent = 'This item explicitly defines its own HSN code and GST rate';
+          noticePill.className = 'badge bg-warning-subtle text-warning-emphasis border border-warning-subtle font-monospace px-2.5 py-1';
+          noticePill.textContent = 'Override Mode';
         }
       }
     }
