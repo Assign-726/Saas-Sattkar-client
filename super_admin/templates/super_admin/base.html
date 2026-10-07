@@ -11,6 +11,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        (function() {
+            const stored = localStorage.getItem('app-theme-preference') || 'system';
+            const isDark = stored === 'system' ? window.matchMedia('(prefers-color-scheme: dark)').matches : stored === 'dark';
+            const eff = isDark ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-bs-theme', eff);
+            document.documentElement.setAttribute('data-theme', eff);
+            if (isDark) { document.documentElement.classList.add('dark-theme'); }
+        })();
+    </script>
     <style>
         :root {
             --bg: #f8fafc;
@@ -32,6 +42,20 @@
             --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
             --radius: 16px;
             --radius-sm: 8px;
+        }
+
+        :root[data-theme="dark"],
+        :root[data-bs-theme="dark"],
+        html[data-theme="dark"],
+        html.dark-theme {
+            --bg: #090d16;
+            --panel: #131c31;
+            --panel-hover: #1b2642;
+            --muted: #94a3b8;
+            --text: #f1f5f9;
+            --border: #233050;
+            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.45), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+            --shadow-sm: 0 2px 5px rgba(0, 0, 0, 0.35);
         }
 
         *, *::before, *::after {
@@ -551,7 +575,35 @@
             gap: 12px;
             flex-wrap: wrap;
             color: var(--text);
-            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            background: var(--panel-hover);
+        }
+
+        html[data-theme="dark"] .card .hd,
+        html.dark-theme .card .hd,
+        [data-theme="dark"] .card .hd,
+        .dark-theme .card .hd {
+            background: #0f172a !important;
+            border-bottom: 1px solid #233050 !important;
+            color: #f8fafc !important;
+        }
+
+        html[data-theme="dark"] .card .hd span,
+        html[data-theme="dark"] .card .hd h2,
+        html[data-theme="dark"] .card .hd h3,
+        html[data-theme="dark"] .card .hd h4,
+        html.dark-theme .card .hd span,
+        html.dark-theme .card .hd h2,
+        html.dark-theme .card .hd h3,
+        html.dark-theme .card .hd h4,
+        [data-theme="dark"] .card .hd span,
+        [data-theme="dark"] .card .hd h2,
+        [data-theme="dark"] .card .hd h3,
+        [data-theme="dark"] .card .hd h4,
+        .dark-theme .card .hd span,
+        .dark-theme .card .hd h2,
+        .dark-theme .card .hd h3,
+        .dark-theme .card .hd h4 {
+            color: #f8fafc !important;
         }
 
         .card .bd {
@@ -627,9 +679,9 @@
             min-width: 600px;
         }
         .table thead th {
-            background: #f8fafc;
+            background: var(--panel-hover, #f8fafc);
             border-bottom: 1.5px solid var(--border);
-            color: #475569;
+            color: var(--muted, #475569);
             font-weight: 700;
             padding: 12px 16px;
             font-size: 12px;
@@ -644,7 +696,34 @@
             color: var(--text);
             vertical-align: middle;
         }
-        .table tbody tr:hover { background: #f8fafc; }
+        .table tbody tr:hover { background: var(--panel-hover, #f8fafc); }
+
+        html[data-theme="dark"] .table thead th,
+        html.dark-theme .table thead th,
+        [data-theme="dark"] .table thead th,
+        .dark-theme .table thead th {
+            background: #0d1526 !important;
+            border-bottom: 1px solid #233050 !important;
+            color: #94a3b8 !important;
+        }
+        html[data-theme="dark"] .table td,
+        html.dark-theme .table td,
+        [data-theme="dark"] .table td,
+        .dark-theme .table td {
+            border-bottom: 1px solid #1c2640 !important;
+            color: #e2e8f0 !important;
+        }
+        html[data-theme="dark"] .table tbody tr:hover,
+        html[data-theme="dark"] .table tbody tr:hover td,
+        html.dark-theme .table tbody tr:hover,
+        html.dark-theme .table tbody tr:hover td,
+        [data-theme="dark"] .table tbody tr:hover,
+        [data-theme="dark"] .table tbody tr:hover td,
+        .dark-theme .table tbody tr:hover,
+        .dark-theme .table tbody tr:hover td {
+            background: rgba(255, 255, 255, 0.05) !important;
+            color: #ffffff !important;
+        }
         
         .action-row {
             display: flex;
@@ -862,6 +941,7 @@
         }
     </style>
     {% block head %}{% endblock %}
+    <link rel="stylesheet" href="{% static 'css/theme-dark.css' %}?v=3.3">
 </head>
 <body>
     <!-- Mobile Topbar for Super Admin -->
@@ -875,9 +955,23 @@
                 <span>Super <span>Admin</span></span>
             </div>
         </div>
-        <a href="{% url 'logout' %}" style="color: #94a3b8; font-size: 14px; padding: 6px 10px; border-radius: 6px; background: rgba(239,68,68,0.1); color: #f87171; border: 1px solid rgba(239,68,68,0.2);">
-            <i class="fa-solid fa-right-from-bracket"></i>
-        </a>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <!-- Mobile Theme Switcher -->
+            <div class="theme-segmented-control" style="width: auto; margin: 0; padding: 2px;">
+                <button type="button" class="theme-seg-btn" data-theme-val="light" title="Light Mode" style="width: 28px; height: 28px; flex: none;">
+                    <i class="fa-solid fa-sun" style="font-size: 12px;"></i>
+                </button>
+                <button type="button" class="theme-seg-btn" data-theme-val="dark" title="Dark Mode" style="width: 28px; height: 28px; flex: none;">
+                    <i class="fa-solid fa-moon" style="font-size: 12px;"></i>
+                </button>
+                <button type="button" class="theme-seg-btn" data-theme-val="system" title="System Theme" style="width: 28px; height: 28px; flex: none;">
+                    <i class="fa-solid fa-desktop" style="font-size: 12px;"></i>
+                </button>
+            </div>
+            <a href="{% url 'logout' %}" style="color: #94a3b8; font-size: 14px; padding: 6px 10px; border-radius: 6px; background: rgba(239,68,68,0.1); color: #f87171; border: 1px solid rgba(239,68,68,0.2);">
+                <i class="fa-solid fa-right-from-bracket"></i>
+            </a>
+        </div>
     </header>
 
     <div class="sidebar-backdrop" id="superSidebarBackdrop"></div>
@@ -1006,6 +1100,20 @@
                     </a>
                     {% endif %}
                 </nav>
+
+                <!-- Theme Segmented Switcher (Bottom-Left Sidebar Corner) -->
+                <div class="theme-segmented-control" role="group" aria-label="Theme Selection">
+                    <button type="button" class="theme-seg-btn" data-theme-val="light" title="Light Mode">
+                        <i class="fa-solid fa-sun"></i>
+                    </button>
+                    <button type="button" class="theme-seg-btn" data-theme-val="dark" title="Dark Mode">
+                        <i class="fa-solid fa-moon"></i>
+                    </button>
+                    <button type="button" class="theme-seg-btn" data-theme-val="system" title="System Theme">
+                        <i class="fa-solid fa-desktop"></i>
+                    </button>
+                </div>
+
                 <button type="button" id="superLogoutBtn" class="btn danger" style="display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; font-weight: 600; color: white; width: 100%; border: none; cursor: pointer; padding: 10px 16px; border-radius: 8px; font-size: 0.9rem;">
                     <i class="fa-solid fa-right-from-bracket"></i>
                     <span>Logout</span>
@@ -1463,5 +1571,6 @@
             }
         });
     </script>
+    <script src="{% static 'js/theme-manager.js' %}"></script>
 </body>
 </html>
