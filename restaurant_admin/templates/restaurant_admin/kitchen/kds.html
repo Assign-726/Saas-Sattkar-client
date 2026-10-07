@@ -38,6 +38,11 @@
   }
 
   /* Kitchen Display Dark Mode (Commercial Kitchen Glare-Free) */
+  :root[data-theme="dark"],
+  :root[data-bs-theme="dark"],
+  html[data-theme="dark"],
+  html.dark-theme,
+  body.dark-mode,
   body.kds-dark-mode {
     --kds-bg: #0B0F19;
     --kds-surface: #141D2B;
@@ -51,13 +56,38 @@
     --kds-card-hover-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
   }
 
-  body.kds-dark-mode {
+  body.kds-dark-mode,
+  [data-theme="dark"] body,
+  .dark-theme body {
     background-color: var(--kds-bg) !important;
   }
 
   body.kds-dark-mode .content-wrapper,
-  body.kds-dark-mode .main-content {
+  body.kds-dark-mode .main-content,
+  [data-theme="dark"] .content-wrapper,
+  [data-theme="dark"] .main-content,
+  .dark-theme .content-wrapper,
+  .dark-theme .main-content {
     background-color: var(--kds-bg) !important;
+  }
+
+  /* Empty State Card */
+  .kds-empty-state-card {
+    background: var(--kds-surface);
+    border: 1px solid var(--kds-border);
+    border-radius: 20px;
+    padding: 3.5rem 2rem;
+    text-align: center;
+    box-shadow: var(--kds-card-shadow);
+    color: var(--kds-text-primary);
+    max-width: 620px;
+    margin: 2rem auto;
+  }
+  .kds-empty-state-card h4 {
+    color: var(--kds-text-primary) !important;
+  }
+  .kds-empty-state-card p {
+    color: var(--kds-text-secondary) !important;
   }
 
   /* Layout Container */
@@ -510,7 +540,9 @@
     background: #FEF2F2;
     color: #DC2626;
   }
-  body.kds-dark-mode .strip-delayed {
+  body.kds-dark-mode .strip-delayed,
+  [data-theme="dark"] .strip-delayed,
+  .dark-theme .strip-delayed {
     background: rgba(220, 38, 38, 0.18);
     color: #F87171;
   }
@@ -519,7 +551,9 @@
     background: #F0FDF4;
     color: #16A34A;
   }
-  body.kds-dark-mode .strip-completed {
+  body.kds-dark-mode .strip-completed,
+  [data-theme="dark"] .strip-completed,
+  .dark-theme .strip-completed {
     background: rgba(22, 163, 74, 0.18);
     color: #4ADE80;
   }
@@ -528,7 +562,9 @@
     background: #EFF6FF;
     color: #2563EB;
   }
-  body.kds-dark-mode .strip-paused {
+  body.kds-dark-mode .strip-paused,
+  [data-theme="dark"] .strip-paused,
+  .dark-theme .strip-paused {
     background: rgba(37, 99, 235, 0.18);
     color: #60A5FA;
   }
@@ -537,7 +573,9 @@
     background: #FFFBEB;
     color: #D97706;
   }
-  body.kds-dark-mode .strip-cooking {
+  body.kds-dark-mode .strip-cooking,
+  [data-theme="dark"] .strip-cooking,
+  .dark-theme .strip-cooking {
     background: rgba(217, 119, 6, 0.18);
     color: #FBBF24;
   }
@@ -769,7 +807,9 @@
     margin-top: 1px;
   }
 
-  body.kds-dark-mode .item-special-note {
+  body.kds-dark-mode .item-special-note,
+  [data-theme="dark"] .item-special-note,
+  .dark-theme .item-special-note {
     background: rgba(245, 158, 11, 0.15);
     border-color: rgba(245, 158, 11, 0.35);
     border-left-color: #F59E0B;
@@ -919,7 +959,9 @@
     color: #1D4ED8;
     border: 1px solid #BFDBFE;
   }
-  body.kds-dark-mode .btn-resume-action {
+  body.kds-dark-mode .btn-resume-action,
+  [data-theme="dark"] .btn-resume-action,
+  .dark-theme .btn-resume-action {
     background: rgba(30, 64, 175, 0.25);
     color: #93C5FD;
     border-color: rgba(30, 64, 175, 0.45);
@@ -1384,7 +1426,8 @@
   function initPreferences() {
     // 1. Theme preference
     const savedTheme = localStorage.getItem('kds_theme');
-    if (savedTheme === 'dark') {
+    const globalDark = document.documentElement.getAttribute('data-theme') === 'dark' || document.documentElement.classList.contains('dark-theme');
+    if (savedTheme === 'dark' || (!savedTheme && globalDark)) {
       enableDarkMode(true);
     } else {
       enableDarkMode(false);

@@ -19,6 +19,16 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <!-- Alpine.js for reactive data grids and dashboards -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+    <script>
+        (function() {
+            const stored = localStorage.getItem('app-theme-preference') || 'system';
+            const isDark = stored === 'system' ? window.matchMedia('(prefers-color-scheme: dark)').matches : stored === 'dark';
+            const eff = isDark ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-bs-theme', eff);
+            document.documentElement.setAttribute('data-theme', eff);
+            if (isDark) { document.documentElement.classList.add('dark-theme'); }
+        })();
+    </script>
 
     <style>
         /* ============================================================
@@ -998,6 +1008,7 @@
     </style>
     {% block extra_css %}{% endblock %}
     {% block extra_head %}{% endblock %}
+    <link rel="stylesheet" href="{% static 'css/theme-dark.css' %}?v=3.1">
 </head>
 <body>
 
@@ -1133,6 +1144,18 @@
     </nav>
 
     <div class="sb-footer">
+        <!-- Theme Segmented Switcher (Bottom-Left Sidebar Corner) -->
+        <div class="theme-segmented-control mb-2" role="group" aria-label="Theme Selection">
+            <button type="button" class="theme-seg-btn" data-theme-val="light" title="Light Mode">
+                <i class="fa-solid fa-sun"></i>
+            </button>
+            <button type="button" class="theme-seg-btn" data-theme-val="dark" title="Dark Mode">
+                <i class="fa-solid fa-moon"></i>
+            </button>
+            <button type="button" class="theme-seg-btn" data-theme-val="system" title="System Theme">
+                <i class="fa-solid fa-desktop"></i>
+            </button>
+        </div>
         <div class="sb-user-card">
             <div class="d-flex align-items-center gap-2 overflow-hidden">
                 <div class="sb-user-avatar">{{ user.username|slice:":1"|upper }}</div>
@@ -1209,6 +1232,7 @@
                 </ul>
             </div>
             {% endif %}
+
             {% if can_create_reservation %}
             <button type="button" class="btn-new-res" data-bs-toggle="modal" data-bs-target="#newBookingModal">
                 <i class="fa-solid fa-plus"></i>
@@ -1273,6 +1297,7 @@
     }, 5000);
 })();
 </script>
+<script src="{% static 'js/theme-manager.js' %}"></script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>

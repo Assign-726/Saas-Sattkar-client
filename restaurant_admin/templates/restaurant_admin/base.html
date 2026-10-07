@@ -24,6 +24,14 @@
     <!-- Alpine.js for lightweight reactive data grids -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
     <script>
+        (function() {
+            const stored = localStorage.getItem('app-theme-preference') || 'system';
+            const isDark = stored === 'system' ? window.matchMedia('(prefers-color-scheme: dark)').matches : stored === 'dark';
+            const eff = isDark ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-bs-theme', eff);
+            document.documentElement.setAttribute('data-theme', eff);
+            if (isDark) { document.documentElement.classList.add('dark-theme'); }
+        })();
         if (localStorage.getItem('sidebar_collapsed') === 'true') {
             document.documentElement.classList.add('sidebar-collapsed');
         }
@@ -41,12 +49,31 @@
             --sidebar-collapsed-width: 70px;
         }
 
+        :root[data-theme="dark"],
+        :root[data-bs-theme="dark"],
+        html[data-theme="dark"],
+        html.dark-theme {
+            --dark: #f8fafc;
+            --light: #131c31;
+            --page-bg: #090d16;
+            --card-bg: #131c31;
+            --card-border: #233050;
+            --text-color: #f1f5f9;
+        }
+
         html,
         body {
             font-size: 13.5px;
             font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             background-color: #F0F2F5;
             color: #525F7F;
+        }
+
+        html[data-theme="dark"] body,
+        html.dark-theme body,
+        body.dark-mode {
+            background-color: #090d16 !important;
+            color: #e2e8f0 !important;
         }
 
         h1,
@@ -738,6 +765,7 @@
         }
     </style>
     {% block extra_head %}{% endblock %}
+    <link rel="stylesheet" href="{% static 'css/theme-dark.css' %}?v=3.1">
 </head>
 
 <body>
@@ -756,6 +784,18 @@
             {% if current_branch %}
             <span class="badge bg-primary text-wrap" style="font-size: 0.7rem;">{{ current_branch.name }}</span>
             {% endif %}
+            <!-- Mobile Theme Switcher -->
+            <div class="theme-segmented-control" style="width: auto; margin: 0; padding: 2px;">
+                <button type="button" class="theme-seg-btn" data-theme-val="light" title="Light Mode" style="width: 28px; height: 28px; flex: none;">
+                    <i class="fas fa-sun" style="font-size: 12px;"></i>
+                </button>
+                <button type="button" class="theme-seg-btn" data-theme-val="dark" title="Dark Mode" style="width: 28px; height: 28px; flex: none;">
+                    <i class="fas fa-moon" style="font-size: 12px;"></i>
+                </button>
+                <button type="button" class="theme-seg-btn" data-theme-val="system" title="System Theme" style="width: 28px; height: 28px; flex: none;">
+                    <i class="fas fa-desktop" style="font-size: 12px;"></i>
+                </button>
+            </div>
             {% if not is_club_user and not is_kitchen_user %}
             <!-- Mobile Notification Bell Dropdown -->
             <div class="dropdown">
@@ -1243,6 +1283,18 @@
                 {% endif %}
             </div>
             <div class="sidebar-footer">
+                <!-- Theme Segmented Switcher (Bottom-Left Sidebar Corner) -->
+                <div class="theme-segmented-control mb-2" role="group" aria-label="Theme Selection">
+                    <button type="button" class="theme-seg-btn" data-theme-val="light" title="Light Mode">
+                        <i class="fas fa-sun"></i>
+                    </button>
+                    <button type="button" class="theme-seg-btn" data-theme-val="dark" title="Dark Mode">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                    <button type="button" class="theme-seg-btn" data-theme-val="system" title="System Theme">
+                        <i class="fas fa-desktop"></i>
+                    </button>
+                </div>
                 <button type="button" class="btn-logout-sidebar" id="sidebarLogoutTrigger" title="Sign out of account">
                     <i class="fas fa-sign-out-alt"></i>
                     <span>Logout</span>
@@ -2028,6 +2080,7 @@
             window.CURRENT_RESTAURANT_SLUG = "{{ rslug|default:'' }}";
         </script>
         <script src="{% static 'restaurant_admin/js/tally_credit_note.js' %}?v=8.0"></script>
+        <script src="{% static 'js/theme-manager.js' %}"></script>
 
         {% block extra_js %}{% endblock %}
         {% endwith %}
