@@ -67,6 +67,14 @@ _DEFAULT_ENABLE_HOTEL_MODULE = _get_env_bool(
     'ENABLE_HOTEL_MODULE',
     _get_env_bool('ENABLE_HOTEL_PMS_MODULE', True)
 )
+_DEFAULT_ENABLE_RESTAURANT_MODULE = _get_env_bool(
+    'ENABLE_RESTAURANT_MODULE',
+    _get_env_bool('ENABLE_POS_MODULE', True)
+)
+_DEFAULT_ENABLE_HOTEL_WEBSITE = _get_env_bool(
+    'ENABLE_HOTEL_WEBSITE',
+    False
+)
 
 
 def is_module_enabled(module_name: str, restaurant=None) -> bool:
@@ -104,6 +112,16 @@ def is_module_enabled(module_name: str, restaurant=None) -> bool:
             return bool(target.feature_hotel_pms)
         return _DEFAULT_ENABLE_HOTEL_MODULE
 
+    if name in ('ENABLE_RESTAURANT_MODULE', 'SHOW_RESTAURANT_MODULE', 'RESTAURANT', 'POS'):
+        if target and hasattr(target, 'feature_restaurant_pos') and target.feature_restaurant_pos is not None:
+            return bool(target.feature_restaurant_pos)
+        return _DEFAULT_ENABLE_RESTAURANT_MODULE
+
+    if name in ('ENABLE_HOTEL_WEBSITE', 'SHOW_HOTEL_WEBSITE', 'HOTEL_WEBSITE'):
+        if target and hasattr(target, 'feature_hotel_website') and target.feature_hotel_website is not None:
+            return bool(target.feature_hotel_website)
+        return _DEFAULT_ENABLE_HOTEL_WEBSITE
+
     return True
 
 
@@ -119,4 +137,9 @@ def __getattr__(name: str):
         return is_module_enabled('ENABLE_CLUB_EVENTS_MODULE')
     if name in ('ENABLE_HOTEL_MODULE', 'SHOW_HOTEL_MODULE'):
         return is_module_enabled('ENABLE_HOTEL_MODULE')
+    if name in ('ENABLE_RESTAURANT_MODULE', 'SHOW_RESTAURANT_MODULE'):
+        return is_module_enabled('ENABLE_RESTAURANT_MODULE')
+    if name in ('ENABLE_HOTEL_WEBSITE', 'SHOW_HOTEL_WEBSITE'):
+        return is_module_enabled('ENABLE_HOTEL_WEBSITE')
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+

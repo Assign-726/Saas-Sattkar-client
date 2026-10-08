@@ -39,7 +39,7 @@ class BranchIsolationTests(TestCase):
         # MenuItemForm
         cat = Category.objects.create(name="Starters", restaurant=self.restaurant, branch=self.branch1)
         menu_form = MenuItemForm(
-            data={'name': 'Spring Roll', 'price': '150.00', 'tax_type': 'GST_FOOD', 'category': cat.id, 'availability': True},
+            data={'name': 'Spring Roll', 'price': '150.00', 'tax_type': 'GST_FOOD', 'category': cat.id, 'availability': True, 'preparation_time': 15},
             restaurant=self.restaurant,
             branch=self.branch1
         )
@@ -49,7 +49,7 @@ class BranchIsolationTests(TestCase):
 
         # MenuItemForm (without category)
         menu_form_no_cat = MenuItemForm(
-            data={'name': 'French Fries', 'price': '100.00', 'tax_type': 'GST_FOOD', 'category': '', 'availability': True},
+            data={'name': 'French Fries', 'price': '100.00', 'tax_type': 'GST_FOOD', 'category': '', 'availability': True, 'preparation_time': 10},
             restaurant=self.restaurant,
             branch=self.branch1
         )

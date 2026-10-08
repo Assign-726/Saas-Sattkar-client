@@ -1613,6 +1613,11 @@ class RestaurantLanding(models.Model):
     theme_config = models.JSONField(default=dict, blank=True, help_text="Custom color scheme and theme settings")
     
     show_hero = models.BooleanField(default=True, verbose_name="Show Hero Section")
+    has_hotel_website = models.BooleanField(
+        default=False,
+        verbose_name="Dedicated Hotel Website Mode",
+        help_text="Operates in Hotel Website mode on the public frontend (suppresses restaurant menus and chefs)"
+    )
     show_about = models.BooleanField(default=True, verbose_name="Show About Us Section")
     show_why_us = models.BooleanField(default=True, verbose_name="Show Why Choose Us Section")
     show_specials = models.BooleanField(default=True, verbose_name="Show Specials Section")

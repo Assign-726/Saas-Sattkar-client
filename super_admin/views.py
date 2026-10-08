@@ -1069,6 +1069,66 @@ def api_toggle_branch_hotel_module(request, pk):
     return JsonResponse({'error': 'POST method required'}, status=405)
 
 
+def api_toggle_branch_restaurant_module(request, pk):
+    branch = get_object_or_404(RestaurantBranch, pk=pk)
+    if request.method == 'POST':
+        is_allowed = getattr(branch.restaurant, 'feature_restaurant_pos', True)
+        try:
+            body = json.loads(request.body.decode('utf-8'))
+            if 'has_restaurant_module' in body:
+                target_state = bool(body['has_restaurant_module'])
+            else:
+                target_state = not branch.has_restaurant_module
+        except Exception:
+            target_state = not branch.has_restaurant_module
+
+        if target_state and not is_allowed:
+            return JsonResponse({
+                'success': False,
+                'error': 'Restaurant POS Module is disabled by Master Admin in your subscription plan.'
+            }, status=403)
+
+        branch.has_restaurant_module = target_state
+        branch.save(update_fields=['has_restaurant_module'])
+        return JsonResponse({
+            'success': True,
+            'branch_id': branch.id,
+            'branch_name': branch.name,
+            'has_restaurant_module': branch.has_restaurant_module
+        })
+    return JsonResponse({'error': 'POST method required'}, status=405)
+
+
+def api_toggle_branch_hotel_website(request, pk):
+    branch = get_object_or_404(RestaurantBranch, pk=pk)
+    if request.method == 'POST':
+        is_allowed = getattr(branch.restaurant, 'feature_hotel_website', False)
+        try:
+            body = json.loads(request.body.decode('utf-8'))
+            if 'has_hotel_website' in body:
+                target_state = bool(body['has_hotel_website'])
+            else:
+                target_state = not branch.has_hotel_website
+        except Exception:
+            target_state = not branch.has_hotel_website
+
+        if target_state and not is_allowed:
+            return JsonResponse({
+                'success': False,
+                'error': 'Hotel Website Mode is disabled by Master Admin in your subscription plan. Please enable it in Master Admin to activate this mode.'
+            }, status=403)
+
+        branch.has_hotel_website = target_state
+        branch.save(update_fields=['has_hotel_website'])
+        return JsonResponse({
+            'success': True,
+            'branch_id': branch.id,
+            'branch_name': branch.name,
+            'has_hotel_website': branch.has_hotel_website
+        })
+    return JsonResponse({'error': 'POST method required'}, status=405)
+
+
 @superuser_required
 def blog_add(request, pk):
     restaurant = get_object_or_404(Restaurant, pk=pk)

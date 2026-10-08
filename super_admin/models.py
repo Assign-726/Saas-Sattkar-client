@@ -80,6 +80,16 @@ class Restaurant(models.Model):
         verbose_name="Hotel PMS Module",
         help_text="Controls ENABLE_HOTEL_MODULE (Hotel rooms & front-desk PMS)"
     )
+    feature_restaurant_pos = models.BooleanField(
+        default=True,
+        verbose_name="Restaurant POS Module",
+        help_text="Controls ENABLE_RESTAURANT_MODULE (Dining menu, tables, POS, kitchen KDS)"
+    )
+    feature_hotel_website = models.BooleanField(
+        default=False,
+        verbose_name="Dedicated Hotel Website Mode",
+        help_text="Controls ENABLE_HOTEL_WEBSITE mode across branches on public frontend"
+    )
     features_last_synced_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -308,10 +318,27 @@ class Restaurant(models.Model):
                     if "ENABLE_HOTEL_MODULE" in modules:
                         update_fields["feature_hotel_pms"] = bool(modules["ENABLE_HOTEL_MODULE"])
                         self.feature_hotel_pms = update_fields["feature_hotel_pms"]
+                    if "ENABLE_RESTAURANT_MODULE" in modules:
+                        update_fields["feature_restaurant_pos"] = bool(modules["ENABLE_RESTAURANT_MODULE"])
+                        self.feature_restaurant_pos = update_fields["feature_restaurant_pos"]
+                    if "ENABLE_HOTEL_WEBSITE" in modules:
+                        update_fields["feature_hotel_website"] = bool(modules["ENABLE_HOTEL_WEBSITE"])
+                        self.feature_hotel_website = update_fields["feature_hotel_website"]
                     update_fields["features_last_synced_at"] = timezone.now()
                     self.features_last_synced_at = update_fields["features_last_synced_at"]
 
                 Restaurant.objects.filter(pk=self.pk).update(**update_fields)
+                if "ENABLE_RESTAURANT_MODULE" in modules:
+                    if not self.feature_restaurant_pos:
+                        self.branches.all().update(has_restaurant_module=False)
+                if "ENABLE_HOTEL_WEBSITE" in modules:
+                    if not self.feature_hotel_website:
+                        self.branches.all().update(has_hotel_website=False)
+                        try:
+                            from core.models import RestaurantLanding
+                            RestaurantLanding.objects.filter(restaurant=self).update(has_hotel_website=False)
+                        except Exception:
+                            pass
                 self.master_license_key = data["license_key"]
                 self.master_sync_status = "SYNCED"
                 logger.info(f"[MasterPanel] Synced '{self.name}' - key: {data['license_key']}, modules: {modules}")
@@ -504,6 +531,20 @@ class RestaurantBranch(models.Model):
         default=False,
         verbose_name="Enable Hotel Module",
         help_text="Enables hotel room inventory, tape chart, guest folios, and booking engine for this branch"
+    )
+
+    # Feature gating: Restaurant & POS module
+    has_restaurant_module = models.BooleanField(
+        default=True,
+        verbose_name="Enable Restaurant / Dining Module",
+        help_text="Enables dining menu, tables, POS, kitchen KDS, and restaurant billing for this branch"
+    )
+
+    # Feature gating: Dedicated Hotel Website Mode
+    has_hotel_website = models.BooleanField(
+        default=False,
+        verbose_name="Dedicated Hotel Website Mode",
+        help_text="When enabled, public frontend operates in Hotel Website mode (suppresses restaurant menus and chefs)"
     )
     
     # Branch Operating Hours & Online Ordering Restrictions (QR & Takeaway)

@@ -128,10 +128,29 @@ class MasterBillingService:
                             if 'ENABLE_HOTEL_MODULE' in modules:
                                 mod_updates['feature_hotel_pms'] = bool(modules['ENABLE_HOTEL_MODULE'])
                                 restaurant.feature_hotel_pms = mod_updates['feature_hotel_pms']
+                            if 'ENABLE_RESTAURANT_MODULE' in modules:
+                                mod_updates['feature_restaurant_pos'] = bool(modules['ENABLE_RESTAURANT_MODULE'])
+                                restaurant.feature_restaurant_pos = mod_updates['feature_restaurant_pos']
+                            if 'ENABLE_HOTEL_WEBSITE' in modules:
+                                mod_updates['feature_hotel_website'] = bool(modules['ENABLE_HOTEL_WEBSITE'])
+                                restaurant.feature_hotel_website = mod_updates['feature_hotel_website']
                             if mod_updates:
                                 mod_updates['features_last_synced_at'] = timezone.now()
                                 restaurant.features_last_synced_at = mod_updates['features_last_synced_at']
                                 Restaurant.objects.filter(pk=restaurant.pk).update(**mod_updates)
+                                if 'ENABLE_RESTAURANT_MODULE' in modules:
+                                    if not restaurant.feature_restaurant_pos:
+                                        # When Master Admin revokes Restaurant POS, disable on all branches
+                                        restaurant.branches.all().update(has_restaurant_module=False)
+                                if 'ENABLE_HOTEL_WEBSITE' in modules:
+                                    if not restaurant.feature_hotel_website:
+                                        # When Master Admin revokes Hotel Website, disable on all branches and landing
+                                        restaurant.branches.all().update(has_hotel_website=False)
+                                        try:
+                                            from core.models import RestaurantLanding
+                                            RestaurantLanding.objects.filter(restaurant=restaurant).update(has_hotel_website=False)
+                                        except Exception:
+                                            pass
                                 logger.info(f"[MasterBillingService] Synced modules for '{restaurant.name}': {mod_updates}")
                         except Exception as mod_err:
                             logger.warning(f"[MasterBillingService] Could not persist modules to DB: {mod_err}")
@@ -284,6 +303,8 @@ class MasterBillingService:
             "ENABLE_ALCOHOL_VAT": getattr(restaurant, 'feature_alcohol_vat', constants._DEFAULT_ENABLE_ALCOHOL_VAT) if restaurant else constants._DEFAULT_ENABLE_ALCOHOL_VAT,
             "ENABLE_CLUB_EVENTS_MODULE": getattr(restaurant, 'feature_club_events', constants._DEFAULT_ENABLE_CLUB_EVENTS_MODULE) if restaurant else constants._DEFAULT_ENABLE_CLUB_EVENTS_MODULE,
             "ENABLE_HOTEL_MODULE": getattr(restaurant, 'feature_hotel_pms', constants._DEFAULT_ENABLE_HOTEL_MODULE) if restaurant else constants._DEFAULT_ENABLE_HOTEL_MODULE,
+            "ENABLE_RESTAURANT_MODULE": getattr(restaurant, 'feature_restaurant_pos', constants._DEFAULT_ENABLE_RESTAURANT_MODULE) if restaurant else constants._DEFAULT_ENABLE_RESTAURANT_MODULE,
+            "ENABLE_HOTEL_WEBSITE": getattr(restaurant, 'feature_hotel_website', constants._DEFAULT_ENABLE_HOTEL_WEBSITE) if restaurant else constants._DEFAULT_ENABLE_HOTEL_WEBSITE,
         }
 
         return {

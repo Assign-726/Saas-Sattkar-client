@@ -7,7 +7,8 @@
 {% endblock %}
 
 {% block header_actions %}
-<a class="btn secondary" href="{% url 'super_admin:dashboard' %}?sync=1" title="Sync live modules & subscription from Master Admin">
+<a class="btn secondary" href="{% url 'super_admin:dashboard' %}?sync=1"
+  title="Sync live modules & subscription from Master Admin">
   <i class="fa-solid fa-rotate"></i>
   <span>Sync Modules</span>
 </a>
@@ -34,7 +35,8 @@
   <div class="stat-card">
     <div>
       <div class="stat-label">Registered Business</div>
-      <div class="stat-value">{{ restaurants|length }} <span style="font-size: 0.85rem; font-weight: 500; color: #64748b;">/ {{ MAX_ALLOWED_BUSINESSES }}</span></div>
+      <div class="stat-value">{{ restaurants|length }} <span
+          style="font-size: 0.85rem; font-weight: 500; color: #64748b;">/ {{ MAX_ALLOWED_BUSINESSES }}</span></div>
     </div>
     <div class="stat-icon primary">
       <i class="fa-solid fa-building"></i>
@@ -44,7 +46,9 @@
   <div class="stat-card">
     <div>
       <div class="stat-label">Total Branch Outlets</div>
-      <div class="stat-value">{{ total_branches|default:0 }}{% if MAX_ALLOWED_BRANCHES > 0 %} <span style="font-size: 0.85rem; font-weight: 500; color: #64748b;">/ {{ MAX_ALLOWED_BRANCHES }}</span>{% endif %}</div>
+      <div class="stat-value">{{ total_branches|default:0 }}{% if MAX_ALLOWED_BRANCHES > 0 %} <span
+          style="font-size: 0.85rem; font-weight: 500; color: #64748b;">/ {{ MAX_ALLOWED_BRANCHES }}</span>{% endif %}
+      </div>
     </div>
     <div class="stat-icon ok">
       <i class="fa-solid fa-store"></i>
@@ -64,216 +68,274 @@
 
 <!-- Business & Branch Outlets Hierarchy Section -->
 <div style="margin-top: 24px; width: 100%;">
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
-    <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text); margin: 0; display: flex; align-items: center; gap: 8px;">
+  <div
+    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+    <h3
+      style="font-size: 1.1rem; font-weight: 700; color: var(--text); margin: 0; display: flex; align-items: center; gap: 8px;">
       <i class="fa-solid fa-building" style="color: var(--primary);"></i>
       <span>Registered Businesses & Outlets</span>
     </h3>
-    <span class="badge {% if restaurants|length >= MAX_ALLOWED_BUSINESSES and MAX_ALLOWED_BUSINESSES > 0 %}ok{% else %}neutral{% endif %}">
+    <span
+      class="badge {% if restaurants|length >= MAX_ALLOWED_BUSINESSES and MAX_ALLOWED_BUSINESSES > 0 %}ok{% else %}neutral{% endif %}">
       {{ restaurants|length }} / {{ MAX_ALLOWED_BUSINESSES }} Business Registered {% if restaurants|length >= MAX_ALLOWED_BUSINESSES and MAX_ALLOWED_BUSINESSES > 0 %}(Single Business Mode){% endif %}
     </span>
   </div>
 
   {% if restaurants %}
-    {% for r in restaurants %}
-    <div class="card" style="margin-bottom: 24px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow);">
-      
-      <!-- Company / Business Header -->
-      <div style="padding: 18px 20px; background: var(--panel-hover); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
-        <div style="flex: 1; min-width: 260px;">
-          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
-            <h2 style="font-size: 1.15rem; font-weight: 800; color: var(--text); margin: 0;">{{ r.trade_name|default:r.name }}</h2>
-            {% if r.legal_name and r.legal_name != r.trade_name %}
-              <span style="font-size: 0.85rem; color: #64748b; font-weight: 500;">({{ r.legal_name }})</span>
-            {% endif %}
+  {% for r in restaurants %}
+  <div class="card"
+    style="margin-bottom: 24px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow);">
 
-            {% if r.business_type %}
-              <span class="badge neutral" style="font-size: 0.75rem;">{{ r.business_type }}</span>
-            {% endif %}
-
-            {% if r.pan %}
-              <span class="badge neutral" style="font-size: 0.75rem; font-family: monospace;">PAN: {{ r.pan }}</span>
-            {% endif %}
-
-            <form method="post" action="{% url 'super_admin:restaurant_toggle_active' r.id %}" style="display: inline;">
-              {% csrf_token %}
-              {% if r.is_active %}
-                <button type="submit" class="badge ok" style="border: none; cursor: pointer; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px;" title="Click to Deactivate Business">
-                  <i class="fa-solid fa-circle-check"></i> Active
-                </button>
-              {% else %}
-                <button type="submit" class="badge neutral" style="border: none; cursor: pointer; font-size: 0.75rem; background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px;" title="Click to Activate Business">
-                  <i class="fa-solid fa-circle-xmark"></i> Inactive
-                </button>
-              {% endif %}
-            </form>
-          </div>
-
-          <div style="display: flex; gap: 12px 16px; font-size: 0.82rem; color: var(--muted); flex-wrap: wrap; margin-top: 6px;">
-            <span><i class="fa-solid fa-phone" style="color: var(--muted); margin-right: 4px;"></i> {{ r.phone|default:'No Phone' }}</span>
-            <span><i class="fa-solid fa-envelope" style="color: var(--muted); margin-right: 4px;"></i> {{ r.email|default:'No Email' }}</span>
-            <span><i class="fa-solid fa-location-dot" style="color: var(--muted); margin-right: 4px;"></i> {{ r.address|default:'Registered Address' }}</span>
-            {% if r.cin_llpin %}
-              <span><i class="fa-solid fa-id-card" style="color: var(--muted); margin-right: 4px;"></i> CIN: {{ r.cin_llpin }}</span>
-            {% endif %}
-          </div>
-        </div>
-
-        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-          <a href="{% url 'super_admin:restaurant_edit' r.id %}" class="btn secondary small" title="Edit Business & Outlets">
-            <i class="fa-solid fa-pen-to-square"></i> <span>Edit Business</span>
-          </a>
-          {% if SHOW_WEBSITE_PAGES %}
-          <a href="{% url 'super_admin:landing_edit' r.id %}" class="btn secondary small" title="Customize Website Pages">
-            <i class="fa-solid fa-window-restore"></i> <span>Website CMS</span>
-          </a>
+    <!-- Company / Business Header -->
+    <div
+      style="padding: 18px 20px; background: var(--panel-hover); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+      <div style="flex: 1; min-width: 260px;">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+          <h2 style="font-size: 1.15rem; font-weight: 800; color: var(--text); margin: 0;">{{ r.trade_name|default:r.name }}</h2>
+          {% if r.legal_name and r.legal_name != r.trade_name %}
+          <span style="font-size: 0.85rem; color: #64748b; font-weight: 500;">({{ r.legal_name }})</span>
           {% endif %}
-          <a href="{% url 'super_admin:restaurant_delete' r.id %}" class="btn secondary small" style="color: var(--danger); border-color: #fecaca;" title="Delete Business">
-            <i class="fa-solid fa-trash-can"></i>
-          </a>
+
+          {% if r.business_type %}
+          <span class="badge neutral" style="font-size: 0.75rem;">{{ r.business_type }}</span>
+          {% endif %}
+
+          {% if r.pan %}
+          <span class="badge neutral" style="font-size: 0.75rem; font-family: monospace;">PAN: {{ r.pan }}</span>
+          {% endif %}
+
+          <form method="post" action="{% url 'super_admin:restaurant_toggle_active' r.id %}" style="display: inline;">
+            {% csrf_token %}
+            {% if r.is_active %}
+            <button type="submit" class="badge ok"
+              style="border: none; cursor: pointer; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px;"
+              title="Click to Deactivate Business">
+              <i class="fa-solid fa-circle-check"></i> Active
+            </button>
+            {% else %}
+            <button type="submit" class="badge neutral"
+              style="border: none; cursor: pointer; font-size: 0.75rem; background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px;"
+              title="Click to Activate Business">
+              <i class="fa-solid fa-circle-xmark"></i> Inactive
+            </button>
+            {% endif %}
+          </form>
+        </div>
+
+        <div
+          style="display: flex; gap: 12px 16px; font-size: 0.82rem; color: var(--muted); flex-wrap: wrap; margin-top: 6px;">
+          <span><i class="fa-solid fa-phone" style="color: var(--muted); margin-right: 4px;"></i> {{ r.phone|default:'No Phone' }}</span>
+          <span><i class="fa-solid fa-envelope" style="color: var(--muted); margin-right: 4px;"></i> {{ r.email|default:'No Email' }}</span>
+          <span><i class="fa-solid fa-location-dot" style="color: var(--muted); margin-right: 4px;"></i> {{ r.address|default:'Registered Address' }}</span>
+          {% if r.cin_llpin %}
+          <span><i class="fa-solid fa-id-card" style="color: var(--muted); margin-right: 4px;"></i> CIN: {{ r.cin_llpin }}</span>
+          {% endif %}
         </div>
       </div>
 
-      <!-- Branch Outlets Sub-Table -->
-      <div style="padding: 18px 20px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-          <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text); margin: 0; display: flex; align-items: center; gap: 8px;">
-            <i class="fa-solid fa-store" style="color: var(--primary);"></i>
-            <span>Branch Outlets ({{ r.branches.all|length }})</span>
-          </h4>
-          <a href="{% url 'super_admin:restaurant_edit' r.id %}?step=2" style="font-size: 0.82rem; font-weight: 600; color: #059669; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
-            <i class="fa-solid fa-plus"></i> Add / Edit Outlets
-          </a>
-        </div>
-
-        {% if r.branches.all %}
-        <div class="table-container" style="border: 1px solid var(--border); border-radius: 8px;">
-          <table class="table" style="font-size: 0.85rem; margin: 0;">
-            <thead style="background: var(--panel-hover);">
-              <tr>
-                <th style="padding: 10px 14px;">Branch Name & Phone</th>
-                <th style="padding: 10px 14px;">Location / Address</th>
-                <th style="padding: 10px 14px;">Tax & License Info</th>
-                <th style="padding: 10px 14px;">Alcohol & VAT Status</th>
-                {% if ENABLE_HOTEL_MODULE %}
-                <th style="padding: 10px 14px;">Hotel PMS Module</th>
-                {% endif %}
-                {% if ENABLE_CLUB_EVENTS_MODULE %}
-                <th style="padding: 10px 14px;">Club & Events Module</th>
-                {% endif %}
-              </tr>
-            </thead>
-            <tbody>
-              {% for b in r.branches.all %}
-              <tr>
-                <td style="padding: 12px 14px; font-weight: 600;">
-                  <div style="color: var(--text); font-size: 0.9rem;">{{ b.name }}</div>
-                  <div style="color: var(--muted); font-size: 0.8rem; font-weight: normal; margin-top: 2px;">
-                    <i class="fa-solid fa-phone" style="font-size: 0.75rem;"></i> {{ b.phone|default:r.phone }}
-                  </div>
-                </td>
-                <td style="padding: 12px 14px; color: var(--text);">
-                  <div>{{ b.city|default:r.city }}, {{ b.state|default:r.state }}</div>
-                  <div style="font-size: 0.75rem; color: var(--muted);">{{ b.address_line_1|default:r.address_line_1 }}</div>
-                </td>
-                <td style="padding: 12px 14px;">
-                  {% if b.gstin or b.gst_registration %}
-                    <div style="font-weight: 600; color: var(--text); font-family: monospace;">GSTIN: {{ b.gst_registration.gstin|default:b.gstin }}</div>
-                    <div style="font-size: 0.75rem; color: var(--muted);">Reg: {{ b.get_gst_registration_type_display }}</div>
-                  {% else %}
-                    <span class="badge neutral" style="font-size: 0.75rem;">GST Unregistered</span>
-                  {% endif %}
-                  {% if b.fssai_license_no %}
-                    <div style="font-size: 0.75rem; color: var(--muted); margin-top: 2px;">FSSAI: {{ b.fssai_license_no }}</div>
-                  {% endif %}
-                </td>
-                <td style="padding: 12px 14px;">
-                  {% if ENABLE_ALCOHOL_VAT and b.serves_alcohol %}
-                    <span class="badge ok" style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a;">
-                      <i class="fa-solid fa-wine-glass"></i> Serves Alcohol (State VAT)
-                    </span>
-                    {% if b.excise_license_no %}
-                      <div style="font-size: 0.75rem; color: #78350f; margin-top: 4px;">Excise No: {{ b.excise_license_no }}</div>
-                    {% endif %}
-                  {% else %}
-                    {% if b.gst_registration_type == 'R18' or b.is_hotel_tariff_7500_plus %}
-                      <span class="badge ok" style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;">
-                        <i class="fa-solid fa-utensils"></i> Food Only (GST 18%)
-                      </span>
-                    {% elif b.gst_registration_type == 'C' %}
-                      <span class="badge neutral" style="background: #fef9c3; color: #854d0e; border: 1px solid #fef08a;">
-                        <i class="fa-solid fa-utensils"></i> Food Only (Composition 0%)
-                      </span>
-                    {% elif b.gst_registration_type == 'U' %}
-                      <span class="badge neutral" style="background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;">
-                        <i class="fa-solid fa-utensils"></i> Food Only (Unregistered)
-                      </span>
-                    {% else %}
-                      <span class="badge ok" style="background: #e6f4ea; color: #137333; border: 1px solid #bbf7d0;">
-                        <i class="fa-solid fa-utensils"></i> Food Only (GST 5%)
-                      </span>
-                    {% endif %}
-                  {% endif %}
-                </td>
-                {% if ENABLE_HOTEL_MODULE %}
-                <td style="padding: 12px 14px;">
-                  <button type="button" 
-                          class="btn small hotel-module-toggle-btn {% if b.has_hotel_module %}hotel-enabled{% else %}hotel-disabled{% endif %}"
-                          data-branch-id="{{ b.id }}"
-                          onclick="toggleBranchHotelModule(this)" 
-                          title="Click to toggle Hotel PMS module permission for this branch">
-                    <i class="fa-solid fa-hotel"></i>
-                    <span class="hotel-toggle-text">{% if b.has_hotel_module %}Hotel Active{% else %}Disabled{% endif %}</span>
-                  </button>
-                </td>
-                {% endif %}
-                {% if ENABLE_CLUB_EVENTS_MODULE %}
-                <td style="padding: 12px 14px;">
-                  <button type="button" 
-                          class="btn small club-module-toggle-btn {% if b.has_club_module %}club-enabled{% else %}club-disabled{% endif %}"
-                          data-branch-id="{{ b.id }}"
-                          onclick="toggleBranchClubModule(this)" 
-                          title="Click to toggle Club Events module permission">
-                    <i class="fa-solid fa-ticket"></i>
-                    <span class="club-toggle-text">{% if b.has_club_module %}Active (Enabled){% else %}Disabled{% endif %}</span>
-                  </button>
-                </td>
-                {% endif %}
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        {% else %}
-        <div style="padding: 16px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; text-align: center; color: #64748b; font-size: 0.85rem;">
-          No outlets configured for this business yet. <a href="{% url 'super_admin:restaurant_edit' r.id %}" style="color: #059669; font-weight: 600;">Click to add outlet</a>
-        </div>
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <a href="{% url 'super_admin:restaurant_edit' r.id %}" class="btn secondary small"
+          title="Edit Business & Outlets">
+          <i class="fa-solid fa-pen-to-square"></i> <span>Edit Business</span>
+        </a>
+        {% if SHOW_WEBSITE_PAGES %}
+        <a href="{% url 'super_admin:landing_edit' r.id %}" class="btn secondary small" title="Customize Website Pages">
+          <i class="fa-solid fa-window-restore"></i> <span>Website CMS</span>
+        </a>
         {% endif %}
+        <a href="{% url 'super_admin:restaurant_delete' r.id %}" class="btn secondary small"
+          style="color: var(--danger); border-color: #fecaca;" title="Delete Business">
+          <i class="fa-solid fa-trash-can"></i>
+        </a>
+      </div>
+    </div>
+
+    <!-- Branch Outlets Sub-Table -->
+    <div style="padding: 18px 20px;">
+      <div
+        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+        <h4
+          style="font-size: 0.95rem; font-weight: 700; color: var(--text); margin: 0; display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-store" style="color: var(--primary);"></i>
+          <span>Branch Outlets ({{ r.branches.all|length }})</span>
+        </h4>
+        <a href="{% url 'super_admin:restaurant_edit' r.id %}?step=2"
+          style="font-size: 0.82rem; font-weight: 600; color: #059669; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
+          <i class="fa-solid fa-plus"></i> Add / Edit Outlets
+        </a>
       </div>
 
+      {% if r.branches.all %}
+      <div class="table-container" style="border: 1px solid var(--border); border-radius: 8px;">
+        <table class="table" style="font-size: 0.85rem; margin: 0;">
+          <thead style="background: var(--panel-hover);">
+            <th style="padding: 10px 14px;">Branch Name & Phone</th>
+            <th style="padding: 10px 14px;">Location / Address</th>
+            <th style="padding: 10px 14px;">Tax & License Info</th>
+            <th style="padding: 10px 14px;">Alcohol & VAT Status</th>
+            <th style="padding: 10px 14px;">Restaurant POS</th>
+            {% if ENABLE_HOTEL_MODULE %}
+            <th style="padding: 10px 14px;">Hotel PMS Module</th>
+            <th style="padding: 10px 14px;">Hotel Website Mode</th>
+            {% endif %}
+            {% if ENABLE_CLUB_EVENTS_MODULE %}
+            <th style="padding: 10px 14px;">Club & Events Module</th>
+            {% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for b in r.branches.all %}
+            <tr>
+              <td style="padding: 12px 14px; font-weight: 600;">
+                <div style="color: var(--text); font-size: 0.9rem;">{{ b.name }}</div>
+                <div style="color: var(--muted); font-size: 0.8rem; font-weight: normal; margin-top: 2px;">
+                  <i class="fa-solid fa-phone" style="font-size: 0.75rem;"></i> {{ b.phone|default:r.phone }}
+                </div>
+              </td>
+              <td style="padding: 12px 14px; color: var(--text);">
+                <div>{{ b.city|default:r.city }}, {{ b.state|default:r.state }}</div>
+                <div style="font-size: 0.75rem; color: var(--muted);">{{ b.address_line_1|default:r.address_line_1 }}
+                </div>
+              </td>
+              <td style="padding: 12px 14px;">
+                {% if b.gstin or b.gst_registration %}
+                <div style="font-weight: 600; color: var(--text); font-family: monospace;">GSTIN: {{ b.gst_registration.gstin|default:b.gstin }}</div>
+                <div style="font-size: 0.75rem; color: var(--muted);">Reg: {{ b.get_gst_registration_type_display }}
+                </div>
+                {% else %}
+                <span class="badge neutral" style="font-size: 0.75rem;">GST Unregistered</span>
+                {% endif %}
+                {% if b.fssai_license_no %}
+                <div style="font-size: 0.75rem; color: var(--muted); margin-top: 2px;">FSSAI: {{ b.fssai_license_no }}
+                </div>
+                {% endif %}
+              </td>
+              <td style="padding: 12px 14px;">
+                {% if ENABLE_ALCOHOL_VAT and b.serves_alcohol %}
+                <span class="badge ok" style="background: #fef3c7; color: #92400e; border: 1px solid #fde68a;">
+                  <i class="fa-solid fa-wine-glass"></i> Serves Alcohol (State VAT)
+                </span>
+                {% if b.excise_license_no %}
+                <div style="font-size: 0.75rem; color: #78350f; margin-top: 4px;">Excise No: {{ b.excise_license_no }}
+                </div>
+                {% endif %}
+                {% else %}
+                {% if b.gst_registration_type == 'R18' or b.is_hotel_tariff_7500_plus %}
+                <span class="badge ok" style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;">
+                  <i class="fa-solid fa-utensils"></i> Food Only (GST 18%)
+                </span>
+                {% elif b.gst_registration_type == 'C' %}
+                <span class="badge neutral" style="background: #fef9c3; color: #854d0e; border: 1px solid #fef08a;">
+                  <i class="fa-solid fa-utensils"></i> Food Only (Composition 0%)
+                </span>
+                {% elif b.gst_registration_type == 'U' %}
+                <span class="badge neutral" style="background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;">
+                  <i class="fa-solid fa-utensils"></i> Food Only (Unregistered)
+                </span>
+                {% else %}
+                <span class="badge ok" style="background: #e6f4ea; color: #137333; border: 1px solid #bbf7d0;">
+                  <i class="fa-solid fa-utensils"></i> Food Only (GST 5%)
+                </span>
+                {% endif %}
+                {% endif %}
+              </td>
+              <td style="padding: 12px 14px;">
+                {% if r.feature_restaurant_pos %}
+                <button type="button"
+                  class="btn small restro-module-toggle-btn {% if b.has_restaurant_module %}restro-enabled{% else %}restro-disabled{% endif %}"
+                  data-branch-id="{{ b.id }}" onclick="toggleBranchRestaurantModule(this)"
+                  title="Click to toggle Restaurant POS / dining permission for this branch">
+                  <i class="fa-solid fa-utensils"></i>
+                  <span class="restro-toggle-text">{% if b.has_restaurant_module %}POS Active{% else %}Disabled{% endif %}</span>
+                </button>
+                {% else %}
+                <span class="btn small"
+                  style="background: #f1f5f9; color: #94a3b8; cursor: not-allowed; border: 1px solid #cbd5e1; font-weight: normal; font-size: 0.78rem;"
+                  title="Restaurant POS Module is disabled in your subscription plan.">
+                  <i class="fa-solid fa-lock" style="font-size: 0.75rem; margin-right: 4px;"></i> Disabled
+                </span>
+                {% endif %}
+              </td>
+              {% if ENABLE_HOTEL_MODULE %}
+              <td style="padding: 12px 14px;">
+                <button type="button"
+                  class="btn small hotel-module-toggle-btn {% if b.has_hotel_module %}hotel-enabled{% else %}hotel-disabled{% endif %}"
+                  data-branch-id="{{ b.id }}" onclick="toggleBranchHotelModule(this)"
+                  title="Click to toggle Hotel PMS module permission for this branch">
+                  <i class="fa-solid fa-hotel"></i>
+                  <span class="hotel-toggle-text">{% if b.has_hotel_module %}Hotel Active{% else %}Disabled{% endif %}</span>
+                </button>
+              </td>
+              <td style="padding: 12px 14px;">
+                {% if r.feature_hotel_website %}
+                <button type="button"
+                  class="btn small hotel-site-toggle-btn {% if b.has_hotel_website %}site-hotel{% else %}site-standard{% endif %}"
+                  data-branch-id="{{ b.id }}" onclick="toggleBranchHotelWebsite(this)"
+                  title="Toggle Hotel Website mode (hides food menus/chefs on public frontend)">
+                  <i class="fa-solid fa-globe"></i>
+                  <span class="site-toggle-text">{% if b.has_hotel_website %}Hotel Site Only{% else %}Standard (Dining){% endif %}</span>
+                </button>
+                {% else %}
+                <span class="btn small"
+                  style="background: #f1f5f9; color: #94a3b8; cursor: not-allowed; border: 1px solid #cbd5e1; font-weight: normal; font-size: 0.78rem;"
+                  title="Hotel Website Mode is disabled in your subscription plan.">
+                  <i class="fa-solid fa-lock" style="font-size: 0.75rem; margin-right: 4px;"></i> Disabled
+                </span>
+                {% endif %}
+              </td>
+              {% endif %}
+              {% if ENABLE_CLUB_EVENTS_MODULE %}
+              <td style="padding: 12px 14px;">
+                <button type="button"
+                  class="btn small club-module-toggle-btn {% if b.has_club_module %}club-enabled{% else %}club-disabled{% endif %}"
+                  data-branch-id="{{ b.id }}" onclick="toggleBranchClubModule(this)"
+                  title="Click to toggle Club Events module permission">
+                  <i class="fa-solid fa-ticket"></i>
+                  <span class="club-toggle-text">{% if b.has_club_module %}Active (Enabled){% else %}Disabled{% endif %}</span>
+                </button>
+              </td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div
+        style="padding: 16px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; text-align: center; color: #64748b; font-size: 0.85rem;">
+        No outlets configured for this business yet. <a href="{% url 'super_admin:restaurant_edit' r.id %}"
+          style="color: #059669; font-weight: 600;">Click to add outlet</a>
+      </div>
+      {% endif %}
     </div>
-    {% endfor %}
+
+  </div>
+  {% endfor %}
   {% else %}
-    <div class="card" style="padding: 40px 20px; text-align: center; color: var(--muted);">
-      <i class="fa-solid fa-store-slash" style="font-size: 2.5rem; color: #cbd5e1; margin-bottom: 12px; display: block;"></i>
-      <h3 style="font-size: 1.1rem; font-weight: 700; color: #334155; margin: 0 0 8px 0;">No Businesses Onboarded Yet</h3>
-      <p style="font-size: 0.9rem; margin: 0 0 16px 0;">Click "Onboard Business" to register your first company and set up branch outlets.</p>
-      <a class="btn" href="{% url 'super_admin:onboard' %}">
-        <i class="fa-solid fa-plus"></i> Onboard Business Now
-      </a>
-    </div>
+  <div class="card" style="padding: 40px 20px; text-align: center; color: var(--muted);">
+    <i class="fa-solid fa-store-slash"
+      style="font-size: 2.5rem; color: #cbd5e1; margin-bottom: 12px; display: block;"></i>
+    <h3 style="font-size: 1.1rem; font-weight: 700; color: #334155; margin: 0 0 8px 0;">No Businesses Onboarded Yet</h3>
+    <p style="font-size: 0.9rem; margin: 0 0 16px 0;">Click "Onboard Business" to register your first company and set up
+      branch outlets.</p>
+    <a class="btn" href="{% url 'super_admin:onboard' %}">
+      <i class="fa-solid fa-plus"></i> Onboard Business Now
+    </a>
+  </div>
   {% endif %}
 </div>
 
 <!-- Restaurant Admins Table -->
 <div class="card" style="margin-top: 24px; border-radius: 14px;">
-  <div class="hd" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+  <div class="hd"
+    style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
     <div style="display: flex; align-items: center; gap: 8px;">
       <i class="fa-solid fa-users-gear" style="color: var(--primary);"></i>
       <span style="font-weight: 700;">System Administrators &amp; Operational Staff</span>
       <span class="badge neutral" style="margin-left: 6px;">{{ admins|length }} User Account(s)</span>
     </div>
-    <a class="btn small" href="{% url 'super_admin:restaurant_admin_create' %}" style="display: inline-flex; align-items: center; gap: 6px;">
+    <a class="btn small" href="{% url 'super_admin:restaurant_admin_create' %}"
+      style="display: inline-flex; align-items: center; gap: 6px;">
       <i class="fa-solid fa-user-plus"></i>
       <span>Add New Admin</span>
     </a>
@@ -298,52 +360,61 @@
               <i class="fa-solid fa-user" style="color: var(--muted); margin-right: 6px;"></i>
               {{ a.user.username }}
               {% if a.user.email %}
-                <div style="font-size: 0.75rem; color: #64748b; font-weight: normal; margin-left: 20px;">{{ a.user.email }}</div>
+              <div style="font-size: 0.75rem; color: #64748b; font-weight: normal; margin-left: 20px;">{{ a.user.email }}</div>
               {% endif %}
             </td>
             <td style="color: var(--text);"><strong>{{ a.restaurant.name }}</strong></td>
             <td>
               {% if a.branch %}
-                <span class="badge ok">
-                  <i class="fa-solid fa-store"></i>
-                  <span>{{ a.branch.name }}</span>
-                </span>
+              <span class="badge ok">
+                <i class="fa-solid fa-store"></i>
+                <span>{{ a.branch.name }}</span>
+              </span>
               {% else %}
-                <span class="badge neutral">
-                  <i class="fa-solid fa-building"></i>
-                  <span>All Outlets (Business Admin)</span>
-                </span>
+              <span class="badge neutral">
+                <i class="fa-solid fa-building"></i>
+                <span>All Outlets (Business Admin)</span>
+              </span>
               {% endif %}
             </td>
             <td>
               <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                 {% if a.role == 'GENERAL_MANAGER' %}
-                  <span class="badge" style="background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; font-size: 0.78rem;" title="Full venue oversight across Hotel PMS, Restaurant POS, & Club Ticketing">
-                    <i class="fa-solid fa-crown" style="color: #4f46e5;"></i>
-                    <span>General Manager</span>
-                  </span>
+                <span class="badge"
+                  style="background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; font-size: 0.78rem;"
+                  title="Full venue oversight across Hotel PMS, Restaurant POS, & Club Ticketing">
+                  <i class="fa-solid fa-crown" style="color: #4f46e5;"></i>
+                  <span>General Manager</span>
+                </span>
                 {% elif a.role == 'HOTEL_ADMIN' %}
-                  <span class="badge" style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; font-size: 0.78rem;" title="Front Desk PMS Manager (Room Inventory, Folio Billing, & Tape Chart)">
-                    <i class="fa-solid fa-hotel" style="color: #0284c7;"></i>
-                    <span>Hotel Admin</span>
-                  </span>
+                <span class="badge"
+                  style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; font-size: 0.78rem;"
+                  title="Front Desk PMS Manager (Room Inventory, Folio Billing, & Tape Chart)">
+                  <i class="fa-solid fa-hotel" style="color: #0284c7;"></i>
+                  <span>Hotel Admin</span>
+                </span>
                 {% elif a.role == 'CLUB_ADMIN' %}
-                  <span class="badge" style="background: #faf5ff; color: #7e22ce; border: 1px solid #e9d5ff; font-size: 0.78rem;" title="Nightclub & Event Ticketing Manager">
-                    <i class="fa-solid fa-ticket" style="color: #9333ea;"></i>
-                    <span>Club Admin</span>
-                  </span>
+                <span class="badge"
+                  style="background: #faf5ff; color: #7e22ce; border: 1px solid #e9d5ff; font-size: 0.78rem;"
+                  title="Nightclub & Event Ticketing Manager">
+                  <i class="fa-solid fa-ticket" style="color: #9333ea;"></i>
+                  <span>Club Admin</span>
+                </span>
                 {% else %}
-                  <span class="badge" style="background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; font-size: 0.78rem;" title="Restaurant F&B POS Manager (Menu, Tables, Kitchen Orders)">
-                    <i class="fa-solid fa-utensils" style="color: #059669;"></i>
-                    <span>Restaurant Admin</span>
-                  </span>
+                <span class="badge"
+                  style="background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; font-size: 0.78rem;"
+                  title="Restaurant F&B POS Manager (Menu, Tables, Kitchen Orders)">
+                  <i class="fa-solid fa-utensils" style="color: #059669;"></i>
+                  <span>Restaurant Admin</span>
+                </span>
                 {% endif %}
 
                 {% if a.is_primary_admin %}
-                  <span class="badge ok" style="font-size: 0.7rem; padding: 2px 6px;" title="Designated Primary Business Administrator">
-                    <i class="fa-solid fa-star" style="color: #eab308;"></i>
-                    <span>Primary</span>
-                  </span>
+                <span class="badge ok" style="font-size: 0.7rem; padding: 2px 6px;"
+                  title="Designated Primary Business Administrator">
+                  <i class="fa-solid fa-star" style="color: #eab308;"></i>
+                  <span>Primary</span>
+                </span>
                 {% endif %}
               </div>
             </td>
@@ -374,7 +445,10 @@
 </div>
 
 <style>
-  .hotel-module-toggle-btn, .club-module-toggle-btn {
+  .hotel-module-toggle-btn,
+  .club-module-toggle-btn,
+  .restro-module-toggle-btn,
+  .hotel-site-toggle-btn {
     font-size: 0.75rem;
     padding: 4px 10px;
     border-radius: 6px;
@@ -385,21 +459,49 @@
     gap: 6px;
     transition: all 0.2s;
   }
+
+  .restro-module-toggle-btn.restro-enabled {
+    background: #16a34a;
+    color: #ffffff;
+    border: 1px solid #15803d;
+  }
+
+  .restro-module-toggle-btn.restro-disabled {
+    background: var(--panel-hover, #f1f5f9);
+    color: var(--muted, #64748b);
+    border: 1px solid var(--border, #cbd5e1);
+  }
+
   .hotel-module-toggle-btn.hotel-enabled {
     background: #0284c7;
     color: #ffffff;
     border: 1px solid #0369a1;
   }
+
   .hotel-module-toggle-btn.hotel-disabled {
     background: var(--panel-hover, #f1f5f9);
     color: var(--muted, #64748b);
     border: 1px solid var(--border, #cbd5e1);
   }
+
+  .hotel-site-toggle-btn.site-hotel {
+    background: #f59e0b;
+    color: #ffffff;
+    border: 1px solid #d97706;
+  }
+
+  .hotel-site-toggle-btn.site-standard {
+    background: var(--panel-hover, #f1f5f9);
+    color: var(--muted, #64748b);
+    border: 1px solid var(--border, #cbd5e1);
+  }
+
   .club-module-toggle-btn.club-enabled {
     background: #7e22ce;
     color: #ffffff;
     border: 1px solid #6b21a8;
   }
+
   .club-module-toggle-btn.club-disabled {
     background: var(--panel-hover, #f1f5f9);
     color: var(--muted, #64748b);
@@ -408,83 +510,157 @@
 </style>
 
 <script>
-function getCsrfToken() {
-  const cookieVal = document.cookie.split('; ').find(row => row.startsWith('csrftoken='));
-  return cookieVal ? decodeURIComponent(cookieVal.split('=')[1]) : '';
-}
+  function getCsrfToken() {
+    const cookieVal = document.cookie.split('; ').find(row => row.startsWith('csrftoken='));
+    return cookieVal ? decodeURIComponent(cookieVal.split('=')[1]) : '';
+  }
 
-function toggleBranchHotelModule(btn) {
-  if (!btn) return;
-  const branchId = btn.dataset.branchId;
-  if (!branchId) return;
-  const originalHtml = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
+  function toggleBranchHotelModule(btn) {
+    if (!btn) return;
+    const branchId = btn.dataset.branchId;
+    if (!branchId) return;
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
 
-  fetch(`/super/api/branches/${branchId}/toggle-hotel-module/`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': getCsrfToken()
-    },
-    body: JSON.stringify({})
-  })
-  .then(res => res.json())
-  .then(data => {
-    btn.disabled = false;
-    if (data.success) {
-      const isEnabled = Boolean(data.has_hotel_module);
-      btn.classList.toggle('hotel-enabled', isEnabled);
-      btn.classList.toggle('hotel-disabled', !isEnabled);
-      btn.innerHTML = `<i class="fa-solid fa-hotel"></i> <span class="hotel-toggle-text">${isEnabled ? 'Hotel Active' : 'Disabled'}</span>`;
-    } else {
-      btn.innerHTML = originalHtml;
-      alert(data.error || 'Failed to toggle Hotel PMS module.');
-    }
-  })
-  .catch(err => {
-    btn.disabled = false;
-    btn.innerHTML = originalHtml;
-    console.error('Error toggling hotel module:', err);
-    alert('Error toggling Hotel PMS module permission. Please check connection.');
-  });
-}
+    fetch(`/super/api/branches/${branchId}/toggle-hotel-module/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken()
+      },
+      body: JSON.stringify({})
+    })
+      .then(res => res.json())
+      .then(data => {
+        btn.disabled = false;
+        if (data.success) {
+          const isEnabled = Boolean(data.has_hotel_module);
+          btn.classList.toggle('hotel-enabled', isEnabled);
+          btn.classList.toggle('hotel-disabled', !isEnabled);
+          btn.innerHTML = `<i class="fa-solid fa-hotel"></i> <span class="hotel-toggle-text">${isEnabled ? 'Hotel Active' : 'Disabled'}</span>`;
+        } else {
+          btn.innerHTML = originalHtml;
+          alert(data.error || 'Failed to toggle Hotel PMS module.');
+        }
+      })
+      .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        console.error('Error toggling hotel module:', err);
+        alert('Error toggling Hotel PMS module permission. Please check connection.');
+      });
+  }
 
-function toggleBranchClubModule(btn) {
-  if (!btn) return;
-  const branchId = btn.dataset.branchId;
-  if (!branchId) return;
-  const originalHtml = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
+  function toggleBranchClubModule(btn) {
+    if (!btn) return;
+    const branchId = btn.dataset.branchId;
+    if (!branchId) return;
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
 
-  fetch(`/super/api/branches/${branchId}/toggle-club-module/`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': getCsrfToken()
-    },
-    body: JSON.stringify({})
-  })
-  .then(res => res.json())
-  .then(data => {
-    btn.disabled = false;
-    if (data.success) {
-      const isEnabled = Boolean(data.has_club_module);
-      btn.classList.toggle('club-enabled', isEnabled);
-      btn.classList.toggle('club-disabled', !isEnabled);
-      btn.innerHTML = `<i class="fa-solid fa-ticket"></i> <span class="club-toggle-text">${isEnabled ? 'Active (Enabled)' : 'Disabled'}</span>`;
-    } else {
-      btn.innerHTML = originalHtml;
-      alert(data.error || 'Failed to toggle Club Events module.');
-    }
-  })
-  .catch(err => {
-    btn.disabled = false;
-    btn.innerHTML = originalHtml;
-    console.error('Error toggling club module:', err);
-    alert('Error toggling Club module permission. Please check connection.');
-  });
-}
+    fetch(`/super/api/branches/${branchId}/toggle-club-module/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken()
+      },
+      body: JSON.stringify({})
+    })
+      .then(res => res.json())
+      .then(data => {
+        btn.disabled = false;
+        if (data.success) {
+          const isEnabled = Boolean(data.has_club_module);
+          btn.classList.toggle('club-enabled', isEnabled);
+          btn.classList.toggle('club-disabled', !isEnabled);
+          btn.innerHTML = `<i class="fa-solid fa-ticket"></i> <span class="club-toggle-text">${isEnabled ? 'Active (Enabled)' : 'Disabled'}</span>`;
+        } else {
+          btn.innerHTML = originalHtml;
+          alert(data.error || 'Failed to toggle Club Events module.');
+        }
+      })
+      .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        console.error('Error toggling club module:', err);
+        alert('Error toggling Club module permission. Please check connection.');
+      });
+  }
+
+  function toggleBranchRestaurantModule(btn) {
+    if (!btn) return;
+    const branchId = btn.dataset.branchId;
+    if (!branchId) return;
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
+
+    fetch(`/super/api/branches/${branchId}/toggle-restaurant-module/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken()
+      },
+      body: JSON.stringify({})
+    })
+      .then(res => res.json())
+      .then(data => {
+        btn.disabled = false;
+        if (data.success) {
+          const isEnabled = Boolean(data.has_restaurant_module);
+          btn.classList.toggle('restro-enabled', isEnabled);
+          btn.classList.toggle('restro-disabled', !isEnabled);
+          btn.innerHTML = `<i class="fa-solid fa-utensils"></i> <span class="restro-toggle-text">${isEnabled ? 'POS Active' : 'Disabled'}</span>`;
+        } else {
+          btn.innerHTML = originalHtml;
+          alert(data.error || 'Failed to toggle Restaurant POS module.');
+        }
+      })
+      .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        console.error('Error toggling restaurant module:', err);
+        alert('Error toggling Restaurant module permission. Please check connection.');
+      });
+  }
+
+  function toggleBranchHotelWebsite(btn) {
+    if (!btn) return;
+    const branchId = btn.dataset.branchId;
+    if (!branchId) return;
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
+
+    fetch(`/super/api/branches/${branchId}/toggle-hotel-website/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken()
+      },
+      body: JSON.stringify({})
+    })
+      .then(res => res.json())
+      .then(data => {
+        btn.disabled = false;
+        if (data.success) {
+          const isHotel = Boolean(data.has_hotel_website);
+          btn.classList.toggle('site-hotel', isHotel);
+          btn.classList.toggle('site-standard', !isHotel);
+          btn.innerHTML = `<i class="fa-solid fa-globe"></i> <span class="site-toggle-text">${isHotel ? 'Hotel Site Only' : 'Standard (Dining)'}</span>`;
+        } else {
+          btn.innerHTML = originalHtml;
+          alert(data.error || 'Failed to toggle Hotel Website mode.');
+        }
+      })
+      .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        console.error('Error toggling hotel website mode:', err);
+        alert('Error toggling Hotel Website mode. Please check connection.');
+      });
+  }
 </script>
 {% endblock %}
