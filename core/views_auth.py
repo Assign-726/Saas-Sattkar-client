@@ -53,8 +53,21 @@ def resolve_user_redirect(request, user, next_url=None):
         first_r = Restaurant.objects.first()
         restaurant_slug = first_r.slug if first_r else 'default'
 
-    # 1. Hotel Admin & Front Desk: Route to Hotel PMS Dashboard
-    if user_role in ['HOTEL_ADMIN', 'FRONT_DESK']:
+    # Check if target branch/venue is strictly Hotel-only (hotel enabled, restaurant disabled)
+    target_branch = None
+    if profile and profile.branch:
+        target_branch = profile.branch
+    elif hasattr(user, 'branch') and user.branch:
+        target_branch = user.branch
+    elif profile and profile.restaurant:
+        target_branch = profile.restaurant.branches.first()
+
+    is_hotel_only = False
+    if target_branch:
+        is_hotel_only = bool(target_branch.has_hotel_module and not getattr(target_branch, 'has_restaurant_module', True))
+
+    # 1. Hotel Admin & Front Desk, or any manager on a Hotel-Only property: Route to Hotel PMS Dashboard
+    if (user_role in ['HOTEL_ADMIN', 'FRONT_DESK']) or (is_hotel_only and user_role in ['GENERAL_MANAGER', 'RESTAURANT_ADMIN']):
         if next_url and '/hotel-admin/' in next_url and url_has_allowed_host_and_scheme(
             url=next_url,
             allowed_hosts={request.get_host()},

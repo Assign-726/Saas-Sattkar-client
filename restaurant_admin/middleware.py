@@ -34,13 +34,43 @@ class BranchContextMiddleware:
                 restaurant = profile.restaurant
                 request.restaurant = restaurant
 
-                # RBAC Isolation:
+                # 1. Resolve Active Branch First so module & RBAC checks can inspect it
+                if profile.branch:
+                    request.active_branch = profile.branch
+                elif restaurant:
+                    session_key = f'active_branch_{restaurant.id}'
+                    branch_id = request.session.get(session_key)
+
+                    branch = None
+                    if branch_id:
+                        branch = restaurant.branches.filter(id=branch_id).first()
+
+                    if not branch:
+                        branch = restaurant.branches.first()
+                        if branch:
+                            request.session[session_key] = branch.id
+
+                    request.active_branch = branch
+
+                active_branch = request.active_branch
+                slug = restaurant.slug if restaurant else 'default'
+
+                # RBAC & Module Isolation:
                 user_role = getattr(user, 'role', None) or profile.role
                 if not user.is_superuser:
+                    # 0. Branch-level Restaurant Module Restriction:
+                    # If this branch does NOT have the restaurant/dining module enabled:
+                    if active_branch and not getattr(active_branch, 'has_restaurant_module', True) and request.path.startswith('/dashboard/'):
+                        from django.shortcuts import redirect
+                        if not request.path.endswith('/logout/') and not request.path.endswith('/switch-branch/') and not '/api/' in request.path:
+                            if getattr(active_branch, 'has_hotel_module', False):
+                                return redirect('hotel_admin:dashboard', restaurant_slug=slug)
+                            elif getattr(active_branch, 'has_club_module', False):
+                                return redirect('restaurant_admin:club_events_list', restaurant_slug=slug)
+
                     # 1. Hotel Roles isolation (Front Desk & Housekeeping locked to PMS; Hotel Admin operates in Hotel PMS)
                     if user_role in ['HOTEL_ADMIN', 'FRONT_DESK', 'HOUSEKEEPING'] and request.path.startswith('/dashboard/'):
                         from django.shortcuts import redirect
-                        slug = restaurant.slug if restaurant else 'default'
                         if user_role == 'HOUSEKEEPING':
                             return redirect('hotel_admin:rooms', restaurant_slug=slug)
                         if user_role == 'FRONT_DESK':
@@ -125,26 +155,7 @@ class BranchContextMiddleware:
                                 pass
                             return redirect('restaurant_admin:transaction_desk_create', restaurant_slug=slug)
 
-                # 1. Branch-locked admin (e.g. a single-outlet manager)
-                if profile.branch:
-                    request.active_branch = profile.branch
-                elif restaurant:
-                    # 2. Primary admin — read from session
-                    session_key = f'active_branch_{restaurant.id}'
-                    branch_id = request.session.get(session_key)
 
-                    branch = None
-                    if branch_id:
-                        branch = restaurant.branches.filter(id=branch_id).first()
-
-                    # 3. Fallback to first branch
-                    if not branch:
-                        branch = restaurant.branches.first()
-                        if branch:
-                            # Persist so context_processor and other views agree
-                            request.session[session_key] = branch.id
-
-                    request.active_branch = branch
             except Exception:
                 # Never crash a request due to middleware errors
                 pass

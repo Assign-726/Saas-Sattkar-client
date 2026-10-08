@@ -30,6 +30,8 @@ def app_constants(request):
     enable_alcohol = constants.is_module_enabled('ENABLE_ALCOHOL_VAT', restaurant)
     enable_club = constants.is_module_enabled('ENABLE_CLUB_EVENTS_MODULE', restaurant)
     enable_hotel = constants.is_module_enabled('ENABLE_HOTEL_MODULE', restaurant)
+    enable_restro = constants.is_module_enabled('ENABLE_RESTAURANT_MODULE', restaurant)
+    enable_hotel_web = constants.is_module_enabled('ENABLE_HOTEL_WEBSITE', restaurant)
 
     return {
         'APP_NAME': constants.APP_NAME,
@@ -49,6 +51,10 @@ def app_constants(request):
         'SHOW_CLUB_EVENTS_MODULE': enable_club,
         'ENABLE_HOTEL_MODULE': enable_hotel,
         'SHOW_HOTEL_MODULE': enable_hotel,
+        'ENABLE_RESTAURANT_MODULE': enable_restro,
+        'SHOW_RESTAURANT_MODULE': enable_restro,
+        'ENABLE_HOTEL_WEBSITE': enable_hotel_web,
+        'SHOW_HOTEL_WEBSITE': enable_hotel_web,
         'UNREAD_INQUIRIES_COUNT': unread_inquiries,
         'PENDING_APPLICATIONS_COUNT': pending_applications,
         # Subscription & Overdue Lockout Status

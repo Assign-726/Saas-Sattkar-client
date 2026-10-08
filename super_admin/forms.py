@@ -604,6 +604,8 @@ class OnboardRestaurantForm(forms.Form):
                 'e_invoicing_enabled': bool(bdata.get("e_invoicing_enabled", False)),
                 'has_club_module': bool(bdata.get("has_club_module", False)),
                 'has_hotel_module': bool(bdata.get("has_hotel_module", False)),
+                'has_restaurant_module': bool(bdata.get("has_restaurant_module", True)),
+                'has_hotel_website': bool(bdata.get("has_hotel_website", False)),
             })
 
         return cleaned_branches
@@ -720,6 +722,8 @@ class OnboardRestaurantForm(forms.Form):
                 branch.e_invoicing_enabled = bdata.get("e_invoicing_enabled", False)
                 branch.has_club_module = bool(bdata.get("has_club_module", False))
                 branch.has_hotel_module = bool(bdata.get("has_hotel_module", False))
+                branch.has_restaurant_module = bool(bdata.get("has_restaurant_module", True)) and getattr(restaurant, 'feature_restaurant_pos', True)
+                branch.has_hotel_website = bool(bdata.get("has_hotel_website", False)) and getattr(restaurant, 'feature_hotel_website', False)
                 branch.save()
             else:
                 branch = RestaurantBranch.objects.create(
@@ -747,6 +751,8 @@ class OnboardRestaurantForm(forms.Form):
                     e_invoicing_enabled=bdata.get("e_invoicing_enabled", False),
                     has_club_module=bool(bdata.get("has_club_module", False)),
                     has_hotel_module=bool(bdata.get("has_hotel_module", False)),
+                    has_restaurant_module=bool(bdata.get("has_restaurant_module", True)) and getattr(restaurant, 'feature_restaurant_pos', True),
+                    has_hotel_website=bool(bdata.get("has_hotel_website", False)) and getattr(restaurant, 'feature_hotel_website', False),
                 )
 
             kept_branch_ids.append(branch.id)

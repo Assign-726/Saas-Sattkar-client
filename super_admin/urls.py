@@ -53,6 +53,8 @@ urlpatterns = [
     path('api/branches-by-restaurant/', views.api_branches_by_restaurant, name='api_branches_by_restaurant'),
     path('api/branches/<int:pk>/toggle-club-module/', views.api_toggle_branch_club_module, name='api_toggle_branch_club_module'),
     path('api/branches/<int:pk>/toggle-hotel-module/', views.api_toggle_branch_hotel_module, name='api_toggle_branch_hotel_module'),
+    path('api/branches/<int:pk>/toggle-restaurant-module/', views.api_toggle_branch_restaurant_module, name='api_toggle_branch_restaurant_module'),
+    path('api/branches/<int:pk>/toggle-hotel-website/', views.api_toggle_branch_hotel_website, name='api_toggle_branch_hotel_website'),
     # Careers & Job Postings
     path('careers/', views.careers_list, name='careers_list'),
     path('careers/create/', views.job_posting_create, name='job_posting_create'),

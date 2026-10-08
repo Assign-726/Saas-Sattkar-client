@@ -10,6 +10,7 @@ class RestaurantBranchSerializer(serializers.ModelSerializer):
     gstin = serializers.SerializerMethodField()
     service_charge_percentage = serializers.SerializerMethodField()
     operating_status = serializers.SerializerMethodField()
+    has_hotel_website = serializers.SerializerMethodField()
 
     class Meta:
         model = RestaurantBranch
@@ -21,7 +22,8 @@ class RestaurantBranchSerializer(serializers.ModelSerializer):
             'map_iframe_url', 'facebook_url', 'instagram_url', 'twitter_url', 'youtube_url',
             'enable_customer_ordering', 'enable_online_payment', 'enable_pay_at_counter',
             'enforce_operating_hours', 'opening_time', 'closing_time', 'closed_message', 'weekly_schedule',
-            'operating_status', 'has_club_module','has_hotel_module'
+            'operating_status', 'has_club_module', 'has_hotel_module',
+            'has_restaurant_module', 'has_hotel_website'
         ]
 
     def get_address(self, obj):
@@ -40,6 +42,12 @@ class RestaurantBranchSerializer(serializers.ModelSerializer):
 
     def get_operating_status(self, obj):
         return obj.get_operating_status()
+
+    def get_has_hotel_website(self, obj):
+        r = getattr(obj, 'restaurant', None)
+        if r and not getattr(r, 'feature_hotel_website', False):
+            return False
+        return bool(getattr(obj, 'has_hotel_website', False))
 
 
 
@@ -737,6 +745,9 @@ class RestaurantLandingSerializer(serializers.ModelSerializer):
     branches = RestaurantBranchSerializer(source='restaurant.branches', many=True, read_only=True)
     restaurant_name = serializers.ReadOnlyField(source='restaurant.name')
     restaurant_slug = serializers.ReadOnlyField(source='restaurant.slug')
+    has_hotel_website = serializers.SerializerMethodField()
+    has_hotel_module = serializers.SerializerMethodField()
+    has_restaurant_module = serializers.SerializerMethodField()
 
     def get_website_type(self, obj):
         if obj.theme_config and isinstance(obj.theme_config, dict):
@@ -771,16 +782,63 @@ class RestaurantLandingSerializer(serializers.ModelSerializer):
         dtype = self.get_brand_display_type(obj)
         return dtype in ('both', 'name_only')
 
+    def get_has_hotel_website(self, obj):
+        r = getattr(obj, 'restaurant', None)
+        if not r or not getattr(r, 'feature_hotel_website', False):
+            return False
+
+        # If a specific branch is requested via query param
+        request = self.context.get('request')
+        if request:
+            q_params = getattr(request, 'query_params', None) or getattr(request, 'GET', {})
+            branch_param = (
+                q_params.get('branch') or 
+                q_params.get('branch_id') or 
+                q_params.get('branch_slug')
+            )
+            if branch_param:
+                from django.db.models import Q
+                target_b = r.branches.filter(
+                    Q(slug=branch_param) | Q(id=int(branch_param) if str(branch_param).isdigit() else None)
+                ).first()
+                if target_b:
+                    return bool(target_b.has_hotel_website)
+
+        # Priority resolution for root landing:
+        # 1. Check explicit landing model setting if set
+        if getattr(obj, 'has_hotel_website', False):
+            return True
+
+        # 2. Check the default / first branch
+        first_branch = r.branches.first()
+        if first_branch:
+            return bool(first_branch.has_hotel_website)
+
+        return False
+
+    def get_has_hotel_module(self, obj):
+        r = getattr(obj, 'restaurant', None)
+        if not r:
+            return False
+        return bool(getattr(r, 'feature_hotel_pms', False) or r.branches.filter(has_hotel_module=True).exists())
+
+    def get_has_restaurant_module(self, obj):
+        r = getattr(obj, 'restaurant', None)
+        if not r:
+            return True
+        return bool(getattr(r, 'feature_restaurant_pos', True) and r.branches.filter(has_restaurant_module=True).exists())
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         # Check if a branch query parameter is present
         request = self.context.get('request')
         branch_param = None
         if request:
+            q_params = getattr(request, 'query_params', None) or getattr(request, 'GET', {})
             branch_param = (
-                request.query_params.get('branch') or 
-                request.query_params.get('branch_id') or 
-                request.query_params.get('branch_slug')
+                q_params.get('branch') or 
+                q_params.get('branch_id') or 
+                q_params.get('branch_slug')
             )
         
         # If branch_param is present, find matching branch config
@@ -854,7 +912,8 @@ class RestaurantLandingSerializer(serializers.ModelSerializer):
             'events_hero_image', 'events_hero_video', 'events_hero_video_url', 'events_hero_bg_type',
             'events_about_suptitle', 'events_about_title', 'events_about_subtitle',
             'events_page_config',
-            'gallery_images', 'team_members', 'reviews', 'events', 'why_choose_us', 'branches'
+            'gallery_images', 'team_members', 'reviews', 'events', 'why_choose_us', 'branches',
+            'has_hotel_website', 'has_hotel_module', 'has_restaurant_module'
         ]
 
 
