@@ -44,10 +44,9 @@ class RestaurantBranchSerializer(serializers.ModelSerializer):
         return obj.get_operating_status()
 
     def get_has_hotel_website(self, obj):
-        r = getattr(obj, 'restaurant', None)
-        if r and not getattr(r, 'feature_hotel_website', False):
-            return False
-        return bool(getattr(obj, 'has_hotel_website', False))
+        if getattr(obj, 'has_hotel_website', False):
+            return True
+        return bool(getattr(obj, 'has_hotel_module', False) and not getattr(obj, 'has_restaurant_module', True))
 
 
 
