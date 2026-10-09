@@ -48,6 +48,27 @@ class RestaurantBranchSerializer(serializers.ModelSerializer):
             return True
         return bool(getattr(obj, 'has_hotel_module', False) and not getattr(obj, 'has_restaurant_module', True))
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        rest = getattr(instance, 'restaurant', None)
+        if rest and (not rest.is_active or not getattr(rest, 'feature_website_pages', True)):
+            data['enable_customer_ordering'] = False
+            data['enable_online_payment'] = False
+            data['enable_pay_at_counter'] = False
+            data['operating_status'] = {
+                'is_open': False,
+                'enforce_operating_hours': True,
+                'status_label': 'Website & Business Inactive',
+                'service_label': 'Inactive',
+                'opens_at': None,
+                'closes_at': None,
+                'next_open_label': None,
+                'next_open_time': None,
+                'seconds_until_next': None,
+                'message': 'This business and its public website are currently inactive.',
+            }
+        return data
+
 
 
 class CategorySerializer(serializers.ModelSerializer):

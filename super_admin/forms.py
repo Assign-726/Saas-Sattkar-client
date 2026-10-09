@@ -650,8 +650,10 @@ class OnboardRestaurantForm(forms.Form):
             restaurant.email = self.cleaned_data.get("restaurant_email", "")
             restaurant.phone = self.cleaned_data.get("restaurant_phone", "")
             restaurant.is_gst_registered = is_gst_reg
-            restaurant.gst_type = Restaurant.GSTType.REGULAR if is_gst_reg else Restaurant.GSTType.UNREGISTERED
-            restaurant.is_active = self.cleaned_data.get("restaurant_is_active", True)
+            if not getattr(restaurant, 'feature_website_pages', True):
+                restaurant.is_active = False
+            else:
+                restaurant.is_active = self.cleaned_data.get("restaurant_is_active", True)
             restaurant.save()
         else:
             restaurant = Restaurant.objects.create(

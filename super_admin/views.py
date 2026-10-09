@@ -187,6 +187,13 @@ def onboard_restaurant(request):
 @superuser_required
 def restaurant_edit(request, pk):
     restaurant = get_object_or_404(Restaurant, pk=pk)
+    try:
+        now = timezone.now()
+        if not restaurant.features_last_synced_at or (now - restaurant.features_last_synced_at).total_seconds() > 3:
+            MasterBillingService.fetch_subscription_details(restaurant)
+            restaurant.refresh_from_db()
+    except Exception:
+        pass
 
     if request.method == 'POST':
         form = OnboardRestaurantForm(request.POST, instance=restaurant)
@@ -228,7 +235,7 @@ def restaurant_edit(request, pk):
             'restaurant_email': restaurant.email,
             'restaurant_phone': restaurant.phone,
             'is_gst_registered': restaurant.is_gst_registered,
-            'restaurant_is_active': restaurant.is_active,
+            'restaurant_is_active': restaurant.is_active and getattr(restaurant, 'feature_website_pages', True),
         }
         form = OnboardRestaurantForm(initial=initial, instance=restaurant)
 
@@ -282,8 +289,15 @@ def restaurant_delete(request, pk):
 @superuser_required
 def restaurant_toggle_active(request, pk):
     restaurant = get_object_or_404(Restaurant, pk=pk)
+    if not restaurant.is_active and not getattr(restaurant, 'feature_website_pages', True):
+        messages.error(request, "Cannot activate: The Public Website & CMS module is not included in your current subscription plan. Please upgrade your subscription to enable online website access.")
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'json' in request.headers.get('Accept', ''):
+            return JsonResponse({'success': False, 'error': 'The Public Website & CMS module is not included in your current subscription plan.'}, status=400)
+        next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('super_admin:dashboard')
+        return redirect(next_url)
+
     restaurant.is_active = not restaurant.is_active
-    restaurant.save()
+    restaurant.save(update_fields=['is_active'])
     status_str = "Active" if restaurant.is_active else "Inactive"
     messages.success(request, f"Business '{restaurant.name}' website status updated to {status_str}.")
     if request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'json' in request.headers.get('Accept', ''):
@@ -1085,7 +1099,7 @@ def api_toggle_branch_restaurant_module(request, pk):
         if target_state and not is_allowed:
             return JsonResponse({
                 'success': False,
-                'error': 'Restaurant POS Module is disabled by Master Admin in your subscription plan.'
+                'error': 'Restaurant POS Module is not included in your current subscription plan.'
             }, status=403)
 
         branch.has_restaurant_module = target_state
@@ -1115,7 +1129,7 @@ def api_toggle_branch_hotel_website(request, pk):
         if target_state and not is_allowed:
             return JsonResponse({
                 'success': False,
-                'error': 'Hotel Website Mode is disabled by Master Admin in your subscription plan. Please enable it in Master Admin to activate this mode.'
+                'error': 'Hotel Website Mode is not included in your current subscription plan. Please upgrade your subscription to activate this mode.'
             }, status=403)
 
         branch.has_hotel_website = target_state

@@ -115,7 +115,7 @@
             {% else %}
             <button type="submit" class="badge neutral"
               style="border: none; cursor: pointer; font-size: 0.75rem; background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px;"
-              title="Click to Activate Business">
+              title="{% if not r.feature_website_pages %}Public Website &amp; CMS module is not included in current subscription plan{% else %}Click to Activate Business{% endif %}">
               <i class="fa-solid fa-circle-xmark"></i> Inactive
             </button>
             {% endif %}
@@ -243,7 +243,9 @@
                 {% if r.feature_restaurant_pos %}
                 <button type="button"
                   class="btn small restro-module-toggle-btn {% if b.has_restaurant_module %}restro-enabled{% else %}restro-disabled{% endif %}"
-                  data-branch-id="{{ b.id }}" onclick="toggleBranchRestaurantModule(this)"
+                  data-branch-id="{{ b.id }}"
+                  data-branch-name="{{ b.name|escape }}"
+                  onclick="toggleBranchRestaurantModule(this)"
                   title="Click to toggle Restaurant POS / dining permission for this branch">
                   <i class="fa-solid fa-utensils"></i>
                   <span class="restro-toggle-text">{% if b.has_restaurant_module %}POS Active{% else %}Disabled{% endif %}</span>
@@ -260,7 +262,9 @@
               <td style="padding: 12px 14px;">
                 <button type="button"
                   class="btn small hotel-module-toggle-btn {% if b.has_hotel_module %}hotel-enabled{% else %}hotel-disabled{% endif %}"
-                  data-branch-id="{{ b.id }}" onclick="toggleBranchHotelModule(this)"
+                  data-branch-id="{{ b.id }}"
+                  data-branch-name="{{ b.name|escape }}"
+                  onclick="toggleBranchHotelModule(this)"
                   title="Click to toggle Hotel PMS module permission for this branch">
                   <i class="fa-solid fa-hotel"></i>
                   <span class="hotel-toggle-text">{% if b.has_hotel_module %}Hotel Active{% else %}Disabled{% endif %}</span>
@@ -270,7 +274,9 @@
                 {% if r.feature_hotel_website %}
                 <button type="button"
                   class="btn small hotel-site-toggle-btn {% if b.has_hotel_website %}site-hotel{% else %}site-standard{% endif %}"
-                  data-branch-id="{{ b.id }}" onclick="toggleBranchHotelWebsite(this)"
+                  data-branch-id="{{ b.id }}"
+                  data-branch-name="{{ b.name|escape }}"
+                  onclick="toggleBranchHotelWebsite(this)"
                   title="Toggle Hotel Website mode (hides food menus/chefs on public frontend)">
                   <i class="fa-solid fa-globe"></i>
                   <span class="site-toggle-text">{% if b.has_hotel_website %}Hotel Site Only{% else %}Standard (Dining){% endif %}</span>
@@ -288,7 +294,9 @@
               <td style="padding: 12px 14px;">
                 <button type="button"
                   class="btn small club-module-toggle-btn {% if b.has_club_module %}club-enabled{% else %}club-disabled{% endif %}"
-                  data-branch-id="{{ b.id }}" onclick="toggleBranchClubModule(this)"
+                  data-branch-id="{{ b.id }}"
+                  data-branch-name="{{ b.name|escape }}"
+                  onclick="toggleBranchClubModule(this)"
                   title="Click to toggle Club Events module permission">
                   <i class="fa-solid fa-ticket"></i>
                   <span class="club-toggle-text">{% if b.has_club_module %}Active (Enabled){% else %}Disabled{% endif %}</span>
@@ -507,7 +515,252 @@
     color: var(--muted, #64748b);
     border: 1px solid var(--border, #cbd5e1);
   }
+  /* Module Confirmation Modal */
+  .module-confirm-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 999999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.2s;
+  }
+
+  .module-confirm-modal.active {
+    display: flex;
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .module-confirm-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+
+  .module-confirm-dialog {
+    position: relative;
+    background: var(--panel, #ffffff);
+    color: var(--text, #0f172a);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 16px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+    width: 100%;
+    max-width: 480px;
+    overflow: hidden;
+    transform: scale(0.95) translateY(-8px);
+    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    z-index: 1;
+  }
+
+  .module-confirm-modal.active .module-confirm-dialog {
+    transform: scale(1) translateY(0);
+  }
+
+  .module-confirm-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border, #e2e8f0);
+  }
+
+  .module-confirm-icon-box {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+
+  .module-confirm-title-area {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .module-confirm-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text, #0f172a);
+    line-height: 1.3;
+  }
+
+  .module-confirm-outlet {
+    font-size: 0.82rem;
+    color: var(--muted, #64748b);
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .module-confirm-close-btn {
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--muted, #64748b);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .module-confirm-close-btn:hover {
+    color: var(--text, #0f172a);
+    background: var(--panel-hover, #f1f5f9);
+  }
+
+  .module-confirm-body {
+    padding: 20px 24px;
+  }
+
+  .module-confirm-action-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--panel-hover, #f8fafc);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 9999px;
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+
+  .module-pill-from {
+    color: var(--muted, #64748b);
+  }
+
+  .module-pill-arrow {
+    font-size: 0.72rem;
+    color: var(--muted, #94a3b8);
+  }
+
+  .module-pill-to {
+    color: var(--text, #0f172a);
+    font-weight: 700;
+  }
+
+  .module-confirm-message {
+    font-size: 0.94rem;
+    line-height: 1.55;
+    color: var(--text, #1e293b);
+    margin: 0 0 14px 0;
+  }
+
+  .module-confirm-warning-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    color: #92400e;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 0.83rem;
+    line-height: 1.45;
+  }
+
+  [data-theme="dark"] .module-confirm-warning-box,
+  html.dark-theme .module-confirm-warning-box {
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(245, 158, 11, 0.35);
+    color: #fde68a;
+  }
+
+  .module-confirm-warning-box i {
+    margin-top: 2px;
+    flex-shrink: 0;
+    font-size: 0.95rem;
+    color: #d97706;
+  }
+
+  .module-confirm-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 24px;
+    border-top: 1px solid var(--border, #e2e8f0);
+    background: var(--panel-hover, #f8fafc);
+  }
+
+  .module-confirm-submit-btn {
+    padding: 9px 20px;
+    font-size: 0.86rem;
+    font-weight: 600;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: filter 0.15s, transform 0.15s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .module-confirm-submit-btn:hover {
+    filter: brightness(1.08);
+  }
+  .module-confirm-submit-btn:active {
+    transform: scale(0.98);
+  }
 </style>
+
+<!-- Module Toggle Confirmation Modal -->
+<div id="moduleConfirmModal" class="module-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="moduleConfirmTitle" style="display: none;">
+  <div class="module-confirm-backdrop" onclick="closeModuleConfirmModal()"></div>
+  <div class="module-confirm-dialog">
+    <div class="module-confirm-header">
+      <div class="module-confirm-icon-box" id="moduleConfirmIconBox">
+        <i class="fa-solid fa-hotel" id="moduleConfirmIcon"></i>
+      </div>
+      <div class="module-confirm-title-area">
+        <h4 class="module-confirm-title" id="moduleConfirmTitle">Confirm Module Action</h4>
+        <div class="module-confirm-outlet">
+          <i class="fa-solid fa-store" style="font-size: 0.72rem; margin-right: 4px; color: var(--primary, #f26c0d);"></i>
+          <span id="moduleConfirmOutlet">Sharma Hotel JLN</span>
+        </div>
+      </div>
+      <button type="button" class="module-confirm-close-btn" onclick="closeModuleConfirmModal()" title="Close dialog">&times;</button>
+    </div>
+
+    <div class="module-confirm-body">
+      <div class="module-confirm-action-pill" id="moduleConfirmActionPill">
+        <span class="module-pill-from" id="modulePillFrom">Hotel Active</span>
+        <i class="fa-solid fa-arrow-right module-pill-arrow"></i>
+        <span class="module-pill-to" id="modulePillTo">Disabled</span>
+      </div>
+      <p class="module-confirm-message" id="moduleConfirmMessage">
+        Are you sure you want to change this module state?
+      </p>
+      <div class="module-confirm-warning-box" id="moduleConfirmWarningBox">
+        <i class="fa-solid fa-circle-exclamation" id="moduleConfirmWarningIcon"></i>
+        <span id="moduleConfirmWarningText">Warning text</span>
+      </div>
+    </div>
+
+    <div class="module-confirm-footer">
+      <button type="button" class="btn secondary" onclick="closeModuleConfirmModal()" style="padding: 9px 18px; font-size: 0.85rem;">
+        Cancel
+      </button>
+      <button type="button" class="module-confirm-submit-btn" id="moduleConfirmSubmitBtn">
+        <span id="moduleConfirmSubmitText">Yes, Update</span>
+      </button>
+    </div>
+  </div>
+</div>
 
 <script>
   function getCsrfToken() {
@@ -515,152 +768,349 @@
     return cookieVal ? decodeURIComponent(cookieVal.split('=')[1]) : '';
   }
 
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function triggerToast(message, type = 'success', title = null) {
+    if (typeof window.showToast === 'function') {
+      window.showToast(message, type, title);
+    } else {
+      alert((title ? title + ': ' : '') + message);
+    }
+  }
+
+  let activeConfirmAction = null;
+
+  function openModuleConfirmModal(config) {
+    const modal = document.getElementById('moduleConfirmModal');
+    if (!modal) {
+      if (typeof config.onConfirm === 'function') config.onConfirm();
+      return;
+    }
+
+    document.getElementById('moduleConfirmTitle').textContent = config.title;
+    document.getElementById('moduleConfirmOutlet').textContent = config.outletName;
+    document.getElementById('moduleConfirmMessage').innerHTML = config.message;
+    document.getElementById('moduleConfirmWarningText').innerHTML = config.warning;
+
+    const iconBox = document.getElementById('moduleConfirmIconBox');
+    const iconEl = document.getElementById('moduleConfirmIcon');
+    iconEl.className = config.iconClass || 'fa-solid fa-gear';
+    iconBox.style.background = config.iconBg || 'rgba(2, 132, 199, 0.12)';
+    iconBox.style.color = config.iconColor || '#0284c7';
+
+    document.getElementById('modulePillFrom').textContent = config.fromText;
+    document.getElementById('modulePillTo').textContent = config.toText;
+
+    const submitBtn = document.getElementById('moduleConfirmSubmitBtn');
+    submitBtn.style.background = config.confirmBtnBg || 'var(--primary, #f26c0d)';
+    submitBtn.style.borderColor = config.confirmBtnBorder || config.confirmBtnBg || 'var(--primary, #f26c0d)';
+    document.getElementById('moduleConfirmSubmitText').textContent = config.confirmText || 'Confirm & Update';
+
+    activeConfirmAction = config.onConfirm;
+
+    modal.style.display = 'flex';
+    void modal.offsetWidth;
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeModuleConfirmModal() {
+    const modal = document.getElementById('moduleConfirmModal');
+    if (!modal) return;
+    modal.classList.remove('active');
+    activeConfirmAction = null;
+    document.body.style.overflow = '';
+    setTimeout(() => {
+      if (!modal.classList.contains('active')) {
+        modal.style.display = 'none';
+      }
+    }, 220);
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    const submitBtn = document.getElementById('moduleConfirmSubmitBtn');
+    if (submitBtn) {
+      submitBtn.addEventListener('click', function() {
+        const action = activeConfirmAction;
+        closeModuleConfirmModal();
+        if (typeof action === 'function') {
+          action();
+        }
+      });
+    }
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('moduleConfirmModal');
+        if (modal && modal.classList.contains('active')) {
+          closeModuleConfirmModal();
+        }
+      }
+    });
+  });
+
   function toggleBranchHotelModule(btn) {
-    if (!btn) return;
+    if (!btn || btn.disabled) return;
     const branchId = btn.dataset.branchId;
     if (!branchId) return;
-    const originalHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
+    const branchName = btn.dataset.branchName || 'Outlet';
+    const isCurrentlyActive = btn.classList.contains('hotel-enabled');
 
-    fetch(`/super/api/branches/${branchId}/toggle-hotel-module/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': getCsrfToken()
-      },
-      body: JSON.stringify({})
-    })
-      .then(res => res.json())
-      .then(data => {
-        btn.disabled = false;
-        if (data.success) {
-          const isEnabled = Boolean(data.has_hotel_module);
-          btn.classList.toggle('hotel-enabled', isEnabled);
-          btn.classList.toggle('hotel-disabled', !isEnabled);
-          btn.innerHTML = `<i class="fa-solid fa-hotel"></i> <span class="hotel-toggle-text">${isEnabled ? 'Hotel Active' : 'Disabled'}</span>`;
-        } else {
-          btn.innerHTML = originalHtml;
-          alert(data.error || 'Failed to toggle Hotel PMS module.');
-        }
-      })
-      .catch(err => {
-        btn.disabled = false;
-        btn.innerHTML = originalHtml;
-        console.error('Error toggling hotel module:', err);
-        alert('Error toggling Hotel PMS module permission. Please check connection.');
-      });
-  }
+    openModuleConfirmModal({
+      title: isCurrentlyActive ? 'Disable Hotel PMS Module?' : 'Activate Hotel PMS Module?',
+      outletName: branchName,
+      fromText: isCurrentlyActive ? 'Hotel Active' : 'Disabled',
+      toText: isCurrentlyActive ? 'Disabled' : 'Hotel Active',
+      iconClass: 'fa-solid fa-hotel',
+      iconBg: isCurrentlyActive ? 'rgba(239, 68, 68, 0.12)' : 'rgba(2, 132, 199, 0.12)',
+      iconColor: isCurrentlyActive ? '#ef4444' : '#0284c7',
+      message: isCurrentlyActive
+        ? `Are you sure you want to deactivate the Hotel PMS & Room management module for <strong>${escapeHtml(branchName)}</strong>?`
+        : `Are you sure you want to activate the Hotel PMS & Room management module for <strong>${escapeHtml(branchName)}</strong>?`,
+      warning: isCurrentlyActive
+        ? 'Disabling this will turn off Hotel Room inventory, Guest Check-in/out, and Room Booking operations for this branch.'
+        : 'Enabling this will allow staff to manage hotel rooms, guest check-in/out, and room reservations for this branch.',
+      confirmBtnBg: isCurrentlyActive ? '#dc2626' : '#0284c7',
+      confirmText: isCurrentlyActive ? 'Yes, Disable Hotel PMS' : 'Yes, Activate Hotel PMS',
+      onConfirm: function() {
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
 
-  function toggleBranchClubModule(btn) {
-    if (!btn) return;
-    const branchId = btn.dataset.branchId;
-    if (!branchId) return;
-    const originalHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
-
-    fetch(`/super/api/branches/${branchId}/toggle-club-module/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': getCsrfToken()
-      },
-      body: JSON.stringify({})
-    })
-      .then(res => res.json())
-      .then(data => {
-        btn.disabled = false;
-        if (data.success) {
-          const isEnabled = Boolean(data.has_club_module);
-          btn.classList.toggle('club-enabled', isEnabled);
-          btn.classList.toggle('club-disabled', !isEnabled);
-          btn.innerHTML = `<i class="fa-solid fa-ticket"></i> <span class="club-toggle-text">${isEnabled ? 'Active (Enabled)' : 'Disabled'}</span>`;
-        } else {
-          btn.innerHTML = originalHtml;
-          alert(data.error || 'Failed to toggle Club Events module.');
-        }
-      })
-      .catch(err => {
-        btn.disabled = false;
-        btn.innerHTML = originalHtml;
-        console.error('Error toggling club module:', err);
-        alert('Error toggling Club module permission. Please check connection.');
-      });
-  }
-
-  function toggleBranchRestaurantModule(btn) {
-    if (!btn) return;
-    const branchId = btn.dataset.branchId;
-    if (!branchId) return;
-    const originalHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
-
-    fetch(`/super/api/branches/${branchId}/toggle-restaurant-module/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': getCsrfToken()
-      },
-      body: JSON.stringify({})
-    })
-      .then(res => res.json())
-      .then(data => {
-        btn.disabled = false;
-        if (data.success) {
-          const isEnabled = Boolean(data.has_restaurant_module);
-          btn.classList.toggle('restro-enabled', isEnabled);
-          btn.classList.toggle('restro-disabled', !isEnabled);
-          btn.innerHTML = `<i class="fa-solid fa-utensils"></i> <span class="restro-toggle-text">${isEnabled ? 'POS Active' : 'Disabled'}</span>`;
-        } else {
-          btn.innerHTML = originalHtml;
-          alert(data.error || 'Failed to toggle Restaurant POS module.');
-        }
-      })
-      .catch(err => {
-        btn.disabled = false;
-        btn.innerHTML = originalHtml;
-        console.error('Error toggling restaurant module:', err);
-        alert('Error toggling Restaurant module permission. Please check connection.');
-      });
+        fetch(`/super/api/branches/${branchId}/toggle-hotel-module/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+          },
+          body: JSON.stringify({})
+        })
+          .then(res => res.json())
+          .then(data => {
+            btn.disabled = false;
+            if (data.success) {
+              const isEnabled = Boolean(data.has_hotel_module);
+              btn.classList.toggle('hotel-enabled', isEnabled);
+              btn.classList.toggle('hotel-disabled', !isEnabled);
+              btn.innerHTML = `<i class="fa-solid fa-hotel"></i> <span class="hotel-toggle-text">${isEnabled ? 'Hotel Active' : 'Disabled'}</span>`;
+              triggerToast(
+                `Hotel PMS module for "${escapeHtml(branchName)}" has been ${isEnabled ? 'activated' : 'disabled'}.`,
+                'success',
+                'Hotel PMS Updated'
+              );
+            } else {
+              btn.innerHTML = originalHtml;
+              triggerToast(data.error || 'Failed to toggle Hotel PMS module.', 'error', 'Action Restricted');
+            }
+          })
+          .catch(err => {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+            console.error('Error toggling hotel module:', err);
+            triggerToast('Could not reach the server. Please check your connection.', 'error', 'Connection Error');
+          });
+      }
+    });
   }
 
   function toggleBranchHotelWebsite(btn) {
-    if (!btn) return;
+    if (!btn || btn.disabled) return;
     const branchId = btn.dataset.branchId;
     if (!branchId) return;
-    const originalHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
+    const branchName = btn.dataset.branchName || 'Outlet';
+    const isHotelSite = btn.classList.contains('site-hotel');
 
-    fetch(`/super/api/branches/${branchId}/toggle-hotel-website/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': getCsrfToken()
-      },
-      body: JSON.stringify({})
-    })
-      .then(res => res.json())
-      .then(data => {
-        btn.disabled = false;
-        if (data.success) {
-          const isHotel = Boolean(data.has_hotel_website);
-          btn.classList.toggle('site-hotel', isHotel);
-          btn.classList.toggle('site-standard', !isHotel);
-          btn.innerHTML = `<i class="fa-solid fa-globe"></i> <span class="site-toggle-text">${isHotel ? 'Hotel Site Only' : 'Standard (Dining)'}</span>`;
-        } else {
-          btn.innerHTML = originalHtml;
-          alert(data.error || 'Failed to toggle Hotel Website mode.');
-        }
-      })
-      .catch(err => {
-        btn.disabled = false;
-        btn.innerHTML = originalHtml;
-        console.error('Error toggling hotel website mode:', err);
-        alert('Error toggling Hotel Website mode. Please check connection.');
-      });
+    openModuleConfirmModal({
+      title: isHotelSite ? 'Switch to Standard Dining Website?' : 'Switch to Hotel Site Only Mode?',
+      outletName: branchName,
+      fromText: isHotelSite ? 'Hotel Site Only' : 'Standard (Dining)',
+      toText: isHotelSite ? 'Standard (Dining)' : 'Hotel Site Only',
+      iconClass: 'fa-solid fa-globe',
+      iconBg: isHotelSite ? 'rgba(242, 108, 13, 0.12)' : 'rgba(217, 119, 6, 0.12)',
+      iconColor: isHotelSite ? '#f26c0d' : '#d97706',
+      message: isHotelSite
+        ? `Are you sure you want to switch the public website to Standard Dining mode for <strong>${escapeHtml(branchName)}</strong>?`
+        : `Are you sure you want to switch the public website to Hotel Site Only mode for <strong>${escapeHtml(branchName)}</strong>?`,
+      warning: isHotelSite
+        ? 'The public website will now showcase the restaurant dining experience with food menu categories, dishes, and chef highlights.'
+        : 'The public website will prioritize hotel rooms, suites, and hotel amenities, hiding restaurant food menus and chef highlights.',
+      confirmBtnBg: isHotelSite ? '#ea580c' : '#d97706',
+      confirmText: isHotelSite ? 'Yes, Switch to Standard Dining' : 'Yes, Switch to Hotel Site Only',
+      onConfirm: function() {
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
+
+        fetch(`/super/api/branches/${branchId}/toggle-hotel-website/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+          },
+          body: JSON.stringify({})
+        })
+          .then(res => res.json())
+          .then(data => {
+            btn.disabled = false;
+            if (data.success) {
+              const isHotel = Boolean(data.has_hotel_website);
+              btn.classList.toggle('site-hotel', isHotel);
+              btn.classList.toggle('site-standard', !isHotel);
+              btn.innerHTML = `<i class="fa-solid fa-globe"></i> <span class="site-toggle-text">${isHotel ? 'Hotel Site Only' : 'Standard (Dining)'}</span>`;
+              triggerToast(
+                `Website mode for "${escapeHtml(branchName)}" switched to ${isHotel ? 'Hotel Site Only' : 'Standard (Dining)'}.`,
+                'success',
+                'Website Mode Updated'
+              );
+            } else {
+              btn.innerHTML = originalHtml;
+              triggerToast(data.error || 'Failed to toggle Hotel Website mode.', 'error', 'Action Restricted');
+            }
+          })
+          .catch(err => {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+            console.error('Error toggling hotel website mode:', err);
+            triggerToast('Could not reach the server. Please check your connection.', 'error', 'Connection Error');
+          });
+      }
+    });
+  }
+
+  function toggleBranchRestaurantModule(btn) {
+    if (!btn || btn.disabled) return;
+    const branchId = btn.dataset.branchId;
+    if (!branchId) return;
+    const branchName = btn.dataset.branchName || 'Outlet';
+    const isCurrentlyActive = btn.classList.contains('restro-enabled');
+
+    openModuleConfirmModal({
+      title: isCurrentlyActive ? 'Disable Restaurant POS Module?' : 'Activate Restaurant POS Module?',
+      outletName: branchName,
+      fromText: isCurrentlyActive ? 'POS Active' : 'Disabled',
+      toText: isCurrentlyActive ? 'Disabled' : 'POS Active',
+      iconClass: 'fa-solid fa-utensils',
+      iconBg: isCurrentlyActive ? 'rgba(239, 68, 68, 0.12)' : 'rgba(22, 163, 74, 0.12)',
+      iconColor: isCurrentlyActive ? '#ef4444' : '#16a34a',
+      message: isCurrentlyActive
+        ? `Are you sure you want to deactivate Restaurant POS & dining operations for <strong>${escapeHtml(branchName)}</strong>?`
+        : `Are you sure you want to activate Restaurant POS & dining operations for <strong>${escapeHtml(branchName)}</strong>?`,
+      warning: isCurrentlyActive
+        ? 'Disabling this will turn off restaurant table dining, POS billing, and kitchen order management (KOT) for this branch.'
+        : 'Enabling this will activate table dining, POS billing, and kitchen order workflows for this branch.',
+      confirmBtnBg: isCurrentlyActive ? '#dc2626' : '#16a34a',
+      confirmText: isCurrentlyActive ? 'Yes, Disable POS' : 'Yes, Activate POS',
+      onConfirm: function() {
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
+
+        fetch(`/super/api/branches/${branchId}/toggle-restaurant-module/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+          },
+          body: JSON.stringify({})
+        })
+          .then(res => res.json())
+          .then(data => {
+            btn.disabled = false;
+            if (data.success) {
+              const isEnabled = Boolean(data.has_restaurant_module);
+              btn.classList.toggle('restro-enabled', isEnabled);
+              btn.classList.toggle('restro-disabled', !isEnabled);
+              btn.innerHTML = `<i class="fa-solid fa-utensils"></i> <span class="restro-toggle-text">${isEnabled ? 'POS Active' : 'Disabled'}</span>`;
+              triggerToast(
+                `Restaurant POS for "${escapeHtml(branchName)}" has been ${isEnabled ? 'activated' : 'disabled'}.`,
+                'success',
+                'Restaurant POS Updated'
+              );
+            } else {
+              btn.innerHTML = originalHtml;
+              triggerToast(data.error || 'Failed to toggle Restaurant POS module.', 'error', 'Action Restricted');
+            }
+          })
+          .catch(err => {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+            console.error('Error toggling restaurant module:', err);
+            triggerToast('Could not reach the server. Please check your connection.', 'error', 'Connection Error');
+          });
+      }
+    });
+  }
+
+  function toggleBranchClubModule(btn) {
+    if (!btn || btn.disabled) return;
+    const branchId = btn.dataset.branchId;
+    if (!branchId) return;
+    const branchName = btn.dataset.branchName || 'Outlet';
+    const isCurrentlyActive = btn.classList.contains('club-enabled');
+
+    openModuleConfirmModal({
+      title: isCurrentlyActive ? 'Disable Club & Events Module?' : 'Activate Club & Events Module?',
+      outletName: branchName,
+      fromText: isCurrentlyActive ? 'Active (Enabled)' : 'Disabled',
+      toText: isCurrentlyActive ? 'Disabled' : 'Active (Enabled)',
+      iconClass: 'fa-solid fa-ticket',
+      iconBg: isCurrentlyActive ? 'rgba(239, 68, 68, 0.12)' : 'rgba(126, 34, 206, 0.12)',
+      iconColor: isCurrentlyActive ? '#ef4444' : '#7e22ce',
+      message: isCurrentlyActive
+        ? `Are you sure you want to deactivate Club & Events operations for <strong>${escapeHtml(branchName)}</strong>?`
+        : `Are you sure you want to activate Club & Events operations for <strong>${escapeHtml(branchName)}</strong>?`,
+      warning: isCurrentlyActive
+        ? 'Disabling this will turn off club event scheduling, party bookings, and ticket pass operations for this branch.'
+        : 'Enabling this will activate club event scheduling, party bookings, and ticket pass workflows for this branch.',
+      confirmBtnBg: isCurrentlyActive ? '#dc2626' : '#7e22ce',
+      confirmText: isCurrentlyActive ? 'Yes, Disable Club Module' : 'Yes, Activate Club Module',
+      onConfirm: function() {
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
+
+        fetch(`/super/api/branches/${branchId}/toggle-club-module/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+          },
+          body: JSON.stringify({})
+        })
+          .then(res => res.json())
+          .then(data => {
+            btn.disabled = false;
+            if (data.success) {
+              const isEnabled = Boolean(data.has_club_module);
+              btn.classList.toggle('club-enabled', isEnabled);
+              btn.classList.toggle('club-disabled', !isEnabled);
+              btn.innerHTML = `<i class="fa-solid fa-ticket"></i> <span class="club-toggle-text">${isEnabled ? 'Active (Enabled)' : 'Disabled'}</span>`;
+              triggerToast(
+                `Club & Events module for "${escapeHtml(branchName)}" has been ${isEnabled ? 'activated' : 'disabled'}.`,
+                'success',
+                'Club Module Updated'
+              );
+            } else {
+              btn.innerHTML = originalHtml;
+              triggerToast(data.error || 'Failed to toggle Club Events module.', 'error', 'Action Restricted');
+            }
+          })
+          .catch(err => {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+            console.error('Error toggling club module:', err);
+            triggerToast('Could not reach the server. Please check your connection.', 'error', 'Connection Error');
+          });
+      }
+    });
   }
 </script>
 {% endblock %}
