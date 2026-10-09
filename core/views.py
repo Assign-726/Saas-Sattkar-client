@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser, AllowAny
 from django.views.generic import TemplateView
 from django.shortcuts import get_object_or_404, redirect
+from django.http import Http404
 from super_admin.models import Restaurant, RestaurantBranch
 from django.db.models import Prefetch
 from restaurant_project import constants
@@ -87,9 +88,11 @@ class RestaurantMenuView(TemplateView):
     template_name = 'core/Customer_base.html'
 
     def get_context_data(self, **kwargs):
+        if not constants.SHOW_WEBSITE_PAGES:
+            raise Http404("Website is currently disabled.")
         context = super().get_context_data(**kwargs)
         restaurant_slug = kwargs.get('restaurant_slug')
-        restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+        restaurant = get_object_or_404(Restaurant, slug=restaurant_slug, is_active=True, feature_website_pages=True)
 
         categories = Category.objects.filter(restaurant=restaurant).prefetch_related(
             Prefetch(
@@ -126,9 +129,11 @@ class RestaurantCartView(TemplateView):
     template_name = 'core/cart.html'
 
     def get_context_data(self, **kwargs):
+        if not constants.SHOW_WEBSITE_PAGES:
+            raise Http404("Website is currently disabled.")
         context = super().get_context_data(**kwargs)
         restaurant_slug = kwargs.get('restaurant_slug')
-        restaurant = Restaurant.objects.filter(slug=restaurant_slug).first()
+        restaurant = Restaurant.objects.filter(slug=restaurant_slug, is_active=True, feature_website_pages=True).first()
         branch = None
         if not restaurant:
             branch = RestaurantBranch.objects.filter(slug=restaurant_slug).first()
@@ -297,10 +302,12 @@ class OrderConfirmView(TemplateView):
 
 class ReserveEntryView(TemplateView):
     def get(self, request, *args, **kwargs):
+        if not constants.SHOW_WEBSITE_PAGES:
+            raise Http404("Website is currently disabled.")
         slug = request.GET.get('restaurant_slug') or request.GET.get('slug')
         if slug:
             return redirect('restaurant_reserve', restaurant_slug=slug)
-        restaurant = Restaurant.objects.filter(is_active=True).order_by('id').first()
+        restaurant = Restaurant.objects.filter(is_active=True, feature_website_pages=True).order_by('id').first()
         if restaurant:
             return redirect('restaurant_reserve', restaurant_slug=restaurant.slug)
         return redirect('home')
@@ -310,10 +317,12 @@ class ReservationPageView(TemplateView):
     template_name = 'core/reserve.html'
 
     def get_context_data(self, **kwargs):
+        if not constants.SHOW_WEBSITE_PAGES:
+            raise Http404("Website is currently disabled.")
         context = super().get_context_data(**kwargs)
         restaurant_slug = kwargs.get('restaurant_slug')
         if restaurant_slug:
-            restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+            restaurant = get_object_or_404(Restaurant, slug=restaurant_slug, is_active=True, feature_website_pages=True)
             context['restaurant'] = restaurant
         return context
 class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
@@ -322,7 +331,9 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        if not constants.SHOW_WEBSITE_PAGES:
+            return Category.objects.none()
+        qs = super().get_queryset().filter(restaurant__is_active=True, restaurant__feature_website_pages=True)
         restaurant_id = self.request.query_params.get('restaurant')
         restaurant_slug = self.request.query_params.get('restaurant_slug')
         branch_slug = self.request.query_params.get('branch_slug') or self.request.query_params.get('branch')
@@ -346,7 +357,9 @@ class SubCategoryViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        if not constants.SHOW_WEBSITE_PAGES:
+            return SubCategory.objects.none()
+        queryset = super().get_queryset().filter(category__restaurant__is_active=True, category__restaurant__feature_website_pages=True)
         category = self.request.query_params.get('category')
         if category:
             queryset = queryset.filter(category_id=category)
@@ -364,7 +377,9 @@ class MenuItemViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        queryset = MenuItem.objects.filter(availability=True)
+        if not constants.SHOW_WEBSITE_PAGES:
+            return MenuItem.objects.none()
+        queryset = MenuItem.objects.filter(availability=True, restaurant__is_active=True, restaurant__feature_website_pages=True)
         subcategory = self.request.query_params.get('subcategory')
         if subcategory:
             queryset = queryset.filter(subcategory_id=subcategory)
@@ -784,10 +799,14 @@ class OrderViewSet(viewsets.ModelViewSet):
 
 
 class RestaurantViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Restaurant.objects.filter(is_active=True)
     serializer_class = RestaurantSerializer
     permission_classes = [AllowAny]
     lookup_field = 'slug'
+
+    def get_queryset(self):
+        if not constants.SHOW_WEBSITE_PAGES:
+            return Restaurant.objects.none()
+        return Restaurant.objects.filter(is_active=True, feature_website_pages=True)
 
 
 class RestaurantLandingViewSet(viewsets.ReadOnlyModelViewSet):
@@ -798,7 +817,7 @@ class RestaurantLandingViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         if not constants.SHOW_WEBSITE_PAGES:
             return RestaurantLanding.objects.none()
-        qs = super().get_queryset()
+        qs = super().get_queryset().filter(restaurant__is_active=True, restaurant__feature_website_pages=True)
         restaurant_id = self.request.query_params.get('restaurant')
         restaurant_slug = self.request.query_params.get('restaurant_slug')
         if restaurant_id:
@@ -822,6 +841,23 @@ class RestaurantSettingsViewSet(viewsets.ReadOnlyModelViewSet):
             restaurant = Restaurant.objects.filter(id=restaurant_id).first()
         elif restaurant_slug:
             restaurant = Restaurant.objects.filter(slug=restaurant_slug).first()
+        if not restaurant:
+            restaurant = Restaurant.objects.first()
+
+        if not constants.SHOW_WEBSITE_PAGES or (restaurant and (not restaurant.is_active or not getattr(restaurant, 'feature_website_pages', True))):
+            return Response({
+                'is_active': False,
+                'operating_status': {
+                    'is_open': False,
+                    'status': 'closed',
+                    'status_label': 'Website Inactive',
+                    'message': 'Website is currently disabled.'
+                },
+                'enable_customer_ordering': False,
+                'enable_online_payment': False,
+                'enable_pay_at_counter': False,
+                'custom_charges': [],
+            })
         
         obj = RestaurantSettings.get_settings(restaurant)
         data = self.get_serializer(obj).data
@@ -926,7 +962,9 @@ class BlogPostViewSet(viewsets.ReadOnlyModelViewSet):
     lookup_field = 'slug'
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        if not constants.SHOW_WEBSITE_PAGES:
+            return BlogPost.objects.none()
+        qs = super().get_queryset().filter(restaurant__is_active=True, restaurant__feature_website_pages=True)
         restaurant_id = self.request.query_params.get('restaurant')
         restaurant_slug = self.request.query_params.get('restaurant_slug')
         if restaurant_id:
@@ -967,7 +1005,9 @@ class RestaurantBranchViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        if not constants.SHOW_WEBSITE_PAGES:
+            return RestaurantBranch.objects.none()
+        qs = super().get_queryset().filter(restaurant__is_active=True, restaurant__feature_website_pages=True)
         restaurant_id = self.request.query_params.get('restaurant')
         restaurant_slug = self.request.query_params.get('restaurant_slug') or self.request.query_params.get('slug')
         if restaurant_id:
@@ -1124,8 +1164,10 @@ class JobPostingViewSet(viewsets.ReadOnlyModelViewSet):
     lookup_field = 'pk'
 
     def get_queryset(self):
+        if not constants.SHOW_WEBSITE_PAGES:
+            return JobPosting.objects.none()
         from django.db.models import Q
-        qs = JobPosting.objects.filter(is_active=True).select_related('restaurant', 'branch')
+        qs = JobPosting.objects.filter(is_active=True, restaurant__is_active=True, restaurant__feature_website_pages=True).select_related('restaurant', 'branch')
         restaurant_id = self.request.query_params.get('restaurant')
         restaurant_slug = self.request.query_params.get('restaurant_slug')
         branch_id = self.request.query_params.get('branch')
@@ -1200,7 +1242,9 @@ class ReviewViewSet(viewsets.ModelViewSet):
         return ReviewSerializer
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        if not constants.SHOW_WEBSITE_PAGES:
+            return Review.objects.none()
+        qs = super().get_queryset().filter(landing__restaurant__is_active=True, landing__restaurant__feature_website_pages=True)
         rslug = self.request.query_params.get('restaurant_slug')
         rid = self.request.query_params.get('restaurant')
         branch_id = self.request.query_params.get('branch_id')

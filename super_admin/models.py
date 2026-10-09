@@ -307,8 +307,11 @@ class Restaurant(models.Model):
                 modules = data.get("modules")
                 if isinstance(modules, dict):
                     if "SHOW_WEBSITE_PAGES" in modules:
-                        update_fields["feature_website_pages"] = bool(modules["SHOW_WEBSITE_PAGES"])
-                        self.feature_website_pages = update_fields["feature_website_pages"]
+                        has_website = bool(modules["SHOW_WEBSITE_PAGES"])
+                        update_fields["feature_website_pages"] = has_website
+                        self.feature_website_pages = has_website
+                        update_fields["is_active"] = has_website
+                        self.is_active = has_website
                     if "ENABLE_ALCOHOL_VAT" in modules:
                         update_fields["feature_alcohol_vat"] = bool(modules["ENABLE_ALCOHOL_VAT"])
                         self.feature_alcohol_vat = update_fields["feature_alcohol_vat"]
@@ -656,6 +659,22 @@ class RestaurantBranch(models.Model):
 
         if dt is None:
             dt = timezone.localtime()
+
+        # If the parent business is inactive or the public website module is revoked by Master Admin
+        if self.restaurant and (not self.restaurant.is_active or not getattr(self.restaurant, 'feature_website_pages', True)):
+            return {
+                "is_open": False,
+                "enforce_operating_hours": True,
+                "status_label": "Website & Business Inactive",
+                "service_label": "Inactive",
+                "opens_at": None,
+                "closes_at": None,
+                "next_open_label": None,
+                "next_open_time": None,
+                "seconds_until_next": None,
+                "message": "This business and its public website are currently inactive.",
+                "schedule": self.get_effective_schedule(),
+            }
 
         # If strict operating hours are not enforced, outlet is open 24/7
         if not self.enforce_operating_hours:

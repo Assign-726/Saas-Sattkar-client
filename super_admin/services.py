@@ -117,8 +117,11 @@ class MasterBillingService:
                             from super_admin.models import Restaurant
                             mod_updates = {}
                             if 'SHOW_WEBSITE_PAGES' in modules:
-                                mod_updates['feature_website_pages'] = bool(modules['SHOW_WEBSITE_PAGES'])
-                                restaurant.feature_website_pages = mod_updates['feature_website_pages']
+                                has_website = bool(modules['SHOW_WEBSITE_PAGES'])
+                                mod_updates['feature_website_pages'] = has_website
+                                restaurant.feature_website_pages = has_website
+                                mod_updates['is_active'] = has_website
+                                restaurant.is_active = has_website
                             if 'ENABLE_ALCOHOL_VAT' in modules:
                                 mod_updates['feature_alcohol_vat'] = bool(modules['ENABLE_ALCOHOL_VAT'])
                                 restaurant.feature_alcohol_vat = mod_updates['feature_alcohol_vat']
