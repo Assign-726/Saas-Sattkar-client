@@ -138,6 +138,18 @@ class Restaurant(models.Model):
         verbose_name="Next Billing Date"
     )
 
+    # Master Dashboard Licensed Quotas (0 means fallback to system/plan default)
+    max_branches = models.IntegerField(
+        default=0,
+        verbose_name="Allowed Outlets / Branches",
+        help_text="Custom branch quota synced from Master Admin. 0 = use system/plan default."
+    )
+    max_businesses = models.IntegerField(
+        default=0,
+        verbose_name="Allowed Businesses",
+        help_text="Custom business quota synced from Master Admin. 0 = use system default."
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -194,6 +206,18 @@ class Restaurant(models.Model):
             'permission_group': 'All Staff',
         }
         return defaults.get(field_name, None)
+
+    def get_max_allowed_branches(self) -> int:
+        if self.max_branches and self.max_branches > 0:
+            return self.max_branches
+        from restaurant_project import constants
+        return constants.MAX_ALLOWED_BRANCHES
+
+    def get_max_allowed_businesses(self) -> int:
+        if self.max_businesses and self.max_businesses > 0:
+            return self.max_businesses
+        from restaurant_project import constants
+        return constants.MAX_ALLOWED_BUSINESSES
 
     def save(self, *args, **kwargs):
         if self.trade_name and not self.name:
@@ -329,6 +353,14 @@ class Restaurant(models.Model):
                         self.feature_hotel_website = update_fields["feature_hotel_website"]
                     update_fields["features_last_synced_at"] = timezone.now()
                     self.features_last_synced_at = update_fields["features_last_synced_at"]
+
+                # Licensed quota limits from MasterPanel
+                if "max_branches" in data and str(data["max_branches"]).strip().isdigit():
+                    update_fields["max_branches"] = int(str(data["max_branches"]).strip())
+                    self.max_branches = update_fields["max_branches"]
+                if "max_businesses" in data and str(data["max_businesses"]).strip().isdigit():
+                    update_fields["max_businesses"] = int(str(data["max_businesses"]).strip())
+                    self.max_businesses = update_fields["max_businesses"]
 
                 Restaurant.objects.filter(pk=self.pk).update(**update_fields)
                 if "ENABLE_RESTAURANT_MODULE" in modules:

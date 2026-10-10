@@ -41,6 +41,34 @@ MAX_ALLOWED_BUSINESSES = _get_env_int('MAX_ALLOWED_BUSINESSES', 1)
 # Maximum allowed branch outlets per business (default: 5; set 0 for unlimited)
 MAX_ALLOWED_BRANCHES = _get_env_int('MAX_ALLOWED_BRANCHES', 5)
 
+def get_effective_max_branches(restaurant=None) -> int:
+    """
+    Returns dynamic branch quota synced from Master Admin, falling back to MAX_ALLOWED_BRANCHES (.env).
+    """
+    if restaurant is None:
+        try:
+            from super_admin.models import Restaurant
+            restaurant = Restaurant.objects.first()
+        except Exception:
+            restaurant = None
+    if restaurant and hasattr(restaurant, 'get_max_allowed_branches'):
+        return restaurant.get_max_allowed_branches()
+    return MAX_ALLOWED_BRANCHES
+
+def get_effective_max_businesses(restaurant=None) -> int:
+    """
+    Returns dynamic business quota synced from Master Admin, falling back to MAX_ALLOWED_BUSINESSES (.env).
+    """
+    if restaurant is None:
+        try:
+            from super_admin.models import Restaurant
+            restaurant = Restaurant.objects.first()
+        except Exception:
+            restaurant = None
+    if restaurant and hasattr(restaurant, 'get_max_allowed_businesses'):
+        return restaurant.get_max_allowed_businesses()
+    return MAX_ALLOWED_BUSINESSES
+
 # ==========================================
 # 3. Regional & Operational Defaults
 # ==========================================

@@ -677,7 +677,7 @@
 
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                 <button type="button" class="btn" onclick="openUpgradeModal()" style="font-size: 13px; padding: 9px 16px;">
-                    <i class="fa-solid fa-paper-plane"></i> Send Upgrade Enquiry / Discuss
+                    <i class="fa-solid fa-paper-plane"></i> Configure Stack / Request Top-Up
                 </button>
                 {% if invoices %}
                 <button type="button" class="btn secondary" onclick="viewLatestInvoice()" style="font-size: 13px; padding: 9px 16px;">
@@ -841,7 +841,7 @@
                         <i class="fa-solid fa-comments"></i>
                     </div>
                     <h3 class="upgrade-enquiry-title">
-                        Need to Upgrade or Expand Features?
+                        Need More Outlets or Specialized Modules?
                     </h3>
                     <p class="upgrade-enquiry-desc">
                         Plans are modular and tailored to each client's specific requirements. Submit an enquiry to discuss upgrading your tier, adding new outlets, or unlocking modules like Hotel PMS, Banquets, Nightlife ticketing, and Central Multi-branch sync.
@@ -849,7 +849,7 @@
                 </div>
                 <div style="margin-top: 20px;">
                     <button type="button" class="btn" onclick="openUpgradeModal()" style="font-size: 13.5px; padding: 12px 24px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; width: 100%; justify-content: center;">
-                        <i class="fa-solid fa-paper-plane"></i> Send Upgrade Enquiry / Discuss Plan
+                        <i class="fa-solid fa-paper-plane"></i> Configure Stack / Request Top-Up Plan
                     </button>
                 </div>
             </div>
@@ -990,66 +990,236 @@
 </div>
 {% endif %}
 
-<!-- ── Upgrade / Plan Request Modal ───────────────────────────────────────── -->
-<div id="upgradeModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px); z-index: 9999; align-items: center; justify-content: center; padding: 20px;">
-    <div class="billing-modal-box" style="width: 100%; max-width: 520px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25); overflow: hidden; animation: modalFadeIn 0.2s ease;">
+<!-- ── Upgrade & Modular Top-Up Request Modal ───────────────────────────────────────── -->
+<div id="upgradeModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(6px); z-index: 9999; align-items: center; justify-content: center; padding: 20px;">
+    <div class="billing-modal-box" style="width: 100%; max-width: 760px; max-height: 92vh; border-radius: 18px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35); overflow: hidden; display: flex; flex-direction: column; animation: modalFadeIn 0.2s ease;">
         
-        <div class="billing-modal-header" style="padding: 20px 24px; display: flex; align-items: center; justify-content: space-between;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <i class="fa-solid fa-wand-magic-sparkles" style="color: var(--primary);"></i>
-                <h3 style="margin: 0; font-size: 1.15rem; font-weight: 800; color: var(--text);">Plan Upgrade & Customization Discussion</h3>
+        <!-- Modal Header -->
+        <div class="billing-modal-header" style="padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border);">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 38px; height: 38px; border-radius: 10px; background: rgba(242, 108, 13, 0.12); color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                    <i class="fa-solid fa-layer-group"></i>
+                </div>
+                <div>
+                    <h3 style="margin: 0; font-size: 1.15rem; font-weight: 800; color: var(--text);">Configure Modular Stack & Top-Up</h3>
+                    <p style="margin: 2px 0 0; font-size: 12px; color: var(--muted);">Custom modular architecture & outlet expansion tailored for your business</p>
+                </div>
             </div>
-            <button type="button" onclick="closeUpgradeModal()" style="background: none; border: none; font-size: 18px; color: var(--muted); cursor: pointer;">
+            <button type="button" onclick="closeUpgradeModal()" style="background: none; border: none; font-size: 20px; color: var(--muted); cursor: pointer; padding: 4px;">
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
 
-        <form onsubmit="submitUpgradeRequest(event)" style="padding: 24px;">
-            <!-- Active Plan Callout -->
-            <div class="billing-modal-callout">
-                <div>
-                    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #ea580c; letter-spacing: 0.5px;">Current Active Plan</div>
-                    <div style="font-size: 14.5px; font-weight: 800; color: var(--text);">{{ current_plan.name|default:subscription.plan_name }}</div>
+        <!-- Scrollable Modal Body -->
+        <form onsubmit="submitUpgradeRequest(event)" style="padding: 24px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 20px;">
+            
+            <!-- Current Plan & Quota Info Pill -->
+            <div class="billing-modal-callout" style="margin-bottom: 0;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(16, 185, 129, 0.15); color: #10b981; display: flex; align-items: center; justify-content: center; font-size: 14px;">
+                        <i class="fa-solid fa-crown"></i>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #ea580c; letter-spacing: 0.5px;">Current Active Subscription</div>
+                        <div style="font-size: 14px; font-weight: 800; color: var(--text);">{{ current_plan.name|default:subscription.plan_name }} &bull; {{ max_branches }} Outlet Quota</div>
+                    </div>
                 </div>
                 <span class="badge-status-pill badge-success-soft">
-                    <i class="fa-solid fa-circle-check"></i> Active
+                    <i class="fa-solid fa-circle-check"></i> Connected
                 </span>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px;">
+            <!-- SECTION 1: Billing Frequency (Strictly Monthly or Yearly) -->
+            <div>
+                <label class="billing-label" style="font-size: 13px; margin-bottom: 8px;">
+                    <i class="fa-solid fa-calendar-check" style="color: var(--primary);"></i> 1. Select Billing Cadence:
+                </label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <label class="billing-radio-label" style="padding: 12px 16px; border-radius: 12px; display: flex; gap: 12px; align-items: flex-start;">
+                        <input type="radio" name="modalBillingCycle" value="MONTHLY" checked onchange="updateStackSummary()">
+                        <div>
+                            <div style="font-weight: 700; font-size: 13.5px; color: var(--text);">Monthly Billing Cycle</div>
+                            <div style="font-size: 11.5px; color: var(--muted); margin-top: 2px;">Flexible standard month-to-month SaaS billing</div>
+                        </div>
+                    </label>
+                    <label class="billing-radio-label" style="padding: 12px 16px; border-radius: 12px; display: flex; gap: 12px; align-items: flex-start;">
+                        <input type="radio" name="modalBillingCycle" value="YEARLY" onchange="updateStackSummary()">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-weight: 700; font-size: 13.5px; color: var(--text);">Annual Contract</span>
+                                <span style="font-size: 10px; font-weight: 700; background: #ecfdf5; color: #059669; padding: 1px 6px; border-radius: 6px;">Best Value</span>
+                            </div>
+                            <div style="font-size: 11.5px; color: var(--muted); margin-top: 2px;">12-month commitment with partner discounts</div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- SECTION 2: Global Enterprise Modules (NO PRICES) -->
+            <div>
+                <label class="billing-label" style="font-size: 13px; margin-bottom: 8px;">
+                    <i class="fa-solid fa-cubes" style="color: var(--primary);"></i> 2. Global Enterprise Modules:
+                </label>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px;">
+                    
+                    <!-- Alcohol & VAT -->
+                    <label style="border: 1.5px solid var(--border); border-radius: 12px; padding: 12px; background: var(--panel); cursor: pointer; display: flex; gap: 10px; align-items: flex-start; transition: all 0.15s ease;">
+                        <input type="checkbox" id="modAlcoholVat" {% if restaurant.feature_alcohol_vat %}checked{% endif %} onchange="updateStackSummary()" style="margin-top: 3px; accent-color: var(--primary);">
+                        <div>
+                            <div style="font-size: 13px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px;">
+                                <i class="fa-solid fa-wine-glass" style="color: #ea580c;"></i> Alcohol & State VAT
+                            </div>
+                            <div style="font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.4;">
+                                State excise registers, liquor billing slabs & beverage VAT compliance
+                            </div>
+                        </div>
+                    </label>
+
+                    <!-- Dynamic Website & Guest Portal -->
+                    <label style="border: 1.5px solid var(--border); border-radius: 12px; padding: 12px; background: var(--panel); cursor: pointer; display: flex; gap: 10px; align-items: flex-start; transition: all 0.15s ease;">
+                        <input type="checkbox" id="modHotelWebsite" {% if restaurant.feature_website_pages %}checked{% endif %} onchange="updateStackSummary()" style="margin-top: 3px; accent-color: var(--primary);">
+                        <div>
+                            <div style="font-size: 13px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px;">
+                                <i class="fa-solid fa-globe" style="color: #3b82f6;"></i> Hotel & Brand Website
+                            </div>
+                            <div style="font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.4;">
+                                Online table bookings, guest room reservations & SEO website
+                            </div>
+                        </div>
+                    </label>
+
+                    <!-- Central Multi-Branch Inventory Sync -->
+                    <label style="border: 1.5px solid var(--border); border-radius: 12px; padding: 12px; background: var(--panel); cursor: pointer; display: flex; gap: 10px; align-items: flex-start; transition: all 0.15s ease;">
+                        <input type="checkbox" id="modCentralInventory" checked onchange="updateStackSummary()" style="margin-top: 3px; accent-color: var(--primary);">
+                        <div>
+                            <div style="font-size: 13px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px;">
+                                <i class="fa-solid fa-network-wired" style="color: #10b981;"></i> Central Sync & Transfers
+                            </div>
+                            <div style="font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.4;">
+                                Inter-branch stock transfers, central recipe ledger & store controls
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- SECTION 3: Outlet / Branch Top-Up Capacity -->
+            <div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                    <label class="billing-label" style="font-size: 13px; margin-bottom: 0;">
+                        <i class="fa-solid fa-store" style="color: var(--primary);"></i> 3. Outlet / Branch Capacity Top-Up:
+                    </label>
+                    <span style="font-size: 12px; color: var(--muted);">Currently Licensed: <strong>{{ max_branches }} Outlets</strong></span>
+                </div>
+
+                <div style="background: var(--panel-hover); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 12px;">
+                    <div>
+                        <div style="font-size: 13px; font-weight: 700; color: var(--text);">Requested Total Branch Outlets:</div>
+                        <div style="font-size: 11.5px; color: var(--muted);">Expand allowed physical branches across cities/locations</div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <button type="button" class="btn secondary" onclick="adjustBranchCount(-1)" style="width: 34px; height: 34px; padding: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; border-radius: 8px;">-</button>
+                        <span id="modalBranchCountDisplay" style="font-size: 1.3rem; font-weight: 800; font-family: monospace; min-width: 36px; text-align: center; color: var(--primary);">{{ max_branches|default:1 }}</span>
+                        <button type="button" class="btn secondary" onclick="adjustBranchCount(1)" style="width: 34px; height: 34px; padding: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; border-radius: 8px;">+</button>
+                    </div>
+                </div>
+
+                <!-- Per-Branch Operational Modules -->
+                <div style="font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
+                    Branch Operational Modules:
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px;" id="modalBranchesContainer">
+                    {% for branch in branches %}
+                    <div class="modal-branch-row" data-branch-id="{{ branch.id }}" data-branch-name="{{ branch.name }}" style="background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                        <div style="font-size: 13px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-location-dot" style="color: var(--primary); font-size: 12px;"></i>
+                            <span>{{ branch.name }}</span>
+                        </div>
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <label style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text); cursor: pointer;">
+                                <input type="checkbox" class="branch-mod-pos" {% if branch.has_restaurant_module %}checked{% endif %} onchange="updateStackSummary()" style="accent-color: var(--primary);">
+                                <span>POS & KDS</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text); cursor: pointer;">
+                                <input type="checkbox" class="branch-mod-hotel" {% if branch.has_hotel_module %}checked{% endif %} onchange="updateStackSummary()" style="accent-color: var(--primary);">
+                                <span>Hotel PMS</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text); cursor: pointer;">
+                                <input type="checkbox" class="branch-mod-club" {% if branch.has_club_module %}checked{% endif %} onchange="updateStackSummary()" style="accent-color: var(--primary);">
+                                <span>Club & Events</span>
+                            </label>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="modal-branch-row" data-branch-name="Primary Outlet" style="background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                        <div style="font-size: 13px; font-weight: 700; color: var(--text);">Primary Outlet</div>
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <label style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text); cursor: pointer;"><input type="checkbox" class="branch-mod-pos" checked onchange="updateStackSummary()"> POS & KDS</label>
+                            <label style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text); cursor: pointer;"><input type="checkbox" class="branch-mod-hotel" onchange="updateStackSummary()"> Hotel PMS</label>
+                            <label style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text); cursor: pointer;"><input type="checkbox" class="branch-mod-club" onchange="updateStackSummary()"> Club & Events</label>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    <div id="modalExtraBranchesSlot" style="display: none; background: rgba(242, 108, 13, 0.05); border: 1px dashed rgba(242, 108, 13, 0.35); border-radius: 10px; padding: 10px 14px; font-size: 12.5px; color: var(--text);">
+                        <i class="fa-solid fa-plus-circle" style="color: var(--primary);"></i>
+                        <span id="modalExtraBranchesText">Additional outlet slots will be provisioned in your license</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 4: Live Configuration Summary Panel (ZERO PRICE SHOWN) -->
+            <div style="background: var(--panel-hover); border: 1.5px solid var(--border); border-radius: 14px; padding: 16px 20px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                    <div style="font-size: 12.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--primary); display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-clipboard-check"></i> Requested Stack Summary
+                    </div>
+                    <span style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+                        Custom Enterprise Quotation
+                    </span>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; font-size: 12.5px; margin-bottom: 12px;">
+                    <div>
+                        <span style="color: var(--muted);">Cycle:</span> <strong id="summaryCycleDisplay" style="color: var(--text);">Monthly</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--muted);">Total Outlets:</span> <strong id="summaryBranchDisplay" style="color: var(--text);">{{ max_branches|default:1 }} Outlets</strong>
+                    </div>
+                    <div>
+                        <span style="color: var(--muted);">Global Add-ons:</span> <strong id="summaryGlobalDisplay" style="color: var(--text);">-</strong>
+                    </div>
+                </div>
+
+                <div style="padding: 10px 12px; border-radius: 8px; background: rgba(242, 108, 13, 0.08); border: 1px solid rgba(242, 108, 13, 0.2); font-size: 11.5px; color: var(--text); display: flex; align-items: flex-start; gap: 8px; line-height: 1.4;">
+                    <i class="fa-solid fa-shield-halved" style="color: var(--primary); margin-top: 2px; flex-shrink: 0;"></i>
+                    <span>
+                        <strong>Custom Partner Pricing Policy:</strong> Individual module costs, bundled discounts, and multi-outlet rate cards are customized exclusively for your organization. Submitting this request allows Master Admin to review and apply the custom stack to your account.
+                    </span>
+                </div>
+            </div>
+
+            <!-- SECTION 5: Contact Details & Notes -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                 <div>
                     <label class="billing-label">Contact Phone:</label>
-                    <input type="text" id="modalContactPhone" class="billing-form-input" value="{{ restaurant.phone|default:'' }}" required>
+                    <input type="text" id="modalContactPhone" class="billing-form-input" value="{{ restaurant.phone|default:'' }}" required placeholder="+91 98765 43210">
                 </div>
                 <div>
                     <label class="billing-label">Contact Email:</label>
-                    <input type="email" id="modalContactEmail" class="billing-form-input" value="{{ restaurant.email|default:'' }}">
+                    <input type="email" id="modalContactEmail" class="billing-form-input" value="{{ restaurant.email|default:'' }}" placeholder="billing@yourbrand.com">
                 </div>
             </div>
 
-            <div style="margin-bottom: 18px;">
-                <label class="billing-label">Preferred Billing Frequency:</label>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <label class="billing-radio-label">
-                        <input type="radio" name="modalBillingCycle" value="MONTHLY" checked>
-                        <span>Monthly Cycle</span>
-                    </label>
-                    <label class="billing-radio-label">
-                        <input type="radio" name="modalBillingCycle" value="YEARLY">
-                        <span>Yearly Cycle</span>
-                    </label>
-                </div>
+            <div>
+                <label class="billing-label">Additional Requirements or Custom SLA Notes:</label>
+                <textarea id="modalNotes" class="billing-form-input" rows="2" placeholder="Mention any extra requirements, staff training requests, or custom billing timelines..."></textarea>
             </div>
 
-            <div style="margin-bottom: 24px;">
-                <label class="billing-label">What would you like to update or upgrade? (Requirements & Notes):</label>
-                <textarea id="modalNotes" class="billing-form-input" rows="3" placeholder="Tell us what modules (e.g. Hotel PMS, Event Booking, Extra Outlets), extra terminals, or custom features you want to add..."></textarea>
-            </div>
-
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <!-- Footer Buttons -->
+            <div style="display: flex; gap: 10px; justify-content: flex-end; padding-top: 10px; border-top: 1px solid var(--border);">
                 <button type="button" class="btn secondary" onclick="closeUpgradeModal()">Cancel</button>
-                <button type="submit" id="btnSubmitUpgrade" class="btn" style="padding: 10px 20px; font-size: 13px; font-weight: 700;">
-                    <i class="fa-solid fa-paper-plane"></i> Send Upgrade Enquiry
+                <button type="submit" id="btnSubmitUpgrade" class="btn" style="padding: 10px 24px; font-size: 13.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-paper-plane"></i> Submit Top-Up & Upgrade Enquiry
                 </button>
             </div>
         </form>
@@ -1203,8 +1373,49 @@
         }
     }
 
+    let currentModalBranchCount = parseInt('{{ max_branches|default:1 }}', 10) || 1;
+    const initialBaseBranchCount = parseInt('{{ branch_count|default:1 }}', 10) || 1;
+
+    function adjustBranchCount(delta) {
+        currentModalBranchCount = Math.max(initialBaseBranchCount, currentModalBranchCount + delta);
+        const disp = document.getElementById('modalBranchCountDisplay');
+        if (disp) disp.textContent = currentModalBranchCount;
+        
+        const extraSlot = document.getElementById('modalExtraBranchesSlot');
+        const extraText = document.getElementById('modalExtraBranchesText');
+        if (extraSlot && extraText) {
+            const extra = currentModalBranchCount - initialBaseBranchCount;
+            if (extra > 0) {
+                extraSlot.style.display = 'block';
+                extraText.textContent = `+${extra} Additional outlet slot(s) will be provisioned in your licensed quota.`;
+            } else {
+                extraSlot.style.display = 'none';
+            }
+        }
+        updateStackSummary();
+    }
+
+    function updateStackSummary() {
+        const cycleRadio = document.querySelector('input[name="modalBillingCycle"]:checked');
+        const cycle = cycleRadio ? cycleRadio.value : 'MONTHLY';
+        const cycleDisp = document.getElementById('summaryCycleDisplay');
+        if (cycleDisp) cycleDisp.textContent = cycle === 'YEARLY' ? 'Annual (Yearly) Contract' : 'Monthly Cycle';
+
+        const branchDisp = document.getElementById('summaryBranchDisplay');
+        if (branchDisp) branchDisp.textContent = currentModalBranchCount + ' Outlets';
+
+        const globals = [];
+        if (document.getElementById('modAlcoholVat')?.checked) globals.push('Alcohol & VAT');
+        if (document.getElementById('modHotelWebsite')?.checked) globals.push('Brand Website');
+        if (document.getElementById('modCentralInventory')?.checked) globals.push('Central Sync');
+
+        const globDisp = document.getElementById('summaryGlobalDisplay');
+        if (globDisp) globDisp.textContent = globals.length > 0 ? globals.join(', ') : 'Standard Base';
+    }
+
     function openUpgradeModal() {
         document.getElementById('upgradeModal').style.display = 'flex';
+        updateStackSummary();
     }
 
     function closeUpgradeModal() {
@@ -1223,7 +1434,30 @@
         const emailElem = document.getElementById('modalContactEmail');
         const email = emailElem ? emailElem.value : '';
         const notes = document.getElementById('modalNotes').value;
-        const currentPlan = "{{ current_plan.name|default:subscription.plan_name|default:'Active Plan' }}";
+
+        const globalModules = [];
+        if (document.getElementById('modAlcoholVat')?.checked) globalModules.push('Alcohol & State VAT Compliance');
+        if (document.getElementById('modHotelWebsite')?.checked) globalModules.push('Dynamic Hotel & Brand Website');
+        if (document.getElementById('modCentralInventory')?.checked) globalModules.push('Central Multi-Branch Inventory Sync');
+
+        const branchesList = [];
+        document.querySelectorAll('.modal-branch-row').forEach(row => {
+            const bName = row.getAttribute('data-branch-name') || 'Outlet';
+            const bMods = [];
+            if (row.querySelector('.branch-mod-pos')?.checked) bMods.push('Restaurant POS & KDS');
+            if (row.querySelector('.branch-mod-hotel')?.checked) bMods.push('Hotel Rooms & PMS');
+            if (row.querySelector('.branch-mod-club')?.checked) bMods.push('Club & Event Ticketing');
+            branchesList.push({ name: bName, modules: bMods });
+        });
+
+        const stackConfig = {
+            billing_cycle: billingCycle,
+            branch_count: currentModalBranchCount,
+            global_modules: globalModules,
+            branches: branchesList,
+        };
+
+        const planName = 'Custom Stack (' + currentModalBranchCount + ' Outlets)';
 
         try {
             const resp = await fetch("{% url 'super_admin:api_request_plan_upgrade' %}", {
@@ -1233,11 +1467,12 @@
                     'X-CSRFToken': '{{ csrf_token }}'
                 },
                 body: JSON.stringify({
-                    plan_name: currentPlan + ' (Upgrade Discussion)',
+                    plan_name: planName,
                     billing_cycle: billingCycle,
                     contact_phone: phone,
                     contact_email: email,
                     notes: notes,
+                    stack_configuration: stackConfig,
                 })
             });
             const data = await resp.json();
@@ -1252,7 +1487,7 @@
             showToast('Network error contacting Master Admin: ' + err.message, 'error');
         } finally {
             btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send Upgrade Enquiry';
+            btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Top-Up & Upgrade Enquiry';
         }
     }
 
