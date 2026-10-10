@@ -676,8 +676,13 @@
             </div>
 
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                {% if billing_data.pending_payment %}
+                <a href="{{ billing_data.pending_payment.url }}" target="_blank" class="btn" style="background: #10b981; border-color: #10b981; font-size: 13px; padding: 9px 16px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25); color: #fff;">
+                    <i class="fa-solid fa-credit-card"></i> Pay Online via Razorpay ({{ billing_data.pending_payment.currency }}{{ billing_data.pending_payment.amount }})
+                </a>
+                {% endif %}
                 <button type="button" class="btn" onclick="openUpgradeModal()" style="font-size: 13px; padding: 9px 16px;">
-                    <i class="fa-solid fa-paper-plane"></i> Configure Stack / Request Top-Up
+                    <i class="fa-solid fa-layer-group"></i> Configure Stack / Request Top-Up
                 </button>
                 {% if invoices %}
                 <button type="button" class="btn secondary" onclick="viewLatestInvoice()" style="font-size: 13px; padding: 9px 16px;">
@@ -912,9 +917,16 @@
                         {% endif %}
                     </td>
                     <td style="text-align: right;">
-                        <button type="button" class="btn small secondary" onclick="openInvoiceReceiptModal('{{ inv.id }}', '{{ inv.title }}', '{{ inv.amount }}', '{{ inv.currency }}', '{{ inv.formatted_date }}', '{{ inv.status }}', '{{ inv.payment_method }}')">
-                            <i class="fa-solid fa-file-invoice"></i> View
-                        </button>
+                        <div style="display: inline-flex; gap: 6px; justify-content: flex-end;">
+                            {% if inv.payment_link_url and inv.status == 'PENDING' %}
+                            <a href="{{ inv.payment_link_url }}" target="_blank" class="btn small" style="background: #10b981; border-color: #10b981; color: white;">
+                                <i class="fa-solid fa-credit-card"></i> Pay Link
+                            </a>
+                            {% endif %}
+                            <button type="button" class="btn small secondary" onclick="openInvoiceReceiptModal('{{ inv.id }}', '{{ inv.title }}', '{{ inv.amount }}', '{{ inv.currency }}', '{{ inv.formatted_date }}', '{{ inv.status }}', '{{ inv.payment_method }}')">
+                                <i class="fa-solid fa-file-invoice"></i> View
+                            </button>
+                        </div>
                     </td>
                 </tr>
                 {% empty %}
