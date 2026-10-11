@@ -198,6 +198,63 @@ class MasterBillingService:
                         except Exception as sub_err:
                             logger.warning(f"[MasterBillingService] Could not persist subscription state: {sub_err}")
 
+                    # Sync remote quota limits (max branches & max businesses)
+                    # Priority 1: Custom client limit in client payload
+                    # Priority 2: Current plan limit in current_plan payload
+                    client_payload = data.get('client', {}) or {}
+                    current_plan_payload = data.get('current_plan', {}) or {}
+
+                    remote_max_branches = None
+                    if 'max_branches' in client_payload and client_payload['max_branches'] is not None:
+                        try:
+                            remote_max_branches = int(client_payload['max_branches'])
+                        except (ValueError, TypeError):
+                            pass
+                    if remote_max_branches is None and 'max_branches' in current_plan_payload and current_plan_payload['max_branches'] is not None:
+                        try:
+                            remote_max_branches = int(current_plan_payload['max_branches'])
+                        except (ValueError, TypeError):
+                            pass
+                    if remote_max_branches is None and 'max_branches' in data and data['max_branches'] is not None:
+                        try:
+                            remote_max_branches = int(data['max_branches'])
+                        except (ValueError, TypeError):
+                            pass
+
+                    remote_max_businesses = None
+                    if 'max_businesses' in client_payload and client_payload['max_businesses'] is not None:
+                        try:
+                            remote_max_businesses = int(client_payload['max_businesses'])
+                        except (ValueError, TypeError):
+                            pass
+                    if remote_max_businesses is None and 'max_businesses' in current_plan_payload and current_plan_payload['max_businesses'] is not None:
+                        try:
+                            remote_max_businesses = int(current_plan_payload['max_businesses'])
+                        except (ValueError, TypeError):
+                            pass
+                    if remote_max_businesses is None and 'max_businesses' in data and data['max_businesses'] is not None:
+                        try:
+                            remote_max_businesses = int(data['max_businesses'])
+                        except (ValueError, TypeError):
+                            pass
+
+                    if restaurant:
+                        quota_updates = {}
+                        if remote_max_branches is not None and getattr(restaurant, 'max_branches', None) != remote_max_branches:
+                            quota_updates['max_branches'] = remote_max_branches
+                            restaurant.max_branches = remote_max_branches
+                        if remote_max_businesses is not None and getattr(restaurant, 'max_businesses', None) != remote_max_businesses:
+                            quota_updates['max_businesses'] = remote_max_businesses
+                            restaurant.max_businesses = remote_max_businesses
+
+                        if quota_updates:
+                            try:
+                                from super_admin.models import Restaurant
+                                Restaurant.objects.filter(pk=restaurant.pk).update(**quota_updates)
+                                logger.info(f"[MasterBillingService] Synced quota limits for '{restaurant.name}': {quota_updates}")
+                            except Exception as q_err:
+                                logger.warning(f"[MasterBillingService] Could not persist quota updates to DB: {q_err}")
+
                     # Normalize plan fields so price and monthly_fee are consistently available
                     if 'available_plans' in data and isinstance(data['available_plans'], list):
                         for p in data['available_plans']:
@@ -242,7 +299,7 @@ class MasterBillingService:
             return fallback
 
     @classmethod
-    def submit_upgrade_request(cls, restaurant, requested_plan_name: str, requested_billing_cycle: str = "MONTHLY", notes: str = "", contact_phone: str = "", contact_email: str = "") -> dict:
+    def submit_upgrade_request(cls, restaurant, requested_plan_name: str, requested_billing_cycle: str = "MONTHLY", notes: str = "", contact_phone: str = "", contact_email: str = "", stack_configuration: dict = None) -> dict:
         """
         Pushes a plan change / renewal upgrade request to Master Admin enquiries desk.
         """
@@ -260,6 +317,8 @@ class MasterBillingService:
             "contact_phone": contact_phone or (getattr(restaurant, 'phone', '') if restaurant else ""),
             "contact_email": contact_email or (getattr(restaurant, 'email', '') if restaurant else ""),
         }
+        if stack_configuration:
+            payload["stack_configuration"] = stack_configuration
 
         body_json = json.dumps(payload, separators=(',', ':'))
         headers = cls.get_headers(body_json)
@@ -324,9 +383,16 @@ class MasterBillingService:
                 "email": email,
                 "phone": phone,
                 "branch_count": branch_count,
+                "max_branches": restaurant.get_max_allowed_branches() if restaurant else constants.MAX_ALLOWED_BRANCHES,
+                "max_businesses": restaurant.get_max_allowed_businesses() if restaurant else constants.MAX_ALLOWED_BUSINESSES,
             },
             "subscription": None,
-            "current_plan": None,
+            "current_plan": {
+                "name": getattr(restaurant, 'subscription_plan_name', '') or "Standard",
+                "max_branches": restaurant.get_max_allowed_branches() if restaurant else constants.MAX_ALLOWED_BRANCHES,
+                "monthly_fee": 0,
+                "price": 0,
+            } if restaurant else None,
             "available_plans": [],
             "invoices": [],
         }

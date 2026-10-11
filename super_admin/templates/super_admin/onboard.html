@@ -959,11 +959,13 @@
             <h2>Add your outlets</h2>
             <p>Configure outlet locations, contact information, outlet types, and state-level GSTINs.</p>
           </div>
-          {% if MAX_ALLOWED_BRANCHES > 0 %}
+          {% with eff_max=form.instance.get_max_allowed_branches|default:MAX_ALLOWED_BRANCHES %}
+          {% if eff_max > 0 %}
           <span class="badge neutral" style="font-size: 0.8rem; padding: 6px 12px; border-radius: 6px; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;">
-            <i class="fa-solid fa-store" style="margin-right: 4px;"></i> Limit: Max {{ MAX_ALLOWED_BRANCHES }} Outlets
+            <i class="fa-solid fa-store" style="margin-right: 4px;"></i> Limit: Max {{ eff_max }} Outlets
           </span>
           {% endif %}
+          {% endwith %}
         </div>
 
         <div id="branches-container">
@@ -1707,7 +1709,7 @@
   function addNewBranchCard(isFirst = false) {
     if (!isFirst) {
       syncBranchesFromDOM();
-      const maxBranches = parseInt('{{ MAX_ALLOWED_BRANCHES|default:0 }}');
+      const maxBranches = parseInt('{{ form.instance.get_max_allowed_branches|default:MAX_ALLOWED_BRANCHES|default:0 }}');
       if (maxBranches > 0 && branches.length >= maxBranches) {
         alert(`Branch limit reached! Your license allows a maximum of ${maxBranches} branch outlets.`);
         return;

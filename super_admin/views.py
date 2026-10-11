@@ -97,11 +97,12 @@ def dashboard(request):
 
 @superuser_required
 def restaurant_create(request):
-    if constants.MAX_ALLOWED_BUSINESSES > 0 and Restaurant.objects.count() >= constants.MAX_ALLOWED_BUSINESSES:
+    effective_max_businesses = constants.get_effective_max_businesses()
+    if effective_max_businesses > 0 and Restaurant.objects.count() >= effective_max_businesses:
         existing = Restaurant.objects.first()
         messages.warning(
             request,
-            f"Business limit reached ({constants.MAX_ALLOWED_BUSINESSES} allowed). You can edit '{existing.trade_name or existing.name}' details and manage outlets below."
+            f"Business limit reached ({effective_max_businesses} allowed). You can edit '{existing.trade_name or existing.name}' details and manage outlets below."
         )
         return redirect('super_admin:restaurant_edit', pk=existing.pk)
 
@@ -271,6 +272,7 @@ def restaurant_edit(request, pk):
         'form': form,
         'is_edit': True,
         'restaurant': restaurant,
+        'branches': restaurant.branches.all() if restaurant else [],
         'all_restaurants': [restaurant],
         'initial_branches_json': json.dumps(existing_branches),
     })
@@ -653,6 +655,7 @@ def landing_edit(request, pk):
 
     return render(request, 'super_admin/landing_edit.html', {
         'restaurant': restaurant,
+        'branches': restaurant.branches.all() if restaurant else [],
         'branches': branches,
         'landing': landing,
         'form': form,
@@ -1175,6 +1178,7 @@ def blog_edit(request, pk, blog_id):
 
     return render(request, 'super_admin/blog_edit.html', {
         'restaurant': restaurant,
+        'branches': restaurant.branches.all() if restaurant else [],
         'blog_post': blog_post,
         'form': form,
     })
@@ -1451,7 +1455,7 @@ def billing_view(request):
     except Exception:
         branch_count = 0
 
-    max_branches = current_plan.get('max_branches', 3) if current_plan else 3
+    max_branches = restaurant.get_max_allowed_branches() if restaurant else (current_plan.get('max_branches', 3) if current_plan else 3)
     branch_usage_percent = min(100, int((branch_count / max(1, max_branches)) * 100))
 
     # Calculate 30-day cycle progress
@@ -1464,6 +1468,7 @@ def billing_view(request):
 
     context = {
         'restaurant': restaurant,
+        'branches': restaurant.branches.all() if restaurant else [],
         'billing_data': billing_data,
         'client_info': client_info,
         'subscription': subscription,
@@ -1535,6 +1540,8 @@ def api_request_plan_upgrade(request):
     except Exception:
         restaurant = None
 
+    stack_configuration = body.get('stack_configuration') or body.get('configured_stack')
+
     result = MasterBillingService.submit_upgrade_request(
         restaurant=restaurant,
         requested_plan_name=plan_name,
@@ -1542,6 +1549,7 @@ def api_request_plan_upgrade(request):
         notes=notes,
         contact_phone=contact_phone,
         contact_email=contact_email,
+        stack_configuration=stack_configuration,
     )
     return JsonResponse(result)
 
@@ -1570,6 +1578,7 @@ def billing_invoice_view(request, invoice_id):
 
     return render(request, 'super_admin/invoice_receipt.html', {
         'restaurant': restaurant,
+        'branches': restaurant.branches.all() if restaurant else [],
         'invoice': invoice,
         'client_info': billing_data.get('client', {}),
         'subscription': billing_data.get('subscription', {}),
@@ -1867,6 +1876,7 @@ def super_analytics(request):
 
     context = {
         'restaurant': restaurant,
+        'branches': restaurant.branches.all() if restaurant else [],
         'branches': branches,
         'selected_branch': selected_branch,
         'branch_param': branch_param,

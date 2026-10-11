@@ -213,10 +213,11 @@ class RestaurantForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        if not self.instance.pk and constants.MAX_ALLOWED_BUSINESSES > 0:
-            if Restaurant.objects.count() >= constants.MAX_ALLOWED_BUSINESSES:
+        effective_max_businesses = self.instance.get_max_allowed_businesses() if (self.instance and hasattr(self.instance, 'get_max_allowed_businesses')) else constants.get_effective_max_businesses()
+        if not self.instance.pk and effective_max_businesses > 0:
+            if Restaurant.objects.count() >= effective_max_businesses:
                 raise forms.ValidationError(
-                    f"Only {constants.MAX_ALLOWED_BUSINESSES} registered business is permitted on this system. You can edit the existing business details instead."
+                    f"Only {effective_max_businesses} registered business is permitted on this system. You can edit the existing business details instead."
                 )
         return cleaned_data
 
@@ -420,13 +421,14 @@ class OnboardRestaurantForm(forms.Form):
                 self.add_error("pan", f"Another business is already registered with PAN '{pan}'.")
 
         # Enforce business limit restriction
-        if not self.instance and constants.MAX_ALLOWED_BUSINESSES > 0:
-            if Restaurant.objects.count() >= constants.MAX_ALLOWED_BUSINESSES:
+        effective_max_businesses = self.instance.get_max_allowed_businesses() if (self.instance and hasattr(self.instance, 'get_max_allowed_businesses')) else constants.get_effective_max_businesses()
+        if not self.instance and effective_max_businesses > 0:
+            if Restaurant.objects.count() >= effective_max_businesses:
                 existing = Restaurant.objects.first()
                 t_name = (cleaned.get("trade_name") or cleaned.get("legal_name") or "").strip()
                 if not existing or existing.name.lower() != t_name.lower():
                     raise forms.ValidationError(
-                        f"Only {constants.MAX_ALLOWED_BUSINESSES} registered business is permitted on this system. You can edit the existing business details instead."
+                        f"Only {effective_max_businesses} registered business is permitted on this system. You can edit the existing business details instead."
                     )
         return cleaned
 
@@ -441,9 +443,10 @@ class OnboardRestaurantForm(forms.Form):
         if not valid_branches:
             raise forms.ValidationError("Please provide details for at least one branch outlet.")
 
-        if constants.MAX_ALLOWED_BRANCHES > 0 and len(valid_branches) > constants.MAX_ALLOWED_BRANCHES:
+        effective_max_branches = self.instance.get_max_allowed_branches() if (self.instance and hasattr(self.instance, 'get_max_allowed_branches')) else constants.get_effective_max_branches()
+        if effective_max_branches > 0 and len(valid_branches) > effective_max_branches:
             raise forms.ValidationError(
-                f"Branch limit reached. Your license allows a maximum of {constants.MAX_ALLOWED_BRANCHES} branch outlets (attempted {len(valid_branches)})."
+                f"Branch limit reached. Your license allows a maximum of {effective_max_branches} branch outlets (attempted {len(valid_branches)})."
             )
 
         cleaned_branches = []
