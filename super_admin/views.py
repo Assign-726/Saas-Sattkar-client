@@ -1444,6 +1444,43 @@ def billing_view(request):
             cp_price = current_plan.get('monthlyPrice') or current_plan.get('amount') or 0
         current_plan['price'] = cp_price
         current_plan['monthly_fee'] = cp_price
+    active_plan_name = (
+        (current_plan.get('name') if current_plan else None) or
+        (subscription.get('plan_name') if subscription else None) or
+        (getattr(restaurant, 'subscription_plan_name', '') if restaurant else '') or
+        'Standard Plan'
+    )
+
+    if not current_plan:
+        current_plan = {
+            'name': active_plan_name,
+            'description': 'Active subscription tier',
+            'max_branches': 3,
+            'monthly_fee': 0,
+            'price': 0,
+            'features': ['Cloud POS', 'Inventory Management', 'Billing & Analytics'],
+        }
+    elif not current_plan.get('name'):
+        current_plan['name'] = active_plan_name
+
+    if not subscription:
+        subscription = {
+            'status': getattr(restaurant, 'subscription_status', 'ACTIVE') if restaurant else 'ACTIVE',
+            'plan_name': active_plan_name,
+            'billing_cycle': 'MONTHLY',
+            'currency': '₹',
+            'monthly_fee': current_plan.get('price', 0),
+            'days_remaining': 30,
+            'hours_remaining': 0,
+            'minutes_remaining': 0,
+            'seconds_remaining': 0,
+            'total_seconds_remaining': 0,
+            'in_grace_period': getattr(restaurant, 'subscription_is_overdue', False) if restaurant else False,
+            'grace_days_remaining': getattr(restaurant, 'subscription_grace_days_remaining', 0) if restaurant else 0,
+            'grace_period_expired': getattr(restaurant, 'subscription_grace_period_expired', False) if restaurant else False,
+            'is_locked': getattr(restaurant, 'subscription_is_locked', False) if restaurant else False,
+        }
+
     invoices = billing_data.get('invoices') or []
     connection_status = billing_data.get('connection_status', 'OFFLINE')
     is_connected = bool(connection_status == 'CONNECTED' and subscription and subscription.get('plan_name'))
@@ -1473,6 +1510,7 @@ def billing_view(request):
         'client_info': client_info,
         'subscription': subscription,
         'current_plan': current_plan,
+        'active_plan_name': active_plan_name,
         'available_plans': available_plans,
         'invoices': invoices,
         'connection_status': connection_status,

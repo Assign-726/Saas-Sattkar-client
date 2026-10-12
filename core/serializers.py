@@ -1,3 +1,5 @@
+from decimal import Decimal
+from django.db import transaction
 from rest_framework import serializers
 # pyrefly: ignore [missing-import]
 from core.models import Category, SubCategory, MenuItem, Table, Zone, CustomCharge, Order, OrderItem, RestaurantLanding, GalleryImage, TeamMember, Review, RestaurantSettings, Event, BlogPost, BlogComment, WhyChooseUs
@@ -199,6 +201,7 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['order_time', 'subtotal', 'tax_amount', 'round_off_amount', 'total_amount', 'discount_amount', 'security_token', 'order_number', 'branch_order_number', 'branch_name', 'branch_slug_display', 'order_restaurant_slug']
 
+    @transaction.atomic
     def create(self, validated_data):
         from core.models import Coupon, RestaurantSettings
         items_data = validated_data.pop('items')
@@ -554,7 +557,6 @@ class OrderSerializer(serializers.ModelSerializer):
             else:
                 coupon = coupon_qs.first()
             if coupon:
-                from decimal import Decimal
                 subtotal = sum((it.subtotal for it in order.items.all()), Decimal('0.00'))
                 if coupon.is_valid_for(subtotal, restaurant=restaurant):
                     order.coupon = coupon

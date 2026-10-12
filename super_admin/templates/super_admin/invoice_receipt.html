@@ -40,16 +40,16 @@
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px;">
         <div>
             <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Billed To / Account Holder</div>
-            <div style="font-size: 15px; font-weight: 700; color: #0f172a;">{{ restaurant.trade_name|default:restaurant.name }}</div>
-            <div style="font-size: 13px; color: #475569; margin-top: 2px;">Legal: {{ restaurant.legal_name }}</div>
+            <div style="font-size: 15px; font-weight: 700; color: #0f172a;">{% if restaurant.trade_name %}{{ restaurant.trade_name }}{% elif restaurant.name %}{{ restaurant.name }}{% else %}-{% endif %}</div>
+            <div style="font-size: 13px; color: #475569; margin-top: 2px;">Legal: {{ restaurant.legal_name|default:'-' }}</div>
             <div style="font-size: 13px; color: #475569;">PAN: {{ restaurant.pan|default:'CEXPJ7241H' }}</div>
             <div style="font-size: 13px; color: #475569;">Email: {{ restaurant.email }} &bull; Phone: {{ restaurant.phone }}</div>
         </div>
         <div>
             <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px;">Subscription Contract Details</div>
-            <div style="font-size: 13px; color: #475569;">Plan: <strong>{{ invoice.plan_name|default:subscription.plan_name|default:'Professional Tier' }}</strong></div>
+            <div style="font-size: 13px; color: #475569;">Plan: <strong>{% if invoice.plan_name %}{{ invoice.plan_name }}{% elif subscription.plan_name %}{{ subscription.plan_name }}{% else %}{{ restaurant.subscription_plan_name|default:'Professional Tier' }}{% endif %}</strong></div>
             <div style="font-size: 13px; color: #475569;">Cycle: <strong>{{ subscription.billing_cycle|default:'MONTHLY'|title }}</strong></div>
-            <div style="font-size: 13px; color: #475569;">License Key: <strong style="font-family: monospace;">{{ client_info.license_key|default:restaurant.master_license_key }}</strong></div>
+            <div style="font-size: 13px; color: #475569;">License Key: <strong style="font-family: monospace;">{% if client_info.license_key %}{{ client_info.license_key }}{% elif restaurant.master_license_key %}{{ restaurant.master_license_key }}{% else %}Not Assigned{% endif %}</strong></div>
             <div style="font-size: 13px; color: #475569;">Outlets Configured: <strong>{{ restaurant.branches.count }} Active Outlets</strong></div>
         </div>
     </div>
