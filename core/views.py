@@ -379,7 +379,14 @@ class MenuItemViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         if not constants.SHOW_WEBSITE_PAGES:
             return MenuItem.objects.none()
-        queryset = MenuItem.objects.filter(availability=True, restaurant__is_active=True, restaurant__feature_website_pages=True)
+        from django.db.models import Q
+        queryset = MenuItem.objects.filter(
+            availability=True,
+            restaurant__is_active=True,
+            restaurant__feature_website_pages=True,
+            publishing_channels__contains=['qr']
+        ).select_related('category', 'subcategory', 'subcategory__category')
+
         subcategory = self.request.query_params.get('subcategory')
         if subcategory:
             queryset = queryset.filter(subcategory_id=subcategory)
@@ -392,10 +399,8 @@ class MenuItemViewSet(viewsets.ReadOnlyModelViewSet):
         elif restaurant_slug:
             queryset = queryset.filter(restaurant__slug=restaurant_slug)
         if branch_slug:
-            from django.db.models import Q
             queryset = queryset.filter(Q(branch__slug=branch_slug) | Q(branch__isnull=True))
         elif branch_id:
-            from django.db.models import Q
             queryset = queryset.filter(Q(branch_id=branch_id) | Q(branch__isnull=True))
         return queryset.order_by('name')
     
@@ -441,6 +446,15 @@ class OrderViewSet(viewsets.ModelViewSet):
             menu_item = MenuItem.objects.filter(id=item_id).first()
             if not menu_item:
                 return Response({'error': f'Item ID {item_id} not found'}, status=status.HTTP_400_BAD_REQUEST)
+            channels = getattr(menu_item, 'publishing_channels', []) or []
+            if channels and 'qr' not in channels and 'online' not in channels:
+                return Response({'error': f'{menu_item.name} is available for in-store POS billing only.'}, status=status.HTTP_400_BAD_REQUEST)
+            if getattr(menu_item, 'is_alcoholic', False):
+                has_valid_table = bool(data.get('table_token') and (data.get('table_id') or data.get('table_number')))
+                if order_type != 'dine_in' or not has_valid_table:
+                    return Response({
+                        'error': f"'{menu_item.name}' contains alcohol and can only be ordered for Dine-In via a verified table QR scan."
+                    }, status=status.HTTP_400_BAD_REQUEST)
             if restaurant is None:
                 restaurant = menu_item.restaurant
             elif restaurant.id != menu_item.restaurant_id:
@@ -817,7 +831,18 @@ class RestaurantLandingViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         if not constants.SHOW_WEBSITE_PAGES:
             return RestaurantLanding.objects.none()
-        qs = super().get_queryset().filter(restaurant__is_active=True, restaurant__feature_website_pages=True)
+        qs = super().get_queryset().filter(
+            restaurant__is_active=True,
+            restaurant__feature_website_pages=True
+        ).select_related('restaurant').prefetch_related(
+            'gallery_images',
+            'team_members',
+            'reviews',
+            'events',
+            'why_choose_us_items',
+            'restaurant__branches',
+            'restaurant__branches__gst_registration'
+        )
         restaurant_id = self.request.query_params.get('restaurant')
         restaurant_slug = self.request.query_params.get('restaurant_slug')
         if restaurant_id:
@@ -835,7 +860,7 @@ class RestaurantSettingsViewSet(viewsets.ReadOnlyModelViewSet):
     def list(self, request, *args, **kwargs):
         restaurant_id = self.request.query_params.get('restaurant')
         restaurant_slug = self.request.query_params.get('restaurant_slug')
-        branch_slug = self.request.query_params.get('branch_slug') or self.request.query_params.get('branch')
+        branch_slug = self.request.query_params.get('branch_slug') or self.request.query_params.get('branch') or self.request.COOKIES.get('active_branch_slug')
         restaurant = None
         if restaurant_id:
             restaurant = Restaurant.objects.filter(id=restaurant_id).first()
@@ -864,18 +889,69 @@ class RestaurantSettingsViewSet(viewsets.ReadOnlyModelViewSet):
         
         branch = None
         if restaurant and branch_slug:
-            branch = restaurant.branches.filter(slug=branch_slug).first()
-            if branch:
-                data['enable_customer_ordering'] = getattr(branch, 'enable_customer_ordering', True)
-                data['enable_online_payment'] = getattr(branch, 'enable_online_payment', False)
-                data['enable_pay_at_counter'] = getattr(branch, 'enable_pay_at_counter', True)
-                data['enforce_operating_hours'] = getattr(branch, 'enforce_operating_hours', False)
-                data['opening_time'] = branch.opening_time.strftime("%H:%M") if branch.opening_time else None
-                data['closing_time'] = branch.closing_time.strftime("%H:%M") if branch.closing_time else None
-                data['closed_message'] = branch.closed_message
-                data['operating_status'] = branch.get_operating_status()
-                if branch.service_charge_percentage is not None:
-                    data['service_charge_percentage'] = str(branch.service_charge_percentage)
+            from django.db.models import Q
+            branch = restaurant.branches.filter(Q(slug__iexact=branch_slug) | Q(name__iexact=branch_slug)).first()
+            if not branch and str(branch_slug).isdigit():
+                branch = restaurant.branches.filter(id=int(branch_slug)).first()
+        if not branch and restaurant and restaurant.branches.count() == 1:
+            branch = restaurant.branches.first()
+
+        if branch:
+            data['enable_customer_ordering'] = getattr(branch, 'enable_customer_ordering', True)
+            data['enable_online_payment'] = getattr(branch, 'enable_online_payment', False)
+            data['enable_pay_at_counter'] = getattr(branch, 'enable_pay_at_counter', True)
+            data['enforce_operating_hours'] = getattr(branch, 'enforce_operating_hours', False)
+            data['opening_time'] = branch.opening_time.strftime("%H:%M") if branch.opening_time else None
+            data['closing_time'] = branch.closing_time.strftime("%H:%M") if branch.closing_time else None
+            data['closed_message'] = branch.closed_message
+            data['operating_status'] = branch.get_operating_status()
+            if branch.service_charge_percentage is not None:
+                data['service_charge_percentage'] = str(branch.service_charge_percentage)
+
+        branch_target = branch or (restaurant.branches.first() if restaurant else None)
+        data['serves_alcohol'] = bool(branch_target and branch_target.serves_alcohol)
+        data['service_charge_taxable'] = getattr(obj, 'service_charge_taxable', True)
+        data['coupon_applies_before_tax'] = getattr(obj, 'coupon_applies_before_tax', True)
+
+        if obj and obj.cgst_percentage is not None:
+            data['cgst_percentage'] = str(obj.cgst_percentage)
+        elif branch_target:
+            if branch_target.gst_registration_type == 'R18' or branch_target.is_hotel_tariff_7500_plus:
+                data['cgst_percentage'] = '9.00'
+            elif branch_target.gst_registration_type in ['C', 'U']:
+                data['cgst_percentage'] = '0.00'
+            else:
+                data['cgst_percentage'] = '2.50'
+        else:
+            data['cgst_percentage'] = '2.50'
+
+        if obj and obj.sgst_percentage is not None:
+            data['sgst_percentage'] = str(obj.sgst_percentage)
+        elif branch_target:
+            if branch_target.gst_registration_type == 'R18' or branch_target.is_hotel_tariff_7500_plus:
+                data['sgst_percentage'] = '9.00'
+            elif branch_target.gst_registration_type in ['C', 'U']:
+                data['sgst_percentage'] = '0.00'
+            else:
+                data['sgst_percentage'] = '2.50'
+        else:
+            data['sgst_percentage'] = '2.50'
+
+        data['vat_beer_percentage'] = str(branch_target.vat_beer_rate if branch_target and getattr(branch_target, 'vat_beer_rate', None) is not None else 60.00)
+        data['vat_imfl_percentage'] = str(branch_target.vat_imfl_rate if branch_target and getattr(branch_target, 'vat_imfl_rate', None) is not None else 65.00)
+        data['vat_wine_percentage'] = str(branch_target.vat_wine_rate if branch_target and getattr(branch_target, 'vat_wine_rate', None) is not None else 60.00)
+
+        b_gen = getattr(branch_target, 'vat_gen_pct', None) if branch_target else None
+        s_gen = getattr(obj, 'vat_gen_pct', None) or getattr(obj, 'vat_percentage', None)
+        data['vat_gen_percentage'] = str(b_gen if b_gen is not None else (s_gen if s_gen is not None else 20.00))
+
+        b_sur = getattr(branch_target, 'vat_surcharge_pct', None) if branch_target else None
+        s_sur = getattr(obj, 'vat_surcharge_pct', None)
+        data['vat_surcharge_percentage'] = str(b_sur if b_sur is not None else (s_sur if s_sur is not None else 0.00))
+
+        b_sur_name = getattr(branch_target, 'vat_surcharge_name', None) if branch_target else None
+        s_sur_name = getattr(obj, 'vat_surcharge_name', None)
+        data['vat_surcharge_name'] = (b_sur_name or s_sur_name or 'VAT Surcharge').strip() or 'VAT Surcharge'
 
         # Dynamic Custom Charges & Dining Zones
         if restaurant:
@@ -884,6 +960,8 @@ class RestaurantSettingsViewSet(viewsets.ReadOnlyModelViewSet):
             charges_qs = CustomCharge.objects.filter(restaurant=restaurant, is_active=True)
             if branch:
                 charges_qs = charges_qs.filter(Q(branch=branch) | Q(branch__isnull=True))
+            else:
+                charges_qs = charges_qs.filter(branch__isnull=True)
             data['custom_charges'] = [
                 {
                     'id': cc.id,
@@ -904,6 +982,8 @@ class RestaurantSettingsViewSet(viewsets.ReadOnlyModelViewSet):
             zones_qs = Zone.objects.filter(restaurant=restaurant)
             if branch:
                 zones_qs = zones_qs.filter(Q(branch=branch) | Q(branch__isnull=True))
+            else:
+                zones_qs = zones_qs.filter(branch__isnull=True)
             
             zones_data = []
             for z in zones_qs.order_by('name'):
@@ -1149,7 +1229,9 @@ class CustomChargeViewSet(viewsets.ReadOnlyModelViewSet):
             qs = qs.filter(restaurant__slug=restaurant_slug)
         if branch_slug:
             from django.db.models import Q
-            qs = qs.filter(Q(branch__slug=branch_slug) | Q(branch__isnull=True))
+            qs = qs.filter(Q(branch__slug__iexact=branch_slug) | Q(branch__name__iexact=branch_slug) | Q(branch__isnull=True))
+        else:
+            qs = qs.filter(branch__isnull=True)
         return qs.order_by('charge_name')
 
 

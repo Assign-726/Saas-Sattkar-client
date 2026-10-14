@@ -101,17 +101,17 @@ class MenuItemSerializer(serializers.ModelSerializer):
     category = serializers.SerializerMethodField()
     image_url = serializers.SerializerMethodField()
     branch_id = serializers.ReadOnlyField(source='branch.id')
+    is_alcoholic = serializers.BooleanField(read_only=True)
     
     class Meta:
         model = MenuItem
         fields = [
-            'id', 'name', 'short_code', 'sku', 'description', 'price', 'tax_type', 'is_tax_inclusive',
+            'id', 'name', 'description', 'price', 'tax_type', 'is_tax_inclusive',
             'image', 'image_url', 'availability', 'subcategory', 'category', 'branch_id',
             'food_type', 'is_jain', 'is_vegan', 'calories', 'portion_serves',
-            'allergens', 'publishing_channels', 'variants_json',
-            'markup_price', 'packaging_fee'
+            'allergens', 'variants_json', 'is_alcoholic'
         ]
-        read_only_fields = ['image_url', 'branch_id']
+        read_only_fields = ['image_url', 'branch_id', 'is_alcoholic']
         
     def get_image_url(self, obj):
         if obj.image and hasattr(obj.image, 'url'):
@@ -137,11 +137,6 @@ class MenuItemSerializer(serializers.ModelSerializer):
         except Exception as e:
             print(f"Error getting category for item {obj.id}: {str(e)}")
             return None
-
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        data['category'] = self.get_category(instance)
-        return data
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -223,6 +218,15 @@ class OrderSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("All items in an order must belong to the same restaurant")
             if not menu_item.availability:
                 raise serializers.ValidationError(f"Menu item {menu_item.name} is not available")
+            
+            # Enforce that POS-only items cannot be ordered via public/online orders
+            request = self.context.get('request')
+            is_staff_user = bool(request and request.user and request.user.is_staff)
+            if not is_staff_user:
+                channels = getattr(menu_item, 'publishing_channels', []) or []
+                if channels and 'qr' not in channels and 'online' not in channels:
+                    raise serializers.ValidationError(f"{menu_item.name} is available for in-store POS billing only.")
+            
             resolved_items.append(item_data)
 
         if not restaurant and restaurant_slug:
@@ -344,6 +348,18 @@ class OrderSerializer(serializers.ModelSerializer):
                 if not provided_token or provided_token.lower() != expected_token.lower():
                     raise serializers.ValidationError({
                         "table_token": "Invalid or tampered table verification code. Please scan the QR code placed at your dining table."
+                    })
+
+        # Alcohol Ordering Policy: Alcoholic items can only be ordered for Dine-In at a verified table QR code
+        if not is_staff_user:
+            order_type_val = validated_data.get('order_type', 'takeaway')
+            has_alcoholic_item = any(getattr(it['menu_item'], 'is_alcoholic', False) for it in resolved_items)
+            if has_alcoholic_item:
+                if order_type_val != 'dine_in' or not table_obj:
+                    alcoholic_names = [it['menu_item'].name for it in resolved_items if getattr(it['menu_item'], 'is_alcoholic', False)]
+                    names_str = ", ".join(alcoholic_names[:3])
+                    raise serializers.ValidationError({
+                        "items": f"Alcoholic beverage ({names_str}) can only be ordered for Dine-In at a verified table. Please scan your dining table QR code."
                     })
 
         # If table_obj belongs to a branch and order branch was not yet resolved, sync it
@@ -706,7 +722,7 @@ class ReviewSerializer(serializers.ModelSerializer):
         model = Review
         fields = [
             'id', 'name', 'stars', 'description', 'branch', 'branch_name', 'branch_slug',
-            'display_order', 'active', 'email', 'phone', 'table_no', 'is_customer_submitted', 'created_at'
+            'display_order', 'active', 'created_at'
         ]
 
 
@@ -952,7 +968,7 @@ class BlogCommentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BlogComment
-        fields = ['id', 'author_name', 'author_email', 'content', 'created_at', 'date_formatted']
+        fields = ['id', 'author_name', 'content', 'created_at', 'date_formatted']
 
     def get_date_formatted(self, obj):
         return obj.created_at.strftime('%I:%M %p %B %d, %Y')

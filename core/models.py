@@ -337,6 +337,24 @@ class MenuItem(models.Model):
     def is_vegetarian(self):
         return self.food_type == self.FoodType.VEG
 
+    @property
+    def is_alcoholic(self):
+        if self.tax_type in [
+            self.TaxType.VAT_BEER,
+            self.TaxType.VAT_IMFL,
+            self.TaxType.VAT_WINE,
+            self.TaxType.VAT_LIQUOR,
+        ]:
+            return True
+        cat_name = (self.category.name if self.category else '').lower()
+        subcat_name = (self.subcategory.name if self.subcategory else '').lower()
+        for kw in ['alcoholic', 'alcohol', 'liquor', 'beer', 'wine', 'spirits', 'bar']:
+            if kw in cat_name and 'non-alcoholic' not in cat_name:
+                return True
+            if kw in subcat_name and 'non-alcoholic' not in subcat_name:
+                return True
+        return False
+
     def __str__(self):
         return f"{self.name} (₹{self.price})"
 
@@ -991,6 +1009,8 @@ class Order(models.Model):
             if self.branch:
                 from django.db.models import Q
                 charges_qs = charges_qs.filter(Q(branch=self.branch) | Q(branch__isnull=True))
+            else:
+                charges_qs = charges_qs.filter(branch__isnull=True)
             def norm_ot(val):
                 return str(val or 'dine_in').lower().strip().replace(' ', '').replace('-', '_')
 
