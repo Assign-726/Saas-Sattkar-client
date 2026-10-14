@@ -67,5 +67,9 @@ def app_constants(request):
         'SUBSCRIPTION_STATUS': getattr(restaurant, 'subscription_status', 'ACTIVE') if restaurant else 'ACTIVE',
         'SUBSCRIPTION_PLAN_NAME': getattr(restaurant, 'subscription_plan_name', '') if restaurant else '',
         'SUBSCRIPTION_NEXT_BILLING_DATE': getattr(restaurant, 'subscription_next_billing_date', None) if restaurant else None,
+        # Free Trial lifecycle
+        'IS_SUBSCRIPTION_TRIAL': bool(restaurant and getattr(restaurant, 'subscription_is_trial', False)),
+        'SUBSCRIPTION_TRIAL_DAYS_REMAINING': getattr(restaurant, 'subscription_trial_days_remaining', 0) if restaurant else 0,
+        'SUBSCRIPTION_TRIAL_ENDS_AT': getattr(restaurant, 'subscription_trial_ends_at', None) if restaurant else None,
     }
 

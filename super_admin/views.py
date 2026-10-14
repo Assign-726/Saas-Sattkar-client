@@ -1420,7 +1420,7 @@ def billing_view(request):
         restaurant = None
 
     try:
-        billing_data = MasterBillingService.fetch_subscription_details(restaurant)
+        billing_data = MasterBillingService.fetch_subscription_details(restaurant, force=True)
     except Exception:
         billing_data = MasterBillingService._build_local_fallback(restaurant)
 
@@ -1438,52 +1438,85 @@ def billing_view(request):
         if 'setup_fee' not in p or p.get('setup_fee') is None:
             p['setup_fee'] = p.get('setupFee') or 0
 
-    if current_plan:
-        cp_price = current_plan.get('price') if current_plan.get('price') is not None else current_plan.get('monthly_fee')
-        if cp_price is None:
-            cp_price = current_plan.get('monthlyPrice') or current_plan.get('amount') or 0
-        current_plan['price'] = cp_price
-        current_plan['monthly_fee'] = cp_price
-    active_plan_name = (
-        (current_plan.get('name') if current_plan else None) or
-        (subscription.get('plan_name') if subscription else None) or
-        (getattr(restaurant, 'subscription_plan_name', '') if restaurant else '') or
-        'Standard Plan'
-    )
+    connection_status = billing_data.get('connection_status', 'OFFLINE')
+    is_connected = bool(connection_status == 'CONNECTED')
 
-    if not current_plan:
-        current_plan = {
-            'name': active_plan_name,
-            'description': 'Active subscription tier',
-            'max_branches': 3,
-            'monthly_fee': 0,
-            'price': 0,
-            'features': ['Cloud POS', 'Inventory Management', 'Billing & Analytics'],
-        }
-    elif not current_plan.get('name'):
-        current_plan['name'] = active_plan_name
+    is_trial = bool(subscription.get('is_trial', False) if subscription else False)
+    has_assigned_plan = bool(subscription.get('has_assigned_plan', False) or is_trial if subscription else False)
+    trial_days_remaining = int(subscription.get('trial_days_remaining', 0) if subscription else 0)
+    trial_ends_at = subscription.get('trial_ends_at') if subscription else None
+
+    if has_assigned_plan:
+        if current_plan:
+            cp_price = current_plan.get('price') if current_plan.get('price') is not None else current_plan.get('monthly_fee')
+            if cp_price is None:
+                cp_price = current_plan.get('monthlyPrice') or current_plan.get('amount') or 0
+            current_plan['price'] = cp_price
+            current_plan['monthly_fee'] = cp_price
+
+        if is_trial:
+            active_plan_name = (
+                (current_plan.get('name') if current_plan else None) or
+                (subscription.get('plan_name') if subscription else None) or
+                f"{trial_days_remaining}-Day Free Trial"
+            )
+            if not current_plan:
+                current_plan = {
+                    'name': active_plan_name,
+                    'description': f"Full access free trial ({trial_days_remaining} days remaining). Unrestricted access to all modules.",
+                    'max_branches': 5,
+                    'monthly_fee': 0,
+                    'price': 0,
+                    'features': ['Cloud POS, Dine-in & KDS', 'Dynamic Brand Website & Digital Menu', 'Front Desk & Hotel PMS', 'Club & Events Passes', 'Alcohol VAT Compliance'],
+                    'is_trial': True,
+                }
+            else:
+                current_plan['name'] = active_plan_name
+                current_plan['is_trial'] = True
+        else:
+            active_plan_name = (
+                (current_plan.get('name') if current_plan else None) or
+                (subscription.get('plan_name') if subscription else None) or
+                (getattr(restaurant, 'subscription_plan_name', '') if restaurant else '') or
+                'Custom Modular Stack'
+            )
+            if not current_plan:
+                current_plan = {
+                    'name': active_plan_name,
+                    'description': 'Active subscription tier',
+                    'max_branches': 3,
+                    'monthly_fee': subscription.get('monthly_fee', 0) if subscription else 0,
+                    'price': subscription.get('monthly_fee', 0) if subscription else 0,
+                    'features': ['Cloud POS', 'Inventory Management', 'Billing & Analytics'],
+                }
+            elif not current_plan.get('name'):
+                current_plan['name'] = active_plan_name
+    else:
+        active_plan_name = "No Plan Assigned"
+        current_plan = None
 
     if not subscription:
         subscription = {
-            'status': getattr(restaurant, 'subscription_status', 'ACTIVE') if restaurant else 'ACTIVE',
+            'status': getattr(restaurant, 'subscription_status', 'NO_PLAN') if restaurant else 'NO_PLAN',
             'plan_name': active_plan_name,
             'billing_cycle': 'MONTHLY',
             'currency': '₹',
-            'monthly_fee': current_plan.get('price', 0),
-            'days_remaining': 30,
+            'monthly_fee': 0,
+            'days_remaining': 0,
             'hours_remaining': 0,
             'minutes_remaining': 0,
             'seconds_remaining': 0,
             'total_seconds_remaining': 0,
-            'in_grace_period': getattr(restaurant, 'subscription_is_overdue', False) if restaurant else False,
-            'grace_days_remaining': getattr(restaurant, 'subscription_grace_days_remaining', 0) if restaurant else 0,
-            'grace_period_expired': getattr(restaurant, 'subscription_grace_period_expired', False) if restaurant else False,
-            'is_locked': getattr(restaurant, 'subscription_is_locked', False) if restaurant else False,
+            'in_grace_period': False,
+            'grace_days_remaining': 0,
+            'grace_period_expired': False,
+            'is_locked': False,
+            'has_assigned_plan': False,
+            'is_trial': False,
+            'trial_days_remaining': 0,
         }
 
     invoices = billing_data.get('invoices') or []
-    connection_status = billing_data.get('connection_status', 'OFFLINE')
-    is_connected = bool(connection_status == 'CONNECTED' and subscription and subscription.get('plan_name'))
     master_url = billing_data.get('master_url', 'http://localhost:3000')
 
     # Calculate outlet quota
@@ -1496,12 +1529,12 @@ def billing_view(request):
     branch_usage_percent = min(100, int((branch_count / max(1, max_branches)) * 100))
 
     # Calculate 30-day cycle progress
-    days_left = subscription.get('days_remaining', 30) if subscription else 30
+    days_left = subscription.get('days_remaining', 0) if subscription else 0
     if days_left is None:
-        days_left = 30
+        days_left = 0
     cycle_days = 30
-    days_passed = max(0, cycle_days - days_left)
-    cycle_progress_percent = min(100, int((days_passed / cycle_days) * 100))
+    days_passed = max(0, cycle_days - days_left) if has_assigned_plan else 0
+    cycle_progress_percent = min(100, int((days_passed / cycle_days) * 100)) if has_assigned_plan else 0
 
     context = {
         'restaurant': restaurant,
@@ -1511,6 +1544,7 @@ def billing_view(request):
         'subscription': subscription,
         'current_plan': current_plan,
         'active_plan_name': active_plan_name,
+        'has_assigned_plan': has_assigned_plan,
         'available_plans': available_plans,
         'invoices': invoices,
         'connection_status': connection_status,
@@ -1522,7 +1556,12 @@ def billing_view(request):
         'cycle_progress_percent': cycle_progress_percent,
         'total_seconds_remaining': subscription.get('total_seconds_remaining', 0) if subscription else 0,
         'next_billing_date': subscription.get('next_billing_date', '') if subscription else '',
-        'formatted_next_billing': subscription.get('formatted_next_billing', '') if subscription else '',
+        'formatted_next_billing': subscription.get('formatted_next_billing', '-') if subscription else '-',
+        'pending_payment': billing_data.get('pending_payment') or None,
+        'pending_addons': billing_data.get('pending_addons') or [],
+        'is_trial': is_trial,
+        'trial_days_remaining': trial_days_remaining,
+        'trial_ends_at': trial_ends_at or '',
     }
     return render(request, 'super_admin/billing.html', context)
 
@@ -1547,7 +1586,7 @@ def api_billing_sync(request):
             pass
 
     try:
-        billing_data = MasterBillingService.fetch_subscription_details(restaurant)
+        billing_data = MasterBillingService.fetch_subscription_details(restaurant, force=True)
     except Exception:
         billing_data = MasterBillingService._build_local_fallback(restaurant)
 
@@ -1557,7 +1596,8 @@ def api_billing_sync(request):
 @superuser_required
 def api_request_plan_upgrade(request):
     """
-    Submits a plan change / tier upgrade or renewal request directly to Master Admin.
+    Submits a plan change / tier upgrade or renewal request directly to Master Admin,
+    or triggers real-time Free Trial activation / Reset.
     """
     if request.method != 'POST':
         return JsonResponse({'status': 'error', 'message': 'POST method required'}, status=405)
@@ -1567,6 +1607,8 @@ def api_request_plan_upgrade(request):
     except Exception:
         body = request.POST.dict()
 
+    action = body.get('action') or 'UPGRADE_OR_RENEWAL_REQUEST'
+    trial_days = int(body.get('trial_days', 14) or 14)
     plan_name = body.get('plan_name') or body.get('requested_plan_name', 'Professional Tier')
     billing_cycle = body.get('billing_cycle') or body.get('requested_billing_cycle', 'MONTHLY')
     notes = body.get('notes', '')
@@ -1588,7 +1630,119 @@ def api_request_plan_upgrade(request):
         contact_phone=contact_phone,
         contact_email=contact_email,
         stack_configuration=stack_configuration,
+        action=action,
+        trial_days=trial_days,
     )
+    return JsonResponse(result)
+
+
+@superuser_required
+def api_billing_ive_paid(request):
+    """
+    Handles 'I've paid' confirmation button from billing dashboard.
+    Verifies the pending payment link / invoice with Master Admin & Razorpay.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
+
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        body = request.POST.dict()
+
+    invoice_no = body.get('invoice_no')
+    invoice_id = body.get('invoice_id')
+    payment_link_id = body.get('payment_link_id')
+
+    restaurant = Restaurant.objects.first()
+    res = MasterBillingService.check_invoice_status(
+        restaurant=restaurant,
+        invoice_no=invoice_no,
+        invoice_id=invoice_id,
+        payment_link_id=payment_link_id,
+    )
+    return JsonResponse(res)
+
+
+@superuser_required
+def api_billing_addons_catalog(request):
+    """
+    Fetches available add-ons catalog, outlets, and orders for self-serve store.
+    """
+    restaurant = Restaurant.objects.first()
+    data = MasterBillingService.fetch_addons(restaurant=restaurant)
+    return JsonResponse(data)
+
+
+@superuser_required
+def api_billing_addon_quote(request):
+    """
+    Live quotation for selected add-on modules and new outlets.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
+
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        body = request.POST.dict()
+
+    items = body.get('items', [])
+    new_outlets = body.get('new_outlets', [])
+
+    restaurant = Restaurant.objects.first()
+    quote = MasterBillingService.quote_addons(restaurant=restaurant, items=items, new_outlets=new_outlets)
+    return JsonResponse(quote)
+
+
+@superuser_required
+def api_billing_addon_order(request):
+    """
+    Creates an add-on order and generates Razorpay payment link.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
+
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        body = request.POST.dict()
+
+    items = body.get('items', [])
+    new_outlets = body.get('new_outlets', [])
+    notes = body.get('notes', '')
+    req_name = request.user.get_full_name() or request.user.username or 'Admin'
+
+    restaurant = Restaurant.objects.first()
+    result = MasterBillingService.order_addons(
+        restaurant=restaurant,
+        items=items,
+        new_outlets=new_outlets,
+        notes=notes,
+        requested_by_name=req_name,
+    )
+    return JsonResponse(result)
+
+
+@superuser_required
+def api_billing_addon_cancel(request):
+    """
+    Cancels an unpaid add-on order.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
+
+    try:
+        body = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        body = request.POST.dict()
+
+    order_id = body.get('order_id')
+    if not order_id:
+        return JsonResponse({'status': 'error', 'message': 'order_id required'}, status=400)
+
+    restaurant = Restaurant.objects.first()
+    result = MasterBillingService.cancel_addon_order(restaurant=restaurant, order_id=order_id)
     return JsonResponse(result)
 
 
