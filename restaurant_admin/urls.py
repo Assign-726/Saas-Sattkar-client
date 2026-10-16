@@ -5,6 +5,7 @@ from restaurant_admin import floor_plan_views
 from restaurant_admin import views_events
 from restaurant_admin import views_staff
 from restaurant_admin import views_hrms
+from restaurant_admin import views_pos_shifts
 
 app_name = 'restaurant_admin'
 
@@ -86,6 +87,19 @@ urlpatterns = [
     path('orders/<int:pk>/credit-note/', views.order_credit_note_api, name='order_credit_note_api'),
     path('orders/credit-note/', views.credit_note_desk, name='credit_note_desk'),
     path('credit-notes/<int:pk>/thermal/', views.credit_note_thermal_view, name='credit_note_thermal_view'),
+
+    # POS Counter & Shift Management
+    path('counters/', views_pos_shifts.pos_counter_list, name='pos_counter_list'),
+    path('counters/api/save/', views_pos_shifts.pos_counter_save_api, name='pos_counter_save_api'),
+    path('counters/<int:pk>/toggle/', views_pos_shifts.pos_counter_toggle_api, name='pos_counter_toggle_api'),
+    path('counters/<int:pk>/delete/', views_pos_shifts.pos_counter_delete_api, name='pos_counter_delete_api'),
+    path('shifts/api/active/', views_pos_shifts.pos_active_shift_api, name='pos_active_shift_api'),
+    path('shifts/api/open/', views_pos_shifts.pos_open_shift_api, name='pos_open_shift_api'),
+    path('shifts/api/summary/', views_pos_shifts.pos_shift_summary_api, name='pos_shift_summary_api'),
+    path('shifts/api/close/', views_pos_shifts.pos_close_shift_api, name='pos_close_shift_api'),
+    path('shifts/api/<int:shift_id>/close/', views_pos_shifts.pos_close_shift_api, name='pos_close_shift_id_api'),
+    path('shifts/', views_pos_shifts.pos_shift_history_view, name='pos_shift_history'),
+    path('shifts/<int:pk>/z-report/', views_pos_shifts.pos_shift_z_report_view, name='pos_shift_z_report'),
 
     # Inventory & Purchases Management
     path('inventory/', views.inventory_list, name='inventory_list'),

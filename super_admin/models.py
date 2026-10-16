@@ -222,15 +222,19 @@ class Restaurant(models.Model):
         return defaults.get(field_name, None)
 
     def get_max_allowed_branches(self) -> int:
+        from restaurant_project import constants
+        if not constants.is_master_connected(self):
+            return constants.MAX_ALLOWED_BRANCHES
         if self.max_branches and self.max_branches > 0:
             return self.max_branches
-        from restaurant_project import constants
         return constants.MAX_ALLOWED_BRANCHES
 
     def get_max_allowed_businesses(self) -> int:
+        from restaurant_project import constants
+        if not constants.is_master_connected(self):
+            return constants.MAX_ALLOWED_BUSINESSES
         if self.max_businesses and self.max_businesses > 0:
             return self.max_businesses
-        from restaurant_project import constants
         return constants.MAX_ALLOWED_BUSINESSES
 
     def save(self, *args, **kwargs):

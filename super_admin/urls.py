@@ -49,6 +49,7 @@ urlpatterns = [
     path('billing/sync/', views.api_billing_sync, name='api_billing_sync'),
     path('billing/upgrade-request/', views.api_request_plan_upgrade, name='api_request_plan_upgrade'),
     path('billing/invoice/<str:invoice_id>/', views.billing_invoice_view, name='billing_invoice'),
+    path('billing/end-trial/', views.api_billing_end_trial, name='api_billing_end_trial'),
     path('billing/paid/', views.api_billing_ive_paid, name='api_billing_ive_paid'),
     path('billing/addons/', views.api_billing_addons_catalog, name='api_billing_addons_catalog'),
     path('billing/addons/quote/', views.api_billing_addon_quote, name='api_billing_addon_quote'),

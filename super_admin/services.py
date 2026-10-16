@@ -28,6 +28,36 @@ class MasterBillingService:
         cache.delete(cls.get_cache_key(restaurant))
 
     @classmethod
+    def is_connected(cls, restaurant=None) -> bool:
+        """
+        Returns True if this instance is actively connected and synchronized with Master Admin.
+        """
+        if restaurant is None:
+            try:
+                from super_admin.models import Restaurant
+                restaurant = Restaurant.objects.first()
+            except Exception:
+                restaurant = None
+        if not restaurant:
+            return False
+
+        if getattr(restaurant, 'master_sync_status', '') != 'SYNCED':
+            return False
+
+        if not getattr(restaurant, 'features_last_synced_at', None):
+            return False
+
+        try:
+            cache_key = cls.get_cache_key(restaurant)
+            cached = cache.get(cache_key)
+            if cached and isinstance(cached, dict):
+                return cached.get('connection_status') == 'CONNECTED'
+        except Exception:
+            pass
+
+        return True
+
+    @classmethod
     def _build_identity(cls, restaurant=None) -> dict:
         params = {}
         if restaurant:
@@ -313,27 +343,52 @@ class MasterBillingService:
                         if 'setup_fee' not in cp or cp.get('setup_fee') is None:
                             cp['setup_fee'] = cp.get('setupFee') or 0
 
-                    cache.set(cache_key, data, 300)
+                    cache.set(cache_key, data, 60)
                     return data
             logger.warning(f"[MasterBillingService] Server returned status {resp.status_code}: {resp.text[:200]}")
+            conn_status = "NOT_CONNECTED" if resp.status_code == 404 else "SERVER_ERROR"
+            if restaurant:
+                try:
+                    from super_admin.models import Restaurant
+                    Restaurant.objects.filter(pk=restaurant.pk).update(master_sync_status=conn_status)
+                    restaurant.master_sync_status = conn_status
+                except Exception:
+                    pass
             fallback = cls._build_local_fallback(restaurant)
-            fallback["connection_status"] = "SERVER_ERROR"
+            fallback["connection_status"] = conn_status
             fallback["master_url"] = master_url
             fallback["message"] = f"Master Admin returned status {resp.status_code}"
+            cache.set(cache_key, fallback, 30)
             return fallback
         except requests.exceptions.RequestException as exc:
             logger.warning(f"[MasterBillingService] Master Admin offline / unreachable: {exc}")
+            if restaurant:
+                try:
+                    from super_admin.models import Restaurant
+                    Restaurant.objects.filter(pk=restaurant.pk).update(master_sync_status="OFFLINE")
+                    restaurant.master_sync_status = "OFFLINE"
+                except Exception:
+                    pass
             fallback = cls._build_local_fallback(restaurant)
             fallback["connection_status"] = "OFFLINE"
             fallback["master_url"] = master_url
             fallback["message"] = f"Could not connect to Master Admin at {master_url}."
+            cache.set(cache_key, fallback, 30)
             return fallback
         except Exception as exc:
             logger.error(f"[MasterBillingService] Unexpected error: {exc}")
+            if restaurant:
+                try:
+                    from super_admin.models import Restaurant
+                    Restaurant.objects.filter(pk=restaurant.pk).update(master_sync_status="ERROR")
+                    restaurant.master_sync_status = "ERROR"
+                except Exception:
+                    pass
             fallback = cls._build_local_fallback(restaurant)
             fallback["connection_status"] = "ERROR"
             fallback["master_url"] = master_url
             fallback["message"] = str(exc)
+            cache.set(cache_key, fallback, 30)
             return fallback
 
     @classmethod
@@ -405,18 +460,18 @@ class MasterBillingService:
 
         from restaurant_project import constants
         modules = {
-            "SHOW_WEBSITE_PAGES": getattr(restaurant, 'feature_website_pages', constants._DEFAULT_SHOW_WEBSITE_PAGES) if restaurant else constants._DEFAULT_SHOW_WEBSITE_PAGES,
-            "ENABLE_ALCOHOL_VAT": getattr(restaurant, 'feature_alcohol_vat', constants._DEFAULT_ENABLE_ALCOHOL_VAT) if restaurant else constants._DEFAULT_ENABLE_ALCOHOL_VAT,
-            "ENABLE_CLUB_EVENTS_MODULE": getattr(restaurant, 'feature_club_events', constants._DEFAULT_ENABLE_CLUB_EVENTS_MODULE) if restaurant else constants._DEFAULT_ENABLE_CLUB_EVENTS_MODULE,
-            "ENABLE_HOTEL_MODULE": getattr(restaurant, 'feature_hotel_pms', constants._DEFAULT_ENABLE_HOTEL_MODULE) if restaurant else constants._DEFAULT_ENABLE_HOTEL_MODULE,
-            "ENABLE_RESTAURANT_MODULE": getattr(restaurant, 'feature_restaurant_pos', constants._DEFAULT_ENABLE_RESTAURANT_MODULE) if restaurant else constants._DEFAULT_ENABLE_RESTAURANT_MODULE,
-            "ENABLE_HOTEL_WEBSITE": getattr(restaurant, 'feature_hotel_website', constants._DEFAULT_ENABLE_HOTEL_WEBSITE) if restaurant else constants._DEFAULT_ENABLE_HOTEL_WEBSITE,
+            "SHOW_WEBSITE_PAGES": constants._DEFAULT_SHOW_WEBSITE_PAGES,
+            "ENABLE_ALCOHOL_VAT": constants._DEFAULT_ENABLE_ALCOHOL_VAT,
+            "ENABLE_CLUB_EVENTS_MODULE": constants._DEFAULT_ENABLE_CLUB_EVENTS_MODULE,
+            "ENABLE_HOTEL_MODULE": constants._DEFAULT_ENABLE_HOTEL_MODULE,
+            "ENABLE_RESTAURANT_MODULE": constants._DEFAULT_ENABLE_RESTAURANT_MODULE,
+            "ENABLE_HOTEL_WEBSITE": constants._DEFAULT_ENABLE_HOTEL_WEBSITE,
         }
 
         return {
             "status": "offline",
-            "connection_status": "OFFLINE",
-            "message": "Master Admin is currently not connected or unreachable.",
+            "connection_status": "NOT_CONNECTED",
+            "message": "Sattkar is currently not connected or unreachable. Local configuration active.",
             "modules": modules,
             "client": {
                 "business_name": business_name or "Registered Business",
@@ -427,36 +482,36 @@ class MasterBillingService:
                 "email": email,
                 "phone": phone,
                 "branch_count": branch_count,
-                "max_branches": restaurant.get_max_allowed_branches() if restaurant else constants.MAX_ALLOWED_BRANCHES,
-                "max_businesses": restaurant.get_max_allowed_businesses() if restaurant else constants.MAX_ALLOWED_BUSINESSES,
+                "max_branches": constants.MAX_ALLOWED_BRANCHES,
+                "max_businesses": constants.MAX_ALLOWED_BUSINESSES,
             },
             "subscription": {
                 "status": getattr(restaurant, 'subscription_status', 'ACTIVE') if restaurant else 'ACTIVE',
-                "plan_name": getattr(restaurant, 'subscription_plan_name', '') or "Standard Plan",
+                "plan_name": getattr(restaurant, 'subscription_plan_name', '') or "Standard Plan (Local .env)",
                 "billing_cycle": "MONTHLY",
                 "currency": "₹",
                 "monthly_fee": 0,
-                "days_remaining": getattr(restaurant, 'subscription_grace_days_remaining', 30) if restaurant else 30,
+                "days_remaining": 30,
                 "hours_remaining": 0,
                 "minutes_remaining": 0,
                 "seconds_remaining": 0,
                 "total_seconds_remaining": 0,
-                "in_grace_period": getattr(restaurant, 'subscription_is_overdue', False) if restaurant else False,
-                "grace_days_remaining": getattr(restaurant, 'subscription_grace_days_remaining', 0) if restaurant else 0,
-                "grace_period_expired": getattr(restaurant, 'subscription_grace_period_expired', False) if restaurant else False,
-                "is_locked": getattr(restaurant, 'subscription_is_locked', False) if restaurant else False,
-                "is_trial": getattr(restaurant, 'subscription_is_trial', False) if restaurant else False,
-                "trial_days": getattr(restaurant, 'subscription_trial_days_remaining', 0) if restaurant else 0,
-                "trial_days_remaining": getattr(restaurant, 'subscription_trial_days_remaining', 0) if restaurant else 0,
-                "trial_ends_at": getattr(restaurant, 'subscription_trial_ends_at', None).isoformat() if (restaurant and getattr(restaurant, 'subscription_trial_ends_at', None)) else None,
+                "in_grace_period": False,
+                "grace_days_remaining": 0,
+                "grace_period_expired": False,
+                "is_locked": False,
+                "is_trial": False,
+                "trial_days": 0,
+                "trial_days_remaining": 0,
+                "trial_ends_at": None,
                 "payment_due": False,
             },
             "pending_payment": None,
             "pending_addons": [],
             "current_plan": {
-                "name": getattr(restaurant, 'subscription_plan_name', '') or "Standard Plan",
+                "name": getattr(restaurant, 'subscription_plan_name', '') or "Standard Plan (Local)",
                 "description": "Standard Plan (Local Fallback)",
-                "max_branches": restaurant.get_max_allowed_branches() if restaurant else constants.MAX_ALLOWED_BRANCHES,
+                "max_branches": constants.MAX_ALLOWED_BRANCHES,
                 "monthly_fee": 0,
                 "price": 0,
                 "features": ["Cloud POS", "Multi-Branch Operations", "Inventory Control", "Live Billing & Reports"],
@@ -464,6 +519,31 @@ class MasterBillingService:
             "available_plans": [],
             "invoices": [],
         }
+
+    @classmethod
+    def end_trial(cls, restaurant=None) -> dict:
+        """
+        Ends the restaurant's free trial immediately, transitioning the account to regular billing
+        and generating the first subscription invoice with a Razorpay link.
+        """
+        master_url, _ = cls.get_config()
+        endpoint = f"{master_url}/api/billing/subscription"
+        payload = {
+            **cls._build_identity(restaurant),
+            "action": "END_TRIAL",
+        }
+        body_json = json.dumps(payload, separators=(',', ':'))
+        headers = cls.get_headers(body_json)
+        try:
+            resp = requests.post(endpoint, data=body_json, headers=headers, timeout=10)
+            data = resp.json()
+            if resp.status_code == 200 and data.get("status") == "success":
+                cls.invalidate_cache(restaurant)
+                cls.fetch_subscription_details(restaurant, force=True)
+            return data
+        except Exception as exc:
+            logger.error(f"[MasterBillingService] end_trial failed: {exc}")
+            return {"status": "error", "message": f"Could not end trial: {exc}"}
 
     @classmethod
     def check_invoice_status(cls, restaurant=None, invoice_no=None, invoice_id=None, payment_link_id=None) -> dict:

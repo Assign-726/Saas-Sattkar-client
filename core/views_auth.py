@@ -506,7 +506,7 @@ class SubmitEnquiryView(View):
                 logger.error(f"Failed to connect to MasterPanel enquiry API at {target_endpoint}: {exc}")
                 return JsonResponse({
                     'success': False,
-                    'error': f"Could not connect to Master Admin on {master_url}. Please ensure the server is active."
+                    'error': f"Could not connect to Sattkar on {master_url}. Please ensure the server is active."
                 }, status=502)
 
         except Exception as exc:

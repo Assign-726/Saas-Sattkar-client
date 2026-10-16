@@ -626,11 +626,19 @@
             </div>
         </div>
         <div class="billing-kpi-value" id="statMRR">
-            {{ subscription.currency|default:'₹' }}{% if is_trial or subscription.is_trial %}<span id="currentPlanPrice">0</span><span style="font-size: 13px; font-weight: 700; color: #10b981; margin-left: 6px;">Free during trial</span>{% else %}<span id="currentPlanPrice">{{ subscription.monthly_fee|default:0 }}</span><span style="font-size: 13px; font-weight: 500; color: #64748b;"> / mo</span>{% endif %}
+            {{ subscription.currency|default:'₹' }}<span id="currentPlanPrice">{{ subscription.monthly_fee|default:0 }}</span><span style="font-size: 13px; font-weight: 500; color: #64748b;"> / mo</span>
+            {% if is_trial or subscription.is_trial %}
+            <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700; color: #10b981; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); padding: 2px 8px; border-radius: 999px; margin-left: 6px; vertical-align: middle;">
+                <i class="fa-solid fa-gift"></i> Free during trial
+            </span>
+            {% endif %}
         </div>
         <div class="billing-kpi-meta">
             {% if is_trial or subscription.is_trial %}
             <span>Trial Ends: <strong style="color: var(--text);">{{ formatted_next_billing|default:'-' }}</strong> ({{ trial_days_remaining|default:subscription.trial_days_remaining|default:0 }}d left)</span>
+            <span style="display: block; font-size: 11px; color: #94a3b8; margin-top: 3px;">
+                ₹0 due now &bull; Renews at ₹{{ subscription.monthly_fee|default:0 }}/mo{% if subscription.subtotal and subscription.gst_amount %} (Net: ₹{{ subscription.subtotal }} + 18% GST: ₹{{ subscription.gst_amount }}){% endif %}
+            </span>
             {% else %}
             <span>Next Renewal: <strong style="color: var(--text);" id="nextBillingDateText">{{ formatted_next_billing|default:'-' }}</strong></span>
             {% if subscription.subtotal and subscription.gst_amount %}
@@ -710,6 +718,11 @@
                     <i class="fa-solid fa-circle-check"></i> I've Paid
                 </button>
                 {% endwith %}
+                {% endif %}
+                {% if is_trial or subscription.is_trial %}
+                <button type="button" class="btn" id="btnEndTrial" onclick="confirmEndTrial()" style="background: rgba(239, 68, 68, 0.08); border: 1.5px solid rgba(239, 68, 68, 0.35); color: #dc2626; font-size: 13px; padding: 9px 16px; display: inline-flex; align-items: center; gap: 6px; font-weight: 700; cursor: pointer;" title="End trial early and activate paid subscription invoice immediately">
+                    <i class="fa-solid fa-flag-checkered"></i> End Trial & Activate Plan
+                </button>
                 {% endif %}
                 <button type="button" class="btn" onclick="openAddonStoreModal()" style="font-size: 13px; padding: 9px 16px;">
                     <i class="fa-solid fa-layer-group"></i> Add-On Store & Modules
@@ -989,13 +1002,25 @@
                         {{ inv.currency }}{{ inv.amount }}
                     </td>
                     <td>
-                        {% if inv.status == 'PAID' %}
+                        {% if inv.status == 'PAID' or inv.status == 'CAPTURED' %}
                         <span class="invoice-badge-paid">
                             PAID
                         </span>
+                        {% elif inv.status == 'PENDING' %}
+                        <span class="invoice-badge-pending" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 700; background: rgba(245, 158, 11, 0.12); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.3);">
+                            <i class="fa-regular fa-clock" style="font-size: 10px;"></i> PENDING
+                        </span>
+                        {% elif inv.status == 'OVERDUE' %}
+                        <span class="invoice-badge-overdue" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 700; background: rgba(239, 68, 68, 0.12); color: #dc2626; border: 1px solid rgba(239, 68, 68, 0.3);">
+                            <i class="fa-solid fa-triangle-exclamation" style="font-size: 10px;"></i> OVERDUE
+                        </span>
+                        {% elif inv.status == 'CANCELLED' %}
+                        <span class="invoice-badge-cancelled" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; background: rgba(148, 163, 184, 0.15); color: #64748b; border: 1px solid rgba(148, 163, 184, 0.3);">
+                            CANCELLED
+                        </span>
                         {% else %}
                         <span class="invoice-badge-upcoming">
-                            UPCOMING
+                            {{ inv.status|default:"UPCOMING" }}
                         </span>
                         {% endif %}
                     </td>
@@ -1987,7 +2012,55 @@
         }
     }
 
-    async function confirmPaymentNow(invoiceNo, invoiceId) {
+    async 
+    function confirmEndTrial() {
+        const fee = '{{ subscription.monthly_fee|default:0 }}';
+        const plan = '{{ active_plan_name|default:"your subscription" }}';
+        const msg = 'Are you sure you want to end your Free Trial now?\n\nThis will activate ' + plan + ' immediately and generate your first billing invoice of ₹' + fee + ' (incl. 18% GST).';
+        if (!confirm(msg)) return;
+
+        const btn = document.getElementById('btnEndTrial');
+        const oldHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Ending Trial & Generating Invoice...';
+        }
+
+        fetch("{% url 'super_admin:api_billing_end_trial' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'success') {
+                showToast('Free trial ended! Subscription invoice generated.', 'success');
+                if (data.invoice && data.invoice.url) {
+                    window.open(data.invoice.url, '_blank');
+                }
+                setTimeout(() => {
+                    window.location.reload();
+                }, 800);
+            } else {
+                showToast(data.message || 'Could not end trial. Please try again.', 'error');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = oldHtml;
+                }
+            }
+        })
+        .catch(err => {
+            showToast('Network error: ' + err.message, 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = oldHtml;
+            }
+        });
+    }
+
+    function confirmPaymentNow(invoiceNo, invoiceId) {
         const btn = document.getElementById('btnHeroIvePaid') || event.target;
         const oldHtml = btn.innerHTML;
         btn.disabled = true;

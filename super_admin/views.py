@@ -76,11 +76,14 @@ def dashboard(request):
     if restaurant:
         try:
             now = timezone.now()
-            # Fast refresh if never synced or synced > 5 seconds ago or manual sync
-            if request.GET.get('sync') or not restaurant.features_last_synced_at or (now - restaurant.features_last_synced_at).total_seconds() > 5:
-                MasterBillingService.fetch_subscription_details(restaurant)
+            # Fast refresh if never synced or synced > 30 seconds ago or manual sync
+            if request.GET.get('sync') or not restaurant.features_last_synced_at or (now - restaurant.features_last_synced_at).total_seconds() > 30:
+                telemetry = MasterBillingService.fetch_subscription_details(restaurant, force=bool(request.GET.get('sync')))
                 if request.GET.get('sync'):
-                    messages.success(request, "Live modules and subscription refreshed from Master Admin.")
+                    if telemetry.get('connection_status') == 'CONNECTED':
+                        messages.success(request, "Live modules and subscription refreshed from Sattkar.")
+                    else:
+                        messages.warning(request, "Sattkar is currently not connected.")
                     return redirect('super_admin:dashboard')
         except Exception as sync_err:
             logger.warning(f"[Dashboard] Subscription sync skipped: {sync_err}")
@@ -1039,9 +1042,9 @@ def api_branches_by_restaurant(request):
 
 @superuser_required
 def api_toggle_branch_club_module(request, pk):
-    if not constants.ENABLE_CLUB_EVENTS_MODULE:
-        return JsonResponse({'success': False, 'error': 'Club & Events module is disabled in system configuration (.env).'}, status=403)
     branch = get_object_or_404(RestaurantBranch, pk=pk)
+    if not constants.is_module_enabled('ENABLE_CLUB_EVENTS_MODULE', branch.restaurant):
+        return JsonResponse({'success': False, 'error': 'Club & Events module is disabled in system configuration (.env).'}, status=403)
     if request.method == 'POST':
         try:
             body = json.loads(request.body.decode('utf-8'))
@@ -1063,9 +1066,9 @@ def api_toggle_branch_club_module(request, pk):
 
 
 def api_toggle_branch_hotel_module(request, pk):
-    if not constants.ENABLE_HOTEL_MODULE:
-        return JsonResponse({'success': False, 'error': 'Hotel & Rooms PMS module is disabled in system configuration (.env).'}, status=403)
     branch = get_object_or_404(RestaurantBranch, pk=pk)
+    if not constants.is_module_enabled('ENABLE_HOTEL_MODULE', branch.restaurant):
+        return JsonResponse({'success': False, 'error': 'Hotel & Rooms PMS module is disabled in system configuration (.env).'}, status=403)
     if request.method == 'POST':
         try:
             body = json.loads(request.body.decode('utf-8'))
@@ -1089,7 +1092,7 @@ def api_toggle_branch_hotel_module(request, pk):
 def api_toggle_branch_restaurant_module(request, pk):
     branch = get_object_or_404(RestaurantBranch, pk=pk)
     if request.method == 'POST':
-        is_allowed = getattr(branch.restaurant, 'feature_restaurant_pos', True)
+        is_allowed = constants.is_module_enabled('ENABLE_RESTAURANT_MODULE', branch.restaurant)
         try:
             body = json.loads(request.body.decode('utf-8'))
             if 'has_restaurant_module' in body:
@@ -1119,7 +1122,7 @@ def api_toggle_branch_restaurant_module(request, pk):
 def api_toggle_branch_hotel_website(request, pk):
     branch = get_object_or_404(RestaurantBranch, pk=pk)
     if request.method == 'POST':
-        is_allowed = getattr(branch.restaurant, 'feature_hotel_website', False)
+        is_allowed = constants.is_module_enabled('ENABLE_HOTEL_WEBSITE', branch.restaurant)
         try:
             body = json.loads(request.body.decode('utf-8'))
             if 'has_hotel_website' in body:
@@ -1474,12 +1477,21 @@ def billing_view(request):
                 current_plan['name'] = active_plan_name
                 current_plan['is_trial'] = True
         else:
-            active_plan_name = (
-                (current_plan.get('name') if current_plan else None) or
+            cand_name = (
                 (subscription.get('plan_name') if subscription else None) or
+                (current_plan.get('name') if current_plan else None) or
                 (getattr(restaurant, 'subscription_plan_name', '') if restaurant else '') or
                 'Custom Modular Stack'
             )
+            if 'trial' in cand_name.lower():
+                cand_name = (
+                    client_info.get('billing', {}).get('plan_name') or
+                    getattr(restaurant, 'subscription_plan_name', '') or
+                    'Custom Modular Stack'
+                )
+                if 'trial' in cand_name.lower():
+                    cand_name = 'Custom Modular Stack'
+            active_plan_name = cand_name
             if not current_plan:
                 current_plan = {
                     'name': active_plan_name,
@@ -1634,6 +1646,20 @@ def api_request_plan_upgrade(request):
         trial_days=trial_days,
     )
     return JsonResponse(result)
+
+
+@superuser_required
+def api_billing_end_trial(request):
+    """
+    Handles self-serve 'End Trial & Activate Subscription' request from Super Admin.
+    Transitions account to regular billing and returns the first Razorpay invoice link.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST required'}, status=405)
+
+    restaurant = Restaurant.objects.first()
+    res = MasterBillingService.end_trial(restaurant=restaurant)
+    return JsonResponse(res)
 
 
 @superuser_required

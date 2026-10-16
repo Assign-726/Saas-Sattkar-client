@@ -14,7 +14,7 @@ from decimal import Decimal
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.conf import settings
 from django.apps import apps
-from core.models import Zone, Table, Category, SubCategory, MenuItem, Order, OrderItem, RestaurantSettings, RestaurantLanding, InventoryItem, InventoryCategory, Coupon, MenuItemIngredient, InventoryTransaction, Supplier, PurchaseOrder, PurchaseOrderItem, Party, CustomCharge, AdvanceReceipt, Branch, DeliveryChallan, DeliveryChallanItem, DocumentSequenceSetting, CreditNote
+from core.models import Zone, Table, Category, SubCategory, MenuItem, Order, OrderItem, RestaurantSettings, RestaurantLanding, InventoryItem, InventoryCategory, Coupon, MenuItemIngredient, InventoryTransaction, Supplier, PurchaseOrder, PurchaseOrderItem, Party, CustomCharge, AdvanceReceipt, Branch, DeliveryChallan, DeliveryChallanItem, DocumentSequenceSetting, CreditNote, POSCounter, POSShift
 from restaurant_admin.sequence_helpers import get_document_sequence_info, get_and_increment_document_number, validate_unique_document_number
 from django.db import transaction
 from super_admin.models import Restaurant, RestaurantUser, RestaurantBranch
@@ -149,6 +149,23 @@ def get_branch_gstin_str(branch=None, restaurant=None):
         if getattr(restaurant, 'gstin', None) and restaurant.gstin.strip():
             return restaurant.gstin.strip()
     return ''
+
+
+def get_user_active_shift(user, restaurant, branch=None):
+    """
+    Returns the current OPEN shift for a cashier, or None.
+    """
+    if not user or not getattr(user, 'is_authenticated', False) or not restaurant:
+        return None
+    qs = POSShift.objects.filter(
+        cashier=user,
+        restaurant=restaurant,
+        status=POSShift.Status.OPEN
+    )
+    if branch:
+        qs = qs.filter(Q(branch=branch) | Q(branch__isnull=True))
+    return qs.select_related('counter', 'cashier').first()
+
 
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
@@ -1037,8 +1054,14 @@ def order_create_manual(request, restaurant_slug=None):
                 messages.error(request, str(ve))
                 return redirect(request.path)
 
+        active_shift = get_user_active_shift(request.user, restaurant, active_branch)
+
         if order_id:
             order = get_object_or_404(Order, pk=order_id, restaurant=restaurant)
+            if not order.shift and active_shift:
+                order.shift = active_shift
+                order.counter = active_shift.counter
+                order.cashier = request.user
             if not order.branch and active_branch:
                 order.branch = active_branch
             order.customer_name = customer_name or order.customer_name
@@ -1101,6 +1124,9 @@ def order_create_manual(request, restaurant_slug=None):
                 phone=phone,
                 notes=notes,
                 order_type=order_type,
+                counter=active_shift.counter if active_shift else None,
+                shift=active_shift,
+                cashier=request.user,
                 table=None if order_type in [Order.OrderType.TAKEAWAY, Order.OrderType.DELIVERY, 'takeaway', 'delivery'] else table_obj,
                 table_number=None if order_type in [Order.OrderType.TAKEAWAY, Order.OrderType.DELIVERY, 'takeaway', 'delivery'] else (table_obj.table_number if table_obj else None),
                 payment_method=payment_method,
@@ -1256,6 +1282,10 @@ def order_create_manual(request, restaurant_slug=None):
             order.discount_reason = discount_reason_val
             order.round_off_amount = round_off_amount_val
             order.total_amount = grand_total_val
+            order.paid_amount = paid_amount_val
+            order.due_amount = due_amount_val
+            order.payment_status = initial_payment_status
+            order.status = initial_status
             order.save()
         else:
             order.update_total()
@@ -1624,6 +1654,7 @@ def order_create_manual(request, restaurant_slug=None):
         'restaurant': restaurant,
         'current_branch': branch_obj,
         'branch_obj': branch_obj,
+        'active_shift': get_user_active_shift(request.user, restaurant, branch_obj),
     })
 
 
@@ -1674,9 +1705,15 @@ def pos_draft_order_api(request, restaurant_slug=None):
             if table_obj:
                 order_type = 'dine_in'
 
+        active_shift = get_user_active_shift(request.user, restaurant, active_branch)
+
         if order_id:
             order = Order.objects.filter(pk=order_id, restaurant=restaurant).first()
             if order:
+                if not order.shift and active_shift:
+                    order.shift = active_shift
+                    order.counter = active_shift.counter
+                    order.cashier = request.user
                 order.customer_name = customer_name
                 order.phone = phone
                 order.notes = notes
@@ -1690,6 +1727,9 @@ def pos_draft_order_api(request, restaurant_slug=None):
             order = Order.objects.create(
                 restaurant=restaurant,
                 branch=active_branch,
+                counter=active_shift.counter if active_shift else None,
+                shift=active_shift,
+                cashier=request.user,
                 status=Order.OrderStatus.DRAFT,
                 payment_status=Order.PaymentStatus.UNPAID,
                 customer_name=customer_name,
@@ -5120,7 +5160,22 @@ def _filter_order_queryset(request, restaurant, ignore_order_type=False, ignore_
             except ValueError:
                 pass
 
-    return orders_qs.select_related('table', 'table__zone', 'restaurant', 'branch', 'credit_note').prefetch_related('items', 'items__menu_item').order_by('-order_time')
+    # Counter filter
+    counter_id = request.GET.get('counter') or request.GET.get('counter_id')
+    if counter_id:
+        orders_qs = orders_qs.filter(counter_id=counter_id)
+
+    # Shift filter
+    shift_id = request.GET.get('shift') or request.GET.get('shift_id')
+    if shift_id:
+        orders_qs = orders_qs.filter(shift_id=shift_id)
+
+    # Cashier filter
+    cashier_id = request.GET.get('cashier') or request.GET.get('cashier_id')
+    if cashier_id:
+        orders_qs = orders_qs.filter(cashier_id=cashier_id)
+
+    return orders_qs.select_related('table', 'table__zone', 'restaurant', 'branch', 'credit_note', 'counter', 'shift', 'cashier').prefetch_related('items', 'items__menu_item').order_by('-order_time')
 
 
 @login_required
@@ -5205,6 +5260,10 @@ def order_records(request, restaurant_slug=None):
         'payment_statuses': Order.PaymentStatus.choices,
         'payment_methods': Order.PaymentMethod.choices,
         'order_types': Order.OrderType.choices,
+        'counters': POSCounter.objects.filter(restaurant=restaurant),
+        'counter_filter': request.GET.get('counter', '') or request.GET.get('counter_id', ''),
+        'shift_filter': request.GET.get('shift', '') or request.GET.get('shift_id', ''),
+        'cashier_filter': request.GET.get('cashier', '') or request.GET.get('cashier_id', ''),
         'url_params': url_params,
     })
 
@@ -6026,6 +6085,14 @@ def order_settle_api(request, pk, restaurant_slug=None):
         order.advance_receipt.order = order
         order.advance_receipt.save(update_fields=['status', 'order'])
 
+    # Ensure active shift is stamped
+    active_b = get_active_branch(request, restaurant)
+    active_shift = get_user_active_shift(request.user, restaurant, active_b)
+    if active_shift and not order.shift:
+        order.shift = active_shift
+        order.counter = active_shift.counter
+        order.cashier = request.user
+
     order.payments = valid_payments
     order.payment_method = payment_method
     if order.payment_status in [Order.PaymentStatus.PAID, 'paid', 'P']:
@@ -6718,10 +6785,15 @@ def order_credit_note_api(request, pk, restaurant_slug=None):
             cn_number = CreditNote.generate_credit_note_number(restaurant, branch=order.branch)
             inv_no = order.gstin_no or order.order_number or f"ORD-{order.id:04d}"
 
+            active_shift = get_user_active_shift(request.user, restaurant, order.branch)
+
             cn = CreditNote.objects.create(
                 restaurant=restaurant,
                 branch=order.branch,
                 order=order,
+                counter=active_shift.counter if active_shift else order.counter,
+                shift=active_shift or order.shift,
+                cashier=request.user,
                 credit_note_number=cn_number,
                 original_invoice_no=inv_no,
                 reason_code=reason_code,
@@ -9160,6 +9232,7 @@ def transaction_desk_create(request, restaurant_slug=None):
 
         # Delivery Challan Context
         'auto_challan_no': auto_challan_no,
+        'active_shift': get_user_active_shift(request.user, restaurant, branch_obj),
     }
 
     return render(request, 'restaurant_admin/transactions/create.html', context)

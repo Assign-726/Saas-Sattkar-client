@@ -5,11 +5,10 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser, AllowAny
-from django.views.generic import TemplateView
 from django.shortcuts import get_object_or_404, redirect
+from django.conf import settings
 from django.http import Http404
 from super_admin.models import Restaurant, RestaurantBranch
-from django.db.models import Prefetch
 from restaurant_project import constants
 
 from core.models import Category, SubCategory, MenuItem, Order, RestaurantSettings, RestaurantLanding, BlogPost, BlogComment, Review
@@ -30,301 +29,28 @@ from core.serializers import (
 )
 
 
-class HomeView(TemplateView):
-    template_name = 'core/Customer_base.html'
-    #template_name = 'core/index.html'
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        
-        # Get all categories with their subcategories and menu items
-        categories = Category.objects.all().prefetch_related(
-            Prefetch(
-                'subcategories',
-                queryset=SubCategory.objects.all().prefetch_related('menu_items')
-            )
-        )
-        
-        # Process categories to include only available menu items
-        processed_categories = []
-        for category in categories:
-            # Create a copy of the category with processed subcategories
-            category_data = {
-                'id': category.id,
-                'name': category.name,
-                'image': category.image,
-                'subcategories': []
-            }
-            
-            for subcategory in category.subcategories.all():
-                # Get available menu items for this subcategory
-                available_items = subcategory.menu_items.filter(availability=True).order_by('name')
-                if available_items.exists():
-                    category_data['subcategories'].append({
-                        'id': subcategory.id,
-                        'name': subcategory.name,
-                        'menu_items': available_items,
-                        #'image': subcategory.image
-                    })
-            
-            # Only include categories that have subcategories with available items
-            if category_data['subcategories']:
-                processed_categories.append(category_data)
-        
-        context['categories'] = processed_categories
-        
-        # # Debug information
-        # print("\n=== DEBUG: Categories Data ===")
-        # for cat in processed_categories:
-        #     print(f"\nCategory: {cat['name']} (ID: {cat['id']})")
-        #     for sub in cat['subcategories']:
-        #         print(f"  - Subcategory: {sub['name']} (ID: {sub['id']}): {len(sub['menu_items'])} items")
-        #         for item in sub['menu_items']:
-        #             print(f"    * {item.name} - ${item.price} (Available: {item.availability})")
-        
-        return context
+# ============================================================================
+# Customer Frontend Redirects
+# (The customer website and ordering pages are now hosted separately on Next.js.
+# Requests to legacy Django frontend endpoints are cleanly redirected to the
+# configured Next.js FRONTEND_URL).
+# ============================================================================
+
+def redirect_to_frontend_menu(request, restaurant_slug=None):
+    base_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000').rstrip('/')
+    if restaurant_slug:
+        return redirect(f"{base_url}/{restaurant_slug}/menu")
+    return redirect(base_url)
 
 
-class RestaurantMenuView(TemplateView):
-    template_name = 'core/Customer_base.html'
-
-    def get_context_data(self, **kwargs):
-        if not constants.SHOW_WEBSITE_PAGES:
-            raise Http404("Website is currently disabled.")
-        context = super().get_context_data(**kwargs)
-        restaurant_slug = kwargs.get('restaurant_slug')
-        restaurant = get_object_or_404(Restaurant, slug=restaurant_slug, is_active=True, feature_website_pages=True)
-
-        categories = Category.objects.filter(restaurant=restaurant).prefetch_related(
-            Prefetch(
-                'subcategories',
-                queryset=SubCategory.objects.filter(category__restaurant=restaurant).prefetch_related('menu_items')
-            )
-        )
-
-        processed_categories = []
-        for category in categories:
-            category_data = {
-                'id': category.id,
-                'name': category.name,
-                'image': category.image,
-                'subcategories': []
-            }
-            for subcategory in category.subcategories.all():
-                available_items = subcategory.menu_items.filter(availability=True, restaurant__isnull=False, restaurant__id=restaurant.id).order_by('name')
-                if available_items.exists():
-                    category_data['subcategories'].append({
-                        'id': subcategory.id,
-                        'name': subcategory.name,
-                        'menu_items': available_items,
-                    })
-            if category_data['subcategories']:
-                processed_categories.append(category_data)
-
-        context['categories'] = processed_categories
-        context['restaurant'] = restaurant
-        return context
+def redirect_to_frontend(request, *args, **kwargs):
+    base_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000').rstrip('/')
+    restaurant_slug = kwargs.get('restaurant_slug')
+    if restaurant_slug:
+        return redirect(f"{base_url}/{restaurant_slug}")
+    return redirect(base_url)
 
 
-class RestaurantCartView(TemplateView):
-    template_name = 'core/cart.html'
-
-    def get_context_data(self, **kwargs):
-        if not constants.SHOW_WEBSITE_PAGES:
-            raise Http404("Website is currently disabled.")
-        context = super().get_context_data(**kwargs)
-        restaurant_slug = kwargs.get('restaurant_slug')
-        restaurant = Restaurant.objects.filter(slug=restaurant_slug, is_active=True, feature_website_pages=True).first()
-        branch = None
-        if not restaurant:
-            branch = RestaurantBranch.objects.filter(slug=restaurant_slug).first()
-            if branch:
-                restaurant = branch.restaurant
-        if not restaurant:
-            restaurant = Restaurant.objects.first()
-
-        settings_obj = RestaurantSettings.get_settings(restaurant)
-        active_b = branch or (restaurant.branches.first() if restaurant else None)
-        if settings_obj and settings_obj.cgst_percentage is not None:
-            cgst_p = Decimal(str(settings_obj.cgst_percentage))
-        elif active_b:
-            if active_b.gst_registration_type == 'R18' or active_b.is_hotel_tariff_7500_plus:
-                cgst_p = Decimal('9.00')
-            elif active_b.gst_registration_type in ['C', 'U']:
-                cgst_p = Decimal('0.00')
-            else:
-                cgst_p = Decimal('2.50')
-        else:
-            cgst_p = Decimal('2.50')
-
-        if settings_obj and settings_obj.sgst_percentage is not None:
-            sgst_p = Decimal(str(settings_obj.sgst_percentage))
-        elif active_b:
-            if active_b.gst_registration_type == 'R18' or active_b.is_hotel_tariff_7500_plus:
-                sgst_p = Decimal('9.00')
-            elif active_b.gst_registration_type in ['C', 'U']:
-                sgst_p = Decimal('0.00')
-            else:
-                sgst_p = Decimal('2.50')
-        else:
-            sgst_p = Decimal('2.50')
-
-        context.update({
-            'cgst_percentage': cgst_p,
-            'sgst_percentage': sgst_p,
-            'service_percentage': settings_obj.service_charge_percentage if settings_obj else Decimal('0.00'),
-            'restaurant': restaurant,
-            'branch': active_b,
-        })
-        return context
-
-
-class CartView(TemplateView):
-    template_name = 'core/cart.html'
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        restaurant_slug = kwargs.get('restaurant_slug')
-        restaurant = Restaurant.objects.filter(slug=restaurant_slug).first()
-        branch = None
-        if not restaurant:
-            branch = RestaurantBranch.objects.filter(slug=restaurant_slug).first()
-            if branch:
-                restaurant = branch.restaurant
-        if not restaurant:
-            restaurant = Restaurant.objects.first()
-
-        settings_obj = RestaurantSettings.get_settings(restaurant)
-        active_b = branch or (restaurant.branches.first() if restaurant else None)
-        if settings_obj and settings_obj.cgst_percentage is not None:
-            cgst_p = Decimal(str(settings_obj.cgst_percentage))
-        elif active_b:
-            if active_b.gst_registration_type == 'R18' or active_b.is_hotel_tariff_7500_plus:
-                cgst_p = Decimal('9.00')
-            elif active_b.gst_registration_type in ['C', 'U']:
-                cgst_p = Decimal('0.00')
-            else:
-                cgst_p = Decimal('2.50')
-        else:
-            cgst_p = Decimal('2.50')
-
-        if settings_obj and settings_obj.sgst_percentage is not None:
-            sgst_p = Decimal(str(settings_obj.sgst_percentage))
-        elif active_b:
-            if active_b.gst_registration_type == 'R18' or active_b.is_hotel_tariff_7500_plus:
-                sgst_p = Decimal('9.00')
-            elif active_b.gst_registration_type in ['C', 'U']:
-                sgst_p = Decimal('0.00')
-            else:
-                sgst_p = Decimal('2.50')
-        else:
-            sgst_p = Decimal('2.50')
-
-        context.update({
-            'cgst_percentage': cgst_p,
-            'sgst_percentage': sgst_p,
-            'service_percentage': settings_obj.service_charge_percentage if settings_obj else Decimal('0.00'),
-            'restaurant': restaurant,
-            'branch': active_b,
-        })
-        return context
-
-
-class OrdersListView(TemplateView):
-    template_name = 'core/orders_list.html'
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        restaurant_slug = kwargs.get('restaurant_slug')
-        if restaurant_slug:
-            restaurant = Restaurant.objects.filter(slug=restaurant_slug).first()
-            if not restaurant:
-                b = RestaurantBranch.objects.filter(slug=restaurant_slug).first()
-                restaurant = b.restaurant if b else None
-            context['restaurant'] = restaurant
-        return context
-
-
-class OrderDetailView(TemplateView):
-    template_name = 'core/order_detail.html'
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        restaurant_slug = kwargs.get('restaurant_slug')
-        restaurant = Restaurant.objects.filter(slug=restaurant_slug).first()
-        branch = None
-        if not restaurant:
-            branch = RestaurantBranch.objects.filter(slug=restaurant_slug).first()
-            if branch:
-                restaurant = branch.restaurant
-        if not restaurant:
-            restaurant = Restaurant.objects.first()
-
-        settings_obj = RestaurantSettings.get_settings(restaurant)
-        active_b = branch or (restaurant.branches.first() if restaurant else None)
-        if settings_obj and settings_obj.cgst_percentage is not None:
-            cgst_p = Decimal(str(settings_obj.cgst_percentage))
-        elif active_b:
-            if active_b.gst_registration_type == 'R18' or active_b.is_hotel_tariff_7500_plus:
-                cgst_p = Decimal('9.00')
-            elif active_b.gst_registration_type in ['C', 'U']:
-                cgst_p = Decimal('0.00')
-            else:
-                cgst_p = Decimal('2.50')
-        else:
-            cgst_p = Decimal('2.50')
-
-        if settings_obj and settings_obj.sgst_percentage is not None:
-            sgst_p = Decimal(str(settings_obj.sgst_percentage))
-        elif active_b:
-            if active_b.gst_registration_type == 'R18' or active_b.is_hotel_tariff_7500_plus:
-                sgst_p = Decimal('9.00')
-            elif active_b.gst_registration_type in ['C', 'U']:
-                sgst_p = Decimal('0.00')
-            else:
-                sgst_p = Decimal('2.50')
-        else:
-            sgst_p = Decimal('2.50')
-
-        context.update({
-            'cgst_percentage': cgst_p,
-            'sgst_percentage': sgst_p,
-            'service_percentage': settings_obj.service_charge_percentage if settings_obj else Decimal('0.00'),
-            'restaurant': restaurant,
-            'branch': active_b,
-        })
-        return context
-
-
-class OrderConfirmView(TemplateView):
-    template_name = 'core/order_confirm.html'
-
-
-
-
-class ReserveEntryView(TemplateView):
-    def get(self, request, *args, **kwargs):
-        if not constants.SHOW_WEBSITE_PAGES:
-            raise Http404("Website is currently disabled.")
-        slug = request.GET.get('restaurant_slug') or request.GET.get('slug')
-        if slug:
-            return redirect('restaurant_reserve', restaurant_slug=slug)
-        restaurant = Restaurant.objects.filter(is_active=True, feature_website_pages=True).order_by('id').first()
-        if restaurant:
-            return redirect('restaurant_reserve', restaurant_slug=restaurant.slug)
-        return redirect('home')
-    
-
-class ReservationPageView(TemplateView):
-    template_name = 'core/reserve.html'
-
-    def get_context_data(self, **kwargs):
-        if not constants.SHOW_WEBSITE_PAGES:
-            raise Http404("Website is currently disabled.")
-        context = super().get_context_data(**kwargs)
-        restaurant_slug = kwargs.get('restaurant_slug')
-        if restaurant_slug:
-            restaurant = get_object_or_404(Restaurant, slug=restaurant_slug, is_active=True, feature_website_pages=True)
-            context['restaurant'] = restaurant
-        return context
 class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer

@@ -858,13 +858,17 @@ class RestaurantLandingSerializer(serializers.ModelSerializer):
         r = getattr(obj, 'restaurant', None)
         if not r:
             return False
-        return bool(getattr(r, 'feature_hotel_pms', False) or r.branches.filter(has_hotel_module=True).exists())
+        from restaurant_project import constants
+        hotel_allowed = constants.is_module_enabled('ENABLE_HOTEL_MODULE', r)
+        return bool(hotel_allowed and (getattr(r, 'feature_hotel_pms', False) or r.branches.filter(has_hotel_module=True).exists() or not constants.is_master_connected(r)))
 
     def get_has_restaurant_module(self, obj):
         r = getattr(obj, 'restaurant', None)
         if not r:
             return True
-        return bool(getattr(r, 'feature_restaurant_pos', True) and r.branches.filter(has_restaurant_module=True).exists())
+        from restaurant_project import constants
+        restro_allowed = constants.is_module_enabled('ENABLE_RESTAURANT_MODULE', r)
+        return bool(restro_allowed and r.branches.filter(has_restaurant_module=True).exists())
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
