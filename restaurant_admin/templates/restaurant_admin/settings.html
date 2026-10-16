@@ -10,10 +10,10 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    background: #f1f5f9;
+    background: var(--ui-surface-2);
     padding: 6px;
     border-radius: 14px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--ui-separator);
     margin-bottom: 24px;
     overflow-x: auto;
   }
@@ -29,7 +29,7 @@
     background: transparent;
     border: 1px solid transparent;
     border-radius: 10px;
-    color: #64748b;
+    color: var(--ui-label-2);
     font-weight: 700;
     font-size: 13.5px;
     cursor: pointer;
@@ -40,28 +40,28 @@
 
   .settings-tab-btn i {
     font-size: 16px;
-    color: #94a3b8;
+    color: var(--ui-label-3);
     transition: all 0.2s ease;
   }
 
   .settings-tab-btn:hover {
-    color: #f26c0d;
-    background: rgba(255, 255, 255, 0.75);
+    color: var(--ui-accent);
+    background: var(--ui-fill-2);
   }
 
   .settings-tab-btn:hover i {
-    color: #f26c0d;
+    color: var(--ui-accent);
   }
 
   .settings-tab-btn.active {
-    color: #0f172a;
-    background: #ffffff;
-    border-color: #e2e8f0;
+    color: var(--ui-label);
+    background: var(--ui-surface);
+    border-color: var(--ui-separator);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   }
 
   .settings-tab-btn.active i {
-    color: #f26c0d;
+    color: var(--ui-accent);
   }
 
   .settings-tab-pane {
@@ -1776,12 +1776,18 @@
     var targetBtn = document.getElementById('tab-btn-' + tabName);
     if (targetBtn) {
       targetBtn.classList.add('active');
+      // Keep the active tab visible in the horizontal strip (phones)
+      var nav = targetBtn.parentElement;
+      if (nav && nav.scrollWidth > nav.clientWidth) {
+        nav.scrollTo({ left: targetBtn.offsetLeft - (nav.clientWidth - targetBtn.offsetWidth) / 2, behavior: 'smooth' });
+      }
     }
 
     // Save preference
     localStorage.setItem('activeBranchSettingsTab', tabName);
 
-    // Tally auto-focus first input in active settings tab
+    // Tally auto-focus first input in active settings tab (keyboard/mouse only — no surprise keyboard on touch)
+    if (!window.matchMedia('(pointer: fine)').matches) return;
     setTimeout(() => {
       const pane = document.getElementById('pane-' + tabName);
       if (pane) {

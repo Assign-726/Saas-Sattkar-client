@@ -107,10 +107,16 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'restaurant_admin.middleware.BranchContextMiddleware',
     'super_admin.middleware.SuperAdminSubscriptionLockMiddleware',
+    'super_admin.activity.ActivityLogMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
 # REST Framework settings
+# Activity log retention: once the oldest log is older than TRIGGER days,
+# everything older than KEEP days is deleted (3 months → keep the latest month).
+ACTIVITY_LOG_TRIGGER_DAYS = env.int('ACTIVITY_LOG_TRIGGER_DAYS', default=90)
+ACTIVITY_LOG_KEEP_DAYS = env.int('ACTIVITY_LOG_KEEP_DAYS', default=30)
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -142,6 +148,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'restaurant_admin.context_processors.restaurant_context',
                 'restaurant_project.context_processors.app_constants',
+                'super_admin.context_processors.activity_log_access',
             ],
         },
     },

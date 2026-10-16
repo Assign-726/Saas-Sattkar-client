@@ -4,19 +4,20 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
     <title>{% block title %}Restaurant Admin{% endblock %}</title>
     <link rel="shortcut icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     <link rel="icon" href="{% static 'favicon.ico' %}" type="image/x-icon">
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{% static 'restaurant_admin/css/admin.css' %}">
     <!-- jQuery -->
@@ -32,9 +33,7 @@
             document.documentElement.setAttribute('data-theme', eff);
             if (isDark) { document.documentElement.classList.add('dark-theme'); }
         })();
-        if (localStorage.getItem('sidebar_collapsed') === 'true') {
-            document.documentElement.classList.add('sidebar-collapsed');
-        }
+        var sc = localStorage.getItem('sidebar_collapsed'); if (sc === 'true' || (sc === null && window.innerWidth >= 992 && window.innerWidth < 1280)) { document.documentElement.classList.add('sidebar-collapsed'); }
     </script>
     {% block extra_css %}{% endblock %}
     <style>
@@ -53,27 +52,27 @@
         :root[data-bs-theme="dark"],
         html[data-theme="dark"],
         html.dark-theme {
-            --dark: #f8fafc;
-            --light: #131c31;
-            --page-bg: #090d16;
-            --card-bg: #131c31;
-            --card-border: #233050;
-            --text-color: #f1f5f9;
+            --dark: var(--ui-label);
+            --light: var(--ui-surface);
+            --page-bg: var(--ui-bg);
+            --card-bg: var(--ui-surface);
+            --card-border: var(--ui-separator);
+            --text-color: var(--ui-label);
         }
 
         html,
         body {
             font-size: 13.5px;
-            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background-color: #F0F2F5;
-            color: #525F7F;
+            font-family: var(--ui-font)"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--ui-bg);
+            color: var(--ui-label-2);
         }
 
         html[data-theme="dark"] body,
         html.dark-theme body,
         body.dark-mode {
-            background-color: #090d16 !important;
-            color: #e2e8f0 !important;
+            background-color: var(--ui-bg) !important;
+            color: var(--ui-label) !important;
         }
 
         h1,
@@ -226,7 +225,7 @@
 
         .sidebar-header {
             padding: 1.5rem;
-            border-bottom: 1px solid #E9ECEF;
+            border-bottom: 1px solid var(--ui-separator);
             flex-shrink: 0;
         }
 
@@ -241,7 +240,7 @@
         .sidebar-footer {
             flex-shrink: 0;
             padding: 0.85rem 1rem;
-            border-top: 1px solid #E9ECEF;
+            border-top: 1px solid var(--ui-separator);
             background: white;
         }
 
@@ -299,7 +298,7 @@
             padding: 0.65rem 1rem;
             font-size: 0.88rem;
             font-weight: 600;
-            color: #525f7f;
+            color: var(--ui-label-2);
             border-radius: 0.375rem;
             margin: 0.15rem 0.75rem;
             text-decoration: none;
@@ -310,13 +309,13 @@
             width: 20px;
             text-align: center;
             font-size: 1rem;
-            color: #8898aa;
+            color: var(--ui-label-3);
             margin-right: 0.5rem;
             transition: color 0.2s ease;
         }
 
         .sidebar-single-nav .nav-link:hover {
-            background-color: #f8f9fe;
+            background-color: var(--ui-surface-2);
             color: var(--primary);
         }
 
@@ -326,7 +325,7 @@
 
         .sidebar-single-nav .nav-link.active {
             color: var(--primary);
-            background-color: rgba(94, 114, 228, 0.1);
+            background-color: rgba(var(--ui-accent-rgb), 0.1);
             border-left: 3px solid var(--primary);
         }
 
@@ -368,7 +367,7 @@
         }
 
         .nav-link {
-            color: #525F7F;
+            color: var(--ui-label-2);
             padding: 0.8rem 1.5rem;
             font-weight: 500;
             border-left: 3px solid transparent;
@@ -379,7 +378,7 @@
 
         .nav-link:hover,
         .nav-link.active {
-            background-color: rgba(94, 114, 228, 0.1);
+            background-color: rgba(var(--ui-accent-rgb), 0.1);
             color: var(--primary);
             border-left-color: var(--primary);
         }
@@ -403,9 +402,9 @@
             padding: 0.65rem 1rem;
             font-size: 0.8rem;
             font-weight: 600;
-            color: #525f7f;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
+            color: var(--ui-label-2);
+            text-transform: none;
+            letter-spacing: 0;
             cursor: pointer;
             border-radius: 0.375rem;
             margin: 0.15rem 0.75rem;
@@ -414,13 +413,13 @@
         }
 
         .sidebar-group-header:hover {
-            background-color: #f8f9fe;
+            background-color: var(--ui-surface-2);
             color: var(--primary);
         }
 
         .sidebar-group-header.active-group {
             color: var(--primary);
-            background-color: rgba(94, 114, 228, 0.08);
+            background-color: rgba(var(--ui-accent-rgb), 0.08);
         }
 
         .sidebar-group-header .group-title {
@@ -433,7 +432,7 @@
             width: 20px;
             text-align: center;
             font-size: 1rem;
-            color: #8898aa;
+            color: var(--ui-label-3);
             transition: color 0.2s ease;
         }
 
@@ -469,16 +468,16 @@
             margin: 0.1rem 0.75rem;
             border-radius: 0.375rem;
             border-left: 3px solid transparent;
-            color: #6b7280;
+            color: var(--ui-label-2);
         }
 
         .sidebar-group-content .nav-link:hover {
-            background-color: rgba(94, 114, 228, 0.08);
+            background-color: rgba(var(--ui-accent-rgb), 0.08);
             color: var(--primary);
         }
 
         .sidebar-group-content .nav-link.active {
-            background-color: rgba(94, 114, 228, 0.12);
+            background-color: rgba(var(--ui-accent-rgb), 0.12);
             color: var(--primary);
             font-weight: 600;
             border-left-color: var(--primary);
@@ -486,11 +485,11 @@
 
         /* Call to Action active styling */
         .sidebar-cta-link.active {
-            background: linear-gradient(135deg, var(--primary) 0%, #825ee4 100%) !important;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--ui-accent) 100%) !important;
             color: #ffffff !important;
             font-weight: 600 !important;
             border-left: none !important;
-            box-shadow: 0 4px 10px rgba(94, 114, 228, 0.3);
+            box-shadow: 0 4px 10px rgba(var(--ui-accent-rgb), 0.3);
         }
 
         /* Collapsed Sidebar Adjustments */
@@ -523,7 +522,7 @@
             padding: 1.25rem 1.5rem;
             width: calc(100% - var(--sidebar-width));
             min-height: 100vh;
-            background-color: #F0F2F5;
+            background-color: var(--ui-bg);
             transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
@@ -548,7 +547,7 @@
 
         .card-header {
             background: white;
-            border-bottom: 1px solid #E9ECEF;
+            border-bottom: 1px solid var(--ui-separator);
             padding: 0.85rem 1.25rem;
             border-top-left-radius: 0.5rem !important;
             border-top-right-radius: 0.5rem !important;
@@ -569,15 +568,15 @@
         }
 
         .bg-success {
-            background-color: #2DCE89 !important;
+            background-color: var(--ui-green) !important;
         }
 
         .bg-warning {
-            background-color: #FB6340 !important;
+            background-color: var(--ui-orange) !important;
         }
 
         .bg-danger {
-            background-color: #F5365C !important;
+            background-color: var(--ui-red) !important;
         }
 
         .btn-primary {
@@ -586,14 +585,14 @@
         }
 
         .btn-outline-light {
-            color: #8898AA;
-            border-color: #E9ECEF;
+            color: var(--ui-label-3);
+            border-color: var(--ui-separator);
         }
 
         .btn-outline-light:hover {
-            background-color: #F8F9FE;
+            background-color: var(--ui-surface-2);
             color: var(--primary);
-            border-color: #E9ECEF;
+            border-color: var(--ui-separator);
         }
 
         .alert {
@@ -645,8 +644,8 @@
                 align-items: center;
                 justify-content: space-between;
                 padding: 0.75rem 1rem;
-                background: #ffffff;
-                border-bottom: 1px solid #E9ECEF;
+                background: var(--ui-surface);
+                border-bottom: 1px solid var(--ui-separator);
                 position: fixed;
                 top: 0;
                 left: 0;
@@ -663,38 +662,38 @@
 
         /* Global Order Notification & Topbar Styles */
         .global-admin-topbar {
-            background: #ffffff;
-            border: 1px solid #E2E8F0;
+            background: var(--ui-surface);
+            border: 1px solid var(--ui-separator);
             border-radius: 14px;
             padding: 10px 16px;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
         }
 
         .btn-white-notif {
-            background-color: #ffffff;
-            border: 1px solid #E2E8F0;
+            background-color: var(--ui-surface);
+            border: 1px solid var(--ui-separator);
             transition: all 0.15s ease;
         }
 
         .btn-white-notif:hover {
-            background-color: #F8FAFC;
-            border-color: #CBD5E1;
+            background-color: var(--ui-surface-2);
+            border-color: var(--ui-separator-strong);
         }
 
         .global-notif-card {
-            background: #ffffff;
+            background: var(--ui-surface);
             border-radius: 12px;
-            border-left: 4px solid #10B981 !important;
+            border-left: 4px solid var(--ui-green) !important;
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08) !important;
             pointer-events: auto;
             transition: all 0.22s ease;
         }
 
         .global-notif-card .btn-notif-view {
-            background-color: #2F3E9E !important;
-            background: #2F3E9E !important;
+            background-color: var(--ui-accent) !important;
+            background: var(--ui-accent) !important;
             color: #FFFFFF !important;
-            border: 1px solid #2F3E9E !important;
+            border: 1px solid var(--ui-accent) !important;
             border-radius: 6px !important;
             font-size: 12px !important;
             font-weight: 600 !important;
@@ -710,8 +709,8 @@
         }
 
         .global-notif-card .btn-notif-view:hover {
-            background-color: #1e2b7b !important;
-            background: #1e2b7b !important;
+            background-color: var(--ui-accent) !important;
+            background: var(--ui-accent) !important;
             color: #FFFFFF !important;
             box-shadow: 0 4px 8px rgba(47, 62, 158, 0.35) !important;
         }
@@ -765,7 +764,8 @@
         }
     </style>
     {% block extra_head %}{% endblock %}
-    <link rel="stylesheet" href="{% static 'css/theme-dark.css' %}?v=3.3">
+    <link rel="stylesheet" href="{% static 'css/theme-dark.css' %}?v=3.4">
+    <link rel="stylesheet" href="{% static 'css/apple-ui.css' %}?v=1.3">
 </head>
 
 <body>
@@ -1235,7 +1235,7 @@
                     <div class="sidebar-group-header {% if active_group == 'staff_operations' or active_menu == 'staff' or active_menu == 'attendance_muster' or active_menu == 'payroll_dashboard' or active_menu == 'sop_dashboard' or active_menu == 'ground_staff_directory' %}open active-group{% endif %}"
                         data-group-target="#group-staff-ops">
                         <div class="group-title">
-                            <i class="bi bi-people-gear"></i>
+                            <i class="fas fa-users-gear"></i>
                             <span>Staff & Operations</span>
                         </div>
                         <i class="fas fa-chevron-down group-chevron"></i>
@@ -1288,19 +1288,31 @@
                 </div>
                 {% endif %}
 
-                {% if show_settings %}
-                <!-- Standalone Item: Settings / Setup -->
-                <div class="sidebar-single-nav">
-                    <a class="nav-link {% if active_menu == 'settings' %}active{% endif %}"
-                        href="{% url 'restaurant_admin:settings' restaurant_slug=rslug %}"
-                        title="Settings & Branch Setup">
-                        <i class="fas fa-sliders-h"></i>
-                        <span>Settings</span>
-                    </a>
-                </div>
-                {% endif %}
             </div>
             <div class="sidebar-footer">
+                <!-- Pinned admin links: always visible above Logout -->
+                <div class="sidebar-footer-nav">
+                    {% if show_settings %}
+                    <div class="sidebar-single-nav">
+                        <a class="nav-link {% if active_menu == 'settings' %}active{% endif %}"
+                            href="{% url 'restaurant_admin:settings' restaurant_slug=rslug %}"
+                            title="Settings & Branch Setup">
+                            <i class="fas fa-sliders-h"></i>
+                            <span>Settings</span>
+                        </a>
+                    </div>
+                    {% endif %}
+                    {% if can_view_restaurant_logs %}
+                    <div class="sidebar-single-nav">
+                        <a class="nav-link {% if active_menu == 'activity_logs' %}active{% endif %}"
+                            href="{% url 'restaurant_admin:activity_logs' restaurant_slug=rslug %}"
+                            title="Activity Logs">
+                            <i class="fas fa-clock-rotate-left"></i>
+                            <span>Activity Logs</span>
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
                 <!-- Theme Segmented Switcher (Bottom-Left Sidebar Corner) -->
                 <div class="theme-segmented-control mb-2" role="group" aria-label="Theme Selection">
                     <button type="button" class="theme-seg-btn" data-theme-val="light" title="Light Mode">
@@ -1513,8 +1525,9 @@
                 }
 
                 // Initial state sync
-                if (localStorage.getItem('sidebar_collapsed') === 'true') {
-                    setSidebarCollapsed(true);
+                if (document.documentElement.classList.contains('sidebar-collapsed')) {
+                    document.body.classList.add('sidebar-collapsed');
+                    if (collapseChevronIcon) collapseChevronIcon.className = 'fas fa-chevron-right';
                 }
 
                 function openSidebar() {
@@ -1603,10 +1616,10 @@
             aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered" style="max-width: 400px;">
                 <div class="modal-content border-0 shadow-lg"
-                    style="border-radius: 1.25rem; overflow: hidden; background: #ffffff;">
+                    style="border-radius: 1.25rem; overflow: hidden; background: var(--ui-surface);">
                     <div class="modal-body text-center p-4">
                         <div
-                            style="width: 64px; height: 64px; background-color: #fef2f2; color: #ef4444; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.25rem; font-size: 1.75rem;">
+                            style="width: 64px; height: 64px; background-color: rgba(var(--ui-red-rgb), 0.1); color: var(--ui-red-text); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.25rem; font-size: 1.75rem;">
                             <i class="fas fa-sign-out-alt"></i>
                         </div>
                         <h5 class="fw-bold text-dark mb-2" id="logoutConfirmModalLabel">Confirm Sign Out</h5>
@@ -1614,9 +1627,9 @@
                             your restaurant administration session?</p>
                         <div class="d-flex gap-2 justify-content-center">
                             <button type="button" class="btn btn-light px-4 fw-semibold" data-bs-dismiss="modal"
-                                style="border-radius: 0.5rem; border: 1px solid #e2e8f0; color: #475569;">Cancel</button>
+                                style="border-radius: 0.5rem; border: 1px solid var(--ui-separator); color: var(--ui-label-2);">Cancel</button>
                             <a href="{% url 'logout' %}" class="btn btn-danger px-4 fw-semibold"
-                                style="border-radius: 0.5rem; background-color: #ef4444; border-color: #ef4444;">
+                                style="border-radius: 0.5rem; background-color: var(--ui-red); border-color: var(--ui-red);">
                                 <i class="fas fa-sign-out-alt me-1"></i> Yes, Log Out
                             </a>
                         </div>
@@ -1853,7 +1866,7 @@
                     toast.className = 'card global-notif-card mb-2 p-0 border-0 shadow-lg';
                     toast.style.borderLeft = '4px solid #2563eb';
                     toast.innerHTML = `
-                        <div class="card-body p-3" style="background: #eff6ff;">
+                        <div class="card-body p-3" style="background: rgba(var(--ui-accent-rgb), 0.1);">
                             <div class="d-flex justify-content-between align-items-start mb-1">
                                 <span class="badge bg-primary text-white px-2 py-0.5" style="font-size: 11px; font-weight: 700;">
                                     <i class="bi bi-bell-fill me-1"></i>FOOD READY TO SERVE
@@ -1867,7 +1880,7 @@
                             <div class="text-muted small">${order.customer_name || 'Customer'} • All kitchen items cooked</div>
                             <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top border-primary-subtle">
                                 <span class="text-primary small fw-semibold">Ready for delivery to table</span>
-                                <a href="${order.detail_url}" class="btn-notif-view" style="background-color: #2563eb !important;">
+                                <a href="${order.detail_url}" class="btn-notif-view" style="background-color: var(--ui-accent) !important;">
                                     Deliver / Serve <i class="bi bi-arrow-right ms-1"></i>
                                 </a>
                             </div>
@@ -2099,6 +2112,7 @@
         </script>
         <script src="{% static 'restaurant_admin/js/tally_credit_note.js' %}?v=8.0"></script>
         <script src="{% static 'js/theme-manager.js' %}"></script>
+        <script src="{% static 'js/apple-ui.js' %}?v=1.2"></script>
 
         {% block extra_js %}{% endblock %}
         {% endwith %}

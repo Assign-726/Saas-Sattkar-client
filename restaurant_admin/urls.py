@@ -1,5 +1,6 @@
 from django.urls import path
 from restaurant_admin import views
+from super_admin import views_logs
 from restaurant_admin import views_reservations
 from restaurant_admin import floor_plan_views
 from restaurant_admin import views_events
@@ -10,6 +11,7 @@ from restaurant_admin import views_pos_shifts
 app_name = 'restaurant_admin'
 
 urlpatterns = [
+    path('activity-logs/', views_logs.restaurant_activity_logs, name='activity_logs'),
     # Test URLs
     path('test/', views.test_template, name='test'),
     path('test-static/', views.test_static, name='test_static'),

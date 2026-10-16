@@ -1,0 +1,292 @@
+{# Activity Logs screen — shared by Restaurant Admin, Hotel PMS and Super Admin #}
+<div class="ui-logs" id="activityLogs" data-total-on-page="{{ logs|length }}">
+
+  <div class="ui-page-header">
+    <div>
+      <h1>Activity Logs</h1>
+      <p>Every change, sign-in and export across {% if logs_area == 'super' %}all businesses{% elif logs_area == 'hotel' %}your hotel{% else %}your business{% endif %} — who did what, when and from where.</p>
+    </div>
+    <div class="ui-actions">
+      <a class="ui-btn ui-btn-gray" href="?export=csv{{ filter_qs_amp }}"><i class="fa-solid fa-file-arrow-down"></i><span>Export CSV</span></a>
+      <button type="button" class="ui-btn ui-btn-tinted-red" data-log-op="purge_now"
+              data-confirm-title="Clean up old logs now?"
+              data-confirm-text="This permanently deletes {{ retention.purgeable }} log{{ retention.purgeable|pluralize }} older than {{ retention.keep_days }} days. The latest {{ retention.keep_days }} days are kept."
+              {% if not retention.purgeable %}disabled{% endif %}>
+        <i class="fa-solid fa-broom"></i><span>Clean up now</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi">
+      <div class="ui-kpi-head"><div class="kpi-label">Total logs</div><div class="kpi-icon"><i class="fa-solid fa-list-check"></i></div></div>
+      <div class="kpi-val">{{ stats.total }}</div>
+      <div class="kpi-sub">{{ stats.matching }} match current filters</div>
+    </div>
+    <div class="ui-kpi kpi-green">
+      <div class="ui-kpi-head"><div class="kpi-label">Today</div><div class="kpi-icon"><i class="fa-solid fa-calendar-day"></i></div></div>
+      <div class="kpi-val">{{ stats.today }}</div>
+      <div class="kpi-sub">Events since midnight</div>
+    </div>
+    <div class="ui-kpi kpi-indigo">
+      <div class="ui-kpi-head"><div class="kpi-label">Last 7 days</div><div class="kpi-icon"><i class="fa-solid fa-chart-line"></i></div></div>
+      <div class="kpi-val">{{ stats.week }}</div>
+      <div class="kpi-sub">Rolling week</div>
+    </div>
+    <div class="ui-kpi kpi-rose">
+      <div class="ui-kpi-head"><div class="kpi-label">Failed (7 days)</div><div class="kpi-icon"><i class="fa-solid fa-triangle-exclamation"></i></div></div>
+      <div class="kpi-val">{{ stats.failed }}</div>
+      <div class="kpi-sub">Errors &amp; failed sign-ins</div>
+    </div>
+  </div>
+
+  <section class="ui-card ui-retention">
+    <div class="ui-retention-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
+    <div class="ui-retention-body">
+      <h2>Automatic cleanup</h2>
+      <p>When the oldest log reaches <strong>{{ retention.trigger_months }} months</strong>, logs older than <strong>{{ retention.keep_months }} month{{ retention.keep_months|pluralize }}</strong> are deleted automatically — the latest {{ retention.keep_months }} month{{ retention.keep_months|pluralize }} is always kept, and the cycle repeats.</p>
+      <dl class="ui-retention-meta">
+        <div><dt>Oldest log</dt><dd>{% if retention.oldest %}{{ retention.oldest|date:"d M Y" }}{% else %}—{% endif %}</dd></div>
+        <div><dt>Next automatic cleanup</dt><dd>{% if retention.next_cleanup %}{{ retention.next_cleanup|date:"d M Y" }}{% else %}—{% endif %}</dd></div>
+        <div><dt>Older than {{ retention.keep_days }} days</dt><dd>{{ retention.purgeable }} log{{ retention.purgeable|pluralize }}</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <form class="ui-card ui-filters" method="get" action="">
+    <div class="ui-field ui-field-search">
+      <label for="logQ">Search</label>
+      <div class="ui-input-icon"><i class="fa-solid fa-magnifying-glass"></i>
+        <input id="logQ" class="ui-input" type="search" name="q" value="{{ filters.q }}" placeholder="User, activity, page or IP" autocomplete="off">
+      </div>
+    </div>
+    <div class="ui-field">
+      <label for="logAction">Action</label>
+      <select id="logAction" class="ui-input" name="action">
+        <option value="">All actions</option>
+        {% for value, label in action_choices %}<option value="{{ value }}" {% if filters.action == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    {% if area_choices|length > 1 %}
+    <div class="ui-field">
+      <label for="logArea">Area</label>
+      <select id="logArea" class="ui-input" name="area">
+        <option value="">All areas</option>
+        {% for value, label in area_choices %}<option value="{{ value }}" {% if filters.area == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <div class="ui-field">
+      <label for="logOutcome">Result</label>
+      <select id="logOutcome" class="ui-input" name="outcome">
+        <option value="">Any result</option>
+        {% for value, label in outcome_choices %}<option value="{{ value }}" {% if filters.outcome == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="ui-field">
+      <label for="logUser">User</label>
+      <select id="logUser" class="ui-input" name="user">
+        <option value="">Everyone</option>
+        {% for name in user_choices %}<option value="{{ name }}" {% if filters.user == name %}selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="ui-field">
+      <label for="logFrom">From</label>
+      <input id="logFrom" class="ui-input" type="date" name="date_from" value="{{ filters.date_from }}">
+    </div>
+    <div class="ui-field">
+      <label for="logTo">To</label>
+      <input id="logTo" class="ui-input" type="date" name="date_to" value="{{ filters.date_to }}">
+    </div>
+    {% if per_page != 50 %}<input type="hidden" name="per_page" value="{{ per_page }}">{% endif %}
+    <div class="ui-filter-actions">
+      <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-filter"></i><span>Apply</span></button>
+      {% if has_filters %}<a class="ui-btn ui-btn-gray" href="{{ request.path }}"><span>Reset</span></a>{% endif %}
+    </div>
+  </form>
+
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar">
+      <div class="ui-list-count">
+        {% if page_obj.paginator.count %}
+        Showing <strong>{{ page_obj.start_index }}–{{ page_obj.end_index }}</strong> of <strong>{{ page_obj.paginator.count }}</strong>
+        {% else %}No logs{% endif %}
+      </div>
+      <div class="ui-actions">
+        <label class="ui-perpage">Show
+          <select class="ui-input" onchange="window.location.href=this.value">
+            {% for n in per_page_options %}
+            <option value="?per_page={{ n }}{% for k, v in filters.items %}{% if v %}&{{ k }}={{ v|urlencode }}{% endif %}{% endfor %}" {% if n == per_page %}selected{% endif %}>{{ n }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        {% if logs %}
+        <button type="button" class="ui-btn ui-btn-gray ui-btn-sm" data-log-op="delete_page"
+                data-confirm-title="Delete this page?"
+                data-confirm-text="This permanently deletes the {{ logs|length }} log{{ logs|length|pluralize }} shown on this page.">
+          <i class="fa-regular fa-trash-can"></i><span>Delete page</span>
+        </button>
+        {% endif %}
+        {% if has_filters and page_obj.paginator.count %}
+        <button type="button" class="ui-btn ui-btn-tinted-red ui-btn-sm" data-log-op="delete_filtered"
+                data-confirm-title="Delete all {{ page_obj.paginator.count }} matching logs?"
+                data-confirm-text="Every log that matches the current filters will be permanently deleted — across all pages, not just this one.">
+          <i class="fa-solid fa-filter-circle-xmark"></i><span>Delete all matching ({{ page_obj.paginator.count }})</span>
+        </button>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="ui-bulkbar" id="logBulkBar" hidden>
+      <span><strong id="logSelCount">0</strong> selected</span>
+      <button type="button" class="ui-btn ui-btn-gray ui-btn-sm" id="logSelClear">Clear</button>
+      <button type="button" class="ui-btn ui-btn-danger ui-btn-sm" data-log-op="delete_selected"
+              data-confirm-title="Delete selected logs?" data-confirm-text="The selected logs will be permanently deleted.">
+        <i class="fa-regular fa-trash-can"></i><span>Delete selected</span>
+      </button>
+    </div>
+
+    {% if logs %}
+    <div class="table-responsive">
+      <table class="table ui-log-table">
+        <thead>
+          <tr>
+            <th class="ui-col-select"><input type="checkbox" class="ui-check" id="logSelectAll" aria-label="Select all logs on this page"></th>
+            <th>Activity</th>
+            <th>User</th>
+            <th>When</th>
+            {% if show_business_column %}<th>Business</th>{% endif %}
+            <th>Result</th>
+            <th>Device</th>
+            <th class="ui-col-actions"><span class="ui-sr">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+          <tr>
+            <td class="ui-col-select"><input type="checkbox" class="ui-check ui-log-check" value="{{ log.id }}" aria-label="Select log"></td>
+            <td>
+              <div class="ui-log-activity">
+                <span class="ui-chip ui-chip-{{ log.tone }}"><i class="fa-solid {{ log.icon }}"></i>{{ log.get_action_display }}</span>
+                <div class="ui-log-text">
+                  <div class="ui-log-msg">{{ log.message|default:"—" }}</div>
+                  <div class="ui-log-sub">{{ log.get_area_display|default:"System" }}{% if log.branch %} · {{ log.branch.name }}{% endif %}{% if log.path %} · <code>{{ log.method }} {{ log.path|truncatechars:48 }}</code>{% endif %}</div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <div class="ui-log-user">
+                <span class="ui-avatar">{{ log.username|default:"?"|slice:":1"|upper }}</span>
+                <div><div class="ui-log-name">{{ log.username|default:"Unknown" }}</div><div class="ui-log-sub">{{ log.role_label }}</div></div>
+              </div>
+            </td>
+            <td><div class="ui-log-time" title="{{ log.created_at|date:'d M Y, H:i:s' }}">{{ log.created_at|date:"d M, h:i A" }}</div><div class="ui-log-sub">{{ log.created_at|timesince }} ago</div></td>
+            {% if show_business_column %}<td class="ui-col-business" title="{{ log.restaurant.name|default:'Platform' }}">{{ log.restaurant.name|default:"Platform" }}</td>{% endif %}
+            <td><span class="ui-chip ui-chip-{% if log.outcome == 'success' %}green{% elif log.outcome == 'invalid' %}orange{% else %}red{% endif %}">{{ log.get_outcome_display }}</span></td>
+            <td><div>{{ log.device|default:"—" }}</div><div class="ui-log-sub">{{ log.ip_address|default:"" }}</div></td>
+            <td class="ui-col-actions">
+              <button type="button" class="ui-icon-btn" data-log-op="delete_one" data-id="{{ log.id }}" title="Delete log"
+                      data-confirm-title="Delete this log?" data-confirm-text="“{{ log.message|truncatechars:80 }}” will be permanently deleted.">
+                <i class="fa-regular fa-trash-can"></i>
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="ui-pager" aria-label="Pagination">
+      {% if page_obj.has_previous %}<a class="ui-pager-btn" href="?page={{ page_obj.previous_page_number }}{{ filter_qs_amp }}"><i class="fa-solid fa-chevron-left"></i><span>Previous</span></a>{% else %}<span class="ui-pager-btn is-disabled"><i class="fa-solid fa-chevron-left"></i><span>Previous</span></span>{% endif %}
+      <span class="ui-pager-info">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}<a class="ui-pager-btn" href="?page={{ page_obj.next_page_number }}{{ filter_qs_amp }}"><span>Next</span><i class="fa-solid fa-chevron-right"></i></a>{% else %}<span class="ui-pager-btn is-disabled"><span>Next</span><i class="fa-solid fa-chevron-right"></i></span>{% endif %}
+    </nav>
+    {% endif %}
+    {% else %}
+    <div class="ui-empty">
+      <div class="ui-empty-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
+      <h3>{% if has_filters %}No logs match these filters{% else %}No activity yet{% endif %}</h3>
+      <p>{% if has_filters %}Try a wider date range or clear the filters.{% else %}Changes, sign-ins and exports will appear here as your team works.{% endif %}</p>
+    </div>
+    {% endif %}
+  </section>
+
+  <form method="post" id="logActionForm" hidden>
+    {% csrf_token %}
+    <input type="hidden" name="op">
+    <input type="hidden" name="id">
+    <input type="hidden" name="qs" value="{{ request.GET.urlencode }}">
+  </form>
+
+  <dialog class="ui-dialog" id="logConfirm">
+    <form method="dialog">
+      <div class="ui-dialog-icon"><i class="fa-regular fa-trash-can"></i></div>
+      <h3 id="logConfirmTitle">Delete?</h3>
+      <p id="logConfirmText"></p>
+      <div class="ui-dialog-actions">
+        <button class="ui-btn ui-btn-gray" value="cancel">Cancel</button>
+        <button class="ui-btn ui-btn-danger" value="ok" id="logConfirmOk">Delete</button>
+      </div>
+    </form>
+  </dialog>
+</div>
+
+<script>
+(function () {
+  var root = document.getElementById('activityLogs');
+  if (!root) return;
+  var form = document.getElementById('logActionForm');
+  var dialog = document.getElementById('logConfirm');
+  var bar = document.getElementById('logBulkBar');
+  var all = document.getElementById('logSelectAll');
+  var checks = function () { return Array.prototype.slice.call(root.querySelectorAll('.ui-log-check')); };
+
+  function refresh() {
+    var sel = checks().filter(function (c) { return c.checked; });
+    document.getElementById('logSelCount').textContent = sel.length;
+    bar.hidden = sel.length === 0;
+    if (all) {
+      all.checked = sel.length > 0 && sel.length === checks().length;
+      all.indeterminate = sel.length > 0 && sel.length < checks().length;
+    }
+    checks().forEach(function (c) { c.closest('tr').classList.toggle('is-selected', c.checked); });
+  }
+  if (all) all.addEventListener('change', function () { checks().forEach(function (c) { c.checked = all.checked; }); refresh(); });
+  root.addEventListener('change', function (e) { if (e.target.classList.contains('ui-log-check')) refresh(); });
+  document.getElementById('logSelClear').addEventListener('click', function () { checks().forEach(function (c) { c.checked = false; }); refresh(); });
+
+  function submit(op, id) {
+    form.querySelectorAll('input[name="ids"]').forEach(function (i) { i.remove(); });
+    form.elements.op.value = op;
+    form.elements.id.value = id || '';
+    var ids = op === 'delete_selected' ? checks().filter(function (c) { return c.checked; })
+            : op === 'delete_page' ? checks() : [];
+    ids.forEach(function (c) {
+      var i = document.createElement('input'); i.type = 'hidden'; i.name = 'ids'; i.value = c.value; form.appendChild(i);
+    });
+    form.submit();
+  }
+
+  root.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-log-op]');
+    if (!btn || btn.disabled) return;
+    var op = btn.getAttribute('data-log-op');
+    var id = btn.getAttribute('data-id');
+    document.getElementById('logConfirmTitle').textContent = btn.getAttribute('data-confirm-title') || 'Are you sure?';
+    document.getElementById('logConfirmText').textContent = btn.getAttribute('data-confirm-text') || '';
+    document.getElementById('logConfirmOk').textContent = op === 'purge_now' ? 'Clean up' : 'Delete';
+    if (typeof dialog.showModal !== 'function') {
+      if (window.confirm(btn.getAttribute('data-confirm-title'))) submit(op, id);
+      return;
+    }
+    dialog.returnValue = '';
+    dialog.showModal();
+    dialog.addEventListener('close', function onClose() {
+      dialog.removeEventListener('close', onClose);
+      if (dialog.returnValue === 'ok') submit(op, id);
+    });
+  });
+  refresh();
+})();
+</script>

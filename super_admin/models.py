@@ -1255,3 +1255,64 @@ class JobApplication(models.Model):
             return f"{exp_str} @ {self.current_organization}"
         return exp_str
 
+
+
+class ActivityLog(models.Model):
+    """Audit trail of admin activity across Restaurant, Hotel PMS and Super Admin."""
+
+    class Action(models.TextChoices):
+        CREATE = 'CREATE', 'Created'
+        UPDATE = 'UPDATE', 'Updated'
+        DELETE = 'DELETE', 'Deleted'
+        STATUS = 'STATUS', 'Status change'
+        EXPORT = 'EXPORT', 'Export'
+        IMPORT = 'IMPORT', 'Import'
+        SETTINGS = 'SETTINGS', 'Settings'
+        SECURITY = 'SECURITY', 'Security'
+        LOGIN = 'LOGIN', 'Signed in'
+        LOGOUT = 'LOGOUT', 'Signed out'
+        LOGIN_FAILED = 'LOGIN_FAILED', 'Failed sign-in'
+        OTHER = 'OTHER', 'Other'
+
+    class Area(models.TextChoices):
+        RESTAURANT = 'restaurant', 'Restaurant'
+        HOTEL = 'hotel', 'Hotel PMS'
+        SUPER = 'super', 'Super Admin'
+        AUTH = 'auth', 'Sign-in'
+
+    class Outcome(models.TextChoices):
+        SUCCESS = 'success', 'Success'
+        INVALID = 'invalid', 'Not saved'
+        FAILED = 'failed', 'Failed'
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='activity_logs')
+    username = models.CharField(max_length=150, blank=True)
+    role = models.CharField(max_length=40, blank=True)
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, null=True, blank=True, related_name='activity_logs')
+    branch = models.ForeignKey('RestaurantBranch', on_delete=models.SET_NULL, null=True, blank=True, related_name='activity_logs')
+    area = models.CharField(max_length=20, choices=Area.choices, blank=True, db_index=True)
+    action = models.CharField(max_length=20, choices=Action.choices, default=Action.OTHER, db_index=True)
+    outcome = models.CharField(max_length=10, choices=Outcome.choices, default=Outcome.SUCCESS)
+    message = models.CharField(max_length=255, blank=True)
+    method = models.CharField(max_length=10, blank=True)
+    path = models.CharField(max_length=255, blank=True)
+    status_code = models.PositiveSmallIntegerField(null=True, blank=True)
+    object_type = models.CharField(max_length=80, blank=True)
+    object_id = models.CharField(max_length=64, blank=True)
+    object_repr = models.CharField(max_length=200, blank=True)
+    ip_address = models.CharField(max_length=45, blank=True)
+    device = models.CharField(max_length=120, blank=True)
+    extra = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        indexes = [
+            models.Index(fields=['restaurant', '-created_at']),
+            models.Index(fields=['area', '-created_at']),
+        ]
+        verbose_name = 'Activity Log'
+        verbose_name_plural = 'Activity Logs'
+
+    def __str__(self):
+        return f'{self.created_at:%Y-%m-%d %H:%M} {self.username or "system"} {self.action} {self.message}'

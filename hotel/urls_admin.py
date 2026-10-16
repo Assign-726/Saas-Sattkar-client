@@ -1,10 +1,12 @@
 from django.urls import path
 from hotel import views_admin
 from hotel import views_staff_hotel
+from super_admin import views_logs
 
 app_name = 'hotel_admin'
 
 urlpatterns = [
+    path('activity-logs/', views_admin.hotel_admin_required(views_logs.hotel_activity_logs_view), name='activity_logs'),
     # Dashboard & Front Desk
     path('', views_admin.dashboard_view, name='dashboard'),
     path('tape-chart/', views_admin.tape_chart_view, name='tape_chart'),
