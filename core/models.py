@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.core.validators import MinValueValidator, MaxValueValidator
+from decimal import Decimal
 
 
 class Zone(models.Model):
@@ -337,6 +338,24 @@ class MenuItem(models.Model):
     def is_vegetarian(self):
         return self.food_type == self.FoodType.VEG
 
+    @property
+    def is_alcoholic(self):
+        if self.tax_type in [
+            self.TaxType.VAT_BEER,
+            self.TaxType.VAT_IMFL,
+            self.TaxType.VAT_WINE,
+            self.TaxType.VAT_LIQUOR,
+        ]:
+            return True
+        cat_name = (self.category.name if self.category else '').lower()
+        subcat_name = (self.subcategory.name if self.subcategory else '').lower()
+        for kw in ['alcoholic', 'alcohol', 'liquor', 'beer', 'wine', 'spirits', 'bar']:
+            if kw in cat_name and 'non-alcoholic' not in cat_name:
+                return True
+            if kw in subcat_name and 'non-alcoholic' not in subcat_name:
+                return True
+        return False
+
     def __str__(self):
         return f"{self.name} (₹{self.price})"
 
@@ -436,6 +455,9 @@ class Order(models.Model):
     is_prep_paused = models.BooleanField(default=False, help_text="Whether cooking is paused in KDS")
     paused_at = models.DateTimeField(null=True, blank=True)
     prep_elapsed_seconds = models.PositiveIntegerField(default=0, help_text="Elapsed cooking seconds tracked by KDS")
+    counter = models.ForeignKey('POSCounter', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
+    shift = models.ForeignKey('POSShift', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
+    cashier = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='pos_orders')
 
     class Meta:
         ordering = ['-order_time']
@@ -991,6 +1013,8 @@ class Order(models.Model):
             if self.branch:
                 from django.db.models import Q
                 charges_qs = charges_qs.filter(Q(branch=self.branch) | Q(branch__isnull=True))
+            else:
+                charges_qs = charges_qs.filter(branch__isnull=True)
             def norm_ot(val):
                 return str(val or 'dine_in').lower().strip().replace(' ', '').replace('-', '_')
 
@@ -2665,6 +2689,9 @@ class CreditNote(models.Model):
     total_refund_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     authorized_by = models.CharField(max_length=100, default='Manager')
+    counter = models.ForeignKey('POSCounter', on_delete=models.SET_NULL, null=True, blank=True, related_name='credit_notes')
+    shift = models.ForeignKey('POSShift', on_delete=models.SET_NULL, null=True, blank=True, related_name='credit_notes')
+    cashier = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='pos_credit_notes')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -2683,3 +2710,195 @@ class CreditNote(models.Model):
         qs = cls.objects.filter(restaurant=restaurant, credit_note_number__startswith=prefix)
         count = qs.count() + 1
         return f"{prefix}{count:04d}"
+
+
+class POSCounter(models.Model):
+    """
+    Logical master record representing a billing desk or service counter.
+    """
+    restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='pos_counters')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='pos_counters')
+    name = models.CharField(max_length=100, help_text="e.g. Main Desk, Bar Counter, Express Takeaway")
+    place = models.CharField(max_length=150, blank=True, default='', help_text="Optional location e.g. Ground Floor Lobby, Rooftop Lounge")
+    standard_opening_amount = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=Decimal('0.00'), 
+        help_text="Default base cash float configured for this counter"
+    )
+    is_active = models.BooleanField(default=True, help_text="Enable or disable this counter for shift selection")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        unique_together = ('restaurant', 'branch', 'name')
+        verbose_name = 'POS Counter'
+        verbose_name_plural = 'POS Counters'
+
+    def __str__(self):
+        loc_str = f" ({self.place})" if self.place else ""
+        return f"{self.name}{loc_str}"
+
+    @property
+    def current_active_shift(self):
+        return self.shifts.filter(status=POSShift.Status.OPEN).first()
+
+
+class POSShift(models.Model):
+    """
+    Transactional record representing a cashier operating session against a specific logical counter.
+    """
+    class Status(models.TextChoices):
+        OPEN = 'OPEN', _('Open / Active')
+        CLOSED = 'CLOSED', _('Closed / Reconciled')
+
+    restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='pos_shifts')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='pos_shifts')
+    counter = models.ForeignKey(POSCounter, on_delete=models.CASCADE, related_name='shifts')
+    cashier = models.ForeignKey('auth.User', on_delete=models.CASCADE, related_name='pos_shifts')
+    
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN, db_index=True)
+    opened_at = models.DateTimeField(auto_now_add=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    
+    opening_amount = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=Decimal('0.00'), 
+        help_text="Actual physical cash float in drawer at start of shift"
+    )
+    closing_cash_actual = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True, 
+        help_text="Actual cash counted by cashier at close of register"
+    )
+    closing_cash_expected = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=Decimal('0.00'), 
+        help_text="Opening Amount + Cash Sales - Cash Refunds"
+    )
+    cash_discrepancy = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=Decimal('0.00'), 
+        help_text="Actual - Expected (Positive = Overage, Negative = Shortage)"
+    )
+    notes = models.TextField(blank=True, default='')
+    closed_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='closed_pos_shifts')
+
+    class Meta:
+        ordering = ['-opened_at']
+        verbose_name = 'POS Shift'
+        verbose_name_plural = 'POS Shifts'
+
+    def __str__(self):
+        return f"Shift #{self.id} - {self.counter.name} ({self.cashier.get_full_name() or self.cashier.username}) [{self.status}]"
+
+    def calculate_expected_cash(self):
+        """
+        Expected Cash = Opening Amount + Cash Payments Collected - Cash Refunds Issued
+        """
+        cash_sales = Decimal('0.00')
+        for order in self.orders.exclude(status=Order.OrderStatus.CANCELLED):
+            order_payments = order.payments or []
+            if not order_payments and order.paid_amount and order.paid_amount > Decimal('0.00'):
+                if str(order.payment_method or '').lower() == 'cash':
+                    cash_sales += Decimal(str(order.paid_amount))
+            else:
+                for p in order_payments:
+                    if str(p.get('method', '')).lower() == 'cash':
+                        try:
+                            cash_sales += Decimal(str(p.get('amount') or 0))
+                        except Exception:
+                            pass
+
+        cash_refunds = Decimal('0.00')
+        for cn in self.credit_notes.all():
+            if cn.refund_route == CreditNote.RefundRoute.CASH:
+                try:
+                    cash_refunds += Decimal(str(cn.total_refund_amount or 0))
+                except Exception:
+                    pass
+
+        return (Decimal(str(self.opening_amount or 0)) + cash_sales - cash_refunds).quantize(Decimal('0.01'))
+
+    def get_financial_summary(self):
+        """
+        Detailed breakdown for X-Report / Z-Report
+        """
+        cash_sales = Decimal('0.00')
+        upi_sales = Decimal('0.00')
+        card_sales = Decimal('0.00')
+        other_sales = Decimal('0.00')
+        total_sales = Decimal('0.00')
+
+        orders_qs = self.orders.exclude(status=Order.OrderStatus.CANCELLED)
+        order_count = orders_qs.count()
+
+        for order in orders_qs:
+            order_total = Decimal(str(order.total_amount or 0))
+            total_sales += order_total
+            order_payments = order.payments or []
+            if not order_payments and order.paid_amount and order.paid_amount > Decimal('0.00'):
+                method = str(order.payment_method or '').lower()
+                amt = Decimal(str(order.paid_amount))
+                if method == 'cash':
+                    cash_sales += amt
+                elif method == 'upi':
+                    upi_sales += amt
+                elif method == 'card':
+                    card_sales += amt
+                else:
+                    other_sales += amt
+            else:
+                for p in order_payments:
+                    method = str(p.get('method', '')).lower()
+                    try:
+                        amt = Decimal(str(p.get('amount') or 0))
+                    except Exception:
+                        amt = Decimal('0.00')
+                    if method == 'cash':
+                        cash_sales += amt
+                    elif method == 'upi':
+                        upi_sales += amt
+                    elif method == 'card':
+                        card_sales += amt
+                    else:
+                        other_sales += amt
+
+        refunds_qs = self.credit_notes.all()
+        refund_count = refunds_qs.count()
+        cash_refunds = Decimal('0.00')
+        total_refunds = Decimal('0.00')
+        for cn in refunds_qs:
+            try:
+                r_amt = Decimal(str(cn.total_refund_amount or 0))
+            except Exception:
+                r_amt = Decimal('0.00')
+            total_refunds += r_amt
+            if cn.refund_route == CreditNote.RefundRoute.CASH:
+                cash_refunds += r_amt
+
+        expected_cash = (Decimal(str(self.opening_amount or 0)) + cash_sales - cash_refunds).quantize(Decimal('0.01'))
+        actual_cash = Decimal(str(self.closing_cash_actual or 0)) if self.closing_cash_actual is not None else None
+        discrepancy = (actual_cash - expected_cash) if actual_cash is not None else Decimal('0.00')
+
+        return {
+            'order_count': order_count,
+            'total_sales': total_sales.quantize(Decimal('0.01')),
+            'cash_sales': cash_sales.quantize(Decimal('0.01')),
+            'upi_sales': upi_sales.quantize(Decimal('0.01')),
+            'card_sales': card_sales.quantize(Decimal('0.01')),
+            'other_sales': other_sales.quantize(Decimal('0.01')),
+            'refund_count': refund_count,
+            'total_refunds': total_refunds.quantize(Decimal('0.01')),
+            'cash_refunds': cash_refunds.quantize(Decimal('0.01')),
+            'opening_amount': Decimal(str(self.opening_amount or 0)).quantize(Decimal('0.01')),
+            'expected_cash': expected_cash,
+            'actual_cash': actual_cash.quantize(Decimal('0.01')) if actual_cash is not None else None,
+            'discrepancy': discrepancy.quantize(Decimal('0.01')),
+        }

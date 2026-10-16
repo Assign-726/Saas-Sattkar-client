@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Z-Report Shift #{{ shift.id }} - {{ restaurant.name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: #f1f5f9;
+      font-family: 'Inter', -apple-system, sans-serif;
+      color: #1e293b;
+      padding: 20px 10px;
+    }
+
+    .top-action-bar {
+      max-width: 80mm;
+      margin: 0 auto 16px;
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .btn-action {
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      color: #334155;
+      transition: all 0.15s ease;
+    }
+    .btn-action:hover {
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    .btn-primary {
+      background: #2563eb;
+      color: #ffffff;
+      border-color: #2563eb;
+    }
+    .btn-primary:hover {
+      background: #1d4ed8;
+      color: #ffffff;
+    }
+
+    .thermal-receipt {
+      width: 80mm;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 16px 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+      border-radius: 8px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11.5px;
+      line-height: 1.35;
+      color: #000000;
+    }
+
+    .text-center { text-align: center; }
+    .text-end { text-align: right; }
+    .fw-bold { font-weight: 700; }
+    .fw-semibold { font-weight: 600; }
+
+    .receipt-header {
+      border-bottom: 1.5px dashed #000000;
+      padding-bottom: 10px;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+    .receipt-title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+    }
+    .receipt-subtitle {
+      font-size: 11px;
+      color: #333333;
+    }
+    .report-badge {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 3px 8px;
+      background: #000000;
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      border-radius: 4px;
+    }
+
+    .info-grid {
+      border-bottom: 1px dashed #000000;
+      padding-bottom: 8px;
+      margin-bottom: 8px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 3px;
+      font-size: 11px;
+    }
+    .info-label { color: #444444; }
+    .info-val { font-weight: 600; text-align: right; }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid #000000;
+      padding-bottom: 2px;
+      margin: 10px 0 6px;
+    }
+
+    .data-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 3px;
+    }
+
+    .reconciliation-box {
+      border: 1.5px solid #000000;
+      border-radius: 4px;
+      padding: 8px;
+      margin: 10px 0;
+      background: #fafafa;
+    }
+    .reconciliation-title {
+      font-weight: 700;
+      text-transform: uppercase;
+      text-align: center;
+      margin-bottom: 6px;
+      border-bottom: 1px solid #000000;
+      padding-bottom: 3px;
+    }
+
+    .discrepancy-row {
+      border-top: 1.5px dashed #000000;
+      margin-top: 6px;
+      padding-top: 6px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .sig-area {
+      margin-top: 24px;
+      padding-top: 10px;
+      border-top: 1px dashed #000000;
+    }
+    .sig-line {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 24px;
+      font-size: 10px;
+    }
+
+    @media print {
+      body {
+        background: none;
+        padding: 0;
+      }
+      .top-action-bar {
+        display: none !important;
+      }
+      .thermal-receipt {
+        width: 100% !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        padding: 4px 0 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Action Bar (Hidden on Print) -->
+  <div class="top-action-bar">
+    <a href="javascript:window.history.back()" class="btn-action">
+      <i class="bi bi-arrow-left"></i> Back
+    </a>
+    <button onclick="window.print()" class="btn-action btn-primary">
+      <i class="bi bi-printer"></i> Print Z-Report
+    </button>
+  </div>
+
+  <!-- Thermal Paper Container -->
+  <div class="thermal-receipt">
+    <!-- Header -->
+    <div class="receipt-header">
+      <div class="receipt-title">{{ restaurant.name }}</div>
+      {% if shift.branch %}
+      <div class="receipt-subtitle">{{ shift.branch.name }}</div>
+      {% endif %}
+      <div class="report-badge">END-OF-SHIFT Z-REPORT</div>
+    </div>
+
+    <!-- Shift Session Metadata -->
+    <div class="info-grid">
+      <div class="info-row">
+        <span class="info-label">Shift Session:</span>
+        <span class="info-val">#{{ shift.id }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Counter / Desk:</span>
+        <span class="info-val">{{ shift.counter.name }}</span>
+      </div>
+      {% if shift.counter.place %}
+      <div class="info-row">
+        <span class="info-label">Location:</span>
+        <span class="info-val">{{ shift.counter.place }}</span>
+      </div>
+      {% endif %}
+      <div class="info-row">
+        <span class="info-label">Cashier:</span>
+        <span class="info-val">{{ shift.cashier.get_full_name|default:shift.cashier.username }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Register Opened:</span>
+        <span class="info-val">{{ shift.opened_at|date:"d/m/y h:i A" }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Register Closed:</span>
+        <span class="info-val">{{ shift.closed_at|date:"d/m/y h:i A"|default:"Active (X-Read)" }}</span>
+      </div>
+    </div>
+
+    <!-- Volume & Sales Summary -->
+    <div class="section-title">Order Volume Summary</div>
+    <div class="data-row">
+      <span>Total Orders:</span>
+      <span class="fw-bold">{{ summary.order_count }}</span>
+    </div>
+    <div class="data-row">
+      <span>Dine-In:</span>
+      <span>{{ dine_in_count }}</span>
+    </div>
+    <div class="data-row">
+      <span>Takeaway:</span>
+      <span>{{ takeaway_count }}</span>
+    </div>
+    <div class="data-row">
+      <span>Delivery:</span>
+      <span>{{ delivery_count }}</span>
+    </div>
+
+    <!-- Revenue Tender Breakdown -->
+    <div class="section-title">Payment Tender Summary</div>
+    <div class="data-row">
+      <span>Cash Sales:</span>
+      <span class="fw-bold">₹{{ summary.cash_sales|floatformat:2 }}</span>
+    </div>
+    <div class="data-row">
+      <span>UPI / QR:</span>
+      <span class="fw-bold">₹{{ summary.upi_sales|floatformat:2 }}</span>
+    </div>
+    <div class="data-row">
+      <span>Card:</span>
+      <span class="fw-bold">₹{{ summary.card_sales|floatformat:2 }}</span>
+    </div>
+    {% if summary.other_sales > 0 %}
+    <div class="data-row">
+      <span>Other Tenders:</span>
+      <span class="fw-bold">₹{{ summary.other_sales|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+    <div class="data-row" style="border-top: 1px dashed #000; padding-top: 3px; font-weight: 700;">
+      <span>Gross Sales:</span>
+      <span>₹{{ summary.total_sales|floatformat:2 }}</span>
+    </div>
+
+    <!-- Refunds & Deductions -->
+    {% if summary.total_refunds > 0 %}
+    <div class="section-title">Refunds & Credit Notes</div>
+    <div class="data-row">
+      <span>Credit Notes Count:</span>
+      <span>{{ summary.refund_count }}</span>
+    </div>
+    <div class="data-row">
+      <span>Cash Refunds Issued:</span>
+      <span class="fw-bold">-₹{{ summary.cash_refunds|floatformat:2 }}</span>
+    </div>
+    <div class="data-row">
+      <span>Total Refunds:</span>
+      <span class="fw-bold">-₹{{ summary.total_refunds|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+
+    <!-- Cash Drawer Reconciliation Box -->
+    <div class="reconciliation-box">
+      <div class="reconciliation-title">Cash Drawer Reconciliation</div>
+      <div class="data-row">
+        <span>(+) Opening Float:</span>
+        <span>₹{{ summary.opening_amount|floatformat:2 }}</span>
+      </div>
+      <div class="data-row">
+        <span>(+) Cash Collections:</span>
+        <span>₹{{ summary.cash_sales|floatformat:2 }}</span>
+      </div>
+      <div class="data-row">
+        <span>(-) Cash Refunds:</span>
+        <span>₹{{ summary.cash_refunds|floatformat:2 }}</span>
+      </div>
+      <div class="data-row" style="border-top: 1px solid #000; padding-top: 3px; font-weight: 700;">
+        <span>Expected Drawer Cash:</span>
+        <span>₹{{ summary.expected_cash|floatformat:2 }}</span>
+      </div>
+      <div class="data-row" style="margin-top: 4px;">
+        <span>Actual Counted Cash:</span>
+        <span class="fw-bold">₹{{ summary.actual_cash|floatformat:2|default:"-" }}</span>
+      </div>
+
+      <div class="data-row discrepancy-row">
+        <span>Discrepancy (Variance):</span>
+        <span>
+          {% if summary.discrepancy == 0 %}
+            ₹0.00 (EXACT)
+          {% elif summary.discrepancy < 0 %}
+            -₹{{ summary.discrepancy|stringformat:".2f"|slice:"1:" }} (SHORT)
+          {% else %}
+            +₹{{ summary.discrepancy|floatformat:2 }} (OVER)
+          {% endif %}
+        </span>
+      </div>
+    </div>
+
+    {% if shift.notes %}
+    <div class="data-row" style="font-size: 10.5px; font-style: italic; margin-top: 6px;">
+      <span>Shift Notes:</span>
+      <span>{{ shift.notes }}</span>
+    </div>
+    {% endif %}
+
+    <!-- Signature Audit Area -->
+    <div class="sig-area">
+      <div class="sig-line">
+        <div>
+          ___________________<br>
+          Cashier Signature
+        </div>
+        <div style="text-align: right;">
+          ___________________<br>
+          Manager Audit Signature
+        </div>
+      </div>
+    </div>
+
+    <div class="text-center text-muted" style="font-size: 9.5px; margin-top: 14px; border-top: 1px dashed #ccc; padding-top: 6px;">
+      Generated: {{ generated_at|date:"d M Y, h:i:s A" }} &bull; By: {{ generated_by }}
+    </div>
+  </div>
+
+  <script>
+    // Auto-open print dialog if requested via ?autoprint=1
+    if (new URLSearchParams(window.location.search).get('autoprint') === '1') {
+      window.print();
+    }
+  </script>
+</body>
+</html>

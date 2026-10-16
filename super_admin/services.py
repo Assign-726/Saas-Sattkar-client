@@ -6,6 +6,7 @@ import hashlib
 import logging
 import requests
 from django.conf import settings
+from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,67 @@ class MasterBillingService:
     Client service for communicating with MasterRestro Master Admin Cloud.
     Retrieves live subscription contracts, plans, renewal countdown timers, and invoices.
     """
+    SUBSCRIPTION_CACHE_KEY_PREFIX = "sattkar:subscription"
+
+    @classmethod
+    def get_cache_key(cls, restaurant=None) -> str:
+        r_id = getattr(restaurant, 'pk', '0') if restaurant else '0'
+        return f"{cls.SUBSCRIPTION_CACHE_KEY_PREFIX}:{r_id}"
+
+    @classmethod
+    def invalidate_cache(cls, restaurant=None):
+        cache.delete(cls.get_cache_key(restaurant))
+
+    @classmethod
+    def is_connected(cls, restaurant=None) -> bool:
+        """
+        Returns True if this instance is actively connected and synchronized with Master Admin.
+        """
+        if restaurant is None:
+            try:
+                from super_admin.models import Restaurant
+                restaurant = Restaurant.objects.first()
+            except Exception:
+                restaurant = None
+        if not restaurant:
+            return False
+
+        if getattr(restaurant, 'master_sync_status', '') != 'SYNCED':
+            return False
+
+        if not getattr(restaurant, 'features_last_synced_at', None):
+            return False
+
+        try:
+            cache_key = cls.get_cache_key(restaurant)
+            cached = cache.get(cache_key)
+            if cached and isinstance(cached, dict):
+                return cached.get('connection_status') == 'CONNECTED'
+        except Exception:
+            pass
+
+        return True
+
+    @classmethod
+    def _build_identity(cls, restaurant=None) -> dict:
+        params = {}
+        if restaurant:
+            email = getattr(restaurant, 'email', None)
+            if email:
+                params['email'] = email.strip()
+            phone = getattr(restaurant, 'phone', None)
+            if phone:
+                params['phone'] = phone.strip()
+            trade_name = getattr(restaurant, 'trade_name', '') or getattr(restaurant, 'name', '')
+            if trade_name:
+                params['business_name'] = trade_name.strip()
+            license_key = getattr(restaurant, 'master_license_key', None)
+            if license_key:
+                params['license_key'] = license_key
+            slug = getattr(restaurant, 'slug', None)
+            if slug:
+                params['domain'] = slug
+        return params
 
     @staticmethod
     def get_config():
@@ -39,7 +101,12 @@ class MasterBillingService:
         return headers
 
     @classmethod
-    def fetch_subscription_details(cls, restaurant=None) -> dict:
+    def fetch_subscription_details(cls, restaurant=None, force: bool = False) -> dict:
+        cache_key = cls.get_cache_key(restaurant)
+        if not force:
+            cached_val = cache.get(cache_key)
+            if cached_val:
+                return cached_val
         """
         Fetches live subscription details from Master Admin.
         Falls back to local restaurant state if Master Admin is offline or unreachable.
@@ -47,24 +114,7 @@ class MasterBillingService:
         master_url, _ = cls.get_config()
         endpoint = f"{master_url}/api/billing/subscription"
 
-        params = {}
-        if restaurant:
-            # Send email, phone, and business name for seamless matching without strict domain/license checks
-            email = getattr(restaurant, 'email', None)
-            if email:
-                params['email'] = email.strip()
-            phone = getattr(restaurant, 'phone', None)
-            if phone:
-                params['phone'] = phone.strip()
-            trade_name = getattr(restaurant, 'trade_name', '') or getattr(restaurant, 'name', '')
-            if trade_name:
-                params['business_name'] = trade_name.strip()
-            license_key = getattr(restaurant, 'master_license_key', None)
-            if license_key:
-                params['license_key'] = license_key
-            slug = getattr(restaurant, 'slug', None)
-            if slug:
-                params['domain'] = slug
+        params = cls._build_identity(restaurant)
 
         headers = cls.get_headers()
 
@@ -170,7 +220,11 @@ class MasterBillingService:
                             overdue_days = int(sub_payload.get('overdue_days', 0) or 0)
                             is_suspended = (sub_status == 'SUSPENDED')
                             is_locked = bool(sub_payload.get('is_locked', False) or is_suspended or grace_expired)
-                            plan_name = sub_payload.get('plan_name', '')
+                            raw_plan = sub_payload.get('plan_name')
+                            plan_name = str(raw_plan) if raw_plan is not None else ''
+
+                            is_trial = bool(sub_payload.get('is_trial', False))
+                            trial_days_remaining = int(sub_payload.get('trial_days_remaining', 0) or 0)
 
                             sub_updates = {
                                 'subscription_status': sub_status,
@@ -180,7 +234,20 @@ class MasterBillingService:
                                 'subscription_overdue_days': overdue_days,
                                 'subscription_is_locked': is_locked,
                                 'subscription_plan_name': plan_name,
+                                'subscription_is_trial': is_trial,
+                                'subscription_trial_days_remaining': trial_days_remaining,
+                                'subscription_trial_ends_at': None,
+                                'subscription_next_billing_date': None,
                             }
+                            trial_ends_str = sub_payload.get('trial_ends_at')
+                            if trial_ends_str:
+                                try:
+                                    from django.utils.dateparse import parse_datetime
+                                    p_trial = parse_datetime(trial_ends_str)
+                                    if p_trial:
+                                        sub_updates['subscription_trial_ends_at'] = p_trial
+                                except Exception:
+                                    pass
                             next_bill_str = sub_payload.get('next_billing_date')
                             if next_bill_str:
                                 try:
@@ -276,30 +343,56 @@ class MasterBillingService:
                         if 'setup_fee' not in cp or cp.get('setup_fee') is None:
                             cp['setup_fee'] = cp.get('setupFee') or 0
 
+                    cache.set(cache_key, data, 60)
                     return data
             logger.warning(f"[MasterBillingService] Server returned status {resp.status_code}: {resp.text[:200]}")
+            conn_status = "NOT_CONNECTED" if resp.status_code == 404 else "SERVER_ERROR"
+            if restaurant:
+                try:
+                    from super_admin.models import Restaurant
+                    Restaurant.objects.filter(pk=restaurant.pk).update(master_sync_status=conn_status)
+                    restaurant.master_sync_status = conn_status
+                except Exception:
+                    pass
             fallback = cls._build_local_fallback(restaurant)
-            fallback["connection_status"] = "SERVER_ERROR"
+            fallback["connection_status"] = conn_status
             fallback["master_url"] = master_url
             fallback["message"] = f"Master Admin returned status {resp.status_code}"
+            cache.set(cache_key, fallback, 30)
             return fallback
         except requests.exceptions.RequestException as exc:
             logger.warning(f"[MasterBillingService] Master Admin offline / unreachable: {exc}")
+            if restaurant:
+                try:
+                    from super_admin.models import Restaurant
+                    Restaurant.objects.filter(pk=restaurant.pk).update(master_sync_status="OFFLINE")
+                    restaurant.master_sync_status = "OFFLINE"
+                except Exception:
+                    pass
             fallback = cls._build_local_fallback(restaurant)
             fallback["connection_status"] = "OFFLINE"
             fallback["master_url"] = master_url
             fallback["message"] = f"Could not connect to Master Admin at {master_url}."
+            cache.set(cache_key, fallback, 30)
             return fallback
         except Exception as exc:
             logger.error(f"[MasterBillingService] Unexpected error: {exc}")
+            if restaurant:
+                try:
+                    from super_admin.models import Restaurant
+                    Restaurant.objects.filter(pk=restaurant.pk).update(master_sync_status="ERROR")
+                    restaurant.master_sync_status = "ERROR"
+                except Exception:
+                    pass
             fallback = cls._build_local_fallback(restaurant)
             fallback["connection_status"] = "ERROR"
             fallback["master_url"] = master_url
             fallback["message"] = str(exc)
+            cache.set(cache_key, fallback, 30)
             return fallback
 
     @classmethod
-    def submit_upgrade_request(cls, restaurant, requested_plan_name: str, requested_billing_cycle: str = "MONTHLY", notes: str = "", contact_phone: str = "", contact_email: str = "", stack_configuration: dict = None) -> dict:
+    def submit_upgrade_request(cls, restaurant, requested_plan_name: str, requested_billing_cycle: str = "MONTHLY", notes: str = "", contact_phone: str = "", contact_email: str = "", stack_configuration: dict = None, action: str = "UPGRADE_OR_RENEWAL_REQUEST", trial_days: int = 14) -> dict:
         """
         Pushes a plan change / renewal upgrade request to Master Admin enquiries desk.
         """
@@ -310,7 +403,8 @@ class MasterBillingService:
             "license_key": getattr(restaurant, 'master_license_key', '') if restaurant else "",
             "domain": getattr(restaurant, 'slug', '') if restaurant else "",
             "business_name": (getattr(restaurant, 'trade_name', '') or getattr(restaurant, 'name', '')) if restaurant else "Restaurant Super Admin",
-            "action": "UPGRADE_OR_RENEWAL_REQUEST",
+            "action": action,
+            "trial_days": trial_days,
             "requested_plan_name": requested_plan_name,
             "requested_billing_cycle": requested_billing_cycle,
             "notes": notes,
@@ -326,6 +420,11 @@ class MasterBillingService:
         try:
             resp = requests.post(endpoint, data=body_json, headers=headers, timeout=5)
             if resp.status_code == 200:
+                cls.invalidate_cache(restaurant)
+                try:
+                    cls.fetch_subscription_details(restaurant, force=True)
+                except Exception:
+                    pass
                 return resp.json()
             return {"status": "error", "message": f"Master Admin returned status {resp.status_code}: {resp.text}"}
         except Exception as exc:
@@ -361,18 +460,18 @@ class MasterBillingService:
 
         from restaurant_project import constants
         modules = {
-            "SHOW_WEBSITE_PAGES": getattr(restaurant, 'feature_website_pages', constants._DEFAULT_SHOW_WEBSITE_PAGES) if restaurant else constants._DEFAULT_SHOW_WEBSITE_PAGES,
-            "ENABLE_ALCOHOL_VAT": getattr(restaurant, 'feature_alcohol_vat', constants._DEFAULT_ENABLE_ALCOHOL_VAT) if restaurant else constants._DEFAULT_ENABLE_ALCOHOL_VAT,
-            "ENABLE_CLUB_EVENTS_MODULE": getattr(restaurant, 'feature_club_events', constants._DEFAULT_ENABLE_CLUB_EVENTS_MODULE) if restaurant else constants._DEFAULT_ENABLE_CLUB_EVENTS_MODULE,
-            "ENABLE_HOTEL_MODULE": getattr(restaurant, 'feature_hotel_pms', constants._DEFAULT_ENABLE_HOTEL_MODULE) if restaurant else constants._DEFAULT_ENABLE_HOTEL_MODULE,
-            "ENABLE_RESTAURANT_MODULE": getattr(restaurant, 'feature_restaurant_pos', constants._DEFAULT_ENABLE_RESTAURANT_MODULE) if restaurant else constants._DEFAULT_ENABLE_RESTAURANT_MODULE,
-            "ENABLE_HOTEL_WEBSITE": getattr(restaurant, 'feature_hotel_website', constants._DEFAULT_ENABLE_HOTEL_WEBSITE) if restaurant else constants._DEFAULT_ENABLE_HOTEL_WEBSITE,
+            "SHOW_WEBSITE_PAGES": constants._DEFAULT_SHOW_WEBSITE_PAGES,
+            "ENABLE_ALCOHOL_VAT": constants._DEFAULT_ENABLE_ALCOHOL_VAT,
+            "ENABLE_CLUB_EVENTS_MODULE": constants._DEFAULT_ENABLE_CLUB_EVENTS_MODULE,
+            "ENABLE_HOTEL_MODULE": constants._DEFAULT_ENABLE_HOTEL_MODULE,
+            "ENABLE_RESTAURANT_MODULE": constants._DEFAULT_ENABLE_RESTAURANT_MODULE,
+            "ENABLE_HOTEL_WEBSITE": constants._DEFAULT_ENABLE_HOTEL_WEBSITE,
         }
 
         return {
             "status": "offline",
-            "connection_status": "OFFLINE",
-            "message": "Master Admin is currently not connected or unreachable.",
+            "connection_status": "NOT_CONNECTED",
+            "message": "Sattkar is currently not connected or unreachable. Local configuration active.",
             "modules": modules,
             "client": {
                 "business_name": business_name or "Registered Business",
@@ -383,16 +482,198 @@ class MasterBillingService:
                 "email": email,
                 "phone": phone,
                 "branch_count": branch_count,
-                "max_branches": restaurant.get_max_allowed_branches() if restaurant else constants.MAX_ALLOWED_BRANCHES,
-                "max_businesses": restaurant.get_max_allowed_businesses() if restaurant else constants.MAX_ALLOWED_BUSINESSES,
+                "max_branches": constants.MAX_ALLOWED_BRANCHES,
+                "max_businesses": constants.MAX_ALLOWED_BUSINESSES,
             },
-            "subscription": None,
+            "subscription": {
+                "status": getattr(restaurant, 'subscription_status', 'ACTIVE') if restaurant else 'ACTIVE',
+                "plan_name": getattr(restaurant, 'subscription_plan_name', '') or "Standard Plan (Local .env)",
+                "billing_cycle": "MONTHLY",
+                "currency": "₹",
+                "monthly_fee": 0,
+                "days_remaining": 30,
+                "hours_remaining": 0,
+                "minutes_remaining": 0,
+                "seconds_remaining": 0,
+                "total_seconds_remaining": 0,
+                "in_grace_period": False,
+                "grace_days_remaining": 0,
+                "grace_period_expired": False,
+                "is_locked": False,
+                "is_trial": False,
+                "trial_days": 0,
+                "trial_days_remaining": 0,
+                "trial_ends_at": None,
+                "payment_due": False,
+            },
+            "pending_payment": None,
+            "pending_addons": [],
             "current_plan": {
-                "name": getattr(restaurant, 'subscription_plan_name', '') or "Standard",
-                "max_branches": restaurant.get_max_allowed_branches() if restaurant else constants.MAX_ALLOWED_BRANCHES,
+                "name": getattr(restaurant, 'subscription_plan_name', '') or "Standard Plan (Local)",
+                "description": "Standard Plan (Local Fallback)",
+                "max_branches": constants.MAX_ALLOWED_BRANCHES,
                 "monthly_fee": 0,
                 "price": 0,
-            } if restaurant else None,
+                "features": ["Cloud POS", "Multi-Branch Operations", "Inventory Control", "Live Billing & Reports"],
+            },
             "available_plans": [],
             "invoices": [],
         }
+
+    @classmethod
+    def end_trial(cls, restaurant=None) -> dict:
+        """
+        Ends the restaurant's free trial immediately, transitioning the account to regular billing
+        and generating the first subscription invoice with a Razorpay link.
+        """
+        master_url, _ = cls.get_config()
+        endpoint = f"{master_url}/api/billing/subscription"
+        payload = {
+            **cls._build_identity(restaurant),
+            "action": "END_TRIAL",
+        }
+        body_json = json.dumps(payload, separators=(',', ':'))
+        headers = cls.get_headers(body_json)
+        try:
+            resp = requests.post(endpoint, data=body_json, headers=headers, timeout=10)
+            data = resp.json()
+            if resp.status_code == 200 and data.get("status") == "success":
+                cls.invalidate_cache(restaurant)
+                cls.fetch_subscription_details(restaurant, force=True)
+            return data
+        except Exception as exc:
+            logger.error(f"[MasterBillingService] end_trial failed: {exc}")
+            return {"status": "error", "message": f"Could not end trial: {exc}"}
+
+    @classmethod
+    def check_invoice_status(cls, restaurant=None, invoice_no=None, invoice_id=None, payment_link_id=None) -> dict:
+        """
+        Confirms payment status with Master Admin & Razorpay immediately ('I've paid' action).
+        """
+        master_url, _ = cls.get_config()
+        endpoint = f"{master_url}/api/billing/invoice-status"
+
+        body = cls._build_identity(restaurant)
+        if invoice_no:
+            body["invoice_no"] = str(invoice_no).strip()
+        if invoice_id:
+            body["invoice_id"] = str(invoice_id).strip()
+        if payment_link_id:
+            body["payment_link_id"] = str(payment_link_id).strip()
+
+        body_json = json.dumps(body, separators=(',', ':'))
+        headers = cls.get_headers(body_json)
+
+        try:
+            resp = requests.post(endpoint, data=body_json, headers=headers, timeout=10)
+            data = resp.json()
+            if resp.status_code == 200 and data.get("status") == "success":
+                inv = data.get("invoice", {})
+                if inv.get("paid"):
+                    cls.invalidate_cache(restaurant)
+                    # Refresh fresh subscription state directly
+                    cls.fetch_subscription_details(restaurant, force=True)
+            return data
+        except Exception as exc:
+            logger.error(f"[MasterBillingService] check_invoice_status failed: {exc}")
+            return {"status": "error", "message": f"Could not verify invoice: {exc}"}
+
+    @classmethod
+    def fetch_addons(cls, restaurant=None) -> dict:
+        """
+        Fetches dynamic catalog of available add-on modules, new outlet options,
+        existing outlets, and recent add-on orders from Master Admin.
+        """
+        master_url, _ = cls.get_config()
+        endpoint = f"{master_url}/api/billing/addons"
+        params = cls._build_identity(restaurant)
+        headers = cls.get_headers()
+
+        try:
+            resp = requests.get(endpoint, params=params, headers=headers, timeout=6)
+            return resp.json()
+        except Exception as exc:
+            logger.error(f"[MasterBillingService] fetch_addons failed: {exc}")
+            return {"status": "error", "message": f"Could not load add-on catalog: {exc}"}
+
+    @classmethod
+    def quote_addons(cls, restaurant=None, items=None, new_outlets=None) -> dict:
+        """
+        Requests instant prorated price quotation for selected add-ons from Master Admin.
+        """
+        master_url, _ = cls.get_config()
+        endpoint = f"{master_url}/api/billing/addons"
+
+        payload = {
+            **cls._build_identity(restaurant),
+            "items": items or [],
+            "new_outlets": new_outlets or [],
+            "preview": True,
+        }
+        body_json = json.dumps(payload, separators=(',', ':'))
+        headers = cls.get_headers(body_json)
+
+        try:
+            resp = requests.post(endpoint, data=body_json, headers=headers, timeout=6)
+            return resp.json()
+        except Exception as exc:
+            logger.error(f"[MasterBillingService] quote_addons failed: {exc}")
+            return {"status": "error", "message": f"Could not calculate quote: {exc}"}
+
+    @classmethod
+    def order_addons(cls, restaurant=None, items=None, new_outlets=None, notes="", requested_by_name="") -> dict:
+        """
+        Places a self-serve add-on order with Master Admin, returning Razorpay payment_url
+        or activating immediately if in trial.
+        """
+        master_url, _ = cls.get_config()
+        endpoint = f"{master_url}/api/billing/addons"
+
+        payload = {
+            **cls._build_identity(restaurant),
+            "items": items or [],
+            "new_outlets": new_outlets or [],
+            "notes": notes,
+            "requested_by_name": requested_by_name,
+            "preview": False,
+        }
+        body_json = json.dumps(payload, separators=(',', ':'))
+        headers = cls.get_headers(body_json)
+
+        try:
+            resp = requests.post(endpoint, data=body_json, headers=headers, timeout=8)
+            data = resp.json()
+            if resp.status_code == 200 and data.get("status") == "success":
+                cls.invalidate_cache(restaurant)
+                cls.fetch_subscription_details(restaurant, force=True)
+            return data
+        except Exception as exc:
+            logger.error(f"[MasterBillingService] order_addons failed: {exc}")
+            return {"status": "error", "message": f"Could not place add-on order: {exc}"}
+
+    @classmethod
+    def cancel_addon_order(cls, restaurant=None, order_id=None) -> dict:
+        """
+        Cancels an unpaid add-on order on Master Admin.
+        """
+        master_url, _ = cls.get_config()
+        endpoint = f"{master_url}/api/billing/addons"
+
+        payload = {
+            **cls._build_identity(restaurant),
+            "action": "cancel",
+            "order_id": order_id,
+        }
+        body_json = json.dumps(payload, separators=(',', ':'))
+        headers = cls.get_headers(body_json)
+
+        try:
+            resp = requests.post(endpoint, data=body_json, headers=headers, timeout=6)
+            data = resp.json()
+            if resp.status_code == 200 and data.get("status") == "success":
+                cls.invalidate_cache(restaurant)
+                cls.fetch_subscription_details(restaurant, force=True)
+            return data
+        except Exception as exc:
+            logger.error(f"[MasterBillingService] cancel_addon_order failed: {exc}")
+            return {"status": "error", "message": f"Could not cancel add-on order: {exc}"}

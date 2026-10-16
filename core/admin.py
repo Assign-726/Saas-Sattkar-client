@@ -3,7 +3,7 @@ from django.utils.html import format_html
 from django import forms
 from django.core.exceptions import ValidationError
 # pyrefly: ignore [missing-import]
-from .models import Category, SubCategory, MenuItem, Order, OrderItem, RestaurantSettings, RestaurantLanding, GalleryImage, TeamMember, Review, Coupon, InventoryItem, MenuItemIngredient, InventoryTransaction, BlogPost, BlogComment, CreditNote
+from .models import Category, SubCategory, MenuItem, Order, OrderItem, RestaurantSettings, RestaurantLanding, GalleryImage, TeamMember, Review, Coupon, InventoryItem, MenuItemIngredient, InventoryTransaction, BlogPost, BlogComment, CreditNote, POSCounter, POSShift
 
 
 class SubCategoryInline(admin.TabularInline):
@@ -390,3 +390,18 @@ class BlogCommentAdmin(admin.ModelAdmin):
     list_display = ('author_name', 'post', 'is_approved', 'created_at')
     list_filter = ('is_approved', 'created_at')
     search_fields = ('author_name', 'author_email', 'content', 'post__title')
+
+
+@admin.register(POSCounter)
+class POSCounterAdmin(admin.ModelAdmin):
+    list_display = ('name', 'place', 'restaurant', 'branch', 'standard_opening_amount', 'is_active', 'created_at')
+    list_filter = ('restaurant', 'branch', 'is_active')
+    search_fields = ('name', 'place')
+
+
+@admin.register(POSShift)
+class POSShiftAdmin(admin.ModelAdmin):
+    list_display = ('id', 'counter', 'cashier', 'status', 'opening_amount', 'closing_cash_actual', 'closing_cash_expected', 'cash_discrepancy', 'opened_at', 'closed_at')
+    list_filter = ('status', 'restaurant', 'branch', 'counter')
+    search_fields = ('counter__name', 'cashier__username', 'cashier__first_name', 'cashier__last_name')
+    readonly_fields = ('opened_at',)

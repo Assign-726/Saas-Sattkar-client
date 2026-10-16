@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 from django.test import TestCase, RequestFactory
 from django.contrib.auth.models import User
@@ -749,3 +750,163 @@ class StaffManagementTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         expected_url = reverse('hotel_admin:staff_list', kwargs={'restaurant_slug': self.restaurant.slug})
         self.assertEqual(resp.url, expected_url)
+
+
+class POSCounterAndShiftTests(TestCase):
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name="POS Test Bistro", slug="pos-bistro")
+        self.branch = RestaurantBranch.objects.create(restaurant=self.restaurant, name="Main Outlet", slug="main-outlet")
+
+        self.cashier_user = User.objects.create_user(username="cashier_john", password="Password123!", is_staff=True)
+        self.cashier_profile = RestaurantUser.objects.create(
+            user=self.cashier_user,
+            restaurant=self.restaurant,
+            branch=self.branch,
+            role=RestaurantUser.Role.CASHIER,
+            pos_pin="1234"
+        )
+
+        from core.models import POSCounter
+        self.counter = POSCounter.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            name="Main Desk",
+            place="Ground Floor Lobby",
+            standard_opening_amount=Decimal('500.00'),
+            is_active=True
+        )
+
+    def test_open_shift_valid_pin_and_counter(self):
+        from django.urls import reverse
+        from core.models import POSShift
+        self.client.force_login(self.cashier_user)
+
+        open_url = reverse('restaurant_admin:pos_open_shift_api', kwargs={'restaurant_slug': self.restaurant.slug})
+        resp = self.client.post(
+            open_url,
+            data=json.dumps({
+                'counter_id': self.counter.id,
+                'opening_amount': '500.00',
+                'pin': '1234'
+            }),
+            content_type='application/json'
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['success'])
+
+        shift = POSShift.objects.get(id=data['shift']['id'])
+        self.assertEqual(shift.status, POSShift.Status.OPEN)
+        self.assertEqual(shift.counter, self.counter)
+        self.assertEqual(shift.cashier, self.cashier_user)
+        self.assertEqual(shift.opening_amount, Decimal('500.00'))
+
+    def test_open_shift_invalid_pin_rejected(self):
+        from django.urls import reverse
+        self.client.force_login(self.cashier_user)
+
+        open_url = reverse('restaurant_admin:pos_open_shift_api', kwargs={'restaurant_slug': self.restaurant.slug})
+        resp = self.client.post(
+            open_url,
+            data=json.dumps({
+                'counter_id': self.counter.id,
+                'opening_amount': '500.00',
+                'pin': '9999'  # Wrong PIN
+            }),
+            content_type='application/json'
+        )
+        self.assertEqual(resp.status_code, 400)
+        data = resp.json()
+        self.assertFalse(data['success'])
+        self.assertIn("Invalid POS Security PIN", data['error'])
+
+    def test_shift_close_reconciliation_and_stamping(self):
+        from django.urls import reverse
+        from core.models import POSShift, Order
+        self.client.force_login(self.cashier_user)
+
+        # 1. Open Shift
+        shift = POSShift.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            counter=self.counter,
+            cashier=self.cashier_user,
+            opening_amount=Decimal('500.00'),
+            status=POSShift.Status.OPEN
+        )
+
+        # 2. Create Order stamped with this shift
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            counter=self.counter,
+            shift=shift,
+            cashier=self.cashier_user,
+            customer_name="Walk-in Guest",
+            order_type=Order.OrderType.DINE_IN,
+            status=Order.OrderStatus.COMPLETED,
+            payment_status=Order.PaymentStatus.PAID,
+            payments=[{'method': 'cash', 'amount': 350.00}],
+            total_amount=Decimal('350.00'),
+            paid_amount=Decimal('350.00')
+        )
+
+        # Expected Cash = 500 (float) + 350 (cash sale) = 850
+        self.assertEqual(shift.calculate_expected_cash(), Decimal('850.00'))
+
+        # 3. Close Shift with Actual Cash = 840 (Shortage of 10)
+        close_url = reverse('restaurant_admin:pos_close_shift_api', kwargs={'restaurant_slug': self.restaurant.slug})
+        resp = self.client.post(
+            close_url,
+            data=json.dumps({
+                'closing_cash_actual': '840.00',
+                'notes': 'Drawer short by 10'
+            }),
+            content_type='application/json'
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['success'])
+
+        shift.refresh_from_db()
+        self.assertEqual(shift.status, POSShift.Status.CLOSED)
+        self.assertEqual(shift.closing_cash_actual, Decimal('840.00'))
+        self.assertEqual(shift.closing_cash_expected, Decimal('850.00'))
+        self.assertEqual(shift.cash_discrepancy, Decimal('-10.00'))
+
+    def test_order_create_manual_view_renders_cleanly(self):
+        from django.urls import reverse
+        self.client.force_login(self.cashier_user)
+
+        # GET without active shift
+        url = reverse('restaurant_admin:order_create_manual', kwargs={'restaurant_slug': self.restaurant.slug})
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(resp.context['active_shift'])
+
+        # Open Shift
+        from core.models import POSShift
+        shift = POSShift.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            counter=self.counter,
+            cashier=self.cashier_user,
+            opening_amount=Decimal('500.00'),
+            status=POSShift.Status.OPEN
+        )
+
+        # GET with active shift
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context['active_shift'].id, shift.id)
+
+    def test_order_records_view_renders_cleanly(self):
+        from django.urls import reverse
+        self.client.force_login(self.cashier_user)
+
+        url = reverse('restaurant_admin:order_records', kwargs={'restaurant_slug': self.restaurant.slug})
+        resp = self.client.get(url, {'counter': self.counter.id})
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(self.counter, resp.context['counters'])
+
+

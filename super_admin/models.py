@@ -129,6 +129,7 @@ class Restaurant(models.Model):
     subscription_plan_name = models.CharField(
         max_length=100,
         blank=True,
+        null=True,
         default="",
         verbose_name="Plan Name"
     )
@@ -136,6 +137,19 @@ class Restaurant(models.Model):
         null=True,
         blank=True,
         verbose_name="Next Billing Date"
+    )
+    subscription_is_trial = models.BooleanField(
+        default=False,
+        verbose_name="Is Free Trial"
+    )
+    subscription_trial_days_remaining = models.IntegerField(
+        default=0,
+        verbose_name="Trial Days Remaining"
+    )
+    subscription_trial_ends_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Trial Ends At"
     )
 
     # Master Dashboard Licensed Quotas (0 means fallback to system/plan default)
@@ -208,15 +222,19 @@ class Restaurant(models.Model):
         return defaults.get(field_name, None)
 
     def get_max_allowed_branches(self) -> int:
+        from restaurant_project import constants
+        if not constants.is_master_connected(self):
+            return constants.MAX_ALLOWED_BRANCHES
         if self.max_branches and self.max_branches > 0:
             return self.max_branches
-        from restaurant_project import constants
         return constants.MAX_ALLOWED_BRANCHES
 
     def get_max_allowed_businesses(self) -> int:
+        from restaurant_project import constants
+        if not constants.is_master_connected(self):
+            return constants.MAX_ALLOWED_BUSINESSES
         if self.max_businesses and self.max_businesses > 0:
             return self.max_businesses
-        from restaurant_project import constants
         return constants.MAX_ALLOWED_BUSINESSES
 
     def save(self, *args, **kwargs):

@@ -17,15 +17,8 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.contrib.auth import views as auth_views
 
 from core.views import (
-    HomeView,
-    CartView,
-    OrdersListView,
-    OrderDetailView,
-    OrderConfirmView,
-    RestaurantMenuView,
-    RestaurantCartView,
-    ReserveEntryView,
-    ReservationPageView,
+    redirect_to_frontend,
+    redirect_to_frontend_menu,
 )
 from core.views_auth import (
     CustomLoginView,
@@ -57,18 +50,17 @@ urlpatterns = [
     path('logout/', CustomLogoutView.as_view(), name='logout'),
     path('dj-admin/logout/', CustomLogoutView.as_view(), name='admin_logout'),
 
-    # Customer pages
-    path('reserve/', ReserveEntryView.as_view(), name='reserve_entry'),
-    path('cart/', CartView.as_view(), name='cart'),
-    # Fix common typo missing slash before 'cart': /r/<slug>cart/ -> /r/<slug>/cart/
-    path('r/<slug:restaurant_slug>cart/', RedirectView.as_view(pattern_name='restaurant_cart', permanent=False)),
-    path('r/<slug:restaurant_slug>/', RestaurantMenuView.as_view(), name='restaurant_menu'),
-    path('r/<slug:restaurant_slug>/reserve/', ReservationPageView.as_view(), name='restaurant_reserve'),
-    path('r/<slug:restaurant_slug>/cart/', RestaurantCartView.as_view(), name='restaurant_cart'),
-    path('r/<slug:restaurant_slug>/orders/', OrdersListView.as_view(), name='restaurant_orders'),
-    path('orders/', OrdersListView.as_view(), name='orders_list'),
-    path('orders/<int:id>/', OrderDetailView.as_view(), name='order_detail'),
-    path('orders/<int:id>/confirm/', OrderConfirmView.as_view(), name='order_confirm'),
+    # Customer pages (Redirect to Next.js Frontend)
+    path('reserve/', redirect_to_frontend, name='reserve_entry'),
+    path('cart/', redirect_to_frontend, name='cart'),
+    path('r/<slug:restaurant_slug>cart/', redirect_to_frontend, name='restaurant_cart_typo'),
+    path('r/<slug:restaurant_slug>/', redirect_to_frontend_menu, name='restaurant_menu'),
+    path('r/<slug:restaurant_slug>/reserve/', redirect_to_frontend, name='restaurant_reserve'),
+    path('r/<slug:restaurant_slug>/cart/', redirect_to_frontend, name='restaurant_cart'),
+    path('r/<slug:restaurant_slug>/orders/', redirect_to_frontend, name='restaurant_orders'),
+    path('orders/', redirect_to_frontend, name='orders_list'),
+    path('orders/<int:id>/', redirect_to_frontend, name='order_detail'),
+    path('orders/<int:id>/confirm/', redirect_to_frontend, name='order_confirm'),
 
     # Admin URLs (using custom admin site)
     path('dj-admin/', custom_admin_site.urls),
