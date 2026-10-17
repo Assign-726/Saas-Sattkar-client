@@ -129,6 +129,7 @@ urlpatterns = [
     path('kitchen/api/orders/<int:order_pk>/items/<int:item_pk>/toggle/', views.kitchen_kds_item_toggle_api, name='kitchen_kds_item_toggle_api'),
     path('orders/draft/', views.pos_draft_order_api, name='pos_draft_order_api'),
     path('orders/draft/sync-items/', views.pos_sync_draft_items_api, name='pos_sync_draft_items_api'),
+    path('orders/gst-company/', views.pos_gst_company_api, name='pos_gst_company_api'),
     path('orders/draft/finalize/', views.pos_finalize_order_api, name='pos_finalize_order_api'),
     path('orders/<int:pk>/settle/', views.order_settle_api, name='order_settle_api'),
     path('api/orders/omni-search/', views.order_omni_search_api, name='order_omni_search_api'),

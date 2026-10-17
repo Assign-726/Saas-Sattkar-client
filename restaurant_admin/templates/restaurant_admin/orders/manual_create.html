@@ -498,14 +498,25 @@
   [data-theme="dark"] #settleWalkinName {
     color: var(--ink) !important;
   }
-  [data-theme="dark"] #tabBillCompany {
+  /* only the unselected options go dark-grey; the selected one keeps its colour */
+  [data-theme="dark"] #tabBillWalkin:not(.on),
+  [data-theme="dark"] #tabBillCompany:not(.on) {
     background: var(--surface) !important;
     color: var(--ink3) !important;
   }
-  [data-theme="dark"] button[onclick^="setSettlePay"] {
+  [data-theme="dark"] button[onclick^="setSettlePay"]:not(.on) {
     background: var(--surface) !important;
     border-color: var(--line) !important;
     color: var(--ink) !important;
+  }
+  [data-theme="dark"] button[onclick^="setSettlePay"].on {
+    background: var(--brand) !important;
+    border-color: var(--brand) !important;
+    color: #fff !important;
+  }
+  [data-theme="dark"] button[data-mode="credit"].on {
+    background: var(--ui-orange) !important;
+    border-color: var(--ui-orange) !important;
   }
 
   /* Quick Add Item modal in dark mode */
@@ -1575,6 +1586,447 @@
     background: rgba(255, 255, 255, 0.22);
     color: #fff;
     border-color: transparent;
+  }
+  /* Settle popup keyboard hints */
+  #posSettleVeil kbd.sk {
+    font-family: var(--ui-font-mono);
+    font-size: 9.5px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 2px 4px;
+    margin-left: 5px;
+    border-radius: 4px;
+    border: 1px solid currentColor;
+    background: transparent;
+    color: inherit;
+    opacity: 0.55;
+    vertical-align: 1px;
+  }
+  #settlePayPills button.on kbd.sk {
+    opacity: 0.8;
+  }
+  #posSettleVeil .sk-note {
+    font-family: var(--ui-font-mono);
+    font-size: 9.5px;
+    font-weight: 600;
+    opacity: 0.6;
+    margin-left: 6px;
+  }
+  #posSettleVeil .cf button {
+    white-space: nowrap;
+  }
+  #settlePayPills button {
+    padding: 8px 12px !important;
+  }
+  .st-tenders {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .st-tenders button {
+    border: 1px solid var(--line, var(--ui-separator));
+    background: var(--surface, var(--ui-surface));
+    color: var(--ink, var(--ui-label));
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-family: var(--ui-font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .st-tenders button:first-child {
+    border-color: var(--brand, var(--ui-accent));
+    color: var(--brand, var(--ui-accent-text));
+  }
+  .st-tenders button:hover {
+    background: var(--brand-tint, rgba(var(--ui-accent-rgb), 0.1));
+  }
+  .gco-note {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .gco-keys kbd {
+    font-size: 9.5px;
+  }
+  @media (max-width: 640px) {
+    #posSettleVeil kbd.sk,
+    #posSettleVeil .sk-note {
+      display: none;
+    }
+  }
+
+  /* Settle → billed GST company: selected card / empty button */
+  .gco-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--line, var(--ui-separator));
+    background: var(--canvas, #f7f6f3);
+  }
+  .gco-card[hidden],
+  .gco-empty[hidden] {
+    display: none;
+  }
+  .gco-card-ic {
+    flex: 0 0 34px;
+    height: 34px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    background: var(--brand-tint, rgba(var(--ui-accent-rgb), 0.12));
+    color: var(--brand, var(--ui-accent));
+  }
+  .gco-card-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .gco-card-main strong {
+    font-size: 13.5px;
+    color: var(--ink, var(--ui-label));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .gco-card-main span {
+    font-family: var(--ui-font-mono);
+    font-size: 11.5px;
+    color: var(--ink3, var(--ui-label-2));
+  }
+  .gco-change {
+    background: var(--surface, var(--ui-surface));
+    border: 1px solid var(--line, #d6d1c7);
+    border-radius: 6px;
+    padding: 4px 9px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--brand, var(--ui-accent-text));
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .gco-empty {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1.5px dashed var(--brand, var(--ui-accent));
+    background: var(--brand-tint, rgba(var(--ui-accent-rgb), 0.08));
+    color: var(--brand, var(--ui-accent-text));
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: left;
+  }
+  .gco-empty span {
+    flex: 1;
+  }
+
+  /* "Add GST Company" popup — same sections as Parties → Add New Party */
+  .gco {
+    width: 100%;
+    max-width: 760px;
+    background: var(--surface, var(--ui-surface));
+    border: 1px solid var(--line, var(--ui-separator));
+    border-radius: 16px;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.3);
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 32px);
+    font-family: var(--ui-font);
+    animation: modalPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .gco-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--line, var(--ui-separator));
+  }
+  .gco-head h3 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--ink, var(--ui-label));
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .gco-head h3 i {
+    color: var(--ui-orange, #f59e0b);
+  }
+  .gco-x {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: var(--raised, rgba(0, 0, 0, 0.05));
+    color: var(--ink, var(--ui-label));
+    cursor: pointer;
+  }
+  .gco-body {
+    padding: 16px 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .gco-find label,
+  .gco-f label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink2, var(--ui-label));
+    margin-bottom: 5px;
+  }
+  .gco-find-field {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 42px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1.5px solid var(--line, var(--ui-separator));
+    background: var(--canvas, var(--ui-surface));
+  }
+  .gco-find-field:focus-within {
+    border-color: var(--ui-orange);
+    box-shadow: 0 0 0 3px rgba(var(--ui-orange-rgb), 0.22);
+  }
+  .gco-find-field i {
+    color: var(--ink3, var(--ui-label-2));
+  }
+  .veil .gco-find-field #gcoFind,
+  .veil .gco-find-field #gcoFind:focus {
+    flex: 1;
+    min-width: 0;
+    border: none !important;
+    outline: none;
+    box-shadow: none !important;
+    background: transparent !important;
+    font-size: 14px;
+    color: var(--ink, var(--ui-label));
+    height: 100%;
+    padding: 0;
+  }
+  .gco-results {
+    margin-top: 6px;
+    border: 1px solid var(--line, var(--ui-separator));
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .gco-results[hidden] {
+    display: none;
+  }
+  .gco-hit {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 12px;
+    border: none;
+    border-bottom: 1px solid var(--line2, var(--ui-separator));
+    background: var(--surface, var(--ui-surface));
+    color: var(--ink, var(--ui-label));
+    text-align: left;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .gco-hit:last-child {
+    border-bottom: none;
+  }
+  .gco-hit.on,
+  .gco-hit:hover {
+    background: var(--brand-tint, rgba(var(--ui-accent-rgb), 0.1));
+  }
+  .gco-hit-n {
+    font-weight: 600;
+  }
+  .gco-hit-g {
+    font-family: var(--ui-font-mono);
+    font-size: 11.5px;
+    color: var(--ink3, var(--ui-label-2));
+    white-space: nowrap;
+  }
+  .gco-nohit {
+    padding: 10px 12px;
+    font-size: 12.5px;
+    color: var(--ink3, var(--ui-label-2));
+  }
+  .gco-or {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink3, var(--ui-label-2));
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .gco-or::before,
+  .gco-or::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line, var(--ui-separator));
+  }
+  .gco-sec {
+    border: 1px solid var(--line, var(--ui-separator));
+    border-radius: 12px;
+    padding: 14px 16px 16px;
+    background: var(--canvas, rgba(0, 0, 0, 0.015));
+  }
+  #gcoForm {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .gco-sec h4 {
+    margin: 0 0 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line, var(--ui-separator));
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--ink, var(--ui-label));
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .gco-sec h4 em {
+    font-style: normal;
+    font-weight: 500;
+    font-size: 11.5px;
+    color: var(--ink3, var(--ui-label-2));
+  }
+  .gco-n {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    background: var(--brand, var(--ui-accent));
+    color: var(--brand-on, #fff);
+  }
+  .gco-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .gco-grid.gco-3 {
+    grid-template-columns: 1.2fr 1fr 0.8fr;
+  }
+  .gco-wide {
+    grid-column: 1 / -1;
+  }
+  .gco-f label b {
+    color: var(--ui-red, #ef4444);
+  }
+  .gco-f input,
+  .gco-f select {
+    width: 100%;
+    height: 40px;
+    padding: 0 12px;
+    border-radius: 8px;
+    border: 1.5px solid var(--line, var(--ui-separator));
+    background: var(--surface, var(--ui-surface));
+    color: var(--ink, var(--ui-label));
+    font-size: 14px;
+    box-sizing: border-box;
+  }
+  .gco-f input.gco-mono {
+    font-family: var(--ui-font-mono);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .gco-f input.gco-bad {
+    border-color: var(--ui-red, #ef4444) !important;
+  }
+  .gco-hint,
+  .gco-err {
+    display: block;
+    font-size: 11.5px;
+    margin-top: 4px;
+    min-height: 0;
+  }
+  .gco-hint {
+    color: var(--ink3, var(--ui-label-2));
+  }
+  .gco-hint.gco-ok {
+    color: var(--ui-green-text, #15803d);
+    font-weight: 600;
+  }
+  .gco-err {
+    color: var(--ui-red-text, #dc2626);
+    font-weight: 600;
+  }
+  .gco-err:empty {
+    display: none;
+  }
+  .gco-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--line, var(--ui-separator));
+  }
+  .gco-note {
+    font-size: 12px;
+    color: var(--ink3, var(--ui-label-2));
+  }
+  .gco-actions {
+    display: flex;
+    gap: 8px;
+  }
+  .gco-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: 9px;
+    border: 1px solid var(--line, var(--ui-separator));
+    background: var(--raised, var(--ui-surface));
+    color: var(--ink, var(--ui-label));
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .gco-btn.gco-primary {
+    background: var(--brand, var(--ui-accent));
+    border-color: var(--brand, var(--ui-accent));
+    color: #fff;
+  }
+  .gco-btn.gco-primary kbd {
+    background: rgba(255, 255, 255, 0.22);
+    color: #fff;
+    border-color: transparent;
+  }
+  .gco-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  @media (max-width: 640px) {
+    .gco-grid,
+    .gco-grid.gco-3 {
+      grid-template-columns: 1fr;
+    }
+    .gco-note,
+    .gco-btn kbd {
+      display: none;
+    }
+    .gco-foot {
+      justify-content: flex-end;
+    }
   }
   @media (max-width: 640px) {
     .tpick-keys {
@@ -4945,7 +5397,7 @@
             color: var(--ink3, var(--ui-label-2));
             margin-bottom: 6px;
           "
-          >WHO IS THIS BILL FOR</label
+          >WHO IS THIS BILL FOR <kbd class="sk">F7</kbd></label
         >
         <div
           class="seg"
@@ -5029,7 +5481,7 @@
         </div>
         <button
           type="button"
-          onclick="posPickGuest(() => updateSettleGuestDisplay())"
+          onclick="posPickGuest(() => { updateSettleGuestDisplay(); window.posFocusSettle && posFocusSettle(); })"
           style="
             background: var(--surface, var(--ui-surface));
             border: 1px solid var(--line, #d6d1c7);
@@ -5050,69 +5502,24 @@
         id="settleCompanyBox"
         style="display: none; flex-direction: column; gap: 10px"
       >
-        <div>
-          <label
-            style="
-              display: block;
-              font-size: 10px;
-              font-weight: 700;
-              text-transform: none;
-              letter-spacing: 0;
-              color: var(--ink3, var(--ui-label-2));
-              margin-bottom: 4px;
-            "
-            >CUSTOMER GSTIN</label
-          >
-          <input
-            type="text"
-            id="settleGstinInput"
-            maxlength="15"
-            placeholder="08AAACS1234C1Z5"
-            style="
-              width: 100%;
-              padding: 9px 12px;
-              font-size: 13px;
-              font-family: var(--ui-font-mono);
-              border: 1.5px solid var(--line, var(--ui-separator));
-              border-radius: 7px;
-              outline: none;
-              background: var(--canvas, var(--ui-surface));
-              color: var(--ink);
-              text-transform: none;
-              box-sizing: border-box;
-            "
-          />
+        <!-- the billed company (a customer Party); the hidden fields are what settle submits -->
+        <input type="hidden" id="settleGstinInput" />
+        <input type="hidden" id="settleRegNameInput" />
+        <div class="gco-card" id="settleCompanyCard" hidden>
+          <span class="gco-card-ic"><i class="fas fa-building"></i></span>
+          <div class="gco-card-main">
+            <strong id="settleCompanyName"></strong>
+            <span id="settleCompanyMeta"></span>
+          </div>
+          <button type="button" class="gco-change" onclick="openGstCompanyModal()">
+            Change <kbd>F6</kbd>
+          </button>
         </div>
-        <div>
-          <label
-            style="
-              display: block;
-              font-size: 10px;
-              font-weight: 700;
-              text-transform: none;
-              letter-spacing: 0;
-              color: var(--ink3, var(--ui-label-2));
-              margin-bottom: 4px;
-            "
-            >REGISTERED NAME</label
-          >
-          <input
-            type="text"
-            id="settleRegNameInput"
-            placeholder="As per GST registration"
-            style="
-              width: 100%;
-              padding: 9px 12px;
-              font-size: 13px;
-              border: 1.5px solid var(--line, var(--ui-separator));
-              border-radius: 7px;
-              outline: none;
-              background: var(--canvas, var(--ui-surface));
-              color: var(--ink);
-              box-sizing: border-box;
-            "
-          />
-        </div>
+        <button type="button" class="gco-empty" id="settleCompanyEmpty" onclick="openGstCompanyModal()">
+          <i class="fas fa-plus"></i>
+          <span>Select or add the GST company</span>
+          <kbd>F6</kbd>
+        </button>
         <div
           class="note"
           style="
@@ -5159,7 +5566,7 @@
             color: var(--ink3, var(--ui-label-2));
             margin-bottom: 6px;
           "
-          >LOYALTY, GIFT CARD &amp; ROOM</label
+          >LOYALTY, GIFT CARD &amp; ROOM <kbd class="sk">F8</kbd></label
         >
         <div class="pos-rw-card">
           <div class="pos-rw-line">
@@ -5268,7 +5675,7 @@
             color: var(--ink3, var(--ui-label-2));
             margin-bottom: 6px;
           "
-          >PAYMENT</label
+          >PAYMENT <span class="sk-note">F1–F5</span></label
         >
         <div
           class="pillrow"
@@ -5278,6 +5685,7 @@
           <button
             type="button"
             class="on"
+            data-mode="cash"
             onclick="setSettlePay('Cash')"
             style="
               padding: 8px 16px;
@@ -5290,10 +5698,11 @@
               cursor: pointer;
             "
           >
-            Cash
+            Cash <kbd class="sk">F1</kbd>
           </button>
           <button
             type="button"
+            data-mode="card"
             onclick="setSettlePay('Card')"
             style="
               padding: 8px 16px;
@@ -5306,10 +5715,11 @@
               cursor: pointer;
             "
           >
-            Card
+            Card <kbd class="sk">F2</kbd>
           </button>
           <button
             type="button"
+            data-mode="upi"
             onclick="setSettlePay('UPI')"
             style="
               padding: 8px 16px;
@@ -5322,10 +5732,11 @@
               cursor: pointer;
             "
           >
-            UPI
+            UPI <kbd class="sk">F3</kbd>
           </button>
           <button
             type="button"
+            data-mode="split"
             onclick="setSettlePay('Split')"
             style="
               padding: 8px 16px;
@@ -5338,10 +5749,11 @@
               cursor: pointer;
             "
           >
-            Split
+            Split <kbd class="sk">F4</kbd>
           </button>
           <button
             type="button"
+            data-mode="credit"
             onclick="setSettlePay('Credit')"
             style="
               padding: 8px 16px;
@@ -5354,7 +5766,7 @@
               cursor: pointer;
             "
           >
-            Credit / Pending
+            Credit / Pending <kbd class="sk">F5</kbd>
           </button>
         </div>
       </div>
@@ -5374,6 +5786,7 @@
         display: flex;
         gap: 10px;
         justify-content: flex-end;
+        align-items: center;
         background: #f7f6f3;
       "
     >
@@ -5407,6 +5820,7 @@
       </button>
       <button
         type="button"
+        id="btnSettleSaveOnly"
         onclick="finalizeSettlement(false)"
         style="
           padding: 9px 16px;
@@ -5419,7 +5833,7 @@
           cursor: pointer;
         "
       >
-        Save Only
+        Save Only <kbd class="sk">F9</kbd>
       </button>
       <button
         type="button"
@@ -9736,13 +10150,15 @@
       }
     };
 
-    window.setBillTarget = function (target) {
+    window.setBillTarget = function (target, opts) {
       window.SETTLE_BILL_TARGET = target;
       const tabWalkin = document.getElementById("tabBillWalkin");
       const tabCompany = document.getElementById("tabBillCompany");
       const walkinBox = document.getElementById("settleWalkinBox");
       const companyBox = document.getElementById("settleCompanyBox");
 
+      if (tabWalkin) tabWalkin.classList.toggle("on", target === "walkin");
+      if (tabCompany) tabCompany.classList.toggle("on", target !== "walkin");
       if (target === "walkin") {
         if (tabWalkin) {
           tabWalkin.style.background = "#2F3E9E";
@@ -9770,11 +10186,365 @@
         }
         if (walkinBox) walkinBox.style.display = "none";
         if (companyBox) companyBox.style.display = "flex";
-        setTimeout(
-          () => document.getElementById("settleGstinInput")?.focus(),
-          50,
-        );
+        if (!(opts && opts.silent) && !(state.companyParty && state.companyParty.gstin))
+          setTimeout(() => window.openGstCompanyModal && window.openGstCompanyModal(), 30);
       }
+    };
+
+    // ── Settle → "Company (has GSTIN)": the billed company is a customer Party ──
+    const GST_STATES = {
+      "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh",
+      "05": "Uttarakhand", "06": "Haryana", "07": "Delhi", "08": "Rajasthan", "09": "Uttar Pradesh",
+      "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh", "13": "Nagaland", "14": "Manipur",
+      "15": "Mizoram", "16": "Tripura", "17": "Meghalaya", "18": "Assam", "19": "West Bengal",
+      "20": "Jharkhand", "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat",
+      "26": "Dadra & Nagar Haveli and Daman & Diu", "27": "Maharashtra", "29": "Karnataka", "30": "Goa",
+      "31": "Lakshadweep", "32": "Kerala", "33": "Tamil Nadu", "34": "Puducherry",
+      "35": "Andaman & Nicobar Islands", "36": "Telangana", "37": "Andhra Pradesh", "38": "Ladakh",
+      "97": "Other Territory",
+    };
+    // "" when valid, else what is wrong (format, state code, check digit)
+    function gstinProblem(g) {
+      if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/.test(g))
+        return "Enter a valid 15-character GSTIN (e.g. 27AAACT2727Q1ZW).";
+      if (!GST_STATES[g.slice(0, 2)]) return "GSTIN starts with an unknown state code (" + g.slice(0, 2) + ").";
+      const C = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+      let sum = 0;
+      for (let i = 0; i < 14; i++) {
+        const v = C.indexOf(g[i]) * (i % 2 ? 2 : 1);
+        sum += Math.floor(v / 36) + (v % 36);
+      }
+      return C[(36 - (sum % 36)) % 36] === g[14] ? "" : "This GSTIN fails the check digit — please re-check it.";
+    }
+    function gstPartyList() {
+      if (!window.__posParties) {
+        try {
+          window.__posParties = JSON.parse(document.getElementById("customer-parties-data").textContent || "[]") || [];
+        } catch (e) {
+          window.__posParties = [];
+        }
+      }
+      return window.__posParties;
+    }
+
+    window.setSettleCompany = function (party) {
+      state.partyId = party && party.id ? party.id : null;
+      state.companyParty = party || null;
+      const g = document.getElementById("settleGstinInput"),
+        n = document.getElementById("settleRegNameInput");
+      if (g) g.value = party ? party.gstin || "" : "";
+      if (n) n.value = party ? party.name || "" : "";
+      const card = document.getElementById("settleCompanyCard"),
+        empty = document.getElementById("settleCompanyEmpty");
+      if (card) card.hidden = !party;
+      if (empty) empty.hidden = !!party;
+      if (party) {
+        document.getElementById("settleCompanyName").textContent = party.name;
+        document.getElementById("settleCompanyMeta").textContent = [
+          party.gstin,
+          party.state || GST_STATES[(party.gstin || "").slice(0, 2)] || "",
+        ].filter(Boolean).join(" · ");
+      }
+    };
+
+    // the amount field of the current payment mode, ready to type over
+    function focusSettle() {
+      const box = document.getElementById("settlePayBox");
+      const el = box && box.querySelector("input:not([type=hidden])");
+      if (el && el.offsetParent) {
+        el.focus();
+        try { el.select(); } catch (e) {}
+      }
+    }
+    window.posFocusSettle = focusSettle;
+
+    window.openGstCompanyModal = function () {
+      if (document.getElementById("gcoVeil")) return;
+      const saved = gstPartyList().filter((p) => (p.gstin || "").length === 15);
+      const cur = state.companyParty || null;
+      const veil = document.createElement("div");
+      veil.className = "veil";
+      veil.id = "gcoVeil";
+      veil.style.cssText =
+        "position:fixed; inset:0; background:rgba(20,22,28,.6); display:flex; align-items:flex-start; justify-content:center; z-index:10050; padding:min(5vh,40px) 16px 16px; overflow-y:auto; animation:fade .14s ease-out;";
+      veil.innerHTML = `
+        <div class="gco" role="dialog" aria-modal="true" aria-labelledby="gcoTitle">
+          <div class="gco-head">
+            <h3 id="gcoTitle"><i class="fas fa-building"></i> Add GST Company</h3>
+            <button type="button" class="gco-x" data-close aria-label="Close"><i class="fas fa-xmark"></i></button>
+          </div>
+          <div class="gco-body">
+            ${saved.length ? `
+            <div class="gco-find">
+              <label for="gcoFind">Billed them before? Pick from Parties</label>
+              <div class="gco-find-field">
+                <i class="fas fa-magnifying-glass"></i>
+                <input id="gcoFind" type="text" placeholder="Search ${saved.length} saved compan${saved.length === 1 ? "y" : "ies"} by name or GSTIN" autocomplete="off" spellcheck="false">
+              </div>
+              <div class="gco-results" id="gcoResults" role="listbox" hidden></div>
+              <div class="gco-or"><span>or add a new company</span></div>
+            </div>` : ""}
+            <form id="gcoForm" novalidate autocomplete="off">
+              <section class="gco-sec">
+                <h4><span class="gco-n">1</span> Company &amp; GST</h4>
+                <div class="gco-grid">
+                  <div class="gco-f gco-wide">
+                    <label for="gcoName">Registered name <b>*</b></label>
+                    <input id="gcoName" name="name" type="text" placeholder="As on the GST certificate">
+                    <small class="gco-err" data-err="name"></small>
+                  </div>
+                  <div class="gco-f">
+                    <label for="gcoGstin">GSTIN <b>*</b></label>
+                    <input id="gcoGstin" name="gstin" type="text" maxlength="15" placeholder="27AAACT2727Q1ZW" spellcheck="false" class="gco-mono">
+                    <small class="gco-hint" id="gcoGstinHint">15 characters — the state fills in from it</small>
+                    <small class="gco-err" data-err="gstin"></small>
+                  </div>
+                  <div class="gco-f">
+                    <label for="gcoType">GST registration</label>
+                    <select id="gcoType" name="gst_registration_type">
+                      <option value="regular">Registered – Regular</option>
+                      <option value="composition">Registered – Composition</option>
+                    </select>
+                  </div>
+                </div>
+              </section>
+              <section class="gco-sec">
+                <h4><span class="gco-n">2</span> Contact <em>optional</em></h4>
+                <div class="gco-grid">
+                  <div class="gco-f">
+                    <label for="gcoPhone">Phone</label>
+                    <input id="gcoPhone" name="phone" type="tel" inputmode="tel" placeholder="9876543210">
+                  </div>
+                  <div class="gco-f">
+                    <label for="gcoEmail">Email for the invoice</label>
+                    <input id="gcoEmail" name="email" type="email" placeholder="accounts@company.com">
+                    <small class="gco-err" data-err="email"></small>
+                  </div>
+                </div>
+              </section>
+              <section class="gco-sec">
+                <h4><span class="gco-n">3</span> Address <em>optional</em></h4>
+                <div class="gco-grid gco-3">
+                  <div class="gco-f gco-wide">
+                    <label for="gcoAddr">Address line</label>
+                    <input id="gcoAddr" name="address_line1" type="text" placeholder="Building, street, area">
+                  </div>
+                  <div class="gco-f"><label for="gcoCity">City</label><input id="gcoCity" name="city" type="text"></div>
+                  <div class="gco-f"><label for="gcoState">State</label><input id="gcoState" name="state" type="text" placeholder="From the GSTIN"></div>
+                  <div class="gco-f"><label for="gcoPin">PIN code</label><input id="gcoPin" name="pincode" type="text" inputmode="numeric" maxlength="6"></div>
+                </div>
+              </section>
+            </form>
+          </div>
+          <div class="gco-foot">
+            <span class="gco-note">
+              <span><i class="fas fa-circle-info"></i> Saved to Parties as a customer</span>
+              <span class="gco-keys"><kbd>↵</kbd> next field · <kbd>Ctrl</kbd>+<kbd>↵</kbd> or <kbd>F9</kbd> save · <kbd>Esc</kbd> cancel</span>
+            </span>
+            <div class="gco-actions">
+              <button type="button" class="gco-btn" data-close>Cancel <kbd>Esc</kbd></button>
+              <button type="button" class="gco-btn gco-primary" id="gcoSave"><i class="fas fa-check"></i> Save &amp; bill <kbd>↵</kbd></button>
+            </div>
+          </div>
+        </div>`;
+      document.body.appendChild(veil);
+      const $ = (sel) => veil.querySelector(sel);
+      const form = $("#gcoForm"),
+        gstinEl = $("#gcoGstin"),
+        hint = $("#gcoGstinHint"),
+        stateEl = $("#gcoState"),
+        find = $("#gcoFind"),
+        results = $("#gcoResults"),
+        saveBtn = $("#gcoSave");
+      let autoState = "";
+
+      const setErr = (field, msg) => {
+        const el = veil.querySelector(`[data-err="${field}"]`);
+        if (el) el.textContent = msg || "";
+        const inp = form.elements[field];
+        if (inp) inp.classList.toggle("gco-bad", !!msg);
+      };
+      const fill = (p) => {
+        form.elements.name.value = p.name || "";
+        gstinEl.value = p.gstin || "";
+        form.elements.gst_registration_type.value = p.gst_registration_type === "composition" ? "composition" : "regular";
+        form.elements.phone.value = p.phone || "";
+        form.elements.email.value = p.email || "";
+        stateEl.value = p.state || "";
+        onGstin();
+      };
+      function onGstin() {
+        const g = gstinEl.value.replace(/\s+/g, "").toUpperCase();
+        if (g !== gstinEl.value) gstinEl.value = g;
+        setErr("gstin", "");
+        hint.className = "gco-hint";
+        if (g.length < 15) {
+          hint.textContent = g.length ? `${15 - g.length} more character${15 - g.length === 1 ? "" : "s"}` : "15 characters — the state fills in from it";
+          return;
+        }
+        const problem = gstinProblem(g);
+        if (problem) {
+          hint.textContent = "";
+          setErr("gstin", problem);
+          return;
+        }
+        const st = GST_STATES[g.slice(0, 2)];
+        const known = gstPartyList().find((p) => (p.gstin || "").toUpperCase() === g);
+        hint.className = "gco-hint gco-ok";
+        hint.textContent = known ? `✓ ${st} · already in Parties as ${known.name} — saving updates it` : `✓ Valid · ${st}`;
+        if (!stateEl.value || stateEl.value === autoState) {
+          stateEl.value = st;
+          autoState = st;
+        }
+        if (known && !form.elements.name.value.trim()) form.elements.name.value = known.name;
+      }
+      gstinEl.addEventListener("input", onGstin);
+      if (cur) fill(cur);
+
+      // saved companies: type to filter, ↑↓ to move, Enter to pick
+      let hits = [],
+        hi = 0;
+      function drawHits() {
+        const q = (find.value || "").trim().toLowerCase();
+        const qc = q.replace(/[^a-z0-9]/g, "");
+        hits = !q ? [] : saved.filter((p) =>
+          p.name.toLowerCase().includes(q) || (qc && (p.gstin || "").toLowerCase().includes(qc))).slice(0, 6);
+        hi = Math.min(hi, Math.max(0, hits.length - 1));
+        results.hidden = !q;
+        results.innerHTML = hits.length
+          ? hits.map((p, i) => `<button type="button" role="option" class="gco-hit${i === hi ? " on" : ""}" data-i="${i}">
+                <span class="gco-hit-n">${escapeHtml(p.name)}</span>
+                <span class="gco-hit-g">${escapeHtml(p.gstin)} · ${escapeHtml(p.state || GST_STATES[p.gstin.slice(0, 2)] || "")}</span>
+              </button>`).join("")
+          : `<div class="gco-nohit">No saved company matches — fill in the form below to add it.</div>`;
+        results.querySelectorAll(".gco-hit").forEach((b) =>
+          b.addEventListener("click", () => pick(hits[+b.dataset.i])));
+      }
+      function pick(p) {
+        if (!p) return;
+        setSettleCompany(p);
+        close();
+        toast(`Billing ${p.name}`);
+      }
+      if (find) find.addEventListener("input", () => { hi = 0; drawHits(); });
+
+      function close() {
+        document.removeEventListener("keydown", onKey, true);
+        veil.remove();
+        focusSettle();
+      }
+      async function save() {
+        const data = Object.fromEntries(new FormData(form).entries());
+        data.gstin = (data.gstin || "").toUpperCase();
+        let bad = false;
+        ["name", "gstin", "email"].forEach((f) => setErr(f, ""));
+        if (!data.name.trim()) { setErr("name", "Enter the registered company name."); bad = true; }
+        const gp = gstinProblem(data.gstin);
+        if (gp) { setErr("gstin", data.gstin ? gp : "Enter the company's GSTIN."); bad = true; }
+        if (bad) {
+          (form.querySelector(".gco-bad") || form.elements.name).focus();
+          if (window.SFX && window.SFX.err) window.SFX.err();
+          return;
+        }
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+        try {
+          const res = await fetch('{% url "restaurant_admin:pos_gst_company_api" restaurant_slug=restaurant.slug %}', {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-CSRFToken": getCookie("csrftoken") || "{{ csrf_token }}",
+                       "X-Requested-With": "XMLHttpRequest" },
+            body: JSON.stringify(data),
+          });
+          const out = await res.json().catch(() => ({}));
+          if (!res.ok || !out.success) {
+            Object.entries(out.errors || {}).forEach(([f, m]) => setErr(f, m));
+            if (!out.errors) toast(out.error || "Could not save the company. Please try again.", true);
+            (form.querySelector(".gco-bad") || form.elements.name).focus();
+            return;
+          }
+          const list = gstPartyList();
+          const at = list.findIndex((p) => p.id === out.party.id);
+          if (at >= 0) list[at] = out.party;
+          else list.push(out.party);
+          setSettleCompany(out.party);
+          close();
+          toast(out.created ? `${out.party.name} added to Parties` : `${out.party.name} updated in Parties`);
+        } catch (e) {
+          toast("Network problem — the company was not saved.", true);
+        } finally {
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = '<i class="fas fa-check"></i> Save &amp; bill <kbd>↵</kbd>';
+        }
+      }
+      saveBtn.addEventListener("click", save);
+      veil.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", close));
+      veil.addEventListener("mousedown", (e) => { if (e.target === veil) close(); });
+
+      // This popup owns the keyboard while open (the settle popup below must not react).
+      function onKey(e) {
+        if (typeof e.key !== "string" || e.isComposing || e.keyCode === 229) return;
+        const inFind = e.target === find;
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          if (inFind && find.value) { find.value = ""; drawHits(); return; }
+          close();
+          return;
+        }
+        if (inFind && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (hits.length) {
+            hi = (hi + (e.key === "ArrowDown" ? 1 : hits.length - 1)) % hits.length;
+            drawHits();
+          } else if (e.key === "ArrowDown") form.elements.name.focus();
+          return;
+        }
+        const sc = window.posShortcut ? window.posShortcut(e) : null;
+        if (sc === "F9" || sc === "F10" || (e.key === "Enter" && (e.ctrlKey || e.metaKey))) {
+          e.preventDefault();
+          e.stopPropagation();
+          save();
+          return;
+        }
+        if (e.key === "Enter") {
+          if (e.target.tagName === "BUTTON") { e.stopPropagation(); return; } // the button's own click
+          e.preventDefault();
+          e.stopPropagation();
+          const nameEl = form.elements.name;
+          const gstinOk = !gstinProblem(gstinEl.value.trim().toUpperCase());
+          if (inFind) {
+            if (hits.length) return pick(hits[hi]);
+            // nothing saved matches: carry what was typed into the form
+            const q = find.value.trim();
+            if (/^[0-9]{2}[A-Za-z]{5}/.test(q.replace(/\s+/g, ""))) {
+              gstinEl.value = q;
+              onGstin();
+              (nameEl.value.trim() ? gstinEl : nameEl).focus();
+            } else {
+              if (q && !nameEl.value.trim()) nameEl.value = q;
+              (q ? gstinEl : nameEl).focus();
+            }
+            return;
+          }
+          // Name ↵ GSTIN ↵ saves (contact and address are optional)
+          if (e.target === nameEl) {
+            if (gstinOk && nameEl.value.trim()) save();
+            else gstinEl.focus();
+            return;
+          }
+          if (e.target === gstinEl && !nameEl.value.trim()) {
+            nameEl.focus();
+            return;
+          }
+          save();
+          return;
+        }
+        if (sc) e.preventDefault(); // other POS shortcuts stay off while the form is open
+        e.stopPropagation();
+      }
+      document.addEventListener("keydown", onKey, true);
+      setTimeout(() => (cur || !find ? form.elements.name : find).focus(), 30);
     };
 
     window.setSettlePay = function (mode) {
@@ -9782,10 +10552,10 @@
       window.SETTLE_PAY_MODE = normMode;
       const pills = document.querySelectorAll("#settlePayPills button");
       pills.forEach((b) => {
-        const btnText = b.textContent.trim().toLowerCase();
+        const btnText = (b.dataset.mode || b.textContent.trim()).toLowerCase();
         const isMatch =
+          btnText === normMode ||
           btnText.startsWith(normMode) ||
-          normMode.startsWith(btnText) ||
           (normMode === "credit" && btnText.includes("credit"));
         if (isMatch) {
           b.className = "on";
@@ -9798,7 +10568,7 @@
         } else {
           b.className = "";
           b.style.background = "#FFF";
-          b.style.color = b.textContent.includes("Credit")
+          b.style.color = b.dataset.mode === "credit"
             ? "var(--ui-orange-text)"
             : "var(--ui-label)";
           b.style.borderColor = "#E3DFD7";
@@ -9850,12 +10620,26 @@
           }
         }
         inp.addEventListener("input", calcCash);
-        setTimeout(() => {
+        // one-tap tenders: exact amount and the next round notes up
+        const tenders = [netPayable];
+        [50, 100, 200, 500, 2000].forEach((n) => {
+          const up = Math.ceil(netPayable / n) * n;
+          if (up > netPayable && !tenders.includes(up) && tenders.length < 5) tenders.push(up);
+        });
+        const chips = document.createElement("div");
+        chips.className = "st-tenders";
+        chips.innerHTML = tenders
+          .map((t, i) => `<button type="button" tabindex="-1" data-amt="${t.toFixed(2)}">${i === 0 ? "Exact" : "₹" + t.toLocaleString("en-IN")}</button>`)
+          .join("");
+        inp.insertAdjacentElement("afterend", chips);
+        chips.addEventListener("click", (e) => {
+          const b = e.target.closest("button[data-amt]");
+          if (!b) return;
+          inp.value = b.dataset.amt;
+          calcCash();
           inp.focus();
-          try {
-            inp.select();
-          } catch (e) {}
-        }, 50);
+          try { inp.select(); } catch (er) {}
+        });
       } else if (mode === "card") {
         el.innerHTML = `
           <div>
@@ -9912,6 +10696,19 @@
         }
         sc.addEventListener("input", calcSplit);
         so.addEventListener("input", calcSplit);
+        // typing the cash part fills the card/UPI part with the rest; Enter moves cash → card → settle
+        sc.addEventListener("input", () => {
+          so.value = Math.max(0, netPayable - (parseFloat(sc.value) || 0)).toFixed(2);
+          calcSplit();
+        });
+        sc.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            so.focus();
+            try { so.select(); } catch (er) {}
+          }
+        });
       } else if (mode === "credit") {
         el.innerHTML = `
           <div>
@@ -9930,6 +10727,7 @@
           </div>
         `;
       }
+      setTimeout(focusSettle, 30);
     }
 
     function openSettlementModal() {
@@ -10146,13 +10944,14 @@
 
       // Who is this bill for (default to walk-in guest)
       if (state.customerGstin && state.customerGstin.length === 15) {
-        setBillTarget("company");
-        const gInp = document.getElementById("settleGstinInput");
-        const nInp = document.getElementById("settleRegNameInput");
-        if (gInp) gInp.value = state.customerGstin;
-        if (nInp) nInp.value = state.customerName || "";
+        const known = gstPartyList().find(
+          (p) => (p.gstin || "").toUpperCase() === state.customerGstin.toUpperCase(),
+        );
+        setSettleCompany(known || { id: state.partyId || null, name: state.customerName || "", gstin: state.customerGstin });
+        setBillTarget("company", { silent: true });
       } else {
-        setBillTarget("walkin");
+        setSettleCompany(null);
+        setBillTarget("walkin", { silent: true });
         const gInp = document.getElementById("settleGstinInput");
         const nInp = document.getElementById("settleRegNameInput");
         if (gInp) gInp.value = "";
@@ -10212,11 +11011,11 @@
         const regNameVal = (
           document.getElementById("settleRegNameInput")?.value || ""
         ).trim();
-        if (gstinVal && gstinVal.length !== 15) {
+        if (gstinVal.length !== 15) {
+          // no company chosen yet: ask for it rather than billing a blank company
           if (window.SFX && window.SFX.err) window.SFX.err();
-          alert(
-            "Please enter a valid 15-character GSTIN or switch to Walk-in guest.",
-          );
+          window.toast && window.toast("Select or add the GST company first — or switch to Walk-in guest.", true);
+          window.openGstCompanyModal && window.openGstCompanyModal();
           return;
         }
         customerGstinVal = gstinVal;
@@ -10349,6 +11148,7 @@
         due_amount: dueAmt.toFixed(2),
         gstin_no: invNoOverride || "",
         customer_gstin: customerGstinVal,
+        party_id: customerGstinVal ? state.partyId || "" : "",
         customer_name: state.customerName,
         print_bill: printBill,
       });
@@ -10455,6 +11255,8 @@
         billing_mode: state.billingMode,
         excise_bill_no: extraData.excise_bill_no || state.exciseBillNo,
         gstin_no: extraData.gstin_no || state.gstinNo,
+        customer_gstin: extraData.customer_gstin || "",
+        party_id: extraData.party_id || "",
         invoice_mode: extraData.invoice_mode || "food",
         receipt_no: state.receiptNo || "",
         advance_amount_paid: state.advanceAmountPaid || 0,
@@ -11979,23 +12781,32 @@
     }
 
     btnSave.onclick = saveGuest;
+    // back to settle when the guest was changed from there, else to the item box
+    const refocus = () => {
+      if (window.posFocusSettle && document.getElementById("posSettleVeil")?.style.display !== "none")
+        window.posFocusSettle();
+      else document.getElementById("fItem")?.focus();
+    };
     btnCancel.onclick = () => {
       veil.remove();
-      const fItem = document.getElementById("fItem");
-      if (fItem) fItem.focus();
+      document.removeEventListener("keydown", handleKey);
+      refocus();
     };
 
     const handleKey = (e) => {
+      // the popup was closed some other way: drop this listener so a later Enter can't re-save
+      if (!document.body.contains(veil)) {
+        document.removeEventListener("keydown", handleKey);
+        return;
+      }
       if (e.key === "Escape") {
         e.preventDefault();
         veil.remove();
         document.removeEventListener("keydown", handleKey);
-        const fItem = document.getElementById("fItem");
-        if (fItem) fItem.focus();
+        refocus();
       } else if (e.key === "Enter") {
         e.preventDefault();
-        saveGuest();
-        document.removeEventListener("keydown", handleKey);
+        saveGuest(); // stays listening if the guest details were invalid
       }
     };
     document.addEventListener("keydown", handleKey);
@@ -12737,6 +13548,14 @@
   window.posShortcut = posShortcut;
 
 
+  // The popup on top (popups opened later sit later in the page), so only it reacts to keys.
+  function posTopOverlay() {
+    const open = Array.from(document.querySelectorAll(".veil")).filter(
+      (v) => getComputedStyle(v).display !== "none",
+    );
+    return open[open.length - 1] || null;
+  }
+
   function posOverlayOpen() {
     if (document.querySelector(".modal.show")) return true;
     return Array.from(document.querySelectorAll(".veil")).some(
@@ -12871,7 +13690,70 @@
     }
 
     const settleVeil = document.getElementById("posSettleVeil");
-    if (settleVeil && settleVeil.style.display !== "none") {
+    if (settleVeil && settleVeil.style.display !== "none" && posTopOverlay() === settleVeil) {
+      // F6 changes who the bill is for: the guest, or the GST company
+      if (sc === "F6") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.SETTLE_BILL_TARGET === "company") window.openGstCompanyModal();
+        else
+          window.posPickGuest(() => {
+            window.updateSettleGuestDisplay();
+            window.posFocusSettle && window.posFocusSettle();
+          });
+        return;
+      }
+      const stop = () => {
+        e.preventDefault();
+        e.stopPropagation();
+      };
+      const tagName = (e.target && e.target.tagName) || "";
+      // F1–F5 payment mode · F7 walk-in ⇄ company · F8 loyalty / gift card · F9 save · F10 print
+      const PAY = { F1: "Cash", F2: "Card", F3: "UPI", F4: "Split", F5: "Credit" };
+      if (sc && PAY[sc]) {
+        stop();
+        window.setSettlePay(PAY[sc]);
+        return;
+      }
+      if (sc === "F7") {
+        stop();
+        const toCompany = window.SETTLE_BILL_TARGET !== "company";
+        window.setBillTarget(toCompany ? "company" : "walkin");
+        if (!toCompany || (window.state && window.state.companyParty)) window.posFocusSettle();
+        return;
+      }
+      if (sc === "F8") {
+        stop();
+        const spots = ["rwPointsInp", "rwCardCode", "rwRoomSel"]
+          .map((id) => document.getElementById(id))
+          .filter((x) => x && x.offsetParent && !x.disabled);
+        if (spots.length) {
+          const next = spots[(spots.indexOf(document.activeElement) + 1) % spots.length];
+          next.focus();
+          try { next.select && next.select(); } catch (er) {}
+        }
+        return;
+      }
+      if (sc === "F9") {
+        stop();
+        window.finalizeSettlement(false);
+        return;
+      }
+      if (sc === "F10" || (e.key === "Enter" && (e.ctrlKey || e.metaKey))) {
+        stop();
+        window.finalizeSettlement(true);
+        return;
+      }
+      if (sc) {
+        stop(); // other F-keys do nothing here (and never reach the order screen behind)
+        return;
+      }
+      // a digit typed while no field has focus goes to the amount
+      if (/^[0-9.]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey &&
+          !["INPUT", "TEXTAREA", "SELECT"].includes(tagName)) {
+        window.posFocusSettle();
+        return;
+      }
       if (e.key === "Escape") {
         e.preventDefault();
         window.closeSettlementModal();
@@ -15623,6 +16505,9 @@
             e.preventDefault();
             e.stopPropagation();
             this.blur();
+            setTimeout(function () {
+              window.posFocusSettle && window.posFocusSettle();
+            }, 60);
           }
         });
       });

@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 import os
 import json
+import re
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
@@ -1117,12 +1118,24 @@ def order_create_manual(request, restaurant_slug=None):
                 excise_bill_no=excise_bill_no or None,
             )
 
-        party_gstin_input = (data.get('party_gstin') or data.get('customer_gstin') or '').strip()
-        if party_gstin_input and len(party_gstin_input) == 15 and not order.gstin_no:
-            order.gstin_no = party_gstin_input
+        # the buyer's GSTIN belongs on their Party (bills read order.party.gstin); gstin_no is OUR invoice number
+        party_gstin_input = (data.get('party_gstin') or data.get('customer_gstin') or '').strip().upper()
 
-        # Resolve, link, or auto-create Party using phone-first matching
-        if customer_name or phone:
+        # A company picked/added at settle is linked directly; otherwise resolve by phone first
+        picked_party = None
+        if str(data.get('party_id') or '').isdigit():
+            picked_party = Party.objects.filter(pk=int(data['party_id']), restaurant=restaurant).first()
+        if picked_party:
+            order.party = picked_party
+            order.customer_name = picked_party.name
+            if phone:
+                order.phone = phone
+            order.save(update_fields=['party', 'customer_name', 'phone'])
+            if party_gstin_input and len(party_gstin_input) == 15 and not picked_party.gstin:
+                picked_party.gstin = party_gstin_input
+                picked_party.gst_registration_type = Party.GstRegistrationType.REGULAR
+                picked_party.save(update_fields=['gstin', 'gst_registration_type'])
+        elif customer_name or phone:
             order.customer_name = customer_name or order.customer_name
             order.phone = phone or order.phone
             if not order.branch and active_branch:
@@ -1623,17 +1636,7 @@ def order_create_manual(request, restaurant_slug=None):
     if branch_obj:
         cust_parties_qs = cust_parties_qs.filter(Q(branch=branch_obj) | Q(branch__isnull=True))
     cust_parties_qs = cust_parties_qs.order_by('name')
-    cust_parties_list = [
-        {
-            'id': p.id,
-            'name': p.name,
-            'phone': p.phone or '',
-            'email': p.email or '',
-            'gstin': p.gstin or '',
-            'full_address': p.full_address or ''
-        }
-        for p in cust_parties_qs
-    ]
+    cust_parties_list = [_party_json(p) for p in cust_parties_qs]
     active_branch_gstin_manual = get_branch_gstin_str(branch_obj, restaurant)
 
     service_charge_pct_val = float(branch_obj.service_charge_percentage if (branch_obj and branch_obj.service_charge_percentage is not None) else (settings_obj.service_charge_percentage or 0))
@@ -1771,6 +1774,74 @@ def pos_draft_order_api(request, restaurant_slug=None):
             'order': serialize_pos_order(order),
             'active_orders': get_pos_active_orders(restaurant, active_branch)
         })
+
+
+def _party_json(p):
+    return {'id': p.id, 'name': p.name, 'phone': p.phone or '', 'email': p.email or '', 'gstin': p.gstin or '',
+            'gst_registration_type': p.gst_registration_type or '', 'state': p.state or '',
+            'full_address': p.full_address or ''}
+
+
+@login_required
+@user_passes_test(is_admin)
+def pos_gst_company_api(request, restaurant_slug=None):
+    """Settle → "Company (has GSTIN)": save the billed company as a customer Party (same record as
+    Parties → Add New Party). A GSTIN already on file updates that party instead of duplicating it."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST required'}, status=405)
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return JsonResponse({'success': False, 'error': 'Not allowed'}, status=403)
+    try:
+        data = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+
+    from super_admin.forms import GST_STATE_CODE_MAP, is_valid_gstin_checksum, normalize_pan_or_gstin
+    name = ' '.join(str(data.get('name') or '').split())
+    gstin = normalize_pan_or_gstin(data.get('gstin') or '')
+    reg_type = data.get('gst_registration_type') or Party.GstRegistrationType.REGULAR
+    if reg_type not in (Party.GstRegistrationType.REGULAR, Party.GstRegistrationType.COMPOSITION):
+        reg_type = Party.GstRegistrationType.REGULAR
+    errors = {}
+    if not name:
+        errors['name'] = 'Enter the registered company name.'
+    if not re.match(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$', gstin):
+        errors['gstin'] = 'Enter a valid 15-character GSTIN (e.g. 27AAACT2727Q1ZW).'
+    elif gstin[:2] not in GST_STATE_CODE_MAP:
+        errors['gstin'] = f'GSTIN starts with an unknown state code ({gstin[:2]}).'
+    elif not is_valid_gstin_checksum(gstin):
+        errors['gstin'] = 'This GSTIN fails the check digit — please re-check it.'
+    email = (data.get('email') or '').strip()
+    if email:
+        from django.core.validators import validate_email
+        try:
+            validate_email(email)
+        except ValidationError:
+            errors['email'] = 'Enter a valid email address.'
+    if errors:
+        return JsonResponse({'success': False, 'errors': errors}, status=400)
+
+    state = (data.get('state') or '').strip() or GST_STATE_CODE_MAP[gstin[:2]]
+    fields = {
+        'name': name, 'party_type': Party.PartyType.CUSTOMER, 'gstin': gstin, 'gst_registration_type': reg_type,
+        'place_of_supply': GST_STATE_CODE_MAP[gstin[:2]], 'phone': (data.get('phone') or '').strip(), 'email': email,
+        'address_line1': (data.get('address_line1') or '').strip(), 'city': (data.get('city') or '').strip(),
+        'state': state, 'pincode': (data.get('pincode') or '').strip(),
+    }
+    fields['address'] = ', '.join(v for v in [fields['address_line1'], fields['city'], state, fields['pincode']] if v)
+    branch = get_active_branch(request, restaurant)
+    party = Party.objects.filter(restaurant=restaurant, gstin__iexact=gstin).first()
+    created = party is None
+    if created:
+        party = Party.objects.create(restaurant=restaurant, branch=branch, opening_balance=Decimal('0.00'),
+                                     balance_type=Party.BalanceType.RECEIVABLE, **fields)
+    else:
+        for k, v in fields.items():  # keep its type (it may also be a vendor) and any details not re-entered
+            if k != 'party_type' and (v or k in ('name', 'gstin', 'gst_registration_type', 'place_of_supply')):
+                setattr(party, k, v)
+        party.save()
+    return JsonResponse({'success': True, 'created': created, 'party': _party_json(party)})
 
 
 @login_required
@@ -2003,9 +2074,8 @@ def order_edit_manual(request, pk, restaurant_slug=None):
         excise_bill_no = (data.get('excise_bill_no') or data.get('excise') or '').strip()
         if gstin_no: order.gstin_no = gstin_no
         if excise_bill_no: order.excise_bill_no = excise_bill_no
-        party_gstin_input = (data.get('party_gstin') or data.get('customer_gstin') or '').strip()
-        if party_gstin_input and len(party_gstin_input) == 15 and not order.gstin_no:
-            order.gstin_no = party_gstin_input
+        # the buyer's GSTIN belongs on their Party (bills read order.party.gstin); gstin_no is OUR invoice number
+        party_gstin_input = (data.get('party_gstin') or data.get('customer_gstin') or '').strip().upper()
 
         # Sync party
         if order.customer_name or order.phone:
