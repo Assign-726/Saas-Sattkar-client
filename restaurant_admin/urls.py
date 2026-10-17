@@ -60,9 +60,6 @@ urlpatterns = [
     path('integrations/webhooks/<int:pk>/deliveries/<int:delivery_pk>/', integration_views.delivery_json, name='integration_delivery'),
     path('integrations/docs/', integration_views.docs, name='integration_docs'),
     # Test URLs
-    path('test/', views.test_template, name='test'),
-    path('test-static/', views.test_static, name='test_static'),
-    path('debug-menu/', views.debug_menu_list, name='debug_menu'),
     
     # Unified Transaction Desk
     path('transactions/create/', views.transaction_desk_create, name='transaction_desk_create'),

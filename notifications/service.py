@@ -16,10 +16,11 @@ from notifications.models import Notification, NotificationState
 
 logger = logging.getLogger(__name__)
 
-SOURCE_LABELS = {'qr': 'Table QR', 'online': 'Online', 'website': 'Website', 'api': 'API', 'zomato': 'Zomato', 'swiggy': 'Swiggy',
+SOURCE_LABELS = {'pos': 'POS', 'qr': 'Table QR', 'online': 'Online', 'website': 'Website', 'api': 'API', 'zomato': 'Zomato', 'swiggy': 'Swiggy',
                  'kitchen': 'Kitchen', 'guest': 'Guest', 'inventory': 'Stock', 'magicpin': 'magicpin', 'ondc': 'ONDC'}
 KIND_STYLE = {
     'order_new': ('fa-receipt', 'blue'), 'order_addon': ('fa-plus', 'indigo'), 'order_ready': ('fa-bell-concierge', 'green'),
+    'kot_new': ('fa-fire-burner', 'orange'),
     'delivery_new': ('fa-motorcycle', 'brand'), 'delivery_cancelled': ('fa-ban', 'red'), 'delivery_attention': ('fa-triangle-exclamation', 'orange'),
     'reservation': ('fa-calendar-check', 'teal'), 'room_booking': ('fa-bed', 'indigo'), 'room_alert': ('fa-triangle-exclamation', 'red'), 'feedback': ('fa-comment-dots', 'purple'), 'low_stock': ('fa-boxes-stacked', 'orange'),
     'system': ('fa-circle-info', 'gray'),
@@ -78,6 +79,25 @@ def notify_addon(order, added_items, source='qr'):
                   url=_order_url(order), source=source, order=order, data=d)
 
 
+def notify_kot(order, lines, items_count, round_no=1):
+    """A kitchen ticket was fired from the POS (first round or an add-on). The kitchen and the
+    KDS need it even though the cashier rang it up; QR / online orders already notify as order_new."""
+    d = order_data(order)
+    where = d['table_name'] if order.order_type == 'dine_in' else d['order_type']
+    label = f'KOT {d["order_number"]}' + (f' · round {round_no}' if round_no > 1 else '')
+    return notify(order.restaurant, 'kot_new', f'{label} · {where}',
+                  body=f'{items_count} item{"s" if items_count != 1 else ""}: {lines}'[:300],
+                  branch=order.branch, url=_kds_url(order), source='pos', order=order, level='info',
+                  dedupe_key=f'kot:{order.pk}:{round_no}', data={**d, 'round': round_no})
+
+
+def _kds_url(order):
+    try:
+        return reverse('restaurant_admin:kitchen_kds', kwargs={'restaurant_slug': order.restaurant.slug})
+    except Exception:
+        return ''
+
+
 def notify_ready(order):
     d = order_data(order)
     where = d['table_name'] if order.order_type == 'dine_in' else d['order_type']
@@ -100,6 +120,8 @@ for _k, _c in Notification.CATEGORY.items():
 MODULE_KINDS = {
     'hotel': ['room_booking', 'room_alert', 'feedback', 'system'],
     'restaurant': [k for k in Notification.CATEGORY if k not in ('room_booking', 'room_alert')],
+    # Kitchen / KDS logins: only what the line needs to cook
+    'kitchen': ['kot_new', 'order_new', 'order_addon', 'delivery_new', 'delivery_cancelled'],
 }
 
 

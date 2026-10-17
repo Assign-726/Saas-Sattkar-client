@@ -81,3 +81,40 @@ class IsBusinessStaff(BasePermission):
 
     def has_permission(self, request, view):
         return is_business_staff(request.user)
+
+
+class TenantSlugMiddleware:
+    """Admin URLs carry the business in the path (/dashboard/<slug>/…, /hotel-admin/<slug>/…).
+    Some views load the restaurant straight from that slug, so check it here once: the slug must
+    be the user's own restaurant or one of its branches (only their own branch for branch-bound
+    staff). Platform admins may open any business."""
+
+    NAMESPACES = ('restaurant_admin', 'hotel_admin')
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        return self.get_response(request)
+
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        slug = view_kwargs.get('restaurant_slug')
+        match = getattr(request, 'resolver_match', None)
+        if not slug or not match or match.namespace not in self.NAMESPACES:
+            return None
+        user = request.user
+        if not user.is_authenticated or is_platform_admin(user):
+            return None  # the view sends anonymous users to the login page
+        p = profile(user)
+        if p is None:
+            return None  # the view answers "no restaurant associated with this account"
+        slug = slug.lower()
+        restaurant = p.restaurant
+        allowed = {(restaurant.slug or '').lower()} if restaurant else set()
+        branches = RestaurantBranch.objects.filter(pk=p.branch_id) if p.branch_id else \
+            RestaurantBranch.objects.filter(restaurant_id=p.restaurant_id)
+        allowed.update(s.lower() for s in branches.values_list('slug', flat=True) if s)
+        if slug in allowed:
+            return None
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden('You do not have access to this business.')

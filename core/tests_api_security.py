@@ -279,3 +279,45 @@ class LoginLockoutTests(Tenants):
             self.api.post('/api/hotel/auth/login/', {'username': 'bravo_mgr', 'password': 'nope'}, format='json', REMOTE_ADDR=f'10.0.2.{_}')
         resp = self.api.post('/api/hotel/auth/login/', {'username': 'bravo_mgr', 'password': 'pw-123456'}, format='json', REMOTE_ADDR='10.0.3.1')
         self.assertEqual(resp.status_code, 429)
+
+
+class TenantSlugGuardTests(TestCase):
+    """/dashboard/<slug>/ and /hotel-admin/<slug>/ only open your own business."""
+
+    def setUp(self):
+        from super_admin.models import Restaurant, RestaurantBranch, RestaurantUser
+        self.a = Restaurant.objects.create(name='Alpha', slug='alpha-co')
+        self.a1 = RestaurantBranch.objects.create(restaurant=self.a, name='A1', slug='alpha-one', has_hotel_module=True)
+        self.a2 = RestaurantBranch.objects.create(restaurant=self.a, name='A2', slug='alpha-two', has_hotel_module=True)
+        self.b = Restaurant.objects.create(name='Beta', slug='beta-co')
+        RestaurantBranch.objects.create(restaurant=self.b, name='B1', slug='beta-one', has_hotel_module=True)
+        self.owner = User.objects.create_user('alpha_owner', password='x', is_staff=True)
+        RestaurantUser.objects.create(user=self.owner, restaurant=self.a, role='GENERAL_MANAGER', is_primary_admin=True)
+        self.desk = User.objects.create_user('alpha_desk', password='x', is_staff=True)
+        RestaurantUser.objects.create(user=self.desk, restaurant=self.a, branch=self.a1, role='CASHIER')
+
+    def test_other_business_is_refused(self):
+        self.client.force_login(self.owner)
+        for url in ['/dashboard/beta-co/menu/', '/dashboard/beta-one/floor-plan/', '/hotel-admin/beta-one/',
+                    '/dashboard/beta-co/api/floor-plan/save-position/']:
+            self.assertEqual(self.client.get(url).status_code, 403, url)
+        self.assertNotEqual(self.client.get('/dashboard/alpha-co/menu/').status_code, 403)
+        self.assertNotEqual(self.client.get('/dashboard/alpha-two/menu/').status_code, 403)
+
+    def test_branch_bound_staff_stay_on_their_branch(self):
+        self.client.force_login(self.desk)
+        self.assertEqual(self.client.get('/dashboard/alpha-two/orders/create/').status_code, 403)
+        self.assertNotEqual(self.client.get('/dashboard/alpha-one/orders/create/').status_code, 403)
+
+    def test_platform_admin_may_open_any_business(self):
+        admin = User.objects.create_superuser('platform', 'p@x.com', 'x')
+        self.client.force_login(admin)
+        self.assertEqual(self.client.get('/dashboard/beta-co/menu/').status_code, 200)
+
+    def test_live_order_stream_accepts_branch_slugs(self):
+        """POS/KDS/floor plan links use the branch slug; the live stream must accept it."""
+        self.client.force_login(self.owner)
+        for slug in ('alpha-co', 'alpha-one'):
+            r = self.client.get(f'/dashboard/{slug}/orders/stream/')
+            self.assertEqual(r.status_code, 200, slug)  # not consumed: closing a stream ends the test DB connection
+        self.assertEqual(self.client.get('/dashboard/beta-one/orders/stream/').status_code, 403)

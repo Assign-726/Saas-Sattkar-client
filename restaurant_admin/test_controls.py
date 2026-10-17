@@ -149,3 +149,38 @@ class ChargeToRoomTests(ControlsBase):
                                            check_out_date=timezone.localdate() + datetime.timedelta(days=1), booking_status='CHECKED_IN')
         self.assertEqual(self.settle([{'method': 'room', 'booking_id': ostay.pk, 'amount': 1050}]).status_code, 400)
         self.assertFalse(FolioCharge.objects.exists())
+
+
+class PosBillTotalTests(ControlsBase):
+    """The POS sends its own totals; the server decides what the bill is and whether it is paid."""
+
+    def setUp(self):
+        super().setUp()
+        self.dish = MenuItem.objects.create(restaurant=self.r, branch=self.b, name='Thali', price=D('500'), sku='T1')
+
+    def post(self, **extra):
+        body = {'customer_name': 'Walk-in Guest', 'order_type': 'takeaway', 'payment_method': 'cash',
+                'items': [{'menu_item_id': self.dish.pk, 'quantity': 2, 'unit_price': 500}], **extra}
+        resp = self.client.post(self.url('order_create_manual'), data=json.dumps(body), content_type='application/json',
+                                HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertTrue(resp.json().get('success'), resp.content)
+        return Order.objects.get(pk=resp.json()['order_id'])
+
+    def test_tampered_low_total_cannot_mark_a_bill_paid(self):
+        o = self.post(action='settle_order', grand_total='1.00', subtotal='1.00', tax_amount='0',
+                      payments=[{'method': 'cash', 'amount': 1}], paid_amount='1.00', due_amount='0', payment_status='paid')
+        self.assertEqual(o.total_amount, D('1050.00'))  # 2 × ₹500 + 5% GST, worked out on the server
+        self.assertEqual(o.paid_amount, D('1.00'))
+        self.assertEqual(o.payment_status, 'partially_paid')
+        self.assertEqual(o.due_amount, D('1049.00'))
+        self.assertNotEqual(o.status, 'COMPLETED')
+
+    def test_matching_total_settles_in_full(self):
+        o = self.post(action='settle_order', grand_total='1050.00', subtotal='1000.00', tax_amount='50.00',
+                      payments=[{'method': 'upi', 'amount': 1050}], paid_amount='1050.00', due_amount='0', payment_status='paid')
+        self.assertEqual((o.total_amount, o.paid_amount, o.payment_status, o.status), (D('1050.00'), D('1050.00'), 'paid', 'COMPLETED'))
+
+    def test_part_payment_keeps_the_balance_when_the_client_sent_no_total(self):
+        o = self.post(action='settle_order', grand_total='0', payments=[{'method': 'cash', 'amount': 400}],
+                      paid_amount='400', payment_status='partially_paid', customer_name='Asha')
+        self.assertEqual((o.paid_amount, o.due_amount, o.payment_status), (D('400.00'), D('650.00'), 'partially_paid'))

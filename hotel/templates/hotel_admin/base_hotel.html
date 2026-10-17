@@ -241,6 +241,28 @@
             flex-shrink: 0;
         }
 
+        /* Sidebar logout, same as the restaurant admin (colours in apple-ui.css) */
+        .btn-logout-sidebar {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.65rem 1rem;
+            background-color: #fff5f5;
+            color: #e53e3e;
+            border: 1px solid #fed7d7;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-logout-sidebar i { font-size: 1rem; transition: transform 0.2s ease; }
+        .btn-logout-sidebar:hover i { transform: translateX(2px); }
+        html.sidebar-collapsed .btn-logout-sidebar { padding: 0.65rem 0.5rem; }
+        html.sidebar-collapsed .btn-logout-sidebar span { display: none !important; }
+
         .sb-user-card {
             display: flex;
             align-items: center;
@@ -1032,11 +1054,13 @@
     </a>
 
     <nav class="sb-nav">
+        {% if show_front_desk_ops and access.revenue %}
+        <a href="{% url 'hotel_admin:management_dashboard' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'mgmt_dashboard' or active_menu == 'action_centre' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-chart-pie"></i></div><span>Dashboard</span></div>
+        </a>
+        {% endif %}
         {% if show_front_desk_ops and access.front_desk or show_front_desk_ops and access.cabs %}
         <div class="sb-section">Front Desk</div>
-        <a href="{% url 'hotel_admin:action_centre' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'action_centre' %}active{% endif %}">
-            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-bolt"></i></div><span>Action Centre</span></div>
-        </a>
         {% if access.front_desk %}
         <a href="{% url 'hotel_admin:dashboard' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'dashboard' %}active{% endif %}">
             <div class="sb-link-inner">
@@ -1356,19 +1380,11 @@
                 <i class="fa-solid fa-desktop"></i>
             </button>
         </div>
-        <div class="sb-user-card">
-            <div class="d-flex align-items-center gap-2 overflow-hidden">
-                <div class="sb-user-avatar">{{ user.username|slice:":1"|upper }}</div>
-                <div class="overflow-hidden">
-                    <div class="fw-semibold text-truncate" style="font-size: 0.8rem; color: var(--ui-label);">{{ user.username }}</div>
-                    <div style="font-size: 0.67rem; color: var(--ui-label-2);">{% if is_housekeeping %}Housekeeping{% elif is_front_desk %}Front Desk{% elif is_general_manager %}General Manager{% else %}Hotel Admin{% endif %}</div>
-                </div>
-            </div>
-            <button type="button" class="btn btn-sm btn-outline-danger p-1 px-2" title="Sign Out" aria-label="Sign out"
-                    data-bs-toggle="modal" data-bs-target="#logoutConfirmModal">
-                <i class="fa-solid fa-power-off" style="font-size: 0.8rem;"></i>
-            </button>
-        </div>
+        <button type="button" class="btn-logout-sidebar" id="sidebarLogoutTrigger" title="Sign out of account"
+                data-bs-toggle="modal" data-bs-target="#logoutConfirmModal">
+            <i class="fa-solid fa-right-from-bracket"></i>
+            <span>Logout</span>
+        </button>
     </div>
 </aside>
     <script>

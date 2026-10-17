@@ -84,7 +84,7 @@ _RESTAURANT_RULES = [
     ('campaigns', r'^campaign_.*$'),
     ('finance', r'^(expenses|expense_receipt|profit_loss)$'),
     ('staff', r'^(staff_.*|ground_staff_.*|muster_roll|payroll_dashboard|salary_slip_view|sop_dashboard|api_.*|roles|role_.*)$'),
-    ('settings', r'^(settings|test_email|test|test_static|debug_menu)$'),
+    ('settings', r'^(settings|test_email)$'),
     ('integrations', r'^integration.*$'),
     ('logs', r'^activity_logs$'),
 ]
@@ -92,7 +92,7 @@ _HOTEL_RULES = [
     ('front_desk', r'^(dashboard|tape_chart|bookings|booking_.*|morning_brief)$'),
     ('rooms', r'^(rooms|room_.*|categories|category_.*)$'),
     ('cabs', r'^(cab_.*|cabs_.*)$'),
-    ('revenue', r'^(rates|rate_.*|reports|reports_.*|night_audit|night_audit_.*)$'),
+    ('revenue', r'^(management_dashboard|rates|rate_.*|reports|reports_.*|night_audit|night_audit_.*)$'),
     ('guest_services', r'^(requests|request_.*|lostfound|lostfound_.*|laundry|laundry_.*|spa|spa_.*)$'),
     ('banquets', r'^(banquets|banquet_.*)$'),
     ('sales', r'^(sales|sales_.*|packages|package_.*|promo_.*)$'),

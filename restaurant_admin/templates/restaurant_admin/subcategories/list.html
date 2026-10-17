@@ -14,9 +14,19 @@
         <div class="card-header">
             <i class="fas fa-table me-1"></i>
             Subcategories List
-            <a href="{% url 'restaurant_admin:subcategory_add' restaurant_slug=rslug %}" class="btn btn-primary btn-sm float-end">
-                <i class="fas fa-plus"></i> Add Subcategory
-            </a>
+            {# A subcategory belongs to a category, so pick the category first #}
+            <div class="dropdown float-end">
+                <button class="btn btn-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-plus"></i> Add Subcategory
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" style="max-height: 320px; overflow-y: auto;">
+                    {% for c in categories %}
+                    <li><a class="dropdown-item" href="{% url 'restaurant_admin:subcategory_add' restaurant_slug=rslug category_id=c.pk %}">{{ c.name }}</a></li>
+                    {% empty %}
+                    <li><a class="dropdown-item" href="{% url 'restaurant_admin:category_list' restaurant_slug=rslug %}">Create a category first</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
         </div>
         <div class="card-body">
             <div class="table-responsive">

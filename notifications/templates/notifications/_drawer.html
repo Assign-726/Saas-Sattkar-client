@@ -4,7 +4,7 @@
             <header class="ui-nt-head">
                 <div>
                     <h2 id="ntTitle">Notifications</h2>
-                    <p id="ntSubtitle">{% if nt_module == 'hotel' %}Channel bookings, changes and guest feedback{% else %}Orders, kitchen and alerts{% endif %}</p>
+                    <p id="ntSubtitle">{% if nt_module == 'hotel' %}Channel bookings, changes and guest feedback{% elif nt_module == 'kitchen' %}New kitchen tickets and orders{% else %}Orders, kitchen and alerts{% endif %}</p>
                 </div>
                 <div class="ui-nt-head-actions">
                     <button type="button" class="ui-nt-iconbtn" id="ntDesktopBtn" title="Allow desktop alerts" aria-label="Allow desktop alerts"><i class="fa-solid fa-display"></i></button>
@@ -22,12 +22,16 @@
                 <button type="button" data-cat="all" class="is-on">All</button>
                 {% if nt_module == 'hotel' %}
                 <button type="button" data-cat="rooms"><i class="fa-solid fa-bed"></i> Bookings &amp; channels</button>
+                {% elif nt_module == 'kitchen' %}
+                <button type="button" data-cat="kitchen"><i class="fa-solid fa-fire-burner"></i> Kitchen tickets</button>
+                <button type="button" data-cat="orders"><i class="fa-solid fa-receipt"></i> Guest orders</button>
+                <button type="button" data-cat="online"><i class="fa-solid fa-motorcycle"></i> Zomato &amp; Swiggy</button>
                 {% else %}
                 <button type="button" data-cat="orders"><i class="fa-solid fa-receipt"></i> Orders</button>
                 <button type="button" data-cat="online"><i class="fa-solid fa-motorcycle"></i> Zomato &amp; Swiggy</button>
                 <button type="button" data-cat="kitchen"><i class="fa-solid fa-bell-concierge"></i> Kitchen</button>
                 {% endif %}
-                <button type="button" data-cat="alerts"><i class="fa-solid fa-triangle-exclamation"></i> Alerts</button>
+                {% if nt_module != 'kitchen' %}<button type="button" data-cat="alerts"><i class="fa-solid fa-triangle-exclamation"></i> Alerts</button>{% endif %}
             </div>
             <div class="ui-nt-bulk">
                 <button type="button" data-bulk="read_all"><i class="fa-solid fa-check-double"></i> Mark all read</button>
@@ -38,8 +42,11 @@
                 {% if nt_module == 'hotel' %}
                 <span><i class="fa-solid fa-circle-info"></i> Bookings made at the front desk don't notify.</span>
                 <a href="{% url 'hotel_admin:bookings' restaurant_slug=rslug %}">Bookings <i class="fa-solid fa-arrow-right"></i></a>
+                {% elif nt_module == 'kitchen' %}
+                <span><i class="fa-solid fa-circle-info"></i> Every KOT from the POS, QR and online orders.</span>
+                <a href="{% url 'restaurant_admin:kitchen_kds' restaurant_slug=rslug %}">Open KDS <i class="fa-solid fa-arrow-right"></i></a>
                 {% else %}
-                <span><i class="fa-solid fa-circle-info"></i> Orders you ring up at the POS don't notify.</span>
+                <span><i class="fa-solid fa-circle-info"></i> POS orders only appear here as kitchen tickets (no chime).</span>
                 <a href="{% url 'restaurant_admin:order_records' restaurant_slug=rslug %}">Live Orders Desk <i class="fa-solid fa-arrow-right"></i></a>
                 {% endif %}
             </footer>

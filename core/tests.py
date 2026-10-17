@@ -82,8 +82,11 @@ class RazorpayPaymentTests(TestCase):
         }
         
         settings_obj = RestaurantSettings.get_settings(self.restaurant)
-        form = RestaurantSettingsForm(data=form_data, instance=settings_obj)
-        self.assertTrue(form.is_valid())
+        # The settings page posts every field (Tally ledgers, print templates…); start from the saved values
+        from django.forms.models import model_to_dict
+        current = {k: v for k, v in model_to_dict(settings_obj).items() if v is not None}
+        form = RestaurantSettingsForm(data={**current, **form_data}, instance=settings_obj)
+        self.assertTrue(form.is_valid(), form.errors)
         
         saved_obj = form.save(commit=False)
         saved_obj.restaurant = self.restaurant
@@ -93,41 +96,53 @@ class RazorpayPaymentTests(TestCase):
         self.assertEqual(updated_settings.razorpay_key_id, 'rzp_test_abc123')
         self.assertTrue(updated_settings.enable_online_payment)
 
-    @patch('urllib.request.urlopen')
-    def test_order_serializer_online_payment(self, mock_urlopen):
-        # Configure restaurant settings to enable online payment
+    @patch('core.payments.fetch_order')
+    def test_order_serializer_online_payment(self, mock_fetch):
+        """An online order is only created once Razorpay has signed the payment."""
+        import hashlib, hmac
         settings_obj = RestaurantSettings.get_settings(self.restaurant)
         settings_obj.enable_online_payment = True
         settings_obj.enable_pay_at_counter = True
         settings_obj.razorpay_key_id = "rzp_test_abc"
         settings_obj.razorpay_key_secret = "secret"
         settings_obj.save()
+        mock_fetch.return_value = {'id': 'order_rzp_mock123', 'amount': 100, 'status': 'paid'}  # ₹1: too little
 
-        # Mock Razorpay order response
-        import json
-        import io
-        mock_response = io.BytesIO(json.dumps({'id': 'order_rzp_mock123'}).encode('utf-8'))
-        mock_urlopen.return_value.__enter__.return_value.status = 201
-        mock_urlopen.return_value.__enter__.return_value.read.return_value = mock_response.read()
+        base = {'customer_name': 'Ritik Kumar', 'phone': '9999999999', 'payment_method': 'O',
+                'items': [{'menu_item': self.menu_item.id, 'quantity': 2}]}
 
-        order_data = {
-            'customer_name': 'Ritik Kumar',
-            'phone': '9999999999',
-            'table_number': 4,
-            'payment_method': 'O',
-            'items': [
-                {'menu_item': self.menu_item.id, 'quantity': 2}
-            ]
-        }
+        # No payment proof: refused
+        serializer = OrderSerializer(data=base)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        with self.assertRaises(Exception):
+            serializer.save()
 
-        serializer = OrderSerializer(data=order_data)
-        self.assertTrue(serializer.is_valid())
+        # Forged signature: refused
+        forged = OrderSerializer(data={**base, 'razorpay_order_id': 'order_rzp_mock123', 'razorpay_payment_id': 'pay_1',
+                                       'razorpay_signature': 'not-a-signature'})
+        self.assertTrue(forged.is_valid(), forged.errors)
+        with self.assertRaises(Exception):
+            forged.save()
+
+        sig = hmac.new(b'secret', b'order_rzp_mock123|pay_1', hashlib.sha256).hexdigest()
+        # Signed, but Razorpay says less was paid than the bill: refused
+        under = OrderSerializer(data={**base, 'razorpay_order_id': 'order_rzp_mock123', 'razorpay_payment_id': 'pay_1',
+                                      'razorpay_signature': sig})
+        self.assertTrue(under.is_valid(), under.errors)
+        with self.assertRaises(Exception):
+            under.save()
+
+        # Correctly signed and fully paid: the order is created and marked paid
+        mock_fetch.return_value = {'id': 'order_rzp_mock123', 'amount': 10_000_00, 'status': 'paid'}
+        serializer = OrderSerializer(data={**base, 'razorpay_order_id': 'order_rzp_mock123', 'razorpay_payment_id': 'pay_1',
+                                           'razorpay_signature': sig})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
         order = serializer.save()
-
         self.assertEqual(order.payment_method, 'O')
-        self.assertEqual(order.payment_status, 'U') # Unpaid initially
+        self.assertEqual(order.payment_status, 'paid')
         self.assertEqual(order.razorpay_order_id, 'order_rzp_mock123')
-        self.assertEqual(order.total_amount, 500.00) # 250.00 * 2
+        from decimal import Decimal
+        self.assertEqual(order.total_amount, Decimal('525.00'))  # 250.00 × 2 + 5% GST
 
     def test_security_token_generation(self):
         # Place order

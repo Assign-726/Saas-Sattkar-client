@@ -1,0 +1,289 @@
+{% load restaurant_admin_extras %}
+{# Hotel management dashboard — period performance, today at a glance, needs attention #}
+{% with cur=d.cur dl=d.deltas %}
+<div class="ui-dash ui-pms">
+
+  <div class="ui-page-header">
+    <div>
+      <h1>{{ greeting }}, {{ user.first_name|default:user.username }}</h1>
+      <p>{{ today|date:"l, j F" }} · {{ current_branch.name }} · {{ period_label }}{% if not d.single_day %} ({{ d.start|date:"j M" }} – {{ d.end|date:"j M" }}){% endif %}</p>
+    </div>
+    <div class="ui-actions">
+      <a class="ui-btn ui-btn-gray" href="?{{ request.GET.urlencode }}&export=csv" title="Download nightly figures"><i class="fa-solid fa-file-csv"></i><span>Export</span></a>
+      <a class="ui-btn ui-btn-gray" href="{{ base_url }}reports/?period={{ period }}{% if period == 'custom' %}&from={{ d.start|date:'Y-m-d' }}&to={{ d.end|date:'Y-m-d' }}{% endif %}"><i class="fa-solid fa-chart-column"></i><span>Full report</span></a>
+    </div>
+  </div>
+
+  <form class="ui-dash-filter" method="get">
+    <nav class="ui-dash-periods" aria-label="Period">
+      {% for k, l in periods %}<a href="?period={{ k }}" class="{% if period == k %}is-on{% endif %}" {% if period == k %}aria-current="true"{% endif %}>{{ l }}</a>{% endfor %}
+      <button type="button" class="{% if period == 'custom' %}is-on{% endif %}" onclick="document.getElementById('hdCustom').hidden=false">Custom…</button>
+    </nav>
+    <div class="ui-dash-custom" id="hdCustom" {% if period != 'custom' %}hidden{% endif %}>
+      <input type="hidden" name="period" value="custom">
+      <input class="ui-input" type="date" name="from" value="{{ d.start|date:'Y-m-d' }}" aria-label="From">
+      <span>to</span>
+      <input class="ui-input" type="date" name="to" value="{{ d.end|date:'Y-m-d' }}" aria-label="To">
+      <button class="ui-btn ui-btn-primary ui-btn-sm" type="submit">Apply</button>
+    </div>
+  </form>
+
+  <!-- Today -->
+  <section class="ui-card ui-dash-live" aria-label="Today">
+    <div class="ui-dash-live-head"><span class="ui-live-dot"></span> Today <span class="ui-log-sub">· {{ today|date:"D j M" }}</span></div>
+    <div class="ui-dash-live-grid">
+      <a class="ui-live-tile" href="{{ base_url }}tape-chart/">
+        <span class="lt-label">Occupancy tonight</span>
+        <span class="lt-val">{{ live.tonight_pct }}%</span>
+        <span class="lt-sub"><span class="ui-bar-mini"><span style="width:{{ live.tonight_pct }}%"></span></span> {{ live.tonight }}/{{ live.sellable }} rooms</span>
+      </a>
+      <a class="ui-live-tile" href="{{ base_url }}reports/?tab=lists&list=in_house">
+        <span class="lt-label">In house</span>
+        <span class="lt-val">{{ live.in_house }}</span>
+        <span class="lt-sub">{{ live.guests_in_house }} guest{{ live.guests_in_house|pluralize }}</span>
+      </a>
+      <a class="ui-live-tile" href="{{ base_url }}reports/?tab=lists&list=arrivals">
+        <span class="lt-label">Arrivals</span>
+        <span class="lt-val">{{ live.arrived }}<small>/{{ live.arrived|add:live.arrivals_due }}</small></span>
+        <span class="lt-sub">{% if live.arrivals_due %}{{ live.arrivals_due }} still to arrive{% else %}All arrived{% endif %}</span>
+      </a>
+      <a class="ui-live-tile" href="{{ base_url }}reports/?tab=lists&list=departures">
+        <span class="lt-label">Departures</span>
+        <span class="lt-val">{{ live.departed }}<small>/{{ live.departed|add:live.departures_due }}</small></span>
+        <span class="lt-sub">{% if live.departures_due %}{{ live.departures_due }} still to check out{% else %}All checked out{% endif %}</span>
+      </a>
+      <a class="ui-live-tile {% if live.dirty or live.ooo %}is-warn{% endif %}" href="{{ base_url }}rooms/housekeeping/">
+        <span class="lt-label">Rooms not ready</span>
+        <span class="lt-val">{{ live.dirty|add:live.ooo }}</span>
+        <span class="lt-sub">{{ live.dirty }} to clean · {{ live.ooo }} out of order</span>
+      </a>
+      <a class="ui-live-tile {% if live.balance_due > 0 %}is-alert{% endif %}" href="{{ base_url }}bookings/">
+        <span class="lt-label">Due from in-house guests</span>
+        <span class="lt-val">₹{{ live.balance_due|inr }}</span>
+        <span class="lt-sub">{% if live.open_requests %}{{ live.open_requests }} open guest request{{ live.open_requests|pluralize }}{% else %}No open guest requests{% endif %}</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- KPIs for the period -->
+  <div class="ui-kpi-grid ui-dash-kpis">
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Occupancy</div><div class="kpi-icon"><i class="fa-solid fa-bed"></i></div></div>
+      <div class="kpi-val">{{ cur.occupancy }}%</div>
+      <div class="kpi-sub">{% if dl.occupancy is not None %}<span class="ui-delta {% if dl.occupancy >= 0 %}is-up{% else %}is-down{% endif %}">{% if dl.occupancy >= 0 %}▲{% else %}▼{% endif %} {{ dl.occupancy|floatformat:1|cut:"-" }} pts</span> · {% endif %}{{ cur.sold }} of {{ cur.sellable }} room nights</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">ADR</div><div class="kpi-icon"><i class="fa-solid fa-tag"></i></div></div>
+      <div class="kpi-val">₹{{ cur.adr|inr }}</div>
+      <div class="kpi-sub">{% if dl.adr is not None %}<span class="ui-delta {% if dl.adr >= 0 %}is-up{% else %}is-down{% endif %}">{% if dl.adr >= 0 %}▲{% else %}▼{% endif %} {{ dl.adr|floatformat:0|cut:"-" }}%</span> · {% endif %}average rate per sold room</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">RevPAR</div><div class="kpi-icon"><i class="fa-solid fa-chart-line"></i></div></div>
+      <div class="kpi-val">₹{{ cur.revpar|inr }}</div>
+      <div class="kpi-sub">{% if dl.revpar is not None %}<span class="ui-delta {% if dl.revpar >= 0 %}is-up{% else %}is-down{% endif %}">{% if dl.revpar >= 0 %}▲{% else %}▼{% endif %} {{ dl.revpar|floatformat:0|cut:"-" }}%</span> · {% endif %}room revenue per available room</div></div>
+    <div class="ui-kpi kpi-cyan"><div class="ui-kpi-head"><div class="kpi-label">Total revenue</div><div class="kpi-icon"><i class="fa-solid fa-indian-rupee-sign"></i></div></div>
+      <div class="kpi-val">₹{{ d.total_revenue|inr }}</div>
+      <div class="kpi-sub">{% if dl.total is not None %}<span class="ui-delta {% if dl.total >= 0 %}is-up{% else %}is-down{% endif %}">{% if dl.total >= 0 %}▲{% else %}▼{% endif %} {{ dl.total|floatformat:0|cut:"-" }}%</span> · {% endif %}before GST</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Room revenue</div><div class="kpi-icon"><i class="fa-solid fa-key"></i></div></div>
+      <div class="kpi-val">₹{{ cur.room_revenue|inr }}</div>
+      <div class="kpi-sub">{% if dl.room_revenue is not None %}<span class="ui-delta {% if dl.room_revenue >= 0 %}is-up{% else %}is-down{% endif %}">{% if dl.room_revenue >= 0 %}▲{% else %}▼{% endif %} {{ dl.room_revenue|floatformat:0|cut:"-" }}%</span> · {% endif %}TRevPAR ₹{{ cur.trevpar|inr }}</div></div>
+    <div class="ui-kpi kpi-purple"><div class="ui-kpi-head"><div class="kpi-label">Arrivals</div><div class="kpi-icon"><i class="fa-solid fa-plane-arrival"></i></div></div>
+      <div class="kpi-val">{{ cur.arrivals }}</div>
+      <div class="kpi-sub">{% if dl.arrivals is not None %}<span class="ui-delta {% if dl.arrivals >= 0 %}is-up{% else %}is-down{% endif %}">{% if dl.arrivals >= 0 %}▲{% else %}▼{% endif %} {{ dl.arrivals|floatformat:0|cut:"-" }}%</span> · {% endif %}{{ cur.avg_stay }} night avg stay · {{ cur.avg_lead }} day lead</div></div>
+    <div class="ui-kpi kpi-cyan"><div class="ui-kpi-head"><div class="kpi-label">Collected</div><div class="kpi-icon"><i class="fa-solid fa-wallet"></i></div></div>
+      <div class="kpi-val">₹{{ cur.collected|inr }}</div>
+      <div class="kpi-sub">{% if dl.collected is not None %}<span class="ui-delta {% if dl.collected >= 0 %}is-up{% else %}is-down{% endif %}">{% if dl.collected >= 0 %}▲{% else %}▼{% endif %} {{ dl.collected|floatformat:0|cut:"-" }}%</span> · {% endif %}payments received</div></div>
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Cancelled &amp; no-show</div><div class="kpi-icon"><i class="fa-solid fa-ban"></i></div></div>
+      <div class="kpi-val">{{ cur.cancelled|add:cur.no_shows }}</div>
+      <div class="kpi-sub">{{ cur.cancelled }} cancelled · {{ cur.no_shows }} no-show{{ cur.no_shows|pluralize }}{% if cur.bookings_made %} · {{ cur.cancel_rate }}% rate{% endif %}</div></div>
+  </div>
+
+  <!-- Trend + needs attention -->
+  <div class="ui-dash-row r-2-1">
+    <section class="ui-card ui-pad">
+      <div class="ui-dash-card-head">
+        <div><h2 class="ui-card-title">Occupancy &amp; room revenue {% if d.single_day %}today{% else %}by night{% endif %}</h2>
+          <p class="ui-card-subtitle">Dashed line: occupancy {{ d.prev_start|date:"j M" }}{% if not d.single_day %} – {{ d.prev_end|date:"j M" }}{% endif %}{% if cur.has_forecast %} · future nights are on the books{% endif %}</p></div>
+      </div>
+      <div class="ui-dash-chart" style="height:280px"><canvas id="hdTrend" aria-label="Occupancy and room revenue by night"></canvas></div>
+    </section>
+    <section class="ui-card ui-pad">
+      <div class="ui-dash-card-head">
+        <h2 class="ui-card-title"><i class="fa-solid fa-bolt" style="color:var(--ui-orange)"></i> Needs attention</h2>
+        {% if d.attention_total %}<a class="ui-link-btn" href="{{ base_url }}action-centre/">All {{ d.attention_total }} <i class="fa-solid fa-chevron-right"></i></a>{% endif %}
+      </div>
+      {% if d.attention %}
+      <ul class="hd-attn">
+        {% for i in d.attention %}<li><a href="{{ i.url }}" class="tone-{{ i.tone }}"><i class="fa-solid {{ i.icon }}"></i><span>{{ i.title }}{% if i.detail %}<small>{{ i.detail }}</small>{% endif %}</span><strong>{{ i.count }}</strong></a></li>{% endfor %}
+      </ul>
+      {% else %}
+      <div class="ui-empty" style="padding:28px 10px"><i class="fa-solid fa-circle-check ui-empty-icon" style="color:var(--ui-green)"></i><p class="ui-log-sub">Nothing needs attention right now.</p></div>
+      {% endif %}
+    </section>
+  </div>
+
+  <!-- Outlook + insights -->
+  <div class="ui-dash-row r-2-1">
+    <section class="ui-card ui-pad">
+      <div class="ui-dash-card-head">
+        <div><h2 class="ui-card-title">Next 14 nights</h2>
+          <p class="ui-card-subtitle">Booked now, plus the pickup we usually get before the night · average forecast {{ d.forecast_avg }}%</p></div>
+        {% if access.revenue %}<a class="ui-link-btn" href="{{ base_url }}reports/forecast/">Forecast <i class="fa-solid fa-chevron-right"></i></a>{% endif %}
+      </div>
+      <div class="ui-dash-chart" style="height:220px"><canvas id="hdOutlook" aria-label="Booked occupancy for the next 14 nights"></canvas></div>
+    </section>
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title"><i class="fa-solid fa-wand-magic-sparkles" style="color:var(--ui-indigo)"></i> What stands out</h2>
+      {% if d.insights %}
+      <ul class="ui-dash-insights">
+        {% for i in d.insights %}<li class="tone-{{ i.tone }}"><i class="fa-solid {{ i.icon }}"></i><span>{{ i.text }}</span></li>{% endfor %}
+      </ul>
+      {% else %}
+      <div class="ui-empty" style="padding:28px 10px"><i class="fa-solid fa-chart-simple ui-empty-icon"></i><p class="ui-log-sub">Insights appear once there are a few stays in this period.</p></div>
+      {% endif %}
+    </section>
+  </div>
+
+  <!-- Revenue mix / sources / payments -->
+  <div class="ui-dash-row r-3">
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">Where revenue came from</h2>
+      {% if d.revenue_mix %}
+      <ul class="ui-dash-bars">
+        {% for r in d.revenue_mix %}<li><div class="bh"><span><i class="fa-solid {{ r.icon }}" style="width:16px;color:var(--ui-label-3)"></i> {{ r.label }}</span><strong>₹{{ r.amount|inr }}</strong></div><div class="ui-bar-mini"><span style="width:{{ r.share }}%"></span></div></li>{% endfor %}
+      </ul>
+      {% if cur.extras_by_kind %}
+      <h3 class="ui-dash-h3">Folio extras</h3>
+      <ul class="ui-dash-mini">{% for x in cur.extras_by_kind|slice:":4" %}<li><span>{{ x.kind }} <small class="ui-log-sub">· {{ x.count }}</small></span><strong>₹{{ x.net|inr }}</strong></li>{% endfor %}</ul>
+      {% endif %}
+      {% else %}<p class="ui-log-sub">No revenue in this period.</p>{% endif %}
+    </section>
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">Booking sources</h2>
+      {% if cur.sources %}
+      <ul class="ui-dash-bars">
+        {% for x in cur.sources %}<li><div class="bh"><span>{{ x.source }} <small>· {{ x.bookings }} arrival{{ x.bookings|pluralize }}</small></span><strong>₹{{ x.revenue|inr }}</strong></div><div class="ui-bar-mini is-indigo"><span style="width:{{ x.share }}%"></span></div></li>{% endfor %}
+      </ul>
+      {% if cur.channels %}
+      <h3 class="ui-dash-h3">OTA channels</h3>
+      <ul class="ui-dash-mini">{% for c in cur.channels %}<li><span>{{ c.name }} <small class="ui-log-sub">· {{ c.bookings }}</small></span><strong>₹{{ c.net|inr }}{% if c.commission %} <small class="ui-log-sub">after ₹{{ c.commission|inr }}</small>{% endif %}</strong></li>{% endfor %}</ul>
+      {% endif %}
+      {% else %}<p class="ui-log-sub">No arrivals in this period.</p>{% endif %}
+    </section>
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">How guests paid</h2>
+      {% if d.payments %}
+      <ul class="ui-dash-bars">
+        {% for p in d.payments %}<li><div class="bh"><span>{{ p.label }}</span><strong>₹{{ p.amount|inr }}</strong></div><div class="ui-bar-mini"><span style="width:{{ p.share }}%"></span></div></li>{% endfor %}
+      </ul>
+      {% else %}<p class="ui-log-sub">No payments in this period.</p>{% endif %}
+      {% if access.finance %}<p class="ui-dash-foot"><a href="{{ base_url }}finance/ledger/"><i class="fa-solid fa-building"></i> Company accounts (city ledger)</a></p>{% endif %}
+    </section>
+  </div>
+
+  <!-- Room types + guest experience -->
+  <div class="ui-dash-row r-2-1">
+    <section class="ui-card ui-list-card">
+      <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Room types</h2>{% if access.rooms %}<a class="ui-link-btn" href="{{ base_url }}categories/">Categories &amp; tariffs <i class="fa-solid fa-chevron-right"></i></a>{% endif %}</div>
+      {% if cur.categories %}
+      <div class="table-responsive"><table class="table ui-dash-table">
+        <thead><tr><th>Type</th><th class="num">Rooms</th><th class="num">Nights sold</th><th class="num">Occupancy</th><th class="num">ADR</th><th class="num">Revenue</th></tr></thead>
+        <tbody>{% for c in cur.categories %}<tr>
+          <td><strong>{{ c.name }}</strong></td>
+          <td class="num">{{ c.rooms }}</td>
+          <td class="num">{{ c.sold }}</td>
+          <td class="num"><div class="ui-dash-share"><div class="ui-bar-mini"><span style="width:{{ c.occupancy }}%"></span></div><span>{{ c.occupancy|floatformat:0 }}%</span></div></td>
+          <td class="num">₹{{ c.adr|inr }}</td>
+          <td class="num"><strong>₹{{ c.revenue|inr }}</strong></td>
+        </tr>{% endfor %}</tbody>
+      </table></div>
+      {% else %}<div class="ui-empty"><i class="fa-solid fa-bed ui-empty-icon"></i><p class="ui-log-sub">No rooms set up yet.</p></div>{% endif %}
+    </section>
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">Guest experience</h2>
+      {% if d.feedback %}
+      <div class="ui-dash-rating">
+        <div class="big">{{ d.feedback.avg }}<small>/5</small></div>
+        <div><div class="ui-stars" aria-hidden="true">{% for i in "12345" %}<i class="fa-solid fa-star {% if forloop.counter > d.feedback.stars %}off{% endif %}"></i>{% endfor %}</div>
+          <span class="ui-log-sub">{{ d.feedback.count }} stay review{{ d.feedback.count|pluralize }}{% if d.feedback.nps is not None %} · NPS {{ d.feedback.nps }}{% endif %}</span></div>
+      </div>
+      {% else %}<p class="ui-log-sub" style="margin-bottom:14px">No stay reviews in this period.</p>{% endif %}
+      <ul class="ui-dash-mini">
+        <li><span>Guest requests</span><strong>{{ d.service.requests }}</strong></li>
+        <li><span>Handled on time</span><strong>{% if d.service.on_time is not None %}{{ d.service.on_time }}%{% else %}—{% endif %}</strong></li>
+        <li><span>Complaints</span><strong class="{% if d.service.complaints %}ui-text-red{% endif %}">{{ d.service.complaints }}</strong></li>
+        {% if d.feedback %}<li><span>Reviews to follow up</span>{% if access.feedback %}<a href="{{ base_url }}feedback/">{{ d.feedback.open }}</a>{% else %}<strong>{{ d.feedback.open }}</strong>{% endif %}</li>{% endif %}
+      </ul>
+    </section>
+  </div>
+</div>
+{{ d.chart|json_script:"hd-data" }}
+{% endwith %}
+
+<style>
+  .hd-attn { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .hd-attn a { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; text-decoration: none;
+    color: var(--ui-label); background: var(--ui-fill-quaternary, rgba(120,120,128,.08)); }
+  .hd-attn a:hover { background: var(--ui-fill-tertiary, rgba(120,120,128,.14)); }
+  .hd-attn i { width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 13px; color: var(--t, var(--ui-label-2)); background: color-mix(in srgb, var(--t, #8E8E93) 14%, transparent); }
+  .hd-attn span { flex: 1; min-width: 0; font-size: 13px; font-weight: 500; line-height: 1.3; }
+  .hd-attn small { display: block; color: var(--ui-label-3); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hd-attn strong { font-variant-numeric: tabular-nums; font-size: 15px; color: var(--t, var(--ui-label)); }
+  .hd-attn .tone-red { --t: var(--ui-red, #FF3B30); }
+  .hd-attn .tone-orange { --t: var(--ui-orange, #FF9500); }
+  .hd-attn .tone-blue { --t: var(--ui-blue, #007AFF); }
+  .hd-attn .tone-indigo { --t: var(--ui-indigo, #5856D6); }
+  .hd-attn .tone-purple { --t: var(--ui-purple, #AF52DE); }
+  .hd-attn .tone-gray { --t: var(--ui-gray, #8E8E93); }
+</style>
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById('hd-data').textContent);
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function money(v) { var a = Math.abs(v); return '₹' + (a >= 100000 ? +(v / 100000).toFixed(1) + 'L' : a >= 1000 ? +(v / 1000).toFixed(1) + 'k' : Math.round(v)); }
+  function draw() {
+    if (!window.Chart) return;
+    var grid = css('--ui-separator') || 'rgba(0,0,0,.08)', label = css('--ui-label-2') || '#6E6E73';
+    Chart.defaults.color = label;
+    Chart.defaults.font.family = css('--ui-font') || 'system-ui';
+    var t = document.getElementById('hdTrend');
+    if (t && !t.dataset.drawn) {
+      t.dataset.drawn = '1';
+      new Chart(t, {
+        data: { labels: data.labels, datasets: [
+          { type: 'bar', label: 'Room revenue', data: data.revenue, yAxisID: 'y1', borderRadius: 4, maxBarThickness: 22,
+            backgroundColor: data.forecast.map(function (f) { return f ? 'rgba(52,199,89,.28)' : 'rgba(52,199,89,.6)'; }) },
+          { type: 'line', label: 'Occupancy %', data: data.occupancy, yAxisID: 'y', borderColor: '#007AFF', backgroundColor: '#007AFF',
+            tension: .35, borderWidth: 2.5, pointRadius: data.labels.length > 40 ? 0 : 2.5 },
+          { type: 'line', label: 'Previous period', data: data.prev_occupancy, yAxisID: 'y', borderColor: label, borderDash: [5, 5],
+            borderWidth: 1.5, pointRadius: 0, tension: .35 }
+        ] },
+        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+          plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } },
+            tooltip: { callbacks: { label: function (c) { return c.dataset.yAxisID === 'y1' ? 'Room revenue: ₹' + Math.round(c.parsed.y).toLocaleString('en-IN') : c.dataset.label + ': ' + c.parsed.y + '%'; } } } },
+          scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 12, maxRotation: 0 } },
+            y: { min: 0, max: 100, grid: { color: grid }, ticks: { callback: function (v) { return v + '%'; } } },
+            y1: { position: 'right', beginAtZero: true, grid: { display: false }, ticks: { callback: money } } } }
+      });
+    }
+    var o = document.getElementById('hdOutlook');
+    if (o && !o.dataset.drawn) {
+      o.dataset.drawn = '1';
+      new Chart(o, { type: 'bar',
+        data: { labels: data.outlook_labels, datasets: [
+          { label: 'Booked', data: data.outlook_otb, backgroundColor: '#5856D6', borderRadius: 4, stack: 's', maxBarThickness: 28 },
+          { label: 'Expected pickup', data: data.outlook_pickup, backgroundColor: 'rgba(88,86,214,.25)', borderRadius: 4, stack: 's', maxBarThickness: 28 }
+        ] },
+        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+          plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } },
+            tooltip: { callbacks: { label: function (c) { return c.dataset.label + ': ' + c.parsed.y + '%'; } } } },
+          scales: { x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true } },
+            y: { stacked: true, min: 0, max: 100, grid: { color: grid }, ticks: { callback: function (v) { return v + '%'; } } } } }
+      });
+    }
+  }
+  function load() {
+    if (window.Chart) return draw();
+    var sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+    sc.onload = draw; document.head.appendChild(sc);
+  }
+  if (document.readyState === 'complete') load(); else window.addEventListener('load', load);
+})();
+</script>

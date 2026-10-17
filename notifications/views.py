@@ -20,7 +20,11 @@ def _scope(request, restaurant_slug):
 
 
 def _module(request):
-    """The hotel shell sees room and channel notifications; the restaurant shell sees the rest."""
+    """The hotel shell sees room and channel notifications; kitchen logins see kitchen tickets;
+    the restaurant shell sees the rest."""
+    profile = getattr(request.user, 'restaurant_profile', None)
+    if profile is not None and profile.role == 'KITCHEN' and not request.user.is_superuser:
+        return 'kitchen'  # decided by role, never by a query parameter
     match = getattr(request, 'resolver_match', None)
     if (match and match.namespace == 'hotel_admin') or 'hotel' in (request.GET.get('module'), request.POST.get('module')):
         return 'hotel'
@@ -52,8 +56,13 @@ def poll(request, restaurant_slug=None):
     except ValueError:
         since = 0
     new = []
+    module = _module(request)
     if since and latest > since:
         new = [S.serialize(n) for n in qs.filter(id__gt=since, archived_at__isnull=True).order_by('id')[:10]]
+        if module != 'kitchen':
+            for n in new:  # the cashier fired it: show the KOT, but only the kitchen gets the chime
+                if n['kind'] == 'kot_new':
+                    n['sound'] = False
     data = {'success': True, 'latest_id': latest, 'unread': S.unread_count(qs), 'new': new}
     if not since or new:
         data['sound_url'] = _sound_url(request, restaurant)

@@ -100,6 +100,7 @@ urlpatterns = [
     path('rates/', views_pms.rates, name='rates'),
     path('rates/save/', views_pms.rate_save, name='rate_save'),
     path('rates/<int:rule_id>/delete/', views_pms.rate_delete, name='rate_delete'),
+    path('insights/', views_pms.management_dashboard, name='management_dashboard'),
     path('reports/', views_pms.reports_view, name='reports'),
     path('night-audit/', views_pms.night_audit, name='night_audit'),
     path('night-audit/close/', views_pms.night_audit_close, name='night_audit_close'),

@@ -1484,18 +1484,16 @@ document.addEventListener('DOMContentLoaded', function() {
     fetchFloorPlanData();
 
     // Real-Time SSE Updates
-    if (restaurantSlug && restaurantSlug !== 'default') {
-        const evtSource = new EventSource(`/api/sse/stream/${restaurantSlug}/`);
-        evtSource.onmessage = function(event) {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'table_status_update' || data.type === 'new_order') {
-                    fetchFloorPlanData();
-                }
-            } catch (e) {
-                console.error("SSE Error:", e);
-            }
+    if (restaurantSlug && restaurantSlug !== 'default' && window.EventSource) {
+        // Same live stream the POS and KDS use; it sends named "new_order" events
+        const evtSource = new EventSource("{% url 'restaurant_admin:orders_stream' restaurant_slug=rslug %}");
+        let sseTimer = null;
+        const refreshSoon = function () {
+            clearTimeout(sseTimer);
+            sseTimer = setTimeout(fetchFloorPlanData, 400);
         };
+        evtSource.addEventListener('new_order', refreshSoon);
+        evtSource.onmessage = refreshSoon;
     }
 
     // Auto-refresh fallback every 15s to catch timer completions

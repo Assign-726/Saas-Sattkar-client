@@ -29,13 +29,15 @@ def order_created_signal(sender, instance: Order, created: bool, **kwargs):
         slug = getattr(restaurant, 'slug', None)
         if not slug:
             return
-        # Publish only on create
+        # Publish only on create, after the transaction commits so listeners can read the order
         if created:
-            publish(slug, {
+            from django.db import transaction
+            payload = {
                 'type': 'new_order',
                 'order_id': instance.id,
                 'at': instance.order_time.isoformat() if instance.order_time else ''
-            })
+            }
+            transaction.on_commit(lambda: publish(slug, payload))
     except Exception:
         # best-effort, do not break request cycle
         pass

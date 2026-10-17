@@ -283,7 +283,7 @@ def restaurant_edit(request, pk):
 
 @superuser_required
 def restaurant_delete(request, pk):
-    restaurant = Restaurant.objects.get(pk=pk)
+    restaurant = get_object_or_404(Restaurant, pk=pk)
     if request.method == 'POST':
         restaurant.delete()
         messages.success(request, 'Restaurant deleted.')
@@ -315,7 +315,7 @@ def restaurant_toggle_active(request, pk):
 # --- Restaurant Admin CRUD ---
 @superuser_required
 def restaurant_admin_edit(request, pk):
-    ru = RestaurantUser.objects.select_related('user').get(pk=pk)
+    ru = get_object_or_404(RestaurantUser.objects.select_related('user'), pk=pk)
     if request.method == 'POST':
         form = RestaurantAdminUpdateForm(request.POST, instance=ru)
         if form.is_valid():
@@ -346,7 +346,7 @@ def landing_edit(request, pk):
     if not constants.SHOW_WEBSITE_PAGES:
         messages.warning(request, "Website Pages CMS is disabled in system configuration.")
         return redirect('super_admin:dashboard')
-    restaurant = Restaurant.objects.get(pk=pk)
+    restaurant = get_object_or_404(Restaurant, pk=pk)
     landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
 
     if request.method == 'POST' and 'save_landing' in request.POST:
@@ -691,7 +691,7 @@ def landing_edit(request, pk):
 
 @superuser_required
 def gallery_add(request, pk):
-    restaurant = Restaurant.objects.get(pk=pk)
+    restaurant = get_object_or_404(Restaurant, pk=pk)
     landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
     if request.method == 'POST':
         form = GalleryImageForm(request.POST, request.FILES, restaurant=restaurant)
@@ -736,7 +736,7 @@ def gallery_delete(request, gid):
 
 @superuser_required
 def team_add(request, pk):
-    restaurant = Restaurant.objects.get(pk=pk)
+    restaurant = get_object_or_404(Restaurant, pk=pk)
     landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
     if request.method == 'POST':
         form = TeamMemberForm(request.POST, request.FILES, restaurant=restaurant)
@@ -781,7 +781,7 @@ def team_delete(request, mid):
 
 @superuser_required
 def review_add(request, pk):
-    restaurant = Restaurant.objects.get(pk=pk)
+    restaurant = get_object_or_404(Restaurant, pk=pk)
     landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
     if request.method == 'POST':
         form = ReviewForm(request.POST, restaurant=restaurant)
@@ -878,7 +878,7 @@ def restaurant_feedback_qr(request, pk):
 
 @superuser_required
 def event_add(request, pk):
-    restaurant = Restaurant.objects.get(pk=pk)
+    restaurant = get_object_or_404(Restaurant, pk=pk)
     landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
     if request.method == 'POST':
         form = EventForm(request.POST, request.FILES, restaurant=restaurant)
@@ -923,7 +923,7 @@ def event_delete(request, ev_id):
 
 @superuser_required
 def why_us_add(request, pk):
-    restaurant = Restaurant.objects.get(pk=pk)
+    restaurant = get_object_or_404(Restaurant, pk=pk)
     landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
     if request.method == 'POST':
         form = WhyChooseUsForm(request.POST, restaurant=restaurant)

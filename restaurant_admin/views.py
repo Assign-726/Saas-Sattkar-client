@@ -51,7 +51,7 @@ def format_local_time(dt, fmt='%I:%M %p'):
 
 @login_required
 @user_passes_test(is_admin)
-def switch_branch(request):
+def switch_branch(request, restaurant_slug=None):
     """
     POST/GET endpoint to switch the admin's active branch.
     Stores the selection in the session, then redirects back
@@ -162,69 +162,6 @@ def get_user_active_shift(user, restaurant, branch=None):
         qs = qs.filter(Q(branch=branch) | Q(branch__isnull=True))
     return qs.select_related('counter', 'cashier').first()
 
-
-@login_required
-@user_passes_test(lambda u: u.is_superuser)
-def test_template(request):
-    """Simple test view to check template rendering"""
-    context = {
-        'user': request.user,
-        'is_authenticated': request.user.is_authenticated,
-        'is_staff': request.user.is_staff if request.user.is_authenticated else False,
-        'static_files_debug': {
-            'STATIC_URL': settings.STATIC_URL,
-            'STATIC_ROOT': settings.STATIC_ROOT,
-            'STATICFILES_DIRS': settings.STATICFILES_DIRS,
-            'DEBUG': settings.DEBUG,
-        },
-        'template_dirs': [os.path.join(settings.BASE_DIR, 'templates')] + [os.path.join(app_config.path, 'templates') for app_config in apps.get_app_configs()]
-    }
-    return render(request, 'restaurant_admin/test.html', context)
-
-@login_required
-@user_passes_test(lambda u: u.is_superuser)
-def test_static(request):
-    """Test view to check static files loading"""
-    return render(request, 'restaurant_admin/test_static.html')
-
-@login_required
-@user_passes_test(lambda u: u.is_superuser)
-def debug_menu_list(request):
-    """Debug version of menu_list without authentication"""
-    try:
-        # Get search query
-        search_query = request.GET.get('q', '')
-        
-        # Base queryset
-        menu_items = MenuItem.objects.select_related('subcategory', 'subcategory__category').order_by('subcategory__category__name', 'subcategory__name', 'name')
-        
-        # Apply search filter if query exists
-        if search_query:
-            menu_items = menu_items.filter(
-                Q(name__icontains=search_query) |
-                Q(description__icontains=search_query) |
-                Q(subcategory__name__icontains=search_query) |
-                Q(subcategory__category__name__icontains=search_query)
-            )
-        
-        # Paginate the menu items
-        try:
-            per_page = int(request.GET.get('per_page', 20))
-        except ValueError:
-            per_page = 20
-        paginator = Paginator(menu_items, per_page)
-        page_number = request.GET.get('page')
-        page_obj = paginator.get_page(page_number)
-        
-        return render(request, 'restaurant_admin/menu/list_new.html', {
-            'menu_items': page_obj,
-            'active_menu': 'menu_list',
-            'search_query': search_query,
-            'today': timezone.now()
-        })
-    except Exception as e:
-        from django.http import HttpResponse
-        return HttpResponse(f"Error: {str(e)}", content_type="text/plain")
 
 @login_required
 @user_passes_test(is_admin)
@@ -758,6 +695,14 @@ def get_pos_active_orders(restaurant, active_branch=None):
     return results
 
 
+def _publish_kot(slug, payload):
+    try:
+        from core.sse import publish
+        publish(slug, payload)
+    except Exception:
+        pass
+
+
 @login_required
 @user_passes_test(is_admin)
 def order_create_manual(request, restaurant_slug=None):
@@ -968,7 +913,7 @@ def order_create_manual(request, restaurant_slug=None):
 
         due_amount_val = max(Decimal('0.00'), grand_total_val - advance_amount_input - paid_amount_val)
 
-        if valid_items_count == 0 or grand_total_val <= Decimal('0.00'):
+        if valid_items_count == 0:
             initial_payment_status = Order.PaymentStatus.UNPAID
             due_amount_val = Decimal('0.00')
             paid_amount_val = Decimal('0.00')
@@ -1072,8 +1017,11 @@ def order_create_manual(request, restaurant_slug=None):
 
         active_shift = get_user_active_shift(request.user, restaurant, active_branch)
 
+        previous_lines = {}   # menu_item_id -> [(kot_batch, is_prepared, is_kot_printed)] before this save
+        prev_status = None
         if order_id:
             order = get_object_or_404(Order, pk=order_id, restaurant=restaurant)
+            prev_status = order.status
             if not order.shift and active_shift:
                 order.shift = active_shift
                 order.counter = active_shift.counter
@@ -1122,9 +1070,13 @@ def order_create_manual(request, restaurant_slug=None):
             else:
                 order.excise_bill_no = None
             order.save()
-            # Clear existing items if items data is provided
+            # Clear existing items if items data is provided — but remember which kitchen round
+            # each line went out in and whether the kitchen ticked it, so re-saving the order
+            # (e.g. adding a second round) does not reset the KDS.
             items_data = data.get('items')
             if isinstance(items_data, list):
+                for old_it in order.items.all():
+                    previous_lines.setdefault(old_it.menu_item_id, []).append((old_it.kot_batch, old_it.is_prepared, old_it.is_kot_printed))
                 order.items.all().delete()
 
             voided_item = data.get('voided_item_name')
@@ -1215,6 +1167,8 @@ def order_create_manual(request, restaurant_slug=None):
                 })
 
         created_items = []
+        prev_round = max([b for lines in previous_lines.values() for b, _, _ in lines], default=0)
+        new_round = prev_round + 1 if prev_round else 1
         if isinstance(items_data, list):
             for item in items_data:
                 item_id = item.get('menu_item_id') or item.get('id')
@@ -1243,6 +1197,11 @@ def order_create_manual(request, restaurant_slug=None):
                 disc_reason = (item.get('discount_reason') or '').strip() or None
                 item_notes = (item.get('notes') or item.get('note') or '').strip()
 
+                kept = previous_lines.get(menu_item.pk) or []
+                if item.get('sent') and kept:
+                    batch, prepared, printed = kept.pop(0)
+                else:
+                    batch, prepared, printed = new_round, False, False
                 created_item = OrderItem.objects.create(
                     order=order,
                     menu_item=menu_item,
@@ -1253,6 +1212,9 @@ def order_create_manual(request, restaurant_slug=None):
                     discount_value=disc_val,
                     discount_amount=disc_amt,
                     discount_reason=disc_reason,
+                    kot_batch=batch,
+                    is_prepared=prepared,
+                    is_kot_printed=printed,
                 )
                 created_items.append(created_item)
 
@@ -1289,7 +1251,11 @@ def order_create_manual(request, restaurant_slug=None):
             else:
                 order.waive_service_charge = False
 
-        if grand_total_val > 0:
+        # The bill total is decided on the server. The POS figure is kept only when it is not
+        # below what the server works out for the same items (₹1 round-off tolerance) — a
+        # tampered or stale request can no longer mark a large bill "paid" with a small total.
+        server_total = order.calculate_bill_breakdown()['final_total'] if order.items.exists() else Decimal('0.00')
+        if grand_total_val > 0 and grand_total_val + Decimal('1.00') >= server_total:
             order.subtotal = subtotal_val
             order.tax_amount = tax_amount_val
             order.discount_amount = discount_amount_val
@@ -1298,13 +1264,36 @@ def order_create_manual(request, restaurant_slug=None):
             order.discount_reason = discount_reason_val
             order.round_off_amount = round_off_amount_val
             order.total_amount = grand_total_val
-            order.paid_amount = paid_amount_val
-            order.due_amount = due_amount_val
-            order.payment_status = initial_payment_status
-            order.status = initial_status
-            order.save()
         else:
+            if grand_total_val > 0:
+                import logging
+                logging.getLogger(__name__).warning('POS order %s: client total %s below server total %s; using server total',
+                                                    order.pk, grand_total_val, server_total)
             order.update_total()
+        bill_total = Decimal(str(order.total_amount or 0))
+        settling = action in ['settle_order', 'print_close'] or data.get('payment_status') == 'paid'
+        if settling and payment_method != 'credit' and bill_total > 0 and paid_amount_val <= 0:
+            paid_amount_val = max(Decimal('0.00'), bill_total - advance_amount_input)
+            valid_payments = [{'method': payment_method, 'amount': float(paid_amount_val)}]
+        due_amount_val = max(Decimal('0.00'), bill_total - advance_amount_input - paid_amount_val)
+        if bill_total <= 0:
+            initial_payment_status, paid_amount_val, due_amount_val, valid_payments = Order.PaymentStatus.UNPAID, Decimal('0.00'), Decimal('0.00'), []
+        elif due_amount_val <= Decimal('0.00'):
+            initial_payment_status = Order.PaymentStatus.PAID
+        elif (paid_amount_val + advance_amount_input) > 0:
+            initial_payment_status = Order.PaymentStatus.PARTIALLY_PAID
+        else:
+            initial_payment_status = Order.PaymentStatus.UNPAID
+        if action in ['settle_order', 'print_close']:
+            initial_status = Order.OrderStatus.COMPLETED if initial_payment_status == Order.PaymentStatus.PAID else Order.OrderStatus.SERVED
+        elif action in ['fire_kot', 'save_kot'] and prev_status == Order.OrderStatus.PREPARING:
+            initial_status = Order.OrderStatus.PREPARING  # an add-on round keeps the kitchen timer running
+        order.payments = valid_payments
+        order.paid_amount = paid_amount_val
+        order.due_amount = due_amount_val
+        order.payment_status = initial_payment_status
+        order.status = initial_status
+        order.save()
 
         order.assign_invoice_numbers()
 
@@ -1320,6 +1309,18 @@ def order_create_manual(request, restaurant_slug=None):
             for ci, item_data in zip(created_items, items_data):
                 if not item_data.get('sent'):
                     new_item_ids.append(str(ci.id))
+
+        # Tell the kitchen: a bell notification for the KDS / admins and a live push so every
+        # open KDS refreshes at once (after commit, so the new ticket is already readable).
+        if action in ['fire_kot', 'save_kot']:
+            fresh = [ci for ci in created_items if ci.kot_batch == new_round and not ci.is_kot_printed]
+            if fresh:
+                from django.db import transaction as _tx
+                from notifications import service as _notify
+                lines = ', '.join(f'{ci.quantity}× {ci.menu_item.name}' for ci in fresh)
+                _notify.notify_kot(order, lines, sum(ci.quantity for ci in fresh), new_round)
+                payload = {'type': 'kot', 'order_id': order.id, 'round': new_round}
+                _tx.on_commit(lambda: _publish_kot(restaurant.slug, payload))
 
         kot_url = reverse('restaurant_admin:order_kot', kwargs={'restaurant_slug': restaurant.slug, 'pk': order.id})
         if new_item_ids and len(new_item_ids) < len(created_items):
@@ -5700,17 +5701,12 @@ def order_records_export(request, restaurant_slug=None):
 @user_passes_test(is_admin)
 def orders_stream(request, restaurant_slug=None):
     """Server-Sent Events stream for new orders for the admin's restaurant."""
-    # Resolve restaurant
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    # Your own restaurant (by its slug or a branch slug); platform admins may watch any
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
 
     slug = getattr(restaurant, 'slug', None)
-    if restaurant_slug and slug != restaurant_slug:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("You do not have permission for this restaurant.")
     if not slug:
         return HttpResponseBadRequest('Missing restaurant slug')
 
@@ -6973,6 +6969,7 @@ def subcategory_list(request, restaurant_slug=None):
     subcategories = paginator.get_page(page_number)
     return render(request, 'restaurant_admin/subcategories/list.html', {
         'subcategories': subcategories,
+        'categories': Category.objects.filter(restaurant=restaurant).order_by('name'),
         'active_menu': 'subcategory_list'
     })
 

@@ -602,6 +602,30 @@ def reports_view(request, restaurant_slug, ctx):
                    sources=[{**x, 'share': round(x['bookings'] / top_src * 100) if top_src else 0} for x in s['sources']])
 
 
+@hotel_admin_required
+def management_dashboard(request, restaurant_slug, ctx):
+    """How the hotel is doing over a period (vs the period before), today at a glance, and what needs attention."""
+    from hotel import dashboard as D
+    branch = ctx['current_branch']
+    key = request.GET.get('period') or '7d'
+    if key not in dict(D.PERIODS) and key != 'custom':
+        key = '7d'
+    start, end, label = reports.resolve_period(key, _date(request.GET.get('from')), _date(request.GET.get('to')))
+    if key == 'custom' and label != 'Custom':
+        key = '30d'
+    if (end - start).days > 366:
+        start = end - datetime.timedelta(days=366)
+    d = D.compute(branch, start, end, P.access_map(request.user))
+    if request.GET.get('export') == 'csv':
+        return _csv(f'hotel-dashboard-{start}-{end}.csv', ['Date', 'Rooms sold', 'Rooms available', 'Occupancy %', 'Room revenue', 'ADR', 'RevPAR'],
+                    [[r['date'], r['sold'], r['sellable'], r['occupancy'], r['revenue'], r['adr'], r['revpar']] for r in d['cur']['rows']])
+    hour = timezone.localtime().hour
+    greeting = 'Good morning' if hour < 12 else 'Good afternoon' if hour < 17 else 'Good evening'
+    return _render(request, ctx, 'hotel_pms/_dashboard.html', 'mgmt_dashboard', 'Dashboard', d=d, live=D.live(branch),
+                   period=key, period_label=label if key != 'custom' else 'Custom', periods=D.PERIODS,
+                   today=timezone.localdate(), greeting=greeting)
+
+
 def _csv(name, header, rows):
     resp = HttpResponse(content_type='text/csv')
     resp['Content-Disposition'] = f'attachment; filename="{name}"'

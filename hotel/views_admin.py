@@ -311,6 +311,11 @@ def dashboard_view(request, restaurant_slug, ctx):
         'booking_map': booking_map,
         'categories': categories,
     }
+    if branch:
+        from hotel import ops
+        from super_admin import permissions as P
+        attention = ops.action_items(branch, P.access_map(request.user))
+        context.update({'attention': attention, 'attention_total': len(attention)})
     return render(request, 'hotel_admin/dashboard.html', context)
 
 

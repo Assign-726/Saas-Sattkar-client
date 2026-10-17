@@ -3,10 +3,17 @@ def restaurant_context(request):
     Context processor to provide `current_restaurant`, `current_branch`,
     `available_branches`, and `is_primary_admin` to all templates.
     """
-    if not request.user.is_authenticated or not hasattr(request.user, 'restaurant_profile'):
+    if not request.user.is_authenticated:
         return {}
-    
-    profile = request.user.restaurant_profile
+    if not hasattr(request.user, 'restaurant_profile'):
+        if not request.user.is_superuser:
+            return {}
+        # A platform admin opening a business: take it from the URL (/dashboard/<slug>/…)
+        profile = _platform_admin_profile(request)
+        if profile is None:
+            return {}
+    else:
+        profile = request.user.restaurant_profile
     restaurant = profile.restaurant
     
     # Branch resolution:
@@ -136,3 +143,18 @@ def restaurant_context(request):
         'delivery_pending': delivery_pending,
         'branch_has_restaurant': branch_has_restaurant,
     }
+
+
+def _platform_admin_profile(request):
+    """An unsaved stand-in profile so templates work when a superuser opens a business admin."""
+    match = getattr(request, 'resolver_match', None)
+    slug = (match.kwargs.get('restaurant_slug') if match else None) if match else None
+    if not slug:
+        return None
+    from super_admin.models import Restaurant, RestaurantBranch, RestaurantUser
+    branch = RestaurantBranch.objects.filter(slug__iexact=slug).select_related('restaurant').first()
+    restaurant = branch.restaurant if branch else Restaurant.objects.filter(slug=slug).first()
+    if restaurant is None:
+        return None
+    return RestaurantUser(user=request.user, restaurant=restaurant, branch=branch,
+                          role=RestaurantUser.Role.GENERAL_MANAGER, is_primary_admin=True)

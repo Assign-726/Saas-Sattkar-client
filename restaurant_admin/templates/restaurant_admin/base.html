@@ -1587,6 +1587,15 @@
     (function () {
         var box = document.querySelector('.sidebar .sidebar-menu'); if (!box) return;
         var KEY = 'ra_sidebar_scroll', saved = null;
+        // Reopen remembered groups first: restoring the scroll on a collapsed (shorter) menu would
+        // clamp it, and the list would then jump when the groups open after DOMContentLoaded.
+        try {
+            (JSON.parse(localStorage.getItem('sidebar_open_groups') || '[]') || []).forEach(function (target) {
+                var h = box.querySelector('.sidebar-group-header[data-group-target="' + target + '"]');
+                var c = h && box.querySelector(target);
+                if (c) { h.classList.add('open', 'active-group'); c.classList.add('show'); }
+            });
+        } catch (e) {}
         try { saved = sessionStorage.getItem(KEY); } catch (e) {}
         if (saved !== null) { box.scrollTop = parseInt(saved, 10) || 0; }
         var active = box.querySelector('a.active');
@@ -1671,6 +1680,13 @@
                     <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-1.5 rounded-pill shadow-xs" style="font-size: 0.78rem;">
                         <i class="bi bi-broadcast me-1"></i>KDS Active
                     </span>
+                    <button type="button"
+                        class="btn btn-sm btn-white-notif rounded-pill px-3 py-1.5 d-flex align-items-center gap-2 position-relative shadow-xs"
+                        data-nt-open title="New kitchen tickets" style="font-size: 0.8rem;">
+                        <i class="bi bi-bell-fill text-primary"></i>
+                        <span class="fw-semibold text-dark">Tickets</span>
+                        <span class="badge rounded-pill bg-danger d-none global-notif-badge" style="font-size: 0.65rem;">0</span>
+                    </button>
                     {% else %}
                     {% if access.kitchen %}
                     <!-- Quick KDS Screen Link -->
@@ -1881,7 +1897,9 @@
         </div>
 
         <!-- Notification centre: full-height drawer + live engine -->
-        {% if not is_club_user and not is_kitchen_user and not is_hotel_user %}
+        {% if is_kitchen_user %}
+        {% include 'notifications/_drawer.html' with nt_module='kitchen' %}
+        {% elif not is_club_user and not is_hotel_user %}
         {% include 'notifications/_drawer.html' with nt_module='restaurant' %}
         {% endif %}
 

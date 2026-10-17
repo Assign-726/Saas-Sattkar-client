@@ -607,7 +607,9 @@ class OrderSerializer(serializers.ModelSerializer):
                     'kot_batch': new_batch_num,
                     'table_number': order.table_number,
                 }
-                publish(order.restaurant.slug, sse_payload)
+                from django.db import transaction as _tx
+                _slug = order.restaurant.slug
+                _tx.on_commit(lambda: publish(_slug, sse_payload))  # once the ticket is readable
         except Exception:
             pass
 

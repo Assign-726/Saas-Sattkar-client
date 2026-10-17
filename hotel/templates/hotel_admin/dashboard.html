@@ -120,6 +120,27 @@
     </div>
 </div>
 
+{% if attention %}
+<!-- Needs attention (from the Action Centre, limited to what this role can open) -->
+<a href="{% url 'hotel_admin:action_centre' restaurant_slug=rslug %}" class="ov-attn mb-3">
+    <span class="ov-attn-icon"><i class="fa-solid fa-bolt"></i></span>
+    <span class="ov-attn-text"><strong>{{ attention_total }} thing{{ attention_total|pluralize }} need{{ attention_total|pluralize:"s," }} attention</strong>
+        <small>{% for i in attention|slice:":3" %}{{ i.title }} ({{ i.count }}){% if not forloop.last %} · {% endif %}{% endfor %}{% if attention_total > 3 %} · …{% endif %}</small></span>
+    <span class="ov-attn-go">View <i class="fa-solid fa-chevron-right"></i></span>
+</a>
+<style>
+    .ov-attn { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 12px; text-decoration: none;
+        background: rgba(255,149,0,.1); border: 1px solid rgba(255,149,0,.3); color: var(--ui-label); }
+    .ov-attn:hover { background: rgba(255,149,0,.16); color: var(--ui-label); }
+    .ov-attn-icon { width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+        background: rgba(255,149,0,.2); color: #C2410C; }
+    [data-theme="dark"] .ov-attn-icon { color: #FDBA74; }
+    .ov-attn-text { flex: 1; min-width: 0; font-size: .86rem; }
+    .ov-attn-text small { display: block; color: var(--ui-label-2); font-size: .76rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ov-attn-go { font-size: .8rem; font-weight: 600; color: var(--ui-accent-text, #0A84FF); white-space: nowrap; }
+</style>
+{% endif %}
+
 <!-- KPI Stat Cards -->
 <div class="row g-3 mb-4">
     <div class="col-6 col-md-4 col-xl-2">

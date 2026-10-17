@@ -139,6 +139,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'restaurant_admin.middleware.BranchContextMiddleware',
     'super_admin.permissions.RolePermissionMiddleware',
+    'core.tenancy.TenantSlugMiddleware',
     'super_admin.middleware.SuperAdminSubscriptionLockMiddleware',
     'super_admin.activity.ActivityLogMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',

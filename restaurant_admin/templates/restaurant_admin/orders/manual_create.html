@@ -3607,6 +3607,10 @@
       });
 
       el.addEventListener("keydown", function (e) {
+        // Chrome autofill fires keydown without a key; IME (Hindi etc.) composition
+        // uses Enter to pick a word — neither is a POS keystroke.
+        if (typeof e.key !== "string" || e.isComposing || e.keyCode === 229)
+          return;
         let isEditing = this.dataset.armed === "1";
 
         // Undo / Redo in draft inputs
@@ -3711,63 +3715,7 @@
       });
     });
 
-    // 2. GLOBAL SHORTCUTS
-    document.addEventListener("keydown", function (e) {
-      // If inside a modal (bootstrap .show), ignore global F keys to prevent overlapping
-      if (document.querySelector(".modal.show")) return;
-
-      const F = {
-        F2: function () {
-          e.preventDefault();
-          window.posPickType && window.posPickType();
-        },
-        F3: function () {
-          e.preventDefault();
-          window.posPickTable && window.posPickTable();
-        },
-        F4: function () {
-          e.preventDefault();
-          const inp =
-            document.getElementById("vCov") ||
-            document.getElementById("v-covers");
-          if (inp) {
-            inp.focus();
-            try {
-              inp.select();
-            } catch (ex) {}
-            if (window.openCoversDD) window.openCoversDD(inp);
-          }
-        },
-        F5: function () {
-          e.preventDefault();
-          window.openOrderDiscountModal && window.openOrderDiscountModal();
-        },
-        F6: function () {
-          e.preventDefault();
-          window.posPickGuest
-            ? window.posPickGuest()
-            : window.openCustomerListModal && window.openCustomerListModal();
-        },
-        F9: function () {
-          e.preventDefault();
-          document.getElementById("btn-fire-kot")?.click();
-        },
-        F10: function () {
-          e.preventDefault();
-          document.getElementById("btn-open-settle-modal")?.click();
-        },
-      };
-
-      if (F[e.key]) {
-        F[e.key]();
-        return;
-      }
-
-      // Check if focus is in Cart, handle up/down/del/d
-      if (e.key === "Delete" || e.key === "Backspace") {
-        // If we are focused on a cart row (implement later if needed)
-      }
-    });
+    // Global F-key shortcuts live in one handler further down (posShortcut).
   });
 </script>
 
@@ -7903,6 +7851,60 @@
     }
     window.toast = toast;
 
+    // Print windows (KOT / bill). Safari and Firefox block window.open() once a
+    // server round-trip has happened, so the tab is opened during the click or
+    // key press and pointed at the document when the server answers.
+    window.posPreopenWindow = function () {
+      try {
+        const w = window.open("", "_blank");
+        if (w && w.document) {
+          w.document.title = "Preparing…";
+          w.document.body.innerHTML =
+            '<p style="font:14px -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;color:#555;padding:24px">Preparing document…</p>';
+        }
+        return w || null;
+      } catch (e) {
+        return null;
+      }
+    };
+    window.posClosePreopened = function (wins) {
+      (wins || []).forEach((w) => {
+        try {
+          if (w && !w.closed) w.close();
+        } catch (e) {}
+      });
+    };
+    window.posShowDoc = function (url, preWin) {
+      if (!url) {
+        window.posClosePreopened([preWin]);
+        return;
+      }
+      try {
+        if (preWin && !preWin.closed) {
+          preWin.location.href = url;
+          return;
+        }
+      } catch (e) {}
+      const w = window.open(url, "_blank");
+      if (!w) window.posBlockedDocNotice(url);
+    };
+    // Last resort when the browser still blocked the tab: a one-tap link.
+    window.posBlockedDocNotice = function (url) {
+      document.querySelectorAll(".pos-doc-notice").forEach((n) => n.remove());
+      const n = document.createElement("div");
+      n.className = "pos-doc-notice";
+      n.setAttribute("role", "alert");
+      n.style.cssText =
+        "position:fixed;bottom:72px;left:50%;transform:translateX(-50%);z-index:10001;background:var(--ui-surface,#fff);color:var(--ui-label,#111);border:1px solid var(--ui-separator,#ddd);border-radius:12px;padding:10px 12px 10px 16px;display:flex;gap:12px;align-items:center;box-shadow:0 12px 30px rgba(0,0,0,.25);font-size:13px;font-weight:600;max-width:calc(100vw - 32px)";
+      n.innerHTML =
+        '<span>The browser blocked the print window.</span><a target="_blank" rel="noopener" style="background:var(--ui-accent,#0A84FF);color:#fff;border-radius:8px;padding:7px 12px;text-decoration:none;white-space:nowrap">Open to print</a><button type="button" aria-label="Dismiss" style="border:0;background:transparent;font-size:18px;line-height:1;color:inherit;cursor:pointer">×</button>';
+      n.querySelector("a").href = url;
+      n.querySelector("a").addEventListener("click", () => n.remove());
+      n.querySelector("button").addEventListener("click", () => n.remove());
+      document.body.appendChild(n);
+      setTimeout(() => n.remove(), 20000);
+    };
+
     window.posTileClick = function (itemOrId) {
       let item =
         typeof itemOrId === "object"
@@ -8950,7 +8952,8 @@
     window.applyLoadedOrder = applyLoadedOrder;
 
     // ── CREATE NEW ORDER (F7) ──
-    window.posCreateNewOrder = function () {
+    window.posCreateNewOrder = function (opts) {
+      const silent = !!(opts && opts.silent);
       clearTimeout(autoSyncTimer);
       state.activeOrderId = null;
       state.activeOrderNumber = null;
@@ -8999,7 +9002,7 @@
       renderTopOrderDropdown();
       if (typeof posCtxRefresh === "function") posCtxRefresh();
 
-      if (window.toast) toast("New draft order created.");
+      if (window.toast && !silent) toast("New draft order created.");
       const fItem = document.getElementById("fItem");
       if (fItem) {
         fItem.focus();
@@ -9103,13 +9106,6 @@
         });
     }
 
-    // Bind Global F7 Key Listener
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "F7") {
-        e.preventDefault();
-        window.posCreateNewOrder();
-      }
-    });
 
     window.toggleSheet = function (force) {
       const r =
@@ -9741,6 +9737,7 @@
     };
 
     window.finalizeSettlement = function (printBill = true) {
+      if (window._isSubmitting) return;
       if (!state.cart || state.cart.length === 0) {
         alert("Cannot settle an order with no items.");
         return;
@@ -9926,6 +9923,23 @@
       if (window._isSubmitting) return;
       window._isSubmitting = true;
 
+      // Open the print tab now, while we still have the user's click / key press.
+      const wantsDoc =
+        action === "fire_kot" ||
+        (["settle_order", "print_close"].includes(action) &&
+          extraData.print_bill !== false);
+      let preWins = [];
+      if (wantsDoc) {
+        preWins.push(window.posPreopenWindow());
+        if (action !== "fire_kot" && extraData.invoice_mode === "split")
+          preWins.push(window.posPreopenWindow());
+      }
+      const dropPreWins = () => {
+        window.posClosePreopened(preWins);
+        preWins = [];
+      };
+      const pendingExtra = Object.assign({}, extraData);
+
       const fireBtn = document.getElementById("btn-fire-kot");
       const settleBtn = document.getElementById("btn-open-settle-modal");
       if (fireBtn) fireBtn.disabled = true;
@@ -9942,7 +9956,8 @@
         !window._bypassedSameGstin &&
         !extraData.bypass_same_gstin
       ) {
-        window._pendingSubmitAction = { action, extraData };
+        dropPreWins();
+        window._pendingSubmitAction = { action, extraData: pendingExtra };
         promptSameGstinModal(partyObj);
         window._isSubmitting = false;
         if (fireBtn) fireBtn.disabled = false;
@@ -10046,8 +10061,9 @@
           if (fireBtn) fireBtn.disabled = false;
           if (settleBtn) settleBtn.disabled = false;
 
+          if (!data.success || data.same_gstin_warning) dropPreWins();
           if (data.same_gstin_warning) {
-            window._pendingSubmitAction = { action, extraData };
+            window._pendingSubmitAction = { action, extraData: pendingExtra };
             promptSameGstinModal(data);
             return;
           }
@@ -10071,6 +10087,7 @@
 
             if (data.active_orders) {
               activeOrders = data.active_orders;
+              window.activeOrders = data.active_orders;
               renderActiveOrders();
             }
 
@@ -10101,7 +10118,7 @@
                 );
                 if (opt) opt.dataset.status = "RUNNING_KOT";
               }
-              if (data.kot_url) window.open(data.kot_url, "_blank");
+              window.posShowDoc(data.kot_url, preWins[0]);
 
               const unsentCount =
                 state.cart.filter((l) => !l.sent).length || state.cart.length;
@@ -10133,18 +10150,22 @@
               if (shouldPrint) {
                 const mode = extraData.invoice_mode || "food";
                 if (mode === "split") {
-                  if (data.food_invoice_url)
-                    window.open(data.food_invoice_url, "_blank");
-                  if (data.liquor_invoice_url)
-                    window.open(data.liquor_invoice_url, "_blank");
+                  window.posShowDoc(data.food_invoice_url, preWins[0]);
+                  window.posShowDoc(data.liquor_invoice_url, preWins[1]);
                 } else if (mode === "liquor" && data.liquor_invoice_url) {
-                  window.open(data.liquor_invoice_url, "_blank");
-                } else if (data.food_invoice_url) {
-                  window.open(data.food_invoice_url, "_blank");
+                  window.posShowDoc(data.liquor_invoice_url, preWins[0]);
+                } else {
+                  window.posShowDoc(data.food_invoice_url, preWins[0]);
                 }
+              } else {
+                dropPreWins();
               }
-              alert(`✅ Order ${data.order_number || ""} saved & settled!`);
+              // Close the settle popup before resetting for the next guest.
+              if (window.closeSettlementModal) window.closeSettlementModal();
               resetPOS();
+              toast(
+                `Order ${data.order_number || ""} settled${shouldPrint ? " · bill sent to print" : ""}.`,
+              );
             } else if (data.redirect_url) {
               window.location.href = data.redirect_url;
             } else {
@@ -10156,6 +10177,7 @@
         })
         .catch((err) => {
           window._isSubmitting = false;
+          dropPreWins();
           if (fireBtn) fireBtn.disabled = false;
           if (settleBtn) settleBtn.disabled = false;
           console.error(err);
@@ -10166,24 +10188,30 @@
     function resetPOS() {
       window._bypassedSameGstin = false;
       window._pendingSubmitAction = null;
-      state.cart = [];
-      state.activeOrderId = null;
-      state.activeOrderNumber = null;
-      state.customerName = "";
-      state.phone = "";
-      state.notes = "";
-      state.tableId = "";
-
-      const custNameInput = document.getElementById("cust-name");
-      const custPhoneInput = document.getElementById("cust-phone");
-      const notesInput = document.getElementById("order-notes");
-      const tableSelect = document.getElementById("table-id");
-      if (custNameInput) custNameInput.value = "";
-      if (custPhoneInput) custPhoneInput.value = "";
-      if (notesInput) notesInput.value = "";
-      if (tableSelect) tableSelect.value = "";
-
-      renderCart();
+      state.customerGstin = "";
+      state.advanceAmountPaid = 0;
+      state.receiptNo = "";
+      state.appliedCustomCharges = [];
+      if (window.posRewardsReset) window.posRewardsReset();
+      const prevType = state.orderType || "dine_in";
+      if (typeof window.posCreateNewOrder === "function") {
+        // Same clean slate as "+ New order": clears guest, table, discount,
+        // pending auto-sync and the ?order_id= in the address bar…
+        window.posCreateNewOrder({ silent: true });
+        // …but stay on the same service mode, so a dine-in counter keeps its
+        // Table and Covers fields for the next guest.
+        if (window.posSetOrderType) window.posSetOrderType(prevType);
+      } else {
+        state.cart = [];
+        state.activeOrderId = null;
+        state.activeOrderNumber = null;
+        state.customerName = "";
+        state.phone = "";
+        state.notes = "";
+        state.tableId = "";
+        state.orderDiscount = null;
+        renderCart();
+      }
       renderMenu();
       renderActiveOrders();
     }
@@ -10735,6 +10763,7 @@
   };
 
   window.onCoversKey = function (e, inp) {
+    if (typeof e.key !== "string" || e.isComposing || e.keyCode === 229) return;
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       e.stopPropagation();
@@ -11159,6 +11188,7 @@
     }
 
     const keyListener = function (e) {
+      if (typeof e.key !== "string" || e.isComposing || e.keyCode === 229) return;
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
@@ -12224,10 +12254,33 @@
   /* ═══════════════════════════════════════════════════════════════════
      GLOBAL KEYBOARD SHORTCUTS: F9 = KOT, F10 = Settle
   ═══════════════════════════════════════════════════════════════════ */
-  document.addEventListener("keydown", function (e) {
-    const anyModalOpen = document.querySelector(
-      '.modal.show, .veil:not([style*="display: none"]):not([style*="display:none"])',
+  // F1–F10 on Windows/Linux keyboards; Option/Alt + 1…0 everywhere (Mac
+  // keyboards send F-keys as media keys unless Fn is held). e.code is used for
+  // the digit because Option+digit types a symbol on a Mac.
+  function posShortcut(e) {
+    if (!e || typeof e.key !== "string") return null;
+    if (/^F([1-9]|10)$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey)
+      return e.key;
+    if (e.altKey && !e.ctrlKey && !e.metaKey && /^Digit[0-9]$/.test(e.code || "")) {
+      const n = parseInt(e.code.slice(5), 10);
+      return n === 0 ? "F10" : "F" + n;
+    }
+    return null;
+  }
+  window.posShortcut = posShortcut;
+
+
+  function posOverlayOpen() {
+    if (document.querySelector(".modal.show")) return true;
+    return Array.from(document.querySelectorAll(".veil")).some(
+      (v) => getComputedStyle(v).display !== "none",
     );
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (typeof e.key !== "string" || e.isComposing || e.keyCode === 229) return;
+    const anyModalOpen = posOverlayOpen();
+    const sc = posShortcut(e);
 
     // Cart Navigation Mode Shortcuts (Fixing the order)
     if (
@@ -12357,7 +12410,10 @@
         window.closeSettlementModal();
         return;
       }
-      if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") {
+      if (
+        e.key === "Enter" &&
+        !["TEXTAREA", "BUTTON", "A", "SELECT"].includes(e.target.tagName)
+      ) {
         e.preventDefault();
         window.finalizeSettlement(true);
         return;
@@ -12406,55 +12462,91 @@
       return;
     }
 
-    // Skip if inside an input/textarea/select or modal open, EXCEPT for F-keys
+    // Typing in a field: only the shortcuts above and F-keys / Option+digit act
     const tag = document.activeElement ? document.activeElement.tagName : "";
-    if (["INPUT", "TEXTAREA", "SELECT"].includes(tag) && !e.key.startsWith("F"))
+    if (["INPUT", "TEXTAREA", "SELECT"].includes(tag) && !sc) return;
+    if (!sc) return;
+
+    // A popup (settle, table picker…) owns the keyboard while it is open.
+    if (anyModalOpen) {
+      e.preventDefault();
       return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
 
-    if (e.key === "F1" && !anyModalOpen) {
-      e.preventDefault();
-      alert(
-        "KEYBOARD SHORTCUTS:\n\n• Enter: Commit item / Add to order\n• Backspace: Step back to previous field\n• ↑ (on empty item): Enter cart edit mode ('Fixing the order')\n• +/- in cart: Adjust quantity\n• D in cart: Line discount\n• N in cart: Line note\n• ↵ (Enter) in cart: Pull back line to edit\n• Del in cart: Remove item\n• Ctrl+Z / Ctrl+Y: Undo / Redo\n• F2: Type | F3: Table | F4: Covers | F5: Bill Discount | F6: Guest\n• F9: Send to Kitchen (KOT) | F10: Settle & Bill",
-      );
-    }
-    if (e.key === "F2" && !anyModalOpen) {
-      e.preventDefault();
-      window.posPickType && window.posPickType();
-    }
-    if (e.key === "F3" && !anyModalOpen) {
-      e.preventDefault();
-      window.posPickTable && window.posPickTable();
-    }
-    if (e.key === "F4" && !anyModalOpen) {
-      e.preventDefault();
-      const inp =
-        document.getElementById("vCov") || document.getElementById("v-covers");
-      if (inp) {
-        inp.focus();
-        try {
-          inp.select();
-        } catch (ex) {}
-        if (typeof window.openCoversDD === "function") window.openCoversDD(inp);
+    const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+    const alt = isMac ? "⌥ Option" : "Alt";
+    switch (sc) {
+      case "F1":
+        alert(
+          "KEYBOARD SHORTCUTS\n" +
+            "(F-keys, or " + alt + " + number — e.g. " + alt + "+9 for F9" + (isMac ? "; on a Mac use Fn+F9 for F-keys" : "") + ")\n\n" +
+            "• Enter: commit item / add to order\n• Backspace: step back to previous field\n" +
+            "• ↑ on empty item: edit earlier lines\n• + / − in cart: quantity   • D: line discount   • N: line note\n" +
+            "• Enter in cart: pull line back to edit   • Del: remove item\n" +
+            "• " + (isMac ? "⌘" : "Ctrl") + "+Z / " + (isMac ? "⌘" : "Ctrl") + "+Y: undo / redo\n\n" +
+            "F2 (" + alt + "+2) Order type     F3 (" + alt + "+3) Table\n" +
+            "F4 (" + alt + "+4) Covers         F5 (" + alt + "+5) Bill discount\n" +
+            "F6 (" + alt + "+6) Guest          F7 (" + alt + "+7) New order\n" +
+            "F8 (" + alt + "+8) Next open order\n" +
+            "F9 (" + alt + "+9) Send to kitchen (KOT)\n" +
+            "F10 (" + alt + "+0) Settle & bill",
+        );
+        break;
+      case "F2":
+        window.posPickType && window.posPickType();
+        break;
+      case "F3":
+        window.posPickTable && window.posPickTable();
+        break;
+      case "F4": {
+        const inp =
+          document.getElementById("vCov") || document.getElementById("v-covers");
+        if (inp) {
+          inp.focus();
+          try {
+            inp.select();
+          } catch (ex) {}
+          if (typeof window.openCoversDD === "function") window.openCoversDD(inp);
+        }
+        break;
       }
-    }
-    if (e.key === "F5" && !anyModalOpen) {
-      e.preventDefault();
-      window.openOrderDiscountModal && window.openOrderDiscountModal();
-    }
-    if (e.key === "F6" && !anyModalOpen) {
-      e.preventDefault();
-      window.posPickGuest && window.posPickGuest();
-    }
-
-    if (e.key === "F9" && !anyModalOpen) {
-      e.preventDefault();
-      const btn = document.getElementById("btn-fire-kot");
-      if (btn && !btn.disabled) btn.click();
-    }
-    if (e.key === "F10" && !anyModalOpen) {
-      e.preventDefault();
-      const btn = document.getElementById("btn-open-settle-modal");
-      if (btn && !btn.disabled) btn.click();
+      case "F5":
+        window.openOrderDiscountModal && window.openOrderDiscountModal();
+        break;
+      case "F6":
+        if (window.posPickGuest) window.posPickGuest();
+        else if (window.openCustomerListModal) window.openCustomerListModal();
+        break;
+      case "F7":
+        window.posCreateNewOrder && window.posCreateNewOrder();
+        break;
+      case "F8": {
+        // Cycle through open orders (next table / ticket)
+        const open = window.activeOrders || [];
+        if (!open.length) {
+          window.toast && window.toast("No other open orders.");
+          break;
+        }
+        const cur = window.state && window.state.activeOrderId;
+        const idx = open.findIndex((o) => String(o.id) === String(cur));
+        const next = open[(idx + 1) % open.length];
+        if (next && String(next.id) !== String(cur) && window.loadActiveOrder)
+          window.loadActiveOrder(next.id);
+        else window.toast && window.toast("No other open orders.");
+        break;
+      }
+      case "F9": {
+        const btn = document.getElementById("btn-fire-kot");
+        if (btn && !btn.disabled) btn.click();
+        break;
+      }
+      case "F10": {
+        const btn = document.getElementById("btn-open-settle-modal");
+        if (btn && !btn.disabled) btn.click();
+        break;
+      }
     }
   });
 
@@ -13103,6 +13195,7 @@
   };
 
   window.posSearchKeyDown = function (event) {
+    if (typeof event.key !== "string" || event.isComposing || event.keyCode === 229) return;
     if (document.getElementById("posVariantModalVeil")) {
       if (event.key === "Enter") {
         event.preventDefault();
@@ -13269,6 +13362,7 @@
 
   // Keyboard handlers for Qty and Rate in draft entry row
   window.posQtyKeyDown = function (event) {
+    if (typeof event.key !== "string" || event.isComposing || event.keyCode === 229) return;
     if (event.key === "Enter") {
       event.preventDefault();
       event.stopPropagation();
@@ -13332,6 +13426,7 @@
   };
 
   window.posRateKeyDown = function (event) {
+    if (typeof event.key !== "string" || event.isComposing || event.keyCode === 229) return;
     if (event.key === "Enter") {
       event.preventDefault();
       event.stopPropagation();
@@ -14569,6 +14664,8 @@
         return;
       }
 
+      // Opened now (still inside the click) so Safari does not block the Z-report.
+      const zWin = window.posPreopenWindow ? window.posPreopenWindow() : null;
       const btn = document.getElementById("btnConfirmCloseShift");
       const oldHtml = btn.innerHTML;
       btn.disabled = true;
@@ -14593,9 +14690,10 @@
         const data = await resp.json();
         if (data.success) {
           window.posCloseCloseRegisterModal();
-          if (data.z_report_url) {
-            window.open(data.z_report_url + "?autoprint=1", "_blank");
-          }
+          window.posShowDoc(
+            data.z_report_url ? data.z_report_url + "?autoprint=1" : "",
+            zWin,
+          );
           // Reset state & show interceptor
           window.posCurrentActiveShift = null;
           const badge = document.getElementById("posShiftHeaderBadge");
@@ -14604,9 +14702,11 @@
           if (btnClose) btnClose.style.display = "none";
           window.posCheckShiftStatus();
         } else {
+          window.posClosePreopened([zWin]);
           alert(data.error || "Failed to close register.");
         }
       } catch (err) {
+        window.posClosePreopened([zWin]);
         alert("Network error closing register: " + err.message);
       } finally {
         btn.disabled = false;

@@ -13,6 +13,7 @@ class Notification(models.Model):
         ORDER_NEW = 'order_new', 'New order'
         ORDER_ADDON = 'order_addon', 'Items added to an order'
         ORDER_READY = 'order_ready', 'Food ready'
+        KOT_NEW = 'kot_new', 'Kitchen ticket (KOT)'
         DELIVERY_NEW = 'delivery_new', 'New Zomato / Swiggy order'
         DELIVERY_CANCELLED = 'delivery_cancelled', 'Online order cancelled'
         DELIVERY_ATTENTION = 'delivery_attention', 'Online order needs attention'
@@ -30,7 +31,7 @@ class Notification(models.Model):
         CRITICAL = 'critical', 'Critical'
 
     CATEGORY = {
-        'order_new': 'orders', 'order_addon': 'orders', 'order_ready': 'kitchen',
+        'order_new': 'orders', 'order_addon': 'orders', 'order_ready': 'kitchen', 'kot_new': 'kitchen',
         'delivery_new': 'online', 'delivery_cancelled': 'online', 'delivery_attention': 'online',
         'reservation': 'alerts', 'room_booking': 'rooms', 'room_alert': 'rooms', 'feedback': 'alerts', 'low_stock': 'alerts', 'system': 'alerts',
     }

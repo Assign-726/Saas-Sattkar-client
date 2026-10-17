@@ -29,18 +29,10 @@ def ensure_default_zone(restaurant, active_branch=None):
 
 @login_required
 def floor_plan_api(request, restaurant_slug=None):
-    try:
-        # Check standard admin relationships
-        restaurant = request.user.restaurant
-    except Exception:
-        # Fallback to looking for related restaurant profile
-        if hasattr(request.user, 'restaurant_profile'):
-            restaurant = request.user.restaurant_profile.restaurant
-        else:
-            restaurant = getattr(request.user, 'restaurant', None)
-
-    if not restaurant:
-        return JsonResponse({'error': 'No restaurant found for this user.'}, status=400)
+    from restaurant_admin.views import resolve_restaurant
+    restaurant = resolve_restaurant(request, restaurant_slug)  # tenant check; superusers may open any business
+    if not hasattr(restaurant, 'branches'):
+        return JsonResponse({'error': 'No restaurant found for this user.'}, status=403)
 
     profile = getattr(request.user, 'restaurant_profile', None)
     active_branch = profile.branch if profile else None
@@ -170,8 +162,10 @@ def floor_plan_save_position_api(request, restaurant_slug=None):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST method required.'}, status=405)
     
-    from super_admin.models import Restaurant
-    restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+    from restaurant_admin.views import resolve_restaurant
+    restaurant = resolve_restaurant(request, restaurant_slug)  # only your own business (or a platform admin)
+    if not hasattr(restaurant, 'branches'):
+        return JsonResponse({'error': 'You do not have access to this restaurant.'}, status=403)
     active_branch = get_view_active_branch(request, restaurant)
 
     try:
