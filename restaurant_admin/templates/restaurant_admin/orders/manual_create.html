@@ -1563,8 +1563,75 @@
   .cln.fly {
     animation: land 0.24s ease-out;
   }
+  /* Line feedback. One effect per line, timed from when it started (--fx-delay is negative on
+     re-render), so redrawing the order list continues an animation instead of replaying it.
+     pending: a new line waits, faded, while its item is flying in
+     hit:     the item has landed: one nudge, highlight that fades, quantity pop
+     pulse:   quantity changed from the line's own controls: highlight only */
+  .cln.pending {
+    opacity: 0.4;
+    background: var(--brand-tint);
+  }
+  .cln.hit {
+    animation:
+      lineNudge 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+      lineGlow 1.4s ease-out both;
+    animation-delay: var(--fx-delay, 0ms);
+  }
+  .cln.hit .q {
+    animation: qPop 0.36s cubic-bezier(0.3, 1.5, 0.5, 1);
+    animation-delay: var(--fx-delay, 0ms);
+  }
   .cln.pulse {
-    animation: pulse 0.55s ease-out;
+    animation: lineGlow 0.9s ease-out both;
+    animation-delay: var(--fx-delay, 0ms);
+  }
+  /* a single settle into place: no overshoot, so the line moves once */
+  @keyframes lineNudge {
+    from {
+      transform: translateX(-8px);
+      opacity: 0.45;
+    }
+    to {
+      transform: none;
+      opacity: 1;
+    }
+  }
+  @keyframes lineGlow {
+    0%,
+    35% {
+      background: var(--brand-tint);
+      box-shadow: inset 3px 0 0 var(--brand);
+    }
+    100% {
+      background: transparent;
+      box-shadow: inset 3px 0 0 transparent;
+    }
+  }
+  @keyframes qPop {
+    0% {
+      transform: scale(1);
+    }
+    45% {
+      transform: scale(1.3);
+      background: var(--brand);
+      color: var(--brand-on);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  .mbar.bump {
+    animation: mbarBump 0.36s cubic-bezier(0.3, 1.5, 0.5, 1);
+  }
+  @keyframes mbarBump {
+    0%,
+    100% {
+      transform: none;
+    }
+    45% {
+      transform: scale(1.035);
+    }
   }
   .cln.sweep {
     animation: sweep 0.6s ease-out both;
@@ -1856,16 +1923,46 @@
   }
   .flyer {
     position: fixed;
-    z-index: 80;
+    left: 0;
+    top: 0;
+    z-index: 1080;
     pointer-events: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 280px;
     background: var(--brand);
     color: var(--brand-on);
-    border-radius: 7px;
-    padding: 7px 13px;
-    font-family: var(--ui-font-mono);
+    border-radius: 10px;
+    padding: 6px 12px 6px 6px;
+    font-family: var(--ui-font);
     font-size: 13px;
-    font-weight: 700;
+    font-weight: 600;
+    line-height: 1.2;
     white-space: nowrap;
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.18),
+      0 10px 24px -6px rgba(15, 23, 42, 0.38);
+    transform-origin: left center;
+    will-change: transform, opacity;
+  }
+  .flyer .fl-q {
+    flex: 0 0 auto;
+    min-width: 24px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 6px;
+    background: var(--brand-on);
+    color: var(--brand);
+    display: grid;
+    place-items: center;
+    font-family: var(--ui-font-mono);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .flyer .fl-n {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /* ── MOBILE ORDER BAR — the tap target that opens the order sheet on a phone ── */
@@ -7435,52 +7532,189 @@
     document.addEventListener("mousedown", wakeAudio);
     document.addEventListener("touchstart", wakeAudio, { passive: true });
 
-    // Flyer Animation to Cart
-    window.flyToCart = function (label) {
-      if (
+    // Add-to-cart feedback: a pill flies in an arc from where the item was picked to its cart line,
+    // which then lands with a shake and a quantity pop, plus a haptic tap where the device has one.
+    let lastPick = null;
+    document.addEventListener(
+      "pointerdown",
+      function (e) {
+        lastPick = { x: e.clientX, y: e.clientY, t: Date.now() };
+      },
+      true,
+    );
+    const posHaptic = (function () {
+      const isIOS =
+        /iP(hone|ad|od)/.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      let sw = null;
+      return function (pattern) {
+        try {
+          if (typeof navigator.vibrate === "function") {
+            navigator.vibrate(pattern); // Android Chrome, Edge, Firefox, Samsung Internet
+            return;
+          }
+          // iOS Safari has no Vibration API; toggling a native switch control plays the system haptic (iOS 18+).
+          if (!isIOS) return;
+          if (!sw) {
+            sw = document.createElement("label");
+            sw.setAttribute("aria-hidden", "true");
+            sw.style.cssText =
+              "position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none;";
+            const input = document.createElement("input");
+            input.type = "checkbox";
+            input.setAttribute("switch", "");
+            input.tabIndex = -1;
+            sw.appendChild(input);
+            document.body.appendChild(sw);
+          }
+          const focused = document.activeElement;
+          sw.click();
+          if (focused && focused !== document.activeElement && focused.focus)
+            focused.focus({ preventScroll: true });
+        } catch (e) {}
+      };
+    })();
+    window.posHaptic = posHaptic;
+
+    function replayClass(el, cls, ms) {
+      if (!el) return;
+      el.classList.remove(cls);
+      void el.offsetWidth; // restart the animation
+      el.classList.add(cls);
+      clearTimeout(el["_t_" + cls]);
+      el["_t_" + cls] = setTimeout(function () {
+        el.classList.remove(cls);
+      }, ms);
+    }
+
+    // How long each line effect runs; renderCart() uses these to continue an effect, never replay it.
+    const LINE_FX_MS = { pending: 1000, hit: 1400, pulse: 900 };
+    window.posLineFx = function (line, now) {
+      if (!line) return null;
+      if (line.pulse === true) {
+        line._pulseAt = now; // a fresh quantity change from the line's own controls
+        line.pulse = "shown";
+      }
+      if (line._landAt && now - line._landAt < LINE_FX_MS.hit) return { cls: "hit", at: line._landAt };
+      if (line._flyAt && !line._landAt && now - line._flyAt < LINE_FX_MS.pending) return { cls: "pending", at: line._flyAt };
+      if (line._pulseAt && now - line._pulseAt < LINE_FX_MS.pulse) return { cls: "pulse", at: line._pulseAt };
+      return null;
+    };
+
+    // label: item name; line: the cart line it went into; qty: how many were added
+    window.flyToCart = function (label, line, qty, merged) {
+      posHaptic(merged ? [10, 40, 10] : 24);
+      const reduce =
         window.matchMedia &&
-        window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      )
-        return;
-      if (window.innerWidth <= 640) return;
-      const srcEl =
-        document.getElementById("fItem") || document.querySelector(".erow");
-      const dstEl =
-        document.getElementById("cart") || document.getElementById("orderPane");
-      if (!srcEl || !dstEl) return;
-      const src = srcEl.getBoundingClientRect(),
-        dst = dstEl.getBoundingClientRect();
-      const f = document.createElement("div");
-      f.className = "flyer";
-      f.textContent = label;
-      f.style.position = "fixed";
-      f.style.zIndex = "80";
-      f.style.pointerEvents = "none";
-      f.style.background = "var(--brand, #2F3E9E)";
-      f.style.color = "#FFFFFF";
-      f.style.borderRadius = "7px";
-      f.style.padding = "6px 12px";
-      f.style.fontFamily = "'IBM Plex Mono', monospace";
-      f.style.fontSize = "13px";
-      f.style.fontWeight = "700";
-      f.style.whiteSpace = "nowrap";
-      f.style.left = src.left + "px";
-      f.style.top = src.top + "px";
-      document.body.appendChild(f);
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const lineId = line ? line.cart_line_id || line.id : "";
+      const rowId = lineId ? "cart-row-" + lineId : "";
+      if (line) {
+        delete line._landAt;
+        if (merged) delete line._flyAt;
+        else line._flyAt = performance.now(); // new line waits, faded, until its item lands
+      }
+      // the item has arrived: one nudge + highlight on its line, applied to the row on screen now
+      const land = function (toBar, mbar) {
+        if (line) line._landAt = performance.now();
+        document.querySelectorAll("#cart .cln.pending").forEach(function (r) {
+          r.classList.remove("pending");
+        });
+        if (toBar) return replayClass(mbar, "bump", 450);
+        const row = rowId && document.getElementById(rowId);
+        if (!row) return;
+        row.classList.remove("pending", "pulse", "hit");
+        row.style.setProperty("--fx-delay", "0ms");
+        void row.offsetWidth;
+        row.classList.add("hit");
+      };
+      // wait one frame so the cart has been re-rendered with the new line
       requestAnimationFrame(function () {
-        f.style.transition =
-          "transform .22s cubic-bezier(.4,0,.2,1), opacity .22s";
-        f.style.transform =
-          "translate(" +
-          (dst.left - src.left + 20) +
-          "px," +
-          (dst.top - src.top + 8) +
-          "px) scale(.85)";
-        f.style.opacity = "0";
+        const cart = document.getElementById("cart");
+        const mbar = document.getElementById("mbar");
+        const row = rowId && document.getElementById(rowId);
+        const visible = function (el) {
+          if (!el) return false;
+          const r = el.getBoundingClientRect();
+          // on screen, not just rendered: the phone order sheet sits off-screen while closed
+          return (
+            r.width > 0 &&
+            r.height > 0 &&
+            r.bottom > 0 &&
+            r.right > 0 &&
+            r.top < window.innerHeight &&
+            r.left < window.innerWidth &&
+            getComputedStyle(el).visibility !== "hidden"
+          );
+        };
+        // on a phone with the order sheet closed, fly to the order bar instead
+        const toBar = !visible(row) && visible(mbar);
+        if (row && cart && !toBar) {
+          const cr = cart.getBoundingClientRect(),
+            rr = row.getBoundingClientRect();
+          if (rr.bottom > cr.bottom) cart.scrollTop += rr.bottom - cr.bottom + 6;
+          else if (rr.top < cr.top) cart.scrollTop -= cr.top - rr.top + 6;
+        }
+        const dstEl = toBar ? mbar : row;
+        if (reduce || !dstEl || !visible(dstEl) || typeof document.body.animate !== "function")
+          return land(toBar, mbar);
+
+        // one flyer at a time: a newer add replaces the one still in the air
+        document.querySelectorAll(".flyer").forEach(function (old) {
+          old.remove();
+        });
+        const f = document.createElement("div");
+        f.className = "flyer";
+        f.innerHTML = '<span class="fl-q"></span><span class="fl-n"></span>';
+        f.querySelector(".fl-q").textContent = (merged ? "+" : "") + (qty || 1);
+        f.querySelector(".fl-n").textContent = label;
+        document.body.appendChild(f);
+        const fw = f.offsetWidth,
+          fh = f.offsetHeight;
+        // start where the cashier picked the item (a tap or click just now), else at the search box
+        const pane = document.getElementById("orderPane");
+        const paneRect = pane && pane.getBoundingClientRect();
+        let x0, y0;
+        const pick = lastPick && Date.now() - lastPick.t < 900 ? lastPick : null;
+        if (pick && !(paneRect && pick.x >= paneRect.left && pick.x <= paneRect.right && !toBar)) {
+          x0 = pick.x - Math.min(fw / 2, 60);
+          y0 = pick.y - fh / 2;
+        } else {
+          const src = (document.getElementById("fItem") || document.querySelector(".erow") || dstEl).getBoundingClientRect();
+          x0 = src.left + 8;
+          y0 = src.top + src.height / 2 - fh / 2;
+        }
+        x0 = Math.max(4, Math.min(x0, window.innerWidth - fw - 4));
+        // end over the line's name (second column), or centred on the phone order bar
+        const d = dstEl.getBoundingClientRect();
+        const nameCell = !toBar && dstEl.children[1];
+        const x1 = toBar ? d.left + d.width / 2 - (fw * 0.9) / 2 : (nameCell ? nameCell.getBoundingClientRect().left : d.left + 40) - 6,
+          y1 = d.top + d.height / 2 - fh / 2;
+        const dx = x1 - x0,
+          dy = y1 - y0,
+          lift = Math.min(48, 16 + Math.abs(dx) * 0.04);
+        const at = (x, y, sc) => "translate(" + x + "px," + y + "px) scale(" + sc + ")";
+        const anim = f.animate(
+          [
+            { transform: at(x0, y0 + 4, 0.92), opacity: 0 },
+            { transform: at(x0, y0, 1), opacity: 1, offset: 0.1 },
+            { transform: at(x0 + dx * 0.5, y0 + dy * 0.5 - lift, 1), opacity: 1, offset: 0.5 },
+            { transform: at(x1, y1, 0.9), opacity: 1, offset: 0.88 },
+            { transform: at(x1, y1, 0.9), opacity: 0 },
+          ],
+          { duration: 540, easing: "cubic-bezier(.25,.1,.25,1)", fill: "forwards" },
+        );
+        let done = false;
+        const finish = function () {
+          if (done) return;
+          done = true;
+          f.remove();
+          land(toBar, mbar);
+        };
+        anim.onfinish = finish;
+        anim.oncancel = finish;
+        setTimeout(finish, 800);
       });
-      setTimeout(function () {
-        f.remove();
-      }, 250);
     };
 
     // Live Grand Total Number Tweening
@@ -7560,8 +7794,9 @@
 
       if (existing) {
         existing.quantity += quantityToAdd;
-        existing.pulse = true;
         window.SFX && window.SFX.merge();
+        window.flyToCart &&
+          window.flyToCart(item.name + (vName ? " (" + vName + ")" : ""), existing, quantityToAdd, true);
       } else {
         const cartLineId =
           "cl_" + Date.now() + "_" + Math.floor(Math.random() * 100000);
@@ -7585,9 +7820,13 @@
           fresh: true,
         });
         window.SFX && window.SFX.add();
-        const flyLabel =
-          quantityToAdd + " × " + item.name + (vName ? " (" + vName + ")" : "");
-        window.flyToCart && window.flyToCart(flyLabel);
+        window.flyToCart &&
+          window.flyToCart(
+            item.name + (vName ? " (" + vName + ")" : ""),
+            state.cart[state.cart.length - 1],
+            quantityToAdd,
+            false,
+          );
       }
 
       // Ensure appropriate cart tab (food vs bar) is activated
@@ -7983,6 +8222,7 @@
           "101 <kbd>&#8629;</kbd> 3 <kbd>&#8629;</kbd> &rarr; three Paneer Tikka<br>" +
           "<kbd>&uarr;</kbd> &rarr; go back and fix any line</div></div>";
       } else {
+        const fxNow = performance.now();
         state.cart.forEach((item, index) => {
           const grossLineTotal = item.unit_price * item.quantity;
           const discVal = parseFloat(item.discount_value || 0);
@@ -7995,12 +8235,17 @@
 
           const isSelected = posCartMode && index === posCartSel;
           const row = document.createElement("div");
+          // add / quantity feedback continues from when it started, so a redraw never replays it
+          const fx = window.posLineFx ? window.posLineFx(item, fxNow) : null;
+          const sweep = !fx && item.sweep !== undefined;
           row.className =
             "cln" +
             (isSelected ? " on" : "") +
-            (item.pulse ? " pulse" : "") +
-            (item.sweep !== undefined ? " sweep" : "");
-          if (item.sweep !== undefined) {
+            (fx ? " " + fx.cls : "") +
+            (sweep ? " sweep" : "");
+          if (fx) {
+            row.style.setProperty("--fx-delay", `-${Math.round(fxNow - fx.at)}ms`);
+          } else if (sweep) {
             row.style.animationDelay = `${item.sweep * 55}ms`;
           }
           const lineId = item.cart_line_id || item.id;
