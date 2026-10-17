@@ -1,0 +1,74 @@
+{% load restaurant_admin_extras %}
+{# Maintenance & out-of-order rooms — hotel admin #}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>Maintenance</h1><p>Report faults and take rooms off sale while they’re fixed. Out-of-order rooms disappear from the website and the front desk.</p></div>
+    <div class="ui-actions">
+      <a class="ui-btn {% if show != 'all' %}ui-btn-primary{% else %}ui-btn-gray{% endif %}" href="?">Open</a>
+      <a class="ui-btn {% if show == 'all' %}ui-btn-primary{% else %}ui-btn-gray{% endif %}" href="?show=all">All</a>
+    </div>
+  </div>
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Open issues</div></div><div class="kpi-val">{{ counts.open }}</div></div>
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Rooms off sale</div></div><div class="kpi-val">{{ counts.ooo }}</div></div>
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">High / urgent</div></div><div class="kpi-val">{{ counts.urgent }}</div></div>
+  </div>
+
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      {% for i, clashes in rows %}
+      <section class="ui-card ui-pad ui-pms-issue" id="issue-{{ i.pk }}">
+        <div class="ui-pms-task-head">
+          <div><strong>Room {{ i.room.room_number }} — {{ i.title }}</strong>
+            <div class="ui-log-sub">Reported {{ i.created_at|date:"d M, h:i A" }}{% if i.reported_by %} by {{ i.reported_by.username }}{% endif %}{% if i.assigned_to %} · with {{ i.assigned_to }}{% endif %}</div></div>
+          <div class="ui-chipset">
+            <span class="ui-chip ui-chip-{% if i.priority == 'URGENT' %}red{% elif i.priority == 'HIGH' %}orange{% elif i.priority == 'MEDIUM' %}blue{% else %}gray{% endif %}">{{ i.get_priority_display }}</span>
+            <span class="ui-chip ui-chip-{% if i.status == 'RESOLVED' %}green{% elif i.status == 'IN_PROGRESS' %}indigo{% else %}orange{% endif %}">{{ i.get_status_display }}</span>
+            {% if i.out_of_order %}<span class="ui-chip ui-chip-red">Off sale{% if i.block_from or i.block_until %} {{ i.block_from|date:"d M"|default:"now" }} – {{ i.block_until|date:"d M"|default:"until fixed" }}{% endif %}</span>{% endif %}
+          </div>
+        </div>
+        {% if i.description %}<p style="margin:8px 0 0">{{ i.description|linebreaksbr }}</p>{% endif %}
+        {% if clashes %}
+        <div class="ui-alert ui-alert-warning" style="margin-top:10px"><i class="fa-solid fa-triangle-exclamation ui-alert-icon"></i><div class="ui-alert-body"><strong>Guests are booked into this room while it’s off sale.</strong> Move them:
+          {% for c in clashes %}<a href="{{ base_url }}bookings/{{ c.pk }}/">{{ c.guest_name }} ({{ c.check_in_date|date:"d M" }})</a>{% if not forloop.last %}, {% endif %}{% endfor %}</div></div>
+        {% endif %}
+        {% if i.status == 'RESOLVED' %}
+        <p class="ui-log-sub" style="margin:8px 0 0">Resolved {{ i.resolved_at|date:"d M, h:i A" }}{% if i.resolution_note %} — {{ i.resolution_note }}{% endif %}{% if i.cost %} · cost ₹{{ i.cost|inr2 }}{% endif %}</p>
+        {% if can_edit %}<form method="post" action="{{ base_url }}rooms/maintenance/{{ i.pk }}/">{% csrf_token %}<input type="hidden" name="op" value="reopen"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="ui-link-btn" type="submit">Reopen</button></form>{% endif %}
+        {% elif can_edit %}
+        <div class="ui-pms-task-actions" style="margin-top:10px">
+          {% if i.status == 'OPEN' %}<form method="post" action="{{ base_url }}rooms/maintenance/{{ i.pk }}/">{% csrf_token %}<input type="hidden" name="op" value="start"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">Mark in progress</button></form>{% endif %}
+          <form method="post" action="{{ base_url }}rooms/maintenance/{{ i.pk }}/" class="ui-inline-fields">{% csrf_token %}<input type="hidden" name="op" value="resolve"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <input class="ui-input" name="resolution_note" placeholder="What was done" maxlength="255">
+            <input class="ui-input" name="cost" type="number" min="0" step="0.01" placeholder="Cost ₹" style="max-width:110px">
+            <button class="ui-btn ui-btn-primary ui-btn-sm" type="submit"><i class="fa-solid fa-check"></i><span>Resolve</span></button></form>
+        </div>
+        {% endif %}
+      </section>
+      {% empty %}
+      <section class="ui-card ui-empty"><div class="ui-empty-icon"><i class="fa-solid fa-screwdriver-wrench"></i></div><h3>No {% if show != 'all' %}open {% endif %}issues</h3><p>Every room is in working order.</p></section>
+      {% endfor %}
+    </div>
+    <div class="ui-g360-side">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Report an issue</h2>
+        <form method="post" action="{{ base_url }}rooms/maintenance/add/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-field"><label for="mxRoom">Room</label><select id="mxRoom" class="ui-input" name="room_id" required><option value="">Choose…</option>{% for r in rooms %}<option value="{{ r.pk }}">{{ r.room_number }}</option>{% endfor %}</select></div>
+          <div class="ui-field"><label for="mxTitle">Problem</label><input id="mxTitle" class="ui-input" name="title" maxlength="150" required placeholder="e.g. AC not cooling"></div>
+          <div class="ui-field"><label for="mxDesc">Details</label><textarea id="mxDesc" class="ui-input" name="description" rows="2"></textarea></div>
+          <div class="ui-field"><label for="mxPri">Priority</label><select id="mxPri" class="ui-input" name="priority">{% for k, l in priorities %}<option value="{{ k }}" {% if k == 'MEDIUM' %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+          <div class="ui-field"><label for="mxWho">Assigned to</label><input id="mxWho" class="ui-input" name="assigned_to" maxlength="120" placeholder="Technician or vendor"></div>
+          {% if can_edit %}
+          <label class="ui-pms-check"><input type="checkbox" name="out_of_order" value="1" onchange="document.getElementById('mxDates').hidden = !this.checked"> Take the room off sale</label>
+          <div id="mxDates" class="ui-inline-fields" hidden>
+            <div class="ui-field"><label for="mxFrom">From</label><input id="mxFrom" class="ui-input" type="date" name="block_from" value="{{ today|date:'Y-m-d' }}"></div>
+            <div class="ui-field"><label for="mxUntil">Until (last night)</label><input id="mxUntil" class="ui-input" type="date" name="block_until"></div>
+          </div>
+          {% endif %}
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-plus"></i><span>Log issue</span></button>
+        </form>
+      </section>
+    </div>
+  </div>
+</div>

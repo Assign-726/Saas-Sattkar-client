@@ -1,0 +1,150 @@
+{# Guest 360 — shared by Restaurant & Hotel shells #}
+<div class="ui-logs ui-guest360">
+  <a class="ui-back" href="{{ base_url }}guests/"><i class="fa-solid fa-chevron-left"></i> Guests</a>
+
+  <div class="ui-g360-hero ui-card">
+    <span class="ui-avatar ui-avatar-lg {% if guest.is_vip %}is-vip{% endif %}">{{ guest.initials }}</span>
+    <div class="ui-g360-id">
+      <h1>{{ guest.name }} {% if guest.is_vip %}<span class="ui-chip ui-chip-purple"><i class="fa-solid fa-crown"></i>VIP</span>{% endif %}
+        {% if not guest.is_vip %}<span class="ui-chip ui-chip-{% if guest.segment == 'lapsed' %}orange{% elif guest.segment == 'new' %}teal{% elif guest.segment == 'regular' %}green{% else %}gray{% endif %}">{{ guest.segment|capfirst }}</span>{% endif %}</h1>
+      <p>
+        {% if guest.phone %}<a href="tel:{{ guest.phone }}"><i class="fa-solid fa-phone"></i> {{ guest.phone }}</a>{% endif %}
+        {% if guest.email %}<a href="mailto:{{ guest.email }}"><i class="fa-regular fa-envelope"></i> {{ guest.email }}</a>{% endif %}
+        {% if guest.phone %}<a href="https://wa.me/91{{ guest.phone }}" target="_blank" rel="noopener"><i class="fa-brands fa-whatsapp"></i> WhatsApp</a>{% endif %}
+      </p>
+      <div class="ui-g360-tags">{% for t in guest.tags %}<span class="ui-chip ui-chip-gray">{{ t }}</span>{% endfor %}{% if not guest.marketing_opt_in %}<span class="ui-chip ui-chip-red">No marketing</span>{% endif %}</div>
+    </div>
+    {% if can_manage_guests %}<button type="button" class="ui-btn ui-btn-gray" data-open-dialog="profileDialog"><i class="fa-solid fa-pen"></i><span>Edit profile</span></button>{% endif %}
+  </div>
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Visits</div><div class="kpi-icon"><i class="fa-solid fa-door-open"></i></div></div>
+      <div class="kpi-val">{{ guest.total_visits }}</div>
+      <div class="kpi-sub">{{ guest.restaurant_visits }} dine · {{ guest.hotel_stays }} stay{{ guest.hotel_stays|pluralize }} · {{ guest.reservations }} table · {{ guest.event_bookings }} event</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Lifetime spend</div><div class="kpi-icon"><i class="fa-solid fa-indian-rupee-sign"></i></div></div>
+      <div class="kpi-val">₹{{ guest.lifetime_spend|floatformat:0 }}</div><div class="kpi-sub">₹{{ average_spend|floatformat:0 }} per visit</div></div>
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Loyalty points</div><div class="kpi-icon"><i class="fa-solid fa-star"></i></div></div>
+      <div class="kpi-val">{{ guest.loyalty_points }}</div><div class="kpi-sub">Worth ₹{{ points_value|floatformat:2 }}</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Last visit</div><div class="kpi-icon"><i class="fa-regular fa-calendar"></i></div></div>
+      <div class="kpi-val ui-kpi-val-sm">{% if guest.last_seen %}{{ guest.last_seen|date:"d M Y" }}{% else %}—{% endif %}</div>
+      <div class="kpi-sub">{% if guest.first_seen %}Guest since {{ guest.first_seen|date:"M Y" }}{% endif %}</div></div>
+  </div>
+
+  <div class="ui-g360-grid">
+    <div class="ui-g360-side">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">About</h2>
+        <dl class="ui-dl">
+          <div><dt>Birthday</dt><dd>{{ guest.birthday|date:"d M"|default:"—" }}</dd></div>
+          <div><dt>Anniversary</dt><dd>{{ guest.anniversary|date:"d M"|default:"—" }}</dd></div>
+          <div class="ui-dl-wide"><dt>Preferences &amp; allergies</dt><dd>{{ guest.preferences|default:"—"|linebreaksbr }}</dd></div>
+        </dl>
+        {% if favourites %}
+        <h3 class="ui-card-subtitle">Usually orders</h3>
+        <ol class="ui-fav">{% for f in favourites %}<li><span>{{ f.name }}</span><span class="ui-log-sub">×{{ f.quantity }}</span></li>{% endfor %}</ol>
+        {% endif %}
+      </section>
+
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Loyalty {% if not loyalty.enabled %}<span class="ui-chip ui-chip-gray">Programme off</span>{% endif %}</h2>
+        <div class="ui-points"><strong>{{ guest.loyalty_points }}</strong> points <span class="ui-log-sub">= ₹{{ points_value|floatformat:2 }}</span></div>
+        <form method="post" class="ui-stack-form">{% csrf_token %}<input type="hidden" name="op" value="redeem">
+          <label class="ui-field-label">Redeem at billing</label>
+          <div class="ui-inline-fields">
+            <input class="ui-input" name="points" type="number" min="{{ loyalty.min_redeem_points }}" max="{{ guest.loyalty_points }}" placeholder="Points (min {{ loyalty.min_redeem_points }})" required>
+            <button class="ui-btn ui-btn-primary" type="submit" {% if guest.loyalty_points < loyalty.min_redeem_points %}disabled{% endif %}>Redeem</button>
+          </div>
+          <input class="ui-input" name="reason" placeholder="Bill or reason (optional)">
+        </form>
+        {% if can_manage_guests %}
+        <details class="ui-details"><summary>Adjust points</summary>
+          <form method="post" class="ui-stack-form">{% csrf_token %}<input type="hidden" name="op" value="adjust">
+            <div class="ui-inline-fields"><input class="ui-input" name="points" type="number" placeholder="+50 or -20" required>
+              <button class="ui-btn ui-btn-gray" type="submit">Apply</button></div>
+            <input class="ui-input" name="reason" placeholder="Reason (required)" required>
+          </form>
+        </details>
+        {% endif %}
+        {% if ledger %}
+        <ul class="ui-ledger">
+          {% for tx in ledger %}
+          <li><span class="ui-ledger-pts {% if tx.points > 0 %}is-plus{% else %}is-minus{% endif %}">{% if tx.points > 0 %}+{% endif %}{{ tx.points }}</span>
+            <span class="ui-ledger-text">{{ tx.reason|default:tx.get_kind_display }}<span class="ui-log-sub">{{ tx.get_kind_display }} · {{ tx.created_at|date:"d M Y" }}{% if tx.created_by %} · {{ tx.created_by.username }}{% endif %}</span></span>
+            <span class="ui-log-sub">{{ tx.balance_after }}</span></li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </section>
+
+      {% if gift_cards %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Gift cards</h2>
+        <ul class="ui-ledger">{% for c in gift_cards %}<li><a href="{{ base_url }}gift-cards/{{ c.pk }}/" class="ui-ledger-text"><code>{{ c.code }}</code><span class="ui-log-sub">{{ c.get_status_display }}</span></a><span>₹{{ c.balance|floatformat:0 }}</span></li>{% endfor %}</ul>
+      </section>
+      {% endif %}
+    </div>
+
+    <div class="ui-g360-main">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Notes</h2>
+        <form method="post" class="ui-note-form">{% csrf_token %}<input type="hidden" name="op" value="add_note">
+          <textarea class="ui-input" name="text" rows="2" placeholder="Seating preference, feedback, follow-up… visible to your team" required></textarea>
+          <div class="ui-note-actions"><label class="ui-switch"><input type="checkbox" name="pinned"><span>Pin to top</span></label><button class="ui-btn ui-btn-primary ui-btn-sm" type="submit">Add note</button></div>
+        </form>
+        {% for n in notes %}
+        <article class="ui-note {% if n.pinned %}is-pinned{% endif %}">
+          <div class="ui-note-text">{{ n.text|linebreaksbr }}</div>
+          <div class="ui-note-meta">{% if n.pinned %}<i class="fa-solid fa-thumbtack"></i> {% endif %}{{ n.author_name|default:"Staff" }} · {{ n.created_at|date:"d M Y, h:i A" }}
+            <form method="post">{% csrf_token %}<input type="hidden" name="op" value="pin_note"><input type="hidden" name="note" value="{{ n.pk }}"><button class="ui-link-btn" type="submit">{% if n.pinned %}Unpin{% else %}Pin{% endif %}</button></form>
+            {% if can_manage_guests or n.author_id == request.user.id %}<form method="post">{% csrf_token %}<input type="hidden" name="op" value="delete_note"><input type="hidden" name="note" value="{{ n.pk }}"><button class="ui-link-btn is-danger" type="submit">Delete</button></form>{% endif %}
+          </div>
+        </article>
+        {% empty %}<p class="ui-log-sub">No notes yet.</p>{% endfor %}
+      </section>
+
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Timeline <span class="ui-log-sub">{{ activity_total }} event{{ activity_total|pluralize }}</span></h2>
+        {% if activity %}
+        <ol class="ui-timeline">
+          {% for a in activity %}
+          <li class="{% if a.cancelled %}is-cancelled{% endif %}">
+            <span class="ui-tl-dot ui-tl-{{ a.kind }}"><i class="fa-solid {% if a.kind == 'order' %}fa-utensils{% elif a.kind == 'stay' %}fa-bed{% elif a.kind == 'reservation' %}fa-chair{% else %}fa-ticket{% endif %}"></i></span>
+            <div class="ui-tl-body"><div class="ui-log-msg">{{ a.title }}</div><div class="ui-log-sub">{{ a.subtitle }}</div></div>
+            <div class="ui-tl-meta">{% if a.amount is not None %}<strong>₹{{ a.amount|floatformat:0 }}</strong>{% endif %}<div class="ui-log-sub">{{ a.when|date:"d M Y" }}</div></div>
+          </li>
+          {% endfor %}
+        </ol>
+        {% if activity_total > activity|length %}<p class="ui-log-sub">Showing the latest {{ activity|length }}.</p>{% endif %}
+        {% else %}<p class="ui-log-sub">No visits recorded yet.</p>{% endif %}
+      </section>
+    </div>
+  </div>
+
+  {% if can_manage_guests %}
+  <dialog class="ui-dialog ui-dialog-form" id="profileDialog">
+    <form method="post">{% csrf_token %}<input type="hidden" name="op" value="update_profile">
+      <h3>Edit guest</h3>
+      <div class="ui-form-grid">
+        <div class="ui-field ui-col-2"><label>Name</label><input class="ui-input" name="name" value="{{ guest.name }}" required></div>
+        <div class="ui-field"><label>Phone</label><input class="ui-input" name="phone" value="{{ guest.phone }}" inputmode="tel"></div>
+        <div class="ui-field"><label>Email</label><input class="ui-input" name="email" type="email" value="{{ guest.email }}"></div>
+        <div class="ui-field"><label>Birthday</label><input class="ui-input" name="birthday" type="date" value="{{ guest.birthday|date:'Y-m-d' }}"></div>
+        <div class="ui-field"><label>Anniversary</label><input class="ui-input" name="anniversary" type="date" value="{{ guest.anniversary|date:'Y-m-d' }}"></div>
+        <div class="ui-field ui-col-2"><label>Tags <span class="ui-log-sub">comma separated</span></label><input class="ui-input" name="tags" value="{{ guest.tags|join:', ' }}" placeholder="corporate, regular, window seat"></div>
+        <div class="ui-field ui-col-2"><label>Preferences &amp; allergies</label><textarea class="ui-input" name="preferences" rows="3">{{ guest.preferences }}</textarea></div>
+        <label class="ui-switch"><input type="checkbox" name="is_vip" {% if guest.is_vip %}checked{% endif %}><span>VIP guest</span></label>
+        <label class="ui-switch"><input type="checkbox" name="marketing_opt_in" {% if guest.marketing_opt_in %}checked{% endif %}><span>Agrees to offers &amp; messages</span></label>
+      </div>
+      <div class="ui-dialog-actions"><button class="ui-btn ui-btn-gray" type="button" data-close-dialog>Cancel</button><button class="ui-btn ui-btn-primary" type="submit">Save</button></div>
+    </form>
+  </dialog>
+  {% endif %}
+</div>
+<script>
+document.querySelectorAll('[data-open-dialog]').forEach(function (b) {
+  b.addEventListener('click', function () { var d = document.getElementById(b.dataset.openDialog); if (d && d.showModal) d.showModal(); });
+});
+document.querySelectorAll('[data-close-dialog]').forEach(function (b) {
+  b.addEventListener('click', function () { b.closest('dialog').close(); });
+});
+</script>

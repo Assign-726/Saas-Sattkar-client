@@ -1,0 +1,42 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>Menu engineering</h1><p>{{ label }} · {{ start|date:"d M" }} – {{ end|date:"d M Y" }}{% if current_branch %} · {{ current_branch.name }}{% endif %} — what each dish earns, from your recipes and sales.</p></div>
+    <div class="ui-actions"><a class="ui-btn ui-btn-gray" href="?{{ request.GET.urlencode }}&export=csv"><i class="fa-solid fa-file-csv"></i><span>CSV</span></a></div>
+  </div>
+
+  <form class="ui-card ui-filters" method="get">
+    <div class="ui-field"><label for="meP">Period</label><select id="meP" class="ui-input" name="period" onchange="this.form.submit()">{% for k, l in periods %}<option value="{{ k }}" {% if period == k %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    {% if cls %}<input type="hidden" name="class" value="{{ cls }}">{% endif %}
+  </form>
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Food cost</div><div class="kpi-icon"><i class="fa-solid fa-scale-balanced"></i></div></div><div class="kpi-val">{% if d.food_cost_pct is not None %}{{ d.food_cost_pct }}%{% else %}—{% endif %}</div><div class="kpi-sub">Theoretical, from recipes · ₹{{ d.theoretical_cost|inr }} on ₹{{ d.costed_revenue|inr }}</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Average margin</div><div class="kpi-icon"><i class="fa-solid fa-indian-rupee-sign"></i></div></div><div class="kpi-val">₹{{ d.avg_margin|inr }}</div><div class="kpi-sub">Per plate sold</div></div>
+    <div class="ui-kpi {% if d.uncosted %}kpi-rose{% endif %}"><div class="ui-kpi-head"><div class="kpi-label">Dishes without a recipe</div><div class="kpi-icon"><i class="fa-solid fa-flask"></i></div></div><div class="kpi-val">{{ d.uncosted }}</div><div class="kpi-sub">{% if d.uncosted %}Add recipes under Menu to cost them{% else %}Every dish sold is costed{% endif %}</div></div>
+  </div>
+
+  <div class="ui-me-quad">
+    <a href="?period={{ period }}&class=star" class="q is-star {% if cls == 'star' %}is-on{% endif %}"><i class="fa-solid fa-star"></i><strong>{{ d.counts.star }} Star{{ d.counts.star|pluralize }}</strong><span>Popular and profitable — keep them prominent and consistent.</span></a>
+    <a href="?period={{ period }}&class=plowhorse" class="q is-plow {% if cls == 'plowhorse' %}is-on{% endif %}"><i class="fa-solid fa-horse"></i><strong>{{ d.counts.plowhorse }} Plowhorse{{ d.counts.plowhorse|pluralize }}</strong><span>Popular, thin margin — trim portion cost or nudge the price.</span></a>
+    <a href="?period={{ period }}&class=puzzle" class="q is-puzzle {% if cls == 'puzzle' %}is-on{% endif %}"><i class="fa-solid fa-puzzle-piece"></i><strong>{{ d.counts.puzzle }} Puzzle{{ d.counts.puzzle|pluralize }}</strong><span>Profitable, rarely ordered — rename, re-place or have staff suggest them.</span></a>
+    <a href="?period={{ period }}&class=dog" class="q is-dog {% if cls == 'dog' %}is-on{% endif %}"><i class="fa-solid fa-dog"></i><strong>{{ d.counts.dog }} Dog{{ d.counts.dog|pluralize }}</strong><span>Neither — rework or take off the menu.</span></a>
+  </div>
+  {% if cls %}<p><a href="?period={{ period }}">Show every dish</a></p>{% endif %}
+
+  <section class="ui-card ui-list-card">
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>Dish</th><th class="num">Sold</th><th class="num">Mix</th><th class="num">Avg price</th><th class="num">Plate cost</th><th class="num">Food cost</th><th class="num">Margin</th><th class="num">Total margin</th><th>Class</th></tr></thead>
+      <tbody>{% for r in rows %}<tr>
+        <td><strong>{{ r.name }}</strong><br><small class="ui-log-sub">{{ r.category }}</small></td>
+        <td class="num">{{ r.qty }}</td><td class="num">{{ r.mix }}%</td><td class="num">₹{{ r.price|inr2 }}</td>
+        <td class="num">{% if r.cost is not None %}₹{{ r.cost|inr2 }}{% else %}<a href="{{ base_url }}menu/{{ r.id }}/recipe/">Add recipe</a>{% endif %}</td>
+        <td class="num {% if r.food_cost_pct and r.food_cost_pct > 35 %}ui-text-red{% endif %}">{% if r.food_cost_pct is not None %}{{ r.food_cost_pct }}%{% else %}—{% endif %}</td>
+        <td class="num">{% if r.margin is not None %}₹{{ r.margin|inr2 }}{% else %}—{% endif %}</td>
+        <td class="num"><strong>{% if r.total_margin is not None %}₹{{ r.total_margin|inr }}{% else %}—{% endif %}</strong></td>
+        <td>{% if r.class == 'star' %}<span class="ui-chip ui-chip-green">Star</span>{% elif r.class == 'plowhorse' %}<span class="ui-chip ui-chip-orange">Plowhorse</span>{% elif r.class == 'puzzle' %}<span class="ui-chip ui-chip-indigo">Puzzle</span>{% elif r.class == 'dog' %}<span class="ui-chip ui-chip-red">Dog</span>{% else %}<span class="ui-chip ui-chip-gray">No recipe</span>{% endif %}</td></tr>
+      {% empty %}<tr><td colspan="9" class="ui-log-sub" style="padding:24px;text-align:center">No dishes sold in this period.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+  <p class="ui-log-sub">Popular means selling more than {{ d.pop_line }}% of all plates (70% of an even share). Profitable means a margin above ₹{{ d.avg_margin|inr }}, the average across costed dishes. Prices are net of item discounts and before GST.</p>
+</div>

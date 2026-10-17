@@ -1,0 +1,81 @@
+<div class="ui-logs ui-integrations">
+  {% include 'integrations/_head.html' with action_label='Connect channel' action_dialog='channelDialog' %}
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Live channels</div><div class="kpi-icon"><i class="fa-solid fa-plug"></i></div></div><div class="kpi-val">{{ kpis.channels }}</div><div class="kpi-sub">{{ kpis.orders_30d }} partner {% if module == 'hotel' %}booking{% else %}order{% endif %}{{ kpis.orders_30d|pluralize }} in 30 days</div></div>
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Active API keys</div><div class="kpi-icon"><i class="fa-solid fa-key"></i></div></div><div class="kpi-val">{{ kpis.keys }}</div><div class="kpi-sub">Each locked to one branch</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Webhooks</div><div class="kpi-icon"><i class="fa-solid fa-tower-broadcast"></i></div></div><div class="kpi-val">{{ kpis.webhooks }}</div><div class="kpi-sub">{% if kpis.failing %}<span class="ui-text-red">{{ kpis.failing }} turned off after failures</span>{% else %}All endpoints healthy{% endif %}</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Deliveries · 24h</div><div class="kpi-icon"><i class="fa-solid fa-paper-plane"></i></div></div><div class="kpi-val">{{ kpis.deliveries }}</div><div class="kpi-sub">{% if kpis.success_rate is not None %}{{ kpis.success_rate }}% delivered first time or on retry{% else %}Nothing sent yet{% endif %}</div></div>
+  </div>
+
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Sales channels</h2><span class="ui-list-count">{{ rows|length }}</span></div>
+    {% if rows %}
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>Channel</th><th>Branch</th><th>Partner outlet ID</th><th>Commission</th><th>Last 30 days</th><th>Status</th><th></th></tr></thead>
+      <tbody>{% for row in rows %}{% with c=row.c %}
+        <tr>
+          <td><span class="ui-provider"><span class="ui-provider-logo {{ c.provider }}">{{ c.get_provider_display|slice:":1" }}</span><span><strong>{{ c.label }}</strong><span class="ui-log-sub" style="display:block">{{ c.get_provider_display }} · {{ row.keys }} key{{ row.keys|pluralize }}</span></span></span></td>
+          <td>{{ c.branch.name }}</td>
+          <td>{% if c.external_store_id %}<code class="ui-code">{{ c.external_store_id }}</code>{% else %}<span class="ui-log-sub">Not set</span>{% endif %}</td>
+          <td>{{ c.commission_pct|floatformat:"-2" }}%</td>
+          <td>{{ row.orders_30d }} {% if c.kind == 'rooms' %}booking{{ row.orders_30d|pluralize }}{% else %}order{{ row.orders_30d|pluralize }}{% endif %}<div class="ui-log-sub">{% if c.last_event_at %}Last call {{ c.last_event_at|timesince }} ago{% else %}No calls yet{% endif %}</div></td>
+          <td>{% if c.is_active %}<span class="ui-chip ui-chip-green">Live</span>{% else %}<span class="ui-chip ui-chip-gray">Paused</span>{% endif %}</td>
+          <td class="ui-cell-actions">
+            <button type="button" class="ui-btn ui-btn-gray ui-btn-sm" data-open-dialog="editChannel{{ c.pk }}">Edit</button>
+            <form method="post" style="display:inline" {% if c.is_active %}data-confirm="Pause {{ c.label }}? Its API keys will be revoked so the partner can no longer push orders."{% endif %}>{% csrf_token %}<input type="hidden" name="op" value="toggle_channel"><input type="hidden" name="pk" value="{{ c.pk }}"><input type="hidden" name="next" value="{{ here }}">
+              <button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">{% if c.is_active %}Pause{% else %}Resume{% endif %}</button></form>
+          </td>
+        </tr>
+        {% endwith %}{% endfor %}</tbody>
+    </table></div>
+    {% else %}
+    <div class="ui-empty"><div class="ui-empty-icon"><i class="fa-solid fa-plug"></i></div><h3>No channels connected{% if selected_branch %} for {{ selected_branch.name }}{% endif %}</h3>
+      <p>{% if module == 'hotel' %}Connect a channel manager (STAAH, SiteMinder, eZee) or an OTA. Each connection gets its own branch-locked API key; bookings it sends block a room on the tape chart straight away.{% else %}Connect Zomato, Swiggy, magicpin, ONDC or your website. Each connection gets its own branch-locked API key, and orders it sends land straight in this outlet's POS and kitchen display.{% endif %}</p>
+      <button type="button" class="ui-btn ui-btn-primary" data-open-dialog="channelDialog"><i class="fa-solid fa-plus"></i><span>Connect a channel</span></button></div>
+    {% endif %}
+  </section>
+
+  <section class="ui-card ui-pad">
+    <h2 class="ui-card-title">How it fits together</h2>
+    <div class="ui-today-stats" style="grid-template-columns:repeat(3,1fr)">
+      <div><strong><i class="fa-solid fa-arrow-right-to-bracket"></i></strong><span><b>Partners push to you.</b> {% if module == 'hotel' %}Room bookings arrive{% else %}Orders arrive{% endif %} through the API with a key that only works for one branch.</span></div>
+      <div><strong><i class="fa-solid fa-arrow-right-from-bracket"></i></strong><span><b>You push to partners.</b> {% if module == 'hotel' %}Webhooks tell them when a booking is made, a guest checks in or checks out.{% else %}Webhooks tell them when an order is ready, cancelled or an item sells out.{% endif %}</span></div>
+      <div><strong><i class="fa-solid fa-scale-balanced"></i></strong><span><b>Commission is tracked.</b> Each channel's commission flows into the profit &amp; loss report.</span></div>
+    </div>
+  </section>
+
+  {% for row in rows %}{% with c=row.c %}
+  <dialog class="ui-dialog ui-dialog-form" id="editChannel{{ c.pk }}">
+    <form method="post">{% csrf_token %}<input type="hidden" name="op" value="update_channel"><input type="hidden" name="pk" value="{{ c.pk }}"><input type="hidden" name="next" value="{{ here }}">
+      <h3>{{ c.get_provider_display }} · {{ c.branch.name }}</h3>
+      <div class="ui-form-grid">
+        <div class="ui-field ui-col-2"><label>Label</label><input class="ui-input" name="name" value="{{ c.name }}" placeholder="{{ c.label }}"></div>
+        <div class="ui-field"><label>Partner outlet / property ID</label><input class="ui-input" name="external_store_id" value="{{ c.external_store_id }}"></div>
+        <div class="ui-field"><label>Commission (%)</label><input class="ui-input" name="commission_pct" inputmode="decimal" value="{{ c.commission_pct|floatformat:'-2' }}"></div>
+        <div class="ui-field ui-col-2"><label>Notes</label><input class="ui-input" name="notes" value="{{ c.notes }}" placeholder="Account manager, contract renewal…"></div>
+      </div>
+      <div class="ui-dialog-actions" style="justify-content:space-between">
+        <button class="ui-btn ui-btn-tinted-red" type="submit" name="op" value="delete_channel" formnovalidate onclick="return confirm('Remove this channel and revoke its keys? Past orders stay in your records.')">Remove</button>
+        <span><button class="ui-btn ui-btn-gray" type="button" data-close-dialog>Cancel</button> <button class="ui-btn ui-btn-primary" type="submit">Save</button></span>
+      </div>
+    </form>
+  </dialog>
+  {% endwith %}{% endfor %}
+
+  <dialog class="ui-dialog ui-dialog-form" id="channelDialog">
+    <form method="post">{% csrf_token %}<input type="hidden" name="op" value="add_channel">
+      <h3>Connect a channel</h3>
+      <div class="ui-form-grid">
+        <div class="ui-field"><label>Channel</label><select class="ui-input" name="provider" required>{% for v, l in providers %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select></div>
+        <div class="ui-field"><label>Branch</label><select class="ui-input" name="branch" required>{% for b in branches %}<option value="{{ b.id }}" {% if selected_branch.id == b.id %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></div>
+        <div class="ui-field"><label>Partner outlet / property ID</label><input class="ui-input" name="external_store_id" placeholder="e.g. 19022345"></div>
+        <div class="ui-field"><label>Commission (%)</label><input class="ui-input" name="commission_pct" inputmode="decimal" placeholder="e.g. 22"></div>
+        <div class="ui-field ui-col-2"><label>Label (optional)</label><input class="ui-input" name="name" placeholder="Swiggy – Koramangala"></div>
+      </div>
+      <label class="ui-log-sub" style="display:flex;gap:8px;align-items:center;margin-top:6px"><input type="checkbox" class="ui-check" name="issue_key" checked> Issue an API key for this channel now</label>
+      <div class="ui-dialog-actions"><button class="ui-btn ui-btn-gray" type="button" data-close-dialog>Cancel</button><button class="ui-btn ui-btn-primary" type="submit">Connect</button></div>
+    </form>
+  </dialog>
+</div>
+{% include 'integrations/_scripts.html' %}

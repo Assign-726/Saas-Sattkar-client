@@ -1,0 +1,42 @@
+{# Event create / edit fields. Context: e (optional), venues, menus, sessions, types, layouts #}
+{% if e %}<input type="hidden" name="pk" value="{{ e.pk }}">{% endif %}
+<div class="ui-field"><label for="evN{{ suffix }}">Event name</label><input id="evN{{ suffix }}" class="ui-input" name="name" maxlength="150" required value="{{ e.name|default:'' }}" placeholder="e.g. Sharma–Mehta sangeet"></div>
+<div class="ui-inline-fields">
+  <div class="ui-field"><label for="evC{{ suffix }}">Client</label><input id="evC{{ suffix }}" class="ui-input" name="client_name" maxlength="150" required value="{{ e.client_name|default:'' }}"></div>
+  <div class="ui-field"><label for="evT{{ suffix }}">Type</label><select id="evT{{ suffix }}" class="ui-input" name="event_type">{% for t in types %}<option {% if e.event_type == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>
+</div>
+<div class="ui-inline-fields">
+  <div class="ui-field"><label for="evPh{{ suffix }}">Phone</label><input id="evPh{{ suffix }}" class="ui-input" name="contact_phone" maxlength="30" value="{{ e.contact_phone|default:'' }}"></div>
+  <div class="ui-field"><label for="evEm{{ suffix }}">Email</label><input id="evEm{{ suffix }}" class="ui-input" type="email" name="contact_email" value="{{ e.contact_email|default:'' }}"></div>
+</div>
+<div class="ui-inline-fields">
+  <div class="ui-field"><label for="evV{{ suffix }}">Venue</label><select id="evV{{ suffix }}" class="ui-input" name="venue" required>{% for v in venues %}<option value="{{ v.pk }}" {% if e.venue_id == v.pk %}selected{% endif %}>{{ v.name }} · up to {{ v.capacity }}</option>{% endfor %}</select></div>
+  <div class="ui-field"><label for="evD{{ suffix }}">Date</label><input id="evD{{ suffix }}" class="ui-input" type="date" name="date" required value="{% if e %}{{ e.date|date:'Y-m-d' }}{% else %}{{ default_date|date:'Y-m-d' }}{% endif %}"></div>
+</div>
+<div class="ui-inline-fields">
+  <div class="ui-field"><label for="evS{{ suffix }}">Session</label><select id="evS{{ suffix }}" class="ui-input" name="session">{% for k, l in sessions %}<option value="{{ k }}" {% if e.session == k or not e and k == 'DINNER' %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+  <div class="ui-field"><label for="evX{{ suffix }}">Guests (guaranteed)</label><input id="evX{{ suffix }}" class="ui-input" type="number" min="1" name="pax" required value="{{ e.pax|default:100 }}"></div>
+</div>
+<div class="ui-inline-fields">
+  <div class="ui-field"><label for="evM{{ suffix }}">Menu</label><select id="evM{{ suffix }}" class="ui-input" name="menu"><option value="">No catering</option>{% for m in menus %}<option value="{{ m.pk }}" {% if e.menu_id == m.pk %}selected{% endif %}>{{ m.name }} · ₹{{ m.price_per_cover|floatformat:'0' }}/cover</option>{% endfor %}</select></div>
+  <div class="ui-field"><label for="evL{{ suffix }}">Layout</label><select id="evL{{ suffix }}" class="ui-input" name="layout">{% for l in layouts %}<option {% if e.layout == l %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+</div>
+<div class="ui-inline-fields">
+  <div class="ui-field"><label for="evVc{{ suffix }}">Venue hire ₹</label><input id="evVc{{ suffix }}" class="ui-input" type="number" min="0" name="venue_charge" value="{{ e.venue_charge|default_if_none:''|floatformat:'0' }}" placeholder="Venue rate"></div>
+  <div class="ui-field"><label for="evDc{{ suffix }}">Décor ₹</label><input id="evDc{{ suffix }}" class="ui-input" type="number" min="0" name="decor" value="{{ e.decor|default:0|floatformat:'0' }}"></div>
+</div>
+<div class="ui-inline-fields">
+  <div class="ui-field"><label for="evAv{{ suffix }}">AV &amp; equipment ₹</label><input id="evAv{{ suffix }}" class="ui-input" type="number" min="0" name="av" value="{{ e.av|default:0|floatformat:'0' }}"></div>
+  <div class="ui-field"><label for="evO{{ suffix }}">Other ₹</label><input id="evO{{ suffix }}" class="ui-input" type="number" min="0" name="other_charges" value="{{ e.other_charges|default:0|floatformat:'0' }}"></div>
+</div>
+<div class="ui-inline-fields">
+  <div class="ui-field"><label for="evG{{ suffix }}">GST %</label><input id="evG{{ suffix }}" class="ui-input" type="number" min="0" max="28" name="gst_percent" value="{{ e.gst_percent|default:18|floatformat:'0' }}"></div>
+  <div class="ui-field"><label for="evGs{{ suffix }}">Client GSTIN</label><input id="evGs{{ suffix }}" class="ui-input" name="client_gstin" maxlength="15" value="{{ e.client_gstin|default:'' }}" style="text-transform:uppercase"></div>
+</div>
+{% if not e or e.status == 'ENQUIRY' or e.status == 'TENTATIVE' or e.status == 'CONFIRMED' %}
+<div class="ui-field"><label for="evSt{{ suffix }}">Status</label><select id="evSt{{ suffix }}" class="ui-input" name="status">{% for k, l in statuses %}{% if k == 'ENQUIRY' or k == 'TENTATIVE' or k == 'CONFIRMED' %}<option value="{{ k }}" {% if e.status == k %}selected{% endif %}>{{ l }}</option>{% endif %}{% endfor %}</select><small class="ui-log-sub">Tentative and confirmed events hold the venue.</small></div>
+{% endif %}
+<div class="ui-field"><label for="evK{{ suffix }}">Kitchen instructions</label><textarea id="evK{{ suffix }}" class="ui-input" name="kitchen_notes" rows="2">{{ e.kitchen_notes|default:'' }}</textarea></div>
+<div class="ui-field"><label for="evH{{ suffix }}">Housekeeping &amp; set-up</label><textarea id="evH{{ suffix }}" class="ui-input" name="housekeeping_notes" rows="2">{{ e.housekeeping_notes|default:'' }}</textarea></div>
+<div class="ui-field"><label for="evE{{ suffix }}">Engineering &amp; AV</label><textarea id="evE{{ suffix }}" class="ui-input" name="engineering_notes" rows="2">{{ e.engineering_notes|default:'' }}</textarea></div>
+<div class="ui-field"><label for="evNo{{ suffix }}">Other notes</label><textarea id="evNo{{ suffix }}" class="ui-input" name="notes" rows="2">{{ e.notes|default:'' }}</textarea></div>

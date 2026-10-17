@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny, IsAdminUser
+from rest_framework.permissions import AllowAny
+from core import tenancy
 from rest_framework.response import Response
 from rest_framework.throttling import SimpleRateThrottle
 from django.utils import timezone
@@ -38,10 +39,10 @@ class ReservationViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['create', 'availability']:
             return [AllowAny()]
-        return [IsAdminUser()]
+        return [tenancy.IsBusinessStaff()]
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = tenancy.scope(super().get_queryset().select_related('restaurant', 'branch'), self.request.user)
         restaurant_id = self.request.query_params.get('restaurant')
         restaurant_slug = self.request.query_params.get('restaurant_slug')
         branch_id = self.request.query_params.get('branch') or self.request.query_params.get('branch_id')
@@ -56,10 +57,13 @@ class ReservationViewSet(viewsets.ModelViewSet):
         elif branch_slug:
             qs = qs.filter(branch__slug=branch_slug)
         if date_str:
+            from django.utils.dateparse import parse_date
             try:
-                qs = qs.filter(date=date_str)
-            except Exception:
-                pass
+                parsed = parse_date(date_str)
+            except ValueError:
+                parsed = None
+            if parsed:
+                qs = qs.filter(date=parsed)
         return qs.order_by('-date', '-start_time')
 
     @action(detail=False, methods=['get'], url_path='availability', permission_classes=[AllowAny], authentication_classes=[])
@@ -70,8 +74,11 @@ class ReservationViewSet(viewsets.ModelViewSet):
         branch_slug = request.query_params.get('branch_slug')
         date_str = request.query_params.get('date')
         time_str = request.query_params.get('start_time')
-        duration = int(request.query_params.get('duration', '90') or 90)
-        party_size = int(request.query_params.get('party_size', '2') or 2)
+        try:
+            duration = min(max(int(request.query_params.get('duration', '90') or 90), 15), 600)
+            party_size = min(max(int(request.query_params.get('party_size', '2') or 2), 1), 500)
+        except (TypeError, ValueError):
+            return Response({'available': False, 'message': 'duration and party_size must be numbers'}, status=400)
 
         restaurant = None
         if rid:

@@ -1,0 +1,60 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>Lost &amp; found</h1><p>Items found on the property. Unclaimed items are held for 90 days.</p></div>
+  </div>
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">In storage</div></div><div class="kpi-val">{{ kpis.stored }}</div></div>
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Valuables held</div></div><div class="kpi-val">{{ kpis.valuable }}</div><div class="kpi-sub">Keep in the safe</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Past the 90-day hold</div></div><div class="kpi-val">{{ kpis.past_hold }}</div><div class="kpi-sub">Donate or dispose</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Returned · 30 days</div></div><div class="kpi-val">{{ kpis.returned }}</div></div>
+  </div>
+  <nav class="ui-tabs ui-pms-tabs" aria-label="Items">
+    <a href="?tab=stored" class="{% if tab == 'stored' %}is-active{% endif %}">In storage</a>
+    <a href="?tab=closed" class="{% if tab == 'closed' %}is-active{% endif %}">Returned &amp; disposed</a>
+  </nav>
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <form method="get" class="ui-card ui-filters"><input type="hidden" name="tab" value="{{ tab }}"><div class="ui-field"><label for="lfQ">Search</label><input id="lfQ" class="ui-input" name="q" value="{{ q }}" placeholder="Item, room, reference"></div><div class="ui-filter-actions"><button class="ui-btn ui-btn-gray" type="submit">Search</button></div></form>
+      <section class="ui-card ui-list-card">
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Item</th><th>Found</th><th>Guest</th><th>Stored at</th><th>Status</th>{% if can_edit and tab == 'stored' %}<th></th>{% endif %}</tr></thead>
+          <tbody>{% for i in rows %}<tr>
+            <td><strong>{{ i.item }}</strong>{% if i.is_valuable %} <span class="ui-chip ui-chip-red">Valuable</span>{% endif %}<br><small class="ui-log-sub">{{ i.reference }}{% if i.description %} · {{ i.description }}{% endif %}</small></td>
+            <td class="nowrap">{{ i.found_on|date:"d M Y" }}<br><small class="ui-log-sub">{{ i.location }}{% if i.found_by %} · {{ i.found_by }}{% endif %}</small></td>
+            <td>{% if i.booking %}<a href="{{ base_url }}bookings/{{ i.booking.pk }}/">{{ i.booking.guest_name }}</a><br><small class="ui-log-sub">{{ i.booking.guest_phone }}</small>{% else %}—{% endif %}</td>
+            <td>{{ i.storage_location|default:"—" }}</td>
+            <td>{% if i.status == 'STORED' %}{% if i.dispose_after < today %}<span class="ui-chip ui-chip-orange">Past hold</span>{% else %}<span class="ui-chip ui-chip-blue">Held until {{ i.dispose_after|date:"d M" }}</span>{% endif %}{% else %}<span class="ui-chip ui-chip-{% if i.status == 'RETURNED' %}green{% else %}gray{% endif %}">{{ i.get_status_display }}</span><br><small class="ui-log-sub">{{ i.returned_on|date:"d M Y" }}{% if i.returned_to %} · {{ i.returned_to }}{% endif %}</small>{% endif %}</td>
+            {% if can_edit and tab == 'stored' %}<td class="nowrap">
+              <details class="ui-pms-void"><summary class="ui-btn ui-btn-primary ui-btn-sm">Return</summary>
+                <form method="post" action="{{ base_url }}lost-found/{{ i.pk }}/action/" class="ui-stack-form ui-ops-pop">{% csrf_token %}<input type="hidden" name="op" value="return"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+                  <div class="ui-field"><label for="rt{{ i.pk }}">Collected by</label><input id="rt{{ i.pk }}" class="ui-input" name="returned_to" required placeholder="Name + ID, or courier & AWB"></div>
+                  <div class="ui-field"><label for="rn{{ i.pk }}">Note</label><input id="rn{{ i.pk }}" class="ui-input" name="note"></div>
+                  <button class="ui-btn ui-btn-primary ui-btn-sm" type="submit">Mark returned</button></form></details>
+              <form method="post" action="{{ base_url }}lost-found/{{ i.pk }}/action/" style="display:inline" onsubmit="var n = prompt('Donated or disposed how?', 'Donated'); if (n === null) return false; this.note.value = n;">{% csrf_token %}<input type="hidden" name="op" value="dispose"><input type="hidden" name="note"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">Dispose</button></form>
+            </td>{% endif %}
+          </tr>{% empty %}<tr><td colspan="6" class="ui-log-sub" style="padding:24px;text-align:center">Nothing here.</td></tr>{% endfor %}</tbody>
+        </table></div>
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      {% if can_edit %}<section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Log a found item</h2>
+        <form method="post" action="{{ base_url }}lost-found/add/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-field"><label for="lfI">Item</label><input id="lfI" class="ui-input" name="item" maxlength="150" required placeholder="e.g. Black leather wallet"></div>
+          <div class="ui-field"><label for="lfD">Description</label><input id="lfD" class="ui-input" name="description" maxlength="255" placeholder="Colour, brand, contents"></div>
+          <div class="ui-inline-fields">
+            <div class="ui-field"><label for="lfL">Found in</label><input id="lfL" class="ui-input" name="location" maxlength="120" required placeholder="Room 204, lobby…"></div>
+            <div class="ui-field"><label for="lfO">On</label><input id="lfO" class="ui-input" type="date" name="found_on" value="{{ today|date:'Y-m-d' }}"></div>
+          </div>
+          <div class="ui-field"><label for="lfB">Probably belongs to</label><select id="lfB" class="ui-input" name="booking"><option value="">Unknown</option>{% for b in recent %}<option value="{{ b.pk }}">Room {{ b.room.room_number }} · {{ b.guest_name }} ({{ b.check_out_date|date:"d M" }})</option>{% endfor %}</select></div>
+          <div class="ui-inline-fields">
+            <div class="ui-field"><label for="lfF">Found by</label><input id="lfF" class="ui-input" name="found_by" maxlength="120"></div>
+            <div class="ui-field"><label for="lfS">Stored at</label><input id="lfS" class="ui-input" name="storage_location" maxlength="120" placeholder="HK store, safe"></div>
+          </div>
+          <label class="ui-pms-check"><input type="checkbox" name="is_valuable" value="1"> Valuable (cash, jewellery, documents, electronics)</label>
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-plus"></i><span>Log item</span></button>
+        </form></section>{% endif %}
+    </div>
+  </div>
+</div>

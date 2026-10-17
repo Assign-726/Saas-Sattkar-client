@@ -16,7 +16,7 @@ from django.shortcuts import get_object_or_404
 from django.conf import settings
 
 from rest_framework import viewsets, status, serializers
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
@@ -40,9 +40,12 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 
-class CsrfExemptSessionAuthentication(SessionAuthentication):
-    def enforce_csrf(self, request):
-        return  # Bypasses CSRF validation for staff session AJAX / fetch calls
+from core import tenancy
+from core.throttling import PaymentRateThrottle, PublicLookupThrottle
+
+# Session calls must carry the CSRF token (the gate scanner already sends X-CSRFToken);
+# JWT calls are unaffected. Skipping CSRF here let any website act as a logged-in admin.
+StaffSessionAuthentication = SessionAuthentication
 
 
 def _get_branch_razorpay_credentials(branch):
@@ -72,14 +75,14 @@ class AdminClubEventViewSet(viewsets.ModelViewSet):
     Protected by Session/JWT Authentication and HasClubModule permission.
     """
     serializer_class = ClubEventSerializer
-    authentication_classes = [CsrfExemptSessionAuthentication, JWTAuthentication]
+    authentication_classes = [StaffSessionAuthentication, JWTAuthentication]
     permission_classes = [IsAuthenticated, HasClubModule]
 
     def get_queryset(self):
         user = self.request.user
         qs = ClubEvent.objects.select_related('branch', 'branch__restaurant').prefetch_related('ticket_types').all()
 
-        if user.is_superuser or user.is_staff:
+        if tenancy.is_platform_admin(user):
             branch_param = self.request.query_params.get('branch_id')
             if branch_param:
                 qs = qs.filter(branch_id=branch_param)
@@ -105,7 +108,12 @@ class AdminClubEventViewSet(viewsets.ModelViewSet):
         branch = None
         branch_id = self.request.data.get('branch') or self.request.data.get('branch_id')
         if branch_id:
-            branch = RestaurantBranch.objects.filter(id=branch_id).first()
+            try:
+                branch = tenancy.allowed_branches(user).filter(id=int(branch_id)).first()
+            except (TypeError, ValueError):
+                branch = None
+            if branch is None:
+                raise serializers.ValidationError({"branch": "You can only create events for your own venue."})
 
         if not branch and hasattr(user, 'restaurant_profile'):
             branch = user.restaurant_profile.branch or (
@@ -246,11 +254,8 @@ class AdminClubEventViewSet(viewsets.ModelViewSet):
             return Response({'valid': False, 'message': 'Invalid pass: Booking reference not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         # Check module permission for this branch
-        if not request.user.is_superuser and not request.user.is_staff:
-            user_profile = getattr(request.user, 'restaurant_profile', None)
-            if user_profile:
-                if user_profile.branch and user_profile.branch_id != booking.event.branch_id:
-                    return Response({'valid': False, 'message': 'Pass belongs to a different venue/branch.'}, status=status.HTTP_403_FORBIDDEN)
+        if not tenancy.can_access_branch(request.user, booking.event.branch):
+            return Response({'valid': False, 'message': 'Pass belongs to a different venue/branch.'}, status=status.HTTP_403_FORBIDDEN)
 
         # Verify payment status
         if booking.payment_status != EventBooking.PaymentStatus.SUCCESS:
@@ -288,7 +293,7 @@ class AdminTicketTypeViewSet(viewsets.ModelViewSet):
     CRUD ViewSet for Ticket Types belonging to an event.
     """
     serializer_class = TicketTypeSerializer
-    authentication_classes = [CsrfExemptSessionAuthentication, JWTAuthentication]
+    authentication_classes = [StaffSessionAuthentication, JWTAuthentication]
     permission_classes = [IsAuthenticated, HasClubModule]
 
     def get_queryset(self):
@@ -298,17 +303,20 @@ class AdminTicketTypeViewSet(viewsets.ModelViewSet):
         if event_id:
             qs = qs.filter(event_id=event_id)
 
-        if user.is_superuser or user.is_staff:
-            return qs
+        return qs.filter(event__branch__in=tenancy.allowed_branches(user))
 
-        if hasattr(user, 'restaurant_profile'):
-            profile = user.restaurant_profile
-            if profile.branch:
-                return qs.filter(event__branch=profile.branch)
-            if profile.restaurant:
-                return qs.filter(event__branch__restaurant=profile.restaurant)
+    def _check_event(self, serializer):
+        event = serializer.validated_data.get('event')
+        if event is not None and not tenancy.can_access_branch(self.request.user, event.branch):
+            raise serializers.ValidationError({"event": "You can only add tickets to your own events."})
 
-        return qs.none()
+    def perform_create(self, serializer):
+        self._check_event(serializer)
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self._check_event(serializer)
+        serializer.save()
 
 
 # -------------------------------------------------------------------------
@@ -360,6 +368,7 @@ class PublicClubEventViewSet(viewsets.ReadOnlyModelViewSet):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([PaymentRateThrottle])
 def public_checkout_initiate(request):
     """
     Public ticket checkout endpoint.
@@ -472,6 +481,7 @@ def public_checkout_initiate(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([PaymentRateThrottle])
 def public_verify_payment(request):
     """
     Verifies Razorpay payment signature, updates booking to SUCCESS,
@@ -500,15 +510,21 @@ def public_verify_payment(request):
             'booking': EventBookingSerializer(booking, context={'request': request}).data
         })
 
-    # Signature verification
+    # Signature verification — against the Razorpay order created for this booking, never
+    # an order id the client chooses (a cheap payment could otherwise unlock any ticket).
+    from core import payments
+    from core.models import GatewayPayment
     branch = booking.event.branch
     key_id, key_secret = _get_branch_razorpay_credentials(branch)
-
-    if key_secret and not key_secret.startswith('mock'):
-        msg = f"{rzp_order_id}|{rzp_payment_id}".encode('utf-8')
-        generated_signature = hmac.new(key_secret.encode('utf-8'), msg, hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(generated_signature, rzp_signature):
-            return Response({'error': 'Razorpay payment signature verification failed.'}, status=status.HTTP_400_BAD_REQUEST)
+    stored_order_id = booking.razorpay_order_id or ''
+    if stored_order_id and rzp_order_id != stored_order_id:
+        return Response({'error': 'This payment belongs to a different checkout.'}, status=status.HTTP_400_BAD_REQUEST)
+    verify_order_id = stored_order_id or (rzp_order_id if payments.is_mock_secret(key_secret) else '')
+    if not payments.signature_ok(key_secret, verify_order_id, rzp_payment_id, rzp_signature):
+        return Response({'error': 'Razorpay payment signature verification failed.'}, status=status.HTTP_400_BAD_REQUEST)
+    if not payments.is_mock_secret(key_secret) and not GatewayPayment.claim(
+            rzp_payment_id, 'event', booking.pk, stored_order_id, booking.total_amount):
+        return Response({'error': 'This payment has already been used.'}, status=status.HTTP_409_CONFLICT)
 
     with transaction.atomic():
         locked_booking = EventBooking.objects.select_for_update().get(pk=booking.pk)
@@ -545,6 +561,7 @@ def public_verify_payment(request):
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@throttle_classes([PublicLookupThrottle])
 def public_booking_detail(request, booking_reference):
     """
     Public endpoint for customers to view and download their confirmed digital ticket pass.

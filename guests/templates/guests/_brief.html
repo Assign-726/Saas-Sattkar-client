@@ -1,0 +1,141 @@
+{# Morning Brief — Restaurant, Hotel & Super Admin (platform) #}
+{% with f=brief.figures %}
+<div class="ui-logs ui-brief">
+  <div class="ui-page-header">
+    <div>
+      <h1>Morning Brief</h1>
+      <p>{{ brief.today|date:"l, d F Y" }} · {% if platform %}all businesses{% else %}{{ restaurant.name }}{% endif %} — what happened yesterday and what needs you today.</p>
+    </div>
+    <div class="ui-actions"><button type="button" class="ui-btn ui-btn-gray" onclick="window.print()"><i class="fa-solid fa-print"></i><span>Print</span></button></div>
+  </div>
+
+  {% if brief.alerts %}
+  <section class="ui-alerts">
+    {% for a in brief.alerts %}
+    <article class="ui-alert ui-alert-{{ a.severity }}">
+      <span class="ui-alert-icon"><i class="fa-solid {% if a.severity == 'critical' %}fa-circle-exclamation{% elif a.severity == 'warning' %}fa-triangle-exclamation{% elif a.severity == 'good' %}fa-arrow-trend-up{% else %}fa-circle-info{% endif %}"></i></span>
+      <div class="ui-alert-body"><h3>{{ a.title }}</h3><p>{{ a.detail }}</p></div>
+      {% if a.url %}<a class="ui-btn ui-btn-gray ui-btn-sm" href="{{ a.url }}">{{ a.action_label }} <i class="fa-solid fa-chevron-right"></i></a>{% endif %}
+    </article>
+    {% endfor %}
+  </section>
+  {% else %}
+  <section class="ui-card ui-pad ui-allclear"><i class="fa-solid fa-circle-check"></i><div><h3>All clear</h3><p>Nothing unusual yesterday and nothing urgent today.</p></div></section>
+  {% endif %}
+
+  <h2 class="ui-section-title">Yesterday · {{ brief.yesterday|date:"D d M" }}</h2>
+  {% if brief.module == 'hotel' %}
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Room revenue</div><div class="kpi-icon"><i class="fa-solid fa-indian-rupee-sign"></i></div></div>
+      <div class="kpi-val">₹{{ f.room_revenue|floatformat:0 }}</div><div class="kpi-sub">From stays checked out yesterday</div></div>
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Occupancy now</div><div class="kpi-icon"><i class="fa-solid fa-bed"></i></div></div>
+      <div class="kpi-val">{% if brief.occupancy is not None %}{{ brief.occupancy }}%{% else %}—{% endif %}</div><div class="kpi-sub">{{ brief.in_house }} of {{ brief.rooms_total }} room{{ brief.rooms_total|pluralize }} occupied</div></div>
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Arrivals · departures</div><div class="kpi-icon"><i class="fa-solid fa-suitcase-rolling"></i></div></div>
+      <div class="kpi-val">{{ brief.arrivals_count }} · {{ brief.departures_count }}</div><div class="kpi-sub">Due today</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Housekeeping</div><div class="kpi-icon"><i class="fa-solid fa-broom"></i></div></div>
+      <div class="kpi-val">{{ brief.rooms_cleaning }}</div><div class="kpi-sub">Being cleaned{% if brief.rooms_maintenance %} · {{ brief.rooms_maintenance }} in maintenance{% endif %}</div></div>
+  </div>
+  {% else %}
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Total revenue</div><div class="kpi-icon"><i class="fa-solid fa-indian-rupee-sign"></i></div></div>
+      <div class="kpi-val">₹{{ f.revenue|floatformat:0 }}</div>
+      <div class="kpi-sub">{% if f.vs_weekday_pct is not None %}<span class="ui-delta {% if f.vs_weekday_pct >= 0 %}is-up{% else %}is-down{% endif %}">{% if f.vs_weekday_pct >= 0 %}▲{% else %}▼{% endif %} {{ f.vs_weekday_pct|stringformat:"d"|cut:"-" }}%</span> vs a usual {{ brief.yesterday|date:"l" }}{% else %}Dining ₹{{ f.food_revenue|floatformat:0 }}{% endif %}</div></div>
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Orders</div><div class="kpi-icon"><i class="fa-solid fa-receipt"></i></div></div>
+      <div class="kpi-val">{{ f.orders }}</div><div class="kpi-sub">Avg ₹{{ f.average_order|floatformat:0 }} · usually {{ f.baseline_orders|floatformat:0 }}/day</div></div>
+    {% if brief.module == 'restaurant' %}
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Events &amp; tickets</div><div class="kpi-icon"><i class="fa-solid fa-ticket"></i></div></div>
+      <div class="kpi-val">₹{{ f.event_revenue|floatformat:0 }}</div><div class="kpi-sub">Dining ₹{{ f.food_revenue|floatformat:0 }}</div></div>
+    {% else %}
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Rooms &amp; events</div><div class="kpi-icon"><i class="fa-solid fa-hotel"></i></div></div>
+      <div class="kpi-val">₹{{ f.other_revenue|floatformat:0 }}</div><div class="kpi-sub">Rooms ₹{{ f.room_revenue|floatformat:0 }} · Events ₹{{ f.event_revenue|floatformat:0 }}</div></div>
+    {% endif %}
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Cancelled</div><div class="kpi-icon"><i class="fa-solid fa-ban"></i></div></div>
+      <div class="kpi-val">{{ f.cancelled }}</div><div class="kpi-sub">{{ f.new_guests }} new guest{{ f.new_guests|pluralize }} yesterday</div></div>
+  </div>
+  {% endif %}
+
+  {% if platform and businesses %}
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">By business</h2></div>
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>Business</th><th>Revenue</th><th>Orders</th><th>vs usual</th><th>Guests</th><th>Needs attention</th></tr></thead>
+      <tbody>{% for b in businesses %}<tr>
+        <td><strong>{{ b.restaurant.name }}</strong></td><td>₹{{ b.figures.revenue|floatformat:0 }}</td><td>{{ b.figures.orders }}</td>
+        <td>{% if b.figures.vs_weekday_pct is not None %}<span class="ui-delta {% if b.figures.vs_weekday_pct >= 0 %}is-up{% else %}is-down{% endif %}">{{ b.figures.vs_weekday_pct }}%</span>{% else %}—{% endif %}</td>
+        <td>{{ b.guests }}</td>
+        <td>{% if b.alerts %}<span class="ui-chip ui-chip-orange">{{ b.alerts }} alert{{ b.alerts|pluralize }}</span>{% else %}<span class="ui-chip ui-chip-green">All clear</span>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+  {% endif %}
+
+  <div class="ui-g360-grid ui-brief-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Today</h2>
+        <div class="ui-today-stats"{% if brief.module != 'all' %} style="grid-template-columns:repeat(3,1fr)"{% endif %}>
+          {% if brief.show_rooms %}<div><strong>{{ brief.arrivals_count }}</strong><span>Arrivals</span></div>
+          <div><strong>{{ brief.departures_count }}</strong><span>Departures</span></div>
+          <div><strong>{{ brief.in_house }}</strong><span>In-house</span></div>{% endif %}
+          {% if brief.show_fb %}<div><strong>{{ brief.reservations_count }}</strong><span>Table bookings</span></div>
+          <div><strong>{{ brief.events|length }}</strong><span>Events</span></div>{% if brief.module == 'restaurant' %}<div><strong>{{ brief.unpaid_count }}</strong><span>Unpaid bills</span></div>{% endif %}{% endif %}
+        </div>
+        {% if brief.show_rooms and brief.arrivals %}
+        <h3 class="ui-card-subtitle">Arriving</h3>
+        <ul class="ui-ledger">{% for b in brief.arrivals %}<li><span class="ui-ledger-text">{{ b.guest_name }}<span class="ui-log-sub">{{ b.room|default:"Room not assigned" }} · {{ b.num_guests }} guest{{ b.num_guests|pluralize }}</span></span><span class="ui-chip ui-chip-{% if b.booking_status == 'CHECKED_IN' %}green{% else %}blue{% endif %}">{{ b.get_booking_status_display }}</span></li>{% endfor %}</ul>
+        {% endif %}
+        {% if brief.show_fb and brief.reservations %}
+        <h3 class="ui-card-subtitle">Table reservations</h3>
+        <ul class="ui-ledger">{% for r in brief.reservations %}<li><span class="ui-ledger-text">{{ r.customer_name }}<span class="ui-log-sub">{{ r.party_size }} people{% if r.occasion %} · {{ r.occasion }}{% endif %}</span></span><span>{{ r.start_time|time:"h:i A" }}</span></li>{% endfor %}</ul>
+        {% endif %}
+        {% if brief.show_fb and brief.events %}
+        <h3 class="ui-card-subtitle">Events</h3>
+        <ul class="ui-ledger">{% for e in brief.events %}<li><span class="ui-ledger-text">{{ e.title }}<span class="ui-log-sub">{{ e.venue_name }}</span></span><span>{{ e.start_datetime|time:"h:i A" }}</span></li>{% endfor %}</ul>
+        {% endif %}
+        {% if brief.module == 'hotel' and not brief.arrivals %}<p class="ui-log-sub">No arrivals scheduled.</p>{% elif brief.module == 'restaurant' and not brief.reservations and not brief.events %}<p class="ui-log-sub">No reservations or events scheduled.</p>{% elif brief.module == 'all' and not brief.arrivals and not brief.reservations and not brief.events %}<p class="ui-log-sub">No arrivals, reservations or events scheduled.</p>{% endif %}
+      </section>
+
+      {% if brief.occasions %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Guest celebrations · next 7 days</h2>
+        <ul class="ui-ledger">{% for o in brief.occasions %}<li>
+          <a class="ui-ledger-text" {% if not platform %}href="{{ guest_base }}guests/{{ o.guest.pk }}/"{% endif %}>{{ o.guest.name }}<span class="ui-log-sub">{{ o.label }} · {{ o.date|date:"D d M" }}{% if o.guest.phone %} · {{ o.guest.phone }}{% endif %}</span></a>
+          <span class="ui-chip ui-chip-{% if o.in_days == 0 %}purple{% else %}gray{% endif %}"><i class="fa-solid {% if o.label == 'Birthday' %}fa-cake-candles{% else %}fa-heart{% endif %}"></i>{% if o.in_days == 0 %}Today{% elif o.in_days == 1 %}Tomorrow{% else %}In {{ o.in_days }} days{% endif %}</span>
+        </li>{% endfor %}</ul>
+      </section>
+      {% endif %}
+    </div>
+
+    <div class="ui-g360-side">
+      {% if brief.show_fb %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Top dishes yesterday</h2>
+        {% if brief.top_items %}<ol class="ui-fav">{% for i in brief.top_items %}<li><span>{{ i.menu_item__name }}</span><span class="ui-log-sub">×{{ i.qty }}</span></li>{% endfor %}</ol>
+        {% else %}<p class="ui-log-sub">No dishes sold yesterday.</p>{% endif %}
+      </section>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Low stock {% if brief.low_stock_count %}<span class="ui-chip ui-chip-orange">{{ brief.low_stock_count }}</span>{% endif %}</h2>
+        {% if brief.low_stock %}<ul class="ui-ledger">{% for s in brief.low_stock %}<li><span class="ui-ledger-text">{{ s.name }}<span class="ui-log-sub">Reorder at {{ s.reorder_level }}</span></span><span class="{% if s.quantity <= 0 %}ui-text-red{% endif %}">{{ s.quantity }} {{ s.unit }}</span></li>{% endfor %}</ul>
+        {% else %}<p class="ui-log-sub">Everything is above its reorder level.</p>{% endif %}
+      </section>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Payments due</h2>
+        <div class="ui-points"><strong>₹{{ brief.unpaid_due|floatformat:0 }}</strong> <span class="ui-log-sub">across {{ brief.unpaid_count }} bill{{ brief.unpaid_count|pluralize }}</span></div>
+      </section>
+      {% endif %}
+      {% if brief.module == 'hotel' %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Unpaid stays</h2>
+        <div class="ui-points"><strong>₹{{ brief.stay_due|floatformat:0 }}</strong> <span class="ui-log-sub">on checked-out folios</span></div>
+      </section>
+      {% endif %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Guest feedback yesterday</h2>
+        {% if brief.feedback_count %}<div class="ui-points"><strong>{{ brief.feedback_avg }}★</strong> <span class="ui-log-sub">from {{ brief.feedback_count }} guest{{ brief.feedback_count|pluralize }}</span></div>
+        {% else %}<p class="ui-log-sub">No ratings yesterday.</p>{% endif %}
+        {% if brief.open_complaints %}<p class="ui-log-sub" style="margin:6px 0 0"><span class="ui-text-red">{{ brief.open_complaints }} complaint{{ brief.open_complaints|pluralize }} still open</span></p>{% endif %}
+      </section>
+    </div>
+  </div>
+</div>
+{% endwith %}

@@ -1,0 +1,100 @@
+<div class="ui-logs ui-integrations">
+  <a class="ui-back" href="{{ nav.webhooks }}"><i class="fa-solid fa-chevron-left"></i> Webhooks</a>
+  <div class="ui-page-header">
+    <div><h1>{{ ep.name }}</h1><p style="word-break:break-all">{{ ep.url }}</p></div>
+    <div class="ui-actions">
+      <form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="op" value="test"><button class="ui-btn ui-btn-gray" type="submit"><i class="fa-solid fa-paper-plane"></i><span>Send test</span></button></form>
+      <form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="op" value="toggle"><button class="ui-btn {% if ep.is_active %}ui-btn-gray{% else %}ui-btn-primary{% endif %}" type="submit"><i class="fa-solid {% if ep.is_active %}fa-pause{% else %}fa-play{% endif %}"></i><span>{% if ep.is_active %}Pause{% else %}Turn on{% endif %}</span></button></form>
+    </div>
+  </div>
+
+  {% if new_secret %}
+  <section class="ui-secret" role="status">
+    <h3><i class="fa-solid fa-circle-check"></i>Signing secret</h3>
+    <p>Use it to verify the <code>X-Webhook-Signature</code> header. It is shown only now.</p>
+    <div class="ui-secret-row"><code id="newSecret">{{ new_secret.value }}</code><button type="button" class="ui-btn ui-btn-primary" data-copy="#newSecret"><i class="fa-regular fa-copy"></i><span>Copy</span></button></div>
+  </section>
+  {% endif %}
+  {% if not ep.is_active and ep.disabled_reason %}
+  <article class="ui-alert ui-alert-critical" style="margin-bottom:16px"><span class="ui-alert-icon"><i class="fa-solid fa-circle-exclamation"></i></span><div class="ui-alert-body"><h3>Deliveries stopped</h3><p>{{ ep.disabled_reason }} Fix the receiver, send a test, then turn it back on.</p></div></article>
+  {% endif %}
+
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar">
+          <h2 class="ui-card-title" style="margin:0">Delivery log</h2>
+          <form method="get"><select class="ui-input" name="status" onchange="this.form.submit()" aria-label="Filter by status"><option value="">All deliveries</option>{% for v, l in statuses %}<option value="{{ v }}" {% if status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></form>
+        </div>
+        {% if page.object_list %}
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Event</th><th>Result</th><th>Attempts</th><th>When</th><th></th></tr></thead>
+          <tbody>{% for d in page.object_list %}
+            <tr>
+              <td class="ui-cell-primary"><code class="ui-code">{{ d.event }}</code><div class="ui-log-sub">{{ d.event_id }}</div></td>
+              <td>{% if d.status == 'SUCCESS' %}<span class="ui-chip ui-chip-green">HTTP {{ d.response_code }}</span>{% elif d.status == 'PENDING' %}<span class="ui-chip ui-chip-gray">Sending</span>{% else %}<span class="ui-chip ui-chip-{% if d.status == 'FAILED' %}orange{% else %}red{% endif %}">{% if d.response_code %}HTTP {{ d.response_code }}{% else %}No response{% endif %}</span><div class="ui-log-sub">{{ d.error|truncatechars:60 }}</div>{% endif %}{% if d.duration_ms %}<div class="ui-log-sub">{{ d.duration_ms }} ms</div>{% endif %}</td>
+              <td>{{ d.attempts }}{% if d.next_attempt_at %}<div class="ui-log-sub">Next try {{ d.next_attempt_at|timeuntil }}</div>{% endif %}</td>
+              <td>{{ d.created_at|date:"d M, H:i" }}</td>
+              <td class="ui-cell-actions">
+                <button type="button" class="ui-btn ui-btn-gray ui-btn-sm" data-delivery="{{ d.pk }}">View</button>
+                {% if d.status != 'SUCCESS' %}<form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="op" value="retry"><input type="hidden" name="delivery" value="{{ d.pk }}"><button class="ui-btn ui-btn-gray ui-btn-sm">Retry</button></form>{% endif %}
+              </td>
+            </tr>{% endfor %}</tbody>
+        </table></div>
+        {% if page.has_other_pages %}<div class="ui-pager"><span class="ui-pager-info">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+          {% if page.has_previous %}<a class="ui-pager-btn" href="?status={{ status }}&page={{ page.previous_page_number }}">Previous</a>{% endif %}
+          {% if page.has_next %}<a class="ui-pager-btn" href="?status={{ status }}&page={{ page.next_page_number }}">Next</a>{% endif %}</div>{% endif %}
+        {% else %}
+        <div class="ui-empty"><div class="ui-empty-icon"><i class="fa-solid fa-inbox"></i></div><h3>Nothing delivered yet</h3><p>Send a test, or wait for the next {{ ep.events|first }} event.</p></div>
+        {% endif %}
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Settings</h2>
+        <form method="post" class="ui-stack-form">{% csrf_token %}<input type="hidden" name="op" value="update">
+          <div class="ui-field"><label>Name</label><input class="ui-input" name="name" value="{{ ep.name }}"></div>
+          <div class="ui-field"><label>URL</label><input class="ui-input" name="url" type="url" value="{{ ep.url }}" required></div>
+          <div class="ui-field"><label>Branch</label>{% if branch_locked %}<input class="ui-input" value="{{ ep.branch.name }}" disabled>{% else %}<select class="ui-input" name="branch"><option value="">All branches</option>{% for b in branches %}<option value="{{ b.id }}" {% if ep.branch_id == b.id %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select>{% endif %}</div>
+          <div class="ui-field-label" style="font-weight:600;font-size:13px">Events</div>
+          <div class="ui-check-grid" style="grid-template-columns:1fr">{% for e, label in events %}<label><input type="checkbox" class="ui-check" name="events" value="{{ e }}" {% if e in ep.events %}checked{% endif %}><span>{{ label }}<code>{{ e }}</code></span></label>{% endfor %}</div>
+          <button class="ui-btn ui-btn-primary" type="submit">Save changes</button>
+        </form>
+      </section>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Signing secret</h2>
+        <p class="ui-log-sub">Current secret <code class="ui-code">{{ secret_hint }}</code></p>
+        <form method="post" data-confirm="Create a new signing secret? Requests will be signed with the new one immediately.">{% csrf_token %}<input type="hidden" name="op" value="rotate"><button class="ui-btn ui-btn-gray" type="submit"><i class="fa-solid fa-rotate"></i><span>Rotate secret</span></button></form>
+      </section>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Delete</h2>
+        <p class="ui-log-sub">Stops all deliveries and removes the log.</p>
+        <form method="post" data-confirm="Delete this webhook and its delivery log?">{% csrf_token %}<input type="hidden" name="op" value="delete"><button class="ui-btn ui-btn-tinted-red" type="submit">Delete webhook</button></form>
+      </section>
+    </div>
+  </div>
+
+  <dialog class="ui-dialog ui-dialog-form" id="deliveryDialog" style="max-width:720px">
+    <h3 id="dlgTitle">Delivery</h3>
+    <div class="ui-log-sub" id="dlgMeta"></div>
+    <div class="ui-field-label" style="font-weight:600;font-size:13px;margin-top:10px">Payload we sent</div>
+    <pre class="ui-codeblock ui-json" id="dlgPayload"></pre>
+    <div class="ui-field-label" style="font-weight:600;font-size:13px">Their response</div>
+    <pre class="ui-codeblock ui-json" id="dlgResponse" style="max-height:160px"></pre>
+    <div class="ui-dialog-actions"><button class="ui-btn ui-btn-primary" type="button" data-close-dialog>Done</button></div>
+  </dialog>
+</div>
+{% include 'integrations/_scripts.html' %}
+<script>
+document.querySelectorAll('[data-delivery]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    fetch('{{ nav.webhooks }}{{ ep.pk }}/deliveries/' + b.dataset.delivery + '/', {credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (d) {
+      document.getElementById('dlgTitle').textContent = d.event;
+      document.getElementById('dlgMeta').textContent = d.status + ' · ' + d.attempts + ' attempt(s)' + (d.response_code ? ' · HTTP ' + d.response_code : '') + (d.error ? ' · ' + d.error : '');
+      document.getElementById('dlgPayload').textContent = JSON.stringify(d.payload, null, 2);
+      document.getElementById('dlgResponse').textContent = d.response_body || '(empty)';
+      document.getElementById('deliveryDialog').showModal();
+    });
+  });
+});
+</script>

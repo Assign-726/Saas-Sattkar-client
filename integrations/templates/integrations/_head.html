@@ -1,0 +1,31 @@
+<div class="ui-page-header">
+  <div><h1>Integrations</h1><p>{% if module == 'hotel' %}Connect each property to channel managers, OTAs and your booking engine with branch-scoped API keys and signed webhooks.{% else %}Connect each outlet to Zomato, Swiggy, ONDC and your own systems with branch-scoped API keys and signed webhooks.{% endif %}</p></div>
+  {% if action_label %}<div class="ui-actions"><button type="button" class="ui-btn ui-btn-primary" data-open-dialog="{{ action_dialog }}"><i class="fa-solid fa-plus"></i><span>{{ action_label }}</span></button></div>{% endif %}
+</div>
+<nav class="ui-tabs" aria-label="Integrations sections">
+  <a href="{{ nav.overview }}{% if request.GET.branch %}?branch={{ request.GET.branch }}{% endif %}" class="{% if tab == 'overview' %}is-active{% endif %}"><i class="fa-solid fa-plug"></i>Channels</a>
+  {% if nav.distribution %}<a href="{{ nav.distribution }}{% if request.GET.branch %}?branch={{ request.GET.branch }}{% endif %}" class="{% if tab == 'distribution' %}is-active{% endif %}"><i class="fa-solid fa-sitemap"></i>Room distribution</a>{% endif %}
+  <a href="{{ nav.keys }}{% if request.GET.branch %}?branch={{ request.GET.branch }}{% endif %}" class="{% if tab == 'keys' %}is-active{% endif %}"><i class="fa-solid fa-key"></i>API keys</a>
+  <a href="{{ nav.webhooks }}{% if request.GET.branch %}?branch={{ request.GET.branch }}{% endif %}" class="{% if tab == 'webhooks' %}is-active{% endif %}"><i class="fa-solid fa-tower-broadcast"></i>Webhooks</a>
+  <a href="{{ nav.docs }}{% if request.GET.branch %}?branch={{ request.GET.branch }}{% endif %}" class="{% if tab == 'docs' %}is-active{% endif %}"><i class="fa-solid fa-book"></i>Developer guide</a>
+</nav>
+{% if branch_locked %}
+<div class="ui-branchbar"><i class="fa-solid fa-code-branch"></i>Branch <span class="ui-chip ui-chip-indigo">{{ selected_branch.name }}</span></div>
+{% elif branches|length > 1 %}
+<form class="ui-branchbar" method="get">
+  <label for="intBranch"><i class="fa-solid fa-code-branch"></i> Showing</label>
+  <select id="intBranch" class="ui-input" name="branch" onchange="this.form.submit()">
+    <option value="all" {% if not selected_branch %}selected{% endif %}>All branches</option>
+    {% for b in branches %}<option value="{{ b.id }}" {% if selected_branch.id == b.id %}selected{% endif %}>{{ b.name }}</option>{% endfor %}
+  </select>
+  <noscript><button class="ui-btn ui-btn-gray ui-btn-sm">Go</button></noscript>
+</form>
+{% endif %}
+{% if new_secret %}
+<section class="ui-secret" role="status">
+  <h3><i class="fa-solid fa-circle-check"></i>{{ new_secret.kind }} for “{{ new_secret.name }}”</h3>
+  <p>Copy it now and store it somewhere safe. For your security it is shown only once.</p>
+  <div class="ui-secret-row"><code id="newSecret">{{ new_secret.value }}</code>
+    <button type="button" class="ui-btn ui-btn-primary" data-copy="#newSecret"><i class="fa-regular fa-copy"></i><span>Copy</span></button></div>
+</section>
+{% endif %}

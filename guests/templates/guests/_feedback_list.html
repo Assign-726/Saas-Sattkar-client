@@ -1,0 +1,96 @@
+<div class="ui-logs ui-feedback">
+  <div class="ui-page-header">
+    <div><h1>Guest Feedback</h1><p>Every rating and complaint in one desk, so unhappy guests hear back before they post a review.</p></div>
+    <div class="ui-actions">
+      <button type="button" class="ui-btn ui-btn-gray" data-open-dialog="linksDialog"><i class="fa-solid fa-qrcode"></i><span>Feedback QR &amp; links</span></button>
+      <button type="button" class="ui-btn ui-btn-primary" data-open-dialog="logDialog"><i class="fa-solid fa-plus"></i><span>Log feedback</span></button>
+    </div>
+  </div>
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Average rating · 30d</div><div class="kpi-icon"><i class="fa-solid fa-star"></i></div></div><div class="kpi-val">{% if stats.avg %}{{ stats.avg }}<span style="font-size:15px;color:var(--ui-label-2)"> / 5</span>{% else %}—{% endif %}</div><div class="kpi-sub">{{ stats.count }} response{{ stats.count|pluralize }}</div></div>
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Net Promoter Score</div><div class="kpi-icon"><i class="fa-solid fa-bullhorn"></i></div></div><div class="kpi-val">{% if stats.nps is not None %}{% if stats.nps > 0 %}+{% endif %}{{ stats.nps }}{% else %}—{% endif %}</div><div class="kpi-sub">Promoters minus detractors</div></div>
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Open complaints</div><div class="kpi-icon"><i class="fa-solid fa-face-frown"></i></div></div><div class="kpi-val">{{ stats.open_complaints }}</div><div class="kpi-sub">1–2 stars, not yet resolved</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Time to resolve</div><div class="kpi-icon"><i class="fa-solid fa-stopwatch"></i></div></div><div class="kpi-val">{% if stats.avg_resolution_hours is not None %}{{ stats.avg_resolution_hours }}h{% else %}—{% endif %}</div><div class="kpi-sub">Average, last 30 days</div></div>
+  </div>
+
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <form class="ui-card ui-filters" method="get">
+        <div class="ui-field ui-field-search"><label for="fbq">Search</label><div class="ui-input-icon"><i class="fa-solid fa-magnifying-glass"></i><input id="fbq" class="ui-input" type="search" name="q" value="{{ filters.q }}" placeholder="Name, phone or words in the comment"></div></div>
+        <div class="ui-field"><label for="fbs">Status</label><select id="fbs" class="ui-input" name="status"><option value="">Any status</option><option value="open" {% if filters.status == 'open' %}selected{% endif %}>Open (new + in progress)</option>{% for v, l in statuses %}<option value="{{ v }}" {% if filters.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+        <div class="ui-field"><label for="fbm">Mood</label><select id="fbm" class="ui-input" name="mood"><option value="">All ratings</option><option value="complaints" {% if filters.mood == 'complaints' %}selected{% endif %}>Complaints (1–2★)</option><option value="neutral" {% if filters.mood == 'neutral' %}selected{% endif %}>Neutral (3★)</option><option value="happy" {% if filters.mood == 'happy' %}selected{% endif %}>Happy (4–5★)</option></select></div>
+        {% if branches|length > 1 %}<div class="ui-field"><label for="fbb">Branch</label><select id="fbb" class="ui-input" name="branch"><option value="">All branches</option>{% for b in branches %}<option value="{{ b.id }}" {% if filters.branch == b.id|stringformat:'d' %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></div>{% endif %}
+        <div class="ui-filter-actions"><button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-filter"></i><span>Apply</span></button><a class="ui-btn ui-btn-gray" href="{{ request.path }}?status=">Show all</a></div>
+      </form>
+
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">{% if filters.status == 'open' %}Open feedback{% else %}Feedback{% endif %}</h2><span class="ui-list-count">{{ page.paginator.count }}</span></div>
+        {% if page.object_list %}
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Guest</th><th>Rating</th><th>Comment</th><th>Status</th><th>Received</th></tr></thead>
+          <tbody>{% for fb in page.object_list %}
+            <tr class="ui-row-link" data-href="{{ base_url }}feedback/{{ fb.pk }}/">
+              <td class="ui-cell-primary"><a href="{{ base_url }}feedback/{{ fb.pk }}/"><strong>{{ fb.name|default:"Anonymous guest" }}</strong></a><div class="ui-log-sub">{{ fb.get_area_display }}{% if fb.branch %} · {{ fb.branch.name }}{% endif %}</div></td>
+              <td>{% include 'guests/_stars.html' with value=fb.rating %}{% if fb.recommend is not None %}<div class="ui-log-sub">Recommend {{ fb.recommend }}/10</div>{% endif %}</td>
+              <td style="max-width:340px">{{ fb.comment|default:"—"|truncatechars:110 }}</td>
+              <td><span class="ui-chip ui-chip-{% if fb.status == 'NEW' %}{% if fb.is_complaint %}red{% else %}blue{% endif %}{% elif fb.status == 'IN_PROGRESS' %}orange{% elif fb.status == 'RESOLVED' %}green{% else %}gray{% endif %}">{{ fb.get_status_display }}</span>{% if fb.assigned_to %}<div class="ui-log-sub">{{ fb.assigned_to.get_full_name|default:fb.assigned_to.username }}</div>{% endif %}</td>
+              <td>{{ fb.created_at|timesince }} ago</td>
+            </tr>{% endfor %}</tbody>
+        </table></div>
+        {% if page.has_other_pages %}<div class="ui-pager"><span class="ui-pager-info">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+          {% if page.has_previous %}<a class="ui-pager-btn" href="?{{ request.GET.urlencode }}&page={{ page.previous_page_number }}">Previous</a>{% endif %}
+          {% if page.has_next %}<a class="ui-pager-btn" href="?{{ request.GET.urlencode }}&page={{ page.next_page_number }}">Next</a>{% endif %}</div>{% endif %}
+        {% else %}
+        <div class="ui-empty"><div class="ui-empty-icon"><i class="fa-solid fa-comments"></i></div><h3>{% if filters.status == 'open' %}Nothing waiting{% else %}No feedback matches{% endif %}</h3>
+          <p>Print the feedback QR for tables, rooms and bills. Ratings arrive here instantly, and 1–2 star ones are flagged in the Morning Brief.</p>
+          <button type="button" class="ui-btn ui-btn-gray" data-open-dialog="linksDialog"><i class="fa-solid fa-qrcode"></i><span>Get the QR code</span></button></div>
+        {% endif %}
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Ratings · 30 days</h2>
+        <div class="ui-rating-bars">{% for stars, count, pct in stats.distribution %}<div class="ui-rating-bar"><span>{{ stars }}★</span><span class="track"><span class="fill" style="width:{{ pct }}%"></span></span><span>{{ count }}</span></div>{% endfor %}</div>
+      </section>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">What guests rate</h2>
+        <ul class="ui-ledger">{% for label, avg in stats.aspects %}<li><span class="ui-ledger-text">{{ label }}</span><span>{% if avg %}<strong>{{ avg }}</strong> <span class="ui-log-sub">/ 5</span>{% else %}<span class="ui-log-sub">No ratings</span>{% endif %}</span></li>{% endfor %}</ul>
+      </section>
+    </div>
+  </div>
+
+  <dialog class="ui-dialog ui-dialog-form" id="logDialog">
+    <form method="post">{% csrf_token %}
+      <h3>Log feedback</h3>
+      <p class="ui-log-sub">For comments given in person, by phone or on a review site.</p>
+      <div class="ui-form-grid">
+        <div class="ui-field"><label>Overall rating</label><select class="ui-input" name="rating" required><option value="">Choose…</option>{% for n in "54321" %}<option value="{{ n }}">{{ n }} star{% if n != '1' %}s{% endif %}</option>{% endfor %}</select></div>
+        <div class="ui-field"><label>About</label><select class="ui-input" name="area">{% for v, l in areas %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select></div>
+        <div class="ui-field"><label>Guest name</label><input class="ui-input" name="name"></div>
+        <div class="ui-field"><label>Phone</label><input class="ui-input" name="phone" inputmode="tel"></div>
+        {% if branches|length > 1 %}<div class="ui-field ui-col-2"><label>Branch</label><select class="ui-input" name="branch">{% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}</select></div>{% else %}{% for b in branches %}<input type="hidden" name="branch" value="{{ b.id }}">{% endfor %}{% endif %}
+        <div class="ui-field ui-col-2"><label>What they said</label><textarea class="ui-input" name="comment" rows="3"></textarea></div>
+      </div>
+      <div class="ui-dialog-actions"><button class="ui-btn ui-btn-gray" type="button" data-close-dialog>Cancel</button><button class="ui-btn ui-btn-primary" type="submit">Save</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="ui-dialog ui-dialog-form" id="linksDialog" style="max-width:640px">
+    <h3>Feedback QR &amp; links</h3>
+    <p class="ui-log-sub">Put the QR on tables, room cards and bills, or send the link after a visit. Each branch has its own, so feedback lands with the right team.</p>
+    <div class="ui-ledger" style="display:flex;flex-direction:column;gap:12px;margin-top:10px">
+      {% for l in links %}
+      <div class="ui-card ui-pad" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:0">
+        {% if l.qr %}<img src="{{ l.qr }}" alt="QR code for {{ l.branch.name }}" width="96" height="96" style="border-radius:8px;background:#fff">{% endif %}
+        <div style="flex:1;min-width:200px"><strong>{{ l.branch.name }}</strong>
+          <div class="ui-secret-row" style="margin-top:6px"><code id="fbl{{ forloop.counter }}">{{ l.url }}</code><button type="button" class="ui-btn ui-btn-gray ui-btn-sm" data-copy="#fbl{{ forloop.counter }}"><span>Copy</span></button></div>
+          <a class="ui-btn ui-btn-gray ui-btn-sm" style="margin-top:8px" href="{{ l.url }}" target="_blank" rel="noopener">Open form</a>{% if l.qr %} <a class="ui-btn ui-btn-gray ui-btn-sm" style="margin-top:8px" href="{{ l.qr }}" download="feedback-qr-{{ l.branch.name|slugify }}.png">Download QR</a>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="ui-dialog-actions"><button class="ui-btn ui-btn-primary" type="button" data-close-dialog>Done</button></div>
+  </dialog>
+</div>
+{% include 'integrations/_scripts.html' %}

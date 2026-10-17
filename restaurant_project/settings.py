@@ -53,6 +53,31 @@ if os.path.exists(local_env):
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env('DJANGO_SECRET_KEY', default=env('SECRET_KEY', default='django-insecure-&6l70up@$mc-r=%ra9arh_@9axe8&(@$@pxd3%tfcz!t8c-nje'))
+DELIVERY_CREDENTIALS_KEY = env('DELIVERY_CREDENTIALS_KEY', default='')  # Fernet key for Zomato / Swiggy credentials
+
+# Zomato / Swiggy — Sattkar-level (POS partner) defaults. A brand's own account, or an
+# outlet override, entered in the admin wins over these. Leave empty when each brand
+# brings its own credentials.
+def _delivery_partner(prefix):
+    import json as _json
+    try:
+        paths = _json.loads(env(f'{prefix}_API_PATHS', default='') or '{}')
+    except ValueError:
+        paths = {}
+    return {
+        'client_id': env(f'{prefix}_CLIENT_ID', default=''),
+        'client_secret': env(f'{prefix}_CLIENT_SECRET', default=''),
+        'access_token': env(f'{prefix}_ACCESS_TOKEN', default=''),
+        'webhook_secret': env(f'{prefix}_WEBHOOK_SECRET', default=''),
+        'api_base_url': env(f'{prefix}_API_BASE_URL', default=''),
+        'token_url': env(f'{prefix}_TOKEN_URL', default=''),
+        'auth_header': env(f'{prefix}_AUTH_HEADER', default=''),
+        'signature_header': env(f'{prefix}_SIGNATURE_HEADER', default=''),
+        'api_paths': paths if isinstance(paths, dict) else {},
+    }
+
+
+DELIVERY_PARTNERS = {'zomato': _delivery_partner('ZOMATO'), 'swiggy': _delivery_partner('SWIGGY')}
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env.bool('DJANGO_DEBUG', default=env.bool('DEBUG', default=False))
@@ -88,6 +113,10 @@ INSTALLED_APPS = [
     'reservations',
     'events',
     'hotel',
+    'guests',
+    'integrations',
+    'finance',
+    'notifications',
 ]
 
 # CORS & CSRF settings
@@ -98,14 +127,18 @@ CORS_ALLOW_CREDENTIALS = env.bool('CORS_ALLOW_CREDENTIALS', default=True)
 CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=['http://localhost:3000', 'http://127.0.0.1:3000'])
 
 MIDDLEWARE = [
+    'core.middleware_api.ApiObservabilityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'core.middleware_api.ApiGZipMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.request_cache.RequestCacheMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'restaurant_admin.middleware.BranchContextMiddleware',
+    'super_admin.permissions.RolePermissionMiddleware',
     'super_admin.middleware.SuperAdminSubscriptionLockMiddleware',
     'super_admin.activity.ActivityLogMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -117,13 +150,48 @@ MIDDLEWARE = [
 ACTIVITY_LOG_TRIGGER_DAYS = env.int('ACTIVITY_LOG_TRIGGER_DAYS', default=90)
 ACTIVITY_LOG_KEEP_DAYS = env.int('ACTIVITY_LOG_KEEP_DAYS', default=30)
 
+# Reverse proxies in front of Django (nginx = 1). Client IPs for rate limits are read
+# this many hops from the right of X-Forwarded-For; 0 = not behind a proxy.
+TRUSTED_PROXY_COUNT = env.int('TRUSTED_PROXY_COUNT', default=1)
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
-    ]
+    ],
+    'NUM_PROXIES': TRUSTED_PROXY_COUNT,
+    # The browsable HTML API is handy locally but in production it only exposes forms
+    # and costs render time, so production serves JSON only.
+    'DEFAULT_RENDERER_CLASSES': (
+        ['rest_framework.renderers.JSONRenderer', 'rest_framework.renderers.BrowsableAPIRenderer']
+        if env.bool('DJANGO_DEBUG', default=env.bool('DEBUG', default=False))
+        else ['rest_framework.renderers.JSONRenderer']
+    ),
+}
+
+# Cache: set REDIS_URL (e.g. redis://localhost:6379/1, needs `pip install redis`) so rate
+# limits, login lockouts and the catalog cache are shared by every worker. Without it each
+# process keeps its own in-memory cache.
+if env('REDIS_URL', default=''):
+    CACHES = {'default': {'BACKEND': 'django.core.cache.backends.redis.RedisCache', 'LOCATION': env('REDIS_URL'),
+                          'KEY_PREFIX': env('CACHE_KEY_PREFIX', default='hospitality'), 'TIMEOUT': 300}}
+else:
+    CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache', 'LOCATION': 'hospitality'}}
+
+CATALOG_CACHE_SECONDS = env.int('CATALOG_CACHE_SECONDS', default=60)
+API_SLOW_REQUEST_MS = env.int('API_SLOW_REQUEST_MS', default=800)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {'plain': {'format': '%(asctime)s %(levelname)s %(name)s %(message)s'}},
+    'handlers': {'console': {'class': 'logging.StreamHandler', 'formatter': 'plain'}},
+    'loggers': {
+        'api': {'handlers': ['console'], 'level': env('API_LOG_LEVEL', default='INFO'), 'propagate': False},
+        'core.payments': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+    },
 }
 
 # JWT settings
@@ -279,6 +347,7 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=True)
     CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=True)
     SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REDIRECT_EXEMPT = [r'^healthz/$']  # plain-HTTP load-balancer probes
     SECURE_BROWSER_XSS_FILTER = True
     X_FRAME_OPTIONS = env('X_FRAME_OPTIONS', default='DENY')
     
@@ -287,3 +356,7 @@ if not DEBUG:
     USE_X_FORWARDED_PORT = True
     if env.bool('SECURE_PROXY_SSL_HEADER_ENABLED', default=True):
         SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Sent on every response (Django's SecurityMiddleware)
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'

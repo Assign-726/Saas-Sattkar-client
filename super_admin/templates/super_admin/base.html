@@ -945,7 +945,7 @@
     </style>
     {% block head %}{% endblock %}
     <link rel="stylesheet" href="{% static 'css/theme-dark.css' %}?v=3.4">
-    <link rel="stylesheet" href="{% static 'css/apple-ui.css' %}?v=1.3">
+    <link rel="stylesheet" href="{% static 'css/apple-ui.css' %}?v=2.1">
 </head>
 <body>
     <!-- Mobile Topbar for Super Admin -->
@@ -1045,6 +1045,10 @@
                         <i class="fa-solid fa-chart-pie"></i>
                         <span>Dashboard</span>
                     </a>
+                    <a href="{% url 'super_admin:morning_brief' %}" class="{% if request.resolver_match.url_name == 'morning_brief' %}active{% endif %}">
+                        <i class="fa-solid fa-mug-hot"></i>
+                        <span>Morning Brief</span>
+                    </a>
                     <a href="{% url 'super_admin:analytics' %}" class="{% if request.resolver_match.url_name == 'analytics' %}active{% endif %}">
                         <i class="fa-solid fa-chart-line"></i>
                         <span>Super Analytics</span>
@@ -1102,6 +1106,10 @@
                         <i class="fa-solid fa-gear"></i>
                         <span>Settings</span>
                     </a>
+                    <a href="{% url 'super_admin:integrations' %}" class="{% if request.resolver_match.url_name == 'integrations' %}active{% endif %}">
+                        <i class="fa-solid fa-plug"></i>
+                        <span>Integrations</span>
+                    </a>
                     <a href="{% url 'super_admin:activity_logs' %}" class="{% if request.resolver_match.url_name == 'activity_logs' %}active{% endif %}">
                         <i class="fa-solid fa-clock-rotate-left"></i>
                         <span>Activity Logs</span>
@@ -1128,6 +1136,23 @@
                 </button>
             </div>
         </aside>
+    <script>
+    /* Keep the sidebar where it was across page loads; otherwise bring the active link into view. */
+    (function () {
+        var box = document.querySelector('aside.sidebar'); if (!box) return;
+        var KEY = 'super_sidebar_scroll', saved = null;
+        try { saved = sessionStorage.getItem(KEY); } catch (e) {}
+        if (saved !== null) { box.scrollTop = parseInt(saved, 10) || 0; }
+        var active = box.querySelector('a.active');
+        if (active) {
+            var b = box.getBoundingClientRect(), a = active.getBoundingClientRect();
+            if (a.top < b.top || a.bottom > b.bottom) { box.scrollTop += a.top - b.top - (b.height - a.height) / 2; }
+        }
+        function save() { try { sessionStorage.setItem(KEY, String(box.scrollTop)); } catch (e) {} }
+        box.addEventListener('click', function (e) { if (e.target.closest('a')) save(); });
+        window.addEventListener('pagehide', save);
+    })();
+    </script>
 
         <main class="main">
             <div class="shell">

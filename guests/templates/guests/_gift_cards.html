@@ -1,0 +1,70 @@
+{# Gift cards — shared by Restaurant & Hotel shells #}
+<div class="ui-logs ui-giftcards">
+  <a class="ui-back" href="{{ base_url }}guests/"><i class="fa-solid fa-chevron-left"></i> Guests</a>
+  <div class="ui-page-header">
+    <div><h1>Gift Cards</h1><p>Sell prepaid cards and vouchers, then redeem them against any bill — dining, stays or events.</p></div>
+    {% if can_manage_guests %}<div class="ui-actions"><button type="button" class="ui-btn ui-btn-primary" data-open-dialog="issueDialog"><i class="fa-solid fa-plus"></i><span>Issue card</span></button></div>{% endif %}
+  </div>
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Active cards</div><div class="kpi-icon"><i class="fa-solid fa-gift"></i></div></div><div class="kpi-val">{{ stats.active }}</div><div class="kpi-sub">Usable right now</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Outstanding balance</div><div class="kpi-icon"><i class="fa-solid fa-scale-balanced"></i></div></div><div class="kpi-val">₹{{ stats.liability|floatformat:0 }}</div><div class="kpi-sub">Owed to card holders</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Sold this month</div><div class="kpi-icon"><i class="fa-solid fa-arrow-trend-up"></i></div></div><div class="kpi-val">₹{{ stats.issued_month|floatformat:0 }}</div><div class="kpi-sub">Issued &amp; topped up</div></div>
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Redeemed this month</div><div class="kpi-icon"><i class="fa-solid fa-receipt"></i></div></div><div class="kpi-val">₹{{ stats.redeemed_month|floatformat:0 }}</div><div class="kpi-sub">Used against bills</div></div>
+  </div>
+
+  <form class="ui-card ui-filters" method="get">
+    <div class="ui-field ui-field-search"><label for="gcq">Find a card</label><div class="ui-input-icon"><i class="fa-solid fa-magnifying-glass"></i>
+      <input id="gcq" class="ui-input" type="search" name="q" value="{{ filters.q }}" placeholder="Card code, name or phone" autocomplete="off" autofocus></div></div>
+    <div class="ui-field"><label for="gcs">Status</label><select id="gcs" class="ui-input" name="status"><option value="">Any status</option>{% for v, l in status_choices %}<option value="{{ v }}" {% if filters.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    <div class="ui-filter-actions"><button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-filter"></i><span>Apply</span></button>{% if filters.q or filters.status %}<a class="ui-btn ui-btn-gray" href="{{ request.path }}">Reset</a>{% endif %}</div>
+  </form>
+
+  <section class="ui-card ui-list-card">
+    {% if cards %}
+    <div class="table-responsive">
+      <table class="table">
+        <thead><tr><th>Card</th><th>Holder</th><th>Balance</th><th>Status</th><th>Expires</th><th>Issued</th></tr></thead>
+        <tbody>
+        {% for c in cards %}
+          <tr class="ui-row-link" data-href="{{ base_url }}gift-cards/{{ c.pk }}/">
+            <td><a href="{{ base_url }}gift-cards/{{ c.pk }}/"><code class="ui-code">{{ c.code }}</code></a></td>
+            <td>{% if c.recipient_name %}{{ c.recipient_name }}{% elif c.guest %}{{ c.guest.name }}{% else %}—{% endif %}<div class="ui-log-sub">{{ c.recipient_phone|default:c.recipient_email }}</div></td>
+            <td><strong>₹{{ c.balance|floatformat:2 }}</strong><div class="ui-log-sub">of ₹{{ c.initial_value|floatformat:0 }}</div></td>
+            <td><span class="ui-chip ui-chip-{% if c.status == 'ACTIVE' %}green{% elif c.status == 'VOID' %}red{% elif c.status == 'EXPIRED' %}orange{% else %}gray{% endif %}">{{ c.get_status_display }}</span></td>
+            <td>{{ c.expires_on|date:"d M Y"|default:"No expiry" }}</td>
+            <td>{{ c.created_at|date:"d M Y" }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="ui-empty"><div class="ui-empty-icon"><i class="fa-solid fa-gift"></i></div><h3>{% if filters.q or filters.status %}No cards match{% else %}No gift cards yet{% endif %}</h3>
+      <p>{% if can_manage_guests %}Issue your first card — great for festivals, corporate gifting and making up for a bad experience.{% else %}Ask an administrator to issue cards.{% endif %}</p></div>
+    {% endif %}
+  </section>
+
+  {% if can_manage_guests %}
+  <dialog class="ui-dialog ui-dialog-form" id="issueDialog">
+    <form method="post">{% csrf_token %}
+      <h3>Issue a gift card</h3>
+      <div class="ui-form-grid">
+        <div class="ui-field ui-col-2"><label>Value (₹)</label><input class="ui-input" name="value" inputmode="decimal" placeholder="2000" required></div>
+        <div class="ui-field ui-col-2"><label>Recipient name</label><input class="ui-input" name="recipient_name" placeholder="Who is it for?"></div>
+        <div class="ui-field"><label>Phone</label><input class="ui-input" name="recipient_phone" inputmode="tel"></div>
+        <div class="ui-field"><label>Email</label><input class="ui-input" name="recipient_email" type="email"></div>
+        <div class="ui-field"><label>Expires on</label><input class="ui-input" name="expires_on" type="date" min="{{ today|date:'Y-m-d' }}"></div>
+        <div class="ui-field"><label>Note</label><input class="ui-input" name="note" placeholder="Diwali gift, compensation…"></div>
+      </div>
+      <p class="ui-log-sub">With a phone or email, the card is linked to the guest's profile.</p>
+      <div class="ui-dialog-actions"><button class="ui-btn ui-btn-gray" type="button" data-close-dialog>Cancel</button><button class="ui-btn ui-btn-primary" type="submit">Issue card</button></div>
+    </form>
+  </dialog>
+  {% endif %}
+</div>
+<script>
+document.querySelectorAll('[data-open-dialog]').forEach(function (b) { b.addEventListener('click', function () { var d = document.getElementById(b.dataset.openDialog); if (d && d.showModal) d.showModal(); }); });
+document.querySelectorAll('[data-close-dialog]').forEach(function (b) { b.addEventListener('click', function () { b.closest('dialog').close(); }); });
+document.querySelectorAll('.ui-row-link').forEach(function (tr) { tr.addEventListener('click', function (e) { if (!e.target.closest('a, button')) window.location = tr.dataset.href; }); });
+</script>

@@ -1,7 +1,15 @@
 from django.urls import path
 from restaurant_admin import views
 from super_admin import views_logs
+from guests import views as guest_views
+from guests import views_growth
+from integrations import views as integration_views
+from integrations.delivery import views as delivery_views
+from notifications import views as notification_views
+from finance import views as finance_views
+from super_admin import views_roles
 from restaurant_admin import views_reservations
+from restaurant_admin import views_controls
 from restaurant_admin import floor_plan_views
 from restaurant_admin import views_events
 from restaurant_admin import views_staff
@@ -11,7 +19,46 @@ from restaurant_admin import views_pos_shifts
 app_name = 'restaurant_admin'
 
 urlpatterns = [
+    # Zomato & Swiggy — separate workspace per platform, per branch
+    path('delivery/', delivery_views.home, name='delivery_home'),
+    path('delivery/<str:platform>/', delivery_views.dashboard, name='delivery_dashboard'),
+    path('delivery/<str:platform>/live/', delivery_views.live, name='delivery_live'),
+    path('delivery/<str:platform>/store/', delivery_views.store, name='delivery_store'),
+    path('delivery/<str:platform>/orders/', delivery_views.orders, name='delivery_orders'),
+    path('delivery/<str:platform>/orders/<int:pk>/', delivery_views.order_detail, name='delivery_order_detail'),
+    path('delivery/<str:platform>/orders/<int:pk>/action/', delivery_views.order_action, name='delivery_order_action'),
+    path('delivery/<str:platform>/menu/', delivery_views.menu, name='delivery_menu'),
+    path('delivery/<str:platform>/menu/sync/', delivery_views.menu_sync, name='delivery_menu_sync'),
+    path('delivery/<str:platform>/menu/export/', delivery_views.menu_export, name='delivery_menu_export'),
+    path('delivery/<str:platform>/payouts/', delivery_views.payouts, name='delivery_payouts'),
+    path('delivery/<str:platform>/payouts/<int:pk>/', delivery_views.payout_detail, name='delivery_payout_detail'),
+    path('delivery/<str:platform>/logs/', delivery_views.logs, name='delivery_logs'),
+    path('delivery/<str:platform>/settings/', delivery_views.settings_view, name='delivery_settings'),
+    path('delivery/<str:platform>/simulate/', delivery_views.simulate, name='delivery_simulate'),
+    path('guests/', guest_views.guest_list, name='guest_list'),
+    path('guests/<int:pk>/', guest_views.guest_detail, name='guest_detail'),
+    path('gift-cards/', guest_views.gift_card_list, name='gift_card_list'),
+    path('gift-cards/<int:pk>/', guest_views.gift_card_detail, name='gift_card_detail'),
+    path('brief/', guest_views.morning_brief, name='morning_brief'),
+    path('guests/pos-lookup/', guest_views.pos_lookup, name='guest_pos_lookup'),
+    path('feedback/', views_growth.feedback_list, name='feedback_list'),
+    path('feedback/<int:pk>/', views_growth.feedback_detail, name='feedback_detail'),
+    path('campaigns/', views_growth.campaign_list, name='campaign_list'),
+    path('campaigns/new/', views_growth.campaign_new, name='campaign_new'),
+    path('campaigns/<int:pk>/', views_growth.campaign_detail, name='campaign_detail'),
     path('activity-logs/', views_logs.restaurant_activity_logs, name='activity_logs'),
+    path('finance/expenses/', finance_views.expenses, name='expenses'),
+    path('finance/expenses/<int:pk>/receipt/', finance_views.receipt, name='expense_receipt'),
+    path('finance/profit-loss/', finance_views.profit_and_loss, name='profit_loss'),
+    path('roles/', views_roles.roles, name='roles'),
+    path('roles/new/', views_roles.role_new, name='role_new'),
+    path('roles/<int:pk>/', views_roles.role_edit, name='role_edit'),
+    path('integrations/', integration_views.overview, name='integrations'),
+    path('integrations/keys/', integration_views.keys, name='integration_keys'),
+    path('integrations/webhooks/', integration_views.webhooks, name='integration_webhooks'),
+    path('integrations/webhooks/<int:pk>/', integration_views.webhook_detail, name='integration_webhook_detail'),
+    path('integrations/webhooks/<int:pk>/deliveries/<int:delivery_pk>/', integration_views.delivery_json, name='integration_delivery'),
+    path('integrations/docs/', integration_views.docs, name='integration_docs'),
     # Test URLs
     path('test/', views.test_template, name='test'),
     path('test-static/', views.test_static, name='test_static'),
@@ -27,6 +74,7 @@ urlpatterns = [
     path('', views.dashboard, name='dashboard'),
     path('analytics/', views.sales_analytics, name='sales_analytics'),
     path('settings/', views.settings_view, name='settings'),
+    path('settings/two-factor/', views.two_factor_update, name='two_factor_update'),
     path('settings/test-email/', views.restaurant_test_email_view, name='test_email'),
     path('settings/custom-charges/save/', views.custom_charge_save, name='custom_charge_save'),
     path('settings/custom-charges/<int:pk>/delete/', views.custom_charge_delete, name='custom_charge_delete'),
@@ -68,7 +116,9 @@ urlpatterns = [
     path('orders/create/', views.order_create_manual, name='order_create_manual'),
     path('orders/<int:pk>/edit/', views.order_edit_manual, name='order_edit_manual'),
     path('orders/stream/', views.orders_stream, name='orders_stream'),
-    path('api/notifications/poll/', views.order_notifications_poll, name='order_notifications_poll'),
+    path('api/notifications/poll/', notification_views.poll, name='order_notifications_poll'),
+    path('api/notifications/', notification_views.listing, name='notifications_list'),
+    path('api/notifications/update/', notification_views.update, name='notifications_update'),
     path('orders/<int:pk>/', views.order_detail, name='order_detail'),
     path('orders/<int:pk>/update-status/', views.order_update_status, name='order_update_status'),
     path('orders/<int:pk>/invoice/', views.order_invoice, name='order_invoice'),
@@ -116,6 +166,13 @@ urlpatterns = [
     path('inventory/<int:pk>/delete/', views.inventory_delete, name='inventory_delete'),
     path('inventory/<int:pk>/adjust/', views.inventory_adjust, name='inventory_adjust'),
     path('inventory/logs/', views.inventory_logs, name='inventory_logs'),
+    path('inventory/wastage/', views_controls.inventory_wastage, name='inventory_wastage'),
+    path('inventory/wastage/add/', views_controls.inventory_wastage_add, name='inventory_wastage_add'),
+    path('inventory/counts/', views_controls.inventory_counts, name='inventory_counts'),
+    path('inventory/counts/new/', views_controls.inventory_count_new, name='inventory_count_new'),
+    path('inventory/counts/<int:pk>/', views_controls.inventory_count_detail, name='inventory_count_detail'),
+    path('inventory/counts/<int:pk>/save/', views_controls.inventory_count_save, name='inventory_count_save'),
+    path('reports/menu-engineering/', views_controls.report_menu_engineering, name='report_menu_engineering'),
     path('purchases/', views.purchase_list, name='purchase_list'),
     path('purchases/export/', views.purchase_records_export, name='purchase_records_export'),
     path('purchases/create/', views.purchase_create, name='purchase_create'),
@@ -163,6 +220,9 @@ urlpatterns = [
 
     # Reservations Management
     path('reservations/', views_reservations.reservation_list, name='reservation_list'),
+    path('reservations/waitlist/', views_controls.reservation_waitlist, name='reservation_waitlist'),
+    path('reservations/waitlist/add/', views_controls.reservation_waitlist_add, name='reservation_waitlist_add'),
+    path('reservations/waitlist/<int:pk>/', views_controls.reservation_waitlist_update, name='reservation_waitlist_update'),
     path('reservations/settings/', views_reservations.reservation_settings, name='reservation_settings'),
     path('reservations/<int:pk>/confirm/', views_reservations.reservation_confirm, name='reservation_confirm'),
     path('reservations/<int:pk>/cancel/', views_reservations.reservation_cancel, name='reservation_cancel'),

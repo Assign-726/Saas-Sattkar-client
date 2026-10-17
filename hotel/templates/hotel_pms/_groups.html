@@ -1,0 +1,50 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>Group bookings</h1><p>Weddings, tours and conferences: block several rooms at once and manage them together.</p></div>
+  </div>
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-list-card">
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Group</th><th>Dates</th><th class="num">Rooms</th><th class="num">Total</th><th class="num">Balance</th><th>Status</th></tr></thead>
+          <tbody>{% for g, s in rows %}<tr>
+            <td><a href="{{ base_url }}bookings/groups/{{ g.pk }}/"><strong>{{ g.name }}</strong></a><br><small class="ui-log-sub">{{ g.code }}{% if g.company_account %} · {{ g.company_account.name }}{% endif %}{% if g.contact_name %} · {{ g.contact_name }}{% endif %}</small></td>
+            <td class="nowrap">{% if s.arrive %}{{ s.arrive|date:"d M" }} → {{ s.depart|date:"d M Y" }}{% else %}—{% endif %}</td>
+            <td class="num">{{ s.rooms }}</td><td class="num">₹{{ s.total|inr }}</td>
+            <td class="num {% if s.balance > 0 %}ui-text-red{% endif %}">₹{{ s.balance|inr }}</td>
+            <td>{% for st, label, n in s.count_list %}<span class="ui-chip ui-chip-{% if st == 'CHECKED_IN' %}green{% elif st == 'RESERVED' %}blue{% elif st == 'CHECKED_OUT' %}gray{% else %}red{% endif %}">{{ n }} {{ label|lower }}</span> {% endfor %}</td></tr>
+          {% empty %}<tr><td colspan="6" class="ui-log-sub" style="padding:24px;text-align:center">No group bookings yet.</td></tr>{% endfor %}</tbody>
+        </table></div>
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      {% if can_edit %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">New group</h2>
+        <form method="post" action="{{ base_url }}bookings/groups/new/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-field"><label for="gpName">Group name</label><input id="gpName" class="ui-input" name="name" maxlength="150" required placeholder="e.g. Sharma–Mehta wedding"></div>
+          <div class="ui-inline-fields">
+            <div class="ui-field"><label for="gpIn">Arrive</label><input id="gpIn" class="ui-input" type="date" name="check_in_date" value="{{ today|date:'Y-m-d' }}" required></div>
+            <div class="ui-field"><label for="gpOut">Depart</label><input id="gpOut" class="ui-input" type="date" name="check_out_date" value="{{ tomorrow|date:'Y-m-d' }}" required></div>
+          </div>
+          <div class="ui-field"><span class="ui-field-label">Rooms needed</span>
+            {% for c in categories %}<div class="ui-inline-fields" style="align-items:center;margin-top:6px"><label for="gpR{{ c.pk }}" style="flex:1;margin:0">{{ c.name }} <small class="ui-log-sub">₹{{ c.base_price_per_night|inr }}</small></label><input id="gpR{{ c.pk }}" class="ui-input" type="number" min="0" max="60" name="rooms_{{ c.pk }}" value="0" style="max-width:80px"></div>{% endfor %}
+          </div>
+          <div class="ui-field"><label for="gpRate">Negotiated rate / room / night (before GST)</label><input id="gpRate" class="ui-input" type="number" min="1" step="1" name="negotiated_rate" placeholder="Use normal rates"></div>
+          <div class="ui-field"><label for="gpCo">Bill to company</label><select id="gpCo" class="ui-input" name="company_account"><option value="">Guests pay their own</option>{% for a in accounts %}<option value="{{ a.pk }}">{{ a.name }}</option>{% endfor %}</select></div>
+          <div class="ui-field"><label for="gpSrc">Source</label><select id="gpSrc" class="ui-input" name="source">{% for k, l in sources %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></div>
+          <div class="ui-field"><label for="gpContact">Contact person</label><input id="gpContact" class="ui-input" name="contact_name" maxlength="120"></div>
+          <div class="ui-inline-fields">
+            <div class="ui-field"><label for="gpPhone">Phone</label><input id="gpPhone" class="ui-input" name="contact_phone" maxlength="30"></div>
+            <div class="ui-field"><label for="gpEmail">Email</label><input id="gpEmail" class="ui-input" type="email" name="contact_email"></div>
+          </div>
+          <div class="ui-field"><label for="gpNotes">Notes</label><textarea id="gpNotes" class="ui-input" name="notes" rows="2"></textarea></div>
+          <label class="ui-pms-check"><input type="checkbox" name="override" value="1"> Override minimum stay / closed dates</label>
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-people-group"></i><span>Block rooms</span></button>
+        </form>
+      </section>
+      {% endif %}
+    </div>
+  </div>
+</div>

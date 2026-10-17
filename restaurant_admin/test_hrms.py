@@ -273,10 +273,10 @@ class HRMSOperationsTests(TestCase):
         staff = StaffMember.objects.create(
             restaurant=self.restaurant,
             branch=self.branch,
-            name="Kavita Housekeeper",
+            name="Kavita Steward",
             employee_id="EMP-HK01",
-            department=Department.HOUSEKEEPING,
-            designation="Room Attendant",
+            department=Department.FLOOR,
+            designation="Senior Steward",
             monthly_base_salary=Decimal('16000.00')
         )
         payroll = MonthlyPayroll.objects.create(
@@ -298,9 +298,14 @@ class HRMSOperationsTests(TestCase):
         url = reverse('restaurant_admin:salary_slip_view', kwargs={'restaurant_slug': self.restaurant.slug, 'pk': payroll.id})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Kavita Housekeeper")
+        self.assertContains(response, "Kavita Steward")
         self.assertContains(response, "Confidential Pay Slip")
         self.assertContains(response, "Net Salary Payable")
+
+        # Housekeeping belongs to the Hotel PMS: the restaurant shell must not open its slips
+        staff.department = Department.HOUSEKEEPING
+        staff.save()
+        self.assertEqual(self.client.get(url).status_code, 404)
 
     def test_daily_sop_board_and_task_verification(self):
         """Test Phase 3: SOP seeding and task verification."""

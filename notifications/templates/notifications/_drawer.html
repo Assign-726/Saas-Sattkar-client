@@ -1,0 +1,348 @@
+{# Notification centre: full-height drawer + live engine. Used by the Restaurant (nt_module='restaurant') and Hotel (nt_module='hotel') shells. #}
+        <div class="ui-nt-backdrop" id="ntBackdrop" hidden></div>
+        <aside class="ui-nt" id="ntDrawer" role="dialog" aria-modal="true" aria-labelledby="ntTitle" aria-hidden="true" tabindex="-1">
+            <header class="ui-nt-head">
+                <div>
+                    <h2 id="ntTitle">Notifications</h2>
+                    <p id="ntSubtitle">{% if nt_module == 'hotel' %}Channel bookings, changes and guest feedback{% else %}Orders, kitchen and alerts{% endif %}</p>
+                </div>
+                <div class="ui-nt-head-actions">
+                    <button type="button" class="ui-nt-iconbtn" id="ntDesktopBtn" title="Allow desktop alerts" aria-label="Allow desktop alerts"><i class="fa-solid fa-display"></i></button>
+                    <button type="button" class="ui-nt-iconbtn" id="ntSoundBtn" title="Mute sound" aria-label="Toggle sound"><i class="fa-solid fa-volume-high"></i></button>
+                    <button type="button" class="ui-nt-iconbtn" data-nt-close title="Close" aria-label="Close notifications"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            </header>
+            <nav class="ui-nt-tabs" role="tablist" aria-label="Notification folders">
+                <button type="button" role="tab" data-tab="inbox" class="is-on" aria-selected="true">Inbox <b data-count="inbox"></b></button>
+                <button type="button" role="tab" data-tab="unread" aria-selected="false">Unread <b data-count="unread"></b></button>
+                <button type="button" role="tab" data-tab="read" aria-selected="false">Read</button>
+                <button type="button" role="tab" data-tab="archived" aria-selected="false">Archived <b data-count="archived"></b></button>
+            </nav>
+            <div class="ui-nt-cats" role="group" aria-label="Show">
+                <button type="button" data-cat="all" class="is-on">All</button>
+                {% if nt_module == 'hotel' %}
+                <button type="button" data-cat="rooms"><i class="fa-solid fa-bed"></i> Bookings &amp; channels</button>
+                {% else %}
+                <button type="button" data-cat="orders"><i class="fa-solid fa-receipt"></i> Orders</button>
+                <button type="button" data-cat="online"><i class="fa-solid fa-motorcycle"></i> Zomato &amp; Swiggy</button>
+                <button type="button" data-cat="kitchen"><i class="fa-solid fa-bell-concierge"></i> Kitchen</button>
+                {% endif %}
+                <button type="button" data-cat="alerts"><i class="fa-solid fa-triangle-exclamation"></i> Alerts</button>
+            </div>
+            <div class="ui-nt-bulk">
+                <button type="button" data-bulk="read_all"><i class="fa-solid fa-check-double"></i> Mark all read</button>
+                <button type="button" data-bulk="archive_read"><i class="fa-solid fa-box-archive"></i> Archive read</button>
+            </div>
+            <div class="ui-nt-list" id="ntList" aria-live="polite"></div>
+            <footer class="ui-nt-foot">
+                {% if nt_module == 'hotel' %}
+                <span><i class="fa-solid fa-circle-info"></i> Bookings made at the front desk don't notify.</span>
+                <a href="{% url 'hotel_admin:bookings' restaurant_slug=rslug %}">Bookings <i class="fa-solid fa-arrow-right"></i></a>
+                {% else %}
+                <span><i class="fa-solid fa-circle-info"></i> Orders you ring up at the POS don't notify.</span>
+                <a href="{% url 'restaurant_admin:order_records' restaurant_slug=rslug %}">Live Orders Desk <i class="fa-solid fa-arrow-right"></i></a>
+                {% endif %}
+            </footer>
+        </aside>
+        <script>
+            (function () {
+                const slug = "{{ rslug }}";
+                const ntModule = "{{ nt_module|default:'restaurant' }}";
+                {% if nt_module == 'hotel' %}
+                const pollUrl = "{% url 'hotel_admin:notifications_poll' restaurant_slug=rslug %}";
+                const listUrl = "{% url 'hotel_admin:notifications_list' restaurant_slug=rslug %}";
+                const updateUrl = "{% url 'hotel_admin:notifications_update' restaurant_slug=rslug %}";
+                {% else %}
+                const pollUrl = "{% url 'restaurant_admin:order_notifications_poll' restaurant_slug=rslug %}";
+                const listUrl = "{% url 'restaurant_admin:notifications_list' restaurant_slug=rslug %}";
+                const updateUrl = "{% url 'restaurant_admin:notifications_update' restaurant_slug=rslug %}";
+                {% endif %}
+                const csrf = "{{ csrf_token }}";
+                const drawer = document.getElementById('ntDrawer');
+                const backdrop = document.getElementById('ntBackdrop');
+                const listEl = document.getElementById('ntList');
+                let lastId = 0, initialized = false, polling = false;
+                let tab = 'inbox', cat = 'all', items = [], hasMore = false, loading = false, lastFocus = null;
+
+                // ---------- sound ----------
+                let soundEnabled = localStorage.getItem('order_notif_sound_enabled') !== '0';
+                let audioCtx = null, customAudio = null, activeSoundUrl = '';
+                function setSoundUrl(url) {
+                    if (!url) { activeSoundUrl = ''; customAudio = null; return; }
+                    if (url === activeSoundUrl && customAudio) return;
+                    activeSoundUrl = url;
+                    try { customAudio = new Audio(url); customAudio.preload = 'auto'; customAudio.load(); } catch (_) { customAudio = null; }
+                }
+                function chime() {
+                    try {
+                        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+                        if (audioCtx.state === 'suspended') audioCtx.resume();
+                        const now = audioCtx.currentTime;
+                        [[880, 0, .28], [1320, .09, .2]].forEach(function (n) {
+                            const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+                            o.type = 'sine'; o.frequency.setValueAtTime(n[0], now + n[1]);
+                            g.gain.setValueAtTime(0.0001, now + n[1]); g.gain.exponentialRampToValueAtTime(n[2], now + n[1] + .02);
+                            g.gain.exponentialRampToValueAtTime(0.0001, now + .6);
+                            o.connect(g).connect(audioCtx.destination); o.start(now + n[1]); o.stop(now + .65);
+                        });
+                    } catch (_) { }
+                }
+                function playSound() {
+                    if (!soundEnabled) return;
+                    if (customAudio && activeSoundUrl) {
+                        try { customAudio.currentTime = 0; const p = customAudio.play(); if (p) { p.catch(chime); return; } } catch (_) { }
+                    }
+                    chime();
+                }
+                function unlockAudio() {
+                    try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); } catch (_) { }
+                    if (customAudio) customAudio.load();
+                }
+                ['click', 'keydown', 'touchstart'].forEach(function (ev) { document.addEventListener(ev, unlockAudio, { once: true }); });
+                function paintSound() {
+                    const icon = document.getElementById('globalSoundToggleIcon'), text = document.getElementById('globalSoundToggleText');
+                    if (icon) icon.className = soundEnabled ? 'bi bi-volume-up-fill text-success' : 'bi bi-volume-mute-fill text-danger';
+                    if (text) text.textContent = soundEnabled ? 'Sound ON' : 'Muted';
+                    const b = document.getElementById('ntSoundBtn');
+                    if (b) { b.innerHTML = soundEnabled ? '<i class="fa-solid fa-volume-high"></i>' : '<i class="fa-solid fa-volume-xmark"></i>'; b.title = soundEnabled ? 'Mute sound' : 'Turn sound on'; b.classList.toggle('is-off', !soundEnabled); }
+                }
+                function toggleSound() { soundEnabled = !soundEnabled; localStorage.setItem('order_notif_sound_enabled', soundEnabled ? '1' : '0'); paintSound(); if (soundEnabled) { unlockAudio(); playSound(); } }
+                const topSound = document.getElementById('globalSoundToggleBtn');
+                if (topSound) topSound.addEventListener('click', toggleSound);
+                document.getElementById('ntSoundBtn').addEventListener('click', toggleSound);
+                paintSound();
+
+                // ---------- desktop alerts ----------
+                const deskBtn = document.getElementById('ntDesktopBtn');
+                function paintDesk() {
+                    const ok = 'Notification' in window && Notification.permission === 'granted';
+                    deskBtn.classList.toggle('is-on', ok);
+                    deskBtn.title = ok ? 'Desktop alerts are on' : 'Allow desktop alerts';
+                    if (!('Notification' in window)) deskBtn.hidden = true;
+                }
+                deskBtn.addEventListener('click', function () {
+                    if ('Notification' in window && Notification.permission !== 'granted') Notification.requestPermission().then(paintDesk);
+                });
+                paintDesk();
+                function desktop(n) {
+                    if (!('Notification' in window) || Notification.permission !== 'granted' || !document.hidden) return;
+                    try {
+                        const d = new Notification(n.title, { body: n.body, silent: true, tag: 'sattkar-' + n.id });
+                        d.onclick = function () { window.focus(); markRead([n.id]); if (n.url) location.href = n.url; d.close(); };
+                    } catch (_) { }
+                }
+
+                // ---------- helpers ----------
+                function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+                function ago(iso) {
+                    const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+                    if (s < 45) return 'just now';
+                    if (s < 3600) return Math.round(s / 60) + ' min ago';
+                    if (s < 86400) return Math.round(s / 3600) + ' h ago';
+                    const d = new Date(iso);
+                    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) + ', ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+                }
+                function post(data) {
+                    const body = new URLSearchParams(data); body.append('module', ntModule);
+                    return fetch(updateUrl, { method: 'POST', body: body, keepalive: true, headers: { 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest' } })
+                        .then(function (r) { return r.ok ? r.json() : null; })
+                        .then(function (d) { if (d && d.unread !== undefined) setBadge(d.unread); return d; }).catch(function () { });
+                }
+                function setBadge(n) {
+                    document.querySelectorAll('.global-notif-badge').forEach(function (b) {
+                        b.textContent = n > 99 ? '99+' : n;
+                        b.classList.toggle('d-none', !n);
+                    });
+                    const el = drawer.querySelector('[data-count="unread"]');
+                    if (el) el.textContent = n || '';
+                    document.getElementById('ntSubtitle').textContent = n ? n + ' unread' : 'You’re all caught up';
+                }
+
+                // ---------- list ----------
+                function itemHtml(n) {
+                    const brand = n.brand ? ' style="--nt-brand:' + n.brand + '"' : '';
+                    const readBtn = n.read ? '<button type="button" data-act="unread" title="Mark as unread" aria-label="Mark as unread"><i class="fa-regular fa-envelope"></i></button>'
+                                           : '<button type="button" data-act="read" title="Mark as read" aria-label="Mark as read"><i class="fa-solid fa-check"></i></button>';
+                    const arcBtn = n.archived ? '<button type="button" data-act="unarchive" title="Move back to inbox" aria-label="Move back to inbox"><i class="fa-solid fa-inbox"></i></button>'
+                                              : '<button type="button" data-act="archive" title="Archive" aria-label="Archive"><i class="fa-solid fa-box-archive"></i></button>';
+                    return '<article class="ui-nt-item lv-' + n.level + (n.read ? '' : ' is-unread') + '" data-id="' + n.id + '">' +
+                        '<span class="ico tone-' + n.tone + '"' + brand + '><i class="fa-solid ' + n.icon + '"></i></span>' +
+                        '<a class="txt" href="' + esc(n.url || '#') + '" data-open>' +
+                            '<span class="t">' + esc(n.title) + '</span>' +
+                            (n.body ? '<span class="b">' + esc(n.body) + '</span>' : '') +
+                            '<span class="m">' + (n.source_label ? '<em' + brand + '>' + esc(n.source_label) + '</em> · ' : '') + '<time datetime="' + n.created_at + '">' + ago(n.created_at) + '</time></span>' +
+                        '</a>' +
+                        '<div class="acts">' + readBtn + arcBtn + '</div>' +
+                    '</article>';
+                }
+                const EMPTY = {
+                    inbox: ['fa-bell-slash', 'No notifications', 'New guest, online and Zomato / Swiggy orders appear here.'],
+                    unread: ['fa-circle-check', 'All caught up', 'Nothing unread.'],
+                    read: ['fa-envelope-open', 'Nothing read yet', 'Notifications you open move here.'],
+                    archived: ['fa-box-archive', 'Archive is empty', 'Archive notifications to keep your inbox clean.'],
+                };
+                function render() {
+                    if (!items.length) {
+                        const e = EMPTY[tab];
+                        listEl.innerHTML = '<div class="ui-nt-empty"><i class="fa-solid ' + e[0] + '"></i><strong>' + e[1] + '</strong><span>' + e[2] + '</span></div>';
+                        return;
+                    }
+                    let html = '', lastDay = '';
+                    items.forEach(function (n) {
+                        const d = new Date(n.created_at), today = new Date(), y = new Date(Date.now() - 864e5);
+                        const day = d.toDateString() === today.toDateString() ? 'Today' : (d.toDateString() === y.toDateString() ? 'Yesterday' : d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' }));
+                        if (day !== lastDay) { html += '<h3 class="ui-nt-day">' + day + '</h3>'; lastDay = day; }
+                        html += itemHtml(n);
+                    });
+                    if (hasMore) html += '<button type="button" class="ui-nt-more" data-more>Show older</button>';
+                    listEl.innerHTML = html;
+                }
+                function load(more) {
+                    if (loading) return;
+                    loading = true;
+                    if (!more) listEl.innerHTML = '<div class="ui-nt-empty"><i class="fa-solid fa-spinner fa-spin"></i></div>';
+                    const q = new URLSearchParams({ tab: tab, cat: cat, module: ntModule });
+                    if (more && items.length) q.set('before', items[items.length - 1].id);
+                    fetch(listUrl + '?' + q, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                        .then(function (r) { return r.ok ? r.json() : null; })
+                        .then(function (d) {
+                            if (!d) return;
+                            items = more ? items.concat(d.items) : d.items;
+                            hasMore = d.has_more;
+                            ['inbox', 'archived'].forEach(function (k) { const el = drawer.querySelector('[data-count="' + k + '"]'); if (el) el.textContent = d.counts[k] || ''; });
+                            setBadge(d.counts.unread);
+                            render();
+                        }).finally(function () { loading = false; });
+                }
+                function markRead(ids) { return post({ op: 'read', ids: ids.join(',') }); }
+
+                listEl.addEventListener('click', function (e) {
+                    if (e.target.closest('[data-more]')) { load(true); return; }
+                    const art = e.target.closest('.ui-nt-item');
+                    if (!art) return;
+                    const id = Number(art.dataset.id), n = items.find(function (x) { return x.id === id; });
+                    const actBtn = e.target.closest('[data-act]');
+                    if (actBtn) {
+                        e.preventDefault();
+                        const act = actBtn.dataset.act;
+                        post({ op: act, ids: String(id) }).then(function () {
+                            if (act === 'read' || act === 'unread') n.read = act === 'read';
+                            const leaves = (tab === 'unread' && act === 'read') || (tab === 'read' && act === 'unread') ||
+                                           (tab !== 'archived' && act === 'archive') || (tab === 'archived' && act === 'unarchive');
+                            if (leaves) { art.classList.add('is-leaving'); setTimeout(function () { items = items.filter(function (x) { return x.id !== id; }); render(); }, 180); }
+                            else render();
+                            if (act === 'archive' || act === 'unarchive') load(false);
+                        });
+                        return;
+                    }
+                    if (e.target.closest('[data-open]')) {
+                        if (!n.read) markRead([id]);
+                        if (!n.url) e.preventDefault();
+                    }
+                });
+                drawer.querySelectorAll('[data-tab]').forEach(function (b) {
+                    b.addEventListener('click', function () {
+                        tab = b.dataset.tab;
+                        drawer.querySelectorAll('[data-tab]').forEach(function (x) { x.classList.toggle('is-on', x === b); x.setAttribute('aria-selected', x === b ? 'true' : 'false'); });
+                        drawer.querySelector('.ui-nt-bulk').hidden = tab === 'archived';
+                        load(false);
+                    });
+                });
+                drawer.querySelectorAll('[data-cat]').forEach(function (b) {
+                    b.addEventListener('click', function () {
+                        cat = b.dataset.cat;
+                        drawer.querySelectorAll('[data-cat]').forEach(function (x) { x.classList.toggle('is-on', x === b); });
+                        load(false);
+                    });
+                });
+                drawer.querySelectorAll('[data-bulk]').forEach(function (b) {
+                    b.addEventListener('click', function () { post({ op: b.dataset.bulk, cat: cat }).then(function () { load(false); }); });
+                });
+
+                // ---------- open / close ----------
+                function open() {
+                    lastFocus = document.activeElement;
+                    backdrop.hidden = false;
+                    drawer.classList.add('is-open'); drawer.setAttribute('aria-hidden', 'false');
+                    document.body.classList.add('ui-nt-lock');
+                    setTimeout(function () { drawer.focus(); }, 30);
+                    load(false);
+                }
+                function close() {
+                    drawer.classList.remove('is-open'); drawer.setAttribute('aria-hidden', 'true');
+                    document.body.classList.remove('ui-nt-lock');
+                    setTimeout(function () { backdrop.hidden = true; }, 200);
+                    if (lastFocus && lastFocus.focus) lastFocus.focus();
+                }
+                document.querySelectorAll('[data-nt-open]').forEach(function (b) { b.addEventListener('click', function (e) { e.preventDefault(); drawer.classList.contains('is-open') ? close() : open(); }); });
+                drawer.querySelectorAll('[data-nt-close]').forEach(function (b) { b.addEventListener('click', close); });
+                backdrop.addEventListener('click', close);
+                document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && drawer.classList.contains('is-open')) close(); });
+                window.SattkarNotifications = { open: open, close: close, refresh: function () { load(false); } };
+                if (location.hash === '#notifications') open();
+                window.addEventListener('hashchange', function () { if (location.hash === '#notifications') open(); });
+
+                // ---------- toasts ----------
+                function toast(n) {
+                    const box = document.getElementById('global-toast-container');
+                    if (!box) return;
+                    const t = document.createElement('div');
+                    t.className = 'ui-nt-toast lv-' + n.level;
+                    t.setAttribute('role', 'status');
+                    const brand = n.brand ? ' style="--nt-brand:' + n.brand + '"' : '';
+                    t.innerHTML = '<span class="ico tone-' + n.tone + '"' + brand + '><i class="fa-solid ' + n.icon + '"></i></span>' +
+                        '<div class="txt"><strong>' + esc(n.title) + '</strong>' + (n.body ? '<span>' + esc(n.body) + '</span>' : '') +
+                        (n.url ? '<a href="' + esc(n.url) + '">Open</a>' : '') + '</div>' +
+                        '<button type="button" aria-label="Dismiss"><i class="fa-solid fa-xmark"></i></button>';
+                    t.querySelector('button').addEventListener('click', function () { t.remove(); });
+                    const a = t.querySelector('a');
+                    if (a) a.addEventListener('click', function () { markRead([n.id]); });
+                    box.appendChild(t);
+                    setTimeout(function () { if (t.parentNode) t.remove(); }, n.level === 'critical' ? 20000 : 9000);
+                }
+                function ring() {
+                    const icon = document.getElementById('globalBellIcon');
+                    if (icon) { icon.classList.add('bell-ring-active'); setTimeout(function () { icon.classList.remove('bell-ring-active'); }, 900); }
+                }
+
+                // ---------- polling ----------
+                function poll() {
+                    if (polling) return;
+                    polling = true;
+                    fetch(pollUrl + '?module=' + ntModule + '&since=' + lastId, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                        .then(function (r) { return r.ok ? r.json() : null; })
+                        .then(function (d) {
+                            if (!d || !d.success) return;
+                            if (d.sound_url !== undefined) setSoundUrl(d.sound_url);
+                            setBadge(d.unread);
+                            if (!initialized) { initialized = true; lastId = d.latest_id || 0; return; }
+                            if (d.new && d.new.length) {
+                                lastId = Math.max(lastId, d.latest_id || 0);
+                                if (d.new.some(function (n) { return n.sound; })) playSound();
+                                ring();
+                                d.new.forEach(function (n) {
+                                    toast(n); desktop(n);
+                                    if (n.kind === 'order_new' || n.kind === 'delivery_new') {
+                                        window.dispatchEvent(new CustomEvent('new_order_arrived', { detail: Object.assign({ id: n.order_id, detail_url: n.url }, n.data) }));
+                                    }
+                                    window.dispatchEvent(new CustomEvent('sattkar_notification', { detail: n }));
+                                });
+                                if (drawer.classList.contains('is-open')) load(false);
+                            } else if (d.latest_id > lastId) {
+                                lastId = d.latest_id;
+                            }
+                        })
+                        .catch(function () { })
+                        .finally(function () { polling = false; });
+                }
+                // A worker keeps polling at full speed while the tab is in the background
+                try {
+                    const w = new Worker(URL.createObjectURL(new Blob(['setInterval(function(){postMessage(1)},12000)'], { type: 'application/javascript' })));
+                    w.onmessage = poll;
+                } catch (_) { setInterval(poll, 12000); }
+                poll();
+                document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(); });
+                window.addEventListener('focus', poll);
+                setInterval(function () { drawer.querySelectorAll('time[datetime]').forEach(function (t) { t.textContent = ago(t.getAttribute('datetime')); }); }, 60000);
+            })();
+        </script>

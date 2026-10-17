@@ -1,0 +1,75 @@
+<div class="ui-logs ui-finance">
+  <div class="ui-page-header">
+    <div><h1>Expenses</h1><p>Record rent, utilities, repairs and every other cost by branch. They flow straight into the profit &amp; loss report.</p></div>
+    <div class="ui-actions">
+      <a class="ui-btn ui-btn-gray" href="{{ base_url }}finance/profit-loss/{% if selected_branch %}?branch={{ selected_branch.id }}{% endif %}"><i class="fa-solid fa-scale-balanced"></i><span>Profit &amp; loss</span></a>
+      <button type="button" class="ui-btn ui-btn-primary" data-open-dialog="expenseDialog"><i class="fa-solid fa-plus"></i><span>Add expense</span></button>
+    </div>
+  </div>
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Spent</div><div class="kpi-icon"><i class="fa-solid fa-wallet"></i></div></div><div class="kpi-val">₹{{ total|floatformat:0 }}</div><div class="kpi-sub">{{ start|date:"d M" }} – {{ end|date:"d M Y" }}</div></div>
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">vs previous period</div><div class="kpi-icon"><i class="fa-solid fa-arrow-right-arrow-left"></i></div></div><div class="kpi-val">{% if change_pct is not None %}<span class="ui-delta {% if change_pct <= 0 %}is-up{% else %}is-down{% endif %}">{% if change_pct > 0 %}▲{% else %}▼{% endif %} {{ change_pct|stringformat:"d"|cut:"-" }}%</span>{% else %}—{% endif %}</div><div class="kpi-sub">₹{{ prev_total|floatformat:0 }} before</div></div>
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">GST paid</div><div class="kpi-icon"><i class="fa-solid fa-percent"></i></div></div><div class="kpi-val">₹{{ tax|floatformat:0 }}</div><div class="kpi-sub">Possible input credit</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Entries</div><div class="kpi-icon"><i class="fa-solid fa-receipt"></i></div></div><div class="kpi-val">{{ count }}</div><div class="kpi-sub">{% if by_cat %}Most on {{ by_cat.0.category__name }}{% else %}Nothing recorded{% endif %}</div></div>
+  </div>
+
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <form class="ui-card ui-filters" method="get">
+        <div class="ui-field ui-field-search"><label for="exq">Search</label><div class="ui-input-icon"><i class="fa-solid fa-magnifying-glass"></i><input id="exq" class="ui-input" type="search" name="q" value="{{ filters.q }}" placeholder="Paid to, bill no. or note"></div></div>
+        <div class="ui-field"><label for="exf">From</label><input id="exf" class="ui-input" type="date" name="from" value="{{ start|date:'Y-m-d' }}"></div>
+        <div class="ui-field"><label for="ext">To</label><input id="ext" class="ui-input" type="date" name="to" value="{{ end|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}"></div>
+        <div class="ui-field"><label for="exc">Category</label><select id="exc" class="ui-input" name="category"><option value="">All categories</option>{% for c in cats %}<option value="{{ c.pk }}" {% if filters.category == c.pk|stringformat:'d' %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
+        {% if not branch_locked and branches|length > 1 %}<div class="ui-field"><label for="exb">Branch</label><select id="exb" class="ui-input" name="branch"><option value="">All branches</option>{% for b in branches %}<option value="{{ b.id }}" {% if selected_branch.id == b.id %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></div>{% endif %}
+        <div class="ui-filter-actions"><button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-filter"></i><span>Apply</span></button><a class="ui-btn ui-btn-gray" href="?{{ request.GET.urlencode }}&export=csv"><i class="fa-solid fa-file-csv"></i><span>CSV</span></a></div>
+      </form>
+
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Expenses</h2><span class="ui-list-count">{{ page.paginator.count }}</span></div>
+        {% if page.object_list %}
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Date</th><th>Category</th><th>Paid to</th><th>Branch</th><th>Amount</th><th></th></tr></thead>
+          <tbody>{% for e in page.object_list %}
+            <tr>
+              <td>{{ e.date|date:"d M Y" }}</td>
+              <td class="ui-cell-primary"><strong><i class="fa-solid {{ e.category.icon }}" style="color:var(--ui-label-2);width:18px"></i> {{ e.category.name }}</strong>{% if e.note %}<div class="ui-log-sub">{{ e.note|truncatechars:60 }}</div>{% endif %}</td>
+              <td>{{ e.paid_to|default:"—" }}{% if e.reference %}<div class="ui-log-sub">Bill {{ e.reference }}</div>{% endif %}</td>
+              <td>{{ e.branch.name|default:"All branches" }}{% if e.department == 'shared' %}<div><span class="ui-chip ui-chip-indigo">Shared</span></div>{% endif %}</td>
+              <td><strong>₹{{ e.amount|floatformat:2 }}</strong><div class="ui-log-sub">{{ e.get_payment_method_display }}{% if e.tax_amount %} · GST ₹{{ e.tax_amount|floatformat:2 }}{% endif %}</div></td>
+              <td class="ui-cell-actions">
+                {% if e.receipt %}<a class="ui-btn ui-btn-gray ui-btn-sm" href="{{ base_url }}finance/expenses/{{ e.pk }}/receipt/" target="_blank" rel="noopener" title="Receipt"><i class="fa-solid fa-paperclip"></i></a>{% endif %}
+                <button type="button" class="ui-btn ui-btn-gray ui-btn-sm" data-open-dialog="edit{{ e.pk }}">Edit</button>
+              </td>
+            </tr>{% endfor %}</tbody>
+        </table></div>
+        {% if page.has_other_pages %}<div class="ui-pager"><span class="ui-pager-info">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+          {% if page.has_previous %}<a class="ui-pager-btn" href="?{{ request.GET.urlencode }}&page={{ page.previous_page_number }}">Previous</a>{% endif %}
+          {% if page.has_next %}<a class="ui-pager-btn" href="?{{ request.GET.urlencode }}&page={{ page.next_page_number }}">Next</a>{% endif %}</div>{% endif %}
+        {% else %}
+        <div class="ui-empty"><div class="ui-empty-icon"><i class="fa-solid fa-wallet"></i></div><h3>No expenses in this period</h3><p>Add rent, bills and petty cash as you pay them, so the profit &amp; loss shows the real picture.</p>
+          <button type="button" class="ui-btn ui-btn-primary" data-open-dialog="expenseDialog"><i class="fa-solid fa-plus"></i><span>Add expense</span></button></div>
+        {% endif %}
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Where it went</h2>
+        {% if by_cat %}<ul class="ui-ledger">{% for row in by_cat %}<li style="flex-direction:column;align-items:stretch;gap:6px"><div style="display:flex;justify-content:space-between"><span class="ui-ledger-text">{{ row.category__name }}</span><strong>₹{{ row.s|floatformat:0 }}</strong></div><div class="ui-bar-mini"><span style="width:{{ row.pct }}%"></span></div></li>{% endfor %}</ul>
+        {% else %}<p class="ui-log-sub">Nothing recorded yet.</p>{% endif %}
+      </section>
+      {% if not branch_locked %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Categories</h2>
+        <ul class="ui-ledger">{% for c in cats %}<li><span class="ui-ledger-text"{% if not c.is_active %} style="opacity:.5"{% endif %}><i class="fa-solid {{ c.icon }}" style="width:18px"></i> {{ c.name }}</span>
+          <form method="post">{% csrf_token %}<input type="hidden" name="op" value="toggle_category"><input type="hidden" name="pk" value="{{ c.pk }}"><input type="hidden" name="next" value="{{ here }}"><button class="ui-link-btn" type="submit">{% if c.is_active %}Hide{% else %}Show{% endif %}</button></form></li>{% endfor %}</ul>
+        <form method="post" class="ui-inline-form" style="display:flex;gap:8px;margin-top:10px">{% csrf_token %}<input type="hidden" name="op" value="add_category"><input type="hidden" name="next" value="{{ here }}"><input class="ui-input" name="name" placeholder="New category" required><button class="ui-btn ui-btn-gray" type="submit">Add</button></form>
+      </section>
+      {% endif %}
+    </div>
+  </div>
+
+  {% include 'finance/_expense_form.html' with dialog_id='expenseDialog' title='Add expense' op='add' e=None %}
+  {% for e in page.object_list %}{% include 'finance/_expense_form.html' with title='Edit expense' op='edit' %}{% endfor %}
+</div>
+{% include 'integrations/_scripts.html' %}

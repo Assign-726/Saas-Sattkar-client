@@ -765,7 +765,7 @@
     </style>
     {% block extra_head %}{% endblock %}
     <link rel="stylesheet" href="{% static 'css/theme-dark.css' %}?v=3.4">
-    <link rel="stylesheet" href="{% static 'css/apple-ui.css' %}?v=1.3">
+    <link rel="stylesheet" href="{% static 'css/apple-ui.css' %}?v=2.1">
 </head>
 
 <body>
@@ -797,35 +797,13 @@
                 </button>
             </div>
             {% if not is_club_user and not is_kitchen_user %}
-            <!-- Mobile Notification Bell Dropdown -->
-            <div class="dropdown">
-                <button class="btn btn-sm btn-light border position-relative p-1 px-2" id="mobileNotifDropdownBtn"
-                    data-bs-toggle="dropdown" aria-expanded="false" title="Order Notifications"
-                    style="border-radius: 8px;">
-                    <i class="bi bi-bell-fill text-primary fs-6"></i>
-                    <span
-                        class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none global-notif-badge"
-                        style="font-size: 0.65rem;">0</span>
-                </button>
-                <div class="dropdown-menu dropdown-menu-end shadow-lg border-0 rounded-3 p-0 overflow-hidden"
-                    style="width: 310px; max-width: 90vw; z-index: 1060;">
-                    <div class="p-2.5 bg-light border-bottom d-flex justify-content-between align-items-center">
-                        <h6 class="fw-bold mb-0 text-dark" style="font-size: 0.85rem;">Recent Orders</h6>
-                    </div>
-                    <div class="overflow-auto global-notif-list-container" style="max-height: 280px;">
-                        <div class="text-center py-3 text-muted small empty-notif-msg">
-                            <i class="bi bi-bell-slash text-secondary fs-4 d-block mb-1"></i>
-                            No new orders yet
-                        </div>
-                    </div>
-                    <div class="p-2 text-center bg-light border-top">
-                        <a href="{% url 'restaurant_admin:order_records' restaurant_slug=rslug %}"
-                            class="btn btn-sm btn-primary w-100 py-1" style="font-size: 0.78rem;">
-                            View Orders Desk →
-                        </a>
-                    </div>
-                </div>
-            </div>
+            <!-- Mobile notifications button (opens the drawer) -->
+            <button type="button" class="btn btn-sm btn-light border position-relative p-1 px-2" data-nt-open
+                title="Notifications" aria-label="Notifications" style="border-radius: 8px;">
+                <i class="bi bi-bell-fill text-primary fs-6"></i>
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none global-notif-badge"
+                    style="font-size: 0.65rem;">0</span>
+            </button>
             {% elif is_club_user %}
             <a href="{% url 'restaurant_admin:club_gate_scanner' restaurant_slug=rslug %}" class="btn btn-sm btn-dark py-1 px-2" title="Gate Scanner">
                 <i class="fas fa-qrcode text-warning"></i>
@@ -878,6 +856,7 @@
             <div class="sidebar-menu">
                 {% if show_dining_dashboard %}
                 <!-- Ungrouped Standalone: Dashboard -->
+                {% if access.dashboard %}
                 <div class="sidebar-single-nav">
                     <a class="nav-link {% if active_menu == 'dashboard' %}active{% endif %}"
                         href="{% url 'restaurant_admin:dashboard' restaurant_slug=rslug %}" title="Dashboard">
@@ -886,9 +865,24 @@
                     </a>
                 </div>
                 {% endif %}
+                {% endif %}
+
+                {% if can_view_guests %}
+                <!-- Standalone: Morning Brief -->
+                {% if access.dashboard %}
+                <div class="sidebar-single-nav">
+                    <a class="nav-link {% if active_menu == 'brief' %}active{% endif %}"
+                        href="{% url 'restaurant_admin:morning_brief' restaurant_slug=rslug %}" title="Morning Brief">
+                        <i class="fas fa-mug-hot"></i>
+                        <span>Morning Brief</span>
+                    </a>
+                </div>
+                {% endif %}
+                {% endif %}
 
                 {% if show_dining_analytics %}
                 <!-- Ungrouped Standalone: Analytics & Sales -->
+                {% if access.analytics %}
                 <div class="sidebar-single-nav">
                     <a class="nav-link {% if active_menu == 'analytics' %}active{% endif %}"
                         href="{% url 'restaurant_admin:sales_analytics' restaurant_slug=rslug %}"
@@ -897,6 +891,15 @@
                         <span>Analytics & Sales</span>
                     </a>
                 </div>
+                <div class="sidebar-single-nav">
+                    <a class="nav-link {% if active_menu == 'menu_engineering' %}active{% endif %}"
+                        href="{% url 'restaurant_admin:report_menu_engineering' restaurant_slug=rslug %}"
+                        title="Menu Engineering">
+                        <i class="fas fa-chess-board"></i>
+                        <span>Menu Engineering</span>
+                    </a>
+                </div>
+                {% endif %}
                 {% endif %}
 
                 {% if show_pos_group %}
@@ -913,6 +916,7 @@
                     <div class="sidebar-group-content {% if active_menu == 'order_records' or active_menu == 'order_list' or active_menu == 'receipts' or active_menu == 'order_create_manual' or active_menu == 'transactions_create' or active_menu == 'credit_note' or active_menu == 'pos_shifts' or active_menu == 'pos_counters' %}show{% endif %}"
                         id="group-pos">
                         <ul class="nav flex-column">
+                            {% if access.pos %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'transactions_create' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:transaction_desk_create' restaurant_slug=rslug %}"
@@ -921,6 +925,8 @@
                                     <span>Transaction Desk</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.pos %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'order_create_manual' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:order_create_manual' restaurant_slug=rslug %}"
@@ -929,6 +935,8 @@
                                     <span>New Local Order</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.pos %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'order_records' or active_menu == 'order_list' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:order_records' restaurant_slug=rslug %}"
@@ -937,6 +945,8 @@
                                     <span>Orders</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.pos %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'receipts' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:receipt_list' restaurant_slug=rslug %}"
@@ -945,7 +955,9 @@
                                     <span>Receipt System</span>
                                 </a>
                             </li>
+                            {% endif %}
                             {% if is_dining_mgmt or is_cashier_user %}
+                            {% if access.pos %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'credit_note' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:credit_note_desk' restaurant_slug=rslug %}"
@@ -954,6 +966,8 @@
                                     <span>Issue Credit Note</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.pos %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'pos_shifts' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:pos_shift_history' restaurant_slug=rslug %}"
@@ -963,7 +977,9 @@
                                 </a>
                             </li>
                             {% endif %}
+                            {% endif %}
                             {% if is_dining_mgmt %}
+                            {% if access.pos %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'pos_counters' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:pos_counter_list' restaurant_slug=rslug %}"
@@ -973,6 +989,7 @@
                                 </a>
                             </li>
                             {% endif %}
+                            {% endif %}
                         </ul>
                     </div>
                 </div>
@@ -980,6 +997,7 @@
 
                 {% if is_kitchen_user %}
                 <!-- Dedicated Station Nav for Kitchen -->
+                {% if access.kitchen %}
                 <div class="sidebar-single-nav">
                     <a class="nav-link {% if active_menu == 'kitchen_kds' %}active{% endif %}"
                         href="{% url 'restaurant_admin:kitchen_kds' restaurant_slug=rslug %}"
@@ -989,11 +1007,12 @@
                     </a>
                 </div>
                 {% endif %}
+                {% endif %}
 
                 {% if show_dinein_group %}
                 <!-- Group 3: Dine-In Operations -->
                 <div class="sidebar-group">
-                    <div class="sidebar-group-header {% if active_menu == 'floor_plan' or active_menu == 'tables' or active_menu == 'reservations' or active_menu == 'kitchen_kds' %}open active-group{% endif %}"
+                    <div class="sidebar-group-header {% if active_menu == 'floor_plan' or active_menu == 'tables' or active_menu == 'reservations' or active_menu == 'kitchen_kds' or active_menu == 'waitlist' %}open active-group{% endif %}"
                         data-group-target="#group-dinein">
                         <div class="group-title">
                             <i class="fas fa-chair"></i>
@@ -1001,10 +1020,11 @@
                         </div>
                         <i class="fas fa-chevron-down group-chevron"></i>
                     </div>
-                    <div class="sidebar-group-content {% if active_menu == 'floor_plan' or active_menu == 'tables' or active_menu == 'reservations' or active_menu == 'kitchen_kds' %}show{% endif %}"
+                    <div class="sidebar-group-content {% if active_menu == 'floor_plan' or active_menu == 'tables' or active_menu == 'reservations' or active_menu == 'kitchen_kds' or active_menu == 'waitlist' %}show{% endif %}"
                         id="group-dinein">
                         <ul class="nav flex-column">
                             {% if is_dining_mgmt %}
+                            {% if access.kitchen %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'kitchen_kds' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:kitchen_kds' restaurant_slug=rslug %}"
@@ -1013,6 +1033,8 @@
                                     <span>Kitchen (KDS)</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.dine_in %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'floor_plan' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:floor_plan_dashboard' restaurant_slug=rslug %}"
@@ -1022,6 +1044,8 @@
                                 </a>
                             </li>
                             {% endif %}
+                            {% endif %}
+                            {% if access.dine_in %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'tables' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:table_list' restaurant_slug=rslug %}" title="Tables">
@@ -1029,6 +1053,8 @@
                                     <span>Tables</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.dine_in %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'reservations' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:reservation_list' restaurant_slug=rslug %}"
@@ -1037,6 +1063,17 @@
                                     <span>Reservations</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.dine_in %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'waitlist' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:reservation_waitlist' restaurant_slug=rslug %}"
+                                    title="Waitlist">
+                                    <i class="bi bi-hourglass-split"></i>
+                                    <span>Walk-in Waitlist</span>
+                                </a>
+                            </li>
+                            {% endif %}
                         </ul>
                     </div>
                 </div>
@@ -1056,6 +1093,7 @@
                     <div class="sidebar-group-content {% if active_menu == 'category_list' or active_menu == 'categories' or active_menu == 'menu_list' or active_menu == 'menu' or active_menu == 'coupons' or active_menu == 'qr_generator' %}show{% endif %}"
                         id="group-menu">
                         <ul class="nav flex-column">
+                            {% if access.menu %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'category_list' or active_menu == 'categories' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:category_list' restaurant_slug=rslug %}"
@@ -1064,6 +1102,8 @@
                                     <span>Menu Categories</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.menu %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'menu_list' or active_menu == 'menu' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:menu_list' restaurant_slug=rslug %}"
@@ -1072,7 +1112,9 @@
                                     <span>Menu Items</span>
                                 </a>
                             </li>
+                            {% endif %}
                             {% if is_dining_mgmt %}
+                            {% if access.menu %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'coupons' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:coupon_list' restaurant_slug=rslug %}"
@@ -1081,6 +1123,8 @@
                                     <span>Coupons</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.menu %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'qr_generator' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:qr_code_generator' restaurant_slug=rslug %}"
@@ -1090,6 +1134,42 @@
                                 </a>
                             </li>
                             {% endif %}
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if show_delivery %}
+                <!-- Group: Online Delivery (Zomato / Swiggy) -->
+                <div class="sidebar-group">
+                    <div class="sidebar-group-header {% if active_menu == 'delivery_zomato' or active_menu == 'delivery_swiggy' %}open active-group{% endif %}"
+                        data-group-target="#group-delivery">
+                        <div class="group-title">
+                            <i class="fas fa-motorcycle"></i>
+                            <span>Online Delivery</span>
+                        </div>
+                        <i class="fas fa-chevron-down group-chevron"></i>
+                    </div>
+                    <div class="sidebar-group-content {% if active_menu == 'delivery_zomato' or active_menu == 'delivery_swiggy' %}show{% endif %}"
+                        id="group-delivery">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'delivery_zomato' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:delivery_dashboard' restaurant_slug=rslug platform='zomato' %}" title="Zomato orders, menu & payouts">
+                                    <i class="sb-brand" style="--b:#E23744">Z</i>
+                                    <span>Zomato</span>
+                                    {% if delivery_pending.zomato %}<span class="sb-count" style="--b:#E23744">{{ delivery_pending.zomato }}</span>{% endif %}
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'delivery_swiggy' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:delivery_dashboard' restaurant_slug=rslug platform='swiggy' %}" title="Swiggy orders, menu & payouts">
+                                    <i class="sb-brand" style="--b:#FC8019">S</i>
+                                    <span>Swiggy</span>
+                                    {% if delivery_pending.swiggy %}<span class="sb-count" style="--b:#FC8019">{{ delivery_pending.swiggy }}</span>{% endif %}
+                                </a>
+                            </li>
                         </ul>
                     </div>
                 </div>
@@ -1110,6 +1190,7 @@
                         id="group-club-events">
                         <ul class="nav flex-column">
                             {% if user_role != 'GATE_SCANNER' %}
+                            {% if access.events %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'club_events' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:club_events_list' restaurant_slug=rslug %}"
@@ -1119,6 +1200,8 @@
                                 </a>
                             </li>
                             {% endif %}
+                            {% endif %}
+                            {% if access.events %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'club_guestlist' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:club_guestlist' restaurant_slug=rslug %}"
@@ -1127,7 +1210,9 @@
                                     <span>Guestlist & Passes</span>
                                 </a>
                             </li>
+                            {% endif %}
                             {% if user_role != 'GATE_SCANNER' %}
+                            {% if access.events %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'club_ticket_grid' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:club_ticket_grid' restaurant_slug=rslug %}"
@@ -1136,6 +1221,8 @@
                                     <span>Ticket Sales Grid</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.events %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'club_floor_plan' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:club_floor_plan' restaurant_slug=rslug %}"
@@ -1145,6 +1232,8 @@
                                 </a>
                             </li>
                             {% endif %}
+                            {% endif %}
+                            {% if access.events %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'club_scanner' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:club_gate_scanner' restaurant_slug=rslug %}"
@@ -1153,6 +1242,7 @@
                                     <span>Gate Scanner</span>
                                 </a>
                             </li>
+                            {% endif %}
                         </ul>
                     </div>
                 </div>
@@ -1161,7 +1251,7 @@
                 {% if show_stock_group %}
                 <!-- Group 5: Stock & Supply Chain -->
                 <div class="sidebar-group">
-                    <div class="sidebar-group-header {% if active_menu == 'inventory' or active_menu == 'inventory_categories' or active_menu == 'purchases' or active_menu == 'challans' or active_menu == 'inventory_logs' %}open active-group{% endif %}"
+                    <div class="sidebar-group-header {% if active_menu == 'inventory' or active_menu == 'inventory_categories' or active_menu == 'purchases' or active_menu == 'challans' or active_menu == 'inventory_logs' or active_menu == 'inventory_wastage' or active_menu == 'inventory_counts' %}open active-group{% endif %}"
                         data-group-target="#group-stock">
                         <div class="group-title">
                             <i class="fas fa-boxes"></i>
@@ -1169,9 +1259,10 @@
                         </div>
                         <i class="fas fa-chevron-down group-chevron"></i>
                     </div>
-                    <div class="sidebar-group-content {% if active_menu == 'inventory' or active_menu == 'inventory_categories' or active_menu == 'purchases' or active_menu == 'challans' or active_menu == 'inventory_logs' %}show{% endif %}"
+                    <div class="sidebar-group-content {% if active_menu == 'inventory' or active_menu == 'inventory_categories' or active_menu == 'purchases' or active_menu == 'challans' or active_menu == 'inventory_logs' or active_menu == 'inventory_wastage' or active_menu == 'inventory_counts' %}show{% endif %}"
                         id="group-stock">
                         <ul class="nav flex-column">
+                            {% if access.inventory %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'inventory' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:inventory_list' restaurant_slug=rslug %}"
@@ -1180,6 +1271,8 @@
                                     <span>Inventory/Stock </span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.inventory %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'inventory_categories' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:inventory_category_list' restaurant_slug=rslug %}"
@@ -1188,6 +1281,8 @@
                                     <span>Stock Categories</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.inventory %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'purchases' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:purchase_list' restaurant_slug=rslug %}"
@@ -1196,6 +1291,8 @@
                                     <span>Purchase Register</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.inventory %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'challans' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:challan_list' restaurant_slug=rslug %}"
@@ -1204,6 +1301,8 @@
                                     <span>Delivery Challans</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.inventory %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'inventory_logs' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:inventory_logs' restaurant_slug=rslug %}"
@@ -1212,6 +1311,25 @@
                                     <span>Inventory Logs</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.inventory %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'inventory_wastage' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:inventory_wastage' restaurant_slug=rslug %}"
+                                    title="Wastage">
+                                    <i class="fas fa-trash-arrow-up"></i>
+                                    <span>Wastage</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'inventory_counts' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:inventory_counts' restaurant_slug=rslug %}"
+                                    title="Stock Counts">
+                                    <i class="fas fa-clipboard-check"></i>
+                                    <span>Stock Counts</span>
+                                </a>
+                            </li>
+                            {% endif %}
                         </ul>
                     </div>
                 </div>
@@ -1219,6 +1337,7 @@
 
                 {% if show_parties %}
                 <!-- Standalone Item: Parties -->
+                {% if access.inventory %}
                 <div class="sidebar-single-nav">
                     <a class="nav-link {% if active_menu == 'parties' %}active{% endif %}"
                         href="{% url 'restaurant_admin:party_list' restaurant_slug=rslug %}"
@@ -1226,6 +1345,101 @@
                         <i class="bi bi-people-fill"></i>
                         <span>Parties</span>
                     </a>
+                </div>
+                {% endif %}
+                {% endif %}
+
+                {% if can_manage_finance and access.finance %}
+                <!-- Group: Finance -->
+                <div class="sidebar-group">
+                    <div class="sidebar-group-header {% if active_menu == 'expenses' or active_menu == 'pnl' %}open active-group{% endif %}"
+                        data-group-target="#group-finance">
+                        <div class="group-title">
+                            <i class="fas fa-scale-balanced"></i>
+                            <span>Finance</span>
+                        </div>
+                        <i class="fas fa-chevron-down group-chevron"></i>
+                    </div>
+                    <div class="sidebar-group-content {% if active_menu == 'expenses' or active_menu == 'pnl' %}show{% endif %}"
+                        id="group-finance">
+                        <ul class="nav flex-column">
+                            {% if access.finance %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'expenses' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:expenses' restaurant_slug=rslug %}" title="Rent, utilities & other costs">
+                                    <i class="fas fa-wallet"></i>
+                                    <span>Expenses</span>
+                                </a>
+                            </li>
+                            {% endif %}
+                            {% if access.finance %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'pnl' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:profit_loss' restaurant_slug=rslug %}" title="Profit & loss by branch">
+                                    <i class="fas fa-chart-column"></i>
+                                    <span>Profit &amp; Loss</span>
+                                </a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if can_view_guests and access.guests_group %}
+                <!-- Group: Guests & Loyalty -->
+                <div class="sidebar-group">
+                    <div class="sidebar-group-header {% if active_menu == 'guests' or active_menu == 'gift_cards' or active_menu == 'feedback' or active_menu == 'campaigns' %}open active-group{% endif %}"
+                        data-group-target="#group-guests">
+                        <div class="group-title">
+                            <i class="fas fa-heart"></i>
+                            <span>Guests & Loyalty</span>
+                        </div>
+                        <i class="fas fa-chevron-down group-chevron"></i>
+                    </div>
+                    <div class="sidebar-group-content {% if active_menu == 'guests' or active_menu == 'gift_cards' or active_menu == 'feedback' or active_menu == 'campaigns' %}show{% endif %}"
+                        id="group-guests">
+                        <ul class="nav flex-column">
+                            {% if access.guests %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'guests' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:guest_list' restaurant_slug=rslug %}" title="Guest profiles, loyalty & notes">
+                                    <i class="fas fa-address-book"></i>
+                                    <span>Guests</span>
+                                </a>
+                            </li>
+                            {% endif %}
+                            {% if access.guests %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'gift_cards' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:gift_card_list' restaurant_slug=rslug %}" title="Gift cards & vouchers">
+                                    <i class="fas fa-gift"></i>
+                                    <span>Gift Cards</span>
+                                </a>
+                            </li>
+                            {% endif %}
+                            {% if access.feedback %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'feedback' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:feedback_list' restaurant_slug=rslug %}" title="Ratings, complaints & follow-up">
+                                    <i class="fas fa-comment-dots"></i>
+                                    <span>Feedback</span>
+                                </a>
+                            </li>
+                            {% endif %}
+                            {% if can_run_campaigns %}
+                            {% if access.campaigns %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'campaigns' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:campaign_list' restaurant_slug=rslug %}" title="WhatsApp, SMS & email campaigns">
+                                    <i class="fas fa-bullhorn"></i>
+                                    <span>Campaigns</span>
+                                </a>
+                            </li>
+                            {% endif %}
+                            {% endif %}
+                        </ul>
+                    </div>
                 </div>
                 {% endif %}
 
@@ -1243,6 +1457,7 @@
                     <div class="sidebar-group-content {% if active_group == 'staff_operations' or active_menu == 'staff' or active_menu == 'attendance_muster' or active_menu == 'payroll_dashboard' or active_menu == 'sop_dashboard' or active_menu == 'ground_staff_directory' %}show{% endif %}"
                         id="group-staff-ops">
                         <ul class="nav flex-column">
+                            {% if access.staff %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'attendance_muster' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:muster_roll' restaurant_slug=rslug %}"
@@ -1251,6 +1466,8 @@
                                     <span>Daily Muster Roll</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.staff %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'payroll_dashboard' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:payroll_dashboard' restaurant_slug=rslug %}"
@@ -1259,6 +1476,8 @@
                                     <span>Payroll & Slips</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.staff %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'sop_dashboard' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:sop_dashboard' restaurant_slug=rslug %}"
@@ -1267,6 +1486,8 @@
                                     <span>Daily SOP Board</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.staff %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'ground_staff_directory' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:ground_staff_list' restaurant_slug=rslug %}"
@@ -1275,6 +1496,8 @@
                                     <span>Ground Staff</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if access.staff %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'staff' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:staff_list' restaurant_slug=rslug %}"
@@ -1283,6 +1506,18 @@
                                     <span>Logins & Roles</span>
                                 </a>
                             </li>
+                            {% endif %}
+                            {% if can_manage_roles %}
+                            {% if access.staff %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'roles' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:roles' restaurant_slug=rslug %}" title="Custom roles: no access, view or manage per area">
+                                    <i class="fas fa-user-shield"></i>
+                                    <span>Roles &amp; Permissions</span>
+                                </a>
+                            </li>
+                            {% endif %}
+                            {% endif %}
                         </ul>
                     </div>
                 </div>
@@ -1292,7 +1527,20 @@
             <div class="sidebar-footer">
                 <!-- Pinned admin links: always visible above Logout -->
                 <div class="sidebar-footer-nav">
+                    {% if can_manage_integrations %}
+                    {% if access.integrations %}
+                    <div class="sidebar-single-nav">
+                        <a class="nav-link {% if active_menu == 'integrations' %}active{% endif %}"
+                            href="{% url 'restaurant_admin:integrations' restaurant_slug=rslug %}"
+                            title="Zomato, Swiggy, API keys & webhooks">
+                            <i class="fas fa-plug"></i>
+                            <span>Integrations</span>
+                        </a>
+                    </div>
+                    {% endif %}
+                    {% endif %}
                     {% if show_settings %}
+                    {% if access.settings %}
                     <div class="sidebar-single-nav">
                         <a class="nav-link {% if active_menu == 'settings' %}active{% endif %}"
                             href="{% url 'restaurant_admin:settings' restaurant_slug=rslug %}"
@@ -1302,7 +1550,9 @@
                         </a>
                     </div>
                     {% endif %}
+                    {% endif %}
                     {% if can_view_restaurant_logs %}
+                    {% if access.logs %}
                     <div class="sidebar-single-nav">
                         <a class="nav-link {% if active_menu == 'activity_logs' %}active{% endif %}"
                             href="{% url 'restaurant_admin:activity_logs' restaurant_slug=rslug %}"
@@ -1311,6 +1561,7 @@
                             <span>Activity Logs</span>
                         </a>
                     </div>
+                    {% endif %}
                     {% endif %}
                 </div>
                 <!-- Theme Segmented Switcher (Bottom-Left Sidebar Corner) -->
@@ -1331,6 +1582,23 @@
                 </button>
             </div>
         </div>
+        <script>
+    /* Keep the sidebar where it was across page loads; otherwise bring the active link into view. */
+    (function () {
+        var box = document.querySelector('.sidebar .sidebar-menu'); if (!box) return;
+        var KEY = 'ra_sidebar_scroll', saved = null;
+        try { saved = sessionStorage.getItem(KEY); } catch (e) {}
+        if (saved !== null) { box.scrollTop = parseInt(saved, 10) || 0; }
+        var active = box.querySelector('a.active');
+        if (active) {
+            var b = box.getBoundingClientRect(), a = active.getBoundingClientRect();
+            if (a.top < b.top || a.bottom > b.bottom) { box.scrollTop += a.top - b.top - (b.height - a.height) / 2; }
+        }
+        function save() { try { sessionStorage.setItem(KEY, String(box.scrollTop)); } catch (e) {} }
+        box.addEventListener('click', function (e) { if (e.target.closest('a')) save(); });
+        window.addEventListener('pagehide', save);
+    })();
+    </script>
 
         {% endif %}
 
@@ -1404,6 +1672,7 @@
                         <i class="bi bi-broadcast me-1"></i>KDS Active
                     </span>
                     {% else %}
+                    {% if access.kitchen %}
                     <!-- Quick KDS Screen Link -->
                     <a href="{% url 'restaurant_admin:kitchen_kds' restaurant_slug=rslug %}"
                         class="btn btn-sm btn-white-notif rounded-pill px-3 py-1.5 d-flex align-items-center gap-1.5 shadow-xs text-decoration-none {% if active_menu == 'kitchen_kds' %}border-primary text-primary fw-bold bg-primary-subtle{% endif %}"
@@ -1411,7 +1680,9 @@
                         <i class="bi bi-display text-primary"></i>
                         <span class="fw-semibold text-dark">Kitchen (KDS)</span>
                     </a>
+                    {% endif %}
 
+                    {% if access.pos or access.kitchen %}
                     <!-- Quick Sound Toggle Button -->
                     <button type="button"
                         class="btn btn-sm btn-white-notif rounded-pill px-3 py-1.5 d-flex align-items-center gap-1.5 shadow-xs"
@@ -1421,46 +1692,15 @@
                         <span class="fw-semibold text-secondary" id="globalSoundToggleText">Sound ON</span>
                     </button>
 
-                    <!-- Global Order Notification Bell -->
-                    <div class="dropdown">
-                        <button
-                            class="btn btn-sm btn-white-notif rounded-pill px-3 py-1.5 d-flex align-items-center gap-2 position-relative shadow-xs"
-                            id="globalNotifDropdownBtn" data-bs-toggle="dropdown" aria-expanded="false"
-                            title="New Orders Alert" style="font-size: 0.8rem;">
-                            <i class="bi bi-bell-fill text-primary" id="globalBellIcon"></i>
-                            <span class="fw-semibold text-dark">Orders</span>
-                            <span class="badge rounded-pill bg-danger d-none global-notif-badge"
-                                style="font-size: 0.68rem;">0</span>
-                        </button>
-                        <div class="dropdown-menu dropdown-menu-end shadow-lg border-0 rounded-3 p-0 overflow-hidden"
-                            id="globalNotifMenu" style="width: 360px; max-width: 95vw; z-index: 1060;">
-                            <div class="p-3 bg-light border-bottom d-flex justify-content-between align-items-center">
-                                <div>
-                                    <h6 class="fw-bold mb-0 text-dark" style="font-size: 0.9rem;">Order Notifications
-                                    </h6>
-                                    <small class="text-muted" style="font-size: 0.72rem;" id="globalNotifSubtitle">Live
-                                        order alerts</small>
-                                </div>
-                                <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
-                                    id="globalEnableDesktopBtn" style="font-size: 11px; border-radius: 6px;"
-                                    title="Enable browser desktop notifications">
-                                    Desktop Alerts
-                                </button>
-                            </div>
-                            <div class="overflow-auto global-notif-list-container" style="max-height: 320px;">
-                                <div class="text-center py-4 text-muted small empty-notif-msg">
-                                    <i class="bi bi-bell-slash text-secondary fs-3 d-block mb-1"></i>
-                                    No recent orders yet
-                                </div>
-                            </div>
-                            <div class="p-2.5 text-center bg-light border-top">
-                                <a href="{% url 'restaurant_admin:order_records' restaurant_slug=rslug %}"
-                                    class="btn btn-sm btn-primary w-100 py-1.5 fw-semibold" style="font-size: 0.82rem;">
-                                    Go to Live Orders Desk <i class="bi bi-arrow-right ms-1"></i>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- Notifications button (opens the full-height drawer) -->
+                    <button type="button"
+                        class="btn btn-sm btn-white-notif rounded-pill px-3 py-1.5 d-flex align-items-center gap-2 position-relative shadow-xs"
+                        id="globalNotifDropdownBtn" data-nt-open title="Notifications" style="font-size: 0.8rem;">
+                        <i class="bi bi-bell-fill text-primary" id="globalBellIcon"></i>
+                        <span class="fw-semibold text-dark">Notifications</span>
+                        <span class="badge rounded-pill bg-danger d-none global-notif-badge" style="font-size: 0.68rem;">0</span>
+                    </button>
+                    {% endif %}
                     {% endif %}
                 </div>
             </div>
@@ -1555,31 +1795,35 @@
                     });
                 });
 
-                // Accordion behavior for sidebar feature groups
+                // Sidebar feature groups: any number can be open at once, remembered across pages
                 var groupHeaders = document.querySelectorAll('.sidebar-group-header');
+                var OPEN_KEY = 'sidebar_open_groups';
+                function readOpenGroups() {
+                    try { return JSON.parse(localStorage.getItem(OPEN_KEY) || '[]') || []; } catch (err) { return []; }
+                }
+                function saveOpenGroups() {
+                    var ids = [];
+                    groupHeaders.forEach(function (h) {
+                        if (h.classList.contains('open')) ids.push(h.getAttribute('data-group-target'));
+                    });
+                    try { localStorage.setItem(OPEN_KEY, JSON.stringify(ids)); } catch (err) {}
+                }
+                function setGroupOpen(header, open) {
+                    var content = document.querySelector(header.getAttribute('data-group-target'));
+                    header.classList.toggle('open', open);
+                    header.classList.toggle('active-group', open);
+                    if (content) content.classList.toggle('show', open);
+                }
+
+                readOpenGroups().forEach(function (target) {
+                    var h = document.querySelector('.sidebar-group-header[data-group-target="' + target + '"]');
+                    if (h) setGroupOpen(h, true);
+                });
+
                 groupHeaders.forEach(function (header) {
-                    header.addEventListener('click', function (e) {
-                        var targetId = this.getAttribute('data-group-target');
-                        var content = document.querySelector(targetId);
-                        var isOpen = this.classList.contains('open');
-
-                        // Auto-close all other categories to preserve vertical space
-                        groupHeaders.forEach(function (h) {
-                            if (h !== header) {
-                                h.classList.remove('open', 'active-group');
-                                var c = document.querySelector(h.getAttribute('data-group-target'));
-                                if (c) c.classList.remove('show');
-                            }
-                        });
-
-                        // Toggle clicked category
-                        if (isOpen) {
-                            this.classList.remove('open', 'active-group');
-                            if (content) content.classList.remove('show');
-                        } else {
-                            this.classList.add('open', 'active-group');
-                            if (content) content.classList.add('show');
-                        }
+                    header.addEventListener('click', function () {
+                        setGroupOpen(this, !this.classList.contains('open'));
+                        saveOpenGroups();
                     });
                 });
 
@@ -1588,13 +1832,11 @@
                 if (activeLink) {
                     var parentContent = activeLink.closest('.sidebar-group-content');
                     if (parentContent) {
-                        parentContent.classList.add('show');
                         var parentHeader = document.querySelector('[data-group-target="#' + parentContent.id + '"]');
-                        if (parentHeader) {
-                            parentHeader.classList.add('open', 'active-group');
-                        }
+                        if (parentHeader) setGroupOpen(parentHeader, true);
                     }
                 }
+                saveOpenGroups();
 
                 // Logout Confirmation Modal Handler
                 var logoutTrigger = document.getElementById('sidebarLogoutTrigger');
@@ -1638,473 +1880,9 @@
             </div>
         </div>
 
-        <!-- Global Real-Time Order Notification Engine -->
+        <!-- Notification centre: full-height drawer + live engine -->
         {% if not is_club_user and not is_kitchen_user and not is_hotel_user %}
-        <script>
-            (function () {
-                const pollUrl = "{% url 'restaurant_admin:order_notifications_poll' restaurant_slug=rslug %}";
-                let lastOrderId = 0;
-                let lastReadyCount = -1;
-                let isInitialized = false;
-                let audioCtx = null;
-                let customAudioEl = null;
-                let activeSoundUrl = '';
-
-                // Sound setting from localStorage (default enabled)
-                let soundEnabled = localStorage.getItem('order_notif_sound_enabled') !== '0';
-
-                function updateSoundUI() {
-                    const icon = document.getElementById('globalSoundToggleIcon');
-                    const text = document.getElementById('globalSoundToggleText');
-                    const btn = document.getElementById('globalSoundToggleBtn');
-                    if (icon && text) {
-                        if (soundEnabled) {
-                            icon.className = 'bi bi-volume-up-fill text-success';
-                            text.textContent = 'Sound ON';
-                            if (btn) btn.title = 'Sound alert is ON (Click to mute)';
-                        } else {
-                            icon.className = 'bi bi-volume-mute-fill text-danger';
-                            text.textContent = 'Muted';
-                            if (btn) btn.title = 'Sound alert is MUTED (Click to unmute)';
-                        }
-                    }
-                }
-
-                function setCustomSoundUrl(url) {
-                    if (!url) {
-                        activeSoundUrl = '';
-                        if (customAudioEl) {
-                            try { customAudioEl.pause(); } catch (_) { }
-                            customAudioEl = null;
-                        }
-                        return;
-                    }
-                    if (url === activeSoundUrl && customAudioEl) {
-                        return;
-                    }
-                    activeSoundUrl = url;
-                    try {
-                        if (customAudioEl) {
-                            try { customAudioEl.pause(); } catch (_) { }
-                            customAudioEl = null;
-                        }
-                        customAudioEl = new Audio(activeSoundUrl);
-                        customAudioEl.preload = 'auto';
-                        customAudioEl.load();
-                    } catch (e) {
-                        console.warn('Could not initialize custom Audio:', e);
-                        customAudioEl = null;
-                    }
-                }
-
-                const soundToggleBtn = document.getElementById('globalSoundToggleBtn');
-                if (soundToggleBtn) {
-                    soundToggleBtn.addEventListener('click', function () {
-                        soundEnabled = !soundEnabled;
-                        localStorage.setItem('order_notif_sound_enabled', soundEnabled ? '1' : '0');
-                        updateSoundUI();
-                        if (soundEnabled) {
-                            unlockAudio();
-                            playAlertSound();
-                        }
-                    });
-                }
-                updateSoundUI();
-
-                // Desktop Notification Permission Button
-                const desktopBtn = document.getElementById('globalEnableDesktopBtn');
-                if (desktopBtn) {
-                    if ('Notification' in window && Notification.permission === 'granted') {
-                        desktopBtn.textContent = 'Alerts Allowed ✓';
-                        desktopBtn.classList.remove('btn-outline-primary');
-                        desktopBtn.classList.add('btn-light', 'text-success', 'border-0');
-                        desktopBtn.disabled = true;
-                    } else {
-                        desktopBtn.addEventListener('click', function (e) {
-                            e.stopPropagation();
-                            if ('Notification' in window) {
-                                Notification.requestPermission().then(function (permission) {
-                                    if (permission === 'granted') {
-                                        desktopBtn.textContent = 'Alerts Allowed ✓';
-                                        desktopBtn.classList.remove('btn-outline-primary');
-                                        desktopBtn.classList.add('btn-light', 'text-success', 'border-0');
-                                        desktopBtn.disabled = true;
-                                        try {
-                                            new Notification("🔔 Order Alerts Enabled", { body: "You will receive desktop notifications for new orders!" });
-                                        } catch (_) { }
-                                    }
-                                });
-                            }
-                        });
-                    }
-                }
-
-                function playSynthesizedChime() {
-                    try {
-                        if (!audioCtx) {
-                            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                        }
-                        if (audioCtx && audioCtx.state === 'suspended') {
-                            audioCtx.resume();
-                        }
-                        if (!audioCtx) return;
-
-                        const now = audioCtx.currentTime;
-                        const osc1 = audioCtx.createOscillator();
-                        const gain1 = audioCtx.createGain();
-                        osc1.type = 'sine';
-                        osc1.frequency.setValueAtTime(880, now);
-                        gain1.gain.setValueAtTime(0.0001, now);
-                        gain1.gain.exponentialRampToValueAtTime(0.28, now + 0.02);
-                        gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
-                        osc1.connect(gain1).connect(audioCtx.destination);
-                        osc1.start(now);
-                        osc1.stop(now + 0.65);
-
-                        const osc2 = audioCtx.createOscillator();
-                        const gain2 = audioCtx.createGain();
-                        osc2.type = 'sine';
-                        osc2.frequency.setValueAtTime(1320, now + 0.09);
-                        gain2.gain.setValueAtTime(0.0001, now + 0.09);
-                        gain2.gain.exponentialRampToValueAtTime(0.20, now + 0.12);
-                        gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
-                        osc2.connect(gain2).connect(audioCtx.destination);
-                        osc2.start(now + 0.09);
-                        osc2.stop(now + 0.65);
-                    } catch (_) { }
-                }
-
-                function unlockAudio() {
-                    if (!audioCtx) {
-                        try {
-                            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                        } catch (_) { }
-                    }
-                    if (audioCtx && audioCtx.state === 'suspended') {
-                        audioCtx.resume();
-                    }
-                    if (customAudioEl) {
-                        customAudioEl.load();
-                    }
-                }
-
-                // Unlock audio silently on user's first touch/click/keypress
-                document.addEventListener('click', unlockAudio, { once: true });
-                document.addEventListener('keydown', unlockAudio, { once: true });
-                document.addEventListener('touchstart', unlockAudio, { once: true });
-
-                function playAlertSound() {
-                    if (!soundEnabled) return;
-
-                    // 1. If custom MP3/WAV is configured, play it directly!
-                    if (customAudioEl && activeSoundUrl) {
-                        try {
-                            customAudioEl.currentTime = 0;
-                            const playPromise = customAudioEl.play();
-                            if (playPromise !== undefined) {
-                                playPromise.then(function () {
-                                    // Custom audio playing cleanly!
-                                }).catch(function (err) {
-                                    console.warn('Custom audio playback failed, falling back to chime:', err);
-                                    playSynthesizedChime();
-                                });
-                                return;
-                            }
-                        } catch (e) {
-                            console.warn('Error initiating custom audio:', e);
-                        }
-                    }
-
-                    // 2. Fallback to pleasant synthesized WebAudio chime
-                    playSynthesizedChime();
-                }
-
-                function showOrderToast(order) {
-                    const container = document.getElementById('global-toast-container');
-                    if (!container) return;
-
-                    const toast = document.createElement('div');
-                    toast.className = 'card global-notif-card mb-2 p-0 border-0';
-                    toast.innerHTML = `
-                        <div class="card-body p-3">
-                            <div class="d-flex justify-content-between align-items-start mb-1">
-                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-0.5" style="font-size: 11px;">
-                                    <i class="bi bi-bell-fill me-1"></i>New Order ${order.order_number}
-                                </span>
-                                <button type="button" class="btn-close" style="font-size: 10px; cursor: pointer;" aria-label="Close"></button>
-                            </div>
-                            <div class="fw-bold text-dark fs-6 mt-1">
-                                ${order.table_name} 
-                                <span class="badge bg-light text-secondary border ms-1" style="font-size: 10px;">${order.order_type}</span>
-                            </div>
-                            <div class="text-muted small">${order.customer_name || 'Customer'} • <span class="badge bg-light text-primary border">${order.items_count || ''} items</span></div>
-                            <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
-                                <div>
-                                    <span class="text-muted small">Total: </span>
-                                    <span class="fw-bold text-primary">₹${Number(order.total_amount).toFixed(2)}</span>
-                                </div>
-                                <a href="${order.detail_url}" class="btn-notif-view">
-                                    View Order <i class="bi bi-arrow-right ms-1"></i>
-                                </a>
-                            </div>
-                        </div>
-                    `;
-                    const closeBtn = toast.querySelector('.btn-close');
-                    if (closeBtn) closeBtn.addEventListener('click', function () { toast.remove(); });
-                    container.appendChild(toast);
-
-                    setTimeout(function () {
-                        if (toast.parentNode) toast.remove();
-                    }, 9000);
-                }
-
-                function showReadyOrderToast(order) {
-                    const container = document.getElementById('global-toast-container');
-                    if (!container) return;
-
-                    const toast = document.createElement('div');
-                    toast.className = 'card global-notif-card mb-2 p-0 border-0 shadow-lg';
-                    toast.style.borderLeft = '4px solid #2563eb';
-                    toast.innerHTML = `
-                        <div class="card-body p-3" style="background: rgba(var(--ui-accent-rgb), 0.1);">
-                            <div class="d-flex justify-content-between align-items-start mb-1">
-                                <span class="badge bg-primary text-white px-2 py-0.5" style="font-size: 11px; font-weight: 700;">
-                                    <i class="bi bi-bell-fill me-1"></i>FOOD READY TO SERVE
-                                </span>
-                                <button type="button" class="btn-close" style="font-size: 10px; cursor: pointer;" aria-label="Close"></button>
-                            </div>
-                            <div class="fw-bold text-dark fs-6 mt-1">
-                                ${order.table_name} 
-                                <span class="badge bg-light text-primary border ms-1" style="font-size: 10px;">${order.order_number}</span>
-                            </div>
-                            <div class="text-muted small">${order.customer_name || 'Customer'} • All kitchen items cooked</div>
-                            <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top border-primary-subtle">
-                                <span class="text-primary small fw-semibold">Ready for delivery to table</span>
-                                <a href="${order.detail_url}" class="btn-notif-view" style="background-color: var(--ui-accent) !important;">
-                                    Deliver / Serve <i class="bi bi-arrow-right ms-1"></i>
-                                </a>
-                            </div>
-                        </div>
-                    `;
-                    const closeBtn = toast.querySelector('.btn-close');
-                    if (closeBtn) closeBtn.addEventListener('click', function () { toast.remove(); });
-                    container.appendChild(toast);
-
-                    setTimeout(function () {
-                        if (toast.parentNode) toast.remove();
-                    }, 12000);
-                }
-
-                function renderOrderListItems(orders) {
-                    const containers = document.querySelectorAll('.global-notif-list-container');
-                    if (!containers.length) return;
-                    if (!orders || !orders.length) {
-                        containers.forEach(function (c) {
-                            c.innerHTML = `
-                                <div class="text-center py-4 text-muted small empty-notif-msg">
-                                    <i class="bi bi-bell-slash text-secondary fs-3 d-block mb-1"></i>
-                                    No recent orders yet
-                                </div>
-                            `;
-                        });
-                        return;
-                    }
-
-                    let html = '<div class="list-group list-group-flush">';
-                    orders.forEach(function (o) {
-                        html += `
-                            <a href="${o.detail_url}" class="list-group-item list-group-item-action p-2.5 d-flex justify-content-between align-items-center border-bottom">
-                                <div>
-                                    <div class="fw-bold text-dark" style="font-size: 12.5px;">
-                                        ${o.order_number} 
-                                        <span class="badge bg-light text-dark border ms-1" style="font-size: 9.5px;">${o.table_name}</span>
-                                    </div>
-                                    <div class="text-muted" style="font-size: 11px;">${o.order_type} • ${o.customer_name || 'Customer'}</div>
-                                </div>
-                                <div class="text-end">
-                                    <div class="fw-bold text-primary" style="font-size: 12px;">₹${Number(o.total_amount).toFixed(2)}</div>
-                                    <small class="text-muted" style="font-size: 10px;">${o.time_str || ''}</small>
-                                </div>
-                            </a>
-                        `;
-                    });
-                    html += '</div>';
-                    containers.forEach(function (c) { c.innerHTML = html; });
-                }
-
-                let unreadCount = 0;
-                function updateBadgeCount(addCount) {
-                    unreadCount += addCount;
-                    const badges = document.querySelectorAll('.global-notif-badge');
-                    badges.forEach(function (b) {
-                        if (unreadCount > 0) {
-                            b.textContent = unreadCount > 99 ? '99+' : unreadCount;
-                            b.classList.remove('d-none');
-                        } else {
-                            b.classList.add('d-none');
-                        }
-                    });
-                }
-
-                // Reset badge on dropdown open
-                const notifButtons = document.querySelectorAll('#globalNotifDropdownBtn, #mobileNotifDropdownBtn');
-                notifButtons.forEach(function (btn) {
-                    btn.addEventListener('click', function () {
-                        unreadCount = 0;
-                        updateBadgeCount(0);
-                    });
-                });
-
-                function ringBellAnimation() {
-                    const icon = document.getElementById('globalBellIcon');
-                    if (icon) {
-                        icon.classList.add('bell-ring-active');
-                        setTimeout(function () { icon.classList.remove('bell-ring-active'); }, 900);
-                    }
-                }
-
-                let isPolling = false;
-
-                function pollOrders() {
-                    if (isPolling) return;
-                    isPolling = true;
-
-                    const url = pollUrl + '?since_id=' + lastOrderId + '&since_ready=' + lastReadyCount;
-                    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-                        .then(function (res) { return res.ok ? res.json() : null; })
-                        .then(function (data) {
-                            if (!data || !data.success) return;
-
-                            if (data.sound_url !== undefined) {
-                                setCustomSoundUrl(data.sound_url);
-                            }
-
-                            if (!isInitialized) {
-                                isInitialized = true;
-                                lastOrderId = data.latest_id || 0;
-                                if (data.ready_count !== undefined) {
-                                    lastReadyCount = data.ready_count;
-                                }
-                                if (data.recent_orders) {
-                                    renderOrderListItems(data.recent_orders);
-                                }
-                                return;
-                            }
-
-                            // Handle newly ready orders from kitchen
-                            if (data.has_new_ready && data.new_ready_orders && data.new_ready_orders.length > 0) {
-                                lastReadyCount = data.ready_count !== undefined ? data.ready_count : lastReadyCount;
-                                playAlertSound();
-                                ringBellAnimation();
-                                data.new_ready_orders.forEach(function (order) {
-                                    showReadyOrderToast(order);
-                                    if ('Notification' in window && Notification.permission === 'granted') {
-                                        try {
-                                            const notif = new Notification('🛎️ Food Ready: ' + order.table_name, {
-                                                body: order.order_number + ' is cooked & ready to be served!',
-                                                silent: true
-                                            });
-                                            notif.onclick = function () {
-                                                window.focus();
-                                                if (order.detail_url) window.location.href = order.detail_url;
-                                                notif.close();
-                                            };
-                                        } catch (_) { }
-                                    }
-                                });
-                            } else if (data.ready_count !== undefined) {
-                                lastReadyCount = data.ready_count;
-                            }
-
-                            // Ultra-lightweight short-circuit: server confirmed no new orders
-                            if (data.has_new === false) {
-                                if (data.latest_id && data.latest_id > lastOrderId) {
-                                    lastOrderId = data.latest_id;
-                                }
-                                return;
-                            }
-
-                            if (data.new_orders && data.new_orders.length > 0) {
-                                lastOrderId = data.latest_id || lastOrderId;
-                                playAlertSound();
-                                ringBellAnimation();
-                                updateBadgeCount(data.new_orders.length);
-
-                                data.new_orders.forEach(function (order) {
-                                    showOrderToast(order);
-
-                                    // OS native desktop notification
-                                    if ('Notification' in window && Notification.permission === 'granted') {
-                                        try {
-                                            const notif = new Notification('🍽️ New Order ' + order.order_number, {
-                                                body: order.table_name + ' (' + order.order_type + ') • ₹' + Number(order.total_amount).toFixed(2),
-                                                silent: true
-                                            });
-                                            notif.onclick = function () {
-                                                window.focus();
-                                                if (order.detail_url) window.location.href = order.detail_url;
-                                                notif.close();
-                                            };
-                                        } catch (_) { }
-                                    }
-
-                                    // Dispatch custom event for page-specific listeners
-                                    window.dispatchEvent(new CustomEvent('new_order_arrived', { detail: order }));
-                                });
-
-                                if (data.recent_orders) {
-                                    renderOrderListItems(data.recent_orders);
-                                }
-                            }
-                        })
-                        .catch(function () { })
-                        .finally(function () {
-                            isPolling = false;
-                        });
-                }
-
-                // Background Web Worker timer:
-                // Prevents Chrome/Edge from throttling the timer to minutes when tab is minimized
-                let workerTimer = null;
-                try {
-                    const workerBlob = new Blob([
-                        'var timer = null;' +
-                        'self.onmessage = function(e) {' +
-                        '    if (e.data === "start") {' +
-                        '        if (timer) clearInterval(timer);' +
-                        '        timer = setInterval(function() { self.postMessage("tick"); }, 12000);' +
-                        '    } else if (e.data === "stop") {' +
-                        '        if (timer) clearInterval(timer);' +
-                        '        timer = null;' +
-                        '    }' +
-                        '};'
-                    ], { type: 'application/javascript' });
-                    workerTimer = new Worker(URL.createObjectURL(workerBlob));
-                    workerTimer.onmessage = function (e) {
-                        if (e.data === 'tick') {
-                            pollOrders();
-                        }
-                    };
-                    workerTimer.postMessage('start');
-                } catch (e) {
-                    // Fallback to standard setInterval if Web Worker is restricted
-                    setInterval(pollOrders, 12000);
-                }
-
-                // Initial poll on page load
-                pollOrders();
-
-                // Instant check when user switches back to tab or un-minimizes window
-                document.addEventListener('visibilitychange', function () {
-                    if (!document.hidden) {
-                        pollOrders();
-                    }
-                });
-                window.addEventListener('focus', function () {
-                    pollOrders();
-                });
-            })();
-        </script>
+        {% include 'notifications/_drawer.html' with nt_module='restaurant' %}
         {% endif %}
 
         <script>

@@ -1,0 +1,86 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <a class="ui-back" href="{{ base_url }}banquets/"><i class="fa-solid fa-chevron-left"></i> Banquets</a>
+  <div class="ui-page-header">
+    <div><h1>{{ e.name }}</h1><p>{{ e.code }} · {{ e.date|date:"l, d M Y" }} · {{ e.get_session_display }} · {{ e.venue.name }}
+      · <span class="ui-chip ui-chip-{% if e.status == 'CONFIRMED' %}green{% elif e.status == 'TENTATIVE' %}orange{% elif e.status == 'ENQUIRY' %}blue{% elif e.status == 'COMPLETED' %}indigo{% else %}gray{% endif %}">{{ e.get_status_display }}</span></p></div>
+    <div class="ui-actions">
+      <a class="ui-btn ui-btn-gray" href="{{ base_url }}banquets/{{ e.pk }}/beo/" target="_blank" rel="noopener"><i class="fa-solid fa-clipboard-list"></i><span>BEO</span></a>
+      <a class="ui-btn ui-btn-gray" href="{{ base_url }}banquets/{{ e.pk }}/beo/?doc=invoice" target="_blank" rel="noopener"><i class="fa-solid fa-file-invoice"></i><span>{% if e.invoice_number %}Invoice{% else %}Quotation{% endif %}</span></a>
+    </div>
+  </div>
+  {% if clash %}<div class="ui-card ui-pad ui-text-red" style="margin-bottom:12px"><i class="fa-solid fa-triangle-exclamation"></i> {{ e.venue.name }} is also held for <a href="{{ base_url }}banquets/{{ clash.pk }}/">{{ clash.name }}</a> in this session.</div>{% endif %}
+  {% if e.pax > e.venue.capacity %}<div class="ui-card ui-pad ui-text-red" style="margin-bottom:12px">{{ e.pax }} guests is more than {{ e.venue.name }} seats ({{ e.venue.capacity }}).</div>{% endif %}
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Event total</div></div><div class="kpi-val">₹{{ e.total|inr }}</div><div class="kpi-sub">incl. {{ e.gst_percent|floatformat:'0' }}% GST</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Received</div></div><div class="kpi-val">₹{{ e.paid|inr }}</div></div>
+    <div class="ui-kpi {% if e.balance > 0 %}kpi-rose{% else %}kpi-green{% endif %}"><div class="ui-kpi-head"><div class="kpi-label">Balance</div></div><div class="kpi-val">₹{{ e.balance|inr }}</div></div>
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Guests</div></div><div class="kpi-val">{{ e.pax }}</div><div class="kpi-sub">Prepare for {{ e.pax|add:5 }}+ · {{ e.layout }}</div></div>
+  </div>
+
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Charges</h2>
+        <dl class="ui-pms-totals" style="justify-content:stretch;padding:0">
+          <div><dt>Venue hire{% if e.venue_charge is None %} · {% if e.session == 'FULL_DAY' %}full day{% else %}one session (60% of day rate){% endif %}{% endif %}</dt><dd>₹{{ e.hire|inr2 }}</dd></div>
+          <div><dt>Food &amp; beverage{% if e.menu %} · {{ e.menu.name }} × {{ e.pax }}{% endif %}</dt><dd>₹{{ e.food|inr2 }}</dd></div>
+          {% if e.decor %}<div><dt>Décor</dt><dd>₹{{ e.decor|inr2 }}</dd></div>{% endif %}
+          {% if e.av %}<div><dt>AV &amp; equipment</dt><dd>₹{{ e.av|inr2 }}</dd></div>{% endif %}
+          {% if e.other_charges %}<div><dt>Other</dt><dd>₹{{ e.other_charges|inr2 }}</dd></div>{% endif %}
+          <div class="is-strong"><dt>Subtotal</dt><dd>₹{{ e.subtotal|inr2 }}</dd></div>
+          <div><dt>CGST {{ e.half_rate|floatformat:'-2' }}% + SGST {{ e.half_rate|floatformat:'-2' }}%</dt><dd>₹{{ e.tax|inr2 }}</dd></div>
+          <div class="is-total"><dt>Total</dt><dd>₹{{ e.total|inr2 }}</dd></div>
+        </dl>
+      </section>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Client &amp; instructions</h2>
+        <dl class="ui-ops-kv"><dt>Client</dt><dd>{{ e.client_name }}{% if e.client_gstin %} · GSTIN {{ e.client_gstin }}{% endif %}</dd>
+          <dt>Contact</dt><dd>{{ e.contact_phone|default:"—" }}{% if e.contact_email %} · {{ e.contact_email }}{% endif %}</dd>
+          <dt>Kitchen</dt><dd>{{ e.kitchen_notes|default:"—"|linebreaksbr }}</dd><dt>Housekeeping</dt><dd>{{ e.housekeeping_notes|default:"—"|linebreaksbr }}</dd>
+          <dt>Engineering</dt><dd>{{ e.engineering_notes|default:"—"|linebreaksbr }}</dd><dt>Notes</dt><dd>{{ e.notes|default:"—"|linebreaksbr }}</dd>
+          {% if e.invoice_number %}<dt>Invoice</dt><dd>{{ e.invoice_number }}</dd>{% endif %}{% if e.cancellation_reason %}<dt>Cancelled</dt><dd>{{ e.cancellation_reason }}</dd>{% endif %}</dl>
+      </section>
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Payments</h2></div>
+        <div class="table-responsive"><table class="table"><tbody>{% for p in payments %}<tr class="{% if p.is_void %}is-void{% endif %}">
+          <td class="nowrap">{{ p.received_on|date:"d M Y" }}</td><td>{{ p.get_kind_display }} · {{ p.get_method_display }}{% if p.reference %} · {{ p.reference }}{% endif %}{% if p.is_void %}<br><small class="ui-log-sub">Voided: {{ p.void_reason }}</small>{% endif %}</td>
+          <td class="num">{% if p.kind == 'REFUND' %}−{% endif %}₹{{ p.amount|inr2 }}</td>
+          <td class="num">{% if can_edit and not p.is_void %}<details class="ui-pms-void"><summary title="Void"><i class="fa-solid fa-ellipsis"></i></summary><form method="post" action="{{ base_url }}banquets/{{ e.pk }}/payments/{{ p.pk }}/void/" class="ui-inline-fields">{% csrf_token %}<input class="ui-input" name="reason" placeholder="Reason" required><button class="ui-btn ui-btn-tinted-red ui-btn-sm" type="submit">Void</button></form></details>{% endif %}</td></tr>
+          {% empty %}<tr><td class="ui-log-sub" style="padding:18px;text-align:center">No payments yet.</td></tr>{% endfor %}</tbody></table></div>
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      {% if can_edit and e.status != 'COMPLETED' and e.status != 'CANCELLED' %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Next step</h2>
+        <div class="ui-stack-form">
+          {% if e.status == 'ENQUIRY' %}<form method="post" action="{{ base_url }}banquets/{{ e.pk }}/action/">{% csrf_token %}<input type="hidden" name="op" value="tentative"><button class="ui-btn ui-btn-gray" type="submit" style="width:100%">Hold the venue (tentative)</button></form>{% endif %}
+          {% if e.status != 'CONFIRMED' %}<form method="post" action="{{ base_url }}banquets/{{ e.pk }}/action/">{% csrf_token %}<input type="hidden" name="op" value="confirm"><button class="ui-btn ui-btn-primary" type="submit" style="width:100%"><i class="fa-solid fa-check"></i><span>Confirm event</span></button></form>
+          {% else %}<form method="post" action="{{ base_url }}banquets/{{ e.pk }}/action/" onsubmit="return confirm('Mark the event completed and issue the invoice?')">{% csrf_token %}<input type="hidden" name="op" value="complete"><button class="ui-btn ui-btn-primary" type="submit" style="width:100%"><i class="fa-solid fa-flag-checkered"></i><span>Complete &amp; invoice</span></button></form>{% endif %}
+          <details class="ui-pms-void"><summary class="ui-link-btn ui-text-red">Cancel event</summary><form method="post" action="{{ base_url }}banquets/{{ e.pk }}/action/" class="ui-stack-form" style="margin-top:8px">{% csrf_token %}<input type="hidden" name="op" value="cancel"><input class="ui-input" name="reason" placeholder="Reason" required><button class="ui-btn ui-btn-tinted-red ui-btn-sm" type="submit">Cancel event</button></form></details>
+        </div>
+      </section>
+      {% endif %}
+      {% if can_edit and e.status != 'COMPLETED' or can_edit and e.balance > 0 %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Record a payment</h2>
+        <form method="post" action="{{ base_url }}banquets/{{ e.pk }}/payments/add/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-inline-fields"><div class="ui-field"><label for="bpA">Amount ₹</label><input id="bpA" class="ui-input" type="number" min="1" step="0.01" name="amount" required value="{% if e.balance > 0 %}{{ e.balance|stringformat:'s' }}{% endif %}"></div>
+            <div class="ui-field"><label for="bpK">Type</label><select id="bpK" class="ui-input" name="kind"><option value="PAYMENT">Advance / payment</option><option value="REFUND">Refund</option></select></div></div>
+          <div class="ui-field"><label for="bpM">Method</label><select id="bpM" class="ui-input" name="method">{% for k, l in methods %}<option value="{{ k }}" {% if k == 'BANK' %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+          <div class="ui-field"><label for="bpR">UTR / cheque / reference</label><input id="bpR" class="ui-input" name="reference" maxlength="100"></div>
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-indian-rupee-sign"></i><span>Record</span></button>
+          <p class="ui-log-sub" style="margin:0">An advance on an enquiry holds the venue (tentative).</p>
+        </form></section>
+      {% endif %}
+      {% if can_edit and e.status != 'COMPLETED' and e.status != 'CANCELLED' %}
+      <section class="ui-card ui-pad"><details><summary class="ui-card-title" style="cursor:pointer">Edit event</summary>
+        <form method="post" action="{{ base_url }}banquets/save/" class="ui-stack-form" style="margin-top:10px">{% csrf_token %}
+          {% include 'hotel_ops/_event_form.html' with suffix='e' %}
+          <button class="ui-btn ui-btn-primary" type="submit">Save changes</button></form></details></section>
+      {% endif %}
+    </div>
+  </div>
+</div>

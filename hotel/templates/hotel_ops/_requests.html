@@ -1,0 +1,68 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>Guest requests</h1><p>Requests, complaints and compliments, routed to departments with response targets.</p></div>
+  </div>
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Open</div></div><div class="kpi-val">{{ kpis.open }}</div></div>
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Past response time</div></div><div class="kpi-val">{{ kpis.breached }}</div><div class="kpi-sub">{% if kpis.breached %}Needs action now{% else %}All within target{% endif %}</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Complaints · 30 days</div></div><div class="kpi-val">{{ kpis.complaints }}</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Average time to resolve</div></div><div class="kpi-val">{% if kpis.avg is not None %}{{ kpis.avg|minutes_label }}{% else %}—{% endif %}</div><div class="kpi-sub">{{ kpis.on_time }}% answered on time</div></div>
+  </div>
+
+  <nav class="ui-tabs ui-pms-tabs" aria-label="Tickets">
+    <a href="?tab=open" class="{% if tab == 'open' %}is-active{% endif %}">Open</a>
+    <a href="?tab=complaints" class="{% if tab == 'complaints' %}is-active{% endif %}">Complaints</a>
+    <a href="?tab=resolved" class="{% if tab == 'resolved' %}is-active{% endif %}">Resolved</a>
+    <a href="?tab=all" class="{% if tab == 'all' %}is-active{% endif %}">All</a>
+  </nav>
+
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-list-card">
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Room / guest</th><th>Ticket</th><th>Department</th><th class="num">Age</th><th>Status</th>{% if can_edit %}<th></th>{% endif %}</tr></thead>
+          <tbody>{% for r in rows %}<tr>
+            <td><strong>{% if r.room %}Room {{ r.room.room_number }}{% else %}—{% endif %}</strong><br><small class="ui-log-sub">{% if r.booking %}<a href="{{ base_url }}bookings/{{ r.booking.pk }}/">{{ r.guest_name }}</a>{% else %}{{ r.guest_name|default:"" }}{% endif %}</small></td>
+            <td style="min-width:220px"><span class="ui-chip ui-chip-{% if r.kind == 'COMPLAINT' %}red{% elif r.kind == 'COMPLIMENT' %}green{% else %}blue{% endif %}">{{ r.get_kind_display }}</span>{% if r.priority == 'HIGH' %} <span class="ui-chip ui-chip-orange">High</span>{% endif %}<br>{{ r.description }}
+              {% if r.resolution %}<br><small class="ui-log-sub"><i class="fa-solid fa-check"></i> {{ r.resolution }}{% if r.allowance %} · allowance ₹{{ r.allowance.amount|inr2|cut:"-" }}{% endif %}</small>{% endif %}</td>
+            <td>{{ r.get_department_display }}</td>
+            <td class="num nowrap {% if r.is_breached %}ui-text-red{% endif %}">{{ r.age_minutes|minutes_label }}{% if r.sla_minutes %}<br><small class="ui-log-sub">target {{ r.sla_minutes }} min</small>{% endif %}</td>
+            <td><span class="ui-chip ui-chip-{% if r.status == 'RESOLVED' %}green{% elif r.status == 'ACKNOWLEDGED' %}indigo{% else %}orange{% endif %}">{{ r.get_status_display }}</span>{% if r.is_breached and r.status != 'RESOLVED' %}<br><small class="ui-text-red">Late</small>{% endif %}</td>
+            {% if can_edit %}<td class="nowrap">{% if r.status != 'RESOLVED' %}
+              {% if r.status == 'OPEN' %}<form method="post" action="{{ base_url }}guest-requests/{{ r.pk }}/action/" style="display:inline">{% csrf_token %}<input type="hidden" name="op" value="ack"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">Acknowledge</button></form>{% endif %}
+              <details class="ui-pms-void"><summary class="ui-btn ui-btn-primary ui-btn-sm">Resolve</summary>
+                <form method="post" action="{{ base_url }}guest-requests/{{ r.pk }}/action/" class="ui-stack-form ui-ops-pop">{% csrf_token %}<input type="hidden" name="op" value="resolve"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+                  <div class="ui-field"><label for="rs{{ r.pk }}">What was done</label><textarea id="rs{{ r.pk }}" class="ui-input" name="resolution" rows="2" required></textarea></div>
+                  {% if r.kind == 'COMPLAINT' and r.booking %}<div class="ui-field"><label for="ra{{ r.pk }}">Service-recovery allowance ₹ (optional)</label><input id="ra{{ r.pk }}" class="ui-input" type="number" min="0" step="1" name="allowance" placeholder="0"><small class="ui-log-sub">Credited on the guest’s folio.</small></div>{% endif %}
+                  <button class="ui-btn ui-btn-primary ui-btn-sm" type="submit">Mark resolved</button>
+                </form></details>
+            {% endif %}</td>{% endif %}
+          </tr>{% empty %}<tr><td colspan="6" class="ui-log-sub" style="padding:24px;text-align:center">No tickets here.</td></tr>{% endfor %}</tbody>
+        </table></div>
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      {% if can_edit %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Log a ticket</h2>
+        <form method="post" action="{{ base_url }}guest-requests/add/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-field"><label for="grB">Guest</label><select id="grB" class="ui-input" name="booking"><option value="">Not a guest room (public area)</option>{% for b in in_house %}<option value="{{ b.pk }}">Room {{ b.room.room_number }} · {{ b.guest_name }}{% if b.booking_status == 'RESERVED' %} (arriving){% endif %}</option>{% endfor %}</select></div>
+          <div class="ui-field"><label for="grR">Or room / area</label><select id="grR" class="ui-input" name="room"><option value="">—</option>{% for r in rooms %}<option value="{{ r.pk }}">Room {{ r.room_number }}</option>{% endfor %}</select></div>
+          <div class="ui-inline-fields">
+            <div class="ui-field"><label for="grK">Type</label><select id="grK" class="ui-input" name="kind">{% for k, l in kinds %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></div>
+            <div class="ui-field"><label for="grP">Priority</label><select id="grP" class="ui-input" name="priority"><option value="NORMAL">Normal</option><option value="HIGH">High</option></select></div>
+          </div>
+          <div class="ui-field"><label for="grD">Department</label><select id="grD" class="ui-input" name="department">{% for k, l in departments %}<option value="{{ k }}">{{ l }} · {{ sla|get_item:k }} min</option>{% endfor %}</select></div>
+          <div class="ui-field"><label for="grT">What does the guest need?</label><textarea id="grT" class="ui-input" name="description" rows="3" required placeholder="e.g. Extra blanket and an iron"></textarea></div>
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-plus"></i><span>Log ticket</span></button>
+          <p class="ui-log-sub" style="margin:0">High priority halves the response target. Complaints alert the duty manager.</p>
+        </form>
+      </section>
+      {% endif %}
+      {% if by_dept %}<section class="ui-card ui-pad"><h2 class="ui-card-title">By department · 30 days</h2>
+        {% for d in by_dept %}<div class="ui-ops-row"><span>{{ d.label }}</span><strong>{{ d.n }}</strong></div>{% endfor %}</section>{% endif %}
+    </div>
+  </div>
+</div>

@@ -529,41 +529,20 @@ class PublicHotelCheckoutSerializer(serializers.Serializer):
                 is_active=True
             ).order_by('room_number')
 
-            booked_room_ids = RoomBooking.objects.filter(
-                room__in=candidate_rooms,
-                booking_status__in=[RoomBooking.BookingStatus.RESERVED, RoomBooking.BookingStatus.CHECKED_IN],
-                check_in_date__lt=check_out_date,
-                check_out_date__gt=check_in_date,
-            ).values_list('room_id', flat=True)
+            from hotel import pricing
+            h_settings = getattr(branch, 'hotel_settings', None) or HotelSettings.get_settings(branch)
+            q = pricing.quote(category, check_in_date, check_out_date, h_settings)
+            if q['restriction']:
+                raise serializers.ValidationError({"room": q['restriction']})
 
-            target_room = candidate_rooms.exclude(id__in=booked_room_ids).first()
+            target_room = pricing.free_rooms(candidate_rooms, branch, check_in_date, check_out_date).first()
             if not target_room:
                 raise serializers.ValidationError({
                     "room": "No available rooms in this category for the selected dates. Please choose different dates or category."
                 })
 
-            # Calculate room pricing & taxes
-            nights = max(1, (check_out_date - check_in_date).days)
-            base_rate = category.base_price_per_night
-            room_charges = base_rate * Decimal(nights)
-            h_settings = getattr(branch, 'hotel_settings', None) or HotelSettings.get_settings(branch)
-
-            if category.custom_tax_rate is not None:
-                room_tax_rate = category.custom_tax_rate / Decimal('100')
-            elif h_settings and not h_settings.enable_dynamic_gst:
-                room_tax_rate = h_settings.tax_rate / Decimal('100')
-            else:
-                room_tax_rate = Decimal('0.12') if base_rate <= 7500 else Decimal('0.18')
-
-            if category.price_is_tax_inclusive:
-                net_room_charges = round(room_charges / (Decimal('1') + room_tax_rate), 2)
-                room_tax_amount = round(room_charges - net_room_charges, 2)
-                room_grand_total = room_charges
-                room_total_charges = net_room_charges
-            else:
-                room_tax_amount = round(room_charges * room_tax_rate, 2)
-                room_grand_total = room_charges + room_tax_amount
-                room_total_charges = room_charges
+            # Room pricing & taxes: per-night rates incl. seasonal overrides (hotel/pricing.py)
+            room_total_charges, room_tax_amount, room_grand_total = q['net'], q['tax'], q['total']
 
             # 2. Create the RoomBooking record (PENDING)
             room_booking = RoomBooking.objects.create(
@@ -583,6 +562,7 @@ class PublicHotelCheckoutSerializer(serializers.Serializer):
                 payment_method=payment_method,
                 special_requests=special_requests,
                 upi_transaction_ref=upi_ref,
+                source=RoomBooking.Source.WEBSITE,
             )
 
             # 3. Validate and create linked CabBooking records

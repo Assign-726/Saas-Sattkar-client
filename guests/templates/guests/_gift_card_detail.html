@@ -1,0 +1,78 @@
+{# Gift card detail — shared by Restaurant & Hotel shells #}
+<div class="ui-logs ui-giftcard">
+  <a class="ui-back" href="{{ base_url }}gift-cards/"><i class="fa-solid fa-chevron-left"></i> Gift cards</a>
+
+  <div class="ui-g360-grid">
+    <div class="ui-g360-side">
+      <section class="ui-giftcard-visual {% if card.status != 'ACTIVE' %}is-inactive{% endif %}">
+        <div class="ui-gc-top"><span>{{ restaurant.name }}</span><i class="fa-solid fa-gift"></i></div>
+        <div class="ui-gc-balance">₹{{ card.balance|floatformat:2 }}</div>
+        <div class="ui-gc-code">{{ card.code }}</div>
+        <div class="ui-gc-bottom"><span>{{ card.recipient_name|default:"Gift card" }}</span><span>{% if card.expires_on %}Valid till {{ card.expires_on|date:"M Y" }}{% else %}No expiry{% endif %}</span></div>
+      </section>
+
+      <section class="ui-card ui-pad">
+        <dl class="ui-dl">
+          <div><dt>Status</dt><dd><span class="ui-chip ui-chip-{% if card.status == 'ACTIVE' %}green{% elif card.status == 'VOID' %}red{% elif card.status == 'EXPIRED' %}orange{% else %}gray{% endif %}">{{ card.get_status_display }}</span></dd></div>
+          <div><dt>Original value</dt><dd>₹{{ card.initial_value|floatformat:2 }}</dd></div>
+          <div><dt>Used</dt><dd>₹{{ used|floatformat:2 }}</dd></div>
+          <div><dt>Issued</dt><dd>{{ card.created_at|date:"d M Y" }}{% if card.issued_by %} · {{ card.issued_by.username }}{% endif %}</dd></div>
+          {% if card.guest %}<div class="ui-dl-wide"><dt>Guest</dt><dd><a href="{{ base_url }}guests/{{ card.guest.pk }}/">{{ card.guest.name }}</a></dd></div>{% endif %}
+          {% if card.note %}<div class="ui-dl-wide"><dt>Note</dt><dd>{{ card.note }}</dd></div>{% endif %}
+        </dl>
+      </section>
+    </div>
+
+    <div class="ui-g360-main">
+      {% if card.status == 'ACTIVE' %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Redeem against a bill</h2>
+        <form method="post" class="ui-stack-form">{% csrf_token %}<input type="hidden" name="op" value="redeem">
+          <div class="ui-inline-fields"><input class="ui-input" name="amount" inputmode="decimal" placeholder="Amount (max ₹{{ card.balance|floatformat:2 }})" required>
+            <button class="ui-btn ui-btn-primary" type="submit">Redeem</button></div>
+          <input class="ui-input" name="note" placeholder="Bill number (optional)">
+        </form>
+      </section>
+      {% endif %}
+
+      {% if can_manage_guests and card.status != 'VOID' %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Manage card</h2>
+        <div class="ui-manage-grid">
+          <form method="post" class="ui-stack-form">{% csrf_token %}<input type="hidden" name="op" value="topup">
+            <label class="ui-field-label">Top up</label>
+            <div class="ui-inline-fields"><input class="ui-input" name="amount" inputmode="decimal" placeholder="Amount" required><button class="ui-btn ui-btn-gray" type="submit">Add</button></div>
+          </form>
+          <form method="post" class="ui-stack-form">{% csrf_token %}<input type="hidden" name="op" value="extend">
+            <label class="ui-field-label">Expiry date</label>
+            <div class="ui-inline-fields"><input class="ui-input" name="expires_on" type="date" value="{{ card.expires_on|date:'Y-m-d' }}"><button class="ui-btn ui-btn-gray" type="submit">Save</button></div>
+          </form>
+        </div>
+        <form method="post" class="ui-void-form" onsubmit="return confirm('Void card {{ card.code }}? The remaining ₹{{ card.balance|floatformat:2 }} can no longer be used.');">{% csrf_token %}<input type="hidden" name="op" value="void">
+          <button class="ui-btn ui-btn-tinted-red ui-btn-sm" type="submit"><i class="fa-solid fa-ban"></i><span>Void card</span></button>
+        </form>
+      </section>
+      {% endif %}
+
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">History</h2></div>
+        <div class="table-responsive">
+          <table class="table">
+            <thead><tr><th>Date</th><th>Activity</th><th>Amount</th><th>Balance</th><th>By</th></tr></thead>
+            <tbody>
+              {% for t in transactions %}
+              <tr>
+                <td>{{ t.created_at|date:"d M Y, h:i A" }}</td>
+                <td><span class="ui-chip ui-chip-{% if t.kind == 'REDEEM' %}indigo{% elif t.kind == 'VOID' %}red{% else %}green{% endif %}">{{ t.get_kind_display }}</span> {{ t.note }}</td>
+                <td>{% if t.kind == 'REDEEM' or t.kind == 'VOID' %}−{% else %}+{% endif %}₹{{ t.amount|floatformat:2 }}</td>
+                <td>₹{{ t.balance_after|floatformat:2 }}</td>
+                <td>{{ t.created_by.username|default:"—" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>

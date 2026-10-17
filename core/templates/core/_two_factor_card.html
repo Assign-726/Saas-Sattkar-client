@@ -1,0 +1,69 @@
+{# Email-OTP sign-in toggle for the signed-in user. Params: action (url), form_id, two_factor_on, with_form (render the <form> here). #}
+{% if with_form %}<form id="{{ form_id }}" method="post" action="{{ action }}">{% csrf_token %}</form>{% endif %}
+<div class="tfa-card">
+  <div class="tfa-head">
+    <i class="fa-solid fa-shield-halved"></i>
+    <div><h3>Two-Factor Authentication (2FA)</h3><p>Configure email OTP security verification for administrative sign-in</p></div>
+  </div>
+  <div class="tfa-body">
+    <label class="tfa-switch-row" for="{{ form_id }}Toggle">
+      <span><strong>Require Email OTP at Sign In</strong>
+        <span class="tfa-desc">{% if user.email %}When enabled, you will receive a secure 6-digit code on <b>{{ user.email }}</b> each time you sign in.{% else %}Add an email address to your account to use sign-in codes.{% endif %}</span></span>
+      <span class="tfa-toggle"><input type="checkbox" role="switch" id="{{ form_id }}Toggle" name="is_2fa_enabled" form="{{ form_id }}" {% if two_factor_on %}checked{% endif %} {% if not user.email %}disabled{% endif %}><i></i></span>
+    </label>
+    <div class="tfa-status is-on" data-tfa="on" {% if not two_factor_on %}hidden{% endif %}><i class="fa-solid fa-circle-check"></i><div><strong>2FA is ON (Recommended)</strong>: High security enabled. An email verification OTP code will be sent and required during login.</div></div>
+    <div class="tfa-status is-off" data-tfa="off" {% if two_factor_on %}hidden{% endif %}><i class="fa-solid fa-triangle-exclamation"></i><div><strong>2FA is OFF</strong>: Direct login enabled. You will sign in with username/email and password only without OTP prompt.</div></div>
+    {% if two_factor_on %}<div class="tfa-password" data-tfa="password" hidden>
+      <label for="{{ form_id }}Pwd">Current password</label>
+      <input type="password" id="{{ form_id }}Pwd" name="current_password" form="{{ form_id }}" class="form-control" autocomplete="current-password">
+      <small>Needed to turn two-factor sign-in off.</small></div>{% endif %}
+  </div>
+  <div class="tfa-foot"><button type="submit" form="{{ form_id }}" class="tfa-save"><i class="fa-solid fa-floppy-disk"></i> Save 2FA Preferences</button></div>
+</div>
+<style>
+  .tfa-card { border: 1px solid var(--ui-separator, #e5e5ea); border-radius: 16px; background: var(--ui-surface, #fff); overflow: hidden; margin-bottom: 1.5rem; }
+  .tfa-head { display: flex; gap: 14px; align-items: flex-start; padding: 20px 22px; border-bottom: 1px solid var(--ui-separator, #e5e5ea); }
+  .tfa-head > i { font-size: 1.35rem; color: var(--ui-accent, #0a84ff); margin-top: 4px; }
+  .tfa-head h3 { font-size: 1.15rem; font-weight: 700; margin: 0; color: var(--ui-label, inherit); }
+  .tfa-head p { margin: 2px 0 0; font-size: .85rem; color: var(--ui-label-2, #6e6e73); }
+  .tfa-body { padding: 20px 22px; display: grid; gap: 14px; }
+  .tfa-switch-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 18px; border: 1px solid var(--ui-separator, #e5e5ea); border-radius: 12px; cursor: pointer; margin: 0; }
+  .tfa-switch-row strong { display: block; font-size: 1rem; color: var(--ui-label, inherit); }
+  .tfa-desc { display: block; font-size: .875rem; color: var(--ui-label-2, #6e6e73); margin-top: 3px; overflow-wrap: anywhere; }
+  .tfa-desc b { color: var(--ui-label, inherit); }
+  .tfa-toggle { position: relative; flex: none; width: 52px; height: 30px; }
+  .tfa-toggle input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
+  .tfa-toggle i { position: absolute; inset: 0; border-radius: 30px; background: var(--ui-fill-2, #d1d1d6); transition: background .2s; }
+  .tfa-toggle i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .2s; }
+  .tfa-toggle input:checked + i { background: var(--ui-green, #34c759); }
+  .tfa-toggle input:checked + i::after { transform: translateX(22px); }
+  .tfa-toggle input:focus-visible + i { outline: 2px solid var(--ui-accent, #0a84ff); outline-offset: 2px; }
+  .tfa-toggle input:disabled + i { opacity: .5; }
+  .tfa-status { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 12px; font-size: .9rem; }
+  .tfa-status[hidden], .tfa-password[hidden] { display: none; }
+  .tfa-status > i { margin-top: 2px; }
+  .tfa-status.is-on { background: rgba(var(--ui-green-rgb, 52,199,89), .12); border: 1px solid rgba(var(--ui-green-rgb, 52,199,89), .35); color: var(--ui-green-text, #248a3d); }
+  .tfa-status.is-off { background: rgba(var(--ui-orange-rgb, 255,149,0), .12); border: 1px solid rgba(var(--ui-orange-rgb, 255,149,0), .35); color: var(--ui-orange-text, #c93400); }
+  .tfa-password { display: grid; gap: 4px; max-width: 360px; }
+  .tfa-password label { font-weight: 600; font-size: .875rem; margin: 0; }
+  .tfa-password small { color: var(--ui-label-2, #6e6e73); }
+  .tfa-foot { display: flex; justify-content: flex-end; padding: 16px 22px; border-top: 1px solid var(--ui-separator, #e5e5ea); background: var(--ui-surface-2, rgba(0,0,0,.02)); }
+  .tfa-save { display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 12px; padding: 11px 22px; font-weight: 700; color: #fff; background: var(--ui-accent, #0a84ff); }
+  .tfa-save:hover { filter: brightness(1.06); }
+  @media (max-width: 575.98px) { .tfa-head, .tfa-body, .tfa-foot { padding-left: 16px; padding-right: 16px; } .tfa-save { width: 100%; justify-content: center; } }
+</style>
+<script>
+(function () {
+  var t = document.getElementById('{{ form_id }}Toggle'); if (!t) return;
+  var card = t.closest('.tfa-card'), wasOn = {{ two_factor_on|yesno:"true,false" }};
+  function sync() {
+    card.querySelector('[data-tfa="on"]').hidden = !t.checked;
+    card.querySelector('[data-tfa="off"]').hidden = t.checked;
+    var pw = card.querySelector('[data-tfa="password"]');
+    if (pw) { pw.hidden = t.checked || !wasOn; var i = pw.querySelector('input'); i.required = !pw.hidden; }
+  }
+  t.addEventListener('change', sync); sync();
+  // Keep this card's edits from marking a surrounding settings form as unsaved
+  ['input', 'change'].forEach(function (e) { card.addEventListener(e, function (ev) { ev.stopPropagation(); }); });
+})();
+</script>

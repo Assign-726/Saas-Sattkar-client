@@ -1,0 +1,27 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <a class="ui-back" href="{{ base_url }}night-audit/"><i class="fa-solid fa-chevron-left"></i> Night audit</a>
+  <div class="ui-page-header">
+    <div><h1>{{ audit.business_date|date:"l, d M Y" }}</h1><p>Closed {{ audit.closed_at|date:"d M Y, h:i A" }}{% if audit.closed_by %} by {{ audit.closed_by.username }}{% endif %}</p></div>
+    <div class="ui-actions"><button type="button" class="ui-btn ui-btn-gray" onclick="window.print()"><i class="fa-solid fa-print"></i><span>Print</span></button></div>
+  </div>
+  {% with s=audit.summary %}
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Occupancy</div></div><div class="kpi-val">{{ s.occupancy }}%</div><div class="kpi-sub">{{ s.sold }} of {{ s.sellable }} rooms</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Room revenue</div></div><div class="kpi-val">₹{{ s.room_revenue|inr }}</div><div class="kpi-sub">ADR ₹{{ s.adr|inr }} · RevPAR ₹{{ s.revpar|inr }}</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Extras</div></div><div class="kpi-val">₹{{ s.extras_revenue|inr }}</div></div>
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Collected</div></div><div class="kpi-val">₹{{ s.collected|inr }}</div></div>
+  </div>
+  <section class="ui-card ui-pad">
+    <ul class="ui-dash-mini">
+      <li><span>Arrivals checked in</span><strong>{{ s.arrivals }}</strong></li>
+      <li><span>Departures checked out</span><strong>{{ s.departures }}</strong></li>
+      <li><span>In house at close</span><strong>{{ s.in_house }}</strong></li>
+      <li><span>No-shows</span><strong>{{ s.no_shows }}{% if s.no_shows_marked %} ({{ s.no_shows_marked }} marked at close){% endif %}</strong></li>
+      <li><span>Cancellations</span><strong>{{ s.cancelled }}</strong></li>
+      {% for k, v in s.payments %}<li><span>{{ k }}</span><strong>₹{{ v|inr2 }}</strong></li>{% endfor %}
+    </ul>
+    {% if audit.notes %}<p style="margin:12px 0 0"><strong>Notes:</strong> {{ audit.notes|linebreaksbr }}</p>{% endif %}
+  </section>
+  {% endwith %}
+</div>

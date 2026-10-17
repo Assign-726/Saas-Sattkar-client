@@ -1,0 +1,59 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>Wastage</h1><p>{{ label }} · {{ start|date:"d M" }} – {{ end|date:"d M Y" }}{% if current_branch %} · {{ current_branch.name }}{% endif %}</p></div>
+    <div class="ui-actions"><a class="ui-btn ui-btn-gray" href="?{{ request.GET.urlencode }}&export=csv"><i class="fa-solid fa-file-csv"></i><span>CSV</span></a></div>
+  </div>
+
+  <form class="ui-card ui-filters" method="get">
+    <div class="ui-field"><label for="wsP">Period</label><select id="wsP" class="ui-input" name="period" onchange="this.form.submit()">{% for k, l in periods %}<option value="{{ k }}" {% if period == k %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+  </form>
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Wasted (at cost)</div><div class="kpi-icon"><i class="fa-solid fa-trash"></i></div></div><div class="kpi-val">₹{{ total|inr }}</div><div class="kpi-sub">{{ count }} entr{{ count|pluralize:"y,ies" }}</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Share of purchases</div><div class="kpi-icon"><i class="fa-solid fa-percent"></i></div></div><div class="kpi-val">{% if share_of_purchases is not None %}{{ share_of_purchases }}%{% else %}—{% endif %}</div><div class="kpi-sub">Good kitchens stay under 4%</div></div>
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Top reason</div></div><div class="kpi-val ui-kpi-val-sm">{% if by_reason %}{{ by_reason.0.0 }}{% else %}—{% endif %}</div><div class="kpi-sub">{% if by_reason %}₹{{ by_reason.0.1|inr }}{% endif %}</div></div>
+  </div>
+
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <div class="ui-pms-3col" style="grid-template-columns:1fr 1fr;margin-top:0">
+        <section class="ui-card ui-pad"><h2 class="ui-card-title">By reason</h2>
+          {% if by_reason %}<ul class="ui-dash-bars">{% for k, v, w in by_reason %}<li><div class="bh"><span>{{ k }}</span><strong>₹{{ v|inr }}</strong></div><div class="ui-bar-mini"><span style="width:{{ w }}%"></span></div></li>{% endfor %}</ul>{% else %}<p class="ui-log-sub">Nothing logged in this period.</p>{% endif %}
+        </section>
+        <section class="ui-card ui-pad"><h2 class="ui-card-title">Most wasted items</h2>
+          {% if by_item %}<ul class="ui-dash-mini">{% for n, u, q, v in by_item %}<li><span>{{ n }} · {{ q }} {{ u }}</span><strong>₹{{ v|inr }}</strong></li>{% endfor %}</ul>{% else %}<p class="ui-log-sub">Nothing logged in this period.</p>{% endif %}
+        </section>
+      </div>
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Log</h2></div>
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>When</th><th>Item</th><th class="num">Qty</th><th>Reason</th><th class="num">Value</th><th>By</th></tr></thead>
+          <tbody>{% for t in page %}<tr>
+            <td class="nowrap">{{ t.created_at|date:"d M, h:i A" }}</td>
+            <td><strong>{{ t.inventory_item.name }}</strong>{% if t.note %}<br><small class="ui-log-sub">{{ t.note }}</small>{% endif %}</td>
+            <td class="num">{{ t.delta|stringformat:"d"|cut:"-" }} {{ t.inventory_item.unit }}</td>
+            <td>{{ t.get_reason_display|default:"—" }}</td>
+            <td class="num">{% if t.unit_cost is not None %}₹{{ t.unit_cost|inr2 }} ea{% else %}—{% endif %}</td>
+            <td>{{ t.performed_by.username|default:"—" }}</td></tr>
+          {% empty %}<tr><td colspan="6" class="ui-log-sub" style="padding:24px;text-align:center">No wastage logged in this period.</td></tr>{% endfor %}</tbody>
+        </table></div>
+        {% if page.has_other_pages %}<div class="ui-pager"><span class="ui-pager-info">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+          {% if page.has_previous %}<a class="ui-pager-btn" href="?period={{ period }}&page={{ page.previous_page_number }}">Previous</a>{% endif %}
+          {% if page.has_next %}<a class="ui-pager-btn" href="?period={{ period }}&page={{ page.next_page_number }}">Next</a>{% endif %}</div>{% endif %}
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Log wastage</h2>
+        <form method="post" action="{{ base_url }}inventory/wastage/add/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-field"><label for="wsItem">Item</label><select id="wsItem" class="ui-input" name="item" required><option value="">Choose…</option>{% for i in items %}<option value="{{ i.pk }}">{{ i.name }} ({{ i.quantity }} {{ i.unit }} in stock)</option>{% endfor %}</select></div>
+          <div class="ui-field"><label for="wsQty">Quantity</label><input id="wsQty" class="ui-input" type="number" name="quantity" min="1" step="1" required></div>
+          <div class="ui-field"><label for="wsReason">Reason</label><select id="wsReason" class="ui-input" name="reason" required><option value="">Choose…</option>{% for k, l in reasons %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></div>
+          <div class="ui-field"><label for="wsNote">Note</label><input id="wsNote" class="ui-input" name="note" maxlength="255" placeholder="e.g. Fridge 2 failed overnight"></div>
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-plus"></i><span>Log &amp; reduce stock</span></button>
+        </form>
+      </section>
+    </div>
+  </div>
+</div>

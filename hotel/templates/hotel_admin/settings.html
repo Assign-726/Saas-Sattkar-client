@@ -147,6 +147,11 @@
                 <i class="fa-solid fa-envelope"></i> <span>Email &amp; SMTP</span>
             </button>
         </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-security" type="button" role="tab">
+                <i class="fa-solid fa-shield-halved"></i> <span>Two-Factor Auth (2FA)</span>
+            </button>
+        </li>
     </ul>
 
     <!-- Tab Contents -->
@@ -485,6 +490,11 @@
         <!-- ========================================== -->
         <!-- TAB 5: HOTEL CUSTOM SMTP / EMAIL SETTINGS  -->
         <!-- ========================================== -->
+        <div class="tab-pane fade" id="tab-security" role="tabpanel">
+            {% url 'hotel_admin:two_factor_update' restaurant_slug=rslug as tfa_action %}
+            {% include 'core/_two_factor_card.html' with action=tfa_action form_id='tfaForm' with_form=False %}
+        </div>
+
         <div class="tab-pane fade" id="tab-email" role="tabpanel">
             <div class="settings-section-card">
                 <div class="settings-card-header">
@@ -633,6 +643,19 @@
         </div>
     </div>
 </form>
+{# Own form for the 2FA tab: its inputs live inside the settings form above and point here with form="tfaForm" #}
+<form id="tfaForm" method="post" action="{% url 'hotel_admin:two_factor_update' restaurant_slug=rslug %}">{% csrf_token %}</form>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var b = document.querySelector('[data-bs-target="#tab-security"]');
+  var bar = document.querySelector('.sticky-save-bar');
+  // The page's save bar saves hotel settings, not 2FA (which has its own button), so hide it on that tab
+  document.querySelectorAll('.pms-nav-tabs [data-bs-toggle="tab"]').forEach(function (t) {
+    t.addEventListener('shown.bs.tab', function () { if (!bar) return; if (t === b) bar.style.setProperty('display', 'none', 'important'); else bar.style.removeProperty('display'); });
+  });
+  if (b && window.bootstrap && new URLSearchParams(location.search).get('tab') === 'security') bootstrap.Tab.getOrCreateInstance(b).show();
+});
+</script>
 
 <!-- Modal: Test Payment Gateway Connection -->
 <div class="modal fade" id="testGatewayModal" tabindex="-1" aria-hidden="true">

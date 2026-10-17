@@ -100,892 +100,467 @@
   }
 
   /* ==========================================================================
-     KDS Command Top Bar (Executive Status HUD)
+     Command bar: title, date window, status filters, station + tools
      ========================================================================== */
   .kds-command-bar {
     background: var(--kds-surface);
     border: 1px solid var(--kds-border);
     border-radius: 16px;
-    padding: 0.9rem 1.25rem;
-    margin-bottom: 1.5rem;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .kds-bar-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
-    transition: all 0.25s ease;
+    gap: 0.6rem 1rem;
   }
-
-  .kds-title-group {
-    display: flex;
-    align-items: center;
-    gap: 0.9rem;
-  }
-
+  .kds-title-group { display: flex; align-items: center; gap: 0.65rem; min-width: 0; }
   .kds-main-title {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--kds-text-primary);
-    margin: 0;
+    font-size: 1.45rem;
+    font-weight: 800;
     letter-spacing: -0.02em;
+    margin: 0;
+    color: var(--kds-text-primary);
     display: flex;
     align-items: center;
     gap: 0.5rem;
   }
-
   .kds-live-pill {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    background: rgba(16, 185, 129, 0.12);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    color: var(--ui-green-text);
+    gap: 0.4rem;
     font-size: 0.72rem;
     font-weight: 700;
-    text-transform: none;
-    letter-spacing: 0;
-    padding: 3px 9px;
-    border-radius: 9999px;
+    padding: 0.28rem 0.65rem;
+    border-radius: 999px;
+    background: rgba(5, 150, 105, 0.1);
+    color: var(--kds-green);
+    white-space: nowrap;
   }
-
+  .kds-live-pill.is-history { background: var(--kds-surface-secondary); color: var(--kds-text-secondary); }
   .kds-pulse-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background-color: var(--ui-green);
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
-    animation: kdsPulse 1.8s infinite;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: currentColor;
+    animation: kdsDot 1.6s ease-in-out infinite;
   }
+  .kds-live-pill.is-history .kds-pulse-dot { animation: none; }
+  @keyframes kdsDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-  @keyframes kdsPulse {
-    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
-    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-  }
-
-  /* KPI Status Filters */
-  .kds-kpi-bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.65rem;
-  }
-
-  .kds-kpi-pill {
-    border: none;
-    outline: none;
-    padding: 0.5rem 1rem;
-    border-radius: 9999px;
-    font-size: 0.82rem;
-    font-weight: 700;
+  /* Date window */
+  .kds-range { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  .kds-seg {
     display: inline-flex;
-    align-items: center;
-    gap: 0.65rem;
-    cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.06);
-    user-select: none;
-    position: relative;
-    opacity: 0.88;
-  }
-
-  .kds-kpi-pill:hover {
-    opacity: 1;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 12px rgba(0,0,0,0.12);
-  }
-
-  .kds-kpi-pill.active {
-    opacity: 1;
-    transform: translateY(-2px);
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.5), 0 8px 16px rgba(0,0,0,0.18);
-  }
-
-  .kds-kpi-pill.kpi-all {
-    background: var(--kds-surface-secondary);
-    color: var(--kds-text-primary);
-    border: 1px solid var(--kds-border);
-  }
-
-  .kds-kpi-pill.kpi-new {
-    background: var(--kds-navy-gradient);
-    color: #FFFFFF;
-  }
-
-  .kds-kpi-pill.kpi-kitchen {
-    background: var(--kds-orange-gradient);
-    color: #FFFFFF;
-  }
-
-  .kds-kpi-pill.kpi-delayed {
-    background: var(--kds-red-gradient);
-    color: #FFFFFF;
-  }
-
-  .kds-kpi-pill.kpi-completed {
-    background: var(--kds-green-gradient);
-    color: #FFFFFF;
-  }
-
-  .kds-kpi-icon {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.22);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.72rem;
-  }
-
-  .kds-kpi-count {
-    font-size: 0.95rem;
-    font-weight: 700;
-    letter-spacing: 0;
-    background: rgba(0,0,0,0.18);
-    padding: 1px 7px;
-    border-radius: 9999px;
-  }
-
-  /* Control Tools Area (Right) */
-  .kds-tools-bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.65rem;
-  }
-
-  .kds-segmented-station {
     background: var(--kds-surface-secondary);
     border: 1px solid var(--kds-border);
-    border-radius: 9999px;
+    border-radius: 11px;
     padding: 3px;
-    display: flex;
-    align-items: center;
     gap: 2px;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
-
-  .station-btn {
-    border: none;
+  .kds-seg::-webkit-scrollbar { display: none; }
+  .kds-seg button {
+    border: 0;
     background: transparent;
-    padding: 5px 13px;
-    font-size: 0.78rem;
-    font-weight: 600;
     color: var(--kds-text-secondary);
-    border-radius: 9999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.38rem 0.8rem;
+    border-radius: 8px;
+    white-space: nowrap;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background 0.15s, color 0.15s;
+  }
+  .kds-seg button:hover { color: var(--kds-text-primary); }
+  .kds-seg button.active {
+    background: var(--kds-surface);
+    color: var(--kds-text-primary);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+  }
+  body.kds-dark-mode .kds-seg button.active { background: var(--kds-border); }
+  .kds-custom-range {
+    display: none;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .kds-custom-range.show { display: inline-flex; }
+  .kds-custom-range input[type="date"] {
+    border: 1px solid var(--kds-border);
+    background: var(--kds-surface);
+    color: var(--kds-text-primary);
+    border-radius: 9px;
+    padding: 0.32rem 0.55rem;
+    font-size: 0.8rem;
+    color-scheme: light dark;
+  }
+  .kds-custom-range .kds-apply {
+    border: 0;
+    border-radius: 9px;
+    padding: 0.38rem 0.8rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    background: var(--ui-accent, #0A84FF);
+    color: #fff;
+  }
+  .kds-range-label { font-size: 0.78rem; color: var(--kds-text-muted); font-weight: 600; white-space: nowrap; }
+
+  /* Status filters */
+  .kds-kpi-bar { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .kds-kpi-pill {
+    --pill: var(--kds-text-secondary);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid var(--kds-border);
+    background: var(--kds-surface);
+    color: var(--kds-text-primary);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.36rem 0.45rem 0.36rem 0.7rem;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .kds-kpi-pill .kds-kpi-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pill); }
+  .kds-kpi-pill .kds-kpi-count {
+    min-width: 1.6rem;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+    font-size: 0.75rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    background: var(--kds-surface-secondary);
+    color: var(--kds-text-primary);
+  }
+  .kds-kpi-pill:hover { border-color: var(--pill); }
+  .kds-kpi-pill.active { border-color: var(--pill); background: color-mix(in srgb, var(--pill) 12%, var(--kds-surface)); }
+  .kds-kpi-pill.active .kds-kpi-count { background: var(--pill); color: #fff; }
+  .kpi-all { --pill: #475569; }
+  .kpi-new { --pill: #2563EB; }
+  .kpi-kitchen { --pill: #D97706; }
+  .kpi-delayed { --pill: #DC2626; }
+  .kpi-completed { --pill: #059669; }
+  .kds-kpi-pill.is-alert { animation: kdsPulse 2s infinite; }
+  @keyframes kdsPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.35); }
+    50% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
   }
 
-  .station-btn.active {
-    background: var(--kds-text-primary);
-    color: var(--kds-surface);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-  }
-
-  .kds-search-wrapper {
-    position: relative;
-    width: 200px;
-  }
-
+  /* Station + tools */
+  .kds-tools-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; }
+  .kds-search-wrapper { position: relative; }
   .kds-search-input {
-    width: 100%;
-    padding: 0.45rem 2rem 0.45rem 0.9rem;
-    border-radius: 9999px;
     border: 1px solid var(--kds-border);
     background: var(--kds-surface-secondary);
-    font-size: 0.82rem;
     color: var(--kds-text-primary);
+    border-radius: 10px;
+    padding: 0.4rem 0.75rem 0.4rem 2rem;
+    font-size: 0.82rem;
+    width: 210px;
+    max-width: 100%;
     outline: none;
-    transition: all 0.2s ease;
   }
-
-  .kds-search-input:focus {
-    border-color: #38BDF8;
-    background: var(--kds-surface);
-    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
-  }
-
+  .kds-search-input:focus { border-color: var(--ui-accent, #0A84FF); background: var(--kds-surface); }
   .kds-search-icon {
-    position: absolute;
-    right: 11px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--kds-text-muted);
-    pointer-events: none;
-    font-size: 0.8rem;
+    position: absolute; left: 0.7rem; top: 50%; transform: translateY(-50%);
+    color: var(--kds-text-muted); font-size: 0.8rem; pointer-events: none;
   }
-
   .kds-tool-icon-btn {
-    width: 36px;
-    height: 36px;
+    width: 34px; height: 34px;
+    display: inline-flex; align-items: center; justify-content: center;
     border-radius: 10px;
     border: 1px solid var(--kds-border);
-    background: var(--kds-surface-secondary);
-    color: var(--kds-text-secondary);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.18s ease;
-  }
-
-  .kds-tool-icon-btn:hover {
     background: var(--kds-surface);
-    color: var(--kds-text-primary);
-    border-color: var(--kds-text-muted);
-    transform: translateY(-1px);
+    color: var(--kds-text-secondary);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
   }
+  .kds-tool-icon-btn:hover { background: var(--kds-surface-secondary); color: var(--kds-text-primary); }
 
   /* ==========================================================================
-     Cards Grid & Proportional Layout
+     Kitchen performance strip (for the chosen dates)
+     ========================================================================== */
+  .kds-perf {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) minmax(0, 2.2fr);
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+  }
+  .kds-perf-tile {
+    background: var(--kds-surface);
+    border: 1px solid var(--kds-border);
+    border-radius: 14px;
+    padding: 0.7rem 0.85rem;
+    min-width: 0;
+  }
+  .kds-perf-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--kds-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .kds-perf-value {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--kds-text-primary);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.25;
+    margin-top: 0.15rem;
+  }
+  .kds-perf-sub { font-size: 0.72rem; color: var(--kds-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kds-perf-value.good { color: var(--kds-green); }
+  .kds-perf-value.warn { color: var(--kds-orange); }
+  .kds-perf-value.bad { color: var(--kds-red); }
+  .kds-top-items { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; }
+  .kds-top-item {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    font-size: 0.75rem; font-weight: 600;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    background: var(--kds-surface-secondary);
+    border: 1px solid var(--kds-border);
+    color: var(--kds-text-primary);
+    max-width: 100%;
+  }
+  .kds-top-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .kds-top-item b { font-variant-numeric: tabular-nums; color: var(--kds-text-secondary); }
+
+  .kds-list-note {
+    grid-column: 1 / -1;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--kds-text-muted);
+    padding: 0.5rem;
+  }
+  .kds-section-head {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--kds-text-muted);
+    margin-top: 0.4rem;
+  }
+  .kds-section-head::after { content: ''; flex: 1; height: 1px; background: var(--kds-border); }
+
+  /* ==========================================================================
+     Ticket grid + ticket cards
      ========================================================================== */
   .kds-grid-container {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-    gap: 1.35rem;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 0.9rem;
     align-items: start;
   }
+  .kds-grid-container.compact-mode { grid-template-columns: repeat(auto-fill, minmax(235px, 1fr)); gap: 0.65rem; }
+  .kds-grid-container.few-cards { grid-template-columns: repeat(auto-fill, minmax(290px, 360px)); }
 
-  .kds-grid-container.compact-mode {
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1rem;
-  }
-
-  .kds-grid-container.few-cards {
-    max-width: 1200px;
-  }
-
-  /* ==========================================================================
-     Order Ticket Card (Fixed Viewport Proportions so buttons never get cut off)
-     ========================================================================== */
   .kds-card {
+    --tone: #2563EB;
+    --tone-soft: rgba(37, 99, 235, 0.1);
+    position: relative;
+    display: flex;
+    flex-direction: column;
     background: var(--kds-surface);
-    border-radius: 16px;
     border: 1px solid var(--kds-border);
+    border-top: 4px solid var(--tone);
+    border-radius: 14px;
     box-shadow: var(--kds-card-shadow);
     overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    /* Height constraint ensures footer & buttons are always visible on screen */
-    max-height: min(84vh, 670px);
-    transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease;
-    position: relative;
+    color: var(--kds-text-primary);
+    transition: box-shadow 0.2s, transform 0.2s;
   }
+  .kds-card:hover { box-shadow: var(--kds-card-hover-shadow); }
+  .kds-card[data-kds-status="IN_KITCHEN"] { --tone: #D97706; --tone-soft: rgba(217, 119, 6, 0.12); }
+  .kds-card[data-kds-status="IN_KITCHEN"].is-paused { --tone: #64748B; --tone-soft: rgba(100, 116, 139, 0.14); }
+  .kds-card[data-kds-status="DELAYED"] { --tone: #DC2626; --tone-soft: rgba(220, 38, 38, 0.1); border-color: rgba(220, 38, 38, 0.45); }
+  .kds-card[data-kds-status="COMPLETED"] { --tone: #059669; --tone-soft: rgba(5, 150, 105, 0.1); }
+  .kds-card[data-kds-status="COMPLETED"].is-served { --tone: #94A3B8; --tone-soft: rgba(148, 163, 184, 0.14); box-shadow: none; }
+  .kds-card[data-kds-status="COMPLETED"].is-served .kds-ticket-items { opacity: 0.7; }
 
-  .kds-card:hover {
-    box-shadow: var(--kds-card-hover-shadow);
-    transform: translateY(-2px);
+  .kds-ticket-head { padding: 0.75rem 0.85rem 0.6rem; display: flex; gap: 0.6rem; align-items: flex-start; }
+  .kds-ticket-id { flex: 1; min-width: 0; }
+  .kds-ticket-table {
+    display: flex; align-items: center; gap: 0.4rem;
+    font-size: 1.2rem; font-weight: 800; letter-spacing: -0.01em;
+    line-height: 1.2;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  .kds-ticket-table i { font-size: 0.95rem; color: var(--tone); }
+  .kds-ticket-meta {
+    margin-top: 0.2rem;
+    display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem;
+    font-size: 0.74rem; color: var(--kds-text-secondary);
+  }
+  .kds-ticket-meta .sep { color: var(--kds-text-muted); }
+  .kds-ticket-meta strong { color: var(--kds-text-primary); font-weight: 700; }
+  .kds-ticket-clock { text-align: right; flex-shrink: 0; }
+  .kds-ticket-timer {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 1.35rem; font-weight: 800; line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    color: var(--tone);
+  }
+  .kds-ticket-timer-cap { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--kds-text-muted); }
+  .kds-ticket-expand {
+    border: 0; background: transparent; color: var(--kds-text-muted);
+    width: 26px; height: 26px; border-radius: 7px; margin: -0.2rem -0.35rem 0 0.1rem;
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+  }
+  .kds-ticket-expand:hover { background: var(--kds-surface-secondary); color: var(--kds-text-primary); }
 
-  /* Delayed Ticket Warning Border */
-  .kds-card[data-kds-status="DELAYED"] {
-    border: 2px solid var(--ui-red);
-    animation: kdsCardDelayedPulse 2.5s infinite;
+  .kds-ticket-status {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+    padding: 0.38rem 0.85rem;
+    background: var(--tone-soft);
+    color: var(--tone);
+    font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
   }
+  .kds-ticket-status .detail { font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--kds-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.kds-dark-mode .kds-ticket-status { filter: brightness(1.25); }
 
-  @keyframes kdsCardDelayedPulse {
-    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-    70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  .kds-flag {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    font-size: 0.66rem; font-weight: 700; padding: 0.1rem 0.45rem; border-radius: 999px;
+    background: rgba(217, 119, 6, 0.14); color: #B45309; white-space: nowrap;
   }
+  body.kds-dark-mode .kds-flag { color: #FBBF24; }
 
-  /* Card Header */
-  .kds-card-header {
-    padding: 0.85rem 1.1rem;
-    color: #FFFFFF;
-    display: flex;
-    flex-direction: column;
-    gap: 0.45rem;
-    position: relative;
-    flex-shrink: 0; /* Pinned at top of card */
+  .kds-ticket-items { padding: 0.35rem 0.55rem; display: flex; flex-direction: column; max-height: 340px; overflow-y: auto; scrollbar-width: thin; }
+  .compact-mode .kds-ticket-items { max-height: 250px; }
+  .kds-round {
+    font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
+    color: #B45309; padding: 0.4rem 0.3rem 0.15rem; display: flex; align-items: center; gap: 0.35rem;
   }
+  body.kds-dark-mode .kds-round { color: #FBBF24; }
 
-  .kds-card[data-kds-status="NEW"] .kds-card-header {
-    background: var(--kds-navy-gradient);
-  }
-
-  .kds-card[data-kds-status="IN_KITCHEN"] .kds-card-header {
-    background: var(--kds-orange-gradient);
-  }
-
-  .kds-card[data-kds-status="DELAYED"] .kds-card-header {
-    background: var(--kds-red-gradient);
-  }
-
-  .kds-card[data-kds-status="COMPLETED"] .kds-card-header {
-    background: var(--kds-green-gradient);
-  }
-
-  /* Header Top Row */
-  .header-top-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-  }
-
-  .table-hero-badge {
-    background: rgba(0, 0, 0, 0.28);
-    backdrop-filter: blur(4px);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    border-radius: 8px;
-    padding: 4px 10px;
-    font-size: 0.9rem;
-    font-weight: 700;
-    letter-spacing: 0;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: #FFFFFF;
-    text-transform: none;
-  }
-
-  .table-hero-badge.takeaway {
-    background: rgba(255, 255, 255, 0.22);
-  }
-
-  .order-ref-badges {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .token-pill-badge {
-    background: var(--ui-surface);
-    color: var(--ui-label);
-    font-size: 0.8rem;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 6px;
-    letter-spacing: 0;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-  }
-
-  .order-num-badge {
-    background: rgba(0, 0, 0, 0.22);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    color: #FFFFFF;
-    font-size: 0.78rem;
-    font-weight: 700;
-    padding: 3px 7px;
-    border-radius: 6px;
-  }
-
-  .header-expand-btn {
-    background: rgba(255, 255, 255, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    color: #FFFFFF;
-    width: 26px;
-    height: 26px;
-    border-radius: 6px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 0.72rem;
-    transition: all 0.15s ease;
-  }
-
-  .header-expand-btn:hover {
-    background: rgba(255, 255, 255, 0.35);
-    transform: scale(1.08);
-  }
-
-  /* Header Bottom Row */
-  .header-bottom-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 0.8rem;
-    opacity: 0.95;
-    border-top: 1px solid rgba(255, 255, 255, 0.18);
-    padding-top: 0.4rem;
-  }
-
-  .customer-details {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 190px;
-  }
-
-  .order-time-elapsed {
-    font-size: 0.75rem;
-    font-weight: 500;
-    opacity: 0.9;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  /* Card Sub-Banner Status Strip */
-  .kds-status-strip {
-    padding: 0.4rem 1.1rem;
-    font-size: 0.75rem;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 1px solid var(--kds-border);
-    flex-shrink: 0;
-  }
-
-  .strip-delayed {
-    background: rgba(var(--ui-red-rgb), 0.1);
-    color: var(--ui-red-text);
-  }
-  body.kds-dark-mode .strip-delayed,
-  [data-theme="dark"] .strip-delayed,
-  .dark-theme .strip-delayed {
-    background: rgba(220, 38, 38, 0.18);
-    color: #F87171;
-  }
-
-  .strip-completed {
-    background: rgba(var(--ui-green-rgb), 0.12);
-    color: var(--ui-green-text);
-  }
-  body.kds-dark-mode .strip-completed,
-  [data-theme="dark"] .strip-completed,
-  .dark-theme .strip-completed {
-    background: rgba(22, 163, 74, 0.18);
-    color: #4ADE80;
-  }
-
-  .strip-paused {
-    background: rgba(var(--ui-accent-rgb), 0.1);
-    color: var(--ui-accent-text);
-  }
-  body.kds-dark-mode .strip-paused,
-  [data-theme="dark"] .strip-paused,
-  .dark-theme .strip-paused {
-    background: rgba(37, 99, 235, 0.18);
-    color: #60A5FA;
-  }
-
-  .strip-cooking {
-    background: rgba(var(--ui-orange-rgb), 0.12);
-    color: var(--ui-orange-text);
-  }
-  body.kds-dark-mode .strip-cooking,
-  [data-theme="dark"] .strip-cooking,
-  .dark-theme .strip-cooking {
-    background: rgba(217, 119, 6, 0.18);
-    color: #FBBF24;
-  }
-
-  /* Subbar for Item Count & Plated Progress */
-  .kds-items-subbar {
-    padding: 0.35rem 1.1rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 0.74rem;
-    font-weight: 700;
-    color: var(--kds-text-secondary);
-    background: var(--kds-surface-secondary);
-    border-bottom: 1px dashed var(--kds-border);
-    flex-shrink: 0;
-  }
-
-  .items-progress-badge {
-    background: var(--kds-surface);
-    border: 1px solid var(--kds-border);
-    padding: 2px 7px;
-    border-radius: 6px;
-    font-size: 0.72rem;
-  }
-
-  .items-progress-badge.all-ready {
-    background: rgba(var(--ui-green-rgb), 0.16);
-    border-color: #86EFAC;
-    color: var(--ui-green-text);
-  }
-
-  .scroll-hint-pill {
-    color: #0284C7;
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    font-size: 0.7rem;
-    animation: kdsBounce 2s infinite;
-  }
-
-  @keyframes kdsBounce {
-    0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
-    40% { transform: translateY(3px); }
-    60% { transform: translateY(1.5px); }
-  }
-
-  /* ==========================================================================
-     Items Section (Scrollable & Responsive for 20+ items)
-     ========================================================================== */
-  .kds-items-list {
-    padding: 0.75rem 1.1rem;
-    flex: 1 1 auto;
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-    min-height: 120px;
-    max-height: 320px;
-    overflow-y: auto;
-    scrollbar-width: thin;
-  }
-
-  /* Auto-Dense Item Style for tickets with many items (> 5 items) */
-  .kds-items-list.dense-order-items {
-    gap: 0.35rem;
-    padding: 0.5rem 0.85rem;
-  }
-
-  .kds-items-list.dense-order-items .kds-item-card {
-    padding: 0.38rem 0.65rem;
-    gap: 0.2rem;
-  }
-
-  .kds-items-list.dense-order-items .item-title-text {
-    font-size: 0.84rem;
-  }
-
-  .kds-items-list.dense-order-items .item-qty-pill {
-    padding: 2px 7px;
-    font-size: 0.8rem;
-  }
-
-  .kds-items-list.dense-order-items .item-special-note {
-    font-size: 0.72rem;
-    padding: 2px 6px;
-  }
-
-  /* Individual Item Row */
+  /* Item rows (also used in the full-ticket modal) */
   .kds-item-card {
-    background: var(--kds-surface-secondary);
-    border: 1px solid var(--kds-border-light);
-    border-radius: 10px;
-    padding: 0.55rem 0.75rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
+    display: block;
+    padding: 0.45rem 0.35rem;
+    border-radius: 9px;
     cursor: pointer;
     user-select: none;
-    transition: all 0.18s ease;
+    transition: background 0.12s;
   }
-
-  .kds-item-card:hover {
-    border-color: var(--kds-border);
-    transform: translateX(2px);
-  }
-
-  /* Checked Item (Plated / Ready) */
-  .kds-item-card.item-done {
-    background: rgba(16, 185, 129, 0.08);
-    border-color: rgba(16, 185, 129, 0.35);
-  }
-
-  .kds-item-card.item-done .item-title-text {
-    text-decoration: line-through;
-    opacity: 0.6;
-    color: var(--kds-text-muted);
-  }
-
-  .kds-item-card.item-done .item-check-dot {
-    background: var(--ui-green);
-    border-color: var(--ui-green);
-    color: #FFFFFF;
-  }
-
-  .item-primary-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.65rem;
-  }
-
-  .item-leading-info {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    flex: 1;
-    min-width: 0;
-  }
-
-  /* Check Circle for Chef Tap */
-  .item-check-dot {
-    width: 20px;
-    height: 20px;
-    border-radius: 6px;
-    border: 1.8px solid var(--kds-text-muted);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.72rem;
+  .kds-item-card + .kds-item-card { border-top: 1px dashed var(--kds-border); }
+  .kds-item-card:hover { background: var(--kds-surface-secondary); }
+  .item-primary-row { display: flex; align-items: flex-start; gap: 0.55rem; }
+  .item-qty {
     flex-shrink: 0;
-    transition: all 0.15s ease;
-    color: transparent;
+    min-width: 2.1rem;
+    text-align: center;
+    font-size: 0.95rem; font-weight: 800; font-variant-numeric: tabular-nums;
+    padding: 0.05rem 0.3rem;
+    border-radius: 7px;
+    background: var(--kds-surface-secondary);
+    border: 1px solid var(--kds-border);
+    color: var(--kds-text-primary);
   }
-
-  /* Veg / Non-Veg Standard Indicators */
-  .fssai-indicator {
-    width: 14px;
-    height: 14px;
-    border-radius: 3px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-
-  .fssai-indicator.veg {
-    border: 1.8px solid var(--ui-green);
-  }
-  .fssai-indicator.veg .fssai-circle {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--ui-green);
-  }
-
-  .fssai-indicator.non-veg {
-    border: 1.8px solid var(--ui-red);
-  }
-  .fssai-indicator.non-veg .fssai-circle {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--ui-red);
-  }
-
+  .item-qty.multi { background: var(--kds-text-primary); border-color: var(--kds-text-primary); color: var(--kds-surface); }
+  .item-body { flex: 1; min-width: 0; }
   .item-title-text {
-    font-size: 0.9rem;
-    font-weight: 700;
+    display: flex; align-items: center; gap: 0.4rem;
+    font-size: 0.92rem; font-weight: 600; line-height: 1.35;
     color: var(--kds-text-primary);
-    line-height: 1.25;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    transition: all 0.18s ease;
+    word-break: break-word;
   }
-
-  /* High-Visibility Quantity Pill */
-  .item-qty-pill {
-    background: var(--kds-surface);
-    border: 1px solid var(--kds-border);
-    padding: 2px 8px;
-    border-radius: 9999px;
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: var(--kds-text-primary);
+  .fssai-indicator {
     flex-shrink: 0;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    width: 13px; height: 13px; border: 1.5px solid #16A34A; border-radius: 3px;
+    display: inline-flex; align-items: center; justify-content: center;
   }
-
-  .item-qty-pill.multi-qty {
-    background: rgba(var(--ui-orange-rgb), 0.14);
-    border-color: var(--ui-orange);
-    color: var(--ui-orange-text);
-  }
-
-  /* High-Contrast Customer Instruction / Notes Callout */
+  .fssai-indicator .fssai-circle { width: 6px; height: 6px; border-radius: 50%; background: #16A34A; }
+  .fssai-indicator.non-veg { border-color: #B91C1C; }
+  .fssai-indicator.non-veg .fssai-circle { background: #B91C1C; }
   .item-special-note {
-    background: rgba(var(--ui-orange-rgb), 0.14);
-    border: 1px solid #FCD34D;
-    border-left: 3.5px solid var(--ui-orange);
+    margin-top: 0.25rem;
+    display: flex; gap: 0.35rem; align-items: flex-start;
+    font-size: 0.76rem; font-weight: 600;
+    color: #B45309;
+    background: rgba(245, 158, 11, 0.12);
     border-radius: 6px;
-    padding: 3px 8px;
-    font-size: 0.75rem;
-    color: var(--ui-orange-text);
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 1px;
+    padding: 0.2rem 0.45rem;
   }
-
-  body.kds-dark-mode .item-special-note,
-  [data-theme="dark"] .item-special-note,
-  .dark-theme .item-special-note {
-    background: rgba(245, 158, 11, 0.15);
-    border-color: rgba(245, 158, 11, 0.35);
-    border-left-color: var(--ui-orange);
-    color: #FDE68A;
+  body.kds-dark-mode .item-special-note { color: #FCD34D; }
+  .item-check-dot {
+    flex-shrink: 0;
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 2px solid var(--kds-border);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: transparent; font-size: 0.8rem;
+    transition: all 0.15s;
   }
+  .kds-item-card.item-done .item-check-dot { background: #059669; border-color: #059669; color: #fff; }
+  .kds-item-card.item-done .item-title-text { text-decoration: line-through; color: var(--kds-text-muted); }
+  .kds-item-card.item-done .item-qty { opacity: 0.5; }
+  .kds-item-card.item-done .item-special-note { opacity: 0.55; }
+  .kds-large-modal-window .kds-item-card { border: 1px solid var(--kds-border); }
+  .kds-large-modal-window .kds-item-card + .kds-item-card { border-top: 1px solid var(--kds-border); }
 
-  /* ==========================================================================
-     Card Footer: HUD Digital Timer, Progress Track & Pinned Actions
-     ========================================================================== */
-  .kds-card-footer {
-    padding: 0.8rem 1.1rem;
-    background: var(--kds-surface);
-    border-top: 1px solid var(--kds-border);
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
-    flex-shrink: 0; /* Pinned at bottom of card */
-  }
-
-  /* Digital Cooking HUD Bar */
-  .cooking-hud-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-  }
-
-  .hud-timer-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-family: var(--ui-font-mono);
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: var(--kds-text-primary);
-    background: var(--kds-surface-secondary);
-    border: 1px solid var(--kds-border);
-    padding: 3px 9px;
-    border-radius: 8px;
-  }
-
-  .hud-pulse-orange {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--ui-orange);
-    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7);
-    animation: kdsPulse 1.5s infinite;
-  }
-
+  .kds-ticket-foot { margin-top: auto; padding: 0.6rem 0.85rem 0.8rem; border-top: 1px solid var(--kds-border-light); }
+  .kds-foot-meta { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; font-size: 0.74rem; color: var(--kds-text-secondary); }
+  .items-progress-badge { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .items-progress-badge.all-ready { color: var(--kds-green); }
   .hud-target-btn {
-    border: 1px solid var(--kds-border);
-    background: var(--kds-surface-secondary);
-    color: var(--kds-text-secondary);
-    padding: 3px 9px;
-    border-radius: 8px;
-    font-size: 0.76rem;
-    font-weight: 700;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    cursor: pointer;
-    transition: all 0.15s ease;
+    border: 0; background: transparent; padding: 0.1rem 0.3rem; border-radius: 6px;
+    font-size: 0.74rem; font-weight: 600; color: var(--kds-text-secondary); cursor: pointer;
   }
+  .hud-target-btn:hover { background: var(--kds-surface-secondary); color: var(--kds-text-primary); }
+  .kds-progress-track { height: 5px; border-radius: 999px; background: var(--kds-surface-secondary); overflow: hidden; margin: 0.45rem 0 0.65rem; }
+  .kds-progress-fill { height: 100%; border-radius: inherit; background: var(--tone); transition: width 0.6s linear; }
 
-  .hud-target-btn:hover {
-    background: var(--kds-surface);
-    color: var(--kds-text-primary);
-    border-color: #38BDF8;
-  }
-
-  /* Multi-State Smooth Progress Bar */
-  .kds-progress-track {
-    width: 100%;
-    height: 6px;
-    background: var(--kds-border);
-    border-radius: 9999px;
-    overflow: hidden;
-    position: relative;
-  }
-
-  .kds-progress-fill {
-    height: 100%;
-    border-radius: 9999px;
-    background: var(--kds-green-gradient);
-    transition: width 0.4s ease, background 0.3s ease;
-  }
-
-  .kds-card[data-kds-status="IN_KITCHEN"] .kds-progress-fill {
-    background: var(--kds-orange-gradient);
-  }
-
-  .kds-card[data-kds-status="DELAYED"] .kds-progress-fill {
-    background: var(--kds-red-gradient);
-  }
-
-  /* Action Buttons Grid */
-  .card-action-bar {
-    display: flex;
-    align-items: center;
-    gap: 0.55rem;
-  }
-
+  .card-action-bar { display: flex; gap: 0.45rem; }
   .kds-action-touch-btn {
     flex: 1;
-    min-height: 40px;
-    padding: 0.45rem 0.85rem;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
+    min-height: 42px;
     border-radius: 10px;
-    font-size: 0.84rem;
-    font-weight: 700;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    cursor: pointer;
-    user-select: none;
-    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-    border: none;
-    outline: none;
-  }
-
-  .kds-action-touch-btn:active {
-    transform: scale(0.97);
-  }
-
-  .btn-start-cooking {
-    background: var(--kds-orange-gradient);
-    color: #FFFFFF;
-    box-shadow: 0 2px 6px rgba(234, 88, 12, 0.3);
-  }
-  .btn-start-cooking:hover {
-    opacity: 0.95;
-    box-shadow: 0 4px 10px rgba(234, 88, 12, 0.4);
-  }
-
-  .btn-pause-action {
-    background: var(--kds-surface-secondary);
-    color: var(--kds-text-primary);
-    border: 1px solid var(--kds-border);
-  }
-  .btn-pause-action:hover {
-    background: var(--kds-border);
-  }
-
-  .btn-resume-action {
-    background: rgba(var(--ui-accent-rgb), 0.1);
-    color: var(--ui-accent-text);
-    border: 1px solid rgba(var(--ui-accent-rgb), 0.3);
-  }
-  body.kds-dark-mode .btn-resume-action,
-  [data-theme="dark"] .btn-resume-action,
-  .dark-theme .btn-resume-action {
-    background: rgba(30, 64, 175, 0.25);
-    color: #93C5FD;
-    border-color: rgba(30, 64, 175, 0.45);
-  }
-
-  .btn-mark-ready {
-    background: var(--kds-green-gradient);
-    color: #FFFFFF;
-    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
-  }
-  .btn-mark-ready:hover {
-    opacity: 0.95;
-    box-shadow: 0 4px 10px rgba(16, 185, 129, 0.4);
-  }
-
-  .btn-print-kot {
-    background: var(--kds-surface-secondary);
-    color: var(--kds-text-secondary);
-    border: 1px solid var(--kds-border);
+    border: 1px solid transparent;
+    font-size: 0.86rem; font-weight: 700;
     text-decoration: none;
+    cursor: pointer;
+    transition: filter 0.15s, background 0.15s;
   }
-  .btn-print-kot:hover {
+  .kds-action-touch-btn:hover { filter: brightness(0.95); }
+  .kds-action-touch-btn:disabled { opacity: 0.6; cursor: wait; }
+  .btn-start-cooking { background: #2563EB; color: #fff; }
+  .btn-mark-ready { background: #059669; color: #fff; }
+  .btn-serve { background: #0F172A; color: #fff; }
+  body.kds-dark-mode .btn-serve { background: #E2E8F0; color: #0F172A; }
+  .btn-pause-action, .btn-resume-action, .btn-print-kot {
+    background: var(--kds-surface-secondary);
+    border-color: var(--kds-border);
     color: var(--kds-text-primary);
-    background: var(--kds-border);
+  }
+  .btn-resume-action { color: #D97706; }
+  .kds-action-touch-btn.icon-only { flex: 0 0 44px; }
+
+  @media (max-width: 1280px) {
+    .kds-perf { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .kds-perf-top { grid-column: 1 / -1; }
+  }
+  @media (max-width: 760px) {
+    .kds-perf { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .kds-perf-tile:nth-child(5) { grid-column: 1 / -1; }
+    .kds-search-wrapper, .kds-search-input { width: 100%; flex: 1 1 100%; }
+    .kds-grid-container, .kds-grid-container.few-cards { grid-template-columns: 1fr; }
+    .kds-main-title { font-size: 1.2rem; }
   }
 
   /* ==========================================================================
@@ -1162,90 +737,82 @@
 {% block content %}
 <div class="kds-wrapper">
 
-  <!-- ========================================================================
-       Executive KDS Command Bar
-       ======================================================================== -->
+  <!-- Command bar: title + date window, then status filters + station/tools -->
   <div class="kds-command-bar">
-    <!-- Left: Title, Live Pulse & Refresh -->
-    <div class="kds-title-group">
-      <h1 class="kds-main-title">
-        <i class="bi bi-display text-primary"></i> Kitchen
-      </h1>
-      <span class="kds-live-pill" title="Live orders sync active">
-        <span class="kds-pulse-dot"></span> Live Orders
-      </span>
-      <button class="kds-tool-icon-btn" id="btnRefreshKds" title="Force Refresh Tickets">
-        <i class="bi bi-arrow-clockwise"></i>
-      </button>
-    </div>
-
-    <!-- Center: Status Filter KPI Pills -->
-    <div class="kds-kpi-bar">
-      <button class="kds-kpi-pill kpi-all active" data-status-filter="all" id="btnFilterAll">
-        <span>All</span>
-        <span class="kds-kpi-count" id="countAll">00</span>
-      </button>
-
-      <button class="kds-kpi-pill kpi-new" data-status-filter="new" id="btnFilterNew">
-        <span class="kds-kpi-icon"><i class="bi bi-receipt"></i></span>
-        <span>New</span>
-        <span class="kds-kpi-count" id="countNew">00</span>
-      </button>
-
-      <button class="kds-kpi-pill kpi-kitchen" data-status-filter="in_kitchen" id="btnFilterKitchen">
-        <span class="kds-kpi-icon"><i class="bi bi-fire"></i></span>
-        <span>In Kitchen</span>
-        <span class="kds-kpi-count" id="countInKitchen">00</span>
-      </button>
-
-      <button class="kds-kpi-pill kpi-delayed" data-status-filter="delayed" id="btnFilterDelayed">
-        <span class="kds-kpi-icon"><i class="bi bi-clock-history"></i></span>
-        <span>Delayed</span>
-        <span class="kds-kpi-count" id="countDelayed">00</span>
-      </button>
-
-      <button class="kds-kpi-pill kpi-completed" data-status-filter="completed" id="btnFilterCompleted">
-        <span class="kds-kpi-icon"><i class="bi bi-check2-circle"></i></span>
-        <span>Completed</span>
-        <span class="kds-kpi-count" id="countCompleted">00</span>
-      </button>
-    </div>
-
-    <!-- Right: Station Filters, Search, Density, Dark Mode, Audio & Fullscreen -->
-    <div class="kds-tools-bar">
-      <!-- Station Segmented Control -->
-      <div class="kds-segmented-station" title="Filter by preparation station">
-        <button class="station-btn active" data-station="all">All Stations</button>
-        <button class="station-btn" data-station="kitchen">🍳 Kitchen (KOT)</button>
-        <button class="station-btn" data-station="bar">🍸 Bar (BOT)</button>
+    <div class="kds-bar-row">
+      <div class="kds-title-group">
+        <h1 class="kds-main-title"><i class="bi bi-display text-primary"></i> Kitchen</h1>
+        <span class="kds-live-pill" id="kdsLivePill" title="New tickets appear automatically">
+          <span class="kds-pulse-dot"></span> <span id="kdsLiveText">Live</span>
+        </span>
+        <button class="kds-tool-icon-btn" id="btnRefreshKds" title="Refresh tickets" aria-label="Refresh tickets">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
       </div>
 
-      <!-- Search Input -->
-      <div class="kds-search-wrapper">
-        <input type="text" class="kds-search-input" id="kdsSearchInput" placeholder="Search table or item...">
-        <i class="bi bi-search kds-search-icon"></i>
+      <div class="kds-range" role="group" aria-label="Dates">
+        <div class="kds-seg" id="kdsRangeSeg">
+          <button type="button" data-range="today" class="active">Today</button>
+          <button type="button" data-range="yesterday">Yesterday</button>
+          <button type="button" data-range="7d">7 days</button>
+          <button type="button" data-range="30d">30 days</button>
+          <button type="button" data-range="custom"><i class="bi bi-calendar3 me-1"></i>Custom</button>
+        </div>
+        <div class="kds-custom-range" id="kdsCustomRange">
+          <input type="date" id="kdsFrom" aria-label="From date">
+          <span class="kds-range-label">to</span>
+          <input type="date" id="kdsTo" aria-label="To date">
+          <button type="button" class="kds-apply" id="kdsApplyRange">Apply</button>
+        </div>
+        <span class="kds-range-label" id="kdsRangeLabel"></span>
+      </div>
+    </div>
+
+    <div class="kds-bar-row">
+      <div class="kds-kpi-bar">
+        <button class="kds-kpi-pill kpi-all active" data-status-filter="all" id="btnFilterAll">
+          <span>All</span><span class="kds-kpi-count" id="countAll">0</span>
+        </button>
+        <button class="kds-kpi-pill kpi-new" data-status-filter="new" id="btnFilterNew">
+          <span class="kds-kpi-dot"></span><span>New</span><span class="kds-kpi-count" id="countNew">0</span>
+        </button>
+        <button class="kds-kpi-pill kpi-kitchen" data-status-filter="in_kitchen" id="btnFilterKitchen">
+          <span class="kds-kpi-dot"></span><span>Cooking</span><span class="kds-kpi-count" id="countInKitchen">0</span>
+        </button>
+        <button class="kds-kpi-pill kpi-delayed" data-status-filter="delayed" id="btnFilterDelayed">
+          <span class="kds-kpi-dot"></span><span>Late</span><span class="kds-kpi-count" id="countDelayed">0</span>
+        </button>
+        <button class="kds-kpi-pill kpi-completed" data-status-filter="completed" id="btnFilterCompleted">
+          <span class="kds-kpi-dot"></span><span>Done</span><span class="kds-kpi-count" id="countCompleted">0</span>
+        </button>
       </div>
 
-      <!-- Compact / Dense Grid Toggle -->
-      <button class="kds-tool-icon-btn" id="btnDensityToggle" title="Toggle Grid Layout (Normal / Compact)">
-        <i class="bi bi-grid-3x3-gap" id="densityIcon"></i>
-      </button>
-
-      <!-- Kitchen Dark/Light Theme Toggle -->
-      <button class="kds-tool-icon-btn" id="btnThemeToggle" title="Toggle Kitchen Dark / Light Mode">
-        <i class="bi bi-moon-stars" id="themeIcon"></i>
-      </button>
-
-      <!-- Sound Chime Toggle -->
-      <button class="kds-tool-icon-btn" id="btnSoundToggle" title="Sound Notification ON / OFF">
-        <i class="bi bi-volume-up-fill text-success" id="soundIcon"></i>
-      </button>
-
-      <!-- Fullscreen Toggle -->
-      <button class="kds-tool-icon-btn" id="btnFullscreenToggle" title="Toggle Fullscreen Screen">
-        <i class="bi bi-fullscreen" id="fullscreenIcon"></i>
-      </button>
+      <div class="kds-tools-bar">
+        <div class="kds-seg" title="Preparation station">
+          <button class="station-btn active" data-station="all">All stations</button>
+          <button class="station-btn" data-station="kitchen">Kitchen (KOT)</button>
+          <button class="station-btn" data-station="bar">Bar (BOT)</button>
+        </div>
+        <div class="kds-search-wrapper">
+          <input type="search" class="kds-search-input" id="kdsSearchInput" placeholder="Table, token or item" aria-label="Search tickets">
+          <i class="bi bi-search kds-search-icon"></i>
+        </div>
+        <button class="kds-tool-icon-btn" id="btnDensityToggle" title="Compact cards" aria-label="Compact cards"><i class="bi bi-grid-3x3-gap" id="densityIcon"></i></button>
+        <button class="kds-tool-icon-btn" id="btnThemeToggle" title="Kitchen dark mode" aria-label="Kitchen dark mode"><i class="bi bi-moon-stars" id="themeIcon"></i></button>
+        <button class="kds-tool-icon-btn" id="btnSoundToggle" title="Sound" aria-label="Sound"><i class="bi bi-volume-up-fill text-success" id="soundIcon"></i></button>
+        <button class="kds-tool-icon-btn" id="btnFullscreenToggle" title="Full screen" aria-label="Full screen"><i class="bi bi-fullscreen" id="fullscreenIcon"></i></button>
+      </div>
     </div>
+  </div>
+
+  <!-- Kitchen performance for the chosen dates -->
+  <div class="kds-perf" id="kdsPerf" aria-live="polite">
+    <div class="kds-perf-tile"><div class="kds-perf-label">Tickets</div><div class="kds-perf-value" id="perfTickets">–</div><div class="kds-perf-sub" id="perfTicketsSub">&nbsp;</div></div>
+    <div class="kds-perf-tile"><div class="kds-perf-label">Avg cook time</div><div class="kds-perf-value" id="perfAvg">–</div><div class="kds-perf-sub">min:sec, start to ready</div></div>
+    <div class="kds-perf-tile"><div class="kds-perf-label">On time</div><div class="kds-perf-value" id="perfOnTime">–</div><div class="kds-perf-sub">ready within target</div></div>
+    <div class="kds-perf-tile"><div class="kds-perf-label">Late tickets</div><div class="kds-perf-value" id="perfLate">–</div><div class="kds-perf-sub">over target time</div></div>
+    <div class="kds-perf-tile"><div class="kds-perf-label">Busiest hour</div><div class="kds-perf-value" id="perfPeak" style="font-size:1.05rem;">–</div><div class="kds-perf-sub" id="perfPeakSub">&nbsp;</div></div>
+    <div class="kds-perf-tile kds-perf-top"><div class="kds-perf-label">Most cooked</div><div class="kds-top-items" id="perfTopItems"><span class="kds-perf-sub">No tickets yet</span></div></div>
   </div>
 
   <!-- ========================================================================
@@ -1328,7 +895,7 @@
         <div class="small text-muted" id="fullTicketSubmeta">Token #01 • Vikram Sharma</div>
       </div>
       <div class="d-flex align-items-center gap-2">
-        <span class="badge bg-primary fs-6 px-3 py-2 rounded-pill" id="fullTicketProgress">0/0 Plated</span>
+        <span class="badge bg-primary fs-6 px-3 py-2 rounded-pill" id="fullTicketProgress">0/0 ready</span>
         <button type="button" class="btn-close" id="btnFullTicketClose" aria-label="Close"></button>
       </div>
     </div>
@@ -1364,7 +931,12 @@
     compactMode: false,
     darkMode: false,
     orders: [],
-    counts: { new: 0, in_kitchen: 0, delayed: 0, completed: 0, total_active: 0 }
+    counts: { all: 0, new: 0, in_kitchen: 0, delayed: 0, completed: 0, total_active: 0 },
+    range: 'today',          // 'today', 'yesterday', '7d', '30d', 'custom'
+    from: '',
+    to: '',
+    window: null,
+    completedHidden: 0
   };
 
   // Checked Item IDs Set (persisted in localStorage and backed by database)
@@ -1382,6 +954,13 @@
   const btnFullscreen = document.getElementById('btnFullscreenToggle');
   const fullscreenIcon = document.getElementById('fullscreenIcon');
   const searchInput = document.getElementById('kdsSearchInput');
+  const rangeSeg = document.getElementById('kdsRangeSeg');
+  const customRange = document.getElementById('kdsCustomRange');
+  const fromInput = document.getElementById('kdsFrom');
+  const toInput = document.getElementById('kdsTo');
+  const rangeLabel = document.getElementById('kdsRangeLabel');
+  const livePill = document.getElementById('kdsLivePill');
+  const liveText = document.getElementById('kdsLiveText');
 
   // KPI count badges
   const countAll = document.getElementById('countAll');
@@ -1667,29 +1246,10 @@
     fullTicketItemsContainer.innerHTML = items.map(it => {
       const isDone = checkedItemIds.has(it.id);
       if (isDone) readyCount++;
-      return `
-        <div class="kds-item-card ${isDone ? 'item-done' : ''}" data-modal-item-id="${it.id}" data-order-id="${order.id}">
-          <div class="item-primary-row">
-            <div class="item-leading-info">
-              <span class="item-check-dot"><i class="bi bi-check-lg"></i></span>
-              <span class="fssai-indicator ${it.is_veg ? 'veg' : 'non-veg'}">
-                <span class="fssai-circle"></span>
-              </span>
-              <span class="item-title-text fw-bold">${escapeHtml(it.name)}</span>
-            </div>
-            <span class="item-qty-pill ${it.quantity > 1 ? 'multi-qty' : ''}">${it.quantity}&times;</span>
-          </div>
-          ${it.notes ? `
-            <div class="item-special-note">
-              <i class="bi bi-exclamation-triangle-fill"></i>
-              <span><strong>NOTE:</strong> ${escapeHtml(it.notes)}</span>
-            </div>
-          ` : ''}
-        </div>
-      `;
+      return itemRowHtml(it, order.id, isDone, 'data-modal-item-id');
     }).join('');
 
-    fullTicketProgress.textContent = `${readyCount}/${items.length} Plated`;
+    fullTicketProgress.textContent = `${readyCount}/${items.length} ready`;
 
     // Attach click handlers inside modal
     fullTicketItemsContainer.querySelectorAll('.kds-item-card').forEach(card => {
@@ -1712,7 +1272,7 @@
             const doneItems = cardEl.querySelectorAll('.kds-item-card.item-done').length;
             const badgeEl = cardEl.querySelector('.items-progress-badge');
             if (badgeEl) {
-              badgeEl.textContent = `${doneItems}/${totalItems} Ready`;
+              badgeEl.textContent = `${doneItems}/${totalItems} ready`;
               badgeEl.classList.toggle('all-ready', doneItems === totalItems);
             }
           }
@@ -1730,34 +1290,52 @@
   // ==========================================================================
   // Live Orders API & Rendering
   // ==========================================================================
-  async function fetchOrders(silently = false) {
-    if (!silently) {
-      btnRefresh.querySelector('i').classList.add('spin-animation');
-    }
+  function windowParams() {
+    const p = { range: state.range };
+    if (state.range === 'custom') { p.from = state.from; p.to = state.to; }
+    return p;
+  }
+
+  // Keep the chosen dates in the address bar so a refresh or shared link opens the same view.
+  function syncUrl() {
     try {
-      const params = new URLSearchParams({
+      const url = new URL(window.location.href);
+      ['range', 'from', 'to'].forEach(k => url.searchParams.delete(k));
+      if (state.range !== 'today') {
+        Object.entries(windowParams()).forEach(([k, v]) => v && url.searchParams.set(k, v));
+      }
+      window.history.replaceState(null, '', url.pathname + (url.search || ''));
+    } catch (e) {}
+  }
+
+  let fetchSeq = 0;
+  async function fetchOrders(silently = false) {
+    const seq = ++fetchSeq;
+    if (!silently) btnRefresh.querySelector('i').classList.add('spin-animation');
+    try {
+      const params = new URLSearchParams(Object.assign({
         station: state.station,
         status: state.statusFilter,
         search: state.searchQuery
-      });
-      const res = await fetch(`${ORDERS_API_URL}?${params.toString()}`);
+      }, windowParams()));
+      const res = await fetch(`${ORDERS_API_URL}?${params.toString()}`, { headers: { 'Accept': 'application/json' } });
       if (!res.ok) throw new Error("Failed to load orders");
       const data = await res.json();
+      if (seq !== fetchSeq) return;  // a newer request (filter change) already answered
       if (data.success) {
         state.orders = data.orders || [];
-        // Sync checkedItemIds with database status
+        state.completedHidden = data.completed_hidden || 0;
+        state.window = data.window || null;
         state.orders.forEach(order => {
           (order.items || []).forEach(it => {
-            if (it.is_prepared) {
-              checkedItemIds.add(it.id);
-            } else {
-              checkedItemIds.delete(it.id);
-            }
+            if (it.is_prepared) checkedItemIds.add(it.id); else checkedItemIds.delete(it.id);
           });
         });
         localStorage.setItem('kds_checked_items', JSON.stringify(Array.from(checkedItemIds)));
-        state.counts = data.counts || { new: 0, in_kitchen: 0, delayed: 0, completed: 0, total_active: 0 };
+        state.counts = data.counts || state.counts;
         updateKPIsUI();
+        renderWindow();
+        renderSummary(data.summary || {});
         renderCards();
       }
     } catch (err) {
@@ -1768,252 +1346,199 @@
   }
 
   function updateKPIsUI() {
-    const totalActive = (state.counts.new || 0) + (state.counts.in_kitchen || 0) + (state.counts.delayed || 0);
-    countAll.textContent = String(totalActive).padStart(2, '0');
-    countNew.textContent = String(state.counts.new || 0).padStart(2, '0');
-    countInKitchen.textContent = String(state.counts.in_kitchen || 0).padStart(2, '0');
-    countDelayed.textContent = String(state.counts.delayed || 0).padStart(2, '0');
-    countCompleted.textContent = String(state.counts.completed || 0).padStart(2, '0');
+    const c = state.counts || {};
+    countAll.textContent = c.all || 0;
+    countNew.textContent = c.new || 0;
+    countInKitchen.textContent = c.in_kitchen || 0;
+    countDelayed.textContent = c.delayed || 0;
+    countCompleted.textContent = c.completed || 0;
+    document.getElementById('btnFilterDelayed').classList.toggle('is-alert', (c.delayed || 0) > 0);
+  }
 
-    // Pulsing warning if delayed tickets exist
-    const delayedBtn = document.getElementById('btnFilterDelayed');
-    if ((state.counts.delayed || 0) > 0) {
-      delayedBtn.style.animation = 'kdsPulse 2s infinite';
-    } else {
-      delayedBtn.style.animation = 'none';
-    }
+  function renderWindow() {
+    const w = state.window;
+    if (!w) return;
+    rangeLabel.textContent = w.range === 'today' ? '' : w.label;
+    const live = w.includes_today;
+    livePill.classList.toggle('is-history', !live);
+    liveText.textContent = live ? 'Live' : 'History';
+    livePill.title = live ? 'New tickets appear automatically' : 'Past dates: tickets are shown as they finished';
+    if (w.range === 'custom') { fromInput.value = w.from; toInput.value = w.to; }
+  }
+
+  function renderSummary(sm) {
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    set('perfTickets', sm.tickets ?? 0);
+    set('perfTicketsSub', `${sm.completed || 0} finished`);
+    set('perfAvg', sm.avg_prep_seconds == null ? '–' : sm.avg_prep_display);
+    const onTime = document.getElementById('perfOnTime');
+    onTime.textContent = sm.on_time_pct == null ? '–' : `${sm.on_time_pct}%`;
+    onTime.className = 'kds-perf-value' + (sm.on_time_pct == null ? '' : sm.on_time_pct >= 85 ? ' good' : sm.on_time_pct >= 60 ? ' warn' : ' bad');
+    const late = document.getElementById('perfLate');
+    late.textContent = sm.late ?? 0;
+    late.className = 'kds-perf-value' + ((sm.late || 0) > 0 ? ' bad' : '');
+    set('perfPeak', sm.peak_hour || '–');
+    set('perfPeakSub', sm.peak_hour ? `${sm.peak_hour_tickets} tickets` : ' ');
+    const top = document.getElementById('perfTopItems');
+    const items = sm.top_items || [];
+    top.innerHTML = items.length
+      ? items.map(it => `<span class="kds-top-item" title="${escapeHtml(it.name)}"><span>${escapeHtml(it.name)}</span><b>${it.qty}</b></span>`).join('')
+      : '<span class="kds-perf-sub">No tickets for these dates</span>';
+  }
+
+  function itemRowHtml(it, orderId, isDone, attr) {
+    return `
+      <div class="kds-item-card ${isDone ? 'item-done' : ''}" ${attr}="${it.id}" data-order-id="${orderId}" role="button" tabindex="0" aria-pressed="${isDone}">
+        <div class="item-primary-row">
+          <span class="item-qty ${it.quantity > 1 ? 'multi' : ''}">${it.quantity}×</span>
+          <div class="item-body">
+            <div class="item-title-text">
+              <span class="fssai-indicator ${it.is_veg ? 'veg' : 'non-veg'}" title="${it.is_veg ? 'Veg' : 'Non-veg'}"><span class="fssai-circle"></span></span>
+              <span>${escapeHtml(it.name)}</span>
+            </div>
+            ${it.notes ? `<div class="item-special-note"><i class="bi bi-exclamation-triangle-fill"></i><span>${escapeHtml(it.notes)}</span></div>` : ''}
+          </div>
+          <span class="item-check-dot"><i class="bi bi-check-lg"></i></span>
+        </div>
+      </div>`;
+  }
+
+  function clockStr(totalSecs) {
+    const m = Math.floor(totalSecs / 60), s = totalSecs % 60;
+    return m >= 100 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   }
 
   function renderCards() {
     if (!state.orders || state.orders.length === 0) {
       gridContainer.classList.remove('few-cards');
+      const live = !state.window || state.window.includes_today;
+      const filtered = state.statusFilter !== 'all' || state.searchQuery || state.station !== 'all';
       gridContainer.innerHTML = `
         <div class="kds-empty-state-card">
-          <div class="kds-empty-hero-icon"><i class="bi bi-check2-circle text-success"></i></div>
-          <h4 class="fw-bold mb-1">Kitchen Tickets Clear</h4>
-          <p class="text-muted small mb-0">All active orders have been prepared or fulfilled. New orders will pop in automatically.</p>
-        </div>
-      `;
+          <div class="kds-empty-hero-icon"><i class="bi ${filtered ? 'bi-funnel' : 'bi-check2-circle text-success'}"></i></div>
+          <h4 class="fw-bold mb-1">${filtered ? 'No tickets match' : live ? 'Kitchen is clear' : 'No tickets on these dates'}</h4>
+          <p class="text-muted small mb-0">${filtered ? 'Try another status, station or search.' : live ? 'New orders appear here automatically.' : 'Pick another date range above.'}</p>
+        </div>`;
       return;
     }
 
-    if (state.orders.length <= 2) {
-      gridContainer.classList.add('few-cards');
-    } else {
-      gridContainer.classList.remove('few-cards');
-    }
+    gridContainer.classList.toggle('few-cards', state.orders.length <= 2);
 
-    gridContainer.innerHTML = state.orders.map(order => {
+    let shownDoneHead = false;
+    const hasOpen = state.orders.some(o => o.kds_status !== 'COMPLETED');
+    const html = state.orders.map(order => {
       const items = order.items || [];
-      const isLargeOrder = items.length > 5;
       let readyCount = 0;
+      let lastBatch = null;
+      const multiRound = new Set(items.map(i => i.kot_batch || 1)).size > 1;
 
-      // Render Items with dense styling if order is large
       const itemsHtml = items.map(it => {
-        const isDone = checkedItemIds.has(it.id) || (it.is_prepared === true);
-        if (isDone) {
-          readyCount++;
-          checkedItemIds.add(it.id);
-        } else {
-          checkedItemIds.delete(it.id);
+        const isDone = checkedItemIds.has(it.id) || it.is_prepared === true;
+        if (isDone) { readyCount++; checkedItemIds.add(it.id); } else { checkedItemIds.delete(it.id); }
+        let roundHtml = '';
+        const batch = it.kot_batch || 1;
+        if (multiRound && batch !== lastBatch) {
+          roundHtml = `<div class="kds-round"><i class="bi ${batch > 1 ? 'bi-plus-circle-fill' : 'bi-receipt'}"></i>${batch > 1 ? `Round ${batch} · add-on` : 'First round'}</div>`;
+          lastBatch = batch;
         }
-        const isMulti = it.quantity > 1;
-
-        return `
-          <div class="kds-item-card ${isDone ? 'item-done' : ''}" data-item-id="${it.id}" data-order-id="${order.id}">
-            <div class="item-primary-row">
-              <div class="item-leading-info">
-                <span class="item-check-dot">
-                  <i class="bi bi-check-lg"></i>
-                </span>
-                <span class="fssai-indicator ${it.is_veg ? 'veg' : 'non-veg'}">
-                  <span class="fssai-circle"></span>
-                </span>
-                <span class="item-title-text" title="${escapeHtml(it.name)}">${escapeHtml(it.name)}</span>
-                ${it.kot_batch && it.kot_batch > 1 ? `
-                  <span class="badge rounded-pill bg-warning text-dark ms-1" style="font-size:0.62rem; font-weight:700; padding: 2px 6px; letter-spacing: 0; border: 1px solid var(--ui-orange);" title="Round ${it.kot_batch} Add-On Item">
-                    <i class="bi bi-plus-circle-fill me-0.5"></i> Round ${it.kot_batch} (Add-on)
-                  </span>
-                ` : ''}
-              </div>
-              <span class="item-qty-pill ${isMulti ? 'multi-qty' : ''}">${it.quantity}&times;</span>
-            </div>
-            ${it.notes ? `
-              <div class="item-special-note">
-                <i class="bi bi-exclamation-triangle-fill"></i>
-                <span><strong>NOTE:</strong> ${escapeHtml(it.notes)}</span>
-              </div>
-            ` : ''}
-          </div>
-        `;
+        return roundHtml + itemRowHtml(it, order.id, isDone, 'data-item-id');
       }).join('');
 
-      // Status strip below header
-      let statusStripHtml = '';
-      if (order.kds_status === 'DELAYED') {
-        statusStripHtml = `
-          <div class="kds-status-strip strip-delayed">
-            <span><i class="bi bi-exclamation-octagon-fill me-1"></i> DELAYED TICKET</span>
-            <span>+${order.delayed_minutes || 1} MINS OVERDUE</span>
-          </div>
-        `;
-      } else if (order.kds_status === 'COMPLETED') {
-        statusStripHtml = `
-          <div class="kds-status-strip strip-completed">
-            <span><i class="bi bi-check2-circle me-1"></i> READY TO SERVE</span>
-            <span>${order.completed_elapsed_str || 'Completed'}</span>
-          </div>
-        `;
-      } else if (order.kds_status === 'IN_KITCHEN') {
-        if (order.is_prep_paused) {
-          statusStripHtml = `
-            <div class="kds-status-strip strip-paused">
-              <span><i class="bi bi-pause-circle-fill me-1"></i> COOKING PAUSED</span>
-              <span>HOLD ON LINE</span>
-            </div>
-          `;
-        } else {
-          statusStripHtml = `
-            <div class="kds-status-strip strip-cooking">
-              <span><i class="bi bi-fire me-1"></i> ACTIVE IN KITCHEN</span>
-              <span>PREPARING NOW</span>
-            </div>
-          `;
-        }
-      }
+      const st = order.kds_status;
+      const isDoneTicket = st === 'COMPLETED';
+      const served = isDoneTicket && !order.is_ready_for_pickup;
+      const paused = st === 'IN_KITCHEN' && order.is_prep_paused;
 
-      // Action buttons row
-      let actionButtonsHtml = '';
-      if (order.kds_status === 'COMPLETED') {
-        actionButtonsHtml = `
-          <div class="card-action-bar">
-            <a href="${order.kot_url}" target="_blank" class="kds-action-touch-btn btn-print-kot">
-              <i class="bi bi-printer"></i> Print KOT
-            </a>
-          </div>
-        `;
-      } else if (order.kds_status === 'IN_KITCHEN' && !order.is_prep_paused) {
-        actionButtonsHtml = `
-          <div class="card-action-bar">
-            <button type="button" class="kds-action-touch-btn btn-pause-action" data-action="pause" data-order-id="${order.id}">
-              <i class="bi bi-pause-fill"></i> Pause
-            </button>
-            <button type="button" class="kds-action-touch-btn btn-mark-ready" data-action="complete" data-order-id="${order.id}">
-              <i class="bi bi-check2-circle"></i> Mark Ready
-            </button>
-          </div>
-        `;
-      } else if (order.kds_status === 'IN_KITCHEN' && order.is_prep_paused) {
-        actionButtonsHtml = `
-          <div class="card-action-bar">
-            <button type="button" class="kds-action-touch-btn btn-resume-action" data-action="play" data-order-id="${order.id}">
-              <i class="bi bi-play-fill"></i> Resume Cooking
-            </button>
-            <button type="button" class="kds-action-touch-btn btn-mark-ready" data-action="complete" data-order-id="${order.id}">
-              <i class="bi bi-check2-circle"></i> Mark Ready
-            </button>
-          </div>
-        `;
+      // Status band
+      let label, detail;
+      if (st === 'NEW') { label = '<i class="bi bi-receipt me-1"></i>New'; detail = `Target ${order.prep_minutes} min`; }
+      else if (paused) { label = '<i class="bi bi-pause-circle-fill me-1"></i>Paused'; detail = 'On hold'; }
+      else if (st === 'IN_KITCHEN') { label = '<i class="bi bi-fire me-1"></i>Cooking'; detail = `Target ${order.prep_minutes} min`; }
+      else if (st === 'DELAYED') { label = '<i class="bi bi-exclamation-octagon-fill me-1"></i>Late'; detail = `${order.delayed_minutes || 1} min over target`; }
+      else if (order.is_ready_for_pickup) { label = '<i class="bi bi-bell-fill me-1"></i>Ready for pickup'; detail = order.ready_ago ? `ready ${order.ready_ago}` : ''; }
+      else { label = '<i class="bi bi-check2-all me-1"></i>Served'; detail = order.cook_time_display ? `cooked in ${order.cook_time_display}${order.was_late ? ' · late' : ''}` : ''; }
+
+      // Big clock: waiting time for new tickets, cook time otherwise
+      let clockVal, clockCap;
+      if (st === 'NEW') { clockVal = clockStr(order.waiting_seconds || 0); clockCap = 'waiting'; }
+      else if (isDoneTicket) { clockVal = order.cook_time_display || '—'; clockCap = 'cook time'; }
+      else { clockVal = order.elapsed_timer_str; clockCap = paused ? 'paused' : 'cooking'; }
+
+      let actions;
+      if (isDoneTicket) {
+        actions = order.is_ready_for_pickup
+          ? `<button type="button" class="kds-action-touch-btn btn-serve" data-action="serve" data-order-id="${order.id}"><i class="bi bi-check2-all"></i> Mark served</button>`
+          : '';
+        actions += `<a href="${order.kot_url}" target="_blank" rel="noopener" class="kds-action-touch-btn btn-print-kot ${order.is_ready_for_pickup ? 'icon-only' : ''}" title="Print KOT"><i class="bi bi-printer"></i>${order.is_ready_for_pickup ? '' : ' Print KOT'}</a>`;
+      } else if (st === 'NEW') {
+        actions = `<button type="button" class="kds-action-touch-btn btn-start-cooking" data-action="play" data-order-id="${order.id}"><i class="bi bi-play-fill"></i> Start cooking</button>`;
+      } else if (paused) {
+        actions = `<button type="button" class="kds-action-touch-btn btn-resume-action" data-action="play" data-order-id="${order.id}"><i class="bi bi-play-fill"></i> Resume</button>
+                   <button type="button" class="kds-action-touch-btn btn-mark-ready" data-action="complete" data-order-id="${order.id}"><i class="bi bi-check2-circle"></i> Ready</button>`;
       } else {
-        // NEW TICKET
-        actionButtonsHtml = `
-          <div class="card-action-bar">
-            <button type="button" class="kds-action-touch-btn btn-start-cooking" data-action="play" data-order-id="${order.id}">
-              <i class="bi bi-play-fill"></i> Start Cooking
-            </button>
-          </div>
-        `;
+        actions = `<button type="button" class="kds-action-touch-btn btn-pause-action icon-only" data-action="pause" data-order-id="${order.id}" title="Pause" aria-label="Pause"><i class="bi bi-pause-fill"></i></button>
+                   <button type="button" class="kds-action-touch-btn btn-mark-ready" data-action="complete" data-order-id="${order.id}"><i class="bi bi-check2-circle"></i> Mark ready</button>`;
       }
 
-      // Table Hero Label formatting
-      const isTakeaway = String(order.order_type || '').toLowerCase().includes('takeaway') || String(order.table_display || '').toLowerCase().includes('take');
-      const tableIcon = isTakeaway ? 'bi-bag-check-fill' : 'bi-geo-alt-fill';
+      const isTakeaway = /take|parcel|deliver/i.test(`${order.order_type} ${order.table_display}`);
+      const allReady = readyCount === items.length && items.length > 0;
+      const whenStr = order.is_today ? order.order_clock : `${order.order_date}, ${order.order_clock}`;
 
-      // Items Subbar with Count and Scroll Hint
-      const isAllReady = readyCount === items.length && items.length > 0;
-      const subbarHtml = `
-        <div class="kds-items-subbar">
-          <span class="d-inline-flex align-items-center gap-1">
-            <i class="bi bi-receipt-cutoff text-muted"></i>
-            <span><strong>${items.length}</strong> Items</span>
-          </span>
-          <span class="items-progress-badge ${isAllReady ? 'all-ready' : ''}">
-            ${readyCount}/${items.length} Ready
-          </span>
-          ${isLargeOrder ? `<span class="scroll-hint-pill" title="Scroll down to see all ${items.length} items"><i class="bi bi-chevron-double-down"></i> Scroll</span>` : ''}
-        </div>
-      `;
+      let head = '';
+      if (isDoneTicket && !shownDoneHead && hasOpen) {
+        head = `<div class="kds-section-head">Finished</div>`;
+        shownDoneHead = true;
+      }
 
-      return `
-        <div class="kds-card" data-order-id="${order.id}" data-kds-status="${order.kds_status}">
-          <!-- High Visibility Status Header -->
-          <div class="kds-card-header">
-            <div class="header-top-row">
-              <div class="table-hero-badge ${isTakeaway ? 'takeaway' : ''}">
-                <i class="bi ${tableIcon}"></i>
+      return head + `
+        <article class="kds-card ${paused ? 'is-paused' : ''} ${served ? 'is-served' : ''}" data-order-id="${order.id}" data-kds-status="${st}">
+          <div class="kds-ticket-head">
+            <div class="kds-ticket-id">
+              <div class="kds-ticket-table" title="${escapeHtml(order.table_display || order.order_type_display)}">
+                <i class="bi ${isTakeaway ? 'bi-bag-check-fill' : 'bi-geo-alt-fill'}"></i>
                 <span>${escapeHtml(order.table_display || order.order_type_display)}</span>
               </div>
-              <div class="order-ref-badges">
-                <span class="token-pill-badge" title="Token Number">TOKEN #${order.token_no}</span>
-                <span class="order-num-badge" title="Order ID">${order.order_number}</span>
-                <button type="button" class="header-expand-btn btn-expand-ticket" data-order-id="${order.id}" title="Expand full ticket in large multi-column view">
-                  <i class="bi bi-arrows-fullscreen"></i>
-                </button>
+              <div class="kds-ticket-meta">
+                <span>Token <strong>${order.token_no}</strong></span><span class="sep">·</span>
+                <span>${order.order_number}</span><span class="sep">·</span>
+                <span>${whenStr}</span>
+              </div>
+              <div class="kds-ticket-meta">
+                <span title="${escapeHtml(order.customer_name)}"><i class="bi bi-person me-1"></i>${escapeHtml(order.customer_name)}</span>
+                ${order.is_carried_over ? `<span class="kds-flag" title="Fired before the chosen dates and still open"><i class="bi bi-arrow-return-right"></i>From ${order.order_date}</span>` : ''}
               </div>
             </div>
-
-            <div class="header-bottom-row">
-              <div class="customer-details" title="${escapeHtml(order.customer_name)}">
-                <i class="bi bi-person-fill"></i>
-                <span>${escapeHtml(order.customer_name)}</span>
-              </div>
-              <div class="order-time-elapsed">
-                <i class="bi bi-clock"></i>
-                <span>${order.order_time}</span>
-              </div>
+            <div class="kds-ticket-clock">
+              <div class="kds-ticket-timer card-timer-text" data-order-id="${order.id}">${clockVal}</div>
+              <div class="kds-ticket-timer-cap">${clockCap}</div>
             </div>
+            <button type="button" class="kds-ticket-expand btn-expand-ticket" data-order-id="${order.id}" title="Open full ticket" aria-label="Open full ticket"><i class="bi bi-arrows-angle-expand"></i></button>
           </div>
 
-          <!-- Status Strip Alert Banner -->
-          ${statusStripHtml}
+          <div class="kds-ticket-status"><span>${label}</span><span class="detail">${detail}</span></div>
 
-          <!-- Items Subbar (Count + Progress) -->
-          ${subbarHtml}
+          <div class="kds-ticket-items">${itemsHtml}</div>
 
-          <!-- Items Checklist Section (Auto-Dense & Scrollable for 20+ items) -->
-          <div class="kds-items-list ${isLargeOrder ? 'dense-order-items' : ''}">
-            ${itemsHtml}
-          </div>
-
-          <!-- Footer: Cooking Timer HUD & Ergonomic Actions (Pinned at Bottom) -->
-          <div class="kds-card-footer">
-            <div class="cooking-hud-row">
-              <div class="hud-timer-badge">
-                <span class="hud-pulse-orange"></span>
-                <span>⏱</span>
-                <span class="card-timer-text" data-order-id="${order.id}">${order.elapsed_timer_str}</span>
-              </div>
-              <button type="button" class="hud-target-btn btn-adjust-time" data-order-id="${order.id}" data-current-minutes="${order.prep_minutes}" title="Adjust Target Preparation Duration">
-                <span>Target: ${order.target_time_display}</span>
-                <i class="bi bi-pencil-fill ms-1" style="font-size: 9px;"></i>
-              </button>
+          <div class="kds-ticket-foot">
+            <div class="kds-foot-meta">
+              <span class="items-progress-badge ${allReady ? 'all-ready' : ''}">${readyCount}/${items.length} ready</span>
+              ${isDoneTicket ? `<span>Target ${order.prep_minutes} min</span>` : `
+              <button type="button" class="hud-target-btn btn-adjust-time" data-order-id="${order.id}" data-current-minutes="${order.prep_minutes}" title="Change target time">
+                Target ${order.target_time_display} <i class="bi bi-pencil-fill ms-1" style="font-size:9px;"></i>
+              </button>`}
             </div>
-
-            <!-- Progress Track -->
-            <div class="kds-progress-track">
-              <div class="kds-progress-fill" style="width: ${order.progress_pct}%;"></div>
-            </div>
-
-            <!-- Touch Action Buttons -->
-            ${actionButtonsHtml}
+            ${isDoneTicket ? '<div style="height:0.6rem"></div>' : `<div class="kds-progress-track"><div class="kds-progress-fill" style="width:${order.progress_pct}%;"></div></div>`}
+            ${actions ? `<div class="card-action-bar">${actions}</div>` : ''}
           </div>
-        </div>
-      `;
+        </article>`;
     }).join('');
 
-    // Persist all checked items to localStorage
-    localStorage.setItem('kds_checked_items', JSON.stringify(Array.from(checkedItemIds)));
+    const note = state.completedHidden
+      ? `<div class="kds-list-note">Showing the latest finished tickets. ${state.completedHidden} older finished tickets are counted above but not drawn; narrow the dates or search to find one.</div>`
+      : '';
+    gridContainer.innerHTML = html + note;
 
+    localStorage.setItem('kds_checked_items', JSON.stringify(Array.from(checkedItemIds)));
     attachCardHandlers();
   }
 
@@ -2086,10 +1611,16 @@
           const doneItems = cardEl.querySelectorAll('.kds-item-card.item-done').length;
           const badgeEl = cardEl.querySelector('.items-progress-badge');
           if (badgeEl) {
-            badgeEl.textContent = `${doneItems}/${totalItems} Ready`;
+            badgeEl.textContent = `${doneItems}/${totalItems} ready`;
             badgeEl.classList.toggle('all-ready', doneItems === totalItems);
           }
         }
+      });
+    });
+
+    gridContainer.querySelectorAll('.kds-item-card').forEach(itemCard => {
+      itemCard.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); itemCard.click(); }
       });
     });
 
@@ -2129,6 +1660,8 @@
               showStatusModal('paused', 'Cooking Paused', data.message || 'Order timer paused.');
             } else if (action === 'complete') {
               showStatusModal('completed', 'Order Ready!', data.message || 'Order marked ready to serve.');
+            } else if (action === 'serve') {
+              playAudioChime('action');
             }
             fetchOrders(true);
           } else {
@@ -2159,33 +1692,28 @@
   // ==========================================================================
   setInterval(() => {
     state.orders.forEach(order => {
+      if (order.kds_status === 'NEW') {
+        order.waiting_seconds = (order.waiting_seconds || 0) + 1;
+        const el = gridContainer.querySelector(`.card-timer-text[data-order-id="${order.id}"]`);
+        if (el) el.textContent = clockStr(order.waiting_seconds);
+        return;
+      }
       if (order.kds_status === 'IN_KITCHEN' && !order.is_prep_paused) {
         order.elapsed_seconds = (order.elapsed_seconds || 0) + 1;
         const targetSecs = (order.prep_minutes || 20) * 60;
-        
-        // Timer string MM:SS
-        const mins = Math.floor(order.elapsed_seconds / 60);
-        const secs = order.elapsed_seconds % 60;
-        order.elapsed_timer_str = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-        
-        // Fast DOM update
+        order.elapsed_timer_str = clockStr(order.elapsed_seconds);
         const timerEl = gridContainer.querySelector(`.card-timer-text[data-order-id="${order.id}"]`);
-        if (timerEl) {
-          timerEl.textContent = order.elapsed_timer_str;
-        }
+        if (timerEl) timerEl.textContent = order.elapsed_timer_str;
 
-        // Progress percentage
         order.progress_pct = Math.min(100, Math.floor((order.elapsed_seconds / targetSecs) * 100));
         const cardEl = gridContainer.querySelector(`.kds-card[data-order-id="${order.id}"]`);
         if (cardEl) {
           const progressEl = cardEl.querySelector('.kds-progress-fill');
           if (progressEl) progressEl.style.width = `${order.progress_pct}%`;
-
-          // If time exceeded, flip to DELAYED state dynamically
+          // Past target: let the server re-classify it as late
           if (order.elapsed_seconds > targetSecs && cardEl.getAttribute('data-kds-status') !== 'DELAYED') {
             cardEl.setAttribute('data-kds-status', 'DELAYED');
             order.kds_status = 'DELAYED';
-            order.delayed_minutes = Math.floor((order.elapsed_seconds - targetSecs) / 60);
             fetchOrders(true);
           }
         }
@@ -2225,6 +1753,64 @@
       fetchOrders();
     }, 250);
   });
+
+  // Date window
+  function setRangeButtons() {
+    rangeSeg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.range === state.range));
+    customRange.classList.toggle('show', state.range === 'custom');
+  }
+  function todayIso() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  rangeSeg.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const r = btn.dataset.range;
+      if (r === 'custom') {
+        state.range = 'custom';
+        setRangeButtons();
+        if (!fromInput.value) {
+          const d = new Date(); d.setDate(d.getDate() - 6);
+          fromInput.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+        if (!toInput.value) toInput.value = todayIso();
+        fromInput.focus();
+        return;
+      }
+      state.range = r;
+      setRangeButtons();
+      syncUrl();
+      fetchOrders();
+    });
+  });
+  document.getElementById('kdsApplyRange').addEventListener('click', () => {
+    if (!fromInput.value) { fromInput.focus(); return; }
+    state.range = 'custom';
+    state.from = fromInput.value;
+    state.to = toInput.value || fromInput.value;
+    syncUrl();
+    fetchOrders();
+  });
+  [fromInput, toInput].forEach(inp => inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('kdsApplyRange').click();
+  }));
+  fromInput.max = toInput.max = todayIso();
+
+  // Opening with ?range=… (a refresh or a shared link) restores the same dates
+  (function restoreWindow() {
+    const q = new URLSearchParams(window.location.search);
+    const r = q.get('range');
+    if (['yesterday', '7d', '30d', 'custom'].includes(r)) {
+      state.range = r;
+      if (r === 'custom') {
+        state.from = q.get('from') || todayIso();
+        state.to = q.get('to') || state.from;
+        fromInput.value = state.from;
+        toInput.value = state.to;
+      }
+    }
+    setRangeButtons();
+  })();
 
   // Manual Refresh
   btnRefresh.addEventListener('click', () => fetchOrders());

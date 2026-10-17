@@ -1,0 +1,6 @@
+<section class="ui-card ui-pad"><h2 class="ui-card-title">{{ title }} <small class="ui-log-sub">{{ acts|length }}</small></h2>
+  {% for a in acts %}<div class="ui-ops-row">
+    <div><strong>{{ a.subject }}</strong><br><small class="ui-log-sub">{{ a.get_kind_display }} · <a href="{{ base_url }}sales/{{ a.lead.pk }}/">{{ a.lead.company }}</a> · {{ a.due_on|date:"d M" }}</small></div>
+    {% if can_edit %}<form method="post" action="{{ base_url }}sales/activities/{{ a.pk }}/action/">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="ui-btn ui-btn-{% if a.is_done %}gray{% else %}primary{% endif %} ui-btn-sm" type="submit">{% if a.is_done %}Reopen{% else %}Done{% endif %}</button></form>{% endif %}
+  </div>{% empty %}<p class="ui-log-sub" style="margin:0">Nothing here.</p>{% endfor %}
+</section>

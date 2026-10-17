@@ -1,0 +1,153 @@
+{% load restaurant_admin_extras %}
+<div class="ui-agg" style="--brand: {{ p.color }}; --brand-rgb: {{ p.rgb }};">
+  {% include 'delivery/_head.html' %}
+  {% if not conn %}
+  <section class="ui-card ui-pad ui-agg-hero">
+    <span class="ui-agg-logo is-big" aria-hidden="true">{{ p.initial }}</span>
+    <div><h2>Connect {{ branch.name }} to {{ p.label }}</h2>
+      <p>{{ p.tagline }}. Enter this branch's outlet ID and the API keys {{ p.label }} issued for it. Every branch keeps its own encrypted keys; add a new branch any time without touching the server.</p></div>
+  </section>
+  {% endif %}
+
+  {% if conn %}
+  <!-- Connection status -->
+  <section class="ui-card ui-pad">
+    <div class="ui-dash-card-head">
+      <div><h2 class="ui-card-title">Connection</h2><p class="ui-card-subtitle">Where each value for {{ branch.name }} comes from: this branch → shared brand settings → server default. Secrets are encrypted and never shown in full.</p></div>
+      <form method="post">{% csrf_token %}<input type="hidden" name="op" value="test"><button class="ui-btn ui-btn-gray" type="submit"><i class="fa-solid fa-plug-circle-check"></i><span>Test connection</span></button></form>
+    </div>
+    <div class="ui-agg-creds">
+      {% for r in cred_rows %}<div class="{% if not r.source %}is-missing{% endif %}"><span>{{ r.label }}</span><strong>{% if r.value %}<code>{{ r.value }}</code>{% else %}—{% endif %}</strong><em class="src-{{ r.source|default:'none' }}">{{ r.source_label }}</em></div>{% endfor %}
+      <div><span>Endpoint paths</span><strong>{{ resolved_paths|length }} of {{ actions|length }}</strong><em class="src-none">{% if resolved_paths %}{% for a, src in path_sources.items %}{% if forloop.first %}{{ source_labels|get_item:src }}{% endif %}{% endfor %}{% else %}Not set{% endif %}</em></div>
+    </div>
+    <p class="ui-log-sub" style="margin:10px 0 0">
+      {% if conn.mode == 'api' %}{% if resolved.api_ready %}<span class="ui-text-green"><i class="fa-solid fa-circle-check"></i> Ready to send actions to {{ p.label }}{% if resolved.uses_oauth %} (tokens are fetched and refreshed automatically){% endif %}.</span>{% else %}<span class="ui-text-red"><i class="fa-solid fa-circle-exclamation"></i> API mode is on but the base URL or credentials are missing.</span>{% endif %}
+      {% else %}Manual mode: orders arrive automatically; staff confirm them here and on the {{ p.label }} tablet. Switch to Partner API once the keys above are complete.{% endif %}
+      {% if acc.last_test_at %} · Last test {{ acc.last_test_at|timesince }} ago: {% if acc.last_test_ok %}<span class="ui-text-green">passed</span>{% else %}<span class="ui-text-red">{{ acc.last_test_message|truncatechars:80 }}</span>{% endif %}{% endif %}
+    </p>
+  </section>
+  {% endif %}
+
+  <!-- Outlet -->
+  <form method="post" class="ui-dash-row r-2-1">{% csrf_token %}<input type="hidden" name="op" value="save">
+    <div>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Outlet · {{ branch.name }}</h2>
+        <div class="ui-form-grid">
+          <div class="ui-field"><label for="so">{{ p.label }} outlet ID *</label><input id="so" class="ui-input" name="external_store_id" value="{{ conn.external_store_id|default:'' }}" required maxlength="120"></div>
+          <div class="ui-field"><label for="sn">Label</label><input id="sn" class="ui-input" name="name" value="{{ conn.name|default:'' }}" placeholder="{{ p.label }} · {{ branch.name }}" maxlength="120"></div>
+          <div class="ui-field"><label for="sc">Commission %</label><input id="sc" class="ui-input" type="number" step="0.01" min="0" max="60" name="commission_pct" value="{{ conn.commission_pct|default:'0' }}"></div>
+          <div class="ui-field"><label for="sp">Default prep time (min)</label><input id="sp" class="ui-input" type="number" min="5" max="120" name="default_prep_minutes" value="{{ conn.default_prep_minutes|default:15 }}"></div>
+          <div class="ui-field"><label for="sw">Time to accept (seconds)</label><input id="sw" class="ui-input" type="number" min="30" max="900" name="accept_window_seconds" value="{{ conn.accept_window_seconds|default:180 }}"></div>
+          <div class="ui-field"><label for="sm">Mode</label><select id="sm" class="ui-input" name="mode"><option value="manual" {% if not conn or conn.mode == 'manual' %}selected{% endif %}>Manual – staff also use the partner tablet</option><option value="api" {% if conn.mode == 'api' %}selected{% endif %}>Partner API – actions sent to {{ p.label }}</option></select></div>
+          <div class="ui-field"><label for="se">Environment</label><select id="se" class="ui-input" name="environment"><option value="sandbox" {% if not conn or conn.environment == 'sandbox' %}selected{% endif %}>Sandbox / testing</option><option value="live" {% if conn.environment == 'live' %}selected{% endif %}>Live</option></select></div>
+        </div>
+        <div class="ui-agg-switches">
+          <label class="ui-switch"><input type="checkbox" name="is_active" value="1" {% if not conn or conn.is_active %}checked{% endif %}> Receive {{ p.label }} orders</label>
+          <label class="ui-switch"><input type="checkbox" name="auto_accept" value="1" {% if conn.auto_accept %}checked{% endif %}> Accept new orders automatically with the default prep time</label>
+        </div>
+        <h3 class="ui-dash-h3">What {{ p.label }} lets this outlet do</h3>
+        <div class="ui-check-grid">{% for k, l, on in caps %}<label><input class="ui-check" type="checkbox" name="cap_{{ k }}" value="1" {% if on %}checked{% endif %}> {{ l }}</label>{% endfor %}</div>
+      </section>
+      <section class="ui-card ui-pad ui-agg-brand">
+        <h2 class="ui-card-title"><i class="fa-solid fa-key" style="color:var(--brand)"></i> {{ p.label }} API keys · {{ branch.name }}</h2>
+        <p class="ui-card-subtitle" style="margin:-6px 0 12px !important">The keys {{ p.label }} issued for <b>this branch</b>. Encrypted; saved values are never shown again — leave a field blank to keep it. Anything left empty falls back to the shared brand settings below.</p>
+        <div class="ui-form-grid ui-agg-acc">
+          {% for key, label in "client_id:Client ID,client_secret:Client secret,access_token:Access token"|pairs %}
+          <div class="ui-field"><label for="ob{{ key }}">{{ label }}{% if outlet_masks|get_item:key %} <span class="ui-chip ui-chip-green">saved</span>{% elif key == 'access_token' and outlet_token_mask %} <span class="ui-chip ui-chip-green">saved</span>{% endif %}</label>
+            <input id="ob{{ key }}" class="ui-input" name="{% if key == 'access_token' %}api_key{% else %}{{ key }}{% endif %}" type="password" autocomplete="new-password"
+                   placeholder="{% if key == 'access_token' and outlet_token_mask %}{{ outlet_token_mask }} · leave blank to keep{% elif outlet_masks|get_item:key %}{{ outlet_masks|get_item:key }} · leave blank to keep{% else %}Not set{% endif %}">
+            {% if outlet_masks|get_item:key or key == 'access_token' and outlet_token_mask %}<label class="ui-agg-clear"><input type="checkbox" name="clear_{{ key }}" value="1"> remove</label>{% endif %}</div>
+          {% endfor %}
+          <div class="ui-field"><label for="otu">Token URL <small class="ui-log-sub">(only if different for this branch)</small></label><input id="otu" class="ui-input" name="token_url" value="{{ conn.token_url|default:'' }}" placeholder="{{ acc.token_url|default:'From shared settings' }}"></div>
+          <div class="ui-field"><label for="ob">API base URL <small class="ui-log-sub">(only if different)</small></label><input id="ob" class="ui-input" name="api_base_url" value="{{ conn.api_base_url|default:'' }}" placeholder="{{ acc.api_base_url|default:'From shared settings' }}"></div>
+          <div class="ui-field"><label for="oh">Auth header</label><input id="oh" class="ui-input" name="auth_header" value="{% if conn.auth_header != 'Authorization' %}{{ conn.auth_header|default:'' }}{% endif %}" placeholder="{{ acc.auth_header|default:'Authorization' }}"></div>
+        </div>
+        <p class="ui-log-sub" style="margin:0"><i class="fa-solid fa-circle-info"></i> The webhook secret {{ p.label }} gave this branch goes in <b>Webhooks</b> on the right.</p>
+        <details class="ui-details" {% if paths %}open{% endif %}><summary>Endpoint paths for this branch only</summary>
+          <p class="ui-log-sub">Usually set once in the shared settings. Fill these only if this branch uses different paths.</p>
+          <div class="ui-form-grid">{% for a, lbl, ex in action_rows %}<div class="ui-field"><label for="pa{{ a }}">{{ lbl }}</label><input id="pa{{ a }}" class="ui-input" name="path_{{ a }}" value="{{ paths|get_item:a|default:'' }}" placeholder="{{ acc_paths|get_item:a|default:'From shared settings' }}"></div>{% endfor %}</div>
+        </details>
+      </section>
+      <div class="ui-agg-savebar"><span></span><button class="ui-btn ui-btn-primary ui-agg-brand-btn" type="submit"><i class="fa-solid fa-floppy-disk"></i><span>{% if conn %}Save branch{% else %}Connect {{ p.label }}{% endif %}</span></button></div>
+    </div>
+    <div>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Webhooks from {{ p.label }}</h2>
+        <div class="ui-field"><label>Shared URL — one for all outlets <span class="ui-chip ui-chip-blue">POS partner</span></label><div class="ui-secret-row"><code id="whx">{{ shared_webhook_url }}</code><button type="button" class="ui-btn ui-btn-gray ui-btn-sm" data-copy="#whx" aria-label="Copy"><i class="fa-regular fa-copy"></i></button></div>
+          <p class="ui-log-sub" style="margin:4px 0 0">Orders are routed by the outlet ID inside each message.</p></div>
+        {% if conn %}
+        <div class="ui-field"><label>This branch's own URL</label><div class="ui-secret-row"><code id="whu">{{ webhook_url }}</code><button type="button" class="ui-btn ui-btn-gray ui-btn-sm" data-copy="#whu" aria-label="Copy"><i class="fa-regular fa-copy"></i></button></div></div>
+        <div class="ui-field"><label>Branch signing secret</label><div class="ui-secret-row"><code id="whs" class="ui-agg-secret" tabindex="0">{{ outlet_secret }}</code><button type="button" class="ui-btn ui-btn-gray ui-btn-sm" data-copy="#whs" aria-label="Copy"><i class="fa-regular fa-copy"></i></button></div></div>
+        <div class="ui-field"><label for="pws">Or paste the webhook secret {{ p.label }} gave this branch</label><input id="pws" class="ui-input" name="platform_webhook_secret" type="password" autocomplete="new-password" placeholder="Replaces the outlet signing secret"></div>
+        <div class="ui-field"><label for="sg">Signature header</label><input id="sg" class="ui-input" name="signature_header" value="{% if conn.signature_header != 'X-Signature' %}{{ conn.signature_header }}{% endif %}" placeholder="{{ resolved.values.signature_header|default:'X-Signature' }}"></div>
+        <p class="ui-log-sub">Requests are accepted when signed (HMAC-SHA256 of the body, hex or base64, optional <code>sha256=</code>) with this branch's secret, the shared brand webhook secret or the server default — or when that secret is sent as <code>Authorization: Bearer …</code>.</p>
+        {% else %}<input type="hidden" name="signature_header" value="">{% endif %}
+      </section>
+    </div>
+  </form>
+
+  <!-- Brand account -->
+  <section class="ui-card ui-pad ui-agg-brand">
+    <div class="ui-dash-card-head">
+      <div><h2 class="ui-card-title"><i class="fa-solid fa-building-shield" style="color:var(--brand)"></i> Shared settings for all branches · {{ restaurant.name }} <span class="ui-chip ui-chip-gray">optional</span></h2>
+        <p class="ui-card-subtitle">Set the API base URL, token URL and endpoint paths once here so every branch uses them. Add keys here only if {{ p.label }} gave one set for the whole brand — each branch's own keys always win. Encrypted.{% if acc.updated_by %} Last changed by {{ acc.updated_by.get_full_name|default:acc.updated_by.username }}, {{ acc.updated_at|timesince }} ago.{% endif %}</p></div>
+      {% if sattkar_configured %}<span class="ui-chip ui-chip-indigo" title="Set on the server in .env"><i class="fa-solid fa-server"></i> Sattkar partner keys available</span>{% endif %}
+    </div>
+    {% if brand_admin %}
+    <form method="post">{% csrf_token %}<input type="hidden" name="op" value="account">
+      <div class="ui-form-grid ui-agg-acc">
+        {% for key, label in "client_id:Client ID,client_secret:Client secret,access_token:Access token,webhook_secret:Webhook secret"|pairs %}
+        <div class="ui-field"><label for="acc{{ key }}">{{ label }}{% if acc_masks|get_item:key %} <span class="ui-chip ui-chip-green">saved</span>{% endif %}</label>
+          <input id="acc{{ key }}" class="ui-input" name="acc_{{ key }}" type="password" autocomplete="new-password" placeholder="{% if acc_masks|get_item:key %}{{ acc_masks|get_item:key }} · leave blank to keep{% else %}Not set{% endif %}">
+          {% if acc_masks|get_item:key %}<label class="ui-agg-clear"><input type="checkbox" name="acc_clear_{{ key }}" value="1"> remove</label>{% endif %}</div>
+        {% endfor %}
+        <div class="ui-field"><label for="accb">API base URL</label><input id="accb" class="ui-input" name="acc_api_base_url" value="{{ acc.api_base_url|default:'' }}" placeholder="https://…"></div>
+        <div class="ui-field"><label for="acct">Token URL <small class="ui-log-sub">(client ID + secret → token)</small></label><input id="acct" class="ui-input" name="acc_token_url" value="{{ acc.token_url|default:'' }}" placeholder="https://…/oauth/token"></div>
+        <div class="ui-field"><label for="acch">Auth header</label><input id="acch" class="ui-input" name="acc_auth_header" value="{{ acc.auth_header|default:'' }}" placeholder="Authorization"></div>
+        <div class="ui-field"><label for="accs">Signature header</label><input id="accs" class="ui-input" name="acc_signature_header" value="{{ acc.signature_header|default:'' }}" placeholder="X-Signature"></div>
+        <div class="ui-field"><label for="acce">Environment</label><select id="acce" class="ui-input" name="acc_environment"><option value="sandbox" {% if not acc or acc.environment == 'sandbox' %}selected{% endif %}>Sandbox</option><option value="live" {% if acc.environment == 'live' %}selected{% endif %}>Live</option></select></div>
+      </div>
+      <details class="ui-details" {% if acc_paths %}open{% endif %}><summary>Endpoint paths from {{ p.label }}'s documentation</summary>
+        <p class="ui-log-sub">Placeholders: <code>{order_id}</code> <code>{outlet_id}</code> <code>{item_id}</code>. We never guess endpoints — an action without a path stays “not configured”.</p>
+        <div class="ui-form-grid">{% for a, lbl, ex in action_rows %}<div class="ui-field"><label for="ap{{ a }}">{{ lbl }}</label><input id="ap{{ a }}" class="ui-input" name="acc_path_{{ a }}" value="{{ acc_paths|get_item:a|default:'' }}" placeholder="e.g. {{ ex }}"></div>{% endfor %}</div>
+      </details>
+      <div class="ui-agg-savebar" style="padding:8px 0 0"><span class="ui-log-sub"><i class="fa-solid fa-lock"></i> Encrypted with the server's credentials key. Changes are recorded in Activity Logs.</span><button class="ui-btn ui-btn-primary ui-agg-brand-btn" type="submit"><i class="fa-solid fa-floppy-disk"></i><span>Save shared settings</span></button></div>
+    </form>
+    {% else %}
+    <div class="ui-agg-creds">{% for key, label in "client_id:Client ID,client_secret:Client secret,access_token:Access token,webhook_secret:Webhook secret"|pairs %}<div><span>{{ label }}</span><strong>{% if acc_masks|get_item:key %}<code>{{ acc_masks|get_item:key }}</code>{% else %}—{% endif %}</strong></div>{% endfor %}</div>
+    <p class="ui-log-sub" style="margin:10px 0 0">Only the business owner or General Manager can change shared settings.</p>
+    {% endif %}
+  </section>
+
+  {% if conn %}
+  <div class="ui-dash-row r-2-1">
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">Message format</h2>
+      <p class="ui-log-sub" style="margin-top:-6px">Until {{ p.label }}'s exact payloads are added to the adapter, send orders in this format (integration partners can map to it). Events: <code>order.placed</code>, <code>order.status</code> (accepted, ready, picked_up, delivered), <code>order.cancelled</code>, <code>rider.assigned</code>, <code>store.status</code>, <code>item.stock</code>, <code>menu.sync_result</code>.</p>
+      <pre class="ui-json">{{ sample }}</pre>
+    </section>
+    <div>
+      {% if conn.environment == 'sandbox' %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title"><i class="fa-solid fa-flask" style="color:var(--ui-orange)"></i> Simulator</h2>
+        <p class="ui-log-sub" style="margin-top:-6px">Sends signed messages through the real webhook pipeline, exactly as {{ p.label }} would.</p>
+        <form method="post" action="{{ u.simulate }}" class="ui-agg-simgrid">{% csrf_token %}<input type="hidden" name="next" value="{{ u.dashboard }}">
+          <button class="ui-btn ui-btn-gray" name="kind" value="order"><i class="fa-solid fa-receipt"></i> New order</button>
+          <button class="ui-btn ui-btn-gray" name="kind" value="rider"><i class="fa-solid fa-person-biking"></i> Rider assigned</button>
+          <button class="ui-btn ui-btn-gray" name="kind" value="picked_up"><i class="fa-solid fa-motorcycle"></i> Picked up</button>
+          <button class="ui-btn ui-btn-gray" name="kind" value="delivered"><i class="fa-solid fa-house-circle-check"></i> Delivered</button>
+          <button class="ui-btn ui-btn-tinted-red" name="kind" value="cancel"><i class="fa-solid fa-ban"></i> Customer cancels</button>
+        </form>
+      </section>
+      {% endif %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Security</h2>
+        <form method="post" onsubmit="return confirm('Create a new outlet signing secret? {{ p.label }} must be updated immediately or orders signed with the old one will be refused.')">{% csrf_token %}<input type="hidden" name="op" value="rotate">
+          <button class="ui-btn ui-btn-tinted-red" type="submit"><i class="fa-solid fa-key"></i><span>Rotate outlet signing secret</span></button></form>
+        <p class="ui-log-sub" style="margin:10px 0 0">All partner keys and webhook secrets are encrypted at rest.</p>
+      </section>
+    </div>
+  </div>
+  {% endif %}
+</div>

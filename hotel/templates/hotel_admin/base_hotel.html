@@ -1012,7 +1012,7 @@
     {% block extra_css %}{% endblock %}
     {% block extra_head %}{% endblock %}
     <link rel="stylesheet" href="{% static 'css/theme-dark.css' %}?v=3.4">
-    <link rel="stylesheet" href="{% static 'css/apple-ui.css' %}?v=1.3">
+    <link rel="stylesheet" href="{% static 'css/apple-ui.css' %}?v=2.1">
 </head>
 <body>
 
@@ -1032,8 +1032,12 @@
     </a>
 
     <nav class="sb-nav">
-        {% if show_front_desk_ops %}
+        {% if show_front_desk_ops and access.front_desk or show_front_desk_ops and access.cabs %}
         <div class="sb-section">Front Desk</div>
+        <a href="{% url 'hotel_admin:action_centre' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'action_centre' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-bolt"></i></div><span>Action Centre</span></div>
+        </a>
+        {% if access.front_desk %}
         <a href="{% url 'hotel_admin:dashboard' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'dashboard' %}active{% endif %}">
             <div class="sb-link-inner">
                 <div class="sb-link-icon"><i class="fa-solid fa-gauge-high"></i></div>
@@ -1041,18 +1045,34 @@
             </div>
             <span class="sb-badge pill-live">Live</span>
         </a>
+        {% endif %}
+        {% if can_view_guests %}
+        {% if access.front_desk %}
+        <a href="{% url 'hotel_admin:morning_brief' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'brief' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-mug-hot"></i></div><span>Morning Brief</span></div>
+        </a>
+        {% endif %}
+        {% endif %}
+        {% if access.front_desk %}
         <a href="{% url 'hotel_admin:tape_chart' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'tape_chart' %}active{% endif %}">
             <div class="sb-link-inner">
                 <div class="sb-link-icon"><i class="fa-solid fa-calendar-days"></i></div>
                 <span>Tape Chart</span>
             </div>
         </a>
+        {% endif %}
+        {% if access.front_desk %}
         <a href="{% url 'hotel_admin:bookings' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'bookings' %}active{% endif %}">
             <div class="sb-link-inner">
                 <div class="sb-link-icon"><i class="fa-solid fa-book-open"></i></div>
                 <span>Guest Folios</span>
             </div>
         </a>
+        <a href="{% url 'hotel_admin:booking_groups' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'groups' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-people-group"></i></div><span>Group Bookings</span></div>
+        </a>
+        {% endif %}
+        {% if access.cabs %}
         <a href="{% url 'hotel_admin:cabs_dispatch' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'cabs' %}active{% endif %}">
             <div class="sb-link-inner">
                 <div class="sb-link-icon"><i class="fa-solid fa-car"></i></div>
@@ -1060,9 +1080,11 @@
             </div>
         </a>
         {% endif %}
+        {% endif %}
 
         {% if is_housekeeping %}
         <div class="sb-section">Housekeeping</div>
+        {% if access.rooms %}
         <a href="{% url 'hotel_admin:rooms' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'rooms' %}active{% endif %}">
             <div class="sb-link-inner">
                 <div class="sb-link-icon"><i class="fa-solid fa-broom"></i></div>
@@ -1070,8 +1092,16 @@
             </div>
             {% if cleaning_count %}<span class="sb-badge pill-warning">{{ cleaning_count }}</span>{% endif %}
         </a>
+        <a href="{% url 'hotel_admin:room_housekeeping' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'housekeeping' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-list-check"></i></div><span>My Tasks</span></div>
+        </a>
+        <a href="{% url 'hotel_admin:room_maintenance' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'maintenance' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-screwdriver-wrench"></i></div><span>Report an Issue</span></div>
+        </a>
+        {% endif %}
         {% else %}
-        <div class="sb-section">Inventory</div>
+        {% if access.rooms %}<div class="sb-section">Inventory</div>{% endif %}
+        {% if access.rooms %}
         <a href="{% url 'hotel_admin:rooms' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'rooms' %}active{% endif %}">
             <div class="sb-link-inner">
                 <div class="sb-link-icon"><i class="fa-solid fa-bed"></i></div>
@@ -1079,7 +1109,15 @@
             </div>
             {% if cleaning_count %}<span class="sb-badge pill-warning">{{ cleaning_count }}</span>{% endif %}
         </a>
+        <a href="{% url 'hotel_admin:room_housekeeping' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'housekeeping' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-list-check"></i></div><span>Housekeeping Tasks</span></div>
+        </a>
+        <a href="{% url 'hotel_admin:room_maintenance' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'maintenance' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-screwdriver-wrench"></i></div><span>Maintenance &amp; OOO</span></div>
+        </a>
+        {% endif %}
         {% if show_room_categories %}
+        {% if access.rooms %}
         <a href="{% url 'hotel_admin:categories' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'categories' %}active{% endif %}">
             <div class="sb-link-inner">
                 <div class="sb-link-icon"><i class="fa-solid fa-tags"></i></div>
@@ -1088,40 +1126,174 @@
         </a>
         {% endif %}
         {% endif %}
+        {% endif %}
 
+        {% if show_front_desk_ops and access.guest_services %}
+        <div class="sb-section">Guest Services</div>
+        <a href="{% url 'hotel_admin:requests' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'requests' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-bell-concierge"></i></div><span>Guest Requests</span></div>
+        </a>
+        <a href="{% url 'hotel_admin:laundry' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'laundry' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-shirt"></i></div><span>Laundry &amp; Valet</span></div>
+        </a>
+        <a href="{% url 'hotel_admin:spa' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'spa' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-spa"></i></div><span>Spa &amp; Wellness</span></div>
+        </a>
+        <a href="{% url 'hotel_admin:lostfound' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'lostfound' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-box-archive"></i></div><span>Lost &amp; Found</span></div>
+        </a>
+        {% endif %}
+
+        {% if show_front_desk_ops and access.banquets or show_front_desk_ops and access.sales %}
+        <div class="sb-section">Events &amp; Sales</div>
+        {% if access.banquets %}
+        <a href="{% url 'hotel_admin:banquets' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'banquets' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-champagne-glasses"></i></div><span>Banquets &amp; Events</span></div>
+        </a>
+        {% endif %}
+        {% if access.sales %}
+        <a href="{% url 'hotel_admin:sales' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'sales' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-handshake"></i></div><span>Sales &amp; CRM</span></div>
+        </a>
+        {% endif %}
+        {% if access.sales %}
+        <a href="{% url 'hotel_admin:packages' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'packages' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-tags"></i></div><span>Packages &amp; Promos</span></div>
+        </a>
+        {% endif %}
+        {% endif %}
+
+        {% if show_front_desk_ops and access.revenue %}
+        <div class="sb-section">Revenue</div>
         {% if show_hotel_config %}
+        <a href="{% url 'hotel_admin:rates' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'rates' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-calendar-week"></i></div><span>Rates &amp; Availability</span></div>
+        </a>
+        {% endif %}
+        <a href="{% url 'hotel_admin:reports' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'reports' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-chart-line"></i></div><span>Reports</span></div>
+        </a>
+        <a href="{% url 'hotel_admin:reports_forecast' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'forecast' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-arrow-trend-up"></i></div><span>Forecast</span></div>
+        </a>
+        <a href="{% url 'hotel_admin:night_audit' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'night_audit' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-moon"></i></div><span>Night Audit</span></div>
+        </a>
+        {% endif %}
+
+        {% if can_view_guests and access.guests_group %}
+        <div class="sb-section">Guests</div>
+        {% if access.guests %}
+        <a href="{% url 'hotel_admin:guest_list' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'guests' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-address-book"></i></div><span>Guests &amp; Loyalty</span></div>
+        </a>
+        {% endif %}
+        {% if access.guests %}
+        <a href="{% url 'hotel_admin:gift_card_list' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'gift_cards' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-gift"></i></div><span>Gift Cards</span></div>
+        </a>
+        {% endif %}
+        {% if access.feedback %}
+        <a href="{% url 'hotel_admin:feedback_list' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'feedback' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-comment-dots"></i></div><span>Feedback</span></div>
+        </a>
+        {% endif %}
+        {% if can_run_campaigns %}
+        {% if access.campaigns %}
+        <a href="{% url 'hotel_admin:campaign_list' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'campaigns' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-bullhorn"></i></div><span>Campaigns</span></div>
+        </a>
+        {% endif %}
+        {% endif %}
+        {% endif %}
+        {% if can_manage_finance and access.finance %}
+        <div class="sb-section">Finance</div>
+        {% if access.finance %}
+        <a href="{% url 'hotel_admin:expenses' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'expenses' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-wallet"></i></div><span>Expenses</span></div>
+        </a>
+        {% endif %}
+        {% if access.finance %}
+        <a href="{% url 'hotel_admin:profit_loss' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'pnl' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-chart-column"></i></div><span>Profit &amp; Loss</span></div>
+        </a>
+        {% endif %}
+        {% if access.finance %}
+        <a href="{% url 'hotel_admin:ledger' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'ledger' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-building-columns"></i></div><span>City Ledger</span></div>
+        </a>
+        {% endif %}
+        <a href="{% url 'hotel_admin:cashier' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'cashier' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-cash-register"></i></div><span>Cashier</span></div>
+        </a>
+        {% endif %}
+
+        {% if show_front_desk_ops and access.back_office %}
+        <div class="sb-section">Back Office</div>
+        <a href="{% url 'hotel_admin:security' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'security' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-shield-halved"></i></div><span>Security &amp; Visitors</span></div>
+        </a>
+        <a href="{% url 'hotel_admin:compliance' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'compliance' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-certificate"></i></div><span>Compliance</span></div>
+        </a>
+        <a href="{% url 'hotel_admin:assets' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'assets' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-building"></i></div><span>Assets &amp; Contracts</span></div>
+        </a>
+        <a href="{% url 'hotel_admin:energy' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'energy' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-bolt-lightning"></i></div><span>Energy &amp; Utilities</span></div>
+        </a>
+        {% endif %}
+
+        {% if show_hotel_config and access.staff %}
         <div class="sb-section">Staff &amp; Operations</div>
         {% if show_hotel_staff %}
+        {% if access.staff %}
         <a href="{% url 'hotel_admin:muster_roll' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'muster_roll' %}active{% endif %}">
             <div class="sb-link-inner">
                 <div class="sb-link-icon"><i class="fa-solid fa-calendar-check"></i></div>
                 <span>Daily Muster Roll</span>
             </div>
         </a>
+        {% endif %}
+        {% if access.staff %}
         <a href="{% url 'hotel_admin:payroll_dashboard' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'payroll_dashboard' %}active{% endif %}">
             <div class="sb-link-inner">
                 <div class="sb-link-icon"><i class="fa-solid fa-money-bill-wave"></i></div>
                 <span>Monthly Payroll</span>
             </div>
         </a>
+        {% endif %}
+        {% if access.staff %}
         <a href="{% url 'hotel_admin:sop_dashboard' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'sop_dashboard' %}active{% endif %}">
             <div class="sb-link-inner">
                 <div class="sb-link-icon"><i class="fa-solid fa-clipboard-check"></i></div>
                 <span>Daily SOP Board</span>
             </div>
         </a>
+        {% endif %}
+        {% if access.staff %}
         <a href="{% url 'hotel_admin:ground_staff_list' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'ground_staff_directory' %}active{% endif %}">
             <div class="sb-link-inner">
                 <div class="sb-link-icon"><i class="fa-solid fa-users"></i></div>
                 <span>Ground Staff</span>
             </div>
         </a>
+        {% endif %}
+        {% if access.staff %}
         <a href="{% url 'hotel_admin:staff_list' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'staff' %}active{% endif %}">
             <div class="sb-link-inner">
                 <div class="sb-link-icon"><i class="fa-solid fa-shield-halved"></i></div>
                 <span>PMS Logins &amp; Roles</span>
             </div>
         </a>
+        {% endif %}
+        {% if can_manage_roles %}
+        {% if access.staff %}
+        <a href="{% url 'hotel_admin:roles' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'roles' %}active{% endif %}">
+            <div class="sb-link-inner"><div class="sb-link-icon"><i class="fa-solid fa-user-shield"></i></div><span>Roles &amp; Permissions</span></div>
+        </a>
+        {% endif %}
+        {% endif %}
         {% endif %}
 
         {% endif %}
@@ -1141,7 +1313,18 @@
     <div class="sb-footer">
         <!-- Pinned admin links: always visible above the account / sign-out row -->
         <div class="sidebar-footer-nav">
+            {% if can_manage_integrations %}
+            {% if access.integrations %}
+            <a href="{% url 'hotel_admin:integrations' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'integrations' %}active{% endif %}">
+                <div class="sb-link-inner">
+                    <div class="sb-link-icon"><i class="fa-solid fa-plug"></i></div>
+                    <span>Integrations</span>
+                </div>
+            </a>
+            {% endif %}
+            {% endif %}
             {% if show_hotel_settings %}
+            {% if access.settings %}
             <a href="{% url 'hotel_admin:settings' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'settings' %}active{% endif %}">
                 <div class="sb-link-inner">
                     <div class="sb-link-icon"><i class="fa-solid fa-sliders"></i></div>
@@ -1149,13 +1332,16 @@
                 </div>
             </a>
             {% endif %}
+            {% endif %}
             {% if can_view_hotel_logs and is_hotel_admin %}
+            {% if access.logs %}
             <a href="{% url 'hotel_admin:activity_logs' restaurant_slug=rslug %}" class="sb-link {% if active_menu == 'activity_logs' %}active{% endif %}">
                 <div class="sb-link-inner">
                     <div class="sb-link-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
                     <span>Activity Logs</span>
                 </div>
             </a>
+            {% endif %}
             {% endif %}
         </div>
         <!-- Theme Segmented Switcher (Bottom-Left Sidebar Corner) -->
@@ -1178,12 +1364,30 @@
                     <div style="font-size: 0.67rem; color: var(--ui-label-2);">{% if is_housekeeping %}Housekeeping{% elif is_front_desk %}Front Desk{% elif is_general_manager %}General Manager{% else %}Hotel Admin{% endif %}</div>
                 </div>
             </div>
-            <a href="{% url 'logout' %}" class="btn btn-sm btn-outline-danger p-1 px-2" title="Sign Out">
+            <button type="button" class="btn btn-sm btn-outline-danger p-1 px-2" title="Sign Out" aria-label="Sign out"
+                    data-bs-toggle="modal" data-bs-target="#logoutConfirmModal">
                 <i class="fa-solid fa-power-off" style="font-size: 0.8rem;"></i>
-            </a>
+            </button>
         </div>
     </div>
 </aside>
+    <script>
+    /* Keep the sidebar where it was across page loads; otherwise bring the active link into view. */
+    (function () {
+        var box = document.querySelector('#pmsSidebar .sb-nav'); if (!box) return;
+        var KEY = 'hotel_sidebar_scroll', saved = null;
+        try { saved = sessionStorage.getItem(KEY); } catch (e) {}
+        if (saved !== null) { box.scrollTop = parseInt(saved, 10) || 0; }
+        var active = box.querySelector('a.active');
+        if (active) {
+            var b = box.getBoundingClientRect(), a = active.getBoundingClientRect();
+            if (a.top < b.top || a.bottom > b.bottom) { box.scrollTop += a.top - b.top - (b.height - a.height) / 2; }
+        }
+        function save() { try { sessionStorage.setItem(KEY, String(box.scrollTop)); } catch (e) {} }
+        box.addEventListener('click', function (e) { if (e.target.closest('a')) save(); });
+        window.addEventListener('pagehide', save);
+    })();
+    </script>
 
 <!-- ============================== MAIN ============================== -->
 <div class="pms-main" id="pmsMain">
@@ -1247,6 +1451,14 @@
             </div>
             {% endif %}
 
+            {% if show_front_desk_ops %}
+            <button type="button" class="btn-module position-relative" data-nt-open title="Notifications" aria-label="Notifications">
+                <i class="fa-solid fa-bell" id="globalBellIcon"></i>
+                <span class="d-none d-lg-inline">Notifications</span>
+                <span class="badge rounded-pill bg-danger d-none global-notif-badge" style="font-size:0.65rem;">0</span>
+            </button>
+            {% endif %}
+
             {% if can_create_reservation %}
             <button type="button" class="btn-new-res" data-bs-toggle="modal" data-bs-target="#newBookingModal">
                 <i class="fa-solid fa-plus"></i>
@@ -1270,6 +1482,30 @@
         {% endif %}
         {% block content %}{% endblock %}
     </main>
+    {% if can_create_reservation %}{% include "hotel_admin/_new_booking_modal.html" %}{% endif %}
+</div>
+
+<!-- Logout Confirmation Modal -->
+<div class="modal fade" id="logoutConfirmModal" tabindex="-1" aria-labelledby="logoutConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 400px;">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 1.25rem; overflow: hidden; background: var(--ui-surface);">
+            <div class="modal-body text-center p-4">
+                <div style="width: 64px; height: 64px; background-color: rgba(var(--ui-red-rgb), 0.1); color: var(--ui-red-text); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.25rem; font-size: 1.75rem;">
+                    <i class="fas fa-sign-out-alt"></i>
+                </div>
+                <h5 class="fw-bold mb-2" id="logoutConfirmModalLabel" style="color: var(--ui-label);">Confirm Sign Out</h5>
+                <p class="small mb-4" style="line-height: 1.5; color: var(--ui-label-2);">Are you sure you want to log out of your hotel administration session?</p>
+                <div class="d-flex gap-2 justify-content-center">
+                    <button type="button" class="btn btn-light px-4 fw-semibold" data-bs-dismiss="modal"
+                        style="border-radius: 0.5rem; border: 1px solid var(--ui-separator); color: var(--ui-label-2);">Cancel</button>
+                    <a href="{% url 'logout' %}" class="btn btn-danger px-4 fw-semibold"
+                        style="border-radius: 0.5rem; background-color: var(--ui-red); border-color: var(--ui-red);">
+                        <i class="fas fa-sign-out-alt me-1"></i> Yes, Log Out
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -1314,5 +1550,9 @@
 <script src="{% static 'js/theme-manager.js' %}"></script>
 <script src="{% static 'js/apple-ui.js' %}?v=1.2"></script>
 {% block extra_js %}{% endblock %}
+{% if show_front_desk_ops %}
+<div id="global-toast-container" class="position-fixed top-0 end-0 p-3" style="z-index: 10999; pointer-events: none; max-width: 400px; width: 100%;"></div>
+{% include 'notifications/_drawer.html' with nt_module='hotel' %}
+{% endif %}
 </body>
 </html>

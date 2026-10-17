@@ -1,0 +1,49 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>City ledger</h1><p>Companies and agents that settle their guests’ bills later.</p></div>
+    <div class="ui-actions"><a class="ui-btn ui-btn-gray" href="?export=csv"><i class="fa-solid fa-file-csv"></i><span>CSV</span></a></div>
+  </div>
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Owed to you</div></div><div class="kpi-val">₹{{ total|inr }}</div><div class="kpi-sub">{{ rows|length }} account{{ rows|length|pluralize }}</div></div>
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Overdue</div></div><div class="kpi-val">₹{{ overdue|inr }}</div><div class="kpi-sub">Past each company’s payment terms</div></div>
+  </div>
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-list-card">
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Company</th><th class="num">Balance</th><th class="num">Overdue</th><th>Credit used</th><th>Terms</th></tr></thead>
+          <tbody>{% for r in rows %}<tr>
+            <td><a href="{{ base_url }}finance/ledger/{{ r.a.pk }}/"><strong>{{ r.a.name }}</strong></a>{% if not r.a.is_active %} <span class="ui-chip ui-chip-gray">Inactive</span>{% endif %}<br><small class="ui-log-sub">{% if r.a.gstin %}{{ r.a.gstin }} · {% endif %}{{ r.bookings }} booking{{ r.bookings|pluralize }}</small></td>
+            <td class="num"><strong>{% if r.balance < 0 %}₹{{ r.balance|inr2|cut:"-" }} cr{% else %}₹{{ r.balance|inr2 }}{% endif %}</strong></td>
+            <td class="num {% if r.overdue > 0 %}ui-text-red{% endif %}">{% if r.overdue > 0 %}₹{{ r.overdue|inr2 }}{% else %}—{% endif %}</td>
+            <td style="min-width:140px">{% if r.used_pct is not None and r.used_pct >= 0 %}<div class="ui-bar-mini {% if r.used_pct >= 90 %}is-indigo{% endif %}"><span style="width:{{ r.used_pct }}%"></span></div><small class="ui-log-sub">{{ r.used_pct }}% of ₹{{ r.a.credit_limit|inr }}</small>{% else %}<small class="ui-log-sub">No limit</small>{% endif %}</td>
+            <td>{{ r.a.payment_terms_days }} days</td></tr>
+          {% empty %}<tr><td colspan="5" class="ui-log-sub" style="padding:24px;text-align:center">No company accounts yet. Add your corporate clients and travel agents here.</td></tr>{% endfor %}</tbody>
+        </table></div>
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      {% if can_edit %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">New company account</h2>
+        <form method="post" action="{{ base_url }}finance/ledger/save/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-field"><label for="laName">Company name</label><input id="laName" class="ui-input" name="name" maxlength="150" required></div>
+          <div class="ui-field"><label for="laGst">GSTIN</label><input id="laGst" class="ui-input" name="gstin" maxlength="15" style="text-transform:uppercase"></div>
+          <div class="ui-field"><label for="laContact">Contact person</label><input id="laContact" class="ui-input" name="contact_name" maxlength="120"></div>
+          <div class="ui-inline-fields">
+            <div class="ui-field"><label for="laPhone">Phone</label><input id="laPhone" class="ui-input" name="phone" maxlength="30"></div>
+            <div class="ui-field"><label for="laEmail">Email</label><input id="laEmail" class="ui-input" type="email" name="email"></div>
+          </div>
+          <div class="ui-inline-fields">
+            <div class="ui-field"><label for="laLimit">Credit limit ₹</label><input id="laLimit" class="ui-input" type="number" min="0" step="1" name="credit_limit" placeholder="No limit"></div>
+            <div class="ui-field"><label for="laTerms">Pay within (days)</label><input id="laTerms" class="ui-input" type="number" min="0" max="365" name="payment_terms_days" value="30"></div>
+          </div>
+          <div class="ui-field"><label for="laAddr">Billing address</label><textarea id="laAddr" class="ui-input" name="address" rows="2"></textarea></div>
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-plus"></i><span>Add account</span></button>
+        </form>
+      </section>
+      {% endif %}
+    </div>
+  </div>
+</div>

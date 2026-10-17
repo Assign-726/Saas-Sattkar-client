@@ -1,0 +1,64 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header"><div><h1>Security &amp; visitors</h1><p>Visitor passes, incident reports and who is on the premises.</p></div></div>
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Visitors inside now</div></div><div class="kpi-val">{{ kpis.inside }}</div></div>
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Visitors today</div></div><div class="kpi-val">{{ kpis.today }}</div></div>
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">In-house guests</div></div><div class="kpi-val">{{ kpis.guests }}</div></div>
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Open incidents</div></div><div class="kpi-val">{{ kpis.open }}</div></div>
+  </div>
+  <nav class="ui-tabs ui-pms-tabs" aria-label="Security"><a href="?tab=visitors" class="{% if tab == 'visitors' %}is-active{% endif %}">Visitors</a><a href="?tab=incidents" class="{% if tab == 'incidents' %}is-active{% endif %}">Incidents</a></nav>
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      {% if tab == 'incidents' %}
+      <section class="ui-card ui-list-card"><div class="table-responsive"><table class="table">
+        <thead><tr><th>When</th><th>Incident</th><th>Severity</th><th>Action taken</th><th>Status</th>{% if can_edit %}<th></th>{% endif %}</tr></thead>
+        <tbody>{% for i in incidents %}<tr>
+          <td class="nowrap">{{ i.occurred_at|date:"d M H:i" }}</td>
+          <td><strong>{{ i.kind }}</strong> · {{ i.location }}<br><small class="ui-log-sub">{{ i.description }}{% if i.reported_by %} · by {{ i.reported_by }}{% endif %}</small></td>
+          <td><span class="ui-chip ui-chip-{% if i.severity == 'CRITICAL' or i.severity == 'HIGH' %}red{% elif i.severity == 'MEDIUM' %}orange{% else %}gray{% endif %}">{{ i.get_severity_display }}</span></td>
+          <td style="font-size:13px">{{ i.action_taken|default:"—"|linebreaksbr }}</td>
+          <td><span class="ui-chip ui-chip-{% if i.is_closed %}green{% else %}orange{% endif %}">{% if i.is_closed %}Closed{% else %}Open{% endif %}</span></td>
+          {% if can_edit %}<td>{% if not i.is_closed %}<details class="ui-pms-void"><summary class="ui-btn ui-btn-gray ui-btn-sm">Close</summary><form method="post" action="{{ base_url }}security/incidents/{{ i.pk }}/close/" class="ui-stack-form ui-ops-pop">{% csrf_token %}<textarea class="ui-input" name="action_taken" rows="2" placeholder="Final action taken" {% if not i.action_taken %}required{% endif %}></textarea><button class="ui-btn ui-btn-primary ui-btn-sm" type="submit">Close incident</button></form></details>{% endif %}</td>{% endif %}
+        </tr>{% empty %}<tr><td colspan="6" class="ui-log-sub" style="padding:24px;text-align:center">No incidents recorded.</td></tr>{% endfor %}</tbody></table></div></section>
+      {% else %}
+      <section class="ui-card ui-list-card"><div class="table-responsive"><table class="table">
+        <thead><tr><th>Visitor</th><th>Meeting</th><th>ID</th><th>In</th><th>Out</th>{% if can_edit %}<th></th>{% endif %}</tr></thead>
+        <tbody>{% for v in visitors %}<tr>
+          <td><strong>{{ v.name }}</strong><br><small class="ui-log-sub">{{ v.pass_number }}{% if v.phone %} · {{ v.phone }}{% endif %}{% if v.vehicle %} · {{ v.vehicle }}{% endif %}</small></td>
+          <td>{{ v.meeting }}<br><small class="ui-log-sub">{{ v.purpose }}</small></td>
+          <td>{{ v.id_type|default:"—" }}{% if v.id_last4 %} ···{{ v.id_last4 }}{% endif %}</td>
+          <td class="nowrap">{{ v.time_in|date:"d M H:i" }}</td>
+          <td class="nowrap">{% if v.time_out %}{{ v.time_out|date:"H:i" }}{% else %}<span class="ui-chip ui-chip-orange">Inside</span>{% endif %}</td>
+          {% if can_edit %}<td>{% if not v.time_out %}<form method="post" action="{{ base_url }}security/visitors/{{ v.pk }}/out/">{% csrf_token %}<button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">Check out</button></form>{% endif %}</td>{% endif %}
+        </tr>{% empty %}<tr><td colspan="6" class="ui-log-sub" style="padding:24px;text-align:center">No visitors in the last 7 days.</td></tr>{% endfor %}</tbody></table></div></section>
+      {% endif %}
+    </div>
+    <div class="ui-g360-side">
+      {% if can_edit %}
+      {% if tab == 'incidents' %}
+      <section class="ui-card ui-pad"><h2 class="ui-card-title">Report an incident</h2>
+        <form method="post" action="{{ base_url }}security/incidents/add/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-inline-fields"><div class="ui-field"><label for="inK">Type</label><select id="inK" class="ui-input" name="kind">{% for k in kinds %}<option>{{ k }}</option>{% endfor %}</select></div>
+            <div class="ui-field"><label for="inS">Severity</label><select id="inS" class="ui-input" name="severity">{% for k, l in severities %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></div></div>
+          <div class="ui-field"><label for="inL">Location</label><input id="inL" class="ui-input" name="location" maxlength="120" required></div>
+          <div class="ui-field"><label for="inD">What happened</label><textarea id="inD" class="ui-input" name="description" rows="3" required></textarea></div>
+          <div class="ui-field"><label for="inA">Action taken</label><textarea id="inA" class="ui-input" name="action_taken" rows="2"></textarea></div>
+          <div class="ui-field"><label for="inB">Reported by</label><input id="inB" class="ui-input" name="reported_by" maxlength="120"></div>
+          <button class="ui-btn ui-btn-primary" type="submit">File report</button>
+          <p class="ui-log-sub" style="margin:0">High and critical incidents alert the duty manager.</p></form></section>
+      {% else %}
+      <section class="ui-card ui-pad"><h2 class="ui-card-title">Visitor entry</h2>
+        <form method="post" action="{{ base_url }}security/visitors/add/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-inline-fields"><div class="ui-field"><label for="viN">Name</label><input id="viN" class="ui-input" name="name" maxlength="120" required></div><div class="ui-field"><label for="viP">Mobile</label><input id="viP" class="ui-input" name="phone" maxlength="30"></div></div>
+          <div class="ui-field"><label for="viU">Purpose</label><select id="viU" class="ui-input" name="purpose"><option>Meeting a guest</option><option>Vendor / contractor</option><option>Interview</option><option>Event site visit</option><option>Delivery</option><option>Other</option></select></div>
+          <div class="ui-field"><label for="viM">Meeting</label><input id="viM" class="ui-input" name="meeting" list="viRooms" maxlength="120" required placeholder="Room 204, Engineering…"><datalist id="viRooms">{% for b in rooms %}<option value="Room {{ b.room.room_number }} · {{ b.guest_name }}">{% endfor %}</datalist></div>
+          <div class="ui-inline-fields"><div class="ui-field"><label for="viI">ID shown</label><select id="viI" class="ui-input" name="id_type"><option>Aadhaar</option><option>Driving licence</option><option>Passport</option><option>Voter ID</option><option>Company ID</option></select></div><div class="ui-field"><label for="viX">ID number</label><input id="viX" class="ui-input" name="id_number" autocomplete="off" placeholder="Only last 4 kept"></div></div>
+          <div class="ui-field"><label for="viV">Vehicle</label><input id="viV" class="ui-input" name="vehicle" maxlength="20" placeholder="RJ14 AB 1234"></div>
+          <button class="ui-btn ui-btn-primary" type="submit">Issue pass</button>
+          <p class="ui-log-sub" style="margin:0">Call the guest before sending a visitor to a room.</p></form></section>
+      {% endif %}
+      {% endif %}
+    </div>
+  </div>
+</div>

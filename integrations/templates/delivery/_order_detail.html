@@ -1,0 +1,85 @@
+{% load restaurant_admin_extras %}
+<div class="ui-agg" style="--brand: {{ p.color }}; --brand-rgb: {{ p.rgb }};">
+  {% include 'delivery/_head.html' %}
+  <a class="ui-back" href="{{ u.orders }}"><i class="fa-solid fa-chevron-left"></i> Orders</a>
+  <div class="ui-page-header">
+    <div><h1 style="font-size:24px">Order #{{ link.external_id }} {% include 'delivery/_status_chip.html' with l=link %}</h1>
+      <p>{{ link.created_at|date:"l j M Y, g:i a" }} · {{ link.order.customer_name }} · our order #{{ link.order.branch_order_number|default:link.order_id }}{% if link.order.payment_status != 'paid' %} · <strong>cash on delivery</strong>{% endif %}</p></div>
+    <div class="ui-actions">
+      {% url 'restaurant_admin:delivery_order_action' restaurant_slug=env.slug platform=env.platform pk=link.pk as action_url %}
+      {% if link.platform_status == 'placed' %}
+        <form method="post" action="{{ action_url }}" class="ui-inline-form">{% csrf_token %}<input type="hidden" name="action" value="accept"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <select name="prep_minutes" class="ui-input" aria-label="Preparation time">{% for m in prep_choices %}<option value="{{ m }}" {% if m == conn.default_prep_minutes %}selected{% endif %}>{{ m }} min</option>{% endfor %}</select>
+          <button class="ui-btn ui-btn-primary ui-agg-brand-btn"><i class="fa-solid fa-check"></i><span>Accept</span></button></form>
+        <form method="post" action="{{ action_url }}" class="ui-inline-form">{% csrf_token %}<input type="hidden" name="action" value="reject"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <select name="reason" class="ui-input" required aria-label="Reason"><option value="">Reject because…</option>{% for k, lbl in reasons_reject %}<option value="{{ k }}">{{ lbl }}</option>{% endfor %}</select>
+          <button class="ui-btn ui-btn-tinted-red">Reject</button></form>
+      {% elif link.platform_status == 'accepted' %}
+        <form method="post" action="{{ action_url }}">{% csrf_token %}<input type="hidden" name="action" value="mark_ready"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="ui-btn ui-btn-primary ui-agg-brand-btn"><i class="fa-solid fa-box"></i><span>Food is ready</span></button></form>
+      {% elif link.platform_status == 'ready' %}
+        <form method="post" action="{{ action_url }}">{% csrf_token %}<input type="hidden" name="action" value="mark_picked_up"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="ui-btn ui-btn-primary ui-agg-brand-btn"><i class="fa-solid fa-hand-holding"></i><span>Handed to rider</span></button></form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="ui-dash-row r-2-1">
+    <div>
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Items</h2></div>
+        <div class="table-responsive"><table class="table ui-dash-table">
+          <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Total</th></tr></thead>
+          <tbody>{% for it in items %}<tr><td><strong>{{ it.menu_item.name }}</strong>{% if it.notes %}<div class="ui-log-sub">{{ it.notes }}</div>{% endif %}</td><td class="num">{{ it.quantity }}</td><td class="num">₹{{ it.unit_price|inr2 }}</td><td class="num">₹{{ it.unit_price|times:it.quantity|inr2 }}</td></tr>{% endfor %}</tbody>
+        </table></div>
+        {% if link.instructions %}<p class="ui-agg-note"><i class="fa-solid fa-message"></i> {{ link.instructions }}</p>{% endif %}
+      </section>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Timeline</h2>
+        <ol class="ui-agg-timeline">
+          {% for h in history %}<li class="st-{{ h.to_status }}"><span class="dot"></span><div><strong>{{ h.label }}</strong>{% if h.note %} · {{ h.note }}{% endif %}<div class="ui-log-sub">{{ h.at|date:"g:i:s a" }} · {% if h.source == 'platform' %}{{ p.label }}{% elif h.actor %}{{ h.actor.get_full_name|default:h.actor.username }}{% else %}{{ h.source|title }}{% endif %}</div></div></li>{% endfor %}
+        </ol>
+      </section>
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Messages with {{ p.label }}</h2></div>
+        <div class="table-responsive"><table class="table ui-dash-table">
+          <thead><tr><th>When</th><th>Direction</th><th>What</th><th>Result</th></tr></thead>
+          <tbody>
+            {% for e in events %}<tr><td class="ui-log-sub">{{ e.received_at|date:"g:i:s a" }}</td><td><span class="ui-chip ui-chip-gray"><i class="fa-solid fa-arrow-down"></i> In</span></td><td>{{ e.event_type }}</td><td>{{ e.get_state_display }}{% if e.last_error %}<div class="ui-log-sub">{{ e.last_error|truncatechars:90 }}</div>{% endif %}</td></tr>{% endfor %}
+            {% for a in actions %}<tr><td class="ui-log-sub">{{ a.created_at|date:"g:i:s a" }}</td><td><span class="ui-chip ui-chip-blue"><i class="fa-solid fa-arrow-up"></i> Out</span></td><td>{{ a.label }}{% if a.attempts > 1 %} <small class="ui-log-sub">· {{ a.attempts }} tries</small>{% endif %}</td><td>{{ a.get_state_display }}{% if a.error %}<div class="ui-log-sub">{{ a.error|truncatechars:90 }}</div>{% endif %}</td></tr>{% endfor %}
+          </tbody>
+        </table></div>
+      </section>
+      {% if is_admin %}<details class="ui-details"><summary>Original {{ p.label }} message</summary><pre class="ui-json">{{ raw }}</pre></details>{% endif %}
+    </div>
+    <div>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Money</h2>
+        <ul class="ui-dash-mini ui-agg-money">
+          <li><span>Food</span><strong>₹{{ link.item_total|inr2 }}</strong></li>
+          {% if link.packaging_fee %}<li><span>Packaging</span><strong>₹{{ link.packaging_fee|inr2 }}</strong></li>{% endif %}
+          {% if link.discount_total %}<li><span>Discount{% if link.merchant_discount %} (you pay ₹{{ link.merchant_discount|inr2 }}){% endif %}</span><strong>−₹{{ link.discount_total|inr2 }}</strong></li>{% endif %}
+          <li><span>Taxes{% if link.tax_total %} (paid by {{ p.label }}){% endif %}</span><strong>₹{{ link.tax_total|inr2 }}</strong></li>
+          {% if link.delivery_fee %}<li><span>Delivery fee</span><strong>₹{{ link.delivery_fee|inr2 }}</strong></li>{% endif %}
+          <li class="is-total"><span>Customer paid</span><strong>₹{{ link.customer_payable|inr2 }}</strong></li>
+          <li><span>{{ p.label }} commission ({{ conn.commission_pct|floatformat:"-2" }}%)</span><strong>−₹{{ link.commission_amount|inr2 }}</strong></li>
+          <li class="is-total"><span>Expected payout</span><strong>₹{{ link.expected_payout|inr2 }}</strong></li>
+          {% if link.settled_amount is not None %}<li><span>Settled {{ link.settled_at|date:"j M" }}</span><strong class="{% if settlement and settlement.match == 'mismatch' %}ui-text-red{% else %}ui-text-green{% endif %}">₹{{ link.settled_amount|inr2 }}</strong></li>{% endif %}
+        </ul>
+        <p class="ui-log-sub" style="margin:10px 0 0">Expected payout = food + packaging − your share of discounts − commission. TDS/TCS and GST on commission appear when you import the payout file.</p>
+      </section>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Delivery</h2>
+        <ul class="ui-dash-mini">
+          <li><span>Accept by</span><strong>{{ link.accept_by|time:"g:i a"|default:"—" }}</strong></li>
+          <li><span>Accepted</span><strong>{{ link.accepted_at|time:"g:i a"|default:"—" }}{% if link.prep_minutes %} · {{ link.prep_minutes }} min{% endif %}</strong></li>
+          <li><span>Food ready</span><strong class="{% if link.ready_at and link.ready_by and link.ready_at > link.ready_by %}ui-text-red{% endif %}">{{ link.ready_at|time:"g:i a"|default:"—" }}</strong></li>
+          <li><span>Rider</span><strong>{{ link.rider_name|default:"Not assigned" }}</strong></li>
+          {% if link.rider_phone %}<li><span>Rider phone</span><strong>{{ link.rider_phone }}</strong></li>{% endif %}
+          {% if link.pickup_code %}<li><span>Pickup code</span><strong>{{ link.pickup_code }}</strong></li>{% endif %}
+          <li><span>Picked up</span><strong>{{ link.picked_up_at|time:"g:i a"|default:"—" }}</strong></li>
+          <li><span>Delivered</span><strong>{{ link.delivered_at|time:"g:i a"|default:"—" }}</strong></li>
+          {% if link.cancel_reason %}<li><span>{{ link.get_platform_status_display }} by {{ link.cancelled_by|default:"platform" }}</span><strong>{{ link.cancel_reason }}</strong></li>{% endif %}
+        </ul>
+      </section>
+    </div>
+  </div>
+</div>

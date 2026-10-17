@@ -1,0 +1,82 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms" id="waitlistPage">
+  <div class="ui-page-header">
+    <div><h1>Walk-in waitlist</h1><p>{{ waiting|length }} part{{ waiting|length|pluralize:"y,ies" }} waiting · {{ free|length }} table{{ free|length|pluralize }} free now</p></div>
+    <div class="ui-actions"><a class="ui-btn ui-btn-gray" href="{{ base_url }}reservations/"><i class="fa-solid fa-calendar-check"></i><span>Reservations</span></a></div>
+  </div>
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Waiting</div></div><div class="kpi-val">{{ waiting|length }}</div><div class="kpi-sub">Quote about {{ suggested }} min to new walk-ins</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Seated today</div></div><div class="kpi-val">{{ seated_count }}</div><div class="kpi-sub">{% if avg_wait is not None %}Average wait {{ avg_wait }} min{% else %}From the waitlist{% endif %}</div></div>
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Walked away</div></div><div class="kpi-val">{{ left_count }}</div><div class="kpi-sub">Today</div></div>
+  </div>
+
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      {% for w in waiting %}
+      <section class="ui-card ui-pad ui-wl {% if w.late %}is-late{% endif %} {% if w.status == 'NOTIFIED' %}is-called{% endif %}">
+        <div class="ui-wl-pos">{{ forloop.counter }}</div>
+        <div class="ui-wl-main">
+          <div class="ui-pms-task-head"><strong>{{ w.name }} · {{ w.party_size }} {% if w.party_size == 1 %}guest{% else %}guests{% endif %}</strong>
+            <span class="ui-chip ui-chip-{% if w.status == 'NOTIFIED' %}indigo{% elif w.late %}red{% else %}gray{% endif %}">{% if w.status == 'NOTIFIED' %}Called{% if w.table %} · {{ w.table.name }}{% endif %}{% else %}{{ w.waited_minutes }} of {{ w.quoted_minutes }} min{% endif %}</span></div>
+          <div class="ui-log-sub">{% if w.phone %}{{ w.phone }} · {% endif %}added {{ w.created_at|time:"h:i A" }}{% if w.preference %} · {{ w.preference }}{% endif %}{% if w.notes %} · {{ w.notes }}{% endif %}</div>
+          <div class="ui-pms-task-actions" style="margin-top:8px">
+            <form method="post" action="{{ base_url }}reservations/waitlist/{{ w.pk }}/" class="ui-inline-fields">{% csrf_token %}
+              <select class="ui-input" name="table" aria-label="Table for {{ w.name }}" style="min-width:150px">
+                <option value="">{% if w.fits %}Pick a table…{% else %}No free table fits yet{% endif %}</option>
+                {% for t in w.fits %}<option value="{{ t.pk }}" {% if w.table_id == t.pk %}selected{% endif %}>{{ t.name }} · {{ t.capacity }} seats</option>{% endfor %}
+                {% if w.table and w.table not in w.fits %}<option value="{{ w.table.pk }}" selected>{{ w.table.name }}</option>{% endif %}
+              </select>
+              <button class="ui-btn ui-btn-primary ui-btn-sm" type="submit" name="op" value="seat"><i class="fa-solid fa-chair"></i><span>Seat</span></button>
+              {% if w.status != 'NOTIFIED' %}<button class="ui-btn ui-btn-gray ui-btn-sm" type="submit" name="op" value="notify">Mark called</button>{% endif %}
+            </form>
+            {% if w.wa %}<a class="ui-btn ui-btn-gray ui-btn-sm" target="_blank" rel="noopener" href="https://wa.me/{{ w.wa }}?text={{ 'Hi '|add:w.name|add:', your table at '|add:restaurant.name|add:' is ready. Please come to the host stand.'|urlencode }}"><i class="fa-brands fa-whatsapp"></i><span>Message</span></a>{% endif %}
+            <form method="post" action="{{ base_url }}reservations/waitlist/{{ w.pk }}/">{% csrf_token %}<button class="ui-btn ui-btn-gray ui-btn-sm" type="submit" name="op" value="left">Left</button></form>
+          </div>
+        </div>
+      </section>
+      {% empty %}
+      <section class="ui-card ui-empty"><div class="ui-empty-icon"><i class="fa-solid fa-hourglass-half"></i></div><h3>Nobody waiting</h3><p>Add walk-ins here when every table is full.</p></section>
+      {% endfor %}
+
+      {% if recent %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Earlier today</h2>
+        <ul class="ui-dash-mini">{% for w in recent %}<li><span>{{ w.created_at|time:"h:i A" }} · {{ w.name }} ({{ w.party_size }}) · {% if w.status == 'SEATED' %}seated{% if w.table %} at {{ w.table.name }}{% endif %} after {{ w.waited_minutes }} min{% else %}left after {{ w.waited_minutes }} min{% endif %}</span>
+          <form method="post" action="{{ base_url }}reservations/waitlist/{{ w.pk }}/">{% csrf_token %}<button class="ui-link-btn" type="submit" name="op" value="back">Undo</button></form></li>{% endfor %}</ul>
+      </section>
+      {% endif %}
+    </div>
+    <div class="ui-g360-side">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Add a walk-in</h2>
+        <form method="post" action="{{ base_url }}reservations/waitlist/add/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-field"><label for="wlName">Name</label><input id="wlName" class="ui-input" name="name" maxlength="120" required autocomplete="off"></div>
+          <div class="ui-inline-fields">
+            <div class="ui-field"><label for="wlSize">Party</label><input id="wlSize" class="ui-input" type="number" name="party_size" min="1" max="50" value="2" required></div>
+            <div class="ui-field"><label for="wlQuote">Quote (min)</label><input id="wlQuote" class="ui-input" type="number" name="quoted_minutes" min="0" max="240" value="{{ suggested }}"></div>
+          </div>
+          <div class="ui-field"><label for="wlPhone">Phone</label><input id="wlPhone" class="ui-input" type="tel" name="phone" maxlength="20" placeholder="To message them when it’s ready"></div>
+          <div class="ui-field"><label for="wlPref">Seating preference</label><input id="wlPref" class="ui-input" name="preference" maxlength="60" list="wlPrefs"><datalist id="wlPrefs"><option value="Indoor"><option value="Outdoor"><option value="Window"><option value="Booth"><option value="High chair needed"><option value="Wheelchair access"></datalist></div>
+          <div class="ui-field"><label for="wlNotes">Notes</label><input id="wlNotes" class="ui-input" name="notes" maxlength="255"></div>
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-plus"></i><span>Add to waitlist</span></button>
+        </form>
+      </section>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Free tables</h2>
+        {% if free %}<div class="ui-pms-rooms">{% for t in free %}<div class="ui-pms-room"><strong>{{ t.name }}</strong><small>{{ t.capacity }} seats</small></div>{% endfor %}</div>
+        {% else %}<p class="ui-log-sub">Every table has an open bill.</p>{% endif %}
+      </section>
+    </div>
+  </div>
+</div>
+<script>
+/* Refresh the board every 30 s while nobody is typing */
+(function () {
+  setInterval(function () {
+    var a = document.activeElement;
+    if (document.hidden || (a && /INPUT|SELECT|TEXTAREA/.test(a.tagName))) return;
+    location.reload();
+  }, 30000);
+})();
+</script>

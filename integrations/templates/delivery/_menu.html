@@ -1,0 +1,73 @@
+{% load restaurant_admin_extras %}
+<div class="ui-agg" style="--brand: {{ p.color }}; --brand-rgb: {{ p.rgb }};">
+  {% include 'delivery/_head.html' %}
+  <div class="ui-agg-ops">
+    <div><span>Listed on {{ p.label }}</span><strong>{{ summary.listed }}</strong></div>
+    <div class="{% if summary.no_id %}is-warn{% endif %}"><span>Missing {{ p.label }} item ID</span><strong>{{ summary.no_id }}</strong></div>
+    <div class="{% if summary.out %}is-warn{% endif %}"><span>Out of stock on {{ p.label }}</span><strong>{{ summary.out }}</strong></div>
+    <div><span>Changes not yet synced</span><strong>{{ summary.pending }}</strong></div>
+  </div>
+
+  <div class="ui-dash-row r-2-1">
+    <section class="ui-card ui-list-card">
+      <form class="ui-list-toolbar ui-agg-menu-filter" method="get">
+        <input class="ui-input" name="q" value="{{ q }}" placeholder="Search dishes" aria-label="Search dishes">
+        <select class="ui-input" name="category" aria-label="Category" onchange="this.form.submit()"><option value="">All categories</option>{% for c in categories %}<option value="{{ c.id }}" {% if cat == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select>
+        <select class="ui-input" name="show" aria-label="Show" onchange="this.form.submit()">
+          <option value="">Every dish</option><option value="listed" {% if show == 'listed' %}selected{% endif %}>Listed on {{ p.label }}</option>
+          <option value="unlisted" {% if show == 'unlisted' %}selected{% endif %}>Not listed</option><option value="no_id" {% if show == 'no_id' %}selected{% endif %}>Missing item ID</option>
+          <option value="out" {% if show == 'out' %}selected{% endif %}>Out of stock</option></select>
+      </form>
+      <form method="post">{% csrf_token %}
+      <div class="table-responsive"><table class="table ui-dash-table ui-agg-menu">
+        <thead><tr><th>Dish</th><th class="text-center">Listed</th><th>{{ p.label }} item ID</th><th class="num">{{ p.label }} price</th><th class="text-center">In stock</th><th class="d-none d-lg-table-cell">Sync</th></tr></thead>
+        <tbody>{% for r in rows %}{% with it=r.item m=r.m %}<tr>
+          <td><input type="hidden" name="seen_{{ it.pk }}" value="1"><strong>{{ it.name }}</strong><div class="ui-log-sub">{{ it.category.name|default:"No category" }} · POS ₹{{ it.price|floatformat:"-2" }}{% if not it.availability %} · <span class="ui-text-red">off in POS</span>{% endif %}</div></td>
+          <td class="text-center"><label class="ui-switch"><input type="checkbox" name="listed_{{ it.pk }}" value="1" {% if m.is_listed %}checked{% endif %} {% if not is_admin %}disabled{% endif %} aria-label="List {{ it.name }} on {{ p.label }}"></label></td>
+          <td><input class="ui-input ui-agg-ext" name="ext_{{ it.pk }}" value="{{ m.external_item_id|default:'' }}" placeholder="{{ it.sku|default:'e.g. 1048231' }}" {% if not is_admin %}readonly{% endif %} aria-label="{{ p.label }} item ID for {{ it.name }}"></td>
+          <td class="num"><input class="ui-input ui-agg-price" name="price_{{ it.pk }}" type="number" step="0.01" min="0.01" value="{% if m.platform_price is not None %}{{ m.platform_price }}{% endif %}" placeholder="{{ r.price|floatformat:'-2' }}" {% if not is_admin %}readonly{% endif %} aria-label="{{ p.label }} price for {{ it.name }}"></td>
+          <td class="text-center">{% if m and m.is_listed %}<button type="button" class="ui-agg-stock {% if m.is_available %}is-on{% endif %}" data-mapping="{{ m.pk }}" aria-pressed="{% if m.is_available %}true{% else %}false{% endif %}">{% if m.is_available %}In stock{% else %}Out{% endif %}</button>{% else %}<span class="ui-log-sub">—</span>{% endif %}</td>
+          <td class="d-none d-lg-table-cell">{% if m and m.is_listed %}<span class="ui-chip {% if m.sync_status == 'synced' %}ui-chip-green{% elif m.sync_status == 'failed' %}ui-chip-red{% else %}ui-chip-gray{% endif %}" title="{{ m.last_error }}">{{ m.get_sync_status_display }}</span>{% endif %}</td>
+        </tr>{% endwith %}{% empty %}<tr><td colspan="6"><div class="ui-empty"><p class="ui-log-sub">No dishes match.</p></div></td></tr>{% endfor %}</tbody>
+      </table></div>
+      {% if is_admin and rows %}<div class="ui-agg-savebar"><span class="ui-log-sub">Leave the price empty to use the aggregator price (or the POS price).</span><button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-floppy-disk"></i><span>Save listings</span></button></div>{% endif %}
+      </form>
+    </section>
+    <div>
+      {% if is_admin %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Publish to {{ p.label }}</h2>
+        <p class="ui-log-sub" style="margin-top:-6px">{% if conn.mode == 'api' %}Sends the full menu of listed dishes. It goes live after {{ p.label }} reviews it.{% else %}Manual mode: we prepare the file and you upload it in the {{ p.label }} partner dashboard.{% endif %}</p>
+        <form method="post" action="{{ u.menu_sync }}">{% csrf_token %}<button class="ui-btn ui-btn-primary ui-agg-brand-btn" style="width:100%" type="submit"><i class="fa-solid fa-cloud-arrow-up"></i><span>{% if conn.mode == 'api' %}Sync menu now{% else %}Prepare menu file{% endif %}</span></button></form>
+        <div class="ui-agg-dl"><a href="{{ u.menu_export }}"><i class="fa-solid fa-file-csv"></i> Current menu (CSV)</a><a href="{{ u.menu_export }}?format=json"><i class="fa-solid fa-code"></i> JSON</a></div>
+        {% if jobs %}
+        <h3 class="ui-dash-h3">Recent syncs</h3>
+        <ul class="ui-dash-mini">{% for j in jobs %}<li><span>{{ j.created_at|date:"j M, g:i a" }} · {{ j.items_count }} dishes{% if j.errors %}<br><small class="ui-text-red">{{ j.errors.0|truncatechars:70 }}</small>{% endif %}</span><strong><span class="ui-chip {% if j.state == 'succeeded' or j.state == 'manual' %}ui-chip-green{% elif j.state == 'failed' %}ui-chip-red{% else %}ui-chip-gray{% endif %}">{{ j.get_state_display }}</span>{% if j.state == 'manual' %} <a href="{{ u.menu_export }}?job={{ j.pk }}" title="Download this menu">↓</a>{% endif %}</strong></li>{% endfor %}</ul>
+        {% endif %}
+      </section>
+      {% endif %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">How stock works</h2>
+        <ul class="ui-agg-help">
+          <li>Switching a dish off in the POS or menu marks it <b>out of stock on every platform</b> it is listed on.</li>
+          <li>The <b>In stock</b> button here changes {{ p.label }} only.</li>
+          <li>Incoming orders are matched by <b>{{ p.label }} item ID</b> (or your SKU) — never by name alone.</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</div>
+<script>
+document.querySelectorAll('.ui-agg-stock').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var on = btn.getAttribute('aria-pressed') !== 'true', body = new FormData();
+    body.append('op', 'stock'); body.append('mapping', btn.dataset.mapping); body.append('available', on ? '1' : '0');
+    body.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+    btn.disabled = true;
+    fetch(location.href, { method: 'POST', body: body, headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function (r) { return r.json(); }).then(function (d) {
+      btn.setAttribute('aria-pressed', d.available ? 'true' : 'false'); btn.classList.toggle('is-on', d.available); btn.textContent = d.available ? 'In stock' : 'Out';
+      btn.title = d.message;
+    }).finally(function () { btn.disabled = false; });
+  });
+});
+</script>

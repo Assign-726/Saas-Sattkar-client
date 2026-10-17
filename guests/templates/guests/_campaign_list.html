@@ -1,0 +1,54 @@
+<div class="ui-logs ui-campaigns">
+  <div class="ui-page-header">
+    <div><h1>Campaigns</h1><p>Send offers and greetings to guest segments by WhatsApp, SMS or email, and let birthdays and win-backs run on their own.</p></div>
+    <div class="ui-actions"><a class="ui-btn ui-btn-primary" href="{{ base_url }}campaigns/new/"><i class="fa-solid fa-plus"></i><span>New campaign</span></a></div>
+  </div>
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Messages sent · 30d</div><div class="kpi-icon"><i class="fa-solid fa-paper-plane"></i></div></div><div class="kpi-val">{{ stats.sent_30d }}</div><div class="kpi-sub">{{ stats.campaigns_30d }} campaign{{ stats.campaigns_30d|pluralize }}</div></div>
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Reachable guests</div><div class="kpi-icon"><i class="fa-solid fa-users"></i></div></div><div class="kpi-val">{{ stats.reachable }}</div><div class="kpi-sub">With a phone or email</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Opted out</div><div class="kpi-icon"><i class="fa-solid fa-bell-slash"></i></div></div><div class="kpi-val">{{ stats.opted_out }}</div><div class="kpi-sub">Never messaged</div></div>
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Automations on</div><div class="kpi-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div></div><div class="kpi-val">{{ stats.automations_on }}</div><div class="kpi-sub">{% if ms.birthday_enabled %}Birthday {% endif %}{% if ms.anniversary_enabled %}Anniversary {% endif %}{% if ms.winback_enabled %}Win-back{% endif %}{% if not ms.birthday_enabled and not ms.anniversary_enabled and not ms.winback_enabled %}None yet{% endif %}</div></div>
+  </div>
+
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">All campaigns</h2></div>
+    {% if page.object_list %}
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>Campaign</th><th>Channel</th><th>Audience</th><th>Sent</th><th>Status</th><th>Created</th></tr></thead>
+      <tbody>{% for c in page.object_list %}
+        <tr class="ui-row-link" data-href="{{ base_url }}campaigns/{{ c.pk }}/">
+          <td class="ui-cell-primary"><a href="{{ base_url }}campaigns/{{ c.pk }}/"><strong>{{ c.name }}</strong></a>{% if c.automation %}<div class="ui-log-sub"><i class="fa-solid fa-wand-magic-sparkles"></i> Automatic</div>{% endif %}</td>
+          <td><i class="fa-{% if c.channel == 'whatsapp' %}brands fa-whatsapp{% elif c.channel == 'sms' %}solid fa-comment-sms{% else %}solid fa-envelope{% endif %}"></i> {{ c.get_channel_display }}</td>
+          <td>{{ c.audience_count }}</td>
+          <td>{{ c.sent_count }}{% if c.failed_count %} <span class="ui-chip ui-chip-red">{{ c.failed_count }} failed</span>{% endif %}<div class="ui-bar-mini" style="margin-top:4px"><span style="width:{% widthratio c.sent_count c.audience_count|default:1 100 %}%"></span></div></td>
+          <td><span class="ui-chip ui-chip-{% if c.status == 'SENT' %}green{% elif c.status == 'SENDING' %}orange{% else %}gray{% endif %}">{{ c.get_status_display }}</span></td>
+          <td>{{ c.created_at|date:"d M Y" }}</td>
+        </tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}
+    <div class="ui-empty"><div class="ui-empty-icon"><i class="fa-solid fa-bullhorn"></i></div><h3>No campaigns yet</h3>
+      <p>Bring back lapsed guests, wish regulars on their birthday, or fill a quiet Tuesday with an offer for VIPs.</p>
+      <a class="ui-btn ui-btn-primary" href="{{ base_url }}campaigns/new/"><i class="fa-solid fa-plus"></i><span>Create a campaign</span></a></div>
+    {% endif %}
+  </section>
+
+  <section class="ui-card ui-pad">
+    <h2 class="ui-card-title">Automatic messages</h2>
+    <p class="ui-log-sub">Sent by email every morning to guests who have not opted out. Placeholders: <code class="ui-code">{first_name}</code> <code class="ui-code">{name}</code> <code class="ui-code">{points}</code> <code class="ui-code">{business}</code> <code class="ui-code">{offer_code}</code></p>
+    <form method="post" class="ui-stack-form">{% csrf_token %}<input type="hidden" name="op" value="automations">
+      <div class="ui-manage-grid" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">
+        <div class="ui-card ui-pad" style="margin:0"><label style="display:flex;gap:8px;align-items:center;font-weight:600"><input type="checkbox" class="ui-check" name="birthday_enabled" {% if ms.birthday_enabled %}checked{% endif %}> <i class="fa-solid fa-cake-candles"></i> Birthday</label>
+          <textarea class="ui-input" name="birthday_message" rows="4" style="margin-top:8px">{{ ms.birthday_message }}</textarea></div>
+        <div class="ui-card ui-pad" style="margin:0"><label style="display:flex;gap:8px;align-items:center;font-weight:600"><input type="checkbox" class="ui-check" name="anniversary_enabled" {% if ms.anniversary_enabled %}checked{% endif %}> <i class="fa-solid fa-heart"></i> Anniversary</label>
+          <textarea class="ui-input" name="anniversary_message" rows="4" style="margin-top:8px">{{ ms.anniversary_message }}</textarea></div>
+        <div class="ui-card ui-pad" style="margin:0"><label style="display:flex;gap:8px;align-items:center;font-weight:600"><input type="checkbox" class="ui-check" name="winback_enabled" {% if ms.winback_enabled %}checked{% endif %}> <i class="fa-solid fa-person-walking-arrow-loop-left"></i> Win-back</label>
+          <div style="display:flex;gap:8px;margin-top:8px"><input class="ui-input" name="winback_days" inputmode="numeric" value="{{ ms.winback_days }}" aria-label="Days since last visit" style="max-width:90px"><span class="ui-log-sub" style="align-self:center">days after the last visit</span></div>
+          <input class="ui-input" name="winback_offer_code" value="{{ ms.winback_offer_code }}" placeholder="Offer code, e.g. COMEBACK15" style="margin-top:8px">
+          <textarea class="ui-input" name="winback_message" rows="3" style="margin-top:8px">{{ ms.winback_message }}</textarea></div>
+      </div>
+      <div><button class="ui-btn ui-btn-primary" type="submit">Save automatic messages</button></div>
+    </form>
+  </section>
+</div>
+{% include 'integrations/_scripts.html' %}

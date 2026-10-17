@@ -1,0 +1,24 @@
+{% load restaurant_admin_extras %}
+<div class="ui-agg" style="--brand: {{ p.color }}; --brand-rgb: {{ p.rgb }};">
+  {% include 'delivery/_head.html' %}
+  <a class="ui-back" href="{{ u.payouts }}"><i class="fa-solid fa-chevron-left"></i> Payouts</a>
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Paid by {{ p.label }}</div></div><div class="kpi-val">₹{{ batch.net_payout|inr }}</div><div class="kpi-sub">{{ batch.reference|default:batch.file_name }} · commission ₹{{ batch.commission|inr }} · TDS/TCS ₹{{ batch.taxes|inr }}</div></div>
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">We expected</div></div><div class="kpi-val">₹{{ batch.expected_payout|inr }}</div><div class="kpi-sub">from {{ batch.matched|add:batch.mismatched }} known orders</div></div>
+    <div class="ui-kpi {% if batch.difference < -1 %}kpi-rose{% else %}kpi-green{% endif %}"><div class="ui-kpi-head"><div class="kpi-label">Difference</div></div><div class="kpi-val">{{ batch.difference|signed_inr }}</div><div class="kpi-sub">on known orders{% if batch.unmatched %} · ₹{{ batch.unknown_paid|inr }} for orders not found here{% endif %}</div></div>
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Orders</div></div><div class="kpi-val">{{ batch.lines_count }}</div><div class="kpi-sub">{{ batch.matched }} match · {{ batch.mismatched }} differ · {{ batch.unmatched }} unknown</div></div>
+  </div>
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Orders in this payout</h2>
+      <div class="ui-chipset"><a class="ui-chip {% if not show %}ui-chip-indigo{% else %}ui-chip-gray{% endif %}" href="?">All</a><a class="ui-chip {% if show == 'mismatch' %}ui-chip-indigo{% else %}ui-chip-gray{% endif %}" href="?show=mismatch">Amount differs</a><a class="ui-chip {% if show == 'unmatched' %}ui-chip-indigo{% else %}ui-chip-gray{% endif %}" href="?show=unmatched">Not found</a><a class="ui-chip {% if show == 'matched' %}ui-chip-indigo{% else %}ui-chip-gray{% endif %}" href="?show=matched">Matched</a></div></div>
+    <div class="table-responsive"><table class="table ui-dash-table">
+      <thead><tr><th>Order</th><th class="num">Order value</th><th class="num">Commission</th><th class="num">Taxes</th><th class="num">Adjust.</th><th class="num">Paid</th><th class="num">Expected</th><th class="num">Difference</th></tr></thead>
+      <tbody>{% for l in lines %}<tr>
+        <td>{% if l.link %}<a href="{% url 'restaurant_admin:delivery_order_detail' restaurant_slug=env.slug platform=env.platform pk=l.link_id %}"><strong>#{{ l.external_order_id }}</strong></a>{% else %}<strong>#{{ l.external_order_id }}</strong>{% endif %}<div>{% if l.match == 'matched' %}<span class="ui-chip ui-chip-green">Matched</span>{% elif l.match == 'mismatch' %}<span class="ui-chip ui-chip-orange">Differs</span>{% else %}<span class="ui-chip ui-chip-red">Not found here</span>{% endif %}</div></td>
+        <td class="num">₹{{ l.order_value|inr2 }}</td><td class="num">₹{{ l.commission|inr2 }}</td><td class="num">₹{{ l.taxes|inr2 }}</td><td class="num">₹{{ l.adjustments|inr2 }}</td>
+        <td class="num"><strong>₹{{ l.net_paid|inr2 }}</strong></td><td class="num">{% if l.expected_net is not None %}₹{{ l.expected_net|inr2 }}{% else %}—{% endif %}</td>
+        <td class="num {% if l.difference < -1 %}ui-text-red{% endif %}">{% if l.match != 'unmatched' %}{{ l.difference|signed_inr }}{% endif %}</td>
+      </tr>{% empty %}<tr><td colspan="8" class="ui-log-sub">Nothing here.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+</div>

@@ -1,0 +1,59 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <a class="ui-back" href="{{ base_url }}bookings/groups/"><i class="fa-solid fa-chevron-left"></i> Group bookings</a>
+  <div class="ui-page-header">
+    <div><h1>{{ g.name }}</h1><p>{{ g.code }}{% if s.arrive %} · {{ s.arrive|date:"D d M" }} → {{ s.depart|date:"D d M Y" }}{% endif %}{% if g.contact_name %} · {{ g.contact_name }}{% endif %}{% if g.contact_phone %} · {{ g.contact_phone }}{% endif %}{% if g.company_account %} · billed to {{ g.company_account.name }}{% endif %}</p></div>
+  </div>
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Rooms</div></div><div class="kpi-val">{{ s.rooms }}</div><div class="kpi-sub">{{ s.room_nights }} room night{{ s.room_nights|pluralize }}</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Total</div></div><div class="kpi-val">₹{{ s.total|inr }}</div><div class="kpi-sub">Paid ₹{{ s.paid|inr }}</div></div>
+    <div class="ui-kpi {% if s.balance > 0 %}kpi-orange{% endif %}"><div class="ui-kpi-head"><div class="kpi-label">Balance</div></div><div class="kpi-val">₹{{ s.balance|inr }}</div></div>
+  </div>
+
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <form method="post" action="{{ base_url }}bookings/groups/{{ g.pk }}/update/" class="ui-card ui-list-card">{% csrf_token %}<input type="hidden" name="op" value="rooming">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Rooming list</h2></div>
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Room</th><th>Guest name</th><th>Phone</th><th class="num">Adults</th><th>Status</th><th class="num">Balance</th></tr></thead>
+          <tbody>{% for b, f in s.rows %}<tr class="{% if b.booking_status == 'CANCELLED' %}is-void{% endif %}">
+            <td><a href="{{ base_url }}bookings/{{ b.pk }}/"><strong>{{ b.room.room_number }}</strong></a><br><small class="ui-log-sub">{{ b.room.category.name }}</small></td>
+            <td><input class="ui-input" name="name_{{ b.pk }}" value="{{ b.guest_name }}" maxlength="150" aria-label="Guest in room {{ b.room.room_number }}" {% if not can_edit %}disabled{% endif %}></td>
+            <td><input class="ui-input" name="phone_{{ b.pk }}" value="{{ b.guest_phone }}" maxlength="30" aria-label="Phone for room {{ b.room.room_number }}" {% if not can_edit %}disabled{% endif %}></td>
+            <td class="num"><input class="ui-input" type="number" min="1" max="10" name="adults_{{ b.pk }}" value="{{ b.adults }}" style="max-width:70px;margin-left:auto" aria-label="Adults in room {{ b.room.room_number }}" {% if not can_edit %}disabled{% endif %}></td>
+            <td><span class="ui-chip ui-chip-{% if b.booking_status == 'CHECKED_IN' %}green{% elif b.booking_status == 'RESERVED' %}blue{% elif b.booking_status == 'CHECKED_OUT' %}gray{% else %}red{% endif %}">{{ b.get_booking_status_display }}</span></td>
+            <td class="num {% if f.balance > 0 %}ui-text-red{% endif %}">₹{{ f.balance|inr2 }}</td></tr>{% endfor %}</tbody>
+        </table></div>
+        {% if can_edit %}<div class="ui-pms-addform" style="grid-template-columns:1fr auto"><p class="ui-log-sub" style="margin:0">Open a room to post charges, take ID or move it.</p><div class="ui-filter-actions"><button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-floppy-disk"></i><span>Save rooming list</span></button></div></div>{% endif %}
+      </form>
+      {% if g.notes %}<section class="ui-card ui-pad"><h2 class="ui-card-title">Notes</h2><p style="margin:0">{{ g.notes|linebreaksbr }}</p></section>{% endif %}
+    </div>
+    <div class="ui-g360-side">
+      {% if can_edit %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Whole group</h2>
+        <div class="ui-pms-stay-actions">
+          {% if s.counts.RESERVED %}<form method="post" action="{{ base_url }}bookings/groups/{{ g.pk }}/update/">{% csrf_token %}<input type="hidden" name="op" value="checkin"><button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-key"></i><span>Check in {{ s.counts.RESERVED }} room{{ s.counts.RESERVED|pluralize }}</span></button></form>{% endif %}
+          {% if s.counts.CHECKED_IN %}<form method="post" action="{{ base_url }}bookings/groups/{{ g.pk }}/update/" class="ui-stack-form">{% csrf_token %}<input type="hidden" name="op" value="checkout">
+            {% if g.company_account %}<label class="ui-pms-check"><input type="checkbox" name="bill_company" value="1" checked> Bill balances to {{ g.company_account.name }}</label>{% endif %}
+            <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-arrow-right-from-bracket"></i><span>Check out {{ s.counts.CHECKED_IN }} room{{ s.counts.CHECKED_IN|pluralize }}</span></button></form>{% endif %}
+          {% if g.company_account and s.balance > 0 %}<form method="post" action="{{ base_url }}bookings/groups/{{ g.pk }}/update/">{% csrf_token %}<input type="hidden" name="op" value="bill_company"><button class="ui-btn ui-btn-gray" type="submit"><i class="fa-solid fa-building"></i><span>Bill all balances to {{ g.company_account.name }}</span></button></form>{% endif %}
+        </div>
+        {% if s.balance > 0 %}
+        <form method="post" action="{{ base_url }}bookings/groups/{{ g.pk }}/update/" class="ui-stack-form">{% csrf_token %}<input type="hidden" name="op" value="pay">
+          <span class="ui-field-label">Take a payment for the group</span>
+          <div class="ui-inline-fields"><input class="ui-input" type="number" min="0.01" step="0.01" name="amount" value="{{ s.balance|stringformat:'s' }}" aria-label="Amount"><select class="ui-input" name="method" aria-label="Method">{% for k, l in methods %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></div>
+          <input class="ui-input" name="reference" placeholder="UTR / slip no." maxlength="100">
+          <button class="ui-btn ui-btn-gray" type="submit"><i class="fa-solid fa-indian-rupee-sign"></i><span>Record &amp; spread across rooms</span></button>
+        </form>
+        {% endif %}
+        {% if s.counts.RESERVED %}
+        <hr class="ui-pms-rule">
+        <form method="post" action="{{ base_url }}bookings/groups/{{ g.pk }}/update/" class="ui-inline-fields" onsubmit="return confirm('Cancel every room of this group that has not checked in?');">{% csrf_token %}<input type="hidden" name="op" value="cancel">
+          <input class="ui-input" name="reason" placeholder="Reason"><button class="ui-btn ui-btn-tinted-red" type="submit"><span>Cancel group</span></button></form>
+        {% endif %}
+      </section>
+      {% endif %}
+    </div>
+  </div>
+</div>

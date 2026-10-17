@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from super_admin.models import RestaurantBranch, Restaurant
+from hotel import pricing
 from hotel.models import (
     RoomCategory,
     Room,
@@ -34,44 +35,53 @@ from hotel.serializers import (
     PublicHotelCheckoutSerializer,
 )
 from hotel.permissions import IsHotelAdminOrManager, IsActiveHotelAdmin
+from core.throttling import (PaymentRateThrottle, PublicLookupThrottle, LoginRateThrottle,
+                             login_locked, record_login_failure, clear_login_failures)
 
 
 
 def resolve_branch_for_request(request):
     """
-    Helper to resolve the active branch for staff or public requests.
+    The branch an authenticated hotel API call works on. A requested ``branch_id`` /
+    ``branch_slug`` is honoured only if it belongs to the caller's business (platform
+    admins may pick any); otherwise None, so the view returns nothing rather than another
+    hotel's data.
     """
-    branch = None
-    branch_id = (
-        request.query_params.get('branch_id') or
-        request.query_params.get('branch') or
-        (request.data.get('branch_id') if hasattr(request, 'data') and isinstance(request.data, dict) else None) or
-        (request.data.get('branch') if hasattr(request, 'data') and isinstance(request.data, dict) else None)
-    )
+    from core import tenancy
+    data = request.data if hasattr(request, 'data') and isinstance(request.data, dict) else {}
+    branch_id = (request.query_params.get('branch_id') or request.query_params.get('branch')
+                 or data.get('branch_id') or data.get('branch'))
+    branch_slug = request.query_params.get('branch_slug') or data.get('branch_slug')
+    allowed = tenancy.allowed_branches(request.user)
+
     if branch_id:
         try:
-            branch = RestaurantBranch.objects.filter(id=branch_id).first()
-        except Exception:
-            pass
+            return allowed.filter(id=int(branch_id)).first()
+        except (TypeError, ValueError):
+            return None
+    if branch_slug:
+        return allowed.filter(slug=branch_slug).first()
 
-    branch_slug = (
-        request.query_params.get('branch_slug') or
-        (request.data.get('branch_slug') if hasattr(request, 'data') and isinstance(request.data, dict) else None)
-    )
-    if not branch and branch_slug:
-        branch = RestaurantBranch.objects.filter(slug=branch_slug).first()
+    p = tenancy.profile(request.user)
+    if p:
+        if p.branch_id:
+            return p.branch
+        return allowed.filter(has_hotel_module=True).first() or allowed.first()
+    if tenancy.is_platform_admin(request.user):
+        return RestaurantBranch.objects.filter(has_hotel_module=True).first() or RestaurantBranch.objects.first()
+    return None
 
-    if not branch and request.user and request.user.is_authenticated:
-        branch = getattr(request.user, 'branch', None)
-        if not branch and hasattr(request.user, 'restaurant_profile'):
-            profile = request.user.restaurant_profile
-            branch = profile.branch or (profile.restaurant.branches.filter(has_hotel_module=True).first() if profile.restaurant else None)
 
-    if not branch:
-        # Fallback to first branch with hotel module or first branch overall
-        branch = RestaurantBranch.objects.filter(has_hotel_module=True).first() or RestaurantBranch.objects.first()
+def _scoped(model, request, pk):
+    """``model`` row ``pk`` if it belongs to one of the caller's branches, else 404."""
+    from core import tenancy
+    return get_object_or_404(model, pk=pk, branch__in=tenancy.allowed_branches(request.user))
 
-    return branch
+
+def _check_branch(request, branch):
+    from core import tenancy
+    if branch is not None and not tenancy.can_access_branch(request.user, branch):
+        raise serializers.ValidationError({"branch": "You can only manage your own hotel."})
 
 
 class RoomCategoryViewSet(viewsets.ModelViewSet):
@@ -129,11 +139,18 @@ class RoomViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         branch = resolve_branch_for_request(self.request)
         category = serializer.validated_data.get('category')
-        if not branch and category:
+        if category is not None:
+            _check_branch(self.request, category.branch)
             branch = category.branch
         if not branch:
             raise serializers.ValidationError({"branch": "A valid branch with hotel module enabled is required."})
         serializer.save(branch=branch)
+
+    def perform_update(self, serializer):
+        category = serializer.validated_data.get('category')
+        if category is not None:
+            _check_branch(self.request, category.branch)
+        serializer.save()
 
 
 class RoomStatusUpdateView(APIView):
@@ -145,7 +162,7 @@ class RoomStatusUpdateView(APIView):
     permission_classes = [IsHotelAdminOrManager]
 
     def patch(self, request, pk):
-        room = get_object_or_404(Room, pk=pk)
+        room = _scoped(Room, request, pk)
         new_status = request.data.get('status', '').upper()
         if new_status not in Room.RoomStatus.values:
             return Response(
@@ -206,102 +223,89 @@ class RoomBookingViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         room = serializer.validated_data.get('room')
         branch = room.branch if room else resolve_branch_for_request(self.request)
+        _check_branch(self.request, branch)
+        if branch is None:
+            raise serializers.ValidationError({"branch": "A valid hotel branch is required."})
         serializer.save(branch=branch)
+
+    def perform_update(self, serializer):
+        room = serializer.validated_data.get('room')
+        if room is not None:
+            _check_branch(self.request, room.branch)
+            serializer.save(branch=room.branch)
+        else:
+            serializer.save()
 
 
 class BookingCheckInView(APIView):
     """
     PATCH /api/hotel/bookings/{id}/check-in/
-    Updates booking status to 'CHECKED_IN' and alters the associated Room status to 'OCCUPIED'.
+    Checks a reserved guest in (same rules as the front desk: ID on file, arrival date,
+    room free and not out of order) and marks the room occupied.
     """
     permission_classes = [IsHotelAdminOrManager]
 
     def patch(self, request, pk):
-        booking = get_object_or_404(RoomBooking, pk=pk)
-        if booking.booking_status == RoomBooking.BookingStatus.CANCELLED:
-            return Response(
-                {"error": "Cannot check in a cancelled booking."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        booking.booking_status = RoomBooking.BookingStatus.CHECKED_IN
-        booking.check_in_time = timezone.now()
-        booking.save(update_fields=['booking_status', 'check_in_time', 'updated_at'])
-
-        # Alter associated Room status to Occupied
-        room = booking.room
-        room.status = Room.RoomStatus.OCCUPIED
-        room.save(update_fields=['status', 'updated_at'])
-
+        from hotel import folio
+        booking = _scoped(RoomBooking, request, pk)
+        err = folio.check_in(booking, request.user)
+        if err:
+            return Response({"error": err}, status=status.HTTP_400_BAD_REQUEST)
+        booking.refresh_from_db()
         return Response({
             "success": True,
             "booking_id": booking.booking_id,
             "booking_status": booking.booking_status,
-            "room_number": room.room_number,
-            "room_status": room.status,
-            "message": f"Guest {booking.guest_name} successfully checked into Room {room.room_number}."
+            "room_number": booking.room.room_number,
+            "room_status": Room.RoomStatus.OCCUPIED,
+            "message": f"Guest {booking.guest_name} successfully checked into Room {booking.room.room_number}."
         })
 
 
 class BookingCheckOutView(APIView):
     """
     PATCH /api/hotel/bookings/{id}/check-out/
-    Updates booking status to 'CHECKED_OUT' and alters the associated Room status to 'CLEANING'.
+    Checks the guest out, issues the invoice number and queues the room for cleaning.
+    Refused while a balance is due unless ``{"allow_balance": true}`` is sent.
     """
     permission_classes = [IsHotelAdminOrManager]
 
     def patch(self, request, pk):
-        booking = get_object_or_404(RoomBooking, pk=pk)
-        if booking.booking_status != RoomBooking.BookingStatus.CHECKED_IN:
-            # Allow checkout if reserved or already in-progress
-            pass
-
-        booking.booking_status = RoomBooking.BookingStatus.CHECKED_OUT
-        booking.check_out_time = timezone.now()
-        booking.save(update_fields=['booking_status', 'check_out_time', 'updated_at'])
-
-        # Alter associated Room status to Cleaning
-        room = booking.room
-        room.status = Room.RoomStatus.CLEANING
-        room.save(update_fields=['status', 'updated_at'])
-
+        from hotel import folio
+        booking = _scoped(RoomBooking, request, pk)
+        allow = str(request.data.get('allow_balance', '')).lower() in ('1', 'true', 'yes')
+        err = folio.check_out(booking, request.user, allow_balance=allow)
+        if err:
+            return Response({"error": err}, status=status.HTTP_400_BAD_REQUEST)
+        booking.refresh_from_db()
         return Response({
             "success": True,
             "booking_id": booking.booking_id,
             "booking_status": booking.booking_status,
-            "room_number": room.room_number,
-            "room_status": room.status,
-            "message": f"Guest {booking.guest_name} checked out. Room {room.room_number} marked for Cleaning."
+            "invoice_number": booking.invoice_number,
+            "room_number": booking.room.room_number,
+            "room_status": Room.RoomStatus.CLEANING,
+            "message": f"Guest {booking.guest_name} checked out. Room {booking.room.room_number} marked for Cleaning."
         })
 
 
 class BookingCancelView(APIView):
     """
-    PATCH /api/hotel/bookings/{id}/cancel/
-    Cancels a booking and resets room status if occupied by this booking.
+    PATCH /api/hotel/bookings/{id}/cancel/   body: {"reason": "..."}
+    Cancels a booking and frees the room if the guest was in house.
     """
     permission_classes = [IsHotelAdminOrManager]
 
     def patch(self, request, pk):
-        booking = get_object_or_404(RoomBooking, pk=pk)
-        booking.booking_status = RoomBooking.BookingStatus.CANCELLED
-        booking.save(update_fields=['booking_status', 'updated_at'])
-
-        # Check if room needs status reset
-        room = booking.room
-        active_other = RoomBooking.objects.filter(
-            room=room,
-            booking_status=RoomBooking.BookingStatus.CHECKED_IN
-        ).exclude(pk=booking.pk).exists()
-
-        if not active_other and room.status == Room.RoomStatus.OCCUPIED:
-            room.status = Room.RoomStatus.AVAILABLE
-            room.save(update_fields=['status', 'updated_at'])
-
+        from hotel import folio
+        booking = _scoped(RoomBooking, request, pk)
+        err = folio.cancel(booking, request.user, request.data.get('reason', ''))
+        if err:
+            return Response({"error": err}, status=status.HTTP_400_BAD_REQUEST)
         return Response({
             "success": True,
             "booking_id": booking.booking_id,
-            "booking_status": booking.booking_status,
+            "booking_status": RoomBooking.BookingStatus.CANCELLED,
             "message": "Booking successfully cancelled."
         })
 
@@ -449,6 +453,7 @@ class HotelAuthLoginView(APIView):
     - CLUB_ADMIN
     """
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
         username = request.data.get('username', '').strip()
@@ -456,6 +461,8 @@ class HotelAuthLoginView(APIView):
 
         if not username or not password:
             return Response({"error": "Username and password are required."}, status=400)
+        if login_locked(username):
+            return Response({"error": "Too many failed attempts. Try again in 15 minutes."}, status=429)
 
         user = authenticate(request, username=username, password=password)
         if not user:
@@ -466,7 +473,9 @@ class HotelAuthLoginView(APIView):
                 user = candidate
 
         if not user or not user.is_active:
+            record_login_failure(username)
             return Response({"error": "Invalid username or password."}, status=401)
+        clear_login_failures(username)
 
         # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
@@ -645,47 +654,22 @@ class PublicBranchAvailabilityView(APIView):
             if not cat_rooms.exists():
                 continue
 
-            # Query rooms locked in RoomBooking for these dates
-            booked_room_ids = RoomBooking.objects.filter(
-                room__in=cat_rooms,
-                booking_status__in=[RoomBooking.BookingStatus.RESERVED, RoomBooking.BookingStatus.CHECKED_IN],
-                check_in_date__lt=end_date,
-                check_out_date__gt=start_date,
-            ).values_list('room_id', flat=True)
-
-            available_rooms = cat_rooms.exclude(id__in=booked_room_ids)
+            # Free rooms: not booked and not out of order for these dates (hotel/pricing.py)
+            available_rooms = pricing.free_rooms(cat_rooms, branch, start_date, end_date)
             avail_count = available_rooms.count()
+
+            q = pricing.quote(cat, start_date, end_date, h_settings)
+            if q['restriction']:
+                avail_count = 0
 
             # Filter out categories where all associated rooms are locked
             if avail_count > 0:
                 base_rate = cat.base_price_per_night
-                room_charges = base_rate * Decimal(nights)
-
-                # Determine tax rate: category custom tax override or branch HotelSettings
-                if cat.custom_tax_rate is not None:
-                    tax_rate = (cat.custom_tax_rate / Decimal('100'))
-                elif h_settings and not h_settings.enable_dynamic_gst:
-                    tax_rate = (h_settings.tax_rate / Decimal('100'))
-                else:
-                    tax_rate = Decimal('0.12') if base_rate <= 7500 else Decimal('0.18')
-
-                if cat.price_is_tax_inclusive:
-                    # Base price already includes tax
-                    tax_divisor = Decimal('1') + tax_rate
-                    net_room_charges = round(room_charges / tax_divisor, 2)
-                    tax_amount = round(room_charges - net_room_charges, 2)
-                    service_charge = Decimal('0.00')
-                    if h_settings and h_settings.service_charge_percent > 0:
-                        service_charge = round(net_room_charges * (h_settings.service_charge_percent / Decimal('100')), 2)
-                    grand_total = room_charges + service_charge
-                    display_room_charges = net_room_charges
-                else:
-                    tax_amount = round(room_charges * tax_rate, 2)
-                    service_charge = Decimal('0.00')
-                    if h_settings and h_settings.service_charge_percent > 0:
-                        service_charge = round(room_charges * (h_settings.service_charge_percent / Decimal('100')), 2)
-                    grand_total = room_charges + tax_amount + service_charge
-                    display_room_charges = room_charges
+                room_charges = q['room_charges']
+                tax_amount = q['tax']
+                service_charge = q['service_charge']
+                grand_total = q['total'] + service_charge
+                display_room_charges = q['net'] if cat.price_is_tax_inclusive else room_charges
 
                 name_lower = cat.name.lower()
                 is_non_ac = 'non-ac' in name_lower or 'non ac' in name_lower
@@ -718,7 +702,10 @@ class PublicBranchAvailabilityView(APIView):
                     "cooling_type": cooling_type,
                     "category_type": cat_type,
                     "is_featured": is_featured,
-                    "tax_rate_percent": float(round(tax_rate * Decimal('100'), 1)),
+                    "tax_rate_percent": float(q['nights'][0]['tax_percent']) if q['nights'] else 0.0,
+                    "average_price_per_night": str(q['average_rate']),
+                    "has_special_rate": q['has_special_rate'],
+                    "nightly_rates": [{"date": n['date'].isoformat(), "price": str(n['price']), "label": n['label']} for n in q['nights']],
                     "custom_tax_rate": str(cat.custom_tax_rate) if cat.custom_tax_rate is not None else None,
                     "amenities": cat.amenities,
                     "effective_image": cat.effective_image_url,
@@ -769,6 +756,7 @@ class PublicBookingCreateView(APIView):
     Accepts both frontend-style and backend-style payload field names.
     """
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [PaymentRateThrottle]
 
     def post(self, request):
         from restaurant_project import constants
@@ -1179,7 +1167,7 @@ class CabBookingManualCreateView(APIView):
         # Lookup Package
         package = CabServicePackage.objects.filter(id=package_id, branch=branch, is_active=True).first()
         if not package:
-            package = CabServicePackage.objects.filter(id=package_id, is_active=True).first()
+            package = None
         if not package:
             return Response({"error": f"Cab service package '{package_id}' not found or inactive."}, status=404)
 
@@ -1253,7 +1241,7 @@ class CabBookingAssignDriverView(APIView):
     permission_classes = [IsActiveHotelAdmin]
 
     def patch(self, request, pk):
-        booking = get_object_or_404(CabBooking, pk=pk)
+        booking = _scoped(CabBooking, request, pk)
 
         if booking.trip_status == CabBooking.TripStatus.CANCELLED:
             return Response({"error": "Cannot assign a driver to a cancelled cab booking."}, status=400)
@@ -1354,7 +1342,7 @@ class CabBookingRescheduleView(APIView):
     permission_classes = [IsActiveHotelAdmin]
 
     def patch(self, request, pk):
-        booking = get_object_or_404(CabBooking, pk=pk)
+        booking = _scoped(CabBooking, request, pk)
         data = request.data
 
         if 'pickup_datetime' in data and data['pickup_datetime']:
@@ -1405,7 +1393,7 @@ class CabBookingStatusUpdateView(APIView):
     permission_classes = [IsActiveHotelAdmin]
 
     def patch(self, request, pk):
-        booking = get_object_or_404(CabBooking, pk=pk)
+        booking = _scoped(CabBooking, request, pk)
         new_status = (request.data.get('status') or request.data.get('trip_status') or '').upper()
 
         if new_status not in CabBooking.TripStatus.values:
@@ -1493,6 +1481,7 @@ class PublicHotelCheckoutView(APIView):
     4. Generates a single Razorpay Order ID for the combined Room + Paid Cabs grand total.
     """
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [PaymentRateThrottle]
 
     def post(self, request):
         from restaurant_project import constants
@@ -1552,6 +1541,7 @@ class PublicHotelVerifyPaymentView(APIView):
     Updates room_booking.payment_status = 'PAID' and linked cab bookings.
     """
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [PaymentRateThrottle]
 
     def post(self, request):
         booking_id = request.data.get('booking_id') or request.data.get('booking_reference')
@@ -1582,7 +1572,10 @@ class PublicHotelVerifyPaymentView(APIView):
                 "grand_total": str(room_booking.grand_total),
             })
 
-        # Signature verification
+        # Signature verification — always required, and always against the Razorpay order
+        # we created for this booking (never one the client names).
+        from core import payments
+        from core.models import GatewayPayment
         branch = room_booking.branch
         h_settings = getattr(branch, 'hotel_settings', None) or HotelSettings.get_settings(branch)
         key_secret = None
@@ -1597,15 +1590,16 @@ class PublicHotelVerifyPaymentView(APIView):
             from django.conf import settings as dj_settings
             key_secret = getattr(dj_settings, 'RAZORPAY_KEY_SECRET', '')
 
-        # Check signature if credentials present
-        if key_secret and not key_secret.startswith('mock') and razorpay_signature:
-            import hmac
-            import hashlib
-            order_to_verify = razorpay_order_id or room_booking.razorpay_order_id or ''
-            msg = f"{order_to_verify}|{razorpay_payment_id}".encode('utf-8')
-            generated_signature = hmac.new(key_secret.encode('utf-8'), msg, hashlib.sha256).hexdigest()
-            if not hmac.compare_digest(generated_signature, razorpay_signature):
-                return Response({"error": "Razorpay payment signature verification failed."}, status=400)
+        stored_order_id = room_booking.razorpay_order_id or ''
+        if stored_order_id and razorpay_order_id and razorpay_order_id != stored_order_id:
+            return Response({"error": "This payment belongs to a different checkout."}, status=400)
+        order_to_verify = stored_order_id or (razorpay_order_id if payments.is_mock_secret(key_secret) else '')
+        if not payments.signature_ok(key_secret, order_to_verify, razorpay_payment_id, razorpay_signature):
+            return Response({"error": "Razorpay payment signature verification failed."}, status=400)
+        if not payments.is_mock_secret(key_secret) and not GatewayPayment.claim(
+                razorpay_payment_id, 'room', room_booking.pk, stored_order_id, room_booking.grand_total):
+            return Response({"error": "This payment has already been used for another booking."}, status=409)
+        razorpay_order_id = stored_order_id or razorpay_order_id
 
         # Mark paid
         room_booking.payment_status = RoomBooking.PaymentStatus.PAID
@@ -1656,6 +1650,7 @@ class PublicHotelCancelUnpaidView(APIView):
     marks the pending reservation as CANCELLED to release the inventory lock immediately.
     """
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [PaymentRateThrottle]
 
     def post(self, request):
         booking_id = request.data.get('booking_id') or request.data.get('booking_reference')
@@ -1671,9 +1666,20 @@ class PublicHotelCancelUnpaidView(APIView):
 
         if room_booking.payment_status == RoomBooking.PaymentStatus.PAID:
             return Response({"error": "Cannot cancel an already paid booking via public endpoint."}, status=400)
+        # Only the guest's own abandoned online checkout can be released here — never a
+        # pay-at-desk, front-desk or channel booking, and only while it is fresh.
+        fresh = room_booking.created_at and room_booking.created_at >= timezone.now() - datetime.timedelta(hours=2)
+        if (room_booking.payment_method != 'ONLINE_RAZORPAY' or not fresh
+                or room_booking.booking_status != RoomBooking.BookingStatus.RESERVED):
+            return Response({"error": "This booking can't be cancelled online. Please contact the hotel."}, status=400)
+        given_order = request.data.get('razorpay_order_id')
+        if room_booking.razorpay_order_id and given_order and given_order != room_booking.razorpay_order_id:
+            return Response({"error": "Booking not found."}, status=404)
 
         room_booking.booking_status = RoomBooking.BookingStatus.CANCELLED
-        room_booking.save(update_fields=['booking_status', 'updated_at'])
+        room_booking.cancelled_at = timezone.now()
+        room_booking.cancellation_reason = 'Online payment not completed'
+        room_booking.save(update_fields=['booking_status', 'cancelled_at', 'cancellation_reason', 'updated_at'])
 
         # Cancel linked cabs as well
         room_booking.cab_bookings.all().update(trip_status=CabBooking.TripStatus.CANCELLED)
@@ -1693,6 +1699,7 @@ class PublicCabBookingCreateView(APIView):
     directly from the frontend cab service UI.
     """
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [PaymentRateThrottle]
 
     def post(self, request):
         data = request.data
@@ -1883,12 +1890,12 @@ class PublicCabBookingDetailView(APIView):
     Allows public status checking and voucher verification for a cab booking.
     """
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [PublicLookupThrottle]
 
     def get(self, request, booking_id):
-        booking = CabBooking.objects.filter(booking_id=booking_id).first()
-        if not booking and str(booking_id).isdigit():
-            booking = CabBooking.objects.filter(id=int(booking_id)).first()
-
+        # Look-ups by the unguessable booking code only; numeric ids would let anyone page
+        # through every guest's trip and phone number.
+        booking = CabBooking.objects.select_related('package', 'assigned_vehicle').filter(booking_id=booking_id).first()
         if not booking:
             return Response({"error": "Cab booking not found."}, status=404)
 

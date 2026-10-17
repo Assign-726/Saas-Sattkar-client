@@ -1,0 +1,122 @@
+<div class="ui-logs ui-integrations">
+  {% include 'integrations/_head.html' %}
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-pad ui-doc">
+        <h2>Authentication</h2>
+        <p>Send the key in the <code class="ui-code">Authorization</code> header. Every key belongs to <strong>one branch</strong>: it can only read and change that branch's menu, orders, rooms and bookings, and only with the permissions ticked when it was created.</p>
+<pre class="ui-codeblock">curl {{ api_base }}branch \
+  -H <span class="s">"Authorization: Bearer hk_live_…"</span></pre>
+
+        <h2>Endpoints</h2>
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Request</th><th>Permission</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><span class="ui-method get">GET</span><code>/branch</code></td><td><code>menu:read</code></td><td>The branch this key belongs to and the key's permissions</td></tr>
+            {% if module != 'hotel' %}<tr><td><span class="ui-method get">GET</span><code>/menu</code></td><td><code>menu:read</code></td><td>Categories and items with price, aggregator price, packaging fee and availability. <code>?available=true</code>, <code>?channel=online</code></td></tr>{% endif %}
+            {% if module != 'hotel' %}<tr><td><span class="ui-method patch">PATCH</span><code>/menu/items/{id}</code></td><td><code>menu:write</code></td><td>Switch an item on or off, change its price or aggregator price</td></tr>{% endif %}
+            {% if module != 'hotel' %}<tr><td><span class="ui-method get">GET</span><code>/orders</code></td><td><code>orders:read</code></td><td>Recent orders. <code>?since=</code>, <code>?status=</code>, <code>?source=swiggy</code>, <code>?limit=</code></td></tr>{% endif %}
+            {% if module != 'hotel' %}<tr><td><span class="ui-method post">POST</span><code>/orders</code></td><td><code>orders:write</code></td><td>Push an order into the POS and kitchen display. Idempotent on <code>external_id</code></td></tr>{% endif %}
+            {% if module != 'hotel' %}<tr><td><span class="ui-method get">GET</span><code>/orders/{id}</code></td><td><code>orders:read</code></td><td>One order</td></tr>{% endif %}
+            {% if module != 'hotel' %}<tr><td><span class="ui-method post">POST</span><code>/orders/{id}/status</code></td><td><code>orders:write</code></td><td><code>accepted, preparing, ready, dispatched, delivered, cancelled</code></td></tr>{% endif %}
+            {% if module != 'restaurant' %}<tr><td><span class="ui-method get">GET</span><code>/rooms/availability</code></td><td><code>rooms:read</code></td><td>Bookable room types for one stay, priced night by night with this channel's adjustment. <code>?check_in=2026-12-24&amp;check_out=2026-12-26</code></td></tr>
+            <tr><td><span class="ui-method get">GET</span><code>/rates</code></td><td><code>rooms:read</code></td><td>ARI calendar for up to 90 nights: <code>price</code>, <code>available</code>, <code>min_stay</code>, <code>closed</code> per room type, with your room and rate-plan codes. <code>?from=2026-12-01&amp;to=2026-12-31</code></td></tr>{% endif %}
+            {% if module != 'restaurant' %}<tr><td><span class="ui-method get">GET</span><code>/bookings</code></td><td><code>bookings:read</code></td><td>Room bookings, newest first. <code>?since=</code></td></tr>{% endif %}
+            {% if module != 'restaurant' %}<tr><td><span class="ui-method post">POST</span><code>/bookings</code></td><td><code>bookings:write</code></td><td>Create a booking; a free room of the type is allocated. Idempotent on <code>external_id</code></td></tr>{% endif %}
+            {% if module != 'restaurant' %}<tr><td><span class="ui-method post">POST</span><code>/bookings/{id}/modify</code></td><td><code>bookings:write</code></td><td>Change <code>check_in</code> / <code>check_out</code> (and optionally <code>amount</code>) — refused with <code>409</code> if the room is taken</td></tr>
+            <tr><td><span class="ui-method post">POST</span><code>/bookings/{id}/cancel</code></td><td><code>bookings:write</code></td><td>Cancel a booking that has not checked in; optional <code>reason</code></td></tr>{% endif %}
+          </tbody>
+        </table></div>
+
+        {% if module != 'hotel' %}
+        <h2>Push an order (Zomato, Swiggy, website…)</h2>
+        <p>Match items by <code>menu_item_id</code>, <code>sku</code>, <code>short_code</code> or exact <code>name</code>. If you leave out <code>unit_price</code>, the aggregator price is used when set, otherwise the menu price. Sending the same <code>external_id</code> again returns the original order with <code>"duplicate": true</code>, so retries are safe.</p>
+<pre class="ui-codeblock">curl -X POST {{ api_base }}orders \
+  -H <span class="s">"Authorization: Bearer hk_live_…"</span> -H <span class="s">"Content-Type: application/json"</span> \
+  -d <span class="s">'{
+    "external_id": "SWG-5567123",
+    "order_type": "delivery",
+    "customer": {"name": "Anita", "phone": "9876543210", "address": "12 MG Road"},
+    "items": [
+      {"sku": "BUT-4921", "quantity": 2},
+      {"name": "Garlic Naan", "quantity": 4, "notes": "extra butter"}
+    ],
+    "payment": {"status": "paid"},
+    "notes": "Ring the bell"
+  }'</span></pre>
+        <p>The order appears in this branch's POS and kitchen display as <em>placed</em>. If the key is tied to a channel, the order is tagged with it and the channel's commission is recorded for the profit &amp; loss report.</p>
+
+        {% endif %}
+        {% if module != 'restaurant' %}
+        <h2>Create a room booking (channel managers, OTAs)</h2>
+<pre class="ui-codeblock">curl -X POST {{ api_base }}bookings \
+  -H <span class="s">"Authorization: Bearer hk_live_…"</span> -H <span class="s">"Content-Type: application/json"</span> \
+  -d <span class="s">'{
+    "external_id": "BDC-88231",
+    "room_type": "Deluxe King",
+    "check_in": "2026-12-24", "check_out": "2026-12-26", "guests": 2,
+    "guest": {"name": "Rahul Mehta", "email": "rahul@example.com", "phone": "9000000000"},
+    "amount": {"total": 9800, "taxes": 1050},
+    "payment_status": "paid"
+  }'</span></pre>
+
+        {% endif %}
+        <h2>Webhooks</h2>
+        <p>We POST JSON to your URL when something happens. Answer with any 2xx within 8 seconds. Failed deliveries are retried after 1, 5, 30, 120 and 360 minutes; after 15 failures in a row the endpoint is turned off and shown in red here.</p>
+<pre class="ui-codeblock">{
+  <span class="k">"id"</span>: <span class="s">"evt_3f2a…"</span>, <span class="k">"event"</span>: <span class="s">"{% if module == 'hotel' %}booking.checked_in{% else %}order.status_changed{% endif %}"</span>,
+  <span class="k">"created_at"</span>: <span class="s">"2026-10-16T19:42:11+05:30"</span>,
+  <span class="k">"business"</span>: { <span class="k">"id"</span>: 4, <span class="k">"name"</span>: <span class="s">"{{ restaurant.name }}"</span> },
+  <span class="k">"branch"</span>: { <span class="k">"id"</span>: {{ example_branch.id|default:1 }}, <span class="k">"name"</span>: <span class="s">"{{ example_branch.name|default:'Main' }}"</span> },
+  <span class="k">"data"</span>: { {% if module == 'hotel' %}<span class="c">/* the booking, same shape as the API */</span> <span class="k">"status"</span>: <span class="s">"checked_in"</span>{% else %}<span class="c">/* the order or menu item, same shape as the API */</span> <span class="k">"status"</span>: <span class="s">"ready"</span>, <span class="k">"previous_status"</span>: <span class="s">"preparing"</span>{% endif %} }
+}</pre>
+        <p><strong>Verify every request.</strong> Compute an HMAC-SHA256 of <code>timestamp + "." + raw body</code> with your signing secret and compare it with <code>v1</code> in <code>X-Webhook-Signature: t=…,v1=…</code>. Reject anything older than five minutes.</p>
+<pre class="ui-codeblock"><span class="c"># Python</span>
+<span class="k">import</span> hmac, hashlib, time
+<span class="k">def</span> verify(secret, header, body: bytes):
+    parts = dict(p.split(<span class="s">"="</span>, 1) <span class="k">for</span> p <span class="k">in</span> header.split(<span class="s">","</span>))
+    <span class="k">if</span> abs(time.time() - int(parts[<span class="s">"t"</span>])) &gt; 300: <span class="k">return False</span>
+    mac = hmac.new(secret.encode(), parts[<span class="s">"t"</span>].encode() + <span class="s">b"."</span> + body, hashlib.sha256).hexdigest()
+    <span class="k">return</span> hmac.compare_digest(mac, parts[<span class="s">"v1"</span>])
+
+<span class="c">// Node.js</span>
+<span class="k">const</span> crypto = require(<span class="s">'crypto'</span>);
+<span class="k">function</span> verify(secret, header, rawBody) {
+  <span class="k">const</span> p = Object.fromEntries(header.split(<span class="s">','</span>).map(s =&gt; s.split(<span class="s">'='</span>)));
+  <span class="k">if</span> (Math.abs(Date.now() / 1000 - Number(p.t)) &gt; 300) <span class="k">return false</span>;
+  <span class="k">const</span> mac = crypto.createHmac(<span class="s">'sha256'</span>, secret).update(p.t + <span class="s">'.'</span> + rawBody).digest(<span class="s">'hex'</span>);
+  <span class="k">return</span> crypto.timingSafeEqual(Buffer.from(mac), Buffer.from(p.v1));
+}</pre>
+
+        <h2>Errors and limits</h2>
+        <p>Errors look like <code>{"error": {"code": "unknown_items", "message": "…"}}</code>. Codes: <code>401 unauthorized</code>, <code>403 insufficient_scope</code>, <code>404 not_found</code>, <code>409 items_unavailable / sold_out / order_closed</code>, <code>422</code> for invalid fields, <code>429 rate_limited</code>. Each key may make 120 requests a minute; see the <code>X-RateLimit-Remaining</code> header.</p>
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Base URL</h2>
+        <div class="ui-secret-row"><code id="apiBase">{{ api_base }}</code><button type="button" class="ui-btn ui-btn-gray" data-copy="#apiBase"><i class="fa-regular fa-copy"></i><span>Copy</span></button></div>
+      </section>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Permissions</h2>
+        <ul class="ui-ledger">{% for s, label in scopes %}<li><span class="ui-ledger-text"><code class="ui-code">{{ s }}</code><span class="ui-log-sub">{{ label }}</span></span></li>{% endfor %}</ul>
+      </section>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Webhook events</h2>
+        <ul class="ui-ledger">{% for e, label in events %}<li><span class="ui-ledger-text"><code class="ui-code">{{ e }}</code><span class="ui-log-sub">{{ label }}</span></span></li>{% endfor %}</ul>
+      </section>
+      {% if module == 'hotel' %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Channel managers &amp; OTAs</h2>
+        <p class="ui-log-sub">STAAH, SiteMinder, eZee and similar channel managers sync availability to Booking.com, Agoda, MakeMyTrip and Expedia. Give the channel manager a key from this property: it reads availability and pushes bookings, which block a room on the tape chart and appear in guest profiles and the P&amp;L.</p>
+      </section>
+      {% else %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Zomato &amp; Swiggy</h2>
+        <p class="ui-log-sub">Zomato and Swiggy release their POS APIs only to approved partners. Most outlets connect through an aggregator bridge (for example UrbanPiper) or a partner integration. Give that partner a key from this branch, and their orders flow into the POS, the kitchen display, guest profiles and the P&amp;L.</p>
+      </section>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% include 'integrations/_scripts.html' %}

@@ -5,12 +5,79 @@ from django.core.cache import cache
 
 def get_client_ip(request):
     """
-    Extract client IP address, respecting X-Forwarded-For if behind a reverse proxy.
+    The client's IP. Behind ``TRUSTED_PROXY_COUNT`` reverse proxies (nginx = 1) the real
+    address is that many entries from the *right* of X-Forwarded-For; the left-most entry
+    is whatever the client typed, so trusting it would let anyone dodge rate limits.
     """
+    from django.conf import settings
+    proxies = getattr(settings, 'TRUSTED_PROXY_COUNT', 1)
     xff = request.META.get('HTTP_X_FORWARDED_FOR')
-    if xff:
-        return xff.split(',')[0].strip()
+    if xff and proxies > 0:
+        hops = [h.strip() for h in xff.split(',') if h.strip()]
+        if hops:
+            return hops[-min(proxies, len(hops))]
     return request.META.get('REMOTE_ADDR') or '127.0.0.1'
+
+
+class _IpThrottle(SimpleRateThrottle):
+    """Per-IP throttle that also applies to logged-in users (staff included)."""
+
+    def get_cache_key(self, request, view):
+        return f"throttle_{self.scope}_{get_client_ip(request)}"
+
+
+class PaymentRateThrottle(_IpThrottle):
+    """Checkout, order placement and payment verification: 30 a minute per IP."""
+    scope = 'payment'
+    rate = '30/min'
+
+
+class CouponRateThrottle(_IpThrottle):
+    """Coupon checks: 20 a minute per IP, so codes can't be guessed by brute force."""
+    scope = 'coupon'
+    rate = '20/min'
+
+
+class PublicLookupThrottle(_IpThrottle):
+    """Public look-ups by booking reference: 60 a minute per IP."""
+    scope = 'public_lookup'
+    rate = '60/min'
+
+
+class LoginRateThrottle(_IpThrottle):
+    """API logins: 10 a minute per IP. Per-account lockout is ``login_locked`` below."""
+    scope = 'login'
+    rate = '10/min'
+
+
+LOGIN_FAILURE_LIMIT = 8
+LOGIN_LOCK_SECONDS = 15 * 60
+
+
+def _login_key(username):
+    return f"login_fail_{str(username or '').strip().lower()[:150]}"
+
+
+def login_locked(username):
+    """True after LOGIN_FAILURE_LIMIT wrong passwords for this account in 15 minutes.
+    Only failures count, so nobody can lock a user out by logging in correctly."""
+    return bool(username) and cache.get(_login_key(username), 0) >= LOGIN_FAILURE_LIMIT
+
+
+def record_login_failure(username):
+    if not username:
+        return
+    key = _login_key(username)
+    cache.add(key, 0, LOGIN_LOCK_SECONDS)
+    try:
+        cache.incr(key)
+    except ValueError:
+        cache.set(key, 1, LOGIN_LOCK_SECONDS)
+
+
+def clear_login_failures(username):
+    if username:
+        cache.delete(_login_key(username))
 
 
 # -------------------------------------------------------------------
@@ -166,3 +233,33 @@ def check_view_rate_limit(request, scope, rate_string):
     history.insert(0, now)
     cache.set(cache_key, history, duration)
     return True, 0
+
+
+# -------------------------------------------------------------------
+# JWT endpoints with brute-force protection
+# -------------------------------------------------------------------
+
+from rest_framework.exceptions import AuthenticationFailed, Throttled  # noqa: E402
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView  # noqa: E402
+
+
+class GuardedTokenObtainPairView(TokenObtainPairView):
+    """/api/token/ with a per-IP rate limit and a per-account lockout after repeated
+    wrong passwords."""
+    throttle_classes = [LoginRateThrottle]
+
+    def post(self, request, *args, **kwargs):
+        username = request.data.get('username') if isinstance(request.data, dict) else None
+        if login_locked(username):
+            raise Throttled(wait=LOGIN_LOCK_SECONDS, detail='Too many failed attempts. Try again in 15 minutes.')
+        try:
+            response = super().post(request, *args, **kwargs)
+        except AuthenticationFailed:
+            record_login_failure(username)
+            raise
+        clear_login_failures(username)
+        return response
+
+
+class GuardedTokenRefreshView(TokenRefreshView):
+    throttle_classes = [PublicLookupThrottle]

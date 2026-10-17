@@ -1,0 +1,81 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>Laundry &amp; valet</h1><p>Guest laundry from pickup to delivery. Delivered orders are charged to the room.</p></div>
+  </div>
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">In process</div></div><div class="kpi-val">{{ kpis.active }}</div></div>
+    <div class="ui-kpi kpi-purple"><div class="ui-kpi-head"><div class="kpi-label">Ready to deliver</div></div><div class="kpi-val">{{ kpis.ready }}</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Express</div></div><div class="kpi-val">{{ kpis.express }}</div><div class="kpi-sub">Same day, 1.5× rate</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Charged today</div></div><div class="kpi-val">₹{{ kpis.revenue|inr }}</div><div class="kpi-sub">Before GST</div></div>
+  </div>
+  <nav class="ui-tabs ui-pms-tabs" aria-label="Laundry">
+    <a href="?tab=orders" class="{% if tab == 'orders' %}is-active{% endif %}">Orders</a>
+    <a href="?tab=prices" class="{% if tab == 'prices' %}is-active{% endif %}">Price list</a>
+  </nav>
+
+  {% if tab == 'prices' %}
+  <section class="ui-card ui-list-card">
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>Item</th><th class="num">Laundry ₹</th><th class="num">Dry clean ₹</th><th class="num">Press only ₹</th><th>Status</th>{% if can_edit %}<th></th>{% endif %}</tr></thead>
+      <tbody>{% for r in rates %}<tr>{% if can_edit %}<td colspan="6" style="padding:6px 12px">
+        <form method="post" action="{{ base_url }}laundry/prices/save/" class="ui-ops-rateform">{% csrf_token %}<input type="hidden" name="pk" value="{{ r.pk }}">
+          <input class="ui-input" name="item" value="{{ r.item }}" aria-label="Item">
+          <input class="ui-input" type="number" min="0" step="1" name="wash_price" value="{{ r.wash_price|default_if_none:''|floatformat:'0' }}" aria-label="Laundry price" placeholder="—">
+          <input class="ui-input" type="number" min="0" step="1" name="dry_clean_price" value="{{ r.dry_clean_price|default_if_none:''|floatformat:'0' }}" aria-label="Dry clean price" placeholder="—">
+          <input class="ui-input" type="number" min="0" step="1" name="press_price" value="{{ r.press_price|default_if_none:''|floatformat:'0' }}" aria-label="Press price" placeholder="—">
+          <select class="ui-input" name="is_active" aria-label="Status"><option value="1" {% if r.is_active %}selected{% endif %}>Offered</option><option value="0" {% if not r.is_active %}selected{% endif %}>Hidden</option></select>
+          <button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">Save</button></form></td>
+        {% else %}<td>{{ r.item }}</td><td class="num">{{ r.wash_price|default_if_none:"—" }}</td><td class="num">{{ r.dry_clean_price|default_if_none:"—" }}</td><td class="num">{{ r.press_price|default_if_none:"—" }}</td><td>{% if r.is_active %}Offered{% else %}Hidden{% endif %}</td>{% endif %}
+      </tr>{% empty %}<tr><td colspan="6" class="ui-log-sub" style="padding:24px;text-align:center">No price list yet.
+        {% if can_edit %}<form method="post" action="{{ base_url }}laundry/prices/save/" style="display:inline">{% csrf_token %}<input type="hidden" name="op" value="seed"><button class="ui-link-btn" type="submit">Load a standard price list</button></form> and adjust it.{% endif %}</td></tr>{% endfor %}
+      {% if can_edit %}<tr><td colspan="6" style="padding:6px 12px"><form method="post" action="{{ base_url }}laundry/prices/save/" class="ui-ops-rateform">{% csrf_token %}
+        <input class="ui-input" name="item" placeholder="New item" aria-label="New item" required>
+        <input class="ui-input" type="number" min="0" name="wash_price" placeholder="Laundry" aria-label="Laundry price"><input class="ui-input" type="number" min="0" name="dry_clean_price" placeholder="Dry clean" aria-label="Dry clean price"><input class="ui-input" type="number" min="0" name="press_price" placeholder="Press" aria-label="Press price">
+        <input type="hidden" name="is_active" value="1"><span></span><button class="ui-btn ui-btn-primary ui-btn-sm" type="submit">Add</button></form></td></tr>{% endif %}
+      </tbody>
+    </table></div>
+    <p class="ui-log-sub" style="padding:0 16px 14px;margin:0">Prices before GST (18% is added on the folio). Leave a price blank if that service isn’t offered for the item.</p>
+  </section>
+  {% else %}
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <div class="ui-seg ui-pms-seg"><a href="?show=active" class="{% if show == 'active' %}active{% endif %}">In process</a><a href="?show=all" class="{% if show == 'all' %}active{% endif %}">All orders</a></div>
+      <section class="ui-card ui-list-card">
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Order</th><th>Items</th><th class="num">Amount</th><th>Status</th>{% if can_edit %}<th></th>{% endif %}</tr></thead>
+          <tbody>{% for o in orders %}<tr>
+            <td><strong>Room {{ o.booking.room.room_number }}</strong><br><small class="ui-log-sub">{{ o.reference }} · {{ o.booking.guest_name }} · {{ o.created_at|date:"d M H:i" }}</small>{% if o.is_express %}<br><span class="ui-chip ui-chip-orange">Express</span>{% endif %}</td>
+            <td style="font-size:13px">{% for l in o.lines.all %}{{ l.quantity }} × {{ l.item }} <span class="ui-log-sub">({{ l.get_service_display }})</span>{% if not forloop.last %}<br>{% endif %}{% endfor %}{% if o.notes %}<br><small class="ui-log-sub">{{ o.notes }}</small>{% endif %}</td>
+            <td class="num">₹{{ o.amount|inr2 }}</td>
+            <td><span class="ui-chip ui-chip-{% if o.status == 'DELIVERED' %}green{% elif o.status == 'READY' %}purple{% elif o.status == 'CANCELLED' %}gray{% else %}blue{% endif %}">{{ o.get_status_display }}</span>{% if o.charge %}<br><small class="ui-log-sub">On folio</small>{% endif %}</td>
+            {% if can_edit %}<td class="nowrap">{% if o.next_status %}
+              <form method="post" action="{{ base_url }}laundry/{{ o.pk }}/action/" style="display:inline">{% csrf_token %}<input type="hidden" name="op" value="advance"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="ui-btn ui-btn-{% if o.next_status == 'DELIVERED' %}primary{% else %}gray{% endif %} ui-btn-sm" type="submit">{% if o.next_status == 'DELIVERED' %}Deliver &amp; charge{% else %}Mark {{ statuses|get_item:o.next_status|lower }}{% endif %}</button></form>
+              <form method="post" action="{{ base_url }}laundry/{{ o.pk }}/action/" style="display:inline" onsubmit="return confirm('Cancel this laundry order?')">{% csrf_token %}<input type="hidden" name="op" value="cancel"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="ui-link-btn" type="submit">Cancel</button></form>
+            {% endif %}</td>{% endif %}
+          </tr>{% empty %}<tr><td colspan="5" class="ui-log-sub" style="padding:24px;text-align:center">No laundry orders.</td></tr>{% endfor %}</tbody>
+        </table></div>
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      {% if can_edit %}<section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Laundry pickup</h2>
+        {% if active_rates %}
+        <form method="post" action="{{ base_url }}laundry/add/" class="ui-stack-form" id="ldForm">{% csrf_token %}
+          <div class="ui-field"><label for="ldB">Room</label><select id="ldB" class="ui-input" name="booking" required><option value="">Choose…</option>{% for b in in_house %}<option value="{{ b.pk }}">Room {{ b.room.room_number }} · {{ b.guest_name }}</option>{% endfor %}</select></div>
+          <div class="ui-ops-ldgrid"><span></span><small>Laundry</small><small>Dry cl.</small><small>Press</small>
+            {% for r in active_rates %}<span>{{ r.item }}</span>
+              {% for svc, price in r.cells %}{% if price %}<input class="ui-input" type="number" min="0" max="99" name="q_{{ r.pk }}_{{ svc }}" data-price="{{ price }}" value="0" aria-label="{{ r.item }} {{ svc }}" title="₹{{ price|floatformat:'0' }} each">{% else %}<span class="ui-log-sub">—</span>{% endif %}{% endfor %}
+            {% endfor %}</div>
+          <label class="ui-pms-check"><input type="checkbox" name="express" value="1" id="ldX"> Express · same day (1.5×)</label>
+          <div class="ui-field"><label for="ldN">Notes</label><input id="ldN" class="ui-input" name="notes" maxlength="255" placeholder="Stains, starch, fold or hang"></div>
+          <div class="ui-ops-row"><span>Estimated, before GST</span><strong id="ldT">₹0</strong></div>
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-shirt"></i><span>Create order</span></button>
+        </form>
+        <script>(function(){var f=document.getElementById('ldForm');if(!f)return;function c(){var t=0;f.querySelectorAll('input[data-price]').forEach(function(i){t+=(+i.value||0)*(+i.dataset.price)});if(document.getElementById('ldX').checked)t*=1.5;document.getElementById('ldT').textContent='₹'+Math.round(t).toLocaleString('en-IN')}f.addEventListener('input',c);f.addEventListener('change',c)})();</script>
+        {% else %}<p class="ui-log-sub" style="margin:0">Set up the <a href="?tab=prices">price list</a> first.</p>{% endif %}
+      </section>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>

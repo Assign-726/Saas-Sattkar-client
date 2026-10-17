@@ -4,12 +4,15 @@ from rest_framework.decorators import action
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.response import Response
-from rest_framework.permissions import IsAdminUser, AllowAny
+from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404, redirect
 from django.conf import settings
 from django.http import Http404
 from super_admin.models import Restaurant, RestaurantBranch
 from restaurant_project import constants
+from core import tenancy
+from core.api_cache import CatalogCacheMixin
+from core.throttling import PaymentRateThrottle, CouponRateThrottle
 
 from core.models import Category, SubCategory, MenuItem, Order, RestaurantSettings, RestaurantLanding, BlogPost, BlogComment, Review
 
@@ -51,7 +54,7 @@ def redirect_to_frontend(request, *args, **kwargs):
     return redirect(base_url)
 
 
-class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
+class CategoryViewSet(CatalogCacheMixin, viewsets.ReadOnlyModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [AllowAny]
@@ -77,7 +80,7 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
         return qs
 
 
-class SubCategoryViewSet(viewsets.ReadOnlyModelViewSet):
+class SubCategoryViewSet(CatalogCacheMixin, viewsets.ReadOnlyModelViewSet):
     queryset = SubCategory.objects.all()
     serializer_class = SubCategorySerializer
     permission_classes = [AllowAny]
@@ -98,7 +101,7 @@ class SubCategoryViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset
 
 
-class MenuItemViewSet(viewsets.ReadOnlyModelViewSet):
+class MenuItemViewSet(CatalogCacheMixin, viewsets.ReadOnlyModelViewSet):
     serializer_class = MenuItemSerializer
     permission_classes = [AllowAny]
 
@@ -141,9 +144,36 @@ class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'create', 'validate_coupon', 'verify_payment', 'cancel_unpaid', 'initiate_razorpay', 'toggle_service_charge']:
+        if self.action in ['list', 'retrieve', 'create', 'validate_coupon', 'verify_payment', 'cancel_unpaid', 'initiate_razorpay', 'toggle_service_charge', 'settle', 'receipt']:
             return [AllowAny()]
-        return [IsAdminUser()]
+        return [tenancy.IsBusinessStaff()]
+
+    def get_throttles(self):
+        if self.action in ('initiate_razorpay', 'verify_payment', 'create'):
+            return [PaymentRateThrottle()]
+        if self.action == 'validate_coupon':
+            return [CouponRateThrottle()]
+        return super().get_throttles()
+
+    def _staff_for(self, order):
+        return tenancy.is_business_staff(self.request.user, order.restaurant_id)
+
+    def _holds_token(self, order):
+        """The guest proves ownership with the order's secret token (as the URL id, or ?token=)."""
+        if not order.security_token:
+            return False
+        if self.kwargs.get('pk') == order.security_token:
+            return True
+        token = self.request.query_params.get('token')
+        if not token and isinstance(self.request.data, dict):
+            token = self.request.data.get('token')
+        import hmac
+        return bool(token) and hmac.compare_digest(str(token), order.security_token)
+
+    def _require_owner(self, order, verb='view'):
+        if not (self._staff_for(order) or self._holds_token(order)):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied(f"You do not have permission to {verb} this order.")
 
     @method_decorator(csrf_exempt)
     @action(detail=False, methods=['post'], url_path='initiate-razorpay', permission_classes=[AllowAny], authentication_classes=[])
@@ -161,16 +191,25 @@ class OrderViewSet(viewsets.ModelViewSet):
         restaurant_slug = data.get('restaurant_slug')
         order_type = data.get('order_type') or 'takeaway'
 
-        if not items_data:
+        if not items_data or not isinstance(items_data, list):
             return Response({'error': 'No menu items provided'}, status=status.HTTP_400_BAD_REQUEST)
+        if len(items_data) > 100:
+            return Response({'error': 'Too many items in one order'}, status=status.HTTP_400_BAD_REQUEST)
 
         restaurant = None
         mock_items = []
         for item in items_data:
+            if not isinstance(item, dict):
+                return Response({'error': 'Invalid item'}, status=status.HTTP_400_BAD_REQUEST)
             item_id = item.get('menu_item')
-            qty = int(item.get('quantity') or 1)
-            menu_item = MenuItem.objects.filter(id=item_id).first()
-            if not menu_item:
+            try:
+                qty = int(item.get('quantity') or 1)
+                menu_item = MenuItem.objects.filter(id=int(item_id)).first()
+            except (TypeError, ValueError):
+                return Response({'error': 'Invalid item or quantity'}, status=status.HTTP_400_BAD_REQUEST)
+            if not 1 <= qty <= 100:
+                return Response({'error': 'Quantity must be between 1 and 100'}, status=status.HTTP_400_BAD_REQUEST)
+            if not menu_item or not menu_item.availability:
                 return Response({'error': f'Item ID {item_id} not found'}, status=status.HTTP_400_BAD_REQUEST)
             channels = getattr(menu_item, 'publishing_channels', []) or []
             if channels and 'qr' not in channels and 'online' not in channels:
@@ -301,35 +340,49 @@ class OrderViewSet(viewsets.ModelViewSet):
                     })
                 else:
                     return Response({'error': 'Failed to create Razorpay payment order'}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response({'error': f'Razorpay gateway error: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning('Razorpay order create failed for restaurant %s', getattr(restaurant, 'pk', None), exc_info=True)
+            return Response({'error': 'Could not reach the payment gateway. Please try again.'}, status=status.HTTP_502_BAD_GATEWAY)
 
     def get_queryset(self):
-        qs = super().get_queryset()
-        if not self.request.user.is_staff:
-            if self.action == 'list':
-                qs = qs.exclude(payment_method='O', payment_status__in=['U', 'F'])
-                ids_param = self.request.query_params.get('ids')
-                if ids_param:
-                    try:
-                        ids = [int(x) for x in ids_param.split(',')]
-                        qs = qs.filter(id__in=ids)
-                    except ValueError:
-                        return qs.none()
-                else:
+        qs = super().get_queryset().select_related('restaurant', 'branch', 'coupon', 'table').prefetch_related('items__menu_item')
+        params = self.request.query_params
+        if tenancy.is_business_staff(self.request.user):
+            qs = tenancy.scope(qs, self.request.user)
+            if params.get('restaurant'):
+                qs = qs.filter(restaurant_id=params.get('restaurant'))
+            elif params.get('restaurant_slug'):
+                qs = qs.filter(restaurant__slug=params.get('restaurant_slug'))
+            return qs.order_by('-order_time')
+
+        if self.action == 'list':
+            # Guests list their own orders by secret token. The old ?ids= form is kept for
+            # existing clients but only covers the last day and hides contact details.
+            qs = qs.exclude(payment_method='O', payment_status__in=['U', 'unpaid', 'F'])
+            tokens = [t.strip() for t in (params.get('tokens') or '').split(',') if t.strip()][:50]
+            if tokens:
+                qs = qs.filter(security_token__in=tokens)
+            elif params.get('ids'):
+                try:
+                    ids = [int(x) for x in params.get('ids').split(',') if x.strip()][:20]
+                except ValueError:
                     return qs.none()
-            
-            restaurant_slug = self.request.query_params.get('restaurant_slug')
-            if restaurant_slug:
-                qs = qs.filter(restaurant__slug=restaurant_slug)
-        else:
-            restaurant_id = self.request.query_params.get('restaurant')
-            restaurant_slug = self.request.query_params.get('restaurant_slug')
-            if restaurant_id:
-                qs = qs.filter(restaurant_id=restaurant_id)
-            elif restaurant_slug:
-                qs = qs.filter(restaurant__slug=restaurant_slug)
+                from django.utils import timezone as _tz
+                qs = qs.filter(id__in=ids, order_time__gte=_tz.now() - _tz.timedelta(hours=24))
+            else:
+                return qs.none()
+
+        if params.get('restaurant_slug'):
+            qs = qs.filter(restaurant__slug=params.get('restaurant_slug'))
         return qs.order_by('-order_time')
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        params = self.request.query_params
+        if self.action == 'list' and not params.get('tokens') and not tenancy.is_business_staff(self.request.user):
+            ctx['public_summary'] = True
+        return ctx
 
     def get_object(self):
         queryset = self.filter_queryset(self.get_queryset())
@@ -346,92 +399,72 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
-        if not request.user.is_staff:
-            lookup_value = self.kwargs.get('pk')
-            if lookup_value != instance.security_token:
-                token = request.query_params.get('token')
-                if not token or instance.security_token != token:
-                    from rest_framework.exceptions import PermissionDenied
-                    raise PermissionDenied("You do not have permission to view this order.")
+        self._require_owner(instance)
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
 
     @action(detail=True, methods=['get'])
     def receipt(self, request, pk=None):
         order = self.get_object()
-        if not request.user.is_staff:
-            lookup_value = self.kwargs.get('pk')
-            if lookup_value != order.security_token:
-                token = request.query_params.get('token')
-                if not token or order.security_token != token:
-                    from rest_framework.exceptions import PermissionDenied
-                    raise PermissionDenied("You do not have permission to view this order.")
+        self._require_owner(order)
         serializer = self.get_serializer(order)
         return Response(serializer.data)
 
     @method_decorator(csrf_exempt)
     @action(detail=True, methods=['post'], url_path='verify-payment', permission_classes=[AllowAny], authentication_classes=[])
     def verify_payment(self, request, pk=None):
-        import hmac
-        import hashlib
-        
-        order = self.get_object()
-        razorpay_payment_id = request.data.get('razorpay_payment_id')
-        razorpay_signature = request.data.get('razorpay_signature')
-        
-        if not razorpay_payment_id or not razorpay_signature:
-            return Response({'error': 'Missing razorpay_payment_id or razorpay_signature'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Retrieve settings for signature verification
-        # pyrefly: ignore [missing-import]
-        from .models import RestaurantSettings
-        settings_obj = RestaurantSettings.get_settings(order.restaurant)
-        key_secret = settings_obj.razorpay_key_secret or ''
-        razorpay_order_id = order.razorpay_order_id or ''
-        
-        # Generate signature
-        msg = f"{razorpay_order_id}|{razorpay_payment_id}"
-        generated_signature = hmac.new(
-            key_secret.encode('utf-8'),
-            msg.encode('utf-8'),
-            hashlib.sha256
-        ).hexdigest()
-        
-        if hmac.compare_digest(generated_signature, razorpay_signature):
-            order.payment_status = 'paid' # Paid
-            order.payment_method = 'O' # Online
-            order.razorpay_payment_id = razorpay_payment_id
-            order.razorpay_signature = razorpay_signature
-            order.save(update_fields=['payment_status', 'payment_method', 'razorpay_payment_id', 'razorpay_signature'])
-            
-            # Publish to SSE notifications
-            try:
-                # pyrefly: ignore [missing-import]
-                from .sse import publish
-                if order.restaurant and order.restaurant.slug:
-                    publish(order.restaurant.slug, {'type': 'new_order', 'order_id': order.id})
-            except Exception:
-                pass
-            
-            return Response({'success': True, 'message': 'Payment verified successfully.'})
-        else:
-            order.payment_status = 'F' # Failed
-            order.save(update_fields=['payment_status'])
-    @method_decorator(csrf_exempt)
-    @action(detail=True, methods=['post', 'patch'], url_path='settle', permission_classes=[AllowAny], authentication_classes=[])
-    def settle(self, request, pk=None):
-        order = self.get_object()
+        from core.models import GatewayPayment
+        from core.payments import signature_ok
 
-        if not request.user.is_staff:
-            lookup_value = self.kwargs.get('pk')
-            if lookup_value != order.security_token:
-                token = request.query_params.get('token') or (request.data.get('token') if isinstance(request.data, dict) else None)
-                if not token or order.security_token != token:
-                    from rest_framework.exceptions import PermissionDenied
-                    raise PermissionDenied("You do not have permission to modify this order.")
+        order = self.get_object()
+        payment_id = request.data.get('razorpay_payment_id')
+        signature = request.data.get('razorpay_signature')
+        if not payment_id or not signature:
+            return Response({'error': 'Missing razorpay_payment_id or razorpay_signature'}, status=status.HTTP_400_BAD_REQUEST)
+        if order.payment_status == 'paid':
+            if order.razorpay_payment_id == payment_id:
+                return Response({'success': True, 'message': 'Payment already verified.'})
+            return Response({'error': 'This order is already paid.'}, status=status.HTTP_409_CONFLICT)
+
+        settings_obj = RestaurantSettings.get_settings(order.restaurant)
+        if not signature_ok(settings_obj.razorpay_key_secret, order.razorpay_order_id, payment_id, signature):
+            # Only an unpaid online attempt can be marked failed; a bad request must not
+            # be able to flip someone else's order.
+            if order.payment_method == 'O' and order.payment_status in ('unpaid', 'U'):
+                order.payment_status = 'F'
+                order.save(update_fields=['payment_status'])
+            return Response({'error': 'Payment signature verification failed.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not GatewayPayment.claim(payment_id, 'order', order.pk, order.razorpay_order_id, order.total_amount):
+            return Response({'error': 'This payment has already been used.'}, status=status.HTTP_409_CONFLICT)
+
+        order.payment_status = 'paid'
+        order.payment_method = 'O'
+        order.razorpay_payment_id = payment_id
+        order.razorpay_signature = signature
+        order.save(update_fields=['payment_status', 'payment_method', 'razorpay_payment_id', 'razorpay_signature'])
+        try:
+            from .sse import publish
+            if order.restaurant and order.restaurant.slug:
+                publish(order.restaurant.slug, {'type': 'new_order', 'order_id': order.id})
+        except Exception:
+            pass
+        return Response({'success': True, 'message': 'Payment verified successfully.'})
+
+    @method_decorator(csrf_exempt)
+    @action(detail=True, methods=['post', 'patch'], url_path='settle', permission_classes=[AllowAny])
+    def settle(self, request, pk=None):
+        """Mark an order paid at the counter. Staff of that restaurant only: a guest's
+        order token must never be enough to declare their own bill paid."""
+        order = self.get_object()
+        if not self._staff_for(order):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only the restaurant's staff can settle an order.")
 
         data = request.data if isinstance(request.data, dict) else {}
-        payment_method = data.get('payment_method') or request.POST.get('payment_method') or 'cash'
+        payment_method = data.get('payment_method') or 'cash'
+        valid_methods = {c[0] for c in Order._meta.get_field('payment_method').choices or []}
+        if valid_methods and payment_method not in valid_methods:
+            payment_method = 'cash' if 'cash' in valid_methods else 'C'
 
         order.payment_status = 'paid'
         order.payment_method = payment_method
@@ -454,15 +487,9 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='cancel-unpaid', permission_classes=[AllowAny], authentication_classes=[])
     def cancel_unpaid(self, request, pk=None):
         order = self.get_object()
-        if not request.user.is_staff:
-            lookup_value = self.kwargs.get('pk')
-            if lookup_value != order.security_token:
-                token = request.query_params.get('token') or (request.data.get('token') if isinstance(request.data, dict) else None)
-                if not token or order.security_token != token:
-                    from rest_framework.exceptions import PermissionDenied
-                    raise PermissionDenied("You do not have permission to modify this order.")
+        self._require_owner(order, 'modify')
 
-        if order.payment_method == 'O' and order.payment_status in ['U', 'F']:
+        if order.payment_method == 'O' and order.payment_status in ['U', 'unpaid', 'F']:
             if order.coupon:
                 if (order.coupon.used_count or 0) > 0:
                     order.coupon.used_count = max(0, (order.coupon.used_count or 1) - 1)
@@ -521,6 +548,9 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='toggle-service-charge', permission_classes=[AllowAny], authentication_classes=[])
     def toggle_service_charge(self, request, pk=None):
         order = self.get_object()
+        self._require_owner(order, 'modify')
+        if order.payment_status == 'paid' and not self._staff_for(order):
+            return Response({'error': 'This order is already paid.'}, status=status.HTTP_409_CONFLICT)
         data = request.data if isinstance(request.data, dict) else {}
         if 'waive' in data:
             order.waive_service_charge = bool(data.get('waive'))
@@ -538,7 +568,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         })
 
 
-class RestaurantViewSet(viewsets.ReadOnlyModelViewSet):
+class RestaurantViewSet(CatalogCacheMixin, viewsets.ReadOnlyModelViewSet):
     serializer_class = RestaurantSerializer
     permission_classes = [AllowAny]
     lookup_field = 'slug'
@@ -549,7 +579,7 @@ class RestaurantViewSet(viewsets.ReadOnlyModelViewSet):
         return Restaurant.objects.filter(is_active=True, feature_website_pages=True)
 
 
-class RestaurantLandingViewSet(viewsets.ReadOnlyModelViewSet):
+class RestaurantLandingViewSet(CatalogCacheMixin, viewsets.ReadOnlyModelViewSet):
     queryset = RestaurantLanding.objects.all()
     serializer_class = RestaurantLandingSerializer
     permission_classes = [AllowAny]
@@ -712,10 +742,12 @@ class RestaurantSettingsViewSet(viewsets.ReadOnlyModelViewSet):
                 zones_qs = zones_qs.filter(branch__isnull=True)
             
             zones_data = []
-            for z in zones_qs.order_by('name'):
-                tables_qs = z.tables.filter(is_active=True)
-                if branch:
-                    tables_qs = tables_qs.filter(Q(branch=branch) | Q(branch__isnull=True))
+            from django.db.models import Prefetch
+            table_qs = Table.objects.filter(is_active=True).order_by('table_number').prefetch_related(Table.active_orders_prefetch())
+            if branch:
+                table_qs = table_qs.filter(Q(branch=branch) | Q(branch__isnull=True))
+            for z in zones_qs.order_by('name').prefetch_related(Prefetch('tables', queryset=table_qs, to_attr='_active_tables')):
+                tables_qs = z._active_tables
                 tbls = [
                     {
                         'id': t.id,
@@ -726,7 +758,7 @@ class RestaurantSettingsViewSet(viewsets.ReadOnlyModelViewSet):
                         'is_placed': t.is_placed,
                         'status': t.current_status,
                     }
-                    for t in tables_qs.order_by('table_number')
+                    for t in tables_qs
                 ]
                 if tbls:
                     zones_data.append({
@@ -738,7 +770,8 @@ class RestaurantSettingsViewSet(viewsets.ReadOnlyModelViewSet):
             unassigned_tables = Table.objects.filter(restaurant=restaurant, zone__isnull=True, is_active=True)
             if branch:
                 unassigned_tables = unassigned_tables.filter(Q(branch=branch) | Q(branch__isnull=True))
-            if unassigned_tables.exists():
+            unassigned_tables = list(unassigned_tables.order_by('table_number').prefetch_related(Table.active_orders_prefetch()))
+            if unassigned_tables:
                 zones_data.append({
                     'id': 0,
                     'name': 'Main Area',
@@ -752,7 +785,7 @@ class RestaurantSettingsViewSet(viewsets.ReadOnlyModelViewSet):
                             'is_placed': t.is_placed,
                             'status': t.current_status,
                         }
-                        for t in unassigned_tables.order_by('table_number')
+                        for t in unassigned_tables
                     ]
                 })
 
@@ -761,7 +794,7 @@ class RestaurantSettingsViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(data)
 
 
-class BlogPostViewSet(viewsets.ReadOnlyModelViewSet):
+class BlogPostViewSet(CatalogCacheMixin, viewsets.ReadOnlyModelViewSet):
     queryset = BlogPost.objects.filter(is_published=True)
     serializer_class = BlogPostSerializer
     permission_classes = [AllowAny]
@@ -805,7 +838,7 @@ class BlogPostViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = BlogCommentSerializer(comment)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-class RestaurantBranchViewSet(viewsets.ReadOnlyModelViewSet):
+class RestaurantBranchViewSet(CatalogCacheMixin, viewsets.ReadOnlyModelViewSet):
     queryset = RestaurantBranch.objects.all()
     serializer_class = RestaurantBranchSerializer
     permission_classes = [AllowAny]
@@ -842,10 +875,10 @@ class CustomerInquiryViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == 'create':
             return [AllowAny()]
-        return [IsAdminUser()]
+        return [tenancy.IsBusinessStaff()]
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = tenancy.scope(super().get_queryset(), self.request.user)
         rslug = self.request.query_params.get('restaurant_slug')
         if rslug:
             qs = qs.filter(restaurant__slug=rslug)
@@ -864,7 +897,12 @@ class NewsletterSubscriberViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['create', 'subscribe']:
             return [AllowAny()]
-        return [IsAdminUser()]
+        return [tenancy.IsBusinessStaff()]
+
+    def get_queryset(self):
+        if self.action == 'create':
+            return super().get_queryset()
+        return tenancy.scope(super().get_queryset(), self.request.user).order_by('-subscribed_at')
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -898,8 +936,11 @@ class ZoneViewSet(viewsets.ReadOnlyModelViewSet):
         return ctx
 
     def get_queryset(self):
-        from core.models import Zone
-        qs = Zone.objects.all()
+        from django.db.models import Prefetch
+        from core.models import Table, Zone
+        qs = Zone.objects.select_related('branch').prefetch_related(Prefetch(
+            'tables', to_attr='_active_tables',
+            queryset=Table.objects.filter(is_active=True).order_by('table_number').prefetch_related(Table.active_orders_prefetch())))
         restaurant_id = self.request.query_params.get('restaurant')
         restaurant_slug = self.request.query_params.get('restaurant_slug')
         branch_slug = self.request.query_params.get('branch_slug') or self.request.query_params.get('branch')
@@ -919,7 +960,7 @@ class TableViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         from core.models import Table
-        qs = Table.objects.filter(is_active=True)
+        qs = Table.objects.filter(is_active=True).select_related('zone', 'branch').prefetch_related(Table.active_orders_prefetch())
         restaurant_id = self.request.query_params.get('restaurant')
         restaurant_slug = self.request.query_params.get('restaurant_slug')
         branch_slug = self.request.query_params.get('branch_slug') or self.request.query_params.get('branch')
@@ -1010,10 +1051,10 @@ class JobApplicationViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == 'create':
             return [AllowAny()]
-        return [IsAdminUser()]
+        return [tenancy.IsBusinessStaff()]
 
     def get_queryset(self):
-        qs = super().get_queryset().select_related('job', 'restaurant', 'branch')
+        qs = tenancy.scope(super().get_queryset().select_related('job', 'restaurant', 'branch'), self.request.user)
         restaurant_slug = self.request.query_params.get('restaurant_slug')
         if restaurant_slug:
             qs = qs.filter(restaurant__slug=restaurant_slug)
@@ -1042,7 +1083,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['create', 'submit']:
             return [AllowAny()]
-        return [IsAdminUser()]
+        return [tenancy.IsBusinessStaff()]
 
     def get_serializer_class(self):
         if self.action in ['create', 'submit']:
@@ -1053,6 +1094,8 @@ class ReviewViewSet(viewsets.ModelViewSet):
         if not constants.SHOW_WEBSITE_PAGES:
             return Review.objects.none()
         qs = super().get_queryset().filter(landing__restaurant__is_active=True, landing__restaurant__feature_website_pages=True)
+        if self.action not in ('create', 'submit'):
+            qs = tenancy.scope(qs, self.request.user, 'landing__restaurant')
         rslug = self.request.query_params.get('restaurant_slug')
         rid = self.request.query_params.get('restaurant')
         branch_id = self.request.query_params.get('branch_id')

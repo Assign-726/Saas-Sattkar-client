@@ -1,0 +1,104 @@
+{# Housekeeping board — hotel admin #}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>Housekeeping</h1><p>{{ day|date:"l, d M Y" }}{% if day != today %} · <a href="?">back to today</a>{% endif %}</p></div>
+    <div class="ui-actions">
+      <a class="ui-btn ui-btn-gray" href="?date={{ prev_day|date:'Y-m-d' }}{% if staff_id %}&staff={{ staff_id }}{% endif %}" aria-label="Previous day"><i class="fa-solid fa-chevron-left"></i></a>
+      <a class="ui-btn ui-btn-gray" href="?date={{ next_day|date:'Y-m-d' }}{% if staff_id %}&staff={{ staff_id }}{% endif %}" aria-label="Next day"><i class="fa-solid fa-chevron-right"></i></a>
+      {% if can_edit and day == today %}
+      <form method="post" action="{{ base_url }}rooms/housekeeping/tasks/stayovers/">{% csrf_token %}<button class="ui-btn ui-btn-gray" type="submit"><i class="fa-solid fa-bed"></i><span>Add stay-over service</span></button></form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="ui-kpi-grid">
+    {% for status, label, items in columns %}
+    <div class="ui-kpi {% if status == 'PENDING' %}kpi-orange{% elif status == 'IN_PROGRESS' %}kpi-indigo{% else %}kpi-green{% endif %}"><div class="ui-kpi-head"><div class="kpi-label">{{ label }}</div></div><div class="kpi-val">{{ items|length }}</div><div class="kpi-sub">{% if status == 'DONE' %}{% if avg_minutes %}~{{ avg_minutes }} min per room{% else %}Completed {{ day|date:"d M" }}{% endif %}{% elif status == 'PENDING' %}Waiting to start{% else %}Being cleaned now{% endif %}</div></div>
+    {% endfor %}
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Dirty rooms</div></div><div class="kpi-val">{{ dirty_count }}</div><div class="kpi-sub">{{ arriving|length }} arrival{{ arriving|length|pluralize }} {% if day == today %}today{% else %}{{ day|date:"d M" }}{% endif %}</div></div>
+  </div>
+
+  <form method="get" class="ui-card ui-filters">
+    <input type="hidden" name="date" value="{{ day|date:'Y-m-d' }}">
+    <div class="ui-field"><label for="hkStaff">Attendant</label><select id="hkStaff" class="ui-input" name="staff" onchange="this.form.submit()"><option value="">Everyone</option>{% for s in all_staff %}<option value="{{ s.pk }}" {% if staff_id == s.pk|stringformat:'s' %}selected{% endif %}>{{ s.name }}</option>{% endfor %}</select></div>
+  </form>
+
+  <div class="ui-pms-board">
+    {% for status, label, items in columns %}
+    <section class="ui-card ui-pms-col">
+      <div class="ui-pms-col-head"><h2 class="ui-card-title" style="margin:0">{{ label }}</h2><span class="ui-list-count">{{ items|length }}</span></div>
+      {% for t in items %}
+      <article class="ui-pms-task {% if t.is_rush and t.status != 'DONE' %}is-rush{% endif %}">
+        <div class="ui-pms-task-head">
+          <strong>Room {{ t.room.room_number }}</strong>
+          <span class="ui-chip ui-chip-{% if t.kind == 'CHECKOUT_CLEAN' %}orange{% elif t.kind == 'STAYOVER' %}blue{% elif t.kind == 'DEEP_CLEAN' %}purple{% else %}gray{% endif %}">{{ t.get_kind_display }}</span>
+        </div>
+        <div class="ui-log-sub">{{ t.room.category.name }}{% if t.task_date < day %} · from {{ t.task_date|date:"d M" }}{% endif %}{% if t.is_rush and t.status != 'DONE' %} · <strong class="ui-text-red">guest arriving today</strong>{% elif t.room.pk in arriving %} · guest arriving{% endif %}</div>
+        {% if t.notes %}<div class="ui-pms-task-note">{{ t.notes }}</div>{% endif %}
+        {% if t.status == 'DONE' %}<div class="ui-log-sub">Done {{ t.completed_at|date:"h:i A" }}{% if t.minutes_taken is not None %} · {{ t.minutes_taken }} min{% endif %}{% if t.assigned_to %} · {{ t.assigned_to.name }}{% endif %}</div>{% endif %}
+        {% if can_edit and t.status != 'DONE' %}
+        <form method="post" action="{{ base_url }}rooms/housekeeping/tasks/{{ t.pk }}/" class="ui-pms-task-assign">{% csrf_token %}<input type="hidden" name="op" value="assign"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <select class="ui-input" name="assigned_to" onchange="this.form.submit()" aria-label="Assign room {{ t.room.room_number }}"><option value="">Unassigned</option>{% for s in staff %}<option value="{{ s.pk }}" {% if t.assigned_to_id == s.pk %}selected{% endif %}>{{ s.name }}</option>{% endfor %}</select>
+        </form>
+        <div class="ui-pms-task-actions">
+          {% if t.status == 'PENDING' %}
+          <form method="post" action="{{ base_url }}rooms/housekeeping/tasks/{{ t.pk }}/">{% csrf_token %}<input type="hidden" name="op" value="start"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">Start</button></form>
+          {% endif %}
+          <form method="post" action="{{ base_url }}rooms/housekeeping/tasks/{{ t.pk }}/">{% csrf_token %}<input type="hidden" name="op" value="done"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="ui-btn ui-btn-primary ui-btn-sm" type="submit"><i class="fa-solid fa-check"></i><span>Done</span></button></form>
+          <form method="post" action="{{ base_url }}rooms/housekeeping/tasks/{{ t.pk }}/" onsubmit="var r = prompt('Why skip it? (e.g. Do not disturb)', 'Do not disturb'); if (r === null) return false; this.notes.value = r;">{% csrf_token %}<input type="hidden" name="op" value="skip"><input type="hidden" name="notes"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">Skip</button></form>
+        </div>
+        {% elif can_edit %}
+        <form method="post" action="{{ base_url }}rooms/housekeeping/tasks/{{ t.pk }}/">{% csrf_token %}<input type="hidden" name="op" value="reopen"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="ui-link-btn" type="submit">Reopen</button></form>
+        {% endif %}
+      </article>
+      {% empty %}
+      <p class="ui-log-sub ui-pms-col-empty">Nothing here.</p>
+      {% endfor %}
+    </section>
+    {% endfor %}
+  </div>
+
+  <div class="ui-g360-grid" style="margin-top:16px">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Room status</h2>
+        <div class="ui-pms-rooms">
+          {% for r in rooms %}
+          <div class="ui-pms-room is-{{ r.status|lower }}" title="{{ r.category.name }} · {{ r.get_status_display }}">
+            <strong>{{ r.room_number }}</strong>
+            <small>{% if r.pk in in_house %}In house{% elif r.status == 'CLEANING' %}Dirty{% elif r.status == 'MAINTENANCE' %}Out of order{% else %}Vacant clean{% endif %}{% if r.pk in arriving %} · arrival{% endif %}</small>
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+      {% if skipped %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Skipped</h2>
+        <ul class="ui-dash-mini">{% for t in skipped %}<li><span>Room {{ t.room.room_number }} · {{ t.get_kind_display }}{% if t.notes %} · {{ t.notes }}{% endif %}</span>{% if can_edit %}<form method="post" action="{{ base_url }}rooms/housekeeping/tasks/{{ t.pk }}/">{% csrf_token %}<input type="hidden" name="op" value="reopen"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="ui-link-btn" type="submit">Reopen</button></form>{% endif %}</li>{% endfor %}</ul>
+      </section>
+      {% endif %}
+    </div>
+    <div class="ui-g360-side">
+      {% if can_edit %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Add a task</h2>
+        <form method="post" action="{{ base_url }}rooms/housekeeping/tasks/add/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-field"><label for="tkRooms">Rooms</label><select id="tkRooms" class="ui-input" name="room_id" multiple size="5" required>{% for r in rooms %}<option value="{{ r.pk }}">{{ r.room_number }} · {{ r.get_status_display }}</option>{% endfor %}</select><small class="ui-log-sub">Hold Ctrl / ⌘ to pick several.</small></div>
+          <div class="ui-field"><label for="tkKind">Task</label><select id="tkKind" class="ui-input" name="kind">{% for k, l in kinds %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></div>
+          <div class="ui-field"><label for="tkStaff">Assign to</label><select id="tkStaff" class="ui-input" name="assigned_to"><option value="">Unassigned</option>{% for s in staff %}<option value="{{ s.pk }}">{{ s.name }}</option>{% endfor %}</select></div>
+          <div class="ui-field"><label for="tkDate">Date</label><input id="tkDate" class="ui-input" type="date" name="task_date" value="{{ day|date:'Y-m-d' }}"></div>
+          <div class="ui-field"><label for="tkNotes">Notes</label><input id="tkNotes" class="ui-input" name="notes" maxlength="255" placeholder="e.g. Extra towels, VIP amenity"></div>
+          <label class="ui-pms-check"><input type="checkbox" name="is_rush" value="1"> Rush — guest waiting</label>
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-plus"></i><span>Add task</span></button>
+        </form>
+      </section>
+      {% endif %}
+      {% if by_staff %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Done by attendant</h2>
+        <ul class="ui-dash-mini">{% for s in by_staff %}<li><span>{{ s.assigned_to__name|default:"Unassigned" }}</span><strong>{{ s.n }}</strong></li>{% endfor %}</ul>
+      </section>
+      {% endif %}
+    </div>
+  </div>
+</div>

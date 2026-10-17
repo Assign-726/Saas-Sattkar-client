@@ -72,11 +72,37 @@ def restaurant_context(request):
     show_parties = is_dining_mgmt and branch_has_restaurant and not is_club_user and not is_kitchen_user and not is_cashier_user and not is_waiter_user and not is_hotel_user
     show_staff = (is_dining_mgmt or user_role == 'CLUB_ADMIN') and not is_kitchen_user and not is_cashier_user and not is_waiter_user and not is_hotel_user and not (user_role in ['GATE_SCANNER', 'FRONT_DESK', 'HOUSEKEEPING'])
     show_settings = can_settings and not is_club_user and not is_hotel_user
+    show_delivery = (is_dining_mgmt or is_cashier_user) and branch_has_restaurant and not is_club_user and not is_kitchen_user and not is_hotel_user
 
     # Club module visibility
     enable_club_globally = getattr(constants, 'ENABLE_CLUB_EVENTS_MODULE', True)
     branch_has_club = getattr(active_branch, 'has_club_module', False) if active_branch else False
     show_club_events = enable_club_globally and (is_club_user or (is_dining_mgmt and branch_has_club) or is_super)
+
+    # Custom roles narrow what the built-in role shows (super_admin.permissions)
+    if getattr(profile, 'custom_role_id', None) and not is_super:
+        from super_admin.permissions import NONE
+        role = profile.custom_role
+        opened = lambda area: role.level(area) != NONE
+        show_dining_dashboard = show_dining_dashboard and opened('dashboard')
+        show_dining_analytics = show_dining_analytics and opened('analytics')
+        show_pos_group = show_pos_group and (opened('pos') or opened('kitchen'))
+        show_dinein_group = show_dinein_group and (opened('dine_in') or opened('kitchen'))
+        show_menu_group = show_menu_group and opened('menu')
+        show_stock_group = show_stock_group and opened('inventory')
+        show_parties = show_parties and opened('inventory')
+        show_staff = show_staff and opened('staff')
+        show_settings = show_settings and opened('settings')
+        show_club_events = show_club_events and opened('events')
+        show_delivery = show_delivery and opened('delivery')
+
+    # New Zomato / Swiggy orders waiting for acceptance, for the sidebar badges
+    delivery_pending = {}
+    if show_delivery and active_branch:
+        from django.db.models import Count
+        from integrations.models import ExternalOrderLink
+        delivery_pending = dict(ExternalOrderLink.objects.filter(branch=active_branch, source__in=['zomato', 'swiggy'], platform_status='placed')
+                                .values_list('source').annotate(n=Count('id')))
 
     return {
         'current_restaurant': restaurant,
@@ -106,5 +132,7 @@ def restaurant_context(request):
         'show_staff': show_staff,
         'show_settings': show_settings,
         'show_club_events': show_club_events,
+        'show_delivery': show_delivery,
+        'delivery_pending': delivery_pending,
         'branch_has_restaurant': branch_has_restaurant,
     }

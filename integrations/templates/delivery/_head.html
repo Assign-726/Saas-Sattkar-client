@@ -1,0 +1,33 @@
+<div class="ui-agg-head">
+  <div class="ui-agg-id">
+    <span class="ui-agg-logo" aria-hidden="true">{{ p.initial }}</span>
+    <div>
+      <h1>{{ p.label }}</h1>
+      <p>{{ branch.name }}{% if conn %} · Outlet {{ conn.external_store_id }}{% endif %}</p>
+    </div>
+  </div>
+  <div class="ui-agg-status">
+    {% if conn %}
+      {% if conn.environment == 'sandbox' %}<span class="ui-chip ui-chip-orange" title="Test outlet — the simulator is available in Settings"><i class="fa-solid fa-flask"></i> Sandbox</span>{% endif %}
+      <span class="ui-chip {% if conn.mode == 'api' %}ui-chip-blue{% else %}ui-chip-gray{% endif %}" title="{{ conn.get_mode_display }}">{% if conn.mode == 'api' %}<i class="fa-solid fa-plug-circle-check"></i> Partner API{% else %}<i class="fa-solid fa-tablet-screen-button"></i> Manual{% endif %}</span>
+      {% with h=conn.health %}
+      {% if h == 'paused' %}<span class="ui-chip ui-chip-red">Paused</span>
+      {% elif h == 'error' %}<span class="ui-chip ui-chip-red" title="{{ conn.last_error }}"><i class="fa-solid fa-triangle-exclamation"></i> Needs attention</span>
+      {% elif h == 'ok' %}<span class="ui-chip ui-chip-green" title="Last message from {{ p.label }}"><i class="fa-solid fa-circle-check"></i> Last message {{ conn.last_event_at|timesince }} ago</span>
+      {% else %}<span class="ui-chip ui-chip-gray">No messages yet</span>{% endif %}
+      {% endwith %}
+      <form method="post" action="{{ u.store }}" class="ui-agg-store">{% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <input type="hidden" name="open" value="{% if conn.is_store_open %}0{% else %}1{% endif %}">
+        <button type="submit" class="ui-agg-store-btn {% if conn.is_store_open %}is-open{% endif %}"
+                onclick="return confirm('{% if conn.is_store_open %}Take the outlet offline on {{ p.label }}? Customers will not be able to order.{% else %}Bring the outlet back online on {{ p.label }}?{% endif %}')">
+          <span class="dot"></span>{% if conn.is_store_open %}Taking orders{% else %}Offline{% endif %}
+        </button>
+      </form>
+    {% endif %}
+    <a class="ui-btn ui-btn-gray ui-btn-sm ui-agg-switch" href="{{ other_url }}" style="--other: {{ other.color }}"><span class="mini">{{ other.initial }}</span>{{ other.label }}</a>
+  </div>
+</div>
+<nav class="ui-tabs ui-agg-tabs" aria-label="{{ p.label }} sections">
+  {% for t in tabs %}<a href="{{ t.url }}" class="{% if tab == t.key %}is-active{% endif %}"><i class="fa-solid {{ t.icon }}"></i>{{ t.label }}</a>{% endfor %}
+</nav>

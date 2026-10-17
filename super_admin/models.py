@@ -982,6 +982,14 @@ class RestaurantUser(models.Model):
         blank=True,
         related_name='created_staff_profiles'
     )
+    custom_role = models.ForeignKey(
+        'CustomRole',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='members',
+        help_text="Narrows this login to the areas the custom role opens (see Roles & Permissions)"
+    )
 
     class Meta:
         unique_together = ('user', 'restaurant')
@@ -1316,3 +1324,52 @@ class ActivityLog(models.Model):
 
     def __str__(self):
         return f'{self.created_at:%Y-%m-%d %H:%M} {self.username or "system"} {self.action} {self.message}'
+
+
+class CustomRole(models.Model):
+    """A business-defined role: No access / View / Manage for each admin area (see super_admin.permissions)."""
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='custom_roles')
+    name = models.CharField(max_length=60)
+    description = models.CharField(max_length=200, blank=True)
+    permissions = models.JSONField(default=dict, help_text='{area: none|view|manage}')
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        constraints = [models.UniqueConstraint(fields=['restaurant', 'name'], name='uniq_custom_role_name')]
+
+    def __str__(self):
+        return self.name
+
+    def level(self, area):
+        from super_admin.permissions import NONE, RANK
+        value = (self.permissions or {}).get(area, NONE)
+        return value if value in RANK else NONE
+
+    @property
+    def base_role(self):
+        from super_admin.permissions import base_role_for
+        return base_role_for(self.permissions or {})
+
+    @property
+    def modules(self):
+        from super_admin.permissions import modules_used
+        return modules_used(self.permissions or {})
+
+    def summary(self):
+        from super_admin.permissions import AREAS, MANAGE, VIEW
+        manage = [label for key, label, *_ in AREAS if self.level(key) == MANAGE]
+        view = [label for key, label, *_ in AREAS if self.level(key) == VIEW]
+        return manage, view
+
+    def sync_members(self):
+        """Keep each member's base role and legacy switches in step with this role."""
+        from super_admin.permissions import LEGACY_FLAGS, RANK
+        base = self.base_role
+        for member in self.members.all():
+            member.role = base
+            for flag, (area, need) in LEGACY_FLAGS.items():
+                setattr(member, flag, RANK[self.level(area)] >= RANK[need])
+            member.save()

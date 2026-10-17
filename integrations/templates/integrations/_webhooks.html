@@ -1,0 +1,39 @@
+<div class="ui-logs ui-integrations">
+  {% include 'integrations/_head.html' with action_label='Add webhook' action_dialog='hookDialog' %}
+
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Webhook endpoints</h2><span class="ui-list-count">{{ rows|length }}</span></div>
+    {% if rows %}
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>Endpoint</th><th>Branch</th><th>Events</th><th>Last 24h</th><th>Health</th></tr></thead>
+      <tbody>{% for row in rows %}{% with ep=row.ep %}
+        <tr class="ui-row-link" data-href="{{ nav.webhooks }}{{ ep.pk }}/">
+          <td class="ui-cell-primary"><a href="{{ nav.webhooks }}{{ ep.pk }}/"><strong>{{ ep.name }}</strong></a><div class="ui-log-sub" style="word-break:break-all">{{ ep.url }}</div></td>
+          <td>{% if ep.branch %}{{ ep.branch.name }}{% else %}<span class="ui-chip ui-chip-indigo">All branches</span>{% endif %}</td>
+          <td>{{ ep.events|length }} event{{ ep.events|length|pluralize }}<div class="ui-log-sub">{{ ep.events|slice:":2"|join:", " }}{% if ep.events|length > 2 %}…{% endif %}</div></td>
+          <td>{% if row.total %}{{ row.ok }}/{{ row.total }} delivered{% else %}<span class="ui-log-sub">No deliveries</span>{% endif %}</td>
+          <td>{% if not ep.is_active %}<span class="ui-health is-bad">{% if ep.disabled_reason %}Turned off{% else %}Paused{% endif %}</span>{% elif ep.failure_streak >= 3 %}<span class="ui-health is-warn">Failing ({{ ep.failure_streak }})</span>{% elif ep.last_status_code %}<span class="ui-health is-ok">Healthy</span>{% else %}<span class="ui-health">Waiting</span>{% endif %}</td>
+        </tr>{% endwith %}{% endfor %}</tbody>
+    </table></div>
+    {% else %}
+    <div class="ui-empty"><div class="ui-empty-icon"><i class="fa-solid fa-tower-broadcast"></i></div><h3>No webhooks yet</h3>
+      <p>Tell an aggregator bridge, channel manager, ERP or Slack/Zapier flow the moment an order is placed, ready or cancelled, an item sells out or a guest checks in. Every request is signed so the receiver can trust it.</p>
+      <button type="button" class="ui-btn ui-btn-primary" data-open-dialog="hookDialog"><i class="fa-solid fa-plus"></i><span>Add webhook</span></button></div>
+    {% endif %}
+  </section>
+
+  <dialog class="ui-dialog ui-dialog-form" id="hookDialog">
+    <form method="post">{% csrf_token %}
+      <h3>Add a webhook</h3>
+      <div class="ui-form-grid">
+        <div class="ui-field"><label>Name</label><input class="ui-input" name="name" required placeholder="e.g. Kitchen ERP, Zapier"></div>
+        <div class="ui-field"><label>Branch</label><select class="ui-input" name="branch">{% if not branch_locked %}<option value="">All branches</option>{% endif %}{% for b in branches %}<option value="{{ b.id }}" {% if selected_branch.id == b.id %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></div>
+        <div class="ui-field ui-col-2"><label>Endpoint URL</label><input class="ui-input" name="url" type="url" required placeholder="https://partner.example.com/webhooks/hospitality"></div>
+      </div>
+      <div class="ui-field-label" style="margin:12px 0 6px;font-weight:600;font-size:13px">Send these events</div>
+      <div class="ui-check-grid">{% for e, label in events %}<label><input type="checkbox" class="ui-check" name="events" value="{{ e }}" {% if e|slice:':6' == 'order.' %}checked{% endif %}><span>{{ label }}<code>{{ e }}</code></span></label>{% endfor %}</div>
+      <div class="ui-dialog-actions"><button class="ui-btn ui-btn-gray" type="button" data-close-dialog>Cancel</button><button class="ui-btn ui-btn-primary" type="submit">Add webhook</button></div>
+    </form>
+  </dialog>
+</div>
+{% include 'integrations/_scripts.html' %}

@@ -164,12 +164,22 @@ class ClubEventsTicketingTests(TestCase):
         ref = init_res.data['booking_reference']
         order_id = init_res.data['razorpay_order_id']
 
-        verify_res = self.client.post('/api/events/public/verify-payment/', {
-            "booking_reference": ref,
-            "razorpay_order_id": order_id,
-            "razorpay_payment_id": "pay_test_9999",
-            "razorpay_signature": "sig_test"
+        # A made-up signature must never confirm a ticket.
+        bad = self.client.post('/api/events/public/verify-payment/', {
+            "booking_reference": ref, "razorpay_order_id": order_id,
+            "razorpay_payment_id": "pay_test_9999", "razorpay_signature": "sig_test"
         }, format='json')
+        self.assertEqual(bad.status_code, status.HTTP_400_BAD_REQUEST)
+
+        import hashlib, hmac
+        sig = hmac.new(b'rzp_secret_test', f"{order_id}|pay_test_9999".encode(), hashlib.sha256).hexdigest()
+        with self.settings(RAZORPAY_KEY_ID='rzp_mock_key', RAZORPAY_KEY_SECRET='rzp_secret_test'):
+            verify_res = self.client.post('/api/events/public/verify-payment/', {
+                "booking_reference": ref,
+                "razorpay_order_id": order_id,
+                "razorpay_payment_id": "pay_test_9999",
+                "razorpay_signature": sig
+            }, format='json')
         self.assertEqual(verify_res.status_code, status.HTTP_200_OK)
 
         booking = EventBooking.objects.get(booking_reference=ref)

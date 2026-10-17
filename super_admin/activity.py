@@ -32,7 +32,7 @@ AREA_PREFIXES = (
 
 # High-frequency background calls that would drown the log
 NOISY_URL_NAMES = {
-    'pos_draft_order_api', 'pos_sync_draft_items_api', 'order_notifications_poll',
+    'pos_draft_order_api', 'pos_sync_draft_items_api', 'order_notifications_poll', 'notifications_poll', 'notifications_list', 'notifications_update',
     'kitchen_kds_orders_api', 'order_omni_search_api', 'detect_location_ip_api',
     'floor_plan_api', 'floor_plan_save_position_api', 'pos_active_shift_api',
     'pos_shift_summary_api', 'inventory_category_api', 'get_subcategories',

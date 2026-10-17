@@ -1,0 +1,47 @@
+<div class="ui-agg" style="--brand: {{ p.color }}; --brand-rgb: {{ p.rgb }};">
+  {% include 'delivery/_head.html' %}
+  <form class="ui-dash-filter" method="get">
+    <nav class="ui-dash-periods" aria-label="Log type">
+      <a href="?kind=events" class="{% if kind == 'events' %}is-on{% endif %}"><i class="fa-solid fa-arrow-down"></i> From {{ p.label }}</a>
+      <a href="?kind=actions" class="{% if kind == 'actions' %}is-on{% endif %}"><i class="fa-solid fa-arrow-up"></i> To {{ p.label }}</a>
+    </nav>
+    <input type="hidden" name="kind" value="{{ kind }}">
+    <select class="ui-input ui-dash-branch" name="state" onchange="this.form.submit()" aria-label="State"><option value="">Every state</option>{% for k, l in states %}<option value="{{ k }}" {% if state == k %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+  </form>
+  <section class="ui-card ui-list-card">
+    {% if page.object_list %}
+    <div class="table-responsive"><table class="table ui-dash-table ui-agg-log">
+      {% if kind == 'actions' %}
+      <thead><tr><th>When</th><th>Action</th><th>Order</th><th>Result</th><th class="num">Tries</th><th></th></tr></thead>
+      <tbody>{% for a in page %}<tr>
+        <td class="ui-log-sub">{{ a.created_at|date:"j M, g:i:s a" }}</td>
+        <td><strong>{{ a.label }}</strong><div class="ui-log-sub">{% if a.created_by %}{{ a.created_by.get_full_name|default:a.created_by.username }}{% else %}automatic{% endif %}</div></td>
+        <td>{% if a.link %}<a href="{% url 'restaurant_admin:delivery_order_detail' restaurant_slug=env.slug platform=env.platform pk=a.link_id %}">#{{ a.link.external_id }}</a>{% else %}—{% endif %}</td>
+        <td><span class="ui-chip {% if a.state == 'succeeded' %}ui-chip-green{% elif a.state == 'manual' or a.state == 'unsupported' %}ui-chip-gray{% elif a.state == 'retry' or a.state == 'queued' %}ui-chip-orange{% else %}ui-chip-red{% endif %}">{{ a.get_state_display }}</span>{% if a.response_code %} <small class="ui-log-sub">HTTP {{ a.response_code }}</small>{% endif %}{% if a.error %}<div class="ui-log-sub">{{ a.error|truncatechars:120 }}</div>{% endif %}</td>
+        <td class="num">{{ a.attempts }}</td>
+        <td class="num">{% if a.state == 'retry' or a.state == 'failed' %}<form method="post">{% csrf_token %}<input type="hidden" name="op" value="retry_action"><input type="hidden" name="id" value="{{ a.pk }}"><button class="ui-btn ui-btn-gray ui-btn-sm">Retry</button></form>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+      {% else %}
+      <thead><tr><th>Received</th><th>Event</th><th>Order</th><th>Result</th><th class="num">Tries</th><th></th></tr></thead>
+      <tbody>{% for e in page %}<tr>
+        <td class="ui-log-sub">{{ e.received_at|date:"j M, g:i:s a" }}</td>
+        <td><strong>{{ e.event_type }}</strong></td>
+        <td>{{ e.external_order_id|default:"—" }}</td>
+        <td><span class="ui-chip {% if e.state == 'processed' %}ui-chip-green{% elif e.state == 'ignored' %}ui-chip-gray{% elif e.state == 'retry' or e.state == 'needs_mapping' %}ui-chip-orange{% else %}ui-chip-red{% endif %}">{{ e.get_state_display }}</span>{% if e.last_error and e.state != 'processed' %}<div class="ui-log-sub">{{ e.last_error|truncatechars:140 }}</div>{% endif %}
+          {% if e.state == 'needs_mapping' %}
+          <form method="post" class="ui-agg-mapform">{% csrf_token %}<input type="hidden" name="op" value="map"><input type="hidden" name="id" value="{{ e.pk }}">
+            {% for un in e.unmapped %}<div class="row-map"><span>“{{ un.name }}”{% if un.external_id %} <code>{{ un.external_id }}</code>{% else %} <em class="ui-text-red">no ID</em>{% endif %} → </span>
+              <select class="ui-input" name="item_{{ forloop.counter0 }}" {% if not un.external_id %}disabled{% endif %}><option value="">Choose dish…</option>{% for m in menu %}<option value="{{ m.pk }}">{{ m.name }}</option>{% endfor %}</select></div>{% endfor %}
+            <button class="ui-btn ui-btn-primary ui-btn-sm">Save mapping &amp; create order</button>
+          </form>{% endif %}
+          <details class="ui-details"><summary>Message</summary><pre class="ui-json">{{ e.payload|pprint|truncatechars:4000 }}</pre></details>
+        </td>
+        <td class="num">{{ e.attempts }}</td>
+        <td class="num">{% if e.state == 'retry' or e.state == 'failed' %}<form method="post">{% csrf_token %}<input type="hidden" name="op" value="retry_event"><input type="hidden" name="id" value="{{ e.pk }}"><button class="ui-btn ui-btn-gray ui-btn-sm">Retry</button></form>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+      {% endif %}
+    </table></div>
+    {% if page.has_other_pages %}<nav class="ui-pager">{% if page.has_previous %}<a class="ui-pager-btn" href="?kind={{ kind }}&state={{ state }}&page={{ page.previous_page_number }}">‹ Previous</a>{% endif %}<span class="ui-pager-info">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="ui-pager-btn" href="?kind={{ kind }}&state={{ state }}&page={{ page.next_page_number }}">Next ›</a>{% endif %}</nav>{% endif %}
+    {% else %}<div class="ui-empty"><i class="fa-solid fa-list-check ui-empty-icon"></i><p class="ui-log-sub">Nothing logged{% if state %} in this state{% endif %}.</p></div>{% endif %}
+  </section>
+</div>
