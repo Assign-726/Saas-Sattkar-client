@@ -82,3 +82,17 @@ class GstCompanyTests(TestCase):
         r = self.post('/dashboard/other-co/orders/gst-company/', {'name': 'X', 'gstin': gstin()})
         self.assertIn(r.status_code, (302, 403))
         self.assertEqual(Party.objects.filter(name='X').count(), 0)
+
+    def test_adding_a_gstin_to_a_picked_party_updates_that_party(self):
+        acme = Party.objects.create(restaurant=self.r, name='Acme', party_type='customer', phone='9822012345')
+        r = self.post(self.url, {'party_id': acme.pk, 'name': 'Acme Pvt Ltd', 'gstin': gstin()})
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertFalse(r.json()['created'])
+        acme.refresh_from_db()
+        self.assertEqual((acme.name, acme.gstin, acme.phone), ('Acme Pvt Ltd', gstin(), '9822012345'))
+        self.assertEqual(Party.objects.count(), 1)
+        # a GSTIN that already belongs to someone else is refused
+        other = Party.objects.create(restaurant=self.r, name='Other', party_type='customer')
+        r = self.post(self.url, {'party_id': other.pk, 'name': 'Other', 'gstin': gstin()})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn('already belongs to “Acme Pvt Ltd”', r.json()['errors']['gstin'])

@@ -1832,6 +1832,15 @@ def pos_gst_company_api(request, restaurant_slug=None):
     fields['address'] = ', '.join(v for v in [fields['address_line1'], fields['city'], state, fields['pincode']] if v)
     branch = get_active_branch(request, restaurant)
     party = Party.objects.filter(restaurant=restaurant, gstin__iexact=gstin).first()
+    # adding a GSTIN to a party picked from Parties: update that party, not a new one
+    picked = None
+    if str(data.get('party_id') or '').isdigit():
+        picked = Party.objects.filter(restaurant=restaurant, pk=int(data['party_id'])).first()
+    if picked:
+        if party and party.pk != picked.pk:
+            return JsonResponse({'success': False, 'errors': {
+                'gstin': f'This GSTIN already belongs to “{party.name}” in Parties — pick that party instead.'}}, status=400)
+        party = picked
     created = party is None
     if created:
         party = Party.objects.create(restaurant=restaurant, branch=branch, opening_balance=Decimal('0.00'),
