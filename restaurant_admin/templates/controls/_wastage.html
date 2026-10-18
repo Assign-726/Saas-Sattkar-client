@@ -2,7 +2,7 @@
 <div class="ui-logs ui-pms">
   <div class="ui-page-header">
     <div><h1>Wastage</h1><p>{{ label }} · {{ start|date:"d M" }} – {{ end|date:"d M Y" }}{% if current_branch %} · {{ current_branch.name }}{% endif %}</p></div>
-    <div class="ui-actions"><a class="ui-btn ui-btn-gray" href="?{{ request.GET.urlencode }}&export=csv"><i class="fa-solid fa-file-csv"></i><span>CSV</span></a></div>
+    <div class="ui-actions" style="gap:8px">{% url 'restaurant_admin:inventory_wastage_export' restaurant_slug=restaurant.slug as mio_export %}{% url 'restaurant_admin:inventory_wastage_import' restaurant_slug=restaurant.slug as mio_import %}{% include 'restaurant_admin/menu/_import_export.html' with noun='wastage entries' export_url=mio_export import_url=mio_import filtered='1' modes='0' tip='Each row is logged as wastage and reduces stock, just like “Log wastage”. Match items by SKU or name.' col_a='Reason' col_b='Quantity' %}</div>
   </div>
 
   <form class="ui-card ui-filters" method="get">

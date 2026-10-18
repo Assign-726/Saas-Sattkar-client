@@ -3,7 +3,7 @@
   <a class="ui-back" href="{{ base_url }}inventory/counts/"><i class="fa-solid fa-chevron-left"></i> Stock counts</a>
   <div class="ui-page-header">
     <div><h1>{{ count.title }}</h1><p><span class="ui-chip ui-chip-{% if count.status == 'POSTED' %}green{% elif count.status == 'DRAFT' %}orange{% else %}gray{% endif %}">{{ count.get_status_display }}</span> · started {{ count.created_at|date:"d M Y, h:i A" }}{% if count.posted_at %} · posted {{ count.posted_at|date:"d M, h:i A" }}{% if count.posted_by %} by {{ count.posted_by.username }}{% endif %}{% endif %}</p></div>
-    <div class="ui-actions"><a class="ui-btn ui-btn-gray" href="?export=csv"><i class="fa-solid fa-file-csv"></i><span>CSV</span></a><button type="button" class="ui-btn ui-btn-gray" onclick="window.print()"><i class="fa-solid fa-print"></i><span>Count sheet</span></button></div>
+    <div class="ui-actions" style="gap:8px">{% url 'restaurant_admin:inventory_count_export' restaurant_slug=restaurant.slug pk=count.pk as mio_export %}{% if count.status == 'DRAFT' %}{% url 'restaurant_admin:inventory_count_import' restaurant_slug=restaurant.slug pk=count.pk as mio_import %}{% endif %}{% include 'restaurant_admin/menu/_import_export.html' with noun='counted quantities' export_noun='count sheet' export_url=mio_export import_url=mio_import modes='0' templates='0' tip='Export the count sheet, fill in the “Counted” column on the shelf, and import it here. The quantities are filled into this count for you to review — nothing is posted until you press Post count.' col_a='Book' col_b='Counted' %}<button type="button" class="ui-btn ui-btn-gray" onclick="window.print()"><i class="fa-solid fa-print"></i><span>Count sheet</span></button></div>
   </div>
 
   <div class="ui-kpi-grid">

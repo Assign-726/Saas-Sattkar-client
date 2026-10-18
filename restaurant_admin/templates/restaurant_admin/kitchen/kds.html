@@ -42,8 +42,7 @@
   :root[data-bs-theme="dark"],
   html[data-theme="dark"],
   html.dark-theme,
-  body.dark-mode,
-  body.kds-dark-mode {
+  body.dark-mode {
     --kds-bg: #0B0F19;
     --kds-surface: #141D2B;
     --kds-surface-secondary: var(--ui-surface-2);
@@ -56,14 +55,11 @@
     --kds-card-hover-shadow: 0 16px 36px rgba(0, 0, 0, 0.6);
   }
 
-  body.kds-dark-mode,
   [data-theme="dark"] body,
   .dark-theme body {
     background-color: var(--kds-bg) !important;
   }
 
-  body.kds-dark-mode .content-wrapper,
-  body.kds-dark-mode .main-content,
   [data-theme="dark"] .content-wrapper,
   [data-theme="dark"] .main-content,
   .dark-theme .content-wrapper,
@@ -183,7 +179,7 @@
     color: var(--kds-text-primary);
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
   }
-  body.kds-dark-mode .kds-seg button.active { background: var(--kds-border); }
+  [data-theme="dark"] .kds-seg button.active { background: var(--kds-border); }
   .kds-custom-range {
     display: none;
     align-items: center;
@@ -432,14 +428,14 @@
     font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
   }
   .kds-ticket-status .detail { font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--kds-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  body.kds-dark-mode .kds-ticket-status { filter: brightness(1.25); }
+  [data-theme="dark"] .kds-ticket-status { filter: brightness(1.25); }
 
   .kds-flag {
     display: inline-flex; align-items: center; gap: 0.25rem;
     font-size: 0.66rem; font-weight: 700; padding: 0.1rem 0.45rem; border-radius: 999px;
     background: rgba(217, 119, 6, 0.14); color: #B45309; white-space: nowrap;
   }
-  body.kds-dark-mode .kds-flag { color: #FBBF24; }
+  [data-theme="dark"] .kds-flag { color: #FBBF24; }
 
   .kds-ticket-items { padding: 0.35rem 0.55rem; display: flex; flex-direction: column; max-height: 340px; overflow-y: auto; scrollbar-width: thin; }
   .compact-mode .kds-ticket-items { max-height: 250px; }
@@ -447,7 +443,7 @@
     font-size: 0.66rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
     color: #B45309; padding: 0.4rem 0.3rem 0.15rem; display: flex; align-items: center; gap: 0.35rem;
   }
-  body.kds-dark-mode .kds-round { color: #FBBF24; }
+  [data-theme="dark"] .kds-round { color: #FBBF24; }
 
   /* Item rows (also used in the full-ticket modal) */
   .kds-item-card {
@@ -497,7 +493,7 @@
     border-radius: 6px;
     padding: 0.2rem 0.45rem;
   }
-  body.kds-dark-mode .item-special-note { color: #FCD34D; }
+  [data-theme="dark"] .item-special-note { color: #FCD34D; }
   .item-check-dot {
     flex-shrink: 0;
     width: 22px; height: 22px; border-radius: 50%;
@@ -542,7 +538,7 @@
   .btn-start-cooking { background: #2563EB; color: #fff; }
   .btn-mark-ready { background: #059669; color: #fff; }
   .btn-serve { background: #0F172A; color: #fff; }
-  body.kds-dark-mode .btn-serve { background: #E2E8F0; color: #0F172A; }
+  [data-theme="dark"] .btn-serve { background: #E2E8F0; color: #0F172A; }
   .btn-pause-action, .btn-resume-action, .btn-print-kot {
     background: var(--kds-surface-secondary);
     border-color: var(--kds-border);
@@ -1018,14 +1014,13 @@
   // Preferences & Persistence (Sound, Theme, Density, Checked Items)
   // ==========================================================================
   function initPreferences() {
-    // 1. Theme preference
-    const savedTheme = localStorage.getItem('kds_theme');
-    const globalDark = document.documentElement.getAttribute('data-theme') === 'dark' || document.documentElement.classList.contains('dark-theme');
-    if (savedTheme === 'dark' || (!savedTheme && globalDark)) {
-      enableDarkMode(true);
-    } else {
-      enableDarkMode(false);
-    }
+    // 1. Theme: the KDS follows the app theme (sidebar Light / Dark / System). It used to keep its
+    //    own 'kds_theme', which fought the app theme (dark text on dark cards, a light mode that
+    //    stayed dark), so that old setting is dropped.
+    try { localStorage.removeItem('kds_theme'); } catch (e) {}
+    syncThemeIcon();
+    window.addEventListener('appThemeChanged', syncThemeIcon);
+    new MutationObserver(syncThemeIcon).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
     // 2. Grid Density preference
     const savedDensity = localStorage.getItem('kds_density');
@@ -1056,23 +1051,36 @@
     }
   }
 
-  function enableDarkMode(enable) {
-    state.darkMode = enable;
-    if (enable) {
-      document.body.classList.add('kds-dark-mode');
-      themeIcon.className = 'bi bi-sun-fill text-warning';
-      btnTheme.title = 'Switch to Light Mode';
-      localStorage.setItem('kds_theme', 'dark');
+  function isDarkTheme() {
+    return document.documentElement.getAttribute('data-theme') === 'dark';
+  }
+
+  function syncThemeIcon() {
+    state.darkMode = isDarkTheme();
+    document.body.classList.remove('kds-dark-mode');
+    themeIcon.className = state.darkMode ? 'bi bi-sun-fill text-warning' : 'bi bi-moon-stars';
+    btnTheme.title = state.darkMode ? 'Switch to light mode' : 'Switch to dark mode';
+    btnTheme.setAttribute('aria-label', btnTheme.title);
+  }
+
+  // Same switch as the sidebar's Light / Dark buttons, so the whole app changes together.
+  function setAppTheme(mode) {
+    const seg = document.querySelector('.theme-seg-btn[data-theme-val="' + mode + '"]');
+    if (seg) {
+      seg.click();
     } else {
-      document.body.classList.remove('kds-dark-mode');
-      themeIcon.className = 'bi bi-moon-stars';
-      btnTheme.title = 'Switch to Kitchen Dark Mode';
-      localStorage.setItem('kds_theme', 'light');
+      try { localStorage.setItem('app-theme-preference', mode); } catch (e) {}
+      document.documentElement.setAttribute('data-theme', mode);
+      document.documentElement.setAttribute('data-bs-theme', mode);
+      document.documentElement.classList.toggle('dark-theme', mode === 'dark');
+      document.body.classList.toggle('dark-mode', mode === 'dark');
+      window.dispatchEvent(new CustomEvent('appThemeChanged', { detail: { preference: mode, effective: mode } }));
     }
+    syncThemeIcon();
   }
 
   btnTheme.addEventListener('click', () => {
-    enableDarkMode(!state.darkMode);
+    setAppTheme(isDarkTheme() ? 'light' : 'dark');
   });
 
   function setCompactMode(enable) {

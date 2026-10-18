@@ -388,7 +388,9 @@
             <h1 class="h2 fw-bold text-dark mb-0">Menu Management</h1>
             <p class="text-muted small mb-0">Organize dishes, set prices in Rupees (₹), and manage instant stock availability.</p>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex flex-wrap gap-2">
+            {% url 'restaurant_admin:menu_export' restaurant_slug=rslug as mio_export %}{% url 'restaurant_admin:menu_import' restaurant_slug=rslug as mio_import %}
+            {% include 'restaurant_admin/menu/_import_export.html' with noun='menu items' export_url=mio_export import_url=mio_import filtered='1' match='item (by Code or Name)' tip='Blank cells keep the current value on existing items.' col_a='Category' col_b='Price' col_b_money='1' %}
             <a href="{% url 'restaurant_admin:menu_bulk_add' restaurant_slug=rslug %}" class="btn btn-outline-primary btn-sm rounded-pill px-3 shadow-xs">
                 <i class="bi bi-file-earmark-code me-1"></i>Bulk Import (JSON)
             </a>

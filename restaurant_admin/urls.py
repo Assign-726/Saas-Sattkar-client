@@ -1,5 +1,7 @@
 from django.urls import path
 from restaurant_admin import views
+from restaurant_admin import views_menu_io
+from restaurant_admin import views_stock_io
 from super_admin import views_logs
 from guests import views as guest_views
 from guests import views_growth
@@ -78,6 +80,7 @@ urlpatterns = [
     
     # Delivery Challans Management
     path('challans/', views.challan_list, name='challan_list'),
+    path('challans/export/', views_stock_io.challan_export, name='challan_export'),
     path('challans/create/', views.challan_create, name='challan_create'),
     path('challans/<int:pk>/', views.challan_detail, name='challan_detail'),
     path('challans/<int:pk>/receive/', views.challan_mark_received, name='challan_mark_received'),
@@ -102,6 +105,8 @@ urlpatterns = [
     path('menu/add/', views.menu_add, name='menu_add'),
     path('menu/quick-add/', views.menu_quick_add_api, name='menu_quick_add_api'),
     path('menu/bulk-add/', views.menu_bulk_add, name='menu_bulk_add'),
+    path('menu/export/', views_menu_io.menu_export, name='menu_export'),
+    path('menu/import/', views_menu_io.menu_import, name='menu_import'),
     path('menu/<int:pk>/edit/', views.menu_edit, name='menu_edit'),
     path('menu/<int:pk>/delete/', views.menu_delete, name='menu_delete'),
     path('menu/<int:pk>/toggle-availability/', views.menu_toggle_availability, name='menu_toggle_availability'),
@@ -153,7 +158,11 @@ urlpatterns = [
 
     # Inventory & Purchases Management
     path('inventory/', views.inventory_list, name='inventory_list'),
+    path('inventory/export/', views_stock_io.inventory_export, name='inventory_export'),
+    path('inventory/import/', views_stock_io.inventory_import, name='inventory_import'),
     path('inventory/categories/', views.inventory_category_list, name='inventory_category_list'),
+    path('inventory/categories/export/', views_stock_io.inventory_category_export, name='inventory_category_export'),
+    path('inventory/categories/import/', views_stock_io.inventory_category_import, name='inventory_category_import'),
     path('inventory/categories/add/', views.inventory_category_add, name='inventory_category_add'),
     path('inventory/categories/<int:pk>/edit/', views.inventory_category_edit, name='inventory_category_edit'),
     path('inventory/categories/<int:pk>/delete/', views.inventory_category_delete, name='inventory_category_delete'),
@@ -164,11 +173,16 @@ urlpatterns = [
     path('inventory/<int:pk>/delete/', views.inventory_delete, name='inventory_delete'),
     path('inventory/<int:pk>/adjust/', views.inventory_adjust, name='inventory_adjust'),
     path('inventory/logs/', views.inventory_logs, name='inventory_logs'),
+    path('inventory/logs/export/', views_stock_io.inventory_logs_export, name='inventory_logs_export'),
     path('inventory/wastage/', views_controls.inventory_wastage, name='inventory_wastage'),
+    path('inventory/wastage/export/', views_stock_io.inventory_wastage_export, name='inventory_wastage_export'),
+    path('inventory/wastage/import/', views_stock_io.inventory_wastage_import, name='inventory_wastage_import'),
     path('inventory/wastage/add/', views_controls.inventory_wastage_add, name='inventory_wastage_add'),
     path('inventory/counts/', views_controls.inventory_counts, name='inventory_counts'),
     path('inventory/counts/new/', views_controls.inventory_count_new, name='inventory_count_new'),
     path('inventory/counts/<int:pk>/', views_controls.inventory_count_detail, name='inventory_count_detail'),
+    path('inventory/counts/<int:pk>/export/', views_stock_io.inventory_count_export, name='inventory_count_export'),
+    path('inventory/counts/<int:pk>/import/', views_stock_io.inventory_count_import, name='inventory_count_import'),
     path('inventory/counts/<int:pk>/save/', views_controls.inventory_count_save, name='inventory_count_save'),
     path('reports/menu-engineering/', views_controls.report_menu_engineering, name='report_menu_engineering'),
     path('purchases/', views.purchase_list, name='purchase_list'),
@@ -180,6 +194,8 @@ urlpatterns = [
 
     # Party Management
     path('parties/', views.party_list, name='party_list'),
+    path('parties/export/', views_stock_io.party_export, name='party_export'),
+    path('parties/import/', views_stock_io.party_import, name='party_import'),
     path('parties/<int:pk>/', views.party_ledger_detail, name='party_ledger_detail'),
     path('parties/<int:pk>/edit/', views.party_edit_api, name='party_edit_api'),
 
@@ -190,6 +206,8 @@ urlpatterns = [
     # Category Management
     path('categories/', views.category_list, name='category_list'),
     path('categories/add/', views.category_add, name='category_add'),
+    path('categories/export/', views_menu_io.category_export, name='category_export'),
+    path('categories/import/', views_menu_io.category_import, name='category_import'),
     path('categories/<int:pk>/edit/', views.category_edit, name='category_edit'),
     path('categories/<int:pk>/delete/', views.category_delete, name='category_delete'),
     

@@ -1,0 +1,280 @@
+{% comment %}
+Import / Export controls for a list page. Include with:
+  noun        plural shown in titles, e.g. "menu items" (export_noun: optional label for the Export menu)
+  export_url  Excel/CSV download (the page's current filters are added to it)
+  import_url  optional — leave out for export-only pages
+  filtered    "1" → the Export menu says it follows the current filters
+  match       mode hint, e.g. "item (by Code or Name)"   ·   tip  extra sentence in the tip box
+  modes       "0" hides the add/update mode choice       ·   templates  "0" hides the template links
+  col_a, col_b  preview columns after Name (col_b_money "1" → shown as ₹)
+{% endcomment %}
+<div class="dropdown mio-wrap">
+    <button class="btn btn-outline-secondary btn-sm rounded-pill px-3 shadow-xs dropdown-toggle" type="button"
+            data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="fas fa-file-export me-1"></i>Export
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end shadow-sm mio-menu">
+        <li><h6 class="dropdown-header">Export {{ export_noun|default:noun }}{% if filtered == '1' %} (current filters){% endif %}</h6></li>
+        <li><a class="dropdown-item mio-export" href="{{ export_url }}" data-format="xlsx">
+            <i class="fas fa-file-excel me-2 text-success"></i>Excel (.xlsx)</a></li>
+        <li><a class="dropdown-item mio-export" href="{{ export_url }}" data-format="csv">
+            <i class="fas fa-file-csv me-2 text-primary"></i>CSV</a></li>
+    </ul>
+</div>
+{% if import_url %}
+<button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3 shadow-xs" data-bs-toggle="modal"
+        data-bs-target="#mioModal">
+    <i class="fas fa-file-import me-1"></i>Import
+</button>
+
+<div class="modal fade" id="mioModal" tabindex="-1" aria-labelledby="mioTitle" aria-hidden="true"
+     data-import-url="{{ import_url }}" data-noun="{{ noun }}" data-money="{{ col_b_money|default:'' }}">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content mio">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="mioTitle"><i class="fas fa-file-import me-2"></i>Import {{ noun }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- step 1: choose file -->
+                <div id="mioStep1">
+                    <label class="mio-drop" id="mioDrop" for="mioFile" tabindex="0">
+                        <input type="file" id="mioFile" accept=".xlsx,.csv" hidden>
+                        <i class="fas fa-cloud-arrow-up"></i>
+                        <strong id="mioFileName">Drop an Excel or CSV file here, or click to choose</strong>
+                        <span>.xlsx or .csv · up to 5 MB · {{ max_rows|default:"5,000" }} rows</span>
+                    </label>
+                    {% if modes != '0' %}
+                    <div class="mio-modes" role="radiogroup" aria-label="What to do with each row">
+                        <label><input type="radio" name="mioMode" value="upsert" checked> <span><b>Add new &amp; update existing</b><small>Rows that match an existing {{ match|default:"record" }} update it</small></span></label>
+                        <label><input type="radio" name="mioMode" value="create"> <span><b>Only add new</b><small>Rows that already exist are skipped</small></span></label>
+                        <label><input type="radio" name="mioMode" value="update"> <span><b>Only update existing</b><small>New rows are skipped — safe for price updates</small></span></label>
+                    </div>
+                    {% else %}<div style="height:14px"></div>{% endif %}
+                    <div class="mio-tip">
+                        <i class="fas fa-lightbulb"></i>
+                        <div>
+                            {% if templates != '0' %}Start from the template:
+                            <a href="{{ export_url }}?template=1&amp;format=xlsx">Excel template</a> ·
+                            <a href="{{ export_url }}?template=1&amp;format=csv">CSV template</a>.
+                            Or export your {{ noun }}, edit them in Excel and import the file back.{% endif %}
+                            {{ tip }}
+                        </div>
+                    </div>
+                </div>
+                <!-- step 2: preview -->
+                <div id="mioStep2" hidden>
+                    <div class="mio-sum" id="mioSum"></div>
+                    <div class="mio-newcats" id="mioNewCats" hidden></div>
+                    <div class="mio-tabs" role="tablist">
+                        <button type="button" class="on" data-f="all">All</button>
+                        <button type="button" data-f="change">Changes</button>
+                        <button type="button" data-f="error">Errors</button>
+                    </div>
+                    <div class="mio-table-wrap">
+                        <table class="table table-sm align-middle mb-0 mio-table">
+                            <thead><tr><th>Row</th><th>Name</th>{% if col_a %}<th class="mio-col-a">{{ col_a }}</th>{% endif %}{% if col_b %}<th class="text-end mio-col-b">{{ col_b }}</th>{% endif %}<th>Result</th></tr></thead>
+                            <tbody id="mioRows"></tbody>
+                        </table>
+                    </div>
+                    <p class="mio-more" id="mioMore" hidden></p>
+                </div>
+                <div class="alert alert-danger mt-3 mb-0 py-2 small" id="mioError" hidden></div>
+            </div>
+            <div class="modal-footer">
+                <span class="mio-keys me-auto"><kbd>↵</kbd> continue · <kbd>Esc</kbd> close</span>
+                <button type="button" class="btn btn-light" id="mioBack" hidden>Choose another file</button>
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal" id="mioCancel">Cancel</button>
+                <button type="button" class="btn btn-primary" id="mioGo" disabled>Check file</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+<style>
+    .mio-menu .dropdown-item { font-size: 13.5px; }
+    .mio .modal-content, .mio { background: var(--ui-surface); color: var(--ui-label); }
+    .mio .modal-header, .mio .modal-footer { border-color: var(--ui-separator); }
+    .mio-drop {
+        display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; cursor: pointer;
+        padding: 26px 16px; border: 2px dashed var(--ui-separator); border-radius: 14px;
+        background: var(--ui-bg-2, rgba(0,0,0,.02)); transition: border-color .15s, background .15s;
+    }
+    .mio-drop:hover, .mio-drop:focus, .mio-drop.drag { border-color: var(--ui-accent); background: rgba(var(--ui-accent-rgb), .06); outline: none; }
+    .mio-drop i { font-size: 28px; color: var(--ui-accent); }
+    .mio-drop strong { font-size: 14.5px; word-break: break-all; }
+    .mio-drop span { font-size: 12px; color: var(--ui-label-2); }
+    .mio-drop.has-file { border-style: solid; border-color: var(--ui-accent); }
+    .mio-modes { display: grid; gap: 8px; margin: 14px 0; }
+    .mio-modes label {
+        display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; cursor: pointer;
+        border: 1px solid var(--ui-separator); border-radius: 10px;
+    }
+    .mio-modes label:has(input:checked) { border-color: var(--ui-accent); background: rgba(var(--ui-accent-rgb), .06); }
+    .mio-modes input { margin-top: 3px; accent-color: var(--ui-accent); }
+    .mio-modes b { display: block; font-size: 13.5px; }
+    .mio-modes small { color: var(--ui-label-2); font-size: 12px; }
+    .mio-tip { display: flex; gap: 10px; font-size: 12.5px; color: var(--ui-label-2); line-height: 1.5;
+               padding: 10px 12px; border-radius: 10px; background: rgba(var(--ui-orange-rgb), .1); }
+    .mio-tip i { color: var(--ui-orange); margin-top: 3px; }
+    .mio-sum { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .mio-chip { display: inline-flex; align-items: baseline; gap: 6px; padding: 8px 12px; border-radius: 10px;
+                border: 1px solid var(--ui-separator); font-size: 12.5px; }
+    .mio-chip b { font-size: 18px; font-variant-numeric: tabular-nums; }
+    .mio-chip.create b { color: var(--ui-green-text); }
+    .mio-chip.update b { color: var(--ui-accent-text); }
+    .mio-chip.error b { color: var(--ui-red-text); }
+    .mio-chip.skip b, .mio-chip.unchanged b { color: var(--ui-label-2); }
+    .mio-newcats { font-size: 12.5px; color: var(--ui-label-2); margin-bottom: 10px; }
+    .mio-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+    .mio-tabs button { border: 1px solid var(--ui-separator); background: transparent; color: var(--ui-label);
+                       border-radius: 999px; padding: 3px 12px; font-size: 12.5px; font-weight: 600; }
+    .mio-tabs button.on { background: var(--ui-accent); border-color: var(--ui-accent); color: #fff; }
+    .mio-table-wrap { max-height: 46vh; overflow: auto; border: 1px solid var(--ui-separator); border-radius: 10px; }
+    .mio-table { --bs-table-bg: transparent; color: var(--ui-label); font-size: 13px; }
+    .mio-table thead th { position: sticky; top: 0; background: var(--ui-surface); z-index: 1; font-size: 11.5px;
+                          text-transform: uppercase; letter-spacing: .03em; color: var(--ui-label-2); border-color: var(--ui-separator); }
+    .mio-table td { border-color: var(--ui-separator); }
+    .mio-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .mio-badge.create { background: rgba(var(--ui-green-rgb), .15); color: var(--ui-green-text); }
+    .mio-badge.update { background: rgba(var(--ui-accent-rgb), .15); color: var(--ui-accent-text); }
+    .mio-badge.error { background: rgba(var(--ui-red-rgb), .15); color: var(--ui-red-text); }
+    .mio-badge.skip, .mio-badge.unchanged { background: rgba(127,127,127,.15); color: var(--ui-label-2); }
+    .mio-detail { display: block; font-size: 11.5px; color: var(--ui-label-2); margin-top: 2px; }
+    .mio-detail.err { color: var(--ui-red-text); }
+    .mio-detail.warn { color: var(--ui-orange-text); }
+    .mio-more { font-size: 12px; color: var(--ui-label-2); margin: 8px 0 0; }
+    .mio-keys { font-size: 12px; color: var(--ui-label-2); }
+    @media (max-width: 576px) { .mio-keys { display: none; } }
+</style>
+
+<script>
+(function () {
+    // Export keeps the page's filters (search, category, status, dates)
+    document.querySelectorAll('.mio-export:not([data-ready])').forEach((a) => {
+        a.dataset.ready = '1';
+        a.addEventListener('click', (e) => {
+            e.preventDefault();
+            const params = new URLSearchParams(location.search);
+            ['page', 'per_page', 'sort', 'export'].forEach((k) => params.delete(k));
+            params.set('format', a.dataset.format);
+            location.href = a.getAttribute('href') + '?' + params.toString();
+        });
+    });
+    const modal = document.getElementById('mioModal');
+    if (!modal || modal.dataset.ready) return;
+    modal.dataset.ready = '1';
+    const $ = (id) => document.getElementById(id);
+    const url = modal.dataset.importUrl, noun = modal.dataset.noun;
+    const fileInp = $('mioFile'), drop = $('mioDrop'), go = $('mioGo'), back = $('mioBack'), errBox = $('mioError');
+    let file = null, plan = null, filter = 'all', busy = false;
+
+    function csrf() {
+        const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+        return m ? decodeURIComponent(m[1]) : (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
+    }
+    function showError(msg) { errBox.textContent = msg || ''; errBox.hidden = !msg; }
+    function setFile(f) {
+        file = f || null;
+        showError('');
+        drop.classList.toggle('has-file', !!file);
+        $('mioFileName').textContent = file ? file.name : 'Drop an Excel or CSV file here, or click to choose';
+        go.disabled = !file;
+        if (file) go.focus();
+    }
+    function reset() {
+        plan = null; filter = 'all'; busy = false;
+        $('mioStep1').hidden = false; $('mioStep2').hidden = true; back.hidden = true;
+        go.textContent = 'Check file'; go.className = 'btn btn-primary';
+        fileInp.value = ''; setFile(null);
+    }
+    modal.addEventListener('show.bs.modal', reset);
+    modal.addEventListener('shown.bs.modal', () => drop.focus());
+    fileInp.addEventListener('change', () => setFile(fileInp.files[0]));
+    drop.addEventListener('keydown', (e) => { if (e.key === ' ' || (e.key === 'Enter' && !file)) { e.preventDefault(); fileInp.click(); } });
+    ['dragenter', 'dragover'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('drag'); }));
+    ['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove('drag'); }));
+    drop.addEventListener('drop', (e) => { if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
+    back.addEventListener('click', reset);
+
+    async function send(step) {
+        if (!file || busy) return;
+        busy = true; showError('');
+        const label = go.textContent;
+        go.disabled = true;
+        go.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + (step === 'apply' ? 'Importing…' : 'Checking…');
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('step', step);
+        fd.append('mode', (modal.querySelector('input[name=mioMode]:checked') || {}).value || 'upsert');
+        try {
+            const res = await fetch(url, { method: 'POST', body: fd, headers: { 'X-CSRFToken': csrf(), 'X-Requested-With': 'XMLHttpRequest' } });
+            const out = await res.json().catch(() => ({ error: 'The server could not read this file.' }));
+            if (!res.ok || !out.success) {
+                showError(out.error || 'Import failed.');
+                go.textContent = label; go.disabled = false;
+                return;
+            }
+            if (out.step === 'done') { location.reload(); return; }
+            plan = out; drawPreview();
+        } catch (e) {
+            showError('Network problem — nothing was imported. Please try again.');
+            go.textContent = label; go.disabled = false;
+        } finally { busy = false; }
+    }
+
+    const ACTION = { create: 'New', update: 'Update', unchanged: 'No change', skip: 'Skipped', error: 'Error' };
+    function esc(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+    function drawPreview() {
+        const s = plan.summary;
+        $('mioStep1').hidden = true; $('mioStep2').hidden = false; back.hidden = false;
+        $('mioSum').innerHTML = ['create', 'update', 'unchanged', 'skip', 'error']
+            .filter((k) => s[k] || k === 'create' || k === 'update')
+            .map((k) => `<span class="mio-chip ${k}"><b>${s[k]}</b>${{ create: 'new', update: 'to update', unchanged: 'unchanged', skip: 'skipped', error: 'with errors' }[k]}</span>`).join('');
+        const nc = plan.new_categories || [];
+        $('mioNewCats').hidden = !nc.length;
+        $('mioNewCats').innerHTML = nc.length ? `<i class="fas fa-folder-plus me-1"></i> New categories will be created: <b>${nc.map(esc).join(', ')}</b>` : '';
+        drawRows();
+        const n = s.create + s.update;
+        go.className = 'btn btn-primary';
+        go.disabled = !n;
+        go.textContent = n ? `Import ${n} ${n === 1 ? noun.replace(/ies$/, 'y').replace(/s$/, '') : noun}` : 'Nothing to import';
+        if (s.error && n) go.textContent += ` (skip ${s.error} with errors)`;
+        if (n) go.focus();
+    }
+    function drawRows() {
+        if (!plan) return;
+        const colA = !!modal.querySelector('th.mio-col-a'), colB = !!modal.querySelector('th.mio-col-b');
+        const money = modal.dataset.money === '1';
+        const rows = plan.rows.filter((r) => filter === 'all' || (filter === 'error' ? r.action === 'error' : ['create', 'update'].includes(r.action)));
+        $('mioRows').innerHTML = rows.map((r) => {
+            const notes = [
+                ...(r.changes || []).length && r.action === 'update' ? [`<span class="mio-detail">Changes: ${r.changes.map(esc).join(', ')}</span>`] : [],
+                ...(r.changes || []).length && r.action !== 'update' ? [`<span class="mio-detail">${r.changes.map(esc).join(' · ')}</span>`] : [],
+                ...r.messages.map((m) => `<span class="mio-detail err">${esc(m)}</span>`),
+                ...r.warnings.map((m) => `<span class="mio-detail warn">${esc(m)}</span>`),
+            ].join('');
+            return `<tr><td class="text-muted">${r.row}</td><td class="fw-semibold">${esc(r.name)}</td>` +
+                (colA ? `<td>${esc(r.category)}</td>` : '') +
+                (colB ? `<td class="text-end">${r.price !== '' && r.price != null ? (money && !isNaN(parseFloat(r.price)) && /^[\d.]+$/.test(String(r.price)) ? '₹' + esc(r.price) : esc(r.price)) : ''}</td>` : '') +
+                `<td><span class="mio-badge ${r.action}">${ACTION[r.action]}</span>${notes}</td></tr>`;
+        }).join('') || `<tr><td colspan="5" class="text-center text-muted py-4">Nothing in this view.</td></tr>`;
+        const more = plan.total - plan.shown;
+        $('mioMore').hidden = more <= 0;
+        $('mioMore').textContent = more > 0 ? `Showing the first ${plan.shown} rows (errors first). All ${plan.total} rows are checked and imported.` : '';
+    }
+    modal.querySelectorAll('.mio-tabs button').forEach((b) => b.addEventListener('click', () => {
+        filter = b.dataset.f;
+        modal.querySelectorAll('.mio-tabs button').forEach((x) => x.classList.toggle('on', x === b));
+        drawRows();
+    }));
+    go.addEventListener('click', () => send(plan ? 'apply' : 'preview'));
+    modal.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !go.disabled && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'A' && e.target !== drop) {
+            e.preventDefault();
+            go.click();
+        }
+    });
+})();
+</script>
