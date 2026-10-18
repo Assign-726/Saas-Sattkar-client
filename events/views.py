@@ -257,6 +257,16 @@ class AdminClubEventViewSet(viewsets.ModelViewSet):
         if not tenancy.can_access_branch(request.user, booking.event.branch):
             return Response({'valid': False, 'message': 'Pass belongs to a different venue/branch.'}, status=status.HTTP_403_FORBIDDEN)
 
+        # A valid pass for another night must not open the door tonight
+        event_id = serializer.validated_data.get('event_id')
+        if event_id and booking.event_id != event_id:
+            return Response({
+                'valid': False, 'wrong_event': True,
+                'message': f'Wrong event: this pass is for “{booking.event.title}” on '
+                           f'{timezone.localtime(booking.event.start_datetime).strftime("%d %b")}.',
+                'booking': EventBookingSerializer(booking).data
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         # Verify payment status
         if booking.payment_status != EventBooking.PaymentStatus.SUCCESS:
             return Response({
@@ -275,7 +285,7 @@ class AdminClubEventViewSet(viewsets.ModelViewSet):
                 'valid': False,
                 'already_checked_in': True,
                 'checked_in_at': booking.checked_in_at,
-                'message': f'ALREADY SCANNED: Guest was checked in on {booking.checked_in_at.strftime("%I:%M %p") if booking.checked_in_at else "earlier"}.',
+                'message': f'ALREADY SCANNED: Guest was checked in on {timezone.localtime(booking.checked_in_at).strftime("%I:%M %p") if booking.checked_in_at else "earlier"}.',
                 'booking': EventBookingSerializer(booking).data
             }, status=status.HTTP_400_BAD_REQUEST)
 

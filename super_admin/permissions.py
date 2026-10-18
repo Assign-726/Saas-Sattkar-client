@@ -36,7 +36,7 @@ AREAS = [
     ('kitchen', 'Kitchen display', R, 'fa-fire-burner', 'KDS tickets and marking items ready'),
     ('dine_in', 'Tables & reservations', R, 'fa-chair', 'Floor plan, tables, zones, reservations and the walk-in waitlist'),
     ('menu', 'Menu & marketing', R, 'fa-utensils', 'Menu items, categories, recipes, coupons and QR codes'),
-    ('events', 'Club & events', R, 'fa-champagne-glasses', 'Events, guest lists, tickets and the gate scanner'),
+    ('events', 'Club & events', S, 'fa-champagne-glasses', 'Ticketed events, guest lists, door passes, table plan and the gate scanner'),
     ('inventory', 'Stock & purchases', R, 'fa-boxes-stacked', 'Inventory, wastage, stock counts, purchases, challans and parties'),
     ('delivery', 'Zomato & Swiggy', R, 'fa-motorcycle', 'Online orders, accept/reject, menu sync and payouts per platform'),
     ('front_desk', 'Front desk & bookings', H, 'fa-concierge-bell', 'Hotel dashboard, tape chart, bookings, check-in and check-out'),
@@ -95,6 +95,7 @@ _HOTEL_RULES = [
     ('revenue', r'^(management_dashboard|rates|rate_.*|reports|reports_.*|night_audit|night_audit_.*)$'),
     ('guest_services', r'^(requests|request_.*|lostfound|lostfound_.*|laundry|laundry_.*|spa|spa_.*)$'),
     ('banquets', r'^(banquets|banquet_.*)$'),
+    ('events', r'^club_.*$'),
     ('sales', r'^(sales|sales_.*|packages|package_.*|promo_.*)$'),
     ('back_office', r'^(security|security_.*|compliance|compliance_.*|assets|asset_.*|contract_.*|energy|energy_.*)$'),
     ('guests', r'^(guest_list|guest_detail|gift_card_.*)$'),
@@ -112,16 +113,16 @@ RULES = {'restaurant_admin': [(a, re.compile(p)) for a, p in _RESTAURANT_RULES],
 # A URL whose name contains one of these words changes data, even when opened with GET
 _MUTATING = re.compile(r'(^|_)(add|create|new|edit|update|delete|toggle|save|cancel|confirm|mark|settle|generate|regenerate|finalize|'
                        r'adjust|check_in|check_out|checkin|assign|reschedule|status|bulk|quick|seed|close|open|action|sync|draft|'
-                       r'position|publish|received|payment|driver|set|cover|image|video|recipe_delete|manual)(_|$)')
+                       r'position|publish|duplicate|received|payment|driver|set|cover|image|video|recipe_delete|manual)(_|$)')
 
 HOME = {
     'dashboard': 'restaurant_admin:dashboard', 'analytics': 'restaurant_admin:sales_analytics', 'pos': 'restaurant_admin:order_create_manual',
     'kitchen': 'restaurant_admin:kitchen_kds', 'dine_in': 'restaurant_admin:table_list', 'menu': 'restaurant_admin:menu_list',
-    'events': 'restaurant_admin:club_events_list', 'inventory': 'restaurant_admin:inventory_list', 'delivery': 'restaurant_admin:delivery_home',
+    'inventory': 'restaurant_admin:inventory_list', 'delivery': 'restaurant_admin:delivery_home',
     'front_desk': 'hotel_admin:dashboard', 'rooms': 'hotel_admin:rooms', 'cabs': 'hotel_admin:cabs_dispatch',
     'revenue': 'hotel_admin:reports', 'guest_services': 'hotel_admin:requests', 'banquets': 'hotel_admin:banquets',
     'sales': 'hotel_admin:sales', 'back_office': 'hotel_admin:security',
-    'guests': '{ns}:guest_list', 'feedback': '{ns}:feedback_list', 'campaigns': '{ns}:campaign_list', 'finance': '{ns}:expenses',
+    'events': '{ns}:club_events_list', 'guests': '{ns}:guest_list', 'feedback': '{ns}:feedback_list', 'campaigns': '{ns}:campaign_list', 'finance': '{ns}:expenses',
     'staff': '{ns}:staff_list', 'settings': '{ns}:settings', 'integrations': '{ns}:integrations', 'logs': '{ns}:activity_logs',
 }
 

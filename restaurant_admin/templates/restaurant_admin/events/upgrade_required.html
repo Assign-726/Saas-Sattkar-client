@@ -1,4 +1,4 @@
-{% extends 'restaurant_admin/base.html' %}
+{% extends base_template|default:'restaurant_admin/base.html' %}
 
 {% block title %}Club & Events Module | Premium Add-on{% endblock %}
 
@@ -15,6 +15,11 @@
                 <div class="display-5 fw-bold mb-3" style="letter-spacing: -0.5px;">
                     Club Events & VIP Ticketing
                 </div>
+                {% if globally_off %}
+                <p class="text-warning fw-semibold mb-3">Club &amp; Events is switched off for this installation. Ask your platform administrator to turn it on.</p>
+                {% else %}
+                <p class="text-light fw-semibold mb-3">Club &amp; Events isn’t enabled for {{ current_branch.name }} yet. A platform admin can switch it on per branch from the Super Admin dashboard.</p>
+                {% endif %}
                 <p class="lead text-light opacity-75 mb-5 mx-auto" style="max-width: 600px;">
                     Transform your venue into a full nightlife destination. Eliminate 3rd-party ticketing fees, sell tiered entry passes with online payments, and manage your door guestlist with instant QR scanning.
                 </p>
@@ -47,7 +52,7 @@
                     <a href="mailto:support@posvenue.com?subject=Upgrade Request: Enable Club Module for {{ current_branch.name }}" class="btn btn-warning btn-lg px-5 py-3 fw-bold rounded-pill shadow">
                         <i class="fas fa-bolt me-2"></i> Request Module Activation
                     </a>
-                    <a href="{% url 'restaurant_admin:dashboard' restaurant_slug=rslug %}" class="btn btn-outline-light btn-lg px-4 py-3 rounded-pill">
+                    <a href="{% url ns|default:'restaurant_admin'|add:':dashboard' restaurant_slug=rslug %}" class="btn btn-outline-light btn-lg px-4 py-3 rounded-pill">
                         Return to Dashboard
                     </a>
                 </div>

@@ -167,3 +167,5 @@ class ManualBookingCreateSerializer(serializers.Serializer):
 
 class GateScanSerializer(serializers.Serializer):
     qr_payload = serializers.CharField(required=True, help_text="Raw scanned QR string or booking reference")
+    event_id = serializers.IntegerField(required=False, allow_null=True,
+                                        help_text="The event being scanned for; passes for any other event are refused")

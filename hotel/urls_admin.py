@@ -10,10 +10,43 @@ from guests import views_growth
 from integrations import views as integration_views
 from finance import views as finance_views
 from super_admin import views_roles
+from restaurant_admin import views_events
 
 app_name = 'hotel_admin'
 
+
+def club(view):
+    """Club & Events screens are shared with the Restaurant admin: run them behind the hotel guard,
+    handing the hotel context over on the request (see restaurant_admin.views_events)."""
+    @views_admin.hotel_admin_required
+    def hotel_club_view(request, restaurant_slug, ctx, *args, **kwargs):
+        request.hotel_ctx = ctx
+        return view(request, restaurant_slug, *args, **kwargs)
+    return hotel_club_view
+
 urlpatterns = [
+    # Club & Events (shared with the Restaurant admin)
+    path('club-events/', club(views_events.club_events_list), name='club_events_list'),
+    path('club-events/create/', club(views_events.club_event_create), name='club_event_create'),
+    path('club-events/<int:pk>/edit/', club(views_events.club_event_edit), name='club_event_edit'),
+    path('club-events/<int:pk>/delete/', club(views_events.club_event_delete), name='club_event_delete'),
+    path('club-events/<int:pk>/toggle-publish/', club(views_events.club_event_toggle_publish), name='club_event_toggle_publish'),
+    path('club-events/<int:pk>/duplicate/', club(views_events.club_event_duplicate), name='club_event_duplicate'),
+    path('club-events/guestlist/', club(views_events.club_guestlist), name='club_guestlist'),
+    path('club-events/<int:event_id>/guestlist/', club(views_events.club_guestlist), name='club_guestlist_event'),
+    path('club-events/<int:event_id>/manual-booking/', club(views_events.club_manual_booking_create), name='club_manual_booking_create'),
+    path('club-events/booking/<int:booking_id>/toggle-checkin/', club(views_events.club_booking_toggle_checkin), name='club_booking_toggle_checkin'),
+    path('club-events/booking/<int:booking_id>/cancel/', club(views_events.club_booking_cancel), name='club_booking_cancel'),
+    path('club-events/<int:event_id>/guestlist/export/', club(views_events.club_guestlist_export), name='club_guestlist_export'),
+    path('club-events/floor-plan/', club(views_events.club_floor_plan), name='club_floor_plan'),
+    path('club-events/<int:event_id>/floor-plan/', club(views_events.club_floor_plan), name='club_floor_plan_event'),
+    path('club-events/<int:event_id>/floor-plan/api/', club(views_events.club_floor_plan_api), name='club_floor_plan_api'),
+    path('club-events/<int:event_id>/floor-plan/assign/', club(views_events.club_floor_plan_assign_table), name='club_floor_plan_assign_table'),
+    path('club-events/ticket-grid/', club(views_events.club_ticket_grid), name='club_ticket_grid'),
+    path('club-events/<int:event_id>/ticket-grid/', club(views_events.club_ticket_grid), name='club_ticket_grid_event'),
+    path('club-events/<int:event_id>/ticket-grid/api/', club(views_events.club_ticket_grid_api), name='club_ticket_grid_api'),
+    path('club-events/gate-scanner/', club(views_events.club_gate_scanner), name='club_gate_scanner'),
+    path('club-events/<int:event_id>/gate-scanner/', club(views_events.club_gate_scanner), name='club_gate_scanner_event'),
     path('guests/', guest_views.hotel_guest_list, name='guest_list'),
     path('guests/<int:pk>/', guest_views.hotel_guest_detail, name='guest_detail'),
     path('gift-cards/', guest_views.hotel_gift_card_list, name='gift_card_list'),

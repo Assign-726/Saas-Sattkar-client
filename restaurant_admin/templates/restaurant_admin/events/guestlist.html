@@ -1,360 +1,273 @@
-{% extends 'restaurant_admin/base.html' %}
+{% extends base_template %}
 
-{% block title %}Guestlist & Tickets | {{ current_branch.name }}{% endblock %}
+{% block title %}Guestlist{% if selected_event %} · {{ selected_event.title }}{% endif %} | {{ current_branch.name }}{% endblock %}
+
+{% block extra_css %}
+{% include 'restaurant_admin/events/_club_styles.html' %}
+<style>
+    .gl-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px; }
+    .gl-filters .club-search { flex: 1 1 240px; }
+    .gl-filters select { width: auto; min-width: 150px; }
+    .gl-table { margin: 0; }
+    .gl-table th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: .03em; color: var(--ui-label-2); font-weight: 600; white-space: nowrap; }
+    .gl-table td { vertical-align: middle; }
+    .gl-ref { font: 600 0.8rem var(--ui-font-mono); color: var(--ui-label); }
+    .gl-sub { font-size: 0.74rem; color: var(--ui-label-3); }
+    .gl-name { font-weight: 700; color: var(--ui-label); }
+    .gl-qty { display: inline-flex; min-width: 26px; justify-content: center; padding: 2px 8px; border-radius: 8px; background: var(--ui-fill); font-weight: 700; font-size: 0.8rem; }
+    .gl-actions { display: flex; gap: 6px; justify-content: flex-end; align-items: center; }
+    .gl-actions .btn { border-radius: 9px; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
+    .gl-row-cancelled td { opacity: .55; }
+    .gl-progress { display: flex; align-items: center; gap: 10px; }
+    .gl-progress .club-bar { flex: 1; height: 8px; }
+    @media (max-width: 767.98px) {
+        .gl-table thead { display: none; }
+        .gl-table tr { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 12px; border-bottom: 1px solid var(--ui-separator); }
+        .gl-table td { border: 0 !important; padding: 0 !important; }
+        .gl-table td.gl-c-actions { grid-column: 1 / -1; margin-top: 6px; }
+        .gl-table td.gl-c-actions .gl-actions { justify-content: flex-start; flex-wrap: wrap; }
+        .gl-table td.gl-hide-sm { display: none; }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-    <!-- Header & Event Selector -->
-    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+<div class="container-fluid club-page">
+    <div class="club-head">
         <div>
-            <h2 class="h3 mb-1 text-gray-800 fw-bold">
-                <i class="fas fa-users text-primary me-2"></i>Guestlist & Attendee Desk
-            </h2>
-            <p class="text-muted small mb-0">
-                Track confirmed ticket buyers, issue door cash passes, and manage real-time entry check-ins.
-            </p>
+            <h1><i class="fas fa-users me-2" style="color: var(--ui-accent);"></i>Guestlist</h1>
+            <p>{% if selected_event %}{{ selected_event.title }} · {{ selected_event.start_datetime|date:"D d M, h:i A" }}{% else %}Bookings and door passes for {{ current_branch.name }}{% endif %}</p>
         </div>
-        <div class="d-flex flex-wrap align-items-center gap-2">
-            <!-- Event Picker Dropdown -->
-            <div class="dropdown">
-                <button class="btn btn-outline-dark dropdown-toggle rounded-pill px-3 py-2 shadow-sm" type="button" data-bs-toggle="dropdown">
-                    <i class="fas fa-calendar-alt me-1 text-primary"></i>
-                    {% if selected_event %}{{ selected_event.title|truncatechars:28 }}{% else %}Select Event{% endif %}
-                </button>
-                <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0" style="max-height: 300px; overflow-y: auto;">
-                    {% for ev in events_list %}
-                    <li>
-                        <a class="dropdown-item py-2 {% if selected_event and selected_event.id == ev.id %}active{% endif %}" href="{% url 'restaurant_admin:club_guestlist_event' restaurant_slug=rslug event_id=ev.id %}">
-                            {{ ev.title }} <small class="text-muted d-block">{{ ev.start_datetime|date:"d M Y" }}</small>
-                        </a>
-                    </li>
-                    {% empty %}
-                    <li><span class="dropdown-item text-muted">No events found</span></li>
-                    {% endfor %}
-                </ul>
-            </div>
-
+        <div class="club-head-actions">
+            {% include 'restaurant_admin/events/_event_switch.html' with events=events_list url_name=':club_guestlist_event' %}
             {% if selected_event %}
-            {% if not is_scanner %}
-            <a href="{% url 'restaurant_admin:club_ticket_grid_event' restaurant_slug=rslug event_id=selected_event.id %}" class="btn btn-outline-primary rounded-pill px-3 shadow-sm">
-                <i class="fas fa-th me-1"></i> Ticket Sales Grid
-            </a>
-            <a href="{% url 'restaurant_admin:club_floor_plan_event' restaurant_slug=rslug event_id=selected_event.id %}" class="btn btn-outline-dark rounded-pill px-3 shadow-sm">
-                <i class="fas fa-th-large me-1 text-primary"></i> Visual Floor Plan
-            </a>
-            {% endif %}
-            <a href="{% url 'restaurant_admin:club_gate_scanner_event' restaurant_slug=rslug event_id=selected_event.id %}" class="btn btn-dark rounded-pill px-3 shadow-sm">
-                <i class="fas fa-qrcode me-1 text-warning"></i> Open Gate Scanner
+            <a href="{% url ns|add:':club_guestlist_export' restaurant_slug=rslug event_id=selected_event.id %}?{{ request.GET.urlencode }}" class="btn btn-outline-secondary rounded-pill px-3" title="Download as CSV (with the current filters)">
+                <i class="fas fa-file-arrow-down me-1"></i> Export
             </a>
             {% if can_issue_passes %}
-            <button type="button" class="btn btn-primary rounded-pill px-3 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#manualBookingModal">
-                <i class="fas fa-user-plus me-1"></i> Add Manual / Door Pass
+            <button type="button" class="btn btn-primary rounded-pill px-3 fw-bold" onclick="clubOpenPassModal()" title="Issue a door pass (N)">
+                <i class="fas fa-user-plus me-1"></i> Door pass <span class="club-kbd ms-1" style="background: rgba(255,255,255,.2); color: inherit; border-color: rgba(255,255,255,.35);">N</span>
             </button>
             {% endif %}
             {% endif %}
         </div>
     </div>
+    {% include 'restaurant_admin/events/_club_nav.html' with tab='guestlist' %}
 
     {% if selected_event %}
-    <!-- Event Quick Stats -->
-    <div class="row g-3 mb-4">
-        <div class="{% if not can_view_sales %}col-md-4{% else %}col-6 col-md-3{% endif %}">
-            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-                <div class="text-muted small fw-semibold text-uppercase">Total Attendees</div>
-                <div class="fs-4 fw-bold text-dark mt-1">{{ total_confirmed_attendees }}</div>
-            </div>
-        </div>
-        <div class="{% if not can_view_sales %}col-md-4{% else %}col-6 col-md-3{% endif %}">
-            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-                <div class="text-muted small fw-semibold text-uppercase">Checked In at Gate</div>
-                <div class="fs-4 fw-bold text-success mt-1">{{ checked_in_count }}</div>
-            </div>
+    <div class="club-kpis">
+        <div class="club-kpi"><div class="k">Guests booked</div><div class="v">{{ total_confirmed_attendees }}</div><div class="s">Confirmed passes</div></div>
+        <div class="club-kpi good">
+            <div class="k">Inside</div><div class="v">{{ checked_in_count }} <small>/ {{ total_confirmed_attendees }}</small></div>
+            <div class="gl-progress mt-1"><div class="club-bar"><span style="width: {{ checkin_pct }}%"></span></div><span class="s">{{ checkin_pct }}%</span></div>
         </div>
         {% if can_view_sales %}
-        <div class="col-6 col-md-3">
-            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-                <div class="text-muted small fw-semibold text-uppercase">Total Sales</div>
-                <div class="fs-4 fw-bold text-warning mt-1">₹{{ total_sales_amount|floatformat:2 }}</div>
-            </div>
-        </div>
+        <div class="club-kpi"><div class="k">Ticket sales</div><div class="v">₹{{ total_sales_amount|floatformat:"0g" }}</div><div class="s">Online + door</div></div>
         {% endif %}
-        <div class="{% if not can_view_sales %}col-md-4{% else %}col-6 col-md-3{% endif %}">
-            <div class="card border-0 shadow-sm rounded-4 p-3 bg-white">
-                <div class="text-muted small fw-semibold text-uppercase">Check-In Rate</div>
-                <div class="fs-4 fw-bold text-info mt-1">
-                    {% if total_confirmed_attendees > 0 %}
-                    {{ checked_in_count|stringformat:"d" }}/{{ total_confirmed_attendees }}
-                    {% else %}0%{% endif %}
-                </div>
-            </div>
-        </div>
+        <div class="club-kpi"><div class="k">Event</div><div class="v" style="font-size: 1rem; padding-top: 6px;"><span class="club-chip {{ state }}">{% if state == 'live' %}Live now{% elif state == 'upcoming' %}Published{% elif state == 'draft' %}Draft{% else %}Ended{% endif %}</span></div>
+            <div class="s">{{ selected_event.venue_name }}</div></div>
     </div>
 
-    <!-- Filter & Search Bar -->
-    <div class="card border-0 shadow-sm rounded-4 p-3 bg-white mb-4">
-        <form method="GET" action="{% url 'restaurant_admin:club_guestlist_event' restaurant_slug=rslug event_id=selected_event.id %}" class="row g-2 align-items-center">
-            <div class="col-md-4">
-                <div class="input-group input-group-sm">
-                    <span class="input-group-text bg-light border-0"><i class="fas fa-search text-muted"></i></span>
-                    <input type="text" name="q" class="form-control border-0 bg-light" placeholder="Search by name, phone, or booking ref..." value="{{ search_query }}">
-                </div>
+    <div class="club-card mb-3">
+        <form method="GET" class="gl-filters" id="glFilters">
+            <div class="club-search">
+                <i class="fas fa-search"></i>
+                <input type="search" name="q" id="glSearch" class="form-control form-control-sm" placeholder="Name, phone, email or pass ref  ( / )" value="{{ search_query }}" aria-label="Search guests">
             </div>
-            <div class="col-md-3">
-                <select name="tier" class="form-select form-select-sm bg-light border-0">
-                    <option value="">All Ticket Tiers</option>
-                    {% for tt in ticket_tiers %}
-                    <option value="{{ tt.id }}" {% if tier_filter == tt.id|stringformat:"d" %}selected{% endif %}>{{ tt.name }}{% if can_view_sales %} (₹{{ tt.base_price|floatformat:0 }}){% endif %}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <select name="checked_in" class="form-select form-select-sm bg-light border-0">
-                    <option value="">All Check-in Status</option>
-                    <option value="1" {% if checked_in_filter == '1' %}selected{% endif %}>Checked In</option>
-                    <option value="0" {% if checked_in_filter == '0' %}selected{% endif %}>Not Checked In</option>
-                </select>
-            </div>
-            <div class="col-md-2 d-flex gap-2">
-                <button type="submit" class="btn btn-sm btn-primary rounded-pill w-100">Filter</button>
-                <a href="{% url 'restaurant_admin:club_guestlist_event' restaurant_slug=rslug event_id=selected_event.id %}" class="btn btn-sm btn-outline-secondary rounded-pill">Reset</a>
-            </div>
+            <select name="tier" class="form-select form-select-sm" aria-label="Tier">
+                <option value="">All tiers</option>
+                {% for tt in ticket_tiers %}<option value="{{ tt.id }}" {% if tier_filter == tt.id|stringformat:"d" %}selected{% endif %}>{{ tt.name }}</option>{% endfor %}
+            </select>
+            <select name="checked_in" class="form-select form-select-sm" aria-label="Entry">
+                <option value="">Inside or not</option>
+                <option value="1" {% if checked_in_filter == '1' %}selected{% endif %}>Checked in</option>
+                <option value="0" {% if checked_in_filter == '0' %}selected{% endif %}>Not arrived</option>
+            </select>
+            <select name="status" class="form-select form-select-sm" aria-label="Status">
+                <option value="">Paid &amp; pending</option>
+                <option value="SUCCESS" {% if status_filter == 'SUCCESS' %}selected{% endif %}>Confirmed</option>
+                <option value="PENDING" {% if status_filter == 'PENDING' %}selected{% endif %}>Awaiting payment</option>
+                <option value="CANCELLED" {% if status_filter == 'CANCELLED' %}selected{% endif %}>Cancelled</option>
+                <option value="EXPIRED" {% if status_filter == 'EXPIRED' %}selected{% endif %}>Expired holds</option>
+            </select>
+            {% if filtered %}<a href="{% url ns|add:':club_guestlist_event' restaurant_slug=rslug event_id=selected_event.id %}" class="btn btn-sm btn-outline-secondary rounded-pill px-3">Clear</a>{% endif %}
+            <span class="ms-auto small" style="color: var(--ui-label-3);">{{ bookings|length }} booking{{ bookings|length|pluralize }}</span>
         </form>
     </div>
 
-    <!-- Attendees Table -->
-    <div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-white">
+    <div class="club-card overflow-hidden">
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="bg-light text-muted small text-uppercase">
+            <table class="table table-hover gl-table">
+                <thead>
                     <tr>
-                        <th class="ps-4">Booking Ref / Pass</th>
-                        <th>Guest Details</th>
-                        <th>Ticket Tier</th>
-                        {% if can_view_sales %}
+                        <th class="ps-3">Guest</th>
+                        <th>Pass</th>
+                        <th>Tier</th>
+                        <th class="text-center">Guests</th>
+                        {% if can_view_sales %}<th>Paid</th>{% endif %}
                         <th>Table</th>
-                        {% endif %}
-                        <th>Qty</th>
-                        {% if can_view_sales %}
-                        <th>Total Paid</th>
-                        <th>Payment</th>
-                        {% endif %}
-                        <th>Gate Entry</th>
-                        <th class="text-end pe-4">Action</th>
+                        <th>Entry</th>
+                        <th class="text-end pe-3">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for b in bookings %}
-                    <tr>
-                        <td class="ps-4">
-                            <div class="fw-bold text-dark font-monospace" style="font-size: 0.85rem;">{{ b.booking_reference }}</div>
-                            <small class="text-muted">{{ b.created_at|date:"d M, h:i A" }}</small>
+                    <tr class="{% if b.payment_status != 'SUCCESS' %}gl-row-cancelled{% endif %}">
+                        <td class="ps-3">
+                            <div class="gl-name">{{ b.guest_name }}</div>
+                            {% if can_view_sales %}<div class="gl-sub">{% if b.guest_phone %}<a href="tel:{{ b.guest_phone }}" class="text-reset text-decoration-none">{{ b.guest_phone }}</a>{% endif %}{% if b.guest_email %} · {{ b.guest_email }}{% endif %}</div>{% endif %}
+                            {% if b.notes %}<div class="gl-sub" title="{{ b.notes }}"><i class="fas fa-note-sticky me-1"></i>{{ b.notes|truncatechars:60 }}</div>{% endif %}
                         </td>
                         <td>
-                            <div class="fw-bold text-dark">{{ b.guest_name }}</div>
-                            {% if can_view_sales and b.guest_phone %}
-                            <div class="small text-muted">
-                                <i class="fas fa-phone-alt me-1 opacity-50"></i>{{ b.guest_phone }}
-                            </div>
-                            {% endif %}
+                            <div class="gl-ref">{{ b.booking_reference }}</div>
+                            <div class="gl-sub">{{ b.created_at|date:"d M, h:i A" }} · {{ b.get_payment_method_display }}</div>
                         </td>
-                        <td>
-                            <span class="badge bg-light text-dark border px-2 py-1">
-                                {{ b.ticket_type.name }}
-                            </span>
-                        </td>
+                        <td class="gl-hide-sm"><span class="club-chip draft">{{ b.ticket_type.name }}</span></td>
+                        <td class="text-center"><span class="gl-qty">{{ b.quantity }}</span></td>
                         {% if can_view_sales %}
-                        <td>
-                            {% if b.assigned_table %}
-                            <a href="{% url 'restaurant_admin:club_floor_plan_event' restaurant_slug=rslug event_id=selected_event.id %}" class="badge bg-primary-subtle text-primary border border-primary-subtle text-decoration-none px-2 py-1">
-                                <i class="fas fa-chair me-1"></i> {{ b.assigned_table.name }}
-                            </a>
-                            {% else %}
-                            <a href="{% url 'restaurant_admin:club_floor_plan_event' restaurant_slug=rslug event_id=selected_event.id %}" class="badge bg-light text-muted text-decoration-none border px-2 py-1">
-                                <i class="fas fa-plus me-1"></i> Unassigned
-                            </a>
-                            {% endif %}
+                        <td class="gl-hide-sm">
+                            <div class="fw-bold" style="color: var(--ui-label);">₹{{ b.total_amount|floatformat:"0g" }}</div>
+                            {% if b.payment_status == 'SUCCESS' %}<span class="club-chip paid">Paid</span>
+                            {% elif b.payment_status == 'PENDING' %}<span class="club-chip pending">Awaiting payment</span>
+                            {% else %}<span class="club-chip {{ b.payment_status|lower }}">{{ b.get_payment_status_display }}</span>{% endif %}
                         </td>
                         {% endif %}
-                        <td>
-                            <span class="badge bg-primary rounded-pill px-2">{{ b.quantity }}</span>
+                        <td class="gl-hide-sm">
+                            {% if b.assigned_table %}<span class="club-chip upcoming"><i class="fas fa-chair"></i> {{ b.assigned_table.name }}</span>
+                            {% elif b.payment_status == 'SUCCESS' and can_manage_events %}<a href="{% url ns|add:':club_floor_plan_event' restaurant_slug=rslug event_id=selected_event.id %}" class="small text-decoration-none">Give table</a>
+                            {% else %}<span class="gl-sub">—</span>{% endif %}
                         </td>
-                        {% if can_view_sales %}
-                        <td>
-                            <div class="fw-bold text-dark">₹{{ b.total_amount|floatformat:2 }}</div>
-                            <small class="text-muted">{{ b.get_payment_method_display }}</small>
-                        </td>
-                        <td>
-                            {% if b.payment_status == 'SUCCESS' %}
-                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1 rounded-pill">
-                                <i class="fas fa-check-circle me-1"></i> Paid
-                            </span>
-                            {% elif b.payment_status == 'PENDING' %}
-                            <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 px-2 py-1 rounded-pill">
-                                <i class="fas fa-clock me-1"></i> Pending
-                            </span>
-                            {% else %}
-                            <span class="badge bg-secondary px-2 py-1 rounded-pill">{{ b.payment_status }}</span>
-                            {% endif %}
-                        </td>
-                        {% endif %}
                         <td>
                             {% if b.checked_in %}
-                            <span class="badge bg-success text-white px-2 py-1 rounded-pill">
-                                <i class="fas fa-user-check me-1"></i> Checked In
-                            </span>
-                            <div class="small text-muted mt-1" style="font-size: 0.72rem;">
-                                {{ b.checked_in_at|date:"h:i A" }}
-                            </div>
-                            {% else %}
-                            <span class="badge bg-light text-muted border px-2 py-1 rounded-pill">
-                                Not Checked In
-                            </span>
-                            {% endif %}
+                            <span class="club-chip in"><i class="fas fa-check"></i> In</span>
+                            <div class="gl-sub">{{ b.checked_in_at|date:"h:i A" }}{% if b.checked_in_by %} · {{ b.checked_in_by.first_name|default:b.checked_in_by.username }}{% endif %}</div>
+                            {% elif b.payment_status == 'SUCCESS' %}<span class="club-chip out">Not arrived</span>
+                            {% else %}<span class="gl-sub">—</span>{% endif %}
                         </td>
-                        <td class="text-end pe-4">
-                            {% if b.payment_status == 'SUCCESS' %}
-                                {% if b.checked_in %}
-                                    {% if can_undo_checkin %}
-                                    <form method="POST" action="{% url 'restaurant_admin:club_booking_toggle_checkin' restaurant_slug=rslug booking_id=b.id %}" class="d-inline">
-                                        {% csrf_token %}
-                                        <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill py-1 px-2" title="Undo check-in">
-                                            <i class="fas fa-undo me-1"></i> Undo
-                                        </button>
+                        <td class="gl-c-actions pe-3">
+                            <div class="gl-actions">
+                                {% if b.payment_status == 'SUCCESS' %}
+                                    {% if not b.checked_in %}
+                                    <form method="POST" action="{% url ns|add:':club_booking_toggle_checkin' restaurant_slug=rslug booking_id=b.id %}">{% csrf_token %}
+                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                        <button type="submit" class="btn btn-sm btn-success px-3"><i class="fas fa-check me-1"></i> Check in</button>
                                     </form>
-                                    {% else %}
-                                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5 rounded-pill fw-medium" title="Admitted">
-                                        <i class="fas fa-check-double me-1"></i> Admitted
-                                    </span>
+                                    {% elif can_undo_checkin %}
+                                    <form method="POST" action="{% url ns|add:':club_booking_toggle_checkin' restaurant_slug=rslug booking_id=b.id %}">{% csrf_token %}
+                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary"><i class="fas fa-rotate-left me-1"></i> Undo</button>
+                                    </form>
                                     {% endif %}
-                                {% else %}
-                                <form method="POST" action="{% url 'restaurant_admin:club_booking_toggle_checkin' restaurant_slug=rslug booking_id=b.id %}" class="d-inline">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn btn-sm btn-success rounded-pill py-1 px-3 shadow-sm fw-bold">
-                                        <i class="fas fa-check me-1"></i> Check In
-                                    </button>
-                                </form>
+                                    {% if can_view_qr and b.booking_qr_code %}
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" title="Show QR pass"
+                                            data-qr="{{ b.booking_qr_code.url }}" data-ref="{{ b.booking_reference }}" data-name="{{ b.guest_name }}"
+                                            data-tier="{{ b.ticket_type.name }} · {{ b.quantity }} guest{{ b.quantity|pluralize }}"
+                                            data-pass="{% url 'events:customer-booking-confirmation' b.booking_reference %}"><i class="fas fa-qrcode"></i></button>
+                                    {% endif %}
+                                    {% if can_cancel_pass and not b.checked_in %}
+                                    <button type="button" class="btn btn-sm btn-outline-danger" title="Cancel pass"
+                                            data-cancel="{% url ns|add:':club_booking_cancel' restaurant_slug=rslug booking_id=b.id %}"
+                                            data-name="{{ b.guest_name }}" data-ref="{{ b.booking_reference }}" data-qty="{{ b.quantity }}"
+                                            data-online="{% if b.payment_method == 'ONLINE' and b.total_amount > 0 %}{{ b.total_amount|floatformat:"0g" }}{% endif %}"><i class="fas fa-ban"></i></button>
+                                    {% endif %}
                                 {% endif %}
-                            {% endif %}
-
-                            {% if can_view_qr and b.booking_qr_code %}
-                            <button type="button" class="btn btn-sm btn-light rounded-circle p-2 ms-1" data-bs-toggle="modal" data-bs-target="#qrModal{{ b.id }}" title="View QR Pass">
-                                <i class="fas fa-qrcode text-primary"></i>
-                            </button>
-
-                            <!-- QR Code Modal -->
-                            <div class="modal fade text-start" id="qrModal{{ b.id }}" tabindex="-1">
-                                <div class="modal-dialog modal-dialog-centered modal-sm">
-                                    <div class="modal-content rounded-4 border-0 p-3 text-center">
-                                        <div class="modal-header border-0 pb-0">
-                                            <h6 class="modal-title fw-bold">Pass: {{ b.booking_reference }}</h6>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                        </div>
-                                        <div class="modal-body py-3">
-                                            <img src="{{ b.booking_qr_code.url }}" alt="QR Pass" class="img-fluid rounded border p-2 mb-2" style="max-height: 220px;">
-                                            <div class="fw-bold">{{ b.guest_name }}</div>
-                                            <div class="small text-muted">{{ b.ticket_type.name }} • {{ b.quantity }} Guest(s)</div>
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
-                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
-                    <tr>
-                        <td colspan="{% if not can_view_sales %}6{% else %}9{% endif %}" class="text-center py-5 text-muted">
-                            <i class="fas fa-users-slash fa-2x opacity-25 mb-2 d-block"></i>
-                            No attendee bookings match the selected criteria.
-                        </td>
-                    </tr>
+                    <tr><td colspan="8" class="club-empty">
+                        <i class="fas fa-user-slash big"></i>
+                        {% if filtered %}<h3>No one matches these filters</h3><p>Try a different name or clear the filters.</p>
+                        {% else %}<h3>No bookings yet</h3><p>Online bookings appear here as they come in. You can also issue door or complimentary passes.</p>
+                        {% if can_issue_passes %}<button type="button" class="btn btn-primary rounded-pill px-4" onclick="clubOpenPassModal()"><i class="fas fa-user-plus me-1"></i> Issue a door pass</button>{% endif %}{% endif %}
+                    </td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
     </div>
 
-    {% if can_issue_passes %}
-    <!-- Manual / Door Cash Booking Modal -->
-    <div class="modal fade" id="manualBookingModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content rounded-4 border-0 shadow">
-                <form method="POST" action="{% url 'restaurant_admin:club_manual_booking_create' restaurant_slug=rslug event_id=selected_event.id %}">
-                    {% csrf_token %}
-                    <div class="modal-header border-bottom p-4">
-                        <h5 class="modal-title fw-bold text-dark">
-                            <i class="fas fa-user-plus text-primary me-2"></i>Issue Door / Walk-in Pass
-                        </h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body p-4">
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Select Ticket Tier <span class="text-danger">*</span></label>
-                            <select name="ticket_type_id" class="form-select" required>
-                                {% for tt in ticket_tiers %}
-                                <option value="{{ tt.id }}">
-                                    {{ tt.name }} — ₹{{ tt.base_price|floatformat:0 }} ({{ tt.available_quantity }} available)
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-7">
-                                <label class="form-label fw-semibold">Guest Name <span class="text-danger">*</span></label>
-                                <input type="text" name="guest_name" class="form-control" required placeholder="Guest full name">
-                            </div>
-                            <div class="col-md-5">
-                                <label class="form-label fw-semibold">Quantity <span class="text-danger">*</span></label>
-                                <input type="number" name="quantity" class="form-control" min="1" max="50" value="1" required>
-                            </div>
-                        </div>
-
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold">Mobile Number <span class="text-danger">*</span></label>
-                                <input type="text" name="guest_phone" class="form-control" required placeholder="10-digit mobile">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold">Payment Method</label>
-                                <select name="payment_method" class="form-select">
-                                    <option value="DOOR_CASH">Cash at Door (Paid)</option>
-                                    <option value="COMPLIMENTARY">Complimentary (₹0 / Guestlist)</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Email (Optional)</label>
-                            <input type="email" name="guest_email" class="form-control" placeholder="guest@email.com">
-                        </div>
-
-                        <div class="mb-0">
-                            <label class="form-label fw-semibold">Staff Notes (Optional)</label>
-                            <input type="text" name="notes" class="form-control" placeholder="e.g. VIP table 4, Manager guest">
-                        </div>
-                    </div>
-                    <div class="modal-footer border-top p-3 bg-light">
-                        <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
-                            <i class="fas fa-ticket-alt me-1"></i> Issue Pass
-                        </button>
-                    </div>
-                </form>
+    <!-- QR pass viewer -->
+    <div class="modal fade" id="qrModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content rounded-4 border-0 text-center p-2">
+                <div class="modal-header border-0 pb-0"><h6 class="modal-title fw-bold font-monospace" id="qrRef"></h6><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+                <div class="modal-body pt-2">
+                    <img id="qrImg" alt="QR pass" class="img-fluid rounded-3 p-2 mb-2" style="background: #fff; max-height: 230px;">
+                    <div class="fw-bold" id="qrName"></div>
+                    <div class="small" style="color: var(--ui-label-2);" id="qrTier"></div>
+                    <a id="qrLink" href="#" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary rounded-pill mt-3"><i class="fas fa-up-right-from-square me-1"></i> Open guest pass</a>
+                </div>
             </div>
         </div>
     </div>
-    {% endif %}
-    {% else %}
-    <div class="card border-0 shadow-sm rounded-4 text-center p-5 bg-white">
-        <div class="py-4">
-            <i class="fas fa-calendar-times fa-3x text-muted opacity-50 mb-3"></i>
-            <h5 class="fw-bold text-dark">No Events Available</h5>
-            <p class="text-muted small">Please create an event first to view attendees and manage passes.</p>
-            <a href="{% url 'restaurant_admin:club_event_create' restaurant_slug=rslug %}" class="btn btn-primary rounded-pill px-4">
-                Create Event
-            </a>
+
+    <!-- Cancel pass -->
+    <div class="modal fade" id="cancelModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form method="POST" class="modal-content rounded-4 border-0" id="cancelForm">{% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <div class="modal-header border-0"><h5 class="modal-title fw-bold"><i class="fas fa-ban me-2" style="color: var(--ui-red);"></i>Cancel pass</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+                <div class="modal-body pt-0">
+                    <p class="mb-2" id="cancelText"></p>
+                    <div class="alert alert-warning small py-2" id="cancelRefund" style="display: none;"></div>
+                    <label class="form-label small fw-semibold" for="cancelReason">Reason <span style="color: var(--ui-label-3);">(saved in the booking notes)</span></label>
+                    <input type="text" name="reason" id="cancelReason" class="form-control" placeholder="e.g. Guest asked to cancel">
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Keep pass</button>
+                    <button type="submit" class="btn btn-danger rounded-pill px-4 fw-bold">Cancel pass</button>
+                </div>
+            </form>
         </div>
+    </div>
+
+    {% if can_issue_passes %}{% include 'restaurant_admin/events/_pass_modal.html' with event=selected_event tiers=ticket_tiers %}{% endif %}
+
+    {% else %}
+    <div class="club-card club-empty">
+        <i class="fas fa-calendar-xmark big"></i>
+        <h3>No events yet</h3>
+        <p>Create an event first — its bookings and door passes will show up here.</p>
+        {% if can_manage_events %}<a href="{% url ns|add:':club_event_create' restaurant_slug=rslug %}" class="btn btn-primary rounded-pill px-4 fw-bold"><i class="fas fa-plus me-1"></i> New event</a>{% endif %}
     </div>
     {% endif %}
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const filters = document.getElementById('glFilters');
+    if (filters) filters.querySelectorAll('select').forEach(s => s.addEventListener('change', () => filters.submit()));
+
+    document.addEventListener('click', e => {
+        const qr = e.target.closest('[data-qr]');
+        if (qr) {
+            document.getElementById('qrImg').src = qr.dataset.qr;
+            document.getElementById('qrRef').textContent = qr.dataset.ref;
+            document.getElementById('qrName').textContent = qr.dataset.name;
+            document.getElementById('qrTier').textContent = qr.dataset.tier;
+            document.getElementById('qrLink').href = qr.dataset.pass;
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('qrModal')).show();
+        }
+        const c = e.target.closest('[data-cancel]');
+        if (c) {
+            const form = document.getElementById('cancelForm');
+            form.action = c.dataset.cancel;
+            document.getElementById('cancelText').textContent =
+                `Cancel ${c.dataset.ref} for ${c.dataset.name}? ${c.dataset.qty} ticket(s) go back on sale and the QR pass stops working.`;
+            const refund = document.getElementById('cancelRefund');
+            refund.style.display = c.dataset.online ? 'block' : 'none';
+            refund.textContent = c.dataset.online ? `This was paid online (₹${c.dataset.online}). Refund the guest from your payment gateway — cancelling here doesn’t send money back.` : '';
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('cancelModal')).show();
+        }
+    });
+
+    document.addEventListener('keydown', e => {
+        const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) || document.querySelector('.modal.show');
+        if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+        if (e.key === '/') { e.preventDefault(); const s = document.getElementById('glSearch'); if (s) { s.focus(); s.select(); } }
+        if ((e.key === 'n' || e.key === 'N') && window.clubOpenPassModal) { e.preventDefault(); window.clubOpenPassModal(); }
+    });
+});
+</script>
 {% endblock %}
