@@ -170,6 +170,7 @@
         <table class="table" style="font-size: 0.85rem; margin: 0;">
           <thead style="background: var(--panel-hover);">
             <th style="padding: 10px 14px;">Branch Name & Phone</th>
+            <th style="padding: 10px 14px;">Open Admin</th>
             <th style="padding: 10px 14px;">Location / Address</th>
             <th style="padding: 10px 14px;">Tax & License Info</th>
             <th style="padding: 10px 14px;">Alcohol & VAT Status</th>
@@ -191,6 +192,33 @@
                 <div style="color: var(--muted); font-size: 0.8rem; font-weight: normal; margin-top: 2px;">
                   <i class="fa-solid fa-phone" style="font-size: 0.75rem;"></i> {{ b.phone|default:r.phone }}
                 </div>
+              </td>
+              <td style="padding: 12px 14px;">
+                {% with bslug=b.slug|default:r.slug %}
+                {% if bslug %}
+                <div class="sa-open-admin">
+                  {% if ENABLE_RESTAURANT_MODULE and b.has_restaurant_module %}
+                  <a class="btn small" href="{% url 'restaurant_admin:dashboard' restaurant_slug=bslug %}" target="_blank" rel="noopener"
+                    title="Open {{ b.name }} Restaurant Admin in a new tab (no separate login)">
+                    <i class="fa-solid fa-utensils"></i> Restaurant
+                  </a>
+                  <a class="btn secondary small" href="{% url 'restaurant_admin:kitchen_kds' restaurant_slug=bslug %}" target="_blank" rel="noopener"
+                    title="Open {{ b.name }} Kitchen Display in a new tab">
+                    <i class="fa-solid fa-fire-burner"></i> KDS
+                  </a>
+                  {% endif %}
+                  {% if ENABLE_HOTEL_MODULE and b.has_hotel_module %}
+                  <a class="btn small" href="{% url 'hotel_admin:dashboard' restaurant_slug=bslug %}" target="_blank" rel="noopener"
+                    title="Open {{ b.name }} Hotel Admin in a new tab (no separate login)">
+                    <i class="fa-solid fa-hotel"></i> Hotel
+                  </a>
+                  {% endif %}
+                  {% if not b.has_restaurant_module and not b.has_hotel_module %}
+                  <span style="color: var(--muted); font-size: 0.78rem;">No module enabled</span>
+                  {% endif %}
+                </div>
+                {% endif %}
+                {% endwith %}
               </td>
               <td style="padding: 12px 14px; color: var(--text);">
                 <div>{{ b.city|default:r.city }}, {{ b.state|default:r.state }}</div>
@@ -453,6 +481,8 @@
 </div>
 
 <style>
+  .sa-open-admin { display: flex; gap: 6px; flex-wrap: wrap; }
+  .sa-open-admin .btn { white-space: nowrap; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
   .hotel-module-toggle-btn,
   .club-module-toggle-btn,
   .restro-module-toggle-btn,

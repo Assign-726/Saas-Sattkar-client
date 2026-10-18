@@ -167,11 +167,9 @@ def get_user_active_shift(user, restaurant, branch=None):
 @login_required
 @user_passes_test(is_admin)
 def order_mark_ready(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     order = get_object_or_404(Order, pk=pk, restaurant=restaurant)
 
@@ -707,11 +705,9 @@ def _publish_kot(slug, payload):
 @login_required
 @user_passes_test(is_admin)
 def order_create_manual(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     if request.method == 'POST':
         import json
@@ -1687,9 +1683,8 @@ def order_create_manual(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def pos_draft_order_api(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
         return JsonResponse({'success': False, 'error': 'No restaurant profile'}, status=403)
 
     active_branch = get_active_branch(request, restaurant)
@@ -1859,9 +1854,8 @@ def pos_sync_draft_items_api(request, restaurant_slug=None):
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'POST required'}, status=405)
 
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
         return JsonResponse({'success': False, 'error': 'No restaurant profile'}, status=403)
 
     active_branch = get_active_branch(request, restaurant)
@@ -2037,11 +2031,9 @@ def pos_finalize_order_api(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def order_edit_manual(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     order = get_object_or_404(Order.objects.prefetch_related('items', 'items__menu_item').filter(restaurant=restaurant), pk=pk)
 
@@ -2525,11 +2517,9 @@ def inventory_edit(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def inventory_delete(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     item = get_object_or_404(InventoryItem, pk=pk, restaurant=restaurant)
     if request.method == 'POST':
         item.delete()
@@ -2542,11 +2532,9 @@ def inventory_delete(request, pk, restaurant_slug=None):
 def inventory_adjust(request, pk, restaurant_slug=None):
     if request.method != 'POST':
         return HttpResponseBadRequest('POST required')
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     item = get_object_or_404(InventoryItem, pk=pk, restaurant=restaurant)
     try:
         delta = int(request.POST.get('delta', '0'))
@@ -2568,11 +2556,9 @@ def inventory_adjust(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def menu_recipe(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     menu_item = get_object_or_404(MenuItem, pk=pk, restaurant=restaurant)
     ingredients = MenuItemIngredient.objects.filter(menu_item=menu_item).select_related('inventory_item')
@@ -2620,11 +2606,9 @@ def menu_recipe(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def menu_recipe_delete(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     recipe_item = get_object_or_404(MenuItemIngredient, pk=pk, menu_item__restaurant=restaurant)
     menu_item_id = recipe_item.menu_item.id
@@ -2636,11 +2620,9 @@ def menu_recipe_delete(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def inventory_logs(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     active_branch = get_active_branch(request, restaurant)
     base_qs = InventoryTransaction.objects.filter(inventory_item__restaurant=restaurant)
@@ -2810,10 +2792,9 @@ def party_list(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def party_edit_api(request, restaurant_slug, pk):
-    if restaurant_slug:
-        restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
-    else:
-        restaurant = request.user.restaurant_profile.restaurant
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     party = get_object_or_404(Party, pk=pk, restaurant=restaurant)
 
@@ -2840,10 +2821,9 @@ def party_edit_api(request, restaurant_slug, pk):
 @login_required
 @user_passes_test(is_admin)
 def party_ledger_detail(request, restaurant_slug, pk):
-    if restaurant_slug:
-        restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
-    else:
-        restaurant = request.user.restaurant_profile.restaurant
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     party = get_object_or_404(Party, pk=pk, restaurant=restaurant)
 
@@ -2953,14 +2933,9 @@ def party_ledger_detail(request, restaurant_slug, pk):
 @login_required
 @user_passes_test(is_admin)
 def purchase_create(request, restaurant_slug=None):
-    if restaurant_slug:
-        restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
-    else:
-        try:
-            restaurant = request.user.restaurant_profile.restaurant
-        except RestaurantUser.DoesNotExist:
-            from django.http import HttpResponseForbidden
-            return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     active_branch = get_active_branch(request, restaurant)
 
@@ -4884,11 +4859,9 @@ def menu_delete(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def order_list(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     query_params = request.GET.urlencode()
     redirect_url = reverse('restaurant_admin:order_records', kwargs={'restaurant_slug': restaurant.slug})
@@ -5546,11 +5519,9 @@ def _export_tally_vouchers(request, restaurant):
 @login_required
 @user_passes_test(is_admin)
 def order_records_export(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     # ── Dispatch: Tally Accounting Voucher export ──────────────────────────
     if request.GET.get('format') == 'tally':
@@ -5825,11 +5796,9 @@ def orders_stream(request, restaurant_slug=None):
 @user_passes_test(is_admin)
 def order_detail(request, pk, restaurant_slug=None):
     # Scope to restaurant
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     order = get_object_or_404(Order.objects.prefetch_related('items', 'items__menu_item').filter(restaurant=restaurant), pk=pk)
 
     # Calculate subtotal, taxes, round off, and totals using Order breakdown
@@ -5898,11 +5867,9 @@ def order_detail(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def order_set_prep_time(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     order = get_object_or_404(Order, pk=pk, restaurant=restaurant)
 
@@ -5959,13 +5926,9 @@ def order_settle_api(request, pk, restaurant_slug=None):
     if request.method not in ['POST', 'PATCH']:
         return JsonResponse({'success': False, 'error': 'POST or PATCH method required'}, status=405)
 
-    if restaurant_slug:
-        restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
-    else:
-        try:
-            restaurant = request.user.restaurant_profile.restaurant
-        except Exception:
-            return JsonResponse({'success': False, 'error': 'No restaurant profile found'}, status=403)
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return JsonResponse({'success': False, 'error': 'No restaurant profile found'}, status=403)
 
     order = get_object_or_404(Order, pk=pk, restaurant=restaurant)
 
@@ -6195,11 +6158,9 @@ def coupon_add(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def coupon_edit(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     coupon = get_object_or_404(Coupon, pk=pk)
     # Only allow editing if global (restaurant null) or matches restaurant
@@ -6229,11 +6190,9 @@ def coupon_edit(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def coupon_delete(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     coupon = get_object_or_404(Coupon, pk=pk)
     if request.method == 'POST':
@@ -6255,11 +6214,9 @@ def coupon_delete(request, pk, restaurant_slug=None):
 @user_passes_test(is_admin)
 def order_invoice(request, pk, restaurant_slug=None):
     # Ensure the order belongs to current admin's restaurant
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     order = get_object_or_404(
         Order.objects.prefetch_related('items', 'items__menu_item').filter(restaurant=restaurant),
@@ -6343,10 +6300,9 @@ def order_invoice(request, pk, restaurant_slug=None):
 
 @login_required
 def order_kot(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except Exception:
-        restaurant = getattr(request.user, 'restaurant', None)
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        restaurant = None
 
     if not restaurant:
         from django.http import HttpResponseForbidden
@@ -6438,11 +6394,9 @@ def order_kot(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def order_update_status(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     try:
         order = get_object_or_404(Order, pk=pk, restaurant=restaurant)
         
@@ -6946,11 +6900,9 @@ def category_list(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def category_detail(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     category = get_object_or_404(Category.objects.prefetch_related('subcategories').filter(restaurant=restaurant), pk=pk)
     subcategories = category.subcategories.all()
     
@@ -6964,11 +6916,9 @@ def category_detail(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def category_add(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     active_branch = get_active_branch(request, restaurant)
     if request.method == 'POST':
         form = CategoryForm(request.POST, request.FILES, restaurant=restaurant, branch=active_branch)
@@ -6989,11 +6939,9 @@ def category_add(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def category_edit(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     active_branch = get_active_branch(request, restaurant)
     category = get_object_or_404(Category, pk=pk, restaurant=restaurant)
     if request.method == 'POST':
@@ -7016,11 +6964,9 @@ def category_edit(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def category_delete(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     category = get_object_or_404(Category, pk=pk, restaurant=restaurant)
     if request.method == 'POST':
         category.delete()
@@ -7032,11 +6978,9 @@ def category_delete(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def subcategory_list(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     subcategories_qs = SubCategory.objects.select_related('category').filter(category__restaurant=restaurant)
 
     try:
@@ -7055,11 +6999,9 @@ def subcategory_list(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def subcategory_add(request, category_id=None, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     category = get_object_or_404(Category, pk=category_id, restaurant=restaurant) if category_id else None
     
     if request.method == 'POST':
@@ -7087,11 +7029,9 @@ def subcategory_add(request, category_id=None, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def subcategory_edit(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     subcategory = get_object_or_404(SubCategory.objects.select_related('category'), pk=pk, category__restaurant=restaurant)
     
     if request.method == 'POST':
@@ -7114,11 +7054,9 @@ def subcategory_edit(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def subcategory_delete(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     subcategory = get_object_or_404(SubCategory, pk=pk, category__restaurant=restaurant)
     category_pk = subcategory.category.pk if subcategory.category else None
     
@@ -7134,49 +7072,31 @@ def subcategory_delete(request, pk, restaurant_slug=None):
         'cancel_url': reverse_lazy('restaurant_admin:category_detail', kwargs={'restaurant_slug': restaurant.slug, 'pk': category_pk}) if category_pk else reverse_lazy('restaurant_admin:category_list', kwargs={'restaurant_slug': restaurant.slug})
     })
 
+@login_required
+@user_passes_test(is_admin)
 @require_http_methods(["GET"])
 def get_subcategories(request, restaurant_slug=None):
-
-    # 
-    #     AJAX view to get subcategories for a given category.
-    #     
+    """AJAX: subcategories of one of this business's categories."""
     category_id = request.GET.get('category_id')
     if not category_id:
         return JsonResponse({'error': 'Category ID is required'}, status=400)
-    
-    try:
-        # Optionally verify category belongs to current admin's restaurant
-        if request.user.is_authenticated and hasattr(request.user, 'restaurant_profile'):
-            try:
-                restaurant = request.user.restaurant_profile.restaurant
-                subcategories = SubCategory.objects.filter(category_id=category_id, category__restaurant=restaurant).values('id', 'name')
-            except RestaurantUser.DoesNotExist:
-                subcategories = SubCategory.objects.none().values('id', 'name')
-        else:
-            subcategories = SubCategory.objects.filter(category_id=category_id).values('id', 'name')
-        return JsonResponse(list(subcategories), safe=False)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return JsonResponse({'error': 'No access to this business'}, status=403)
+    subcategories = SubCategory.objects.filter(category_id=category_id, category__restaurant=restaurant).values('id', 'name')
+    return JsonResponse(list(subcategories), safe=False)
 
 
+@login_required
+@user_passes_test(is_admin)
 def qr_code_generator(request, restaurant_slug=None):
     """View for the QR code generator page"""
-    # Get categories and menu items for the form
-    if request.user.is_authenticated and hasattr(request.user, 'restaurant_profile'):
-        try:
-            restaurant = request.user.restaurant_profile.restaurant
-            categories = Category.objects.filter(restaurant=restaurant)
-            menu_items = MenuItem.objects.filter(restaurant=restaurant)
-        except RestaurantUser.DoesNotExist:
-            categories = Category.objects.none()
-            menu_items = MenuItem.objects.none()
-    else:
-        categories = Category.objects.all()
-        menu_items = MenuItem.objects.all()
-    
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     return render(request, 'restaurant_admin/qr_code_generator.html', {
-        'categories': categories,
-        'menu_items': menu_items,
+        'categories': Category.objects.filter(restaurant=restaurant),
+        'menu_items': MenuItem.objects.filter(restaurant=restaurant),
         'active_menu': 'qr_generator',
     })
 
@@ -7547,11 +7467,9 @@ def custom_charge_delete(request, restaurant_slug=None, pk=None):
 @login_required
 @user_passes_test(is_admin)
 def sales_analytics(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     active_branch = get_active_branch(request, restaurant)
 
@@ -7820,11 +7738,9 @@ def sales_analytics(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def receipt_list(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     active_branch = get_active_branch(request, restaurant)
     qs = AdvanceReceipt.objects.filter(restaurant=restaurant)
@@ -7889,11 +7805,9 @@ def receipt_list(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def receipt_create_page(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     active_branch = get_active_branch(request, restaurant)
 
@@ -8099,11 +8013,9 @@ def receipt_create_page(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def receipt_edit_page(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     receipt = get_object_or_404(AdvanceReceipt, pk=pk, restaurant=restaurant)
 
@@ -8289,9 +8201,8 @@ def receipt_edit_page(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def receipt_create_api(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
         return JsonResponse({'success': False, 'error': 'No restaurant associated with account.'}, status=403)
 
     active_branch = get_active_branch(request, restaurant)
@@ -8424,11 +8335,9 @@ def receipt_create_api(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def receipt_print(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     receipt = get_object_or_404(AdvanceReceipt, pk=pk, restaurant=restaurant)
     branch = restaurant.branches.first() if hasattr(restaurant, 'branches') else None
@@ -8443,9 +8352,8 @@ def receipt_print(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def receipt_cancel_api(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
         return JsonResponse({'success': False, 'error': 'No restaurant associated with account.'}, status=403)
 
     if request.method != 'POST':
@@ -8464,9 +8372,8 @@ def receipt_cancel_api(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def receipt_detail_api(request, receipt_no, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
         return JsonResponse({'success': False, 'error': 'No restaurant associated with account.'}, status=403)
 
     receipt = get_object_or_404(AdvanceReceipt, restaurant=restaurant, receipt_no=receipt_no)
@@ -9208,10 +9115,9 @@ def kitchen_kds_view(request, restaurant_slug=None):
     Main Kitchen Display System (KDS) View.
     Displays active KOT and BOT tickets for Kitchen and Bar.
     """
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except Exception:
-        restaurant = getattr(request.user, 'restaurant', None)
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        restaurant = None
 
     if not restaurant:
         from django.http import HttpResponseForbidden
@@ -9236,10 +9142,9 @@ def kitchen_kds_orders_api(request, restaurant_slug=None):
     """
     JSON API for KDS to fetch live tickets, filter by station, and update timers.
     """
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except Exception:
-        restaurant = getattr(request.user, 'restaurant', None)
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        restaurant = None
 
     if not restaurant:
         return JsonResponse({'success': False, 'error': 'No restaurant found'}, status=403)
@@ -9441,10 +9346,9 @@ def kitchen_kds_action_api(request, pk, restaurant_slug=None):
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'POST method required'}, status=405)
 
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except Exception:
-        restaurant = getattr(request.user, 'restaurant', None)
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        restaurant = None
 
     if not restaurant:
         return JsonResponse({'success': False, 'error': 'No restaurant associated with account'}, status=403)
@@ -9559,10 +9463,9 @@ def kitchen_kds_item_toggle_api(request, order_pk, item_pk, restaurant_slug=None
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'POST required'}, status=405)
 
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except Exception:
-        restaurant = getattr(request.user, 'restaurant', None)
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        restaurant = None
 
     if not restaurant:
         return JsonResponse({'success': False, 'error': 'No restaurant found'}, status=403)
