@@ -217,33 +217,36 @@ class Table(models.Model):
 
         super().save(*args, **kwargs)
 
+    @staticmethod
+    def active_orders_prefetch():
+        """Prefetch for lists of tables: ``prefetch_related(Table.active_orders_prefetch())``
+        lets ``current_status`` answer without a query per table."""
+        from django.db.models import Prefetch
+        return Prefetch('orders', to_attr='_active_orders', queryset=Order.objects.exclude(status__in=['C', 'DRAFT'])
+                        .exclude(payment_status__in=['F', 'paid', 'P']).only('id', 'table_id', 'status', 'ready_at'))
+
     @property
     def current_status(self):
         # Active orders that are NOT cancelled, NOT draft, NOT failed, and NOT fully paid
-        active_orders = self.orders.exclude(status__in=['C', 'DRAFT']).exclude(payment_status__in=['F', 'paid', 'P'])
-        if not active_orders.exists():
+        active_orders = getattr(self, '_active_orders', None)
+        if active_orders is None:
+            active_orders = list(self.orders.exclude(status__in=['C', 'DRAFT']).exclude(payment_status__in=['F', 'paid', 'P'])
+                                 .only('id', 'status', 'ready_at'))
+        if not active_orders:
             return 'BLANK'
 
-        # Check if any active order is SERVED (Billed / Waiting for payment)
-        if active_orders.filter(status='S').exists():
+        # Any SERVED order means billed / waiting for payment
+        if any(o.status == 'S' for o in active_orders):
             return 'PRINTED'
 
         from django.utils import timezone
         now = timezone.now()
-
-        # Check if any active order is still being prepared in kitchen (Pending and not ready)
-        has_running_kot = False
-        for ord in active_orders:
-            # Order is ready if status is 'READY' or 'PR' or ready_at is reached
-            is_ready = (ord.status in ['READY', 'PR']) or (ord.ready_at is not None and ord.ready_at <= now)
-            if ord.status == 'P' and not is_ready:
-                has_running_kot = True
-                break
-
-        if has_running_kot:
-            return 'RUNNING_KOT'
-
-        # Active order is ready (out from kitchen, on the way to table / running)
+        # Still in the kitchen: pending and not yet ready
+        for o in active_orders:
+            is_ready = (o.status in ['READY', 'PR']) or (o.ready_at is not None and o.ready_at <= now)
+            if o.status == 'P' and not is_ready:
+                return 'RUNNING_KOT'
+        # Out of the kitchen, on the way to the table / running
         return 'RUNNING'
 
 class Category(models.Model):
@@ -850,7 +853,9 @@ class Order(models.Model):
 
         # Fetch tax rates BEFORE the loop so inclusive items can reverse-calculate
         settings_obj = RestaurantSettings.get_settings(self.restaurant)
-        branch_obj = self.branch or (self.restaurant.branches.first() if self.restaurant else None)
+        from core.request_cache import memo
+        branch_obj = self.branch or (memo(('first_branch', self.restaurant_id), lambda: self.restaurant.branches.first())
+                                     if self.restaurant else None)
 
         if settings_obj and settings_obj.cgst_percentage is not None:
             cgst_pct = Decimal(str(settings_obj.cgst_percentage)) if bill_type != 'liquor' else Decimal('0.00')
@@ -1015,6 +1020,8 @@ class Order(models.Model):
                 charges_qs = charges_qs.filter(Q(branch=self.branch) | Q(branch__isnull=True))
             else:
                 charges_qs = charges_qs.filter(branch__isnull=True)
+            from core.request_cache import memo
+            charges_qs = memo(('charges', self.restaurant_id, self.branch_id), lambda: list(charges_qs))
             def norm_ot(val):
                 return str(val or 'dine_in').lower().strip().replace(' ', '').replace('-', '_')
 
@@ -1313,6 +1320,11 @@ class RestaurantSettings(models.Model):
 
     @classmethod
     def get_settings(cls, restaurant=None):
+        from core.request_cache import memo
+        return memo(('settings', getattr(restaurant, 'pk', restaurant)), lambda: cls._load_settings(restaurant))
+
+    @classmethod
+    def _load_settings(cls, restaurant=None):
         if restaurant is None:
             obj = cls.objects.filter(restaurant__isnull=True).first() or cls.objects.first()
             if obj:
@@ -2262,12 +2274,28 @@ class InventoryTransaction(models.Model):
         MANUAL = 'M', _('Manual Adjustment')
         RESTOCK = 'R', _('Restock')
         INWARD_PURCHASE = 'P', _('Inward Purchase')
+        WASTAGE = 'W', _('Wastage')
+        STOCK_COUNT = 'S', _('Stock count correction')
+
+    class WastageReason(models.TextChoices):
+        SPOILED = 'SPOILED', _('Spoiled / expired')
+        PREP_WASTE = 'PREP_WASTE', _('Prep / trim waste')
+        OVERPRODUCTION = 'OVERPRODUCTION', _('Over-production')
+        RETURNED = 'RETURNED', _('Guest returned dish')
+        DAMAGED = 'DAMAGED', _('Spilled / damaged')
+        STAFF_MEAL = 'STAFF_MEAL', _('Staff meal')
+        COMPLIMENTARY = 'COMPLIMENTARY', _('Complimentary')
+        OTHER = 'OTHER', _('Other')
 
     inventory_item = models.ForeignKey(InventoryItem, on_delete=models.CASCADE, related_name='transactions')
     transaction_type = models.CharField(max_length=1, choices=TransactionType.choices)
     delta = models.IntegerField(help_text="Positive for restock/returns/purchase, negative for consumption")
     order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, related_name='inventory_transactions')
     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.SET_NULL, null=True, blank=True, related_name='inventory_transactions')
+    reason = models.CharField(max_length=20, choices=WastageReason.choices, blank=True)
+    note = models.CharField(max_length=255, blank=True)
+    unit_cost = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Cost per unit when this happened")
+    stock_count = models.ForeignKey('StockCount', on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions')
     performed_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -2902,3 +2930,101 @@ class POSShift(models.Model):
             'actual_cash': actual_cash.quantize(Decimal('0.01')) if actual_cash is not None else None,
             'discrepancy': discrepancy.quantize(Decimal('0.01')),
         }
+
+class StockCount(models.Model):
+    """A physical stock take: staff count what is on the shelf, then posting corrects the books."""
+    class Status(models.TextChoices):
+        DRAFT = 'DRAFT', _('Counting')
+        POSTED = 'POSTED', _('Posted')
+        CANCELLED = 'CANCELLED', _('Cancelled')
+
+    restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='stock_counts')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='stock_counts')
+    title = models.CharField(max_length=120, blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.DRAFT)
+    note = models.TextField(blank=True)
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    posted_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    posted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.title or f"Stock count {self.created_at:%d %b %Y}"
+
+
+class StockCountLine(models.Model):
+    count = models.ForeignKey(StockCount, on_delete=models.CASCADE, related_name='lines')
+    item = models.ForeignKey(InventoryItem, on_delete=models.CASCADE, related_name='count_lines')
+    expected = models.IntegerField(help_text="Book quantity when the count started")
+    counted = models.IntegerField(null=True, blank=True)
+    unit_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ['item__name']
+        unique_together = ('count', 'item')
+
+    @property
+    def variance(self):
+        return None if self.counted is None else self.counted - self.expected
+
+    @property
+    def variance_value(self):
+        v = self.variance
+        return None if v is None else (Decimal(v) * (self.unit_cost or 0))
+
+
+class GatewayPayment(models.Model):
+    """One row per online payment we accept, so the same Razorpay payment can never be
+    claimed twice (for another order, room booking or event ticket)."""
+    KIND_CHOICES = [('order', 'Restaurant order'), ('room', 'Room booking'), ('event', 'Event ticket')]
+
+    provider = models.CharField(max_length=20, default='razorpay')
+    payment_id = models.CharField(max_length=100)
+    gateway_order_id = models.CharField(max_length=100, blank=True, default='')
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES)
+    object_id = models.PositiveBigIntegerField()
+    amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['provider', 'payment_id'], name='uniq_gateway_payment')]
+        indexes = [models.Index(fields=['kind', 'object_id'])]
+
+    def __str__(self):
+        return f"{self.provider}:{self.payment_id} → {self.kind} #{self.object_id}"
+
+    @classmethod
+    def claim(cls, payment_id, kind, object_id, gateway_order_id='', amount=None, provider='razorpay'):
+        """Record the payment against this object. False when it was already used for a
+        different object (a replay); True when new or already ours (an idempotent retry)."""
+        from django.db import IntegrityError, transaction
+        if not payment_id:
+            return False
+        existing = cls.objects.filter(provider=provider, payment_id=payment_id).first()
+        if existing:
+            return existing.kind == kind and existing.object_id == object_id
+        try:
+            with transaction.atomic():
+                cls.objects.create(provider=provider, payment_id=payment_id, kind=kind, object_id=object_id,
+                                   gateway_order_id=gateway_order_id or '', amount=amount)
+        except IntegrityError:
+            return cls.objects.filter(provider=provider, payment_id=payment_id, kind=kind, object_id=object_id).exists()
+        return True
+
+
+# Keep the per-request memo (core.request_cache) honest when these change mid-request.
+from django.db.models.signals import post_delete as _post_delete, post_save as _post_save  # noqa: E402
+
+
+def _forget_request_memo(sender, **kwargs):
+    from core.request_cache import forget
+    forget({RestaurantSettings: ('settings',), CustomCharge: ('charges',)}.get(sender, ('first_branch',)))
+
+
+for _model in (RestaurantSettings, CustomCharge):
+    _post_save.connect(_forget_request_memo, sender=_model, dispatch_uid=f'memo_save_{_model.__name__}')
+    _post_delete.connect(_forget_request_memo, sender=_model, dispatch_uid=f'memo_delete_{_model.__name__}')
+_post_save.connect(_forget_request_memo, sender='super_admin.RestaurantBranch', dispatch_uid='memo_save_branch')

@@ -1,0 +1,111 @@
+<div class="ui-logs ui-finance">
+  <div class="ui-page-header">
+    <div><h1>Profit &amp; Loss</h1><p>{{ scope_label }} · {{ label }} · {{ start|date:"d M Y" }} – {{ end|date:"d M Y" }} · {% if report.branch %}{{ report.branch.name }}{% else %}all branches{% endif %}</p></div>
+    <div class="ui-actions">
+      <a class="ui-btn ui-btn-gray" href="?{{ request.GET.urlencode }}&export=csv"><i class="fa-solid fa-file-csv"></i><span>CSV</span></a>
+      <button type="button" class="ui-btn ui-btn-gray" onclick="window.print()"><i class="fa-solid fa-print"></i><span>Print</span></button>
+      <a class="ui-btn ui-btn-primary" href="{{ base_url }}finance/expenses/"><i class="fa-solid fa-plus"></i><span>Add expense</span></a>
+    </div>
+  </div>
+
+  <form class="ui-card ui-filters" method="get">
+    <div class="ui-field"><label for="plp">Period</label><select id="plp" class="ui-input" name="period" onchange="document.getElementById('plCustom').hidden = this.value !== 'custom'">{% for k, l in periods %}<option value="{{ k }}" {% if period == k %}selected{% endif %}>{{ l }}</option>{% endfor %}<option value="custom" {% if period == 'custom' %}selected{% endif %}>Custom dates…</option></select></div>
+    <div id="plCustom" style="display:contents" {% if period != 'custom' %}hidden{% endif %}>
+      <div class="ui-field"><label for="plf">From</label><input id="plf" class="ui-input" type="date" name="from" value="{{ start|date:'Y-m-d' }}"></div>
+      <div class="ui-field"><label for="plt">To</label><input id="plt" class="ui-input" type="date" name="to" value="{{ end|date:'Y-m-d' }}"></div>
+    </div>
+    {% if scopes|length > 1 %}<div class="ui-field"><label for="pls">View</label><select id="pls" class="ui-input" name="scope">{% for k, l in scopes %}<option value="{{ k }}" {% if scope == k %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>{% endif %}
+    {% if not branch_locked and branches|length > 1 %}<div class="ui-field"><label for="plb">Branch</label><select id="plb" class="ui-input" name="branch"><option value="">All branches</option>{% for b in branches %}<option value="{{ b.id }}" {% if selected_branch.id == b.id %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></div>{% endif %}
+    <div class="ui-filter-actions"><button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-rotate"></i><span>Update</span></button></div>
+  </form>
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Revenue</div><div class="kpi-icon"><i class="fa-solid fa-indian-rupee-sign"></i></div></div><div class="kpi-val">₹{{ report.revenue|floatformat:0 }}</div><div class="kpi-sub">{% if deltas.revenue is not None %}<span class="ui-delta {% if deltas.revenue >= 0 %}is-up{% else %}is-down{% endif %}">{% if deltas.revenue >= 0 %}▲{% else %}▼{% endif %} {{ deltas.revenue|stringformat:"d"|cut:"-" }}%</span> vs previous period{% else %}Net of GST{% endif %}</div></div>
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Total costs</div><div class="kpi-icon"><i class="fa-solid fa-arrow-trend-down"></i></div></div><div class="kpi-val">₹{{ total_costs|floatformat:0 }}</div><div class="kpi-sub">{% if deltas.costs is not None %}<span class="ui-delta {% if deltas.costs <= 0 %}is-up{% else %}is-down{% endif %}">{% if deltas.costs >= 0 %}▲{% else %}▼{% endif %} {{ deltas.costs|stringformat:"d"|cut:"-" }}%</span> vs previous period{% else %}Purchases, payroll, expenses{% endif %}</div></div>
+    <div class="ui-kpi {% if report.net_profit >= 0 %}kpi-indigo{% else %}kpi-orange{% endif %}"><div class="ui-kpi-head"><div class="kpi-label">Net {% if report.net_profit >= 0 %}profit{% else %}loss{% endif %}</div><div class="kpi-icon"><i class="fa-solid fa-scale-balanced"></i></div></div><div class="kpi-val {% if report.net_profit < 0 %}ui-text-red{% endif %}">₹{{ report.net_profit|floatformat:0 }}</div><div class="kpi-sub">{% if report.net_margin is not None %}{{ report.net_margin }}% margin{% else %}No revenue yet{% endif %}</div></div>
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Gross margin</div><div class="kpi-icon"><i class="fa-solid fa-chart-pie"></i></div></div><div class="kpi-val">{% if report.gross_margin is not None %}{{ report.gross_margin }}%{% else %}—{% endif %}</div><div class="kpi-sub">After purchases &amp; commission</div></div>
+  </div>
+
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Statement</h2></div>
+        <div class="table-responsive"><table class="ui-pl">
+          <thead><tr><th>Line</th><th class="num">Amount</th><th class="num">% of revenue</th></tr></thead>
+          <tbody>
+            <tr class="is-group"><td>Revenue <span class="ui-log-sub" style="font-weight:400">net of GST</span></td><td class="num">₹{{ report.revenue|floatformat:2 }}</td><td class="num">100%</td></tr>
+            {% for l in report.revenue_lines %}<tr class="is-sub"><td><i class="fa-solid {{ l.icon }}" style="width:18px"></i> {{ l.name }} <span class="ui-log-sub">· {{ l.detail }}</span></td><td class="num">₹{{ l.amount|floatformat:2 }}</td><td class="num"></td></tr>{% endfor %}
+            <tr class="is-group"><td>Cost of sales</td><td class="num neg">−₹{{ report.cost_of_sales|floatformat:2 }}</td><td class="num"></td></tr>
+            {% if scope != 'hotel' %}<tr class="is-sub"><td><i class="fa-solid fa-boxes-stacked" style="width:18px"></i> Purchases <span class="ui-log-sub">· {{ report.purchases_count }} bills, net of input GST</span></td><td class="num">₹{{ report.purchases|floatformat:2 }}</td><td class="num">{% if report.cost_share.purchases is not None %}{{ report.cost_share.purchases }}%{% endif %}</td></tr>{% endif %}
+            <tr class="is-sub"><td><i class="fa-solid fa-plug" style="width:18px"></i> Partner commission <span class="ui-log-sub">· {% if scope == 'hotel' %}OTAs &amp; channel managers{% elif scope == 'restaurant' %}Zomato, Swiggy &amp; others{% else %}Zomato, Swiggy, OTAs{% endif %}</span></td><td class="num">₹{{ report.commission|floatformat:2 }}</td><td class="num">{% if report.cost_share.commission is not None %}{{ report.cost_share.commission }}%{% endif %}</td></tr>
+            <tr class="is-group"><td>Gross profit</td><td class="num {% if report.gross_profit < 0 %}neg{% else %}pos{% endif %}">₹{{ report.gross_profit|floatformat:2 }}</td><td class="num">{% if report.gross_margin is not None %}{{ report.gross_margin }}%{% endif %}</td></tr>
+            <tr class="is-group"><td>Operating costs</td><td class="num neg">−₹{{ report.operating|floatformat:2 }}</td><td class="num"></td></tr>
+            <tr class="is-sub"><td><i class="fa-solid fa-users" style="width:18px"></i> Payroll <span class="ui-log-sub">· {{ report.payroll_count }} payslips{% if report.payroll_drafts %}, {{ report.payroll_drafts }} still draft{% endif %}</span></td><td class="num">₹{{ report.payroll|floatformat:2 }}</td><td class="num">{% if report.cost_share.payroll is not None %}{{ report.cost_share.payroll }}%{% endif %}</td></tr>
+            {% for l in report.expense_lines %}<tr class="is-sub"><td><i class="fa-solid {{ l.icon }}" style="width:18px"></i> {{ l.name }} <span class="ui-log-sub">· {{ l.count }}</span></td><td class="num">₹{{ l.amount|floatformat:2 }}</td><td class="num"></td></tr>{% empty %}<tr class="is-sub"><td colspan="3"><span class="ui-log-sub">No expenses recorded. <a href="{{ base_url }}finance/expenses/">Add them</a> for a true net profit.</span></td></tr>{% endfor %}
+            <tr class="is-total"><td>Net {% if report.net_profit >= 0 %}profit{% else %}loss{% endif %}</td><td class="num {% if report.net_profit < 0 %}neg{% else %}pos{% endif %}">₹{{ report.net_profit|floatformat:2 }}</td><td class="num">{% if report.net_margin is not None %}{{ report.net_margin }}%{% endif %}</td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      {% if compare %}
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">By branch</h2></div>
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Branch</th><th>Revenue</th><th>Costs</th><th>Profit</th><th>Margin</th></tr></thead>
+          <tbody>{% for c in compare %}<tr>
+            <td class="ui-cell-primary"><a href="?period={{ period }}&from={{ start|date:'Y-m-d' }}&to={{ end|date:'Y-m-d' }}&branch={{ c.branch.id }}"><strong>{{ c.branch.name }}</strong></a></td>
+            <td>₹{{ c.revenue|floatformat:0 }}</td><td>₹{{ c.costs|floatformat:0 }}</td>
+            <td class="{% if c.profit < 0 %}ui-text-red{% endif %}"><strong>₹{{ c.profit|floatformat:0 }}</strong></td>
+            <td>{% if c.margin is not None %}{{ c.margin }}%{% else %}—{% endif %}</td></tr>{% endfor %}</tbody>
+        </table></div>
+        <p class="ui-log-sub" style="padding:0 16px 14px;margin:0">Costs not assigned to a branch appear only in the all-branches total.{% if scope != 'all' %} Shared costs (management, security, shared expenses) appear only in the whole-business view.{% endif %}</p>
+      </section>
+      {% endif %}
+    </div>
+    <div class="ui-g360-side">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Last 6 months</h2>
+        <div style="position:relative;height:240px"><canvas id="plTrend" aria-label="Revenue, costs and profit by month"></canvas></div>
+      </section>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Where revenue goes</h2>
+        <ul class="ui-ledger">
+          <li style="flex-direction:column;align-items:stretch;gap:6px"><div style="display:flex;justify-content:space-between"><span class="ui-ledger-text">Purchases</span><span>{{ report.cost_share.purchases|default:0 }}%</span></div><div class="ui-bar-mini"><span style="width:{{ report.cost_share.purchases|default:0 }}%"></span></div></li>
+          <li style="flex-direction:column;align-items:stretch;gap:6px"><div style="display:flex;justify-content:space-between"><span class="ui-ledger-text">Payroll</span><span>{{ report.cost_share.payroll|default:0 }}%</span></div><div class="ui-bar-mini"><span style="width:{{ report.cost_share.payroll|default:0 }}%"></span></div></li>
+          <li style="flex-direction:column;align-items:stretch;gap:6px"><div style="display:flex;justify-content:space-between"><span class="ui-ledger-text">Expenses</span><span>{{ report.cost_share.expenses|default:0 }}%</span></div><div class="ui-bar-mini"><span style="width:{{ report.cost_share.expenses|default:0 }}%"></span></div></li>
+          <li style="flex-direction:column;align-items:stretch;gap:6px"><div style="display:flex;justify-content:space-between"><span class="ui-ledger-text">Partner commission</span><span>{{ report.cost_share.commission|default:0 }}%</span></div><div class="ui-bar-mini"><span style="width:{{ report.cost_share.commission|default:0 }}%"></span></div></li>
+        </ul>
+        <p class="ui-log-sub" style="margin-top:10px">{% if scope == 'hotel' %}Hotel rule of thumb: payroll 25–35% of room revenue, OTA commission 15–20%.{% else %}Hospitality rule of thumb: food cost 28–35%, payroll 25–30%.{% endif %}</p>
+      </section>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var data = {{ chart_json|safe }};
+  function draw() {
+  var el = document.getElementById('plTrend');
+  if (!el || !window.Chart || el.dataset.drawn) return;
+  el.dataset.drawn = '1';
+  new Chart(el, {
+    data: {
+      labels: data.map(function (d) { return d.label; }),
+      datasets: [
+        { type: 'bar', label: 'Revenue', data: data.map(function (d) { return d.revenue; }), backgroundColor: 'rgba(52,199,89,.75)', borderRadius: 6 },
+        { type: 'bar', label: 'Costs', data: data.map(function (d) { return d.costs; }), backgroundColor: 'rgba(255,59,48,.65)', borderRadius: 6 },
+        { type: 'line', label: 'Profit', data: data.map(function (d) { return d.profit; }), borderColor: 'rgb(0,122,255)', backgroundColor: 'rgb(0,122,255)', tension: .35, pointRadius: 3 }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } },
+      scales: { y: { ticks: { callback: function (v) { return '₹' + (Math.abs(v) >= 1000 ? Math.round(v / 1000) + 'k' : v); } } } } }
+  });
+  }
+  // The shell may already load Chart.js further down the page; load it ourselves only if it never arrives.
+  window.addEventListener('load', function () {
+    if (window.Chart) return draw();
+    var sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+    sc.onload = draw; document.head.appendChild(sc);
+  });
+})();
+</script>

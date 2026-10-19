@@ -1,0 +1,41 @@
+{% load restaurant_admin_extras %}
+<div class="ui-agg" style="--brand: {{ p.color }}; --brand-rgb: {{ p.rgb }};">
+  {% include 'delivery/_head.html' %}
+  <div class="ui-dash-row r-2-1">
+    <section class="ui-card ui-list-card">
+      <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Imported payouts</h2></div>
+      {% if batches %}
+      <div class="table-responsive"><table class="table ui-dash-table">
+        <thead><tr><th>Payout</th><th class="num">Orders</th><th class="num">Paid</th><th class="num">Expected</th><th class="num">Difference</th><th>Match</th></tr></thead>
+        <tbody>{% for b in batches %}<tr class="ui-row-link" onclick="location.href='{% url 'restaurant_admin:delivery_payout_detail' restaurant_slug=env.slug platform=env.platform pk=b.pk %}'">
+          <td><a href="{% url 'restaurant_admin:delivery_payout_detail' restaurant_slug=env.slug platform=env.platform pk=b.pk %}"><strong>{{ b.reference|default:b.file_name }}</strong></a><div class="ui-log-sub">{% if b.payout_date %}Paid {{ b.payout_date|date:"j M Y" }} · {% endif %}{% if b.period_start %}{{ b.period_start|date:"j M" }} – {{ b.period_end|date:"j M" }}{% else %}imported {{ b.created_at|date:"j M" }}{% endif %}</div></td>
+          <td class="num">{{ b.lines_count }}</td><td class="num"><strong>₹{{ b.net_payout|inr }}</strong></td><td class="num">₹{{ b.expected_payout|inr }}</td>
+          <td class="num {% if b.difference < -1 %}ui-text-red{% endif %}">{{ b.difference|signed_inr }}</td>
+          <td><span class="ui-chip ui-chip-green">{{ b.matched }}</span>{% if b.mismatched %} <span class="ui-chip ui-chip-orange">{{ b.mismatched }}</span>{% endif %}{% if b.unmatched %} <span class="ui-chip ui-chip-red">{{ b.unmatched }}</span>{% endif %}</td>
+        </tr>{% endfor %}</tbody>
+      </table></div>
+      {% else %}<div class="ui-empty"><i class="fa-solid fa-building-columns ui-empty-icon"></i><p class="ui-log-sub">No payouts imported yet. {{ p.settlement_hint }}</p></div>{% endif %}
+    </section>
+    <div>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Not yet paid out</h2>
+        <div class="ui-dash-stats" style="grid-template-columns:1fr 1fr">
+          <div><strong>{{ unsettled.n }}</strong><span>orders</span></div>
+          <div><strong>₹{{ unsettled.v|inr }}</strong><span>expected</span></div>
+        </div>
+        {% if unsettled.old %}<p class="ui-log-sub" style="margin:10px 0 0"><i class="fa-solid fa-clock" style="color:var(--ui-orange)"></i> {{ unsettled.old }} delivered more than 10 days ago — check with {{ p.label }}.</p>{% endif %}
+        <p style="margin:12px 0 0"><a href="{{ u.orders }}?settled=no">See unpaid orders →</a></p>
+      </section>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Import a payout file</h2>
+        <form method="post" enctype="multipart/form-data" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-field"><label for="pf">CSV file</label><input id="pf" class="ui-input" type="file" name="file" accept=".csv,text/csv" required style="padding-top:7px"></div>
+          <div class="ui-field"><label for="pr">Payout reference (UTR)</label><input id="pr" class="ui-input" name="reference" maxlength="120"></div>
+          <div class="ui-field"><label for="pd">Payout date</label><input id="pd" class="ui-input" type="date" name="payout_date"></div>
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-file-import"></i><span>Import &amp; reconcile</span></button>
+        </form>
+        <p class="ui-log-sub" style="margin:12px 0 0">{{ p.settlement_hint }} We need an <b>order ID</b> and a <b>net payout</b> column; commission, TDS/TCS and adjustments are read when present. Actual commission replaces our estimate in the Profit &amp; Loss.</p>
+      </section>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,22 @@
+<dialog class="ui-dialog ui-dialog-form" id="{% if op == 'edit' %}edit{{ e.pk }}{% else %}{{ dialog_id }}{% endif %}">
+  <form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="op" value="{{ op }}">{% if e %}<input type="hidden" name="pk" value="{{ e.pk }}">{% endif %}<input type="hidden" name="next" value="{{ here }}">
+    <h3>{{ title }}</h3>
+    <div class="ui-form-grid">
+      <div class="ui-field"><label>Amount paid (₹)</label><input class="ui-input" name="amount" inputmode="decimal" required value="{% if e %}{{ e.amount }}{% endif %}" placeholder="0.00"></div>
+      <div class="ui-field"><label>Date</label><input class="ui-input" type="date" name="date" required value="{% if e %}{{ e.date|date:'Y-m-d' }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}" max="{{ today|date:'Y-m-d' }}"></div>
+      <div class="ui-field"><label>Category</label><select class="ui-input" name="category" required>{% for c in active_cats %}<option value="{{ c.pk }}" {% if e.category_id == c.pk %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
+      <div class="ui-field"><label>Branch</label>{% if branch_locked %}<input class="ui-input" value="{{ branches.0.name }}" disabled>{% else %}<select class="ui-input" name="branch"><option value="">Shared by all branches</option>{% for b in branches %}<option value="{{ b.id }}" {% if e and e.branch_id == b.id %}selected{% elif not e and selected_branch.id == b.id %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select>{% endif %}</div>
+      <div class="ui-field"><label>Belongs to</label><select class="ui-input" name="department"><option value="{{ module }}" {% if not e or e.department == module %}selected{% endif %}>{{ module_label }}</option><option value="shared" {% if e.department == 'shared' %}selected{% endif %}>Shared (whole business)</option></select></div>
+      <div class="ui-field"><label>Paid to</label><input class="ui-input" name="paid_to" value="{{ e.paid_to|default:'' }}" placeholder="Landlord, BESCOM, plumber…"></div>
+      <div class="ui-field"><label>Paid by</label><select class="ui-input" name="payment_method">{% for v, l in methods %}<option value="{{ v }}" {% if e.payment_method == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+      <div class="ui-field"><label>Bill / invoice no.</label><input class="ui-input" name="reference" value="{{ e.reference|default:'' }}"></div>
+      <div class="ui-field"><label>GST included (₹)</label><input class="ui-input" name="tax_amount" inputmode="decimal" value="{% if e %}{{ e.tax_amount }}{% else %}0{% endif %}"></div>
+      <div class="ui-field ui-col-2"><label>Note</label><input class="ui-input" name="note" value="{{ e.note|default:'' }}"></div>
+      <div class="ui-field ui-col-2"><label>Receipt (PDF or photo, up to 8 MB){% if e.receipt %} · replaces the current one{% endif %}</label><input class="ui-input" type="file" name="receipt" accept=".pdf,image/*"></div>
+    </div>
+    <div class="ui-dialog-actions" style="justify-content:space-between">
+      {% if e %}<button class="ui-btn ui-btn-tinted-red" type="submit" name="op" value="delete" formnovalidate onclick="return confirm('Delete this expense?')">Delete</button>{% else %}<span></span>{% endif %}
+      <span><button class="ui-btn ui-btn-gray" type="button" data-close-dialog>Cancel</button> <button class="ui-btn ui-btn-primary" type="submit">Save</button></span>
+    </div>
+  </form>
+</dialog>

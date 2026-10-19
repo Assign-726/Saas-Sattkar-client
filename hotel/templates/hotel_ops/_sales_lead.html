@@ -1,0 +1,48 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <a class="ui-back" href="{{ base_url }}sales/"><i class="fa-solid fa-chevron-left"></i> Sales</a>
+  <div class="ui-page-header">
+    <div><h1>{{ l.company }}</h1><p>{{ l.get_lead_type_display }} · ₹{{ l.value|inr }} · <span class="ui-chip ui-chip-{% if l.stage == 'WON' %}green{% elif l.stage == 'LOST' %}red{% else %}blue{% endif %}">{{ l.get_stage_display }}</span> · {{ l.probability }}% likely</p></div>
+    {% if can_edit and l.is_open %}<div class="ui-actions">
+      <form method="post" action="{{ base_url }}sales/{{ l.pk }}/action/">{% csrf_token %}<input type="hidden" name="op" value="back"><button class="ui-btn ui-btn-gray" type="submit" aria-label="Previous stage"><i class="fa-solid fa-arrow-left"></i></button></form>
+      {% if l.stage != 'NEGOTIATION' %}<form method="post" action="{{ base_url }}sales/{{ l.pk }}/action/">{% csrf_token %}<input type="hidden" name="op" value="next"><button class="ui-btn ui-btn-gray" type="submit"><span>Next stage</span><i class="fa-solid fa-arrow-right"></i></button></form>{% endif %}
+    </div>{% endif %}
+  </div>
+  {% if l.company_account or l.event %}<div class="ui-card ui-pad" style="margin-bottom:12px">{% if l.company_account %}City ledger account: <a href="{{ base_url }}finance/ledger/{{ l.company_account.pk }}/">{{ l.company_account.name }}</a>{% endif %}{% if l.event %} Event: <a href="{{ base_url }}banquets/{{ l.event.pk }}/">{{ l.event.name }}</a>{% endif %}</div>{% endif %}
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-pad"><h2 class="ui-card-title">Details</h2>
+        <dl class="ui-ops-kv"><dt>Contact</dt><dd>{{ l.contact_name|default:"—" }}{% if l.phone %} · {{ l.phone }}{% endif %}{% if l.email %} · {{ l.email }}{% endif %}</dd>
+          <dt>Source</dt><dd>{{ l.source }}</dd><dt>Owner</dt><dd>{% firstof l.owner.get_full_name l.owner.username "—" %}</dd>
+          <dt>Requirement</dt><dd>{{ l.requirement|default:"—"|linebreaksbr }}</dd>
+          {% if l.next_action %}<dt>Next step</dt><dd>{{ l.next_action }}{% if l.next_action_on %} · {{ l.next_action_on|date:"d M Y" }}{% endif %}</dd>{% endif %}
+          {% if l.lost_reason %}<dt>Lost because</dt><dd>{{ l.lost_reason }}</dd>{% endif %}{% if l.closed_on %}<dt>Closed</dt><dd>{{ l.closed_on|date:"d M Y" }}</dd>{% endif %}</dl></section>
+      <section class="ui-card ui-pad"><h2 class="ui-card-title">Activity</h2>
+        {% for a in activities %}<div class="ui-ops-row"><div><strong>{{ a.subject }}</strong><br><small class="ui-log-sub">{{ a.get_kind_display }} · {{ a.due_on|date:"d M Y" }}{% if a.is_done %} · done{% elif a.due_on < today %} · <span class="ui-text-red">overdue</span>{% endif %}</small></div>
+          {% if can_edit %}<form method="post" action="{{ base_url }}sales/activities/{{ a.pk }}/action/">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="ui-btn ui-btn-{% if a.is_done %}gray{% else %}primary{% endif %} ui-btn-sm" type="submit">{% if a.is_done %}Reopen{% else %}Done{% endif %}</button></form>{% endif %}</div>
+        {% empty %}<p class="ui-log-sub" style="margin:0">No activity yet.</p>{% endfor %}
+        {% if can_edit %}<form method="post" action="{{ base_url }}sales/{{ l.pk }}/activities/add/" class="ui-ops-inline is-wide" style="margin-top:12px">{% csrf_token %}
+          <select class="ui-input" name="kind" aria-label="Type">{% for k, v in kinds %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+          <input class="ui-input" name="subject" placeholder="Subject" aria-label="Subject" required><input class="ui-input" type="date" name="due_on" value="{{ today|date:'Y-m-d' }}" aria-label="Due">
+          <label class="ui-pms-check"><input type="checkbox" name="is_done" value="1"> Done</label><button class="ui-btn ui-btn-primary ui-btn-sm" type="submit">Add</button></form>{% endif %}
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      {% if can_edit and l.is_open %}
+      <section class="ui-card ui-pad"><h2 class="ui-card-title">Close the deal</h2>
+        <form method="post" action="{{ base_url }}sales/{{ l.pk }}/action/" class="ui-stack-form">{% csrf_token %}<input type="hidden" name="op" value="win">
+          <div class="ui-field"><label for="lwC">Also set up</label><select id="lwC" class="ui-input" name="create"><option value="">Nothing</option><option value="account" {% if l.lead_type == 'CORPORATE' or l.lead_type == 'TRAVEL_AGENT' %}selected{% endif %}>A city-ledger company account</option><option value="event" {% if l.lead_type == 'WEDDING' or l.lead_type == 'MICE' %}selected{% endif %}>A banquet event enquiry</option></select></div>
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-trophy"></i><span>Mark won</span></button></form>
+        <details style="margin-top:10px"><summary class="ui-link-btn ui-text-red">Mark lost</summary>
+          <form method="post" action="{{ base_url }}sales/{{ l.pk }}/action/" class="ui-stack-form" style="margin-top:8px">{% csrf_token %}<input type="hidden" name="op" value="lose">
+            <select class="ui-input" name="reason" aria-label="Reason"><option>Price / budget</option><option>Dates not available</option><option>Chose a competitor</option><option>Event cancelled</option><option>No response</option></select>
+            <button class="ui-btn ui-btn-tinted-red ui-btn-sm" type="submit">Mark lost</button></form></details>
+      </section>
+      <section class="ui-card ui-pad"><details><summary class="ui-card-title" style="cursor:pointer">Edit deal</summary>
+        <form method="post" action="{{ base_url }}sales/save/" class="ui-stack-form" style="margin-top:10px">{% csrf_token %}{% include 'hotel_ops/_lead_form.html' with suffix='e' %}
+          <div class="ui-field"><label for="ldSt">Stage</label><select id="ldSt" class="ui-input" name="stage">{% for k, v in stages %}{% if k != 'WON' and k != 'LOST' %}<option value="{{ k }}" {% if l.stage == k %}selected{% endif %}>{{ v }}</option>{% endif %}{% endfor %}</select></div>
+          <button class="ui-btn ui-btn-primary" type="submit">Save</button></form></details></section>
+      {% endif %}
+    </div>
+  </div>
+</div>

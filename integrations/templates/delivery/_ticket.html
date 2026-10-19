@@ -1,0 +1,39 @@
+{% load restaurant_admin_extras %}
+{% url 'restaurant_admin:delivery_order_detail' restaurant_slug=env.slug platform=env.platform pk=l.pk as detail_url %}
+{% url 'restaurant_admin:delivery_order_action' restaurant_slug=env.slug platform=env.platform pk=l.pk as action_url %}
+<article class="ui-agg-ticket {% if stage == 'placed' %}is-new{% endif %}" data-id="{{ l.pk }}">
+  <div class="t-top">
+    <a href="{{ detail_url }}" class="t-id">#{{ l.external_id }}</a>
+    {% if stage == 'placed' and l.seconds_to_accept is not None %}<span class="t-timer {% if l.seconds_to_accept < 60 %}is-urgent{% endif %}" data-deadline="{{ l.accept_by|date:'c' }}">{{ l.seconds_to_accept }}s</span>
+    {% else %}<span class="t-age">{{ l.created_at|timesince }}</span>{% endif %}
+  </div>
+  <div class="t-cust">{{ l.order.customer_name }}{% if l.order.payment_status != 'paid' %} <span class="ui-chip ui-chip-orange">Cash on delivery</span>{% endif %}</div>
+  <ul class="t-items">{% for it in l.order.items.all %}<li><b>{{ it.quantity }}×</b> {{ it.menu_item.name }}{% if it.notes %}<small>{{ it.notes }}</small>{% endif %}</li>{% endfor %}</ul>
+  {% if l.instructions %}<p class="t-note"><i class="fa-solid fa-message"></i> {{ l.instructions }}</p>{% endif %}
+  {% if l.rider_name %}<p class="t-rider"><i class="fa-solid fa-person-biking"></i> {{ l.rider_name }}{% if l.rider_eta and stage != 'picked_up' %} · arrives {{ l.rider_eta|time:"g:i a" }}{% endif %}{% if l.pickup_code %} · code <b>{{ l.pickup_code }}</b>{% endif %}</p>{% endif %}
+  <div class="t-foot">
+    <strong>₹{{ l.customer_payable|inr }}</strong>
+    {% if stage == 'accepted' and l.ready_by %}<span class="t-age {% if l.is_late %}ui-text-red{% endif %}">{% if l.is_late %}late · {% endif %}ready by {{ l.ready_by|time:"g:i a" }}</span>{% endif %}
+  </div>
+  {% if stage == 'placed' %}
+  <form method="post" action="{{ action_url }}" class="t-accept">{% csrf_token %}
+    <input type="hidden" name="action" value="accept"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <label class="ui-sr" for="prep{{ l.pk }}">Preparation time</label>
+    <select id="prep{{ l.pk }}" name="prep_minutes" class="ui-input">{% for m in prep_choices %}<option value="{{ m }}" {% if m == conn.default_prep_minutes %}selected{% endif %}>{{ m }} min</option>{% endfor %}</select>
+    <button class="ui-btn ui-btn-primary ui-btn-sm ui-agg-brand-btn" type="submit"><i class="fa-solid fa-check"></i> Accept</button>
+  </form>
+  <details class="t-reject"><summary>Reject</summary>
+    <form method="post" action="{{ action_url }}">{% csrf_token %}
+      <input type="hidden" name="action" value="reject"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <select name="reason" class="ui-input" required><option value="">Why?</option>{% for k, lbl in reasons_reject %}<option value="{{ k }}">{{ lbl }}</option>{% endfor %}</select>
+      <button class="ui-btn ui-btn-tinted-red ui-btn-sm" type="submit">Reject order</button>
+    </form>
+  </details>
+  {% elif stage == 'accepted' %}
+  <form method="post" action="{{ action_url }}">{% csrf_token %}<input type="hidden" name="action" value="mark_ready"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <button class="ui-btn ui-btn-gray ui-btn-sm t-wide" type="submit"><i class="fa-solid fa-box"></i> Food is ready</button></form>
+  {% elif stage == 'ready' %}
+  <form method="post" action="{{ action_url }}">{% csrf_token %}<input type="hidden" name="action" value="mark_picked_up"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <button class="ui-btn ui-btn-gray ui-btn-sm t-wide" type="submit"><i class="fa-solid fa-hand-holding"></i> Handed to rider</button></form>
+  {% endif %}
+</article>

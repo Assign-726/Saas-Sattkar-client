@@ -2,6 +2,17 @@ import json
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from core.models import Zone, Table
+
+
+def _slug_restaurant(request, restaurant_slug):
+    """The business in the URL (company or branch slug), checked against the user — see resolve_restaurant."""
+    from django.core.exceptions import PermissionDenied
+    from django.http import HttpResponse
+    from restaurant_admin.views import resolve_restaurant
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        raise PermissionDenied
+    return restaurant
 from django.shortcuts import render
 from django.core.paginator import Paginator
 
@@ -29,18 +40,10 @@ def ensure_default_zone(restaurant, active_branch=None):
 
 @login_required
 def floor_plan_api(request, restaurant_slug=None):
-    try:
-        # Check standard admin relationships
-        restaurant = request.user.restaurant
-    except Exception:
-        # Fallback to looking for related restaurant profile
-        if hasattr(request.user, 'restaurant_profile'):
-            restaurant = request.user.restaurant_profile.restaurant
-        else:
-            restaurant = getattr(request.user, 'restaurant', None)
-
-    if not restaurant:
-        return JsonResponse({'error': 'No restaurant found for this user.'}, status=400)
+    from restaurant_admin.views import resolve_restaurant
+    restaurant = resolve_restaurant(request, restaurant_slug)  # tenant check; superusers may open any business
+    if not hasattr(restaurant, 'branches'):
+        return JsonResponse({'error': 'No restaurant found for this user.'}, status=403)
 
     profile = getattr(request.user, 'restaurant_profile', None)
     active_branch = profile.branch if profile else None
@@ -115,7 +118,7 @@ def floor_plan_api(request, restaurant_slug=None):
 @login_required
 def floor_plan_dashboard(request, restaurant_slug=None):
     from super_admin.models import Restaurant
-    restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+    restaurant = _slug_restaurant(request, restaurant_slug)
     active_branch = get_view_active_branch(request, restaurant)
     ensure_default_zone(restaurant, active_branch)
     
@@ -170,8 +173,10 @@ def floor_plan_save_position_api(request, restaurant_slug=None):
     if request.method != 'POST':
         return JsonResponse({'error': 'POST method required.'}, status=405)
     
-    from super_admin.models import Restaurant
-    restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+    from restaurant_admin.views import resolve_restaurant
+    restaurant = resolve_restaurant(request, restaurant_slug)  # only your own business (or a platform admin)
+    if not hasattr(restaurant, 'branches'):
+        return JsonResponse({'error': 'You do not have access to this restaurant.'}, status=403)
     active_branch = get_view_active_branch(request, restaurant)
 
     try:
@@ -247,7 +252,7 @@ def zone_list(request, restaurant_slug=None):
 
 @login_required
 def zone_add(request, restaurant_slug=None):
-    restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+    restaurant = _slug_restaurant(request, restaurant_slug)
     active_branch = get_view_active_branch(request, restaurant)
     if request.method == 'POST':
         form = ZoneForm(request.POST, restaurant=restaurant, branch=active_branch)
@@ -261,7 +266,7 @@ def zone_add(request, restaurant_slug=None):
 
 @login_required
 def zone_edit(request, restaurant_slug=None, pk=None):
-    restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+    restaurant = _slug_restaurant(request, restaurant_slug)
     active_branch = get_view_active_branch(request, restaurant)
     zone = get_object_or_404(Zone, pk=pk, restaurant=restaurant)
     if request.method == 'POST':
@@ -277,7 +282,7 @@ def zone_edit(request, restaurant_slug=None, pk=None):
 @login_required
 def zone_delete(request, restaurant_slug=None, pk=None):
     from django.db.models import ProtectedError
-    restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+    restaurant = _slug_restaurant(request, restaurant_slug)
     zone = get_object_or_404(Zone, pk=pk, restaurant=restaurant)
 
     default_names = ['main area', 'main floor', 'default', 'general']
@@ -301,7 +306,7 @@ def zone_delete(request, restaurant_slug=None, pk=None):
 @login_required
 def table_list(request, restaurant_slug=None):
     from django.db.models import Q
-    restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+    restaurant = _slug_restaurant(request, restaurant_slug)
     active_branch = get_view_active_branch(request, restaurant)
     ensure_default_zone(restaurant, active_branch)
     tables_all_qs = Table.objects.filter(restaurant=restaurant)
@@ -355,7 +360,7 @@ def table_list(request, restaurant_slug=None):
 @login_required
 def table_add(request, restaurant_slug=None):
     from django.db.models import Q
-    restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+    restaurant = _slug_restaurant(request, restaurant_slug)
     active_branch = get_view_active_branch(request, restaurant)
     initial_data = {}
     if 'zone' in request.GET:
@@ -456,7 +461,7 @@ def table_add(request, restaurant_slug=None):
 
 @login_required
 def table_edit(request, restaurant_slug=None, pk=None):
-    restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+    restaurant = _slug_restaurant(request, restaurant_slug)
     active_branch = get_view_active_branch(request, restaurant)
     table = get_object_or_404(Table, pk=pk, restaurant=restaurant)
     if request.method == 'POST':
@@ -471,7 +476,7 @@ def table_edit(request, restaurant_slug=None, pk=None):
 
 @login_required
 def table_delete(request, restaurant_slug=None, pk=None):
-    restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+    restaurant = _slug_restaurant(request, restaurant_slug)
     table = get_object_or_404(Table, pk=pk, restaurant=restaurant)
     if request.method == 'POST':
         table.delete()
@@ -487,7 +492,7 @@ def regenerate_table_qrs(request, restaurant_slug=None):
     using the current FRONTEND_URL from .env, branch slug, and floor zone name.
     """
     from django.db.models import Q
-    restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
+    restaurant = _slug_restaurant(request, restaurant_slug)
     active_branch = get_view_active_branch(request, restaurant)
     
     tables_qs = Table.objects.filter(restaurant=restaurant)

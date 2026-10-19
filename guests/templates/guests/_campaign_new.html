@@ -1,0 +1,64 @@
+<div class="ui-logs ui-campaigns">
+  <a class="ui-back" href="{{ base_url }}campaigns/"><i class="fa-solid fa-chevron-left"></i> Campaigns</a>
+  <div class="ui-page-header"><div><h1>New campaign</h1><p>Pick who it is for and how to reach them. Guests who opted out are left out automatically.</p></div></div>
+  <form method="post" id="campaignForm">{% csrf_token %}
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-pad">
+        <div class="ui-form-grid">
+          <div class="ui-field ui-col-2"><label for="cName">Campaign name</label><input id="cName" class="ui-input" name="name" required placeholder="e.g. Diwali weekend for regulars"></div>
+          <div class="ui-field"><label for="cChannel">Channel</label><select id="cChannel" class="ui-input" name="channel">{% for v, l in channels %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select></div>
+          <div class="ui-field"><label for="cSegment">Send to</label><select id="cSegment" class="ui-input" name="segment">{% for v, l in segments %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select></div>
+          <div class="ui-field ui-col-2" id="subjectField" hidden><label for="cSubject">Email subject</label><input id="cSubject" class="ui-input" name="subject" placeholder="A little thank-you from us"></div>
+          <div class="ui-field ui-col-2"><label for="cMessage">Message</label><textarea id="cMessage" class="ui-input" name="message" rows="6" required>Hi {first_name}! Thank you for being a regular at {business}. This weekend, enjoy 15% off your bill with code {offer_code}. You also have {points} loyalty points waiting. See you soon!</textarea>
+            <div class="ui-log-sub" style="margin-top:6px">Insert:
+              <button type="button" class="ui-btn ui-btn-gray ui-btn-sm" data-tag="{first_name}">first name</button>
+              <button type="button" class="ui-btn ui-btn-gray ui-btn-sm" data-tag="{points}">points</button>
+              <button type="button" class="ui-btn ui-btn-gray ui-btn-sm" data-tag="{points_value}">points value</button>
+              <button type="button" class="ui-btn ui-btn-gray ui-btn-sm" data-tag="{business}">business</button>
+              <button type="button" class="ui-btn ui-btn-gray ui-btn-sm" data-tag="{offer_code}">offer code</button></div></div>
+          <div class="ui-field"><label for="cCode">Offer code (optional)</label><input id="cCode" class="ui-input" name="offer_code" placeholder="WEEKEND15"></div>
+        </div>
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Preview</h2>
+        <p class="ui-log-sub" id="pvTo">To …</p>
+        <div class="ui-preview-msg" id="pvMsg"></div>
+        <div class="ui-points" style="margin-top:14px"><strong id="pvCount">—</strong> <span class="ui-log-sub">guests will receive it</span></div>
+        <p class="ui-log-sub" id="pvHow" style="margin-top:8px"></p>
+        <button class="ui-btn ui-btn-primary" type="submit" style="width:100%;margin-top:6px">Create campaign</button>
+      </section>
+    </div>
+  </div>
+  </form>
+</div>
+<script>
+(function () {
+  var f = document.getElementById('campaignForm'), timer;
+  var how = { whatsapp: 'You will get a send list: each row opens WhatsApp with the message ready, so it comes from your business number.', sms: 'You will get a send list with one-tap SMS links, plus a CSV for your bulk SMS provider.', email: 'Emails go out from your configured mail server, each with an unsubscribe link.' };
+  function refresh() {
+    clearTimeout(timer);
+    timer = setTimeout(function () {
+      var ch = f.channel.value;
+      document.getElementById('subjectField').hidden = ch !== 'email';
+      document.getElementById('pvHow').textContent = how[ch] || '';
+      var q = new URLSearchParams({ preview: 1, channel: ch, segment: f.segment.value, message: f.message.value, offer_code: f.offer_code.value });
+      fetch(location.pathname + '?' + q.toString(), { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+        document.getElementById('pvMsg').textContent = d.preview || '…';
+        document.getElementById('pvCount').textContent = d.count;
+        document.getElementById('pvTo').textContent = 'To ' + d.sample_name + (d.count > 1 ? ' and ' + (d.count - 1) + ' more' : '');
+      });
+    }, 250);
+  }
+  ['input', 'change'].forEach(function (ev) { f.addEventListener(ev, refresh); });
+  document.querySelectorAll('[data-tag]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var t = f.message, s = t.selectionStart || t.value.length;
+      t.value = t.value.slice(0, s) + b.dataset.tag + t.value.slice(t.selectionEnd || s); t.focus(); refresh();
+    });
+  });
+  refresh();
+})();
+</script>

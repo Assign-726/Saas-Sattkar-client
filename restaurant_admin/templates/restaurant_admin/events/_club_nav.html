@@ -1,0 +1,19 @@
+{% comment %}
+Club & Events tabs. Params: tab (events|guestlist|grid|floor|scanner). Uses ns, rslug, selected_event, flags.
+Tabs for one event carry the selected event along so switching screens keeps it.
+{% endcomment %}
+<nav class="club-tabs" aria-label="Club &amp; Events">
+    {% if can_manage_events %}
+    <a href="{% url ns|add:':club_events_list' restaurant_slug=rslug %}" class="{% if tab == 'events' %}on{% endif %}"><i class="fas fa-calendar-alt"></i> Events</a>
+    {% endif %}
+    <a href="{% if selected_event %}{% url ns|add:':club_guestlist_event' restaurant_slug=rslug event_id=selected_event.id %}{% else %}{% url ns|add:':club_guestlist' restaurant_slug=rslug %}{% endif %}"
+       class="{% if tab == 'guestlist' %}on{% endif %}"><i class="fas fa-users"></i> Guestlist</a>
+    {% if can_manage_events %}
+    <a href="{% if selected_event %}{% url ns|add:':club_ticket_grid_event' restaurant_slug=rslug event_id=selected_event.id %}{% else %}{% url ns|add:':club_ticket_grid' restaurant_slug=rslug %}{% endif %}"
+       class="{% if tab == 'grid' %}on{% endif %}"><i class="fas fa-th"></i> Ticket grid</a>
+    <a href="{% if selected_event %}{% url ns|add:':club_floor_plan_event' restaurant_slug=rslug event_id=selected_event.id %}{% else %}{% url ns|add:':club_floor_plan' restaurant_slug=rslug %}{% endif %}"
+       class="{% if tab == 'floor' %}on{% endif %}"><i class="fas fa-chair"></i> Table plan</a>
+    {% endif %}
+    <a href="{% if selected_event %}{% url ns|add:':club_gate_scanner_event' restaurant_slug=rslug event_id=selected_event.id %}{% else %}{% url ns|add:':club_gate_scanner' restaurant_slug=rslug %}{% endif %}"
+       class="{% if tab == 'scanner' %}on{% endif %}"><i class="fas fa-qrcode"></i> Gate scanner</a>
+</nav>

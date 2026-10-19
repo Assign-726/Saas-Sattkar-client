@@ -13,8 +13,10 @@ from django.views.static import serve
 from django.contrib.staticfiles.views import serve as staticfiles_serve
 from django.shortcuts import redirect
 from django.views.generic import RedirectView
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from core.throttling import GuardedTokenObtainPairView, GuardedTokenRefreshView
+from core import views_health
 from django.contrib.auth import views as auth_views
+from integrations.delivery import views as delivery_views
 
 from core.views import (
     redirect_to_frontend,
@@ -30,6 +32,7 @@ from core.views_auth import (
 from core.admin_custom import custom_admin_site
 from restaurant_admin import urls as restaurant_admin_urls
 from hotel import views as views_hotel
+from guests import views_growth as guest_growth_views
 
 
 # Use the custom admin site
@@ -38,6 +41,7 @@ admin.autodiscover()
 
 urlpatterns = [
     # Favicon
+    path('healthz/', views_health.healthz, name='healthz'),
     path('favicon.ico', RedirectView.as_view(url=settings.STATIC_URL + 'favicon.ico', permanent=True)),
 
     # Admin / Authentication at root
@@ -80,6 +84,15 @@ urlpatterns = [
     # Super Admin
     path('super/', include(('super_admin.urls', 'super_admin'), namespace='super_admin')),
     
+    # Public guest pages: feedback form (one per branch) and email unsubscribe
+    path('feedback/<slug:restaurant_slug>/<int:branch_id>/', guest_growth_views.feedback_public, name='guest_feedback_public'),
+    path('g/unsubscribe/<str:token>/', guest_growth_views.unsubscribe, name='guest_unsubscribe'),
+
+    # Public partner API (branch-scoped API keys) — see Integrations › Developer guide
+    path('api/v1/', include('integrations.urls_api')),
+    path('integrations/delivery/<str:provider>/webhook/', delivery_views.webhook_shared, name='delivery_webhook_shared'),
+    path('integrations/delivery/<str:provider>/<uuid:public_id>/webhook/', delivery_views.webhook, name='delivery_webhook'),
+
     # API endpoints
     path('api/', include('core.urls')),
     path('api/', include('reservations.urls')),
@@ -109,8 +122,8 @@ urlpatterns = [
 
 
     # API Token Authentication
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/token/', GuardedTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', GuardedTokenRefreshView.as_view(), name='token_refresh'),
 ]
 
 # Media and Static files serving (Development & Production fallback)

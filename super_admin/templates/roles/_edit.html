@@ -1,0 +1,135 @@
+<div class="ui-logs ui-roles">
+  <a class="ui-back" href="{{ roles_url }}"><i class="fa-solid fa-chevron-left"></i> Roles</a>
+  <form method="post" id="roleForm">{% csrf_token %}<input type="hidden" name="op" value="save">
+  <div class="ui-page-header">
+    <div><h1>{% if role %}{{ role.name }}{% else %}New role{% endif %}</h1><p>Choose what people with this role can do in each area.</p></div>
+    <div class="ui-actions"><button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-check"></i><span>{% if role %}Save role{% else %}Create role{% endif %}</span></button></div>
+  </div>
+
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-pad">
+        <div class="ui-form-grid">
+          <div class="ui-field"><label for="rName">Role name</label><input id="rName" class="ui-input" name="name" required maxlength="60" value="{% if role %}{{ role.name }}{% else %}{{ preset_name }}{% endif %}" placeholder="e.g. Accountant"></div>
+          <div class="ui-field"><label for="rDesc">Description</label><input id="rDesc" class="ui-input" name="description" maxlength="200" value="{% if role %}{{ role.description }}{% else %}{{ preset_desc }}{% endif %}" placeholder="What this person is responsible for"></div>
+        </div>
+      </section>
+
+      {% for g in groups %}
+      <section class="ui-card ui-list-card ui-perm-card" data-module="{{ g.module }}">
+        <div class="ui-list-toolbar">
+          <h2 class="ui-card-title" style="margin:0">{{ g.title }}</h2>
+          <div class="ui-perm-bulk" role="group" aria-label="Set every {{ g.title }} area">
+            <button type="button" class="ui-btn ui-btn-gray ui-btn-sm" data-bulk="none">None</button>
+            <button type="button" class="ui-btn ui-btn-gray ui-btn-sm" data-bulk="view">All view</button>
+            <button type="button" class="ui-btn ui-btn-gray ui-btn-sm" data-bulk="manage">All manage</button>
+          </div>
+        </div>
+        <ul class="ui-perm-list">
+          {% for row in g.rows %}
+          <li class="ui-perm-row">
+            <span class="ui-perm-icon"><i class="fa-solid {{ row.icon }}"></i></span>
+            <span class="ui-perm-text"><strong>{{ row.label }}</strong><span class="ui-log-sub">{{ row.desc }}</span></span>
+            <span class="ui-seg" role="radiogroup" aria-label="{{ row.label }}">
+              {% for value, label in levels %}<input type="radio" id="p_{{ row.key }}_{{ value }}" name="perm_{{ row.key }}" value="{{ value }}" {% if row.level == value %}checked{% endif %}><label for="p_{{ row.key }}_{{ value }}" class="lv-{{ value }}">{{ label }}</label>{% endfor %}
+            </span>
+          </li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endfor %}
+    </div>
+
+    <div class="ui-g360-side">
+      <section class="ui-card ui-pad ui-perm-summary">
+        <h2 class="ui-card-title">Summary</h2>
+        <div class="ui-log-sub">Signs in to</div>
+        <p id="sumShell" style="font-weight:600;margin:2px 0 12px">{{ base_label|default:"—" }}</p>
+        <div class="ui-today-stats" style="grid-template-columns:repeat(3,1fr)">
+          <div><strong id="sumManage">0</strong><span>Manage</span></div>
+          <div><strong id="sumView">0</strong><span>View</span></div>
+          <div><strong id="sumNone">0</strong><span>Hidden</span></div>
+        </div>
+        <p class="ui-log-sub" id="sumWarn" hidden style="margin-top:10px"><i class="fa-solid fa-triangle-exclamation" style="color:var(--ui-orange)"></i> Open at least one area.</p>
+      </section>
+      {% if not role %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Templates</h2>
+        <ul class="ui-ledger">{% for name, desc, perms in presets %}<li><a class="ui-ledger-text" href="?preset={{ name|urlencode }}">{{ name }}<span class="ui-log-sub">{{ desc }}</span></a></li>{% endfor %}</ul>
+      </section>
+      {% endif %}
+    </div>
+  </div>
+  </form>
+
+  {% if role %}
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">People with this role</h2><span class="ui-list-count">{{ members|length }}</span></div>
+        {% if members %}
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Login</th><th>Branch</th><th>Move to</th></tr></thead>
+          <tbody>{% for m in members %}<tr>
+            <td class="ui-cell-primary"><strong>{{ m.user.get_full_name|default:m.user.username }}</strong><div class="ui-log-sub">{{ m.user.username }}{% if m.user.email %} · {{ m.user.email }}{% endif %}</div></td>
+            <td>{{ m.branch.name|default:"All branches" }}</td>
+            <td class="ui-cell-actions"><form method="post" class="ui-inline-form" style="display:flex;gap:6px">{% csrf_token %}<input type="hidden" name="op" value="remove"><input type="hidden" name="member" value="{{ m.pk }}">
+              <select class="ui-input" name="new_role" required aria-label="Standard role"><option value="">Standard role…</option>{% for v, l in standard_roles %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select>
+              <button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">Move</button></form></td>
+          </tr>{% endfor %}</tbody>
+        </table></div>
+        {% else %}
+        <div class="ui-empty"><div class="ui-empty-icon"><i class="fa-solid fa-user-plus"></i></div><h3>Nobody has this role yet</h3><p>Add existing logins on the right. Create new logins in Staff › Logins &amp; Roles first.</p></div>
+        {% endif %}
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Add people</h2>
+        {% if eligible %}
+        <form method="post" class="ui-stack-form">{% csrf_token %}<input type="hidden" name="op" value="assign">
+          <div class="ui-check-grid" style="grid-template-columns:1fr;max-height:320px;overflow:auto">
+            {% for m in eligible %}<label><input type="checkbox" class="ui-check" name="logins" value="{{ m.pk }}"><span>{{ m.user.get_full_name|default:m.user.username }}<code>{% if m.custom_role %}{{ m.custom_role.name }}{% else %}{{ m.get_role_display }}{% endif %}{% if m.branch %} · {{ m.branch.name }}{% endif %}</code></span></label>{% endfor %}
+          </div>
+          <button class="ui-btn ui-btn-primary" type="submit">Give this role</button>
+        </form>
+        {% else %}<p class="ui-log-sub">No other logins can take this role.</p>{% endif %}
+      </section>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Delete role</h2>
+        <p class="ui-log-sub">{% if members %}Move everyone to another role first.{% else %}This cannot be undone.{% endif %}</p>
+        <form method="post" onsubmit="return confirm('Delete this role?')">{% csrf_token %}<input type="hidden" name="op" value="delete"><button class="ui-btn ui-btn-tinted-red" type="submit" {% if members %}disabled{% endif %}>Delete role</button></form>
+      </section>
+    </div>
+  </div>
+  {% endif %}
+</div>
+<script>
+(function () {
+  var form = document.getElementById('roleForm');
+  var shells = { r: 'Restaurant admin', h: 'Hotel admin', rh: 'Restaurant & Hotel admin', s: 'Restaurant admin' };
+  function summary() {
+    var counts = { manage: 0, view: 0, none: 0 }, mods = {};
+    form.querySelectorAll('.ui-perm-card').forEach(function (card) {
+      card.querySelectorAll('.ui-perm-row').forEach(function (row) {
+        var on = row.querySelector('input:checked'); var v = on ? on.value : 'none';
+        counts[v]++; row.classList.toggle('is-off', v === 'none');
+        if (v !== 'none') mods[card.dataset.module] = true;
+      });
+    });
+    document.getElementById('sumManage').textContent = counts.manage;
+    document.getElementById('sumView').textContent = counts.view;
+    document.getElementById('sumNone').textContent = counts.none;
+    document.getElementById('sumWarn').hidden = counts.manage + counts.view > 0;
+    document.getElementById('sumShell').textContent = mods.restaurant && mods.hotel ? shells.rh : (mods.hotel ? shells.h : (counts.manage + counts.view ? shells.r : '—'));
+  }
+  form.querySelectorAll('[data-bulk]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      b.closest('.ui-perm-card').querySelectorAll('input[value="' + b.dataset.bulk + '"]').forEach(function (i) { i.checked = true; });
+      summary();
+    });
+  });
+  form.addEventListener('change', summary);
+  summary();
+})();
+</script>

@@ -1,686 +1,387 @@
 {% extends 'restaurant_admin/base.html' %}
-{% load static %}
+{% load restaurant_admin_extras %}
 
-{% block title %}Dashboard - Restaurant Admin{% endblock %}
-
-{% block extra_css %}
-<style>
-    .stat-card {
-        display: flex;
-        align-items: center;
-        padding: 1.5rem;
-        border-radius: 0.5rem;
-        color: white;
-        position: relative;
-        overflow: hidden;
-        transition: all 0.3s ease;
-        border: none;
-        height: 100%;
-        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-    }
-    
-    .stat-card i {
-        font-size: 2.5rem;
-        margin-right: 1rem;
-        opacity: 0.8;
-        transition: all 0.3s ease;
-    }
-    
-    .stat-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
-    }
-    
-    .stat-card h3 {
-        font-size: 1.75rem;
-        font-weight: 700;
-        margin-bottom: 0.25rem;
-        line-height: 1.2;
-    }
-    
-    .stat-card p {
-        opacity: 0.9;
-        margin-bottom: 0;
-        font-size: 0.875rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        font-weight: 500;
-    }
-    
-    .avatar {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 36px;
-        height: 36px;
-    }
-    
-    .avatar-sm {
-        width: 32px;
-        height: 32px;
-        font-size: 0.875rem;
-    }
-    
-    .avatar-title {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        height: 100%;
-        color: var(--bs-body-color);
-    }
-    
-    .bg-primary-soft {
-        background-color: rgba(94, 114, 228, 0.1) !important;
-        color: var(--primary) !important;
-    }
-    
-    .card {
-        border: none;
-        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-        transition: all 0.3s ease;
-    }
-    
-    .card:hover {
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
-    }
-    
-    .card-header {
-        background-color: #fff;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-        padding: 1rem 1.5rem;
-    }
-    
-    .table th {
-        font-weight: 600;
-        text-transform: uppercase;
-        font-size: 0.75rem;
-        letter-spacing: 0.5px;
-        padding: 1rem 1.5rem;
-        background-color: #f8f9fa;
-        border-bottom: 1px solid #e9ecef;
-    }
-    
-    .table td {
-        padding: 1rem 1.5rem;
-        vertical-align: middle;
-        border-bottom: 1px solid #e9ecef;
-    }
-</style>
-{% endblock %}
+{% block title %}Dashboard - {{ restaurant.name }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-        <h2 class="mb-0">Dashboard</h2>
-        <div class="d-flex align-items-center gap-3 flex-wrap">
-            <span class="text-muted small">
-                <i class="bi bi-person-circle me-1"></i>
-                {{ user.username }}
-            </span>
-            
-            {% if current_branch %}
-                <span class="badge bg-success-subtle text-success border border-success-subtle px-2.5 py-1.5" style="font-size: 0.85rem; font-weight: 600;">
-                    <i class="bi bi-shop me-1"></i> {{ current_branch.name }}
-                </span>
-            {% else %}
-                <span class="text-muted small">
-                    <i class="bi bi-building me-1"></i>
-                    {{ restaurant.name }}
-                </span>
-            {% endif %}
+{% with s=restaurant.slug cur=d.cur dl=d.deltas %}
+<div class="container-fluid ui-dash">
 
-            {% if available_branches|length > 1 and is_primary_admin %}
-                <div class="d-flex align-items-center gap-1">
-                    <span class="text-muted small fw-semibold">Branch:</span>
-                    <select class="form-select form-select-sm border-primary" onchange="location.href='?branch_id=' + this.value" style="width: auto; font-size: 0.82rem; font-weight: 600; cursor: pointer;">
-                        {% for b in available_branches %}
-                            <option value="{{ b.id }}" {% if current_branch and current_branch.id == b.id %}selected{% endif %}>
-                                📍 {{ b.name }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-            {% endif %}
-            
-            <span class="text-muted small"><i class="bi bi-calendar-event me-1"></i>{{ today|date:"l, F j, Y" }}</span>
-        </div>
+  <!-- Header -->
+  <div class="ui-page-header">
+    <div>
+      <h1>{{ greeting }}, {{ user.first_name|default:user.username }}</h1>
+      <p>{{ today|date:"l, j F" }} · {% if dash_branch %}{{ dash_branch.name }}{% else %}All branches{% endif %} · {{ period_label }}{% if not d.single_day %} ({{ d.start|date:"j M" }} – {{ d.end|date:"j M" }}){% endif %}</p>
     </div>
-    
-    <!-- Stats Cards -->
-    <div class="row g-4 mb-4">
-        <div class="col-xl-3 col-md-6">
-            <div class="stat-card bg-primary">
-                <i class="bi bi-cart3"></i>
-                <div>
-                    <h3>{{ total_orders }}</h3>
-                    <p>Total Orders</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="stat-card bg-success">
-                <i class="bi bi-bag-check"></i>
-                <div>
-                    <h3>{{ today_orders }}</h3>
-                    <p>Today's Orders</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="stat-card bg-info">
-                <i class="bi bi-egg-fried"></i>
-                <div>
-                    <h3>{{ total_menu_items }}</h3>
-                    <p>Menu Items</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="stat-card bg-warning">
-                <i class="bi bi-currency-rupee"></i>
-                <div>
-                    <h3>₹{{ total_revenue|floatformat:2 }}</h3>
-                    <p>Total Revenue</p>
-                </div>
-            </div>
-        </div>
+    <div class="ui-actions">
+      <a class="ui-btn ui-btn-gray" href="?{{ request.GET.urlencode }}&export=csv" title="Download sales by {% if d.single_day %}hour{% else %}day{% endif %}"><i class="fa-solid fa-file-csv"></i><span>Export</span></a>
+      {% if access.analytics %}<a class="ui-btn ui-btn-gray" href="{% url 'restaurant_admin:sales_analytics' restaurant_slug=s %}"><i class="fa-solid fa-chart-column"></i><span>Tax &amp; sales report</span></a>{% endif %}
+      {% if access.pos %}<a class="ui-btn ui-btn-primary" href="{% url 'restaurant_admin:order_create_manual' restaurant_slug=s %}"><i class="fa-solid fa-plus"></i><span>New order</span></a>{% endif %}
     </div>
+  </div>
 
-    <div class="row g-4">
-        <!-- Recent Orders -->
-        <div class="col-xl-8">
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0">Recent Orders</h5>
-                    <a href="{% url 'restaurant_admin:order_list' restaurant_slug=restaurant.slug %}" class="btn btn-sm btn-outline-primary">View All</a>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="bg-light">
-                                <tr>
-                                    <th class="ps-4">ORDER</th>
-                                    <th>CUSTOMER</th>
-                                    <th>TABLE</th>
-                                    <th>AMOUNT</th>
-                                    <th>STATUS</th>
-                                    <th class="text-end pe-4">ACTIONS</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for order in recent_orders %}
-                                <tr>
-                                    <td class="ps-4 fw-bold">#{{ order.branch_order_number|default:order.id }}</td>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <div class="avatar avatar-sm me-2">
-                                                <span class="avatar-title rounded-circle bg-light text-dark">
-                                                    {{ order.customer_name|slice:":1"|upper }}
-                                                </span>
-                                            </div>
-                                            <div>
-                                                <div class="fw-bold">{{ order.customer_name|default:"Walk-in Customer" }}</div>
-                                                <small class="text-muted">{{ order.order_time|timesince }} ago</small>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-light text-dark">
-                                            <i class="bi bi-table me-1"></i> {{ order.table_number|default:"N/A" }}
-                                        </span>
-                                    </td>
-                                    <td class="fw-bold">₹{{ order.total_amount|floatformat:2 }}</td>
-                                    <td>
-                                        <span class="badge 
-                                            {% if order.status == 'completed' or order.status == 'C' %}bg-success
-                                            {% elif order.status == 'cancelled' or order.status == 'X' %}bg-danger
-                                            {% else %}bg-warning{% endif %}">
-                                            {% if order.get_status_display %}
-                                                {{ order.get_status_display }}
-                                            {% else %}
-                                                {{ order.status|title }}
-                                            {% endif %}
-                                        </span>
-                                    </td>
-                                    <td class="text-end pe-4">
-                                        <a href="{% url 'restaurant_admin:order_list' restaurant_slug=restaurant.slug %}?order_id={{ order.id }}" 
-                                           class="btn btn-sm btn-outline-primary"
-                                           data-bs-toggle="tooltip" 
-                                           title="View Details">
-                                            <i class="bi bi-eye"></i>
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="6" class="text-center py-4">
-                                        <div class="text-muted">No recent orders found.</div>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Right Sidebar -->
-        <div class="col-xl-4">
-            <!-- Top Selling Items -->
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Top Selling Items</h5>
-                </div>
-                <div class="card-body p-0">
-                    <div class="list-group list-group-flush">
-                        {% for item in top_items %}
-                        <div class="list-group-item border-0 p-3">
-                            <div class="d-flex align-items-center justify-content-between">
-                                <div class="d-flex align-items-center">
-                                    <div class="avatar avatar-sm bg-light text-primary rounded-circle me-3">
-                                        <i class="bi bi-trophy"></i>
-                                    </div>
-                                    <div>
-                                        <h6 class="mb-0">
-                                            {% if item.menu_item__name %}
-                                                {{ item.menu_item__name }}
-                                            {% elif item.name %}
-                                                {{ item.name }}
-                                            {% else %}
-                                                Item {{ forloop.counter }}
-                                            {% endif %}
-                                        </h6>
-                                        <small class="text-muted">
-                                            {% if item.total_ordered %}
-                                                {{ item.total_ordered }}
-                                            {% elif item.quantity %}
-                                                {{ item.quantity }}
-                                            {% else %}
-                                                0
-                                            {% endif %} orders
-                                        </small>
-                                    </div>
-                                </div>
-                                <span class="badge bg-primary-soft rounded-pill">{{ forloop.counter }}</span>
-                            </div>
-                        </div>
-                        {% empty %}
-                        <div class="text-center py-4">
-                            <div class="text-muted">No items sold yet.</div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-
-            <!-- Quick Actions -->
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Quick Actions</h5>
-                </div>
-                <div class="card-body">
-                    <div class="d-grid gap-2">
-                        <a href="{% url 'restaurant_admin:menu_add' restaurant_slug=restaurant.slug %}" class="btn btn-primary">
-                            <i class="bi bi-plus-circle me-2"></i> Add New Menu Item
-                        </a>
-                        <a href="{% url 'restaurant_admin:order_list' restaurant_slug=restaurant.slug %}" class="btn btn-outline-secondary">
-                            <i class="bi bi-list-ul me-2"></i> View All Orders
-                        </a>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- QR Code Section -->
-            <div class="card mt-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0">Menu QR Code</h5>
-                    <a href="{% url 'restaurant_admin:qr_code_generator' restaurant_slug=restaurant.slug %}" class="btn btn-sm btn-outline-primary">
-                        <i class="bi bi-qr-code-scan me-1"></i> Advanced QR Generator
-                    </a>
-                </div>
-                <div class="card-body">
-                    <div class="text-center">
-                        <div class="qr-code-container mb-3">
-                            <img id="dashboardQrCode" 
-                                 src="{% url 'restaurant_admin:generate_qr_code' restaurant_slug=restaurant.slug %}" 
-                                 alt="Menu QR Code" 
-                                 class="img-fluid"
-                                 style="max-width: 200px;">
-                        </div>
-                        <p class="text-muted small mb-3">Scan this code to view the menu on any device</p>
-                        
-                        <div class="d-grid gap-2">
-                            <a href="{% url 'restaurant_admin:generate_qr_code' restaurant_slug=restaurant.slug %}?download=1" 
-                               class="btn btn-primary"
-                               id="downloadQrBtn">
-                                <i class="bi bi-download me-1"></i> Download QR Code
-                            </a>
-                            <button type="button" 
-                                    class="btn btn-outline-secondary" 
-                                    onclick="copyQrLink()"
-                                    id="copyLinkBtn">
-                                <i class="bi bi-link-45deg me-1"></i> Copy Menu Link
-                            </button>
-                        </div>
-                        
-                        <div class="mt-3">
-                            <a href="{% url 'restaurant_admin:qr_code_generator' restaurant_slug=restaurant.slug %}" class="text-decoration-none small">
-                                <i class="bi bi-arrow-right-circle me-1"></i> Generate custom QR codes for tables & categories
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <script>
-            function copyQrLink() {
-                const url = '{{ request.scheme }}://{{ request.get_host }}{% url "restaurant_admin:generate_qr_code" restaurant_slug=restaurant.slug %}';
-                navigator.clipboard.writeText(url).then(() => {
-                    const btn = document.getElementById('copyLinkBtn');
-                    const originalHtml = btn.innerHTML;
-                    btn.innerHTML = '<i class="bi bi-check me-1"></i> Link Copied!';
-                    btn.classList.remove('btn-outline-secondary');
-                    btn.classList.add('btn-success');
-                    
-                    setTimeout(() => {
-                        btn.innerHTML = originalHtml;
-                        btn.classList.remove('btn-success');
-                        btn.classList.add('btn-outline-secondary');
-                    }, 2000);
-                });
-            }
-            
-            // Add click handler for download button to show feedback
-            document.getElementById('downloadQrBtn').addEventListener('click', function(e) {
-                const btn = this;
-                const originalHtml = btn.innerHTML;
-                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> Downloading...';
-                
-                // Reset button after download starts
-                setTimeout(() => {
-                    btn.innerHTML = originalHtml;
-                }, 2000);
-            });
-            </script>
-        </div>
+  <!-- Period & branch -->
+  <form class="ui-dash-filter" method="get" id="dashFilter">
+    <nav class="ui-dash-periods" aria-label="Period">
+      {% for k, l in periods %}<a href="?period={{ k }}{% if request.GET.branch_id %}&branch_id={{ request.GET.branch_id }}{% endif %}" class="{% if period == k %}is-on{% endif %}" {% if period == k %}aria-current="true"{% endif %}>{{ l }}</a>{% endfor %}
+      <button type="button" class="{% if period == 'custom' %}is-on{% endif %}" onclick="document.getElementById('dashCustom').hidden=false">Custom…</button>
+    </nav>
+    <div class="ui-dash-custom" id="dashCustom" {% if period != 'custom' %}hidden{% endif %}>
+      <input type="hidden" name="period" value="custom">
+      <input class="ui-input" type="date" name="from" value="{{ d.start|date:'Y-m-d' }}" aria-label="From">
+      <span>to</span>
+      <input class="ui-input" type="date" name="to" value="{{ d.end|date:'Y-m-d' }}" aria-label="To">
+      <button class="ui-btn ui-btn-primary ui-btn-sm" type="submit">Apply</button>
     </div>
+    {% if not branch_locked and dash_branches|length > 1 %}
+    <select class="ui-input ui-dash-branch" name="branch_id" aria-label="Branch" onchange="var f=this.form;if(document.getElementById('dashCustom').hidden){f.querySelector('[name=period]').value='{{ period }}';}f.submit()">
+      <option value="all" {% if not dash_branch %}selected{% endif %}>All branches</option>
+      {% for b in dash_branches %}<option value="{{ b.id }}" {% if dash_branch.id == b.id %}selected{% endif %}>{{ b.name }}</option>{% endfor %}
+    </select>
+    {% endif %}
+  </form>
+
+  <!-- Right now -->
+  <section class="ui-card ui-dash-live" aria-label="Right now">
+    <div class="ui-dash-live-head"><span class="ui-live-dot"></span> Right now <span class="ui-log-sub">· updates every 30 seconds</span></div>
+    <div class="ui-dash-live-grid">
+      <a class="ui-live-tile" href="{% if access.pos %}{% url 'restaurant_admin:order_list' restaurant_slug=s %}{% else %}#{% endif %}">
+        <span class="lt-label">Sales today</span>
+        <span class="lt-val">₹{{ live.today_sales|inr }}</span>
+        <span class="lt-sub">{{ live.today_orders }} order{{ live.today_orders|pluralize }}{% if live.vs_last_week is not None %} · <span class="ui-delta {% if live.vs_last_week >= 0 %}is-up{% else %}is-down{% endif %}">{% if live.vs_last_week >= 0 %}▲{% else %}▼{% endif %} {{ live.vs_last_week|floatformat:0|cut:"-" }}%</span> vs last {{ today|date:"l" }}{% endif %}</span>
+      </a>
+      <a class="ui-live-tile" href="{% if access.kitchen %}{% url 'restaurant_admin:kitchen_kds' restaurant_slug=s %}{% else %}#{% endif %}">
+        <span class="lt-label">Open orders</span>
+        <span class="lt-val">{{ live.open_total }}</span>
+        <span class="lt-sub ui-dash-pipeline">
+          <span title="Waiting"><i class="dot dot-orange"></i>{{ live.pending }} new</span>
+          <span title="Cooking"><i class="dot dot-blue"></i>{{ live.preparing }} cooking</span>
+          <span title="Ready to serve"><i class="dot dot-green"></i>{{ live.ready }} ready</span>
+          <span title="Served, bill not settled"><i class="dot dot-gray"></i>{{ live.served_unpaid }} to bill</span>
+        </span>
+      </a>
+      <a class="ui-live-tile {% if live.late %}is-alert{% endif %}" href="{% if access.kitchen %}{% url 'restaurant_admin:kitchen_kds' restaurant_slug=s %}{% else %}#{% endif %}">
+        <span class="lt-label">Running late</span>
+        <span class="lt-val">{{ live.late }}</span>
+        <span class="lt-sub">{% if live.late %}Waiting over 25 minutes{% else %}Kitchen is on time{% endif %}</span>
+      </a>
+      <a class="ui-live-tile" href="{% if access.dine_in %}{% url 'restaurant_admin:floor_plan_dashboard' restaurant_slug=s %}{% else %}#{% endif %}">
+        <span class="lt-label">Tables in use</span>
+        <span class="lt-val">{{ live.tables_occupied }}<small>/{{ live.tables_total }}</small></span>
+        <span class="lt-sub"><span class="ui-bar-mini"><span style="width:{{ live.occupancy }}%"></span></span></span>
+      </a>
+      <a class="ui-live-tile" href="{% if access.dine_in %}{% url 'restaurant_admin:reservation_list' restaurant_slug=s %}{% else %}#{% endif %}">
+        <span class="lt-label">Reservations today</span>
+        <span class="lt-val">{{ live.reservations }}</span>
+        <span class="lt-sub">{{ live.covers }} cover{{ live.covers|pluralize }}{% if live.next_reservations %} · next {{ live.next_reservations.0.start_time|time:"g:i a" }}{% endif %}</span>
+      </a>
+      <a class="ui-live-tile {% if live.low_stock_count %}is-warn{% endif %}" href="{% if access.inventory %}{% url 'restaurant_admin:inventory_list' restaurant_slug=s %}{% else %}#{% endif %}">
+        <span class="lt-label">Low stock</span>
+        <span class="lt-val">{{ live.low_stock_count }}</span>
+        <span class="lt-sub">{% if live.low_stock_count %}{{ live.low_stock.0.name }}{% if live.low_stock_count > 1 %} +{{ live.low_stock_count|add:"-1" }} more{% endif %}{% else %}All items above reorder level{% endif %}</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- KPIs -->
+  <div class="ui-kpi-grid ui-dash-kpis">
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Sales</div><div class="kpi-icon"><i class="fa-solid fa-indian-rupee-sign"></i></div></div>
+      <div class="kpi-val">₹{{ cur.gross|inr }}</div>
+      <div class="kpi-sub">{% if dl.sales is not None %}<span class="ui-delta {% if dl.sales >= 0 %}is-up{% else %}is-down{% endif %}">{% if dl.sales >= 0 %}▲{% else %}▼{% endif %} {{ dl.sales|floatformat:0|cut:"-" }}%</span> · {% endif %}incl. tax</div></div>
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Orders</div><div class="kpi-icon"><i class="fa-solid fa-receipt"></i></div></div>
+      <div class="kpi-val">{{ cur.orders|inr }}</div>
+      <div class="kpi-sub">{% if dl.orders is not None %}<span class="ui-delta {% if dl.orders >= 0 %}is-up{% else %}is-down{% endif %}">{% if dl.orders >= 0 %}▲{% else %}▼{% endif %} {{ dl.orders|floatformat:0|cut:"-" }}%</span> · {% endif %}{{ d.menu.items_sold|inr }} items sold</div></div>
+    <div class="ui-kpi kpi-cyan"><div class="ui-kpi-head"><div class="kpi-label">Average bill</div><div class="kpi-icon"><i class="fa-solid fa-scale-balanced"></i></div></div>
+      <div class="kpi-val">₹{{ cur.aov|inr }}</div>
+      <div class="kpi-sub">{% if dl.aov is not None %}<span class="ui-delta {% if dl.aov >= 0 %}is-up{% else %}is-down{% endif %}">{% if dl.aov >= 0 %}▲{% else %}▼{% endif %} {{ dl.aov|floatformat:0|cut:"-" }}%</span> · {% endif %}{{ d.menu.items_per_order }} items per order</div></div>
+    <div class="ui-kpi kpi-purple"><div class="ui-kpi-head"><div class="kpi-label">Guests served</div><div class="kpi-icon"><i class="fa-solid fa-users"></i></div></div>
+      <div class="kpi-val">{{ cur.guests|inr }}</div>
+      <div class="kpi-sub">{% if dl.guests is not None %}<span class="ui-delta {% if dl.guests >= 0 %}is-up{% else %}is-down{% endif %}">{% if dl.guests >= 0 %}▲{% else %}▼{% endif %} {{ dl.guests|floatformat:0|cut:"-" }}%</span> · {% endif %}{% if cur.guests %}₹{{ cur.per_guest|inr }} per guest{% else %}add covers on dine-in bills{% endif %}</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Net sales</div><div class="kpi-icon"><i class="fa-solid fa-chart-line"></i></div></div>
+      <div class="kpi-val">₹{{ cur.net|inr }}</div>
+      <div class="kpi-sub">{% if dl.net is not None %}<span class="ui-delta {% if dl.net >= 0 %}is-up{% else %}is-down{% endif %}">{% if dl.net >= 0 %}▲{% else %}▼{% endif %} {{ dl.net|floatformat:0|cut:"-" }}%</span> · {% endif %}after ₹{{ cur.tax|inr }} tax</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Discounts</div><div class="kpi-icon"><i class="fa-solid fa-tags"></i></div></div>
+      <div class="kpi-val">₹{{ cur.discounts|inr }}</div>
+      <div class="kpi-sub">{{ cur.discount_rate }}% of bill value{% if d.cancels.coupons %} · {{ d.cancels.coupons }} coupon{{ d.cancels.coupons|pluralize }}{% endif %}</div></div>
+    <div class="ui-kpi kpi-cyan"><div class="ui-kpi-head"><div class="kpi-label">Collected</div><div class="kpi-icon"><i class="fa-solid fa-wallet"></i></div></div>
+      <div class="kpi-val">₹{{ cur.collected|inr }}</div>
+      <div class="kpi-sub">{% if cur.due > 0 %}<span class="ui-text-red">₹{{ cur.due|inr }} still due</span>{% else %}Nothing outstanding{% endif %}</div></div>
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Cancelled &amp; refunded</div><div class="kpi-icon"><i class="fa-solid fa-ban"></i></div></div>
+      <div class="kpi-val">{{ d.cancels.cancelled|add:d.cancels.refunded }}</div>
+      <div class="kpi-sub">₹{{ d.cancels.cancelled_value|add:d.cancels.refunded_value|inr }} not earned</div></div>
+  </div>
+
+  <!-- Trend + insights -->
+  <div class="ui-dash-row r-2-1">
+    <section class="ui-card ui-pad">
+      <div class="ui-dash-card-head">
+        <div><h2 class="ui-card-title">Sales {% if d.single_day %}by hour{% else %}by day{% endif %}</h2>
+          <p class="ui-card-subtitle">Compared with {% if d.single_day %}{{ d.prev_start|date:"l j M" }}{% else %}{{ d.prev_start|date:"j M" }} – {{ d.prev_end|date:"j M" }}{% endif %}</p></div>
+        {% if d.best %}<div class="ui-dash-best"><span class="ui-log-sub">Best {% if d.single_day %}hour{% else %}day{% endif %}</span><strong>{{ d.best.label }}</strong><span class="ui-log-sub">₹{{ d.best.sales|inr }}</span></div>{% endif %}
+      </div>
+      <div class="ui-dash-chart" style="height:280px"><canvas id="dashTrend" aria-label="Sales trend compared with the previous period"></canvas></div>
+    </section>
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title"><i class="fa-solid fa-wand-magic-sparkles" style="color:var(--ui-indigo)"></i> What stands out</h2>
+      {% if d.insights %}
+      <ul class="ui-dash-insights">
+        {% for i in d.insights %}<li class="tone-{{ i.tone }}"><i class="fa-solid {{ i.icon }}"></i><span>{{ i.text }}</span></li>{% endfor %}
+      </ul>
+      {% else %}
+      <div class="ui-empty" style="padding:28px 10px"><i class="fa-solid fa-chart-simple ui-empty-icon"></i><p class="ui-log-sub">Insights appear once there are a few orders in this period.</p></div>
+      {% endif %}
+    </section>
+  </div>
+
+  <!-- Channels / payments / categories -->
+  <div class="ui-dash-row r-3">
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">Sales channels</h2>
+      {% if d.channels %}
+      <div class="ui-dash-donut"><canvas id="dashChannels" aria-label="Sales by channel"></canvas><div class="ui-donut-center"><strong>{{ cur.orders }}</strong><span>orders</span></div></div>
+      <ul class="ui-dash-list">
+        {% for c in d.channels %}<li><span class="sw" data-i="{{ forloop.counter0 }}"></span><span class="nm"><i class="fa-solid {{ c.icon }}"></i> {{ c.label }}<small>{{ c.orders }} · avg ₹{{ c.aov|inr }}{% if c.commission %} · ₹{{ c.commission|inr }} commission{% endif %}</small></span><span class="vl">₹{{ c.sales|inr }}<small>{{ c.share }}%</small></span></li>{% endfor %}
+      </ul>
+      {% else %}<p class="ui-log-sub">No sales in this period.</p>{% endif %}
+    </section>
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">How guests paid</h2>
+      {% if d.payments %}
+      <ul class="ui-dash-bars">
+        {% for p in d.payments %}<li><div class="bh"><span>{{ p.label }} <small>· {{ p.count }}</small></span><strong>₹{{ p.amount|inr }}</strong></div><div class="ui-bar-mini"><span style="width:{{ p.share }}%"></span></div></li>{% endfor %}
+      </ul>
+      {% else %}<p class="ui-log-sub">No payments in this period.</p>{% endif %}
+      {% if cur.due > 0 %}<p class="ui-dash-foot"><i class="fa-solid fa-circle-exclamation" style="color:var(--ui-orange)"></i> ₹{{ cur.due|inr }} of these bills is still unpaid.</p>{% endif %}
+    </section>
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">Categories</h2>
+      {% if d.menu.categories %}
+      <ul class="ui-dash-bars">
+        {% for c in d.menu.categories %}<li><div class="bh"><span>{{ c.name }} <small>· {{ c.qty }} sold</small></span><strong>{{ c.share }}%</strong></div><div class="ui-bar-mini is-indigo"><span style="width:{{ c.share }}%"></span></div></li>{% endfor %}
+      </ul>
+      {% else %}<p class="ui-log-sub">No items sold in this period.</p>{% endif %}
+    </section>
+  </div>
+
+  {% if d.heat and not d.single_day %}
+  <!-- Busiest times -->
+  <section class="ui-card ui-pad">
+    <div class="ui-dash-card-head">
+      <div><h2 class="ui-card-title">Busiest times</h2><p class="ui-card-subtitle">Orders by weekday and hour — plan staffing and prep around the dark cells</p></div>
+      <div class="ui-dash-chips"><span class="ui-chip ui-chip-indigo"><i class="fa-solid fa-fire"></i> Peak {{ d.heat.peak }}</span><span class="ui-chip ui-chip-gray">Rush hour {{ d.heat.peak_hour }}</span><span class="ui-chip ui-chip-gray">Best day {{ d.heat.best_day }}</span></div>
+    </div>
+    <div class="ui-heat-wrap">
+      <table class="ui-heat">
+        <thead><tr><th></th>{% for h in d.heat.hours %}<th scope="col">{{ h }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for row in d.heat.grid %}<tr><th scope="row">{{ row.day }}</th>{% for c in row.cells %}<td class="lv{{ c.level }}" title="{{ c.title }}">{% if c.n %}{{ c.n }}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody>
+      </table>
+    </div>
+    <div class="ui-heat-legend"><span>Fewer</span><i class="lv1"></i><i class="lv2"></i><i class="lv3"></i><i class="lv4"></i><span>More orders</span></div>
+  </section>
+  {% endif %}
+
+  <!-- Menu performance -->
+  <div class="ui-dash-row r-2-1">
+    <section class="ui-card ui-list-card">
+      <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Top dishes</h2>{% if access.menu %}<a class="ui-link-btn" href="{% url 'restaurant_admin:menu_list' restaurant_slug=s %}">Menu <i class="fa-solid fa-chevron-right"></i></a>{% endif %}</div>
+      {% if d.menu.top %}
+      <div class="table-responsive"><table class="table ui-dash-table">
+        <thead><tr><th>#</th><th>Dish</th><th class="num">Sold</th><th class="num">Sales</th><th class="num d-none d-md-table-cell">Share</th></tr></thead>
+        <tbody>{% for t in d.menu.top %}<tr>
+          <td class="rank">{{ forloop.counter }}</td>
+          <td><strong>{{ t.menu_item__name }}</strong><div class="ui-log-sub">{{ t.menu_item__category__name|default:"Uncategorised" }} · in {{ t.orders }} order{{ t.orders|pluralize }}</div></td>
+          <td class="num">{{ t.qty }}</td>
+          <td class="num"><strong>₹{{ t.sales|inr }}</strong></td>
+          <td class="num d-none d-md-table-cell"><div class="ui-dash-share"><div class="ui-bar-mini"><span style="width:{{ t.share }}%"></span></div><span>{{ t.share }}%</span></div></td>
+        </tr>{% endfor %}</tbody>
+      </table></div>
+      {% else %}<div class="ui-empty"><i class="fa-solid fa-bowl-food ui-empty-icon"></i><p class="ui-log-sub">No dishes sold in this period yet.</p></div>{% endif %}
+    </section>
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">Menu health</h2>
+      <div class="ui-dash-stats">
+        <div><strong>{{ d.menu.items_sold|inr }}</strong><span>items sold</span></div>
+        <div><strong>{{ d.menu.menu_size }}</strong><span>dishes on sale</span></div>
+        <div class="{% if d.menu.unsold_count %}is-warn{% endif %}"><strong>{{ d.menu.unsold_count }}</strong><span>didn't sell</span></div>
+      </div>
+      {% if d.menu.by_qty %}
+      <h3 class="ui-dash-h3">Most ordered</h3>
+      <ol class="ui-dash-ol">{% for t in d.menu.by_qty %}<li><span>{{ t.menu_item__name }}</span><strong>{{ t.qty }}</strong></li>{% endfor %}</ol>
+      {% endif %}
+      {% if d.menu.unsold %}
+      <h3 class="ui-dash-h3">Not sold this period</h3>
+      <div class="ui-chipset">{% for n in d.menu.unsold %}<span class="ui-chip ui-chip-gray">{{ n }}</span>{% endfor %}{% if d.menu.unsold_more %}<span class="ui-chip ui-chip-gray">+{{ d.menu.unsold_more }} more</span>{% endif %}</div>
+      {% endif %}
+    </section>
+  </div>
+
+  <!-- People: staff / guests / kitchen & feedback -->
+  <div class="ui-dash-row r-3">
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">Staff performance</h2>
+      {% if d.staff %}
+      <ul class="ui-dash-people">
+        {% for p in d.staff %}<li><span class="ui-avatar">{{ p.initials }}</span><span class="nm">{{ p.name }}<small>{{ p.orders }} bills · avg ₹{{ p.aov|inr }}{% if p.disc %} · ₹{{ p.disc|inr }} off{% endif %}</small></span><strong>₹{{ p.sales|inr }}</strong></li>{% endfor %}
+      </ul>
+      {% else %}<p class="ui-log-sub">Bills rung up on the POS show here by cashier.</p>{% endif %}
+    </section>
+    <section class="ui-card ui-pad">
+      <div class="ui-dash-card-head"><h2 class="ui-card-title">Guests</h2>{% if access.guests %}<a class="ui-link-btn" href="{% url 'restaurant_admin:guest_list' restaurant_slug=s %}">All guests <i class="fa-solid fa-chevron-right"></i></a>{% endif %}</div>
+      <div class="ui-dash-stats">
+        <div><strong>{{ d.guests.unique }}</strong><span>identified</span></div>
+        <div><strong>{{ d.guests.new }}</strong><span>first visit</span></div>
+        <div class="is-good"><strong>{{ d.guests.returning }}</strong><span>came back</span></div>
+      </div>
+      <div class="ui-dash-split" title="Returning vs new guests"><span style="width:{{ d.guests.returning_share }}%"></span></div>
+      <p class="ui-log-sub" style="margin:6px 0 12px">{{ d.guests.capture }}% of bills have a phone number{% if d.guests.anonymous %} · {{ d.guests.anonymous }} walk-in{{ d.guests.anonymous|pluralize }} unrecorded{% endif %}</p>
+      {% if d.guests.top %}
+      <h3 class="ui-dash-h3">Top spenders</h3>
+      <ul class="ui-dash-people compact">
+        {% for g in d.guests.top %}<li><span class="nm">{{ g.name|default:"Guest" }}{% if g.returning %} <span class="ui-chip ui-chip-green">Regular</span>{% endif %}<small>{{ g.visits }} visit{{ g.visits|pluralize }}</small></span><strong>₹{{ g.spend|inr }}</strong></li>{% endfor %}
+      </ul>
+      {% endif %}
+    </section>
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">Service quality</h2>
+      {% if d.feedback %}
+      <div class="ui-dash-rating">
+        <div class="big">{{ d.feedback.avg }}<small>/5</small></div>
+        <div><div class="ui-stars" aria-hidden="true">{% for i in "12345" %}<i class="fa-solid fa-star {% if forloop.counter > d.feedback.stars %}off{% endif %}"></i>{% endfor %}</div>
+          <span class="ui-log-sub">{{ d.feedback.count }} review{{ d.feedback.count|pluralize }}{% if d.feedback.nps is not None %} · NPS {{ d.feedback.nps }}{% endif %}</span></div>
+      </div>
+      <ul class="ui-dash-mini">
+        {% if d.feedback.food %}<li><span>Food</span><strong>{{ d.feedback.food }}</strong></li>{% endif %}
+        {% if d.feedback.service %}<li><span>Service</span><strong>{{ d.feedback.service }}</strong></li>{% endif %}
+        <li><span>Open complaints</span>{% if access.feedback %}<a href="{% url 'restaurant_admin:feedback_list' restaurant_slug=s %}">{{ d.feedback.open }}</a>{% else %}<strong>{{ d.feedback.open }}</strong>{% endif %}</li>
+      </ul>
+      {% else %}<p class="ui-log-sub" style="margin-bottom:14px">No guest feedback in this period.{% if access.feedback %} <a href="{% url 'restaurant_admin:feedback_list' restaurant_slug=s %}">Share your feedback QR</a> to start collecting it.{% endif %}</p>{% endif %}
+      <h3 class="ui-dash-h3">Kitchen</h3>
+      {% if d.kitchen %}
+      <ul class="ui-dash-mini">
+        <li><span>Average ticket time</span><strong>{{ d.kitchen.avg }} min</strong></li>
+        <li><span>Slowest ticket</span><strong>{{ d.kitchen.worst }} min</strong></li>
+        <li><span>Over 20 minutes</span><strong class="{% if d.kitchen.slow_pct >= 15 %}ui-text-red{% endif %}">{{ d.kitchen.slow }} ({{ d.kitchen.slow_pct }}%)</strong></li>
+      </ul>
+      {% else %}<p class="ui-log-sub">Ticket times appear when the kitchen uses the KDS to start and finish orders.</p>{% endif %}
+    </section>
+  </div>
+
+  {% if compare %}
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Branches</h2></div>
+    <div class="table-responsive"><table class="table ui-dash-table">
+      <thead><tr><th>Branch</th><th class="num">Orders</th><th class="num">Sales</th><th class="num">Average bill</th><th class="num d-none d-md-table-cell">Share</th></tr></thead>
+      <tbody>{% for c in compare %}<tr>
+        <td><a href="?period={{ period }}&branch_id={{ c.branch.id }}{% if period == 'custom' %}&from={{ d.start|date:'Y-m-d' }}&to={{ d.end|date:'Y-m-d' }}{% endif %}"><strong>{{ c.branch.name }}</strong></a></td>
+        <td class="num">{{ c.orders }}</td><td class="num"><strong>₹{{ c.gross|inr }}</strong></td><td class="num">₹{{ c.aov|inr }}</td>
+        <td class="num d-none d-md-table-cell"><div class="ui-dash-share"><div class="ui-bar-mini"><span style="width:{{ c.share }}%"></span></div><span>{{ c.share }}%</span></div></td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+  {% endif %}
+
+  <!-- Tables / recent orders / reservations & stock -->
+  <div class="ui-dash-row r-2-1">
+    <section class="ui-card ui-list-card">
+      <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Latest orders</h2>{% if access.pos %}<a class="ui-link-btn" href="{% url 'restaurant_admin:order_list' restaurant_slug=s %}">All orders <i class="fa-solid fa-chevron-right"></i></a>{% endif %}</div>
+      {% if d.recent %}
+      <div class="table-responsive"><table class="table ui-dash-table">
+        <thead><tr><th>Order</th><th>Guest</th><th class="d-none d-md-table-cell">Where</th><th class="num">Amount</th><th>Status</th></tr></thead>
+        <tbody>{% for o in d.recent %}<tr>
+          <td><strong>#{{ o.branch_order_number|default:o.id }}</strong><div class="ui-log-sub">{{ o.order_time|timesince }} ago</div></td>
+          <td>{{ o.customer_name|default:"Walk-in" }}</td>
+          <td class="d-none d-md-table-cell">{% if o.table %}{{ o.table.name }}{% else %}{{ o.get_order_type_display }}{% endif %}{% if not dash_branch and o.branch %}<div class="ui-log-sub">{{ o.branch.name }}</div>{% endif %}</td>
+          <td class="num"><strong>₹{{ o.total_amount|inr }}</strong>{% if o.payment_status != 'paid' and o.status != 'C' %}<div class="ui-log-sub">{{ o.get_payment_status_display }}</div>{% endif %}</td>
+          <td><span class="ui-chip {% if o.status == 'COMPLETED' or o.status == 'S' %}ui-chip-green{% elif o.status == 'C' %}ui-chip-red{% elif o.status == 'READY' %}ui-chip-teal{% elif o.status == 'PR' %}ui-chip-blue{% else %}ui-chip-orange{% endif %}">{{ o.get_status_display }}</span></td>
+        </tr>{% endfor %}</tbody>
+      </table></div>
+      {% else %}<div class="ui-empty"><i class="fa-solid fa-receipt ui-empty-icon"></i><p class="ui-log-sub">No orders yet.</p></div>{% endif %}
+    </section>
+    <div>
+      {% if d.tables %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Top tables</h2>
+        <ul class="ui-dash-people compact">
+          {% for t in d.tables %}<li><span class="ui-avatar ui-avatar-sq"><i class="fa-solid fa-chair"></i></span><span class="nm">{{ t.table__name }}<small>{{ t.table__zone__name|default:"Main floor" }} · {{ t.orders }} turn{{ t.orders|pluralize }}{% if t.guests %} · {{ t.guests }} guests{% endif %}</small></span><strong>₹{{ t.sales|inr }}</strong></li>{% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Coming up today</h2>
+        {% if live.next_reservations %}
+        <ul class="ui-dash-people compact">
+          {% for r in live.next_reservations %}<li><span class="ui-dash-time">{{ r.start_time|time:"g:i" }}<small>{{ r.start_time|time:"a" }}</small></span><span class="nm">{{ r.customer_name }}<small>{{ r.party_size }} guests{% if r.occasion %} · {{ r.occasion }}{% endif %}</small></span>{% if r.status == 'P' %}<span class="ui-chip ui-chip-orange">Unconfirmed</span>{% else %}<span class="ui-chip ui-chip-green">Confirmed</span>{% endif %}</li>{% endfor %}
+        </ul>
+        {% else %}<p class="ui-log-sub">No more reservations today.</p>{% endif %}
+        {% if live.low_stock %}
+        <h3 class="ui-dash-h3">Restock soon</h3>
+        <ul class="ui-dash-mini">{% for i in live.low_stock %}<li><span>{{ i.name }}</span><strong class="{% if i.quantity <= 0 %}ui-text-red{% endif %}">{{ i.quantity }} {{ i.unit }}</strong></li>{% endfor %}</ul>
+        {% endif %}
+        {% if access.dine_in %}<p class="ui-dash-foot"><a href="{% url 'restaurant_admin:qr_code_generator' restaurant_slug=s %}"><i class="fa-solid fa-qrcode"></i> Menu &amp; table QR codes</a></p>{% endif %}
+      </section>
+    </div>
+  </div>
 </div>
-
-<style>
-.qr-code-container {
-    background-color: #f8f9fa;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 15px;
-}
-
-.qr-code-container img {
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    padding: 10px;
-    background: white;
-}
-</style>
+{{ chart_data|json_script:"dash-data" }}
+{% endwith %}
 {% endblock %}
 
 {% block extra_js %}
 <script id="dashboard-js" data-baseline-orders="{{ baseline_total_orders|default:0 }}">
-// Bootstrap tooltips init
-document.addEventListener('DOMContentLoaded', function() {
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-    tooltipTriggerList.map(function (el) { return new bootstrap.Tooltip(el) });
-});
+(function () {
+  var data = JSON.parse(document.getElementById('dash-data').textContent);
+  var palette = ['#007AFF', '#34C759', '#FF9500', '#AF52DE', '#30B0C7', '#FF2D55', '#5856D6', '#FFCC00'];
+  document.querySelectorAll('.ui-dash-list .sw').forEach(function (el) { el.style.background = palette[+el.dataset.i % palette.length]; });
 
-// Sound notification system
-const notifUrl = "{{ notification_sound_abs_url|default:'' }}";
-let audioCtx = null;
-let audioBuffer = null;
-let audioSource = null;
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function money(v) { var a = Math.abs(v); return '₹' + (a >= 100000 ? +(v / 100000).toFixed(1) + 'L' : a >= 10000 ? Math.round(v / 1000) + 'k' : a >= 1000 ? +(v / 1000).toFixed(1) + 'k' : Math.round(v)); }
 
-// Initialize audio context on user interaction
-function initAudio() {
-    if (audioCtx === null) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        
-        // Load notification sound if available
-        if (notifUrl) {
-            fetch(notifUrl)
-                .then(response => response.arrayBuffer())
-                .then(arrayBuffer => audioCtx.decodeAudioData(arrayBuffer))
-                .then(decodedAudio => {
-                    audioBuffer = decodedAudio;
-                })
-                .catch(e => console.error('Error loading audio:', e));
-        }
+  function draw() {
+    if (!window.Chart) return;
+    var grid = css('--ui-separator') || 'rgba(0,0,0,.08)', label = css('--ui-label-2') || '#6E6E73';
+    Chart.defaults.color = label;
+    Chart.defaults.font.family = css('--ui-font') || 'system-ui';
+    var trend = document.getElementById('dashTrend');
+    if (trend && !trend.dataset.drawn) {
+      trend.dataset.drawn = '1';
+      var ctx = trend.getContext('2d');
+      var fill = ctx.createLinearGradient(0, 0, 0, 280);
+      fill.addColorStop(0, 'rgba(0,122,255,.22)'); fill.addColorStop(1, 'rgba(0,122,255,0)');
+      new Chart(trend, {
+        type: 'line',
+        data: { labels: data.labels, datasets: [
+          { label: 'This period', data: data.sales, borderColor: '#007AFF', backgroundColor: fill, fill: true, tension: .35, borderWidth: 2.5, pointRadius: data.labels.length > 40 ? 0 : 2.5, pointHoverRadius: 5 },
+          { label: 'Previous period', data: data.prev, borderColor: label, borderDash: [5, 5], borderWidth: 1.5, pointRadius: 0, tension: .35, fill: false }
+        ] },
+        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+          plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } },
+            tooltip: { callbacks: { label: function (c) { var t = c.dataset.label + ': ₹' + Math.round(c.parsed.y).toLocaleString('en-IN'); if (c.datasetIndex === 0) t += ' · ' + data.orders[c.dataIndex] + ' orders'; return t; } } } },
+          scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 12, maxRotation: 0 } }, y: { beginAtZero: true, grid: { color: grid }, ticks: { callback: money } } } }
+      });
     }
-    return audioCtx.state === 'running';
-}
-
-// Play bell sound
-async function playBell() {
-    try {
-        // Try to resume audio context if it's suspended
-        if (audioCtx && audioCtx.state === 'suspended') {
-            await audioCtx.resume();
-        }
-
-        // Play custom sound if loaded
-        if (audioBuffer) {
-            if (audioSource) {
-                audioSource.stop();
-            }
-            audioSource = audioCtx.createBufferSource();
-            audioSource.buffer = audioBuffer;
-            audioSource.connect(audioCtx.destination);
-            audioSource.start(0);
-            return;
-        }
-
-        // Fallback to Web Audio API if no custom sound
-        if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        
-        const now = audioCtx.currentTime;
-        const o1 = audioCtx.createOscillator();
-        const g1 = audioCtx.createGain();
-        o1.type = 'sine';
-        o1.frequency.setValueAtTime(880, now);
-        g1.gain.setValueAtTime(0.0001, now);
-        g1.gain.exponentialRampToValueAtTime(0.22, now + 0.01);
-        g1.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
-        o1.connect(g1).connect(audioCtx.destination);
-        o1.start(now);
-        o1.stop(now + 0.6);
-        
-        const o2 = audioCtx.createOscillator();
-        const g2 = audioCtx.createGain();
-        o2.type = 'sine';
-        o2.frequency.setValueAtTime(1320, now + 0.08);
-        g2.gain.setValueAtTime(0.0001, now + 0.08);
-        g2.gain.exponentialRampToValueAtTime(0.14, now + 0.11);
-        g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
-        o2.connect(g2).connect(audioCtx.destination);
-        o2.start(now + 0.08);
-        o2.stop(now + 0.6);
-    } catch (e) {
-        console.error('Error playing sound:', e);
+    var ch = document.getElementById('dashChannels');
+    if (ch && !ch.dataset.drawn && data.channels.length) {
+      ch.dataset.drawn = '1';
+      new Chart(ch, { type: 'doughnut',
+        data: { labels: data.channels.map(function (c) { return c.label; }), datasets: [{ data: data.channels.map(function (c) { return c.value; }), backgroundColor: palette, borderWidth: 0 }] },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '72%', plugins: { legend: { display: false },
+          tooltip: { callbacks: { label: function (c) { return c.label + ': ₹' + Math.round(c.parsed).toLocaleString('en-IN'); } } } } } });
     }
-}
+  }
+  window.addEventListener('load', function () {
+    if (window.Chart) return draw();
+    var sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+    sc.onload = draw; document.head.appendChild(sc);
+  });
+})();
 
-// Toast helper
-function showInfoToast(msg) {
-    const toast = document.createElement('div');
-    toast.className = 'position-fixed bottom-0 end-0 m-3 alert alert-info alert-dismissible fade show';
-    toast.role = 'alert';
-    toast.innerHTML = `${msg}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
-    document.body.appendChild(toast);
-    setTimeout(() => { try { (new bootstrap.Alert(toast)).close(); } catch(e){} }, 3000);
-}
-
-function showWarningToast(msg) {
-    const toast = document.createElement('div');
-    toast.className = 'position-fixed bottom-0 end-0 m-3 alert alert-warning alert-dismissible fade show';
-    toast.role = 'alert';
-    toast.style.zIndex = '1090';
-    toast.innerHTML = `<i class="fas fa-exclamation-triangle me-2 text-warning"></i> <strong>Low Stock Alert:</strong> ${msg}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>`;
-    document.body.appendChild(toast);
-    setTimeout(() => { try { (new bootstrap.Alert(toast)).close(); } catch(e){} }, 6000);
-}
-
-// SSE for new orders
-document.addEventListener('DOMContentLoaded', function() {
-    // Enable sound UX to unlock autoplay
-    const enableBtn = document.createElement('button');
-    enableBtn.textContent = '🔔 Enable Notifications';
-    enableBtn.className = 'btn btn-sm btn-primary position-fixed top-0 end-0 m-3';
-    enableBtn.style.zIndex = '1080';
-    enableBtn.style.display = 'none'; // Hide by default, show if needed
-    
-    function hideEnable() { 
-        if (enableBtn.parentNode) {
-            enableBtn.parentNode.removeChild(enableBtn);
-        }
-    }
-    
-    async function enableSound() {
-        try {
-            // Initialize audio context and play a silent sound to unlock audio
-            if (initAudio()) {
-                // Play a silent sound to unlock audio
-                const source = audioCtx.createBufferSource();
-                const buffer = audioCtx.createBuffer(1, 1, 22050);
-                source.buffer = buffer;
-                source.connect(audioCtx.destination);
-                source.start(0);
-                source.stop(0.1);
-                
-                // Mark as enabled in localStorage
-                localStorage.setItem('notifSoundEnabled', '1');
-                hideEnable();
-                
-                // Show confirmation
-                showInfoToast('Notifications enabled! You will now hear sounds for new orders.');
-            }
-        } catch (e) {
-            console.error('Error enabling sound:', e);
-            showInfoToast('Error enabling notifications. Please try again.');
-        }
-    }
-    
-    // Show enable button if sound isn't already enabled
-    if (localStorage.getItem('notifSoundEnabled') !== '1') {
-        // Check if we need to show the enable button
-        document.addEventListener('click', function initSoundOnInteraction() {
-            // Remove this event listener after first interaction
-            document.removeEventListener('click', initSoundOnInteraction);
-            
-            // Show the enable button
-            document.body.appendChild(enableBtn);
-            enableBtn.style.display = 'block';
-            
-            // Set up the click handler
-            enableBtn.addEventListener('click', enableSound);
-        }, { once: true });
-    } else {
-        // Sound is already enabled, initialize audio context
-        document.addEventListener('click', function initOnInteraction() {
-            document.removeEventListener('click', initOnInteraction);
-            initAudio();
-        }, { once: true });
-    }
-
-    // ── Lightweight poll for new orders (replaces SSE to prevent thread exhaustion) ──
-    let _dashLastCount = parseInt(document.getElementById('dashboard-js').dataset.baselineOrders || '0', 10);
-    function dashPoll() {
-        fetch("{% url 'restaurant_admin:order_list' restaurant_slug=restaurant.slug %}?poll=1", {
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-            if (!data) return;
-            if (data.total_orders > _dashLastCount) {
-                _dashLastCount = data.total_orders;
-                if (localStorage.getItem('notifSoundEnabled') === '1') playBell().catch(()=>{});
-                showInfoToast('New order received!');
-            }
-        })
-        .catch(() => {});
-    }
-    const _dashTimer = setInterval(dashPoll, 30000);
-    document.addEventListener('visibilitychange', () => { if (document.hidden) clearInterval(_dashTimer); });
-
+// New-order alerts (sound, toasts, desktop) come from the global notification centre.
+// Refresh the "Right now" figures when a guest or online order arrives.
+window.addEventListener('new_order_arrived', function () {
+  if (document.querySelector('.ui-nt.is-open')) return;
+  clearTimeout(window.__dashReload);
+  window.__dashReload = setTimeout(function () { location.reload(); }, 4000);
 });
 </script>
 {% endblock %}
-        height: 36px;
-    }
-    
-    .avatar-sm {
-        width: 32px;
-        height: 32px;
-        font-size: 0.875rem;
-    }
-    
-    .avatar-title {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        height: 100%;
-        color: var(--bs-body-color);
-    }
-    
-    .bg-primary-soft {
-        background-color: rgba(94, 114, 228, 0.1) !important;
-        color: var(--primary) !important;
-    }
-    
-    .card {
-        border: none;
-        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-        transition: all 0.3s ease;
-    }
-    
-    .card:hover {
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
-    }
-    
-    .card-header {
-        background-color: #fff;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-        padding: 1rem 1.5rem;
-    }
-    
-    .card-title {
-        font-weight: 600;
-        margin-bottom: 0;
-    }
-    
-    .table {
-        margin-bottom: 0;
-    }
-    
-    .table th {
-        font-weight: 600;
-        text-transform: uppercase;
-        font-size: 0.75rem;
-        letter-spacing: 0.5px;
-        padding: 1rem 1.5rem;
-        background-color: #f8f9fa;
-        border-bottom: 1px solid #e9ecef;
-    }
-    
-    .table td {
-        padding: 1rem 1.5rem;
-        vertical-align: middle;
-        border-bottom: 1px solid #e9ecef;
-    }
-    
-    .badge {
-        font-weight: 500;
-        padding: 0.35em 0.65em;
-    }
-</style>

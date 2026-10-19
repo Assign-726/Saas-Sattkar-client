@@ -11,8 +11,9 @@ class HasClubModule(permissions.BasePermission):
     code = "FEATURE_GATED_CLUB_MODULE"
 
     def has_permission(self, request, view):
-        # Superusers and staff bypass module gating
-        if request.user and (request.user.is_superuser or request.user.is_staff):
+        # Only platform superusers bypass module gating. Every business login is ``is_staff``,
+        # so letting staff through would switch the Club module on for every branch.
+        if request.user and request.user.is_superuser:
             return True
 
         # Unauthenticated public endpoints (like browsing published events or checkout)
@@ -36,6 +37,10 @@ class HasClubModule(permissions.BasePermission):
                 branch = RestaurantBranch.objects.filter(id=branch_id).first()
             except Exception:
                 pass
+            # A branch named in the request must belong to the caller's own business
+            profile = getattr(request.user, 'restaurant_profile', None)
+            if branch and (profile is None or branch.restaurant_id != profile.restaurant_id):
+                return False
 
         # 2. From user's restaurant profile
         if not branch and hasattr(request.user, 'restaurant_profile'):

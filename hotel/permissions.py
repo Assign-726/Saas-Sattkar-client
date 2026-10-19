@@ -1,5 +1,4 @@
 from rest_framework import permissions
-from super_admin.models import RestaurantBranch
 
 
 class IsHotelAdminOrManager(permissions.BasePermission):
@@ -13,72 +12,31 @@ class IsHotelAdminOrManager(permissions.BasePermission):
 
     def has_permission(self, request, view):
         from restaurant_project import constants
+        from core import tenancy
         if not getattr(constants, 'ENABLE_HOTEL_MODULE', True):
             return False
 
-        # 1. Superuser / platform staff bypass
-        if request.user and (request.user.is_superuser or request.user.is_staff):
+        # Only platform superusers bypass. Every business login is ``is_staff``, so staff
+        # status must never open another business's hotel.
+        if tenancy.is_platform_admin(request.user):
             return True
-
-        # 2. Must be authenticated
-        if not request.user or not request.user.is_authenticated:
+        if not request.user or not request.user.is_authenticated or not request.user.is_active:
+            return False
+        if getattr(request.user, 'role', None) not in ('HOTEL_ADMIN', 'GENERAL_MANAGER'):
             return False
 
-        # 3. Resolve user role
-        user_role = getattr(request.user, 'role', None)
-        if not user_role and hasattr(request.user, 'restaurant_profile'):
-            user_role = getattr(request.user.restaurant_profile, 'role', None)
-
-        if user_role not in ['HOTEL_ADMIN', 'GENERAL_MANAGER']:
-            return False
-
-        # 4. Resolve user branch
-        branch = None
-
-        # Check explicit branch in URL or request params
-        branch_id = (
-            view.kwargs.get('branch_id') or
-            view.kwargs.get('branch_pk') or
-            request.query_params.get('branch_id') or
-            request.query_params.get('branch') or
-            (request.data.get('branch_id') if hasattr(request, 'data') and isinstance(request.data, dict) else None) or
-            (request.data.get('branch') if hasattr(request, 'data') and isinstance(request.data, dict) else None)
-        )
-        if branch_id:
-            try:
-                branch = RestaurantBranch.objects.filter(id=branch_id).first()
-            except Exception:
-                pass
-
-        # Check request.user.branch property
-        if not branch:
-            branch = getattr(request.user, 'branch', None)
-
-        # Fallback to restaurant profile branch
-        if not branch and hasattr(request.user, 'restaurant_profile'):
-            profile = request.user.restaurant_profile
-            branch = profile.branch
-            if not branch and profile.restaurant:
-                branch = profile.restaurant.branches.filter(has_hotel_module=True).first() or profile.restaurant.branches.first()
-
-        if not branch:
-            return False
-
-        # Check request.user.branch.has_hotel_module == True
-        return bool(getattr(branch, 'has_hotel_module', False))
+        from hotel.views import resolve_branch_for_request
+        branch = resolve_branch_for_request(request)
+        return bool(branch and branch.has_hotel_module and tenancy.can_access_branch(request.user, branch))
 
     def has_object_permission(self, request, view, obj):
-        if request.user and request.user.is_superuser:
+        from core import tenancy
+        if tenancy.is_platform_admin(request.user):
             return True
-
         branch = getattr(obj, 'branch', None)
-        if not branch and hasattr(obj, 'room'):
+        if branch is None and hasattr(obj, 'room'):
             branch = getattr(obj.room, 'branch', None)
-
-        if not branch:
-            return True
-
-        return bool(getattr(branch, 'has_hotel_module', False))
+        return bool(branch and tenancy.can_access_branch(request.user, branch) and branch.has_hotel_module)
 
 
 # Alias for explicit Travel Desk & Cab Management specification

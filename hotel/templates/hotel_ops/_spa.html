@@ -1,0 +1,76 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>Spa &amp; wellness</h1><p>{{ day|date:"l, d M Y" }} · therapist schedule, bookings and settlement.</p></div>
+    <div class="ui-actions">
+      <a class="ui-btn ui-btn-gray" href="?date={{ prev_day|date:'Y-m-d' }}" aria-label="Previous day"><i class="fa-solid fa-chevron-left"></i></a>
+      <a class="ui-btn ui-btn-gray" href="?date={{ next_day|date:'Y-m-d' }}" aria-label="Next day"><i class="fa-solid fa-chevron-right"></i></a>
+      <a class="ui-btn ui-btn-gray" href="{{ base_url }}spa/setup/"><i class="fa-solid fa-sliders"></i><span>Therapists &amp; menu</span></a>
+    </div>
+  </div>
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Appointments</div></div><div class="kpi-val">{{ kpis.count }}</div></div>
+    <div class="ui-kpi kpi-purple"><div class="ui-kpi-head"><div class="kpi-label">Therapist utilisation</div></div><div class="kpi-val">{{ kpis.util }}%</div><div class="kpi-sub">Booked minutes ÷ available</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Completed</div></div><div class="kpi-val">{{ kpis.completed }}</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Spa revenue</div></div><div class="kpi-val">₹{{ kpis.revenue|inr }}</div><div class="kpi-sub">Before GST</div></div>
+  </div>
+  <div class="ui-seg ui-pms-seg">{% for d in days %}<a href="?date={{ d|date:'Y-m-d' }}" class="{% if d == day %}active{% endif %}">{% if d == today %}Today{% else %}{{ d|date:"D d" }}{% endif %}</a>{% endfor %}</div>
+
+  {% if not therapists or not treatments %}
+  <section class="ui-card ui-pad"><p style="margin:0">Add your <a href="{{ base_url }}spa/setup/">therapists and treatment menu</a> to start taking bookings.</p></section>
+  {% else %}
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-list-card">
+        <div class="ui-ops-sched"><table>
+          <thead><tr><th class="tm">Time</th>{% for t in therapists %}<th>{{ t.name }}<br><small class="ui-log-sub">{{ t.skills }}</small></th>{% endfor %}</tr></thead>
+          <tbody>{% for row in grid %}<tr><td class="tm">{{ row.label }}</td>
+            {% for c in row.cells %}{% if c.appt %}<td rowspan="{{ c.span }}"><a class="ui-ops-appt is-{{ c.appt.status|lower }}" href="#appt{{ c.appt.pk }}"><strong>{{ c.appt.guest_name }}</strong>{{ c.appt.treatment.name }}<small>{{ c.appt.start_time|time:"H:i" }}–{{ c.appt.end_time|time:"H:i" }} · {{ c.appt.get_status_display }}</small></a></td>
+            {% elif c.free %}<td class="free">{% if can_edit and day >= today %}<button type="button" class="ui-ops-slot" data-ther="{{ c.therapist.pk }}" data-time="{{ c.time }}" aria-label="Book {{ c.therapist.name }} at {{ c.time }}"></button>{% endif %}</td>{% endif %}{% endfor %}
+          </tr>{% endfor %}</tbody>
+        </table></div>
+        <p class="ui-log-sub" style="padding:8px 16px 14px;margin:0">Tap an empty slot to book it.</p>
+      </section>
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Appointments</h2></div>
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Time</th><th>Guest</th><th>Treatment</th><th class="num">Price</th><th>Status</th>{% if can_edit %}<th></th>{% endif %}</tr></thead>
+          <tbody>{% for a in appts %}<tr id="appt{{ a.pk }}">
+            <td class="nowrap"><strong>{{ a.start_time|time:"H:i" }}</strong><br><small class="ui-log-sub">{{ a.duration_minutes }} min</small></td>
+            <td>{{ a.guest_name }}<br><small class="ui-log-sub">{% if a.booking %}Room {{ a.booking.room.room_number }}{% else %}Walk-in{% endif %}{% if a.guest_phone %} · {{ a.guest_phone }}{% endif %}</small></td>
+            <td>{{ a.treatment.name }}<br><small class="ui-log-sub">{{ a.therapist.name }}</small></td>
+            <td class="num">₹{{ a.price|inr }}</td>
+            <td><span class="ui-chip ui-chip-{% if a.status == 'COMPLETED' %}green{% elif a.status == 'IN_TREATMENT' %}orange{% elif a.status == 'BOOKED' %}blue{% else %}gray{% endif %}">{{ a.get_status_display }}</span>{% if a.settled_by %}<br><small class="ui-log-sub">{{ a.get_settled_by_display }}</small>{% endif %}</td>
+            {% if can_edit %}<td class="nowrap">{% if a.status == 'BOOKED' or a.status == 'IN_TREATMENT' %}
+              {% if a.status == 'BOOKED' %}<form method="post" action="{{ base_url }}spa/{{ a.pk }}/action/" style="display:inline">{% csrf_token %}<input type="hidden" name="op" value="start"><button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">Start</button></form>{% endif %}
+              <details class="ui-pms-void"><summary class="ui-btn ui-btn-primary ui-btn-sm">Complete</summary>
+                <form method="post" action="{{ base_url }}spa/{{ a.pk }}/action/" class="ui-stack-form ui-ops-pop">{% csrf_token %}<input type="hidden" name="op" value="complete">
+                  <div class="ui-field"><label for="sb{{ a.pk }}">Settle by</label><select id="sb{{ a.pk }}" class="ui-input" name="settled_by">{% for k, l in settlements %}{% if k != 'ROOM' or a.booking %}<option value="{{ k }}">{{ l }}</option>{% endif %}{% endfor %}</select></div>
+                  <p class="ui-log-sub" style="margin:0">₹{{ a.total|inr2 }} incl. GST</p>
+                  <button class="ui-btn ui-btn-primary ui-btn-sm" type="submit">Complete &amp; settle</button></form></details>
+              <details class="ui-pms-void"><summary title="More"><i class="fa-solid fa-ellipsis"></i></summary><div class="ui-ops-pop">
+                <form method="post" action="{{ base_url }}spa/{{ a.pk }}/action/">{% csrf_token %}<input type="hidden" name="op" value="no_show"><button class="ui-link-btn" type="submit">No-show</button></form>
+                <form method="post" action="{{ base_url }}spa/{{ a.pk }}/action/" onsubmit="return confirm('Cancel this appointment?')">{% csrf_token %}<input type="hidden" name="op" value="cancel"><button class="ui-link-btn ui-text-red" type="submit">Cancel appointment</button></form></div></details>
+            {% endif %}</td>{% endif %}
+          </tr>{% empty %}<tr><td colspan="6" class="ui-log-sub" style="padding:24px;text-align:center">No appointments on this day.</td></tr>{% endfor %}</tbody>
+        </table></div>
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      {% if can_edit and day >= today %}<section class="ui-card ui-pad" id="spaBook">
+        <h2 class="ui-card-title">Book a treatment</h2>
+        <form method="post" action="{{ base_url }}spa/add/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-field"><label for="spB">In-house guest</label><select id="spB" class="ui-input" name="booking"><option value="">Walk-in / non-resident</option>{% for b in in_house %}<option value="{{ b.pk }}">Room {{ b.room.room_number }} · {{ b.guest_name }}</option>{% endfor %}</select></div>
+          <div class="ui-inline-fields"><div class="ui-field"><label for="spN">Walk-in name</label><input id="spN" class="ui-input" name="guest_name" maxlength="150"></div><div class="ui-field"><label for="spP">Mobile</label><input id="spP" class="ui-input" name="guest_phone" maxlength="30"></div></div>
+          <div class="ui-field"><label for="spT">Treatment</label><select id="spT" class="ui-input" name="treatment" required>{% for t in treatments %}<option value="{{ t.pk }}">{{ t.name }} · {{ t.duration_minutes }} min · ₹{{ t.price|inr }}</option>{% endfor %}</select></div>
+          <div class="ui-field"><label for="spH">Therapist</label><select id="spH" class="ui-input" name="therapist" required>{% for t in therapists %}<option value="{{ t.pk }}">{{ t.name }}</option>{% endfor %}</select></div>
+          <div class="ui-inline-fields"><div class="ui-field"><label for="spD">Date</label><input id="spD" class="ui-input" type="date" name="date" value="{{ day|date:'Y-m-d' }}" min="{{ today|date:'Y-m-d' }}" required></div><div class="ui-field"><label for="spS">Start</label><input id="spS" class="ui-input" type="time" name="start" step="1800" value="10:00" required></div></div>
+          <div class="ui-field"><label for="spX">Notes</label><input id="spX" class="ui-input" name="notes" maxlength="255" placeholder="Allergies, preferences"></div>
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-spa"></i><span>Book</span></button>
+        </form>
+        <script>document.querySelectorAll('.ui-ops-slot').forEach(function(b){b.addEventListener('click',function(){document.getElementById('spH').value=b.dataset.ther;document.getElementById('spS').value=b.dataset.time;var f=document.getElementById('spBook');f.scrollIntoView({behavior:'smooth',block:'start'});document.getElementById('spB').focus();});});</script>
+      </section>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>

@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from super_admin.models import Restaurant, RestaurantBranch, RestaurantUser
 from restaurant_admin.views import resolve_restaurant, get_active_branch
+from super_admin.modules import RESTAURANT, RESTAURANT_DEPARTMENTS, department_choices
 from restaurant_admin.models import (
     Department,
     ShiftType,
@@ -27,6 +28,9 @@ from restaurant_admin.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+# The restaurant shell manages restaurant-side departments; Housekeeping & Front Desk live in the Hotel PMS.
+RESTAURANT_DEPARTMENT_CHOICES = department_choices(RESTAURANT)
 
 
 def is_management_user(user):
@@ -113,7 +117,7 @@ def muster_roll_view(request, restaurant_slug=None):
     search_query = request.GET.get('q', '').strip()
 
     # Base ground staff queryset
-    staff_qs = StaffMember.objects.filter(restaurant=restaurant, is_active=True)
+    staff_qs = StaffMember.objects.filter(restaurant=restaurant, department__in=RESTAURANT_DEPARTMENTS, is_active=True)
     if active_branch:
         staff_qs = staff_qs.filter(models.Q(branch=active_branch) | models.Q(branch__isnull=True))
 
@@ -136,6 +140,7 @@ def muster_roll_view(request, restaurant_slug=None):
         att.staff_member_id: att
         for att in DailyAttendance.objects.filter(
             restaurant=restaurant,
+            staff_member__department__in=RESTAURANT_DEPARTMENTS,
             date=selected_date,
             staff_member__in=staff_members
         ).select_related('staff_member')
@@ -144,6 +149,7 @@ def muster_roll_view(request, restaurant_slug=None):
     # Aggregate daily status counters across ALL active staff for this date
     all_active_ids = StaffMember.objects.filter(
         restaurant=restaurant,
+        department__in=RESTAURANT_DEPARTMENTS,
         is_active=True
     )
     if active_branch:
@@ -152,6 +158,7 @@ def muster_roll_view(request, restaurant_slug=None):
 
     all_attendances_today = DailyAttendance.objects.filter(
         restaurant=restaurant,
+            staff_member__department__in=RESTAURANT_DEPARTMENTS,
         date=selected_date,
         staff_member_id__in=all_active_ids
     )
@@ -167,7 +174,7 @@ def muster_roll_view(request, restaurant_slug=None):
 
     # Department badges with counts
     dept_counts = []
-    for dept_code, dept_label in Department.choices:
+    for dept_code, dept_label in RESTAURANT_DEPARTMENT_CHOICES:
         dept_total = StaffMember.objects.filter(restaurant=restaurant, department=dept_code, is_active=True).count()
         if dept_total > 0:
             dept_counts.append({
@@ -219,7 +226,7 @@ def muster_roll_view(request, restaurant_slug=None):
         'total_ot_hours_today': total_ot_hours_today,
         'total_penalties_today': total_penalties_today,
         'dept_counts': dept_counts,
-        'departments': Department.choices,
+        'departments': RESTAURANT_DEPARTMENT_CHOICES,
         'shift_types': ShiftType.choices,
         'attendance_statuses': AttendanceStatus.choices,
     }
@@ -255,7 +262,7 @@ def api_mark_all_present(request, restaurant_slug=None):
     except ValueError:
         return JsonResponse({'success': False, 'error': 'Invalid date format'}, status=400)
 
-    staff_qs = StaffMember.objects.filter(restaurant=restaurant, is_active=True)
+    staff_qs = StaffMember.objects.filter(restaurant=restaurant, department__in=RESTAURANT_DEPARTMENTS, is_active=True)
     if active_branch:
         staff_qs = staff_qs.filter(models.Q(branch=active_branch) | models.Q(branch__isnull=True))
 
@@ -325,7 +332,7 @@ def api_save_single_attendance(request, restaurant_slug=None):
     check_in_str = data.get('check_in_time', '').strip()
     check_out_str = data.get('check_out_time', '').strip()
 
-    staff = get_object_or_404(StaffMember, id=staff_id, restaurant=restaurant)
+    staff = get_object_or_404(StaffMember, id=staff_id, restaurant=restaurant, department__in=RESTAURANT_DEPARTMENTS)
 
     try:
         att_date = datetime.strptime(date_str, '%Y-%m-%d').date()
@@ -382,7 +389,7 @@ def api_save_single_attendance(request, restaurant_slug=None):
     )
 
     # Recalculate summary metrics for today
-    today_records = DailyAttendance.objects.filter(restaurant=restaurant, date=att_date)
+    today_records = DailyAttendance.objects.filter(restaurant=restaurant, staff_member__department__in=RESTAURANT_DEPARTMENTS, date=att_date)
     return JsonResponse({
         'success': True,
         'attendance_id': att.id,
@@ -422,7 +429,7 @@ def ground_staff_list(request, restaurant_slug=None):
     shift_filter = request.GET.get('shift', '').strip()
     search = request.GET.get('q', '').strip()
 
-    staff_qs = StaffMember.objects.filter(restaurant=restaurant)
+    staff_qs = StaffMember.objects.filter(restaurant=restaurant, department__in=RESTAURANT_DEPARTMENTS)
     if active_branch:
         staff_qs = staff_qs.filter(models.Q(branch=active_branch) | models.Q(branch__isnull=True))
 
@@ -456,7 +463,7 @@ def ground_staff_list(request, restaurant_slug=None):
         'staff_list': staff_list,
         'total_staff': total_staff,
         'total_monthly_payroll': total_monthly_payroll,
-        'departments': Department.choices,
+        'departments': RESTAURANT_DEPARTMENT_CHOICES,
         'shift_types': ShiftType.choices,
         'selected_department': dept_filter,
         'selected_shift': shift_filter,
@@ -481,6 +488,8 @@ def ground_staff_create(request, restaurant_slug=None):
         name = request.POST.get('name', '').strip()
         employee_id = request.POST.get('employee_id', '').strip()
         department = request.POST.get('department', Department.FLOOR)
+        if department not in RESTAURANT_DEPARTMENTS:
+            department = Department.FLOOR
         designation = request.POST.get('designation', '').strip()
         phone = request.POST.get('phone', '').strip()
         default_shift = request.POST.get('default_shift', ShiftType.GENERAL)
@@ -499,7 +508,7 @@ def ground_staff_create(request, restaurant_slug=None):
             return render(request, 'restaurant_admin/staff/ground_staff_form.html', {
                 'restaurant': restaurant,
                 'rslug': restaurant.slug,
-                'departments': Department.choices,
+                'departments': RESTAURANT_DEPARTMENT_CHOICES,
                 'shift_types': ShiftType.choices,
                 'is_edit': False,
             })
@@ -525,7 +534,7 @@ def ground_staff_create(request, restaurant_slug=None):
             return render(request, 'restaurant_admin/staff/ground_staff_form.html', {
                 'restaurant': restaurant,
                 'rslug': restaurant.slug,
-                'departments': Department.choices,
+                'departments': RESTAURANT_DEPARTMENT_CHOICES,
                 'shift_types': ShiftType.choices,
                 'is_edit': False,
             })
@@ -558,7 +567,7 @@ def ground_staff_create(request, restaurant_slug=None):
         'rslug': restaurant.slug,
         'active_menu': 'ground_staff_directory',
         'active_group': 'staff_operations',
-        'departments': Department.choices,
+        'departments': RESTAURANT_DEPARTMENT_CHOICES,
         'shift_types': ShiftType.choices,
         'is_edit': False,
         'suggested_id': suggested_id,
@@ -577,12 +586,13 @@ def ground_staff_edit(request, restaurant_slug=None, pk=None):
     if not isinstance(restaurant, Restaurant):
         return restaurant
 
-    staff = get_object_or_404(StaffMember, id=pk, restaurant=restaurant)
+    staff = get_object_or_404(StaffMember, id=pk, restaurant=restaurant, department__in=RESTAURANT_DEPARTMENTS)
 
     if request.method == 'POST':
         staff.name = request.POST.get('name', '').strip() or staff.name
         staff.employee_id = request.POST.get('employee_id', '').strip() or staff.employee_id
-        staff.department = request.POST.get('department', staff.department)
+        if request.POST.get('department') in RESTAURANT_DEPARTMENTS:
+            staff.department = request.POST['department']
         staff.designation = request.POST.get('designation', '').strip() or staff.designation
         staff.phone = request.POST.get('phone', '').strip()
         staff.default_shift = request.POST.get('default_shift', staff.default_shift)
@@ -614,7 +624,7 @@ def ground_staff_edit(request, restaurant_slug=None, pk=None):
         'active_menu': 'ground_staff_directory',
         'active_group': 'staff_operations',
         'staff': staff,
-        'departments': Department.choices,
+        'departments': RESTAURANT_DEPARTMENT_CHOICES,
         'shift_types': ShiftType.choices,
         'is_edit': True,
     }
@@ -628,7 +638,7 @@ def ground_staff_toggle_active(request, restaurant_slug=None, pk=None):
         return JsonResponse({'success': False, 'error': 'Forbidden'}, status=403)
 
     restaurant = resolve_restaurant(request, restaurant_slug)
-    staff = get_object_or_404(StaffMember, id=pk, restaurant=restaurant)
+    staff = get_object_or_404(StaffMember, id=pk, restaurant=restaurant, department__in=RESTAURANT_DEPARTMENTS)
     staff.is_active = not staff.is_active
     staff.save()
     status_str = "Active" if staff.is_active else "Inactive"
@@ -668,6 +678,7 @@ def payroll_dashboard(request, restaurant_slug=None):
     # Payroll records for the selected month
     payroll_qs = MonthlyPayroll.objects.filter(
         restaurant=restaurant,
+        staff_member__department__in=RESTAURANT_DEPARTMENTS,
         year=year,
         month=month
     ).select_related('staff_member', 'finalized_by')
@@ -694,7 +705,7 @@ def payroll_dashboard(request, restaurant_slug=None):
     paid_count = sum(1 for p in payrolls if p.payment_status == MonthlyPayroll.PaymentStatus.PAID)
 
     # Active staff count for comparison
-    active_staff_count = StaffMember.objects.filter(restaurant=restaurant, is_active=True).count()
+    active_staff_count = StaffMember.objects.filter(restaurant=restaurant, department__in=RESTAURANT_DEPARTMENTS, is_active=True).count()
 
     months_list = [(i, calendar.month_name[i]) for i in range(1, 13)]
     years_list = [now.year - 1, now.year, now.year + 1]
@@ -723,7 +734,7 @@ def payroll_dashboard(request, restaurant_slug=None):
         'paid_count': paid_count,
         'months_list': months_list,
         'years_list': years_list,
-        'departments': Department.choices,
+        'departments': RESTAURANT_DEPARTMENT_CHOICES,
         'selected_dept': dept_filter,
         'selected_status': status_filter,
         'payment_statuses': MonthlyPayroll.PaymentStatus.choices,
@@ -767,7 +778,7 @@ def api_generate_monthly_payroll(request, restaurant_slug=None):
     end_date = date(year, month, days_in_month)
 
     # Fetch all active staff
-    staff_qs = StaffMember.objects.filter(restaurant=restaurant, is_active=True)
+    staff_qs = StaffMember.objects.filter(restaurant=restaurant, department__in=RESTAURANT_DEPARTMENTS, is_active=True)
     if active_branch:
         staff_qs = staff_qs.filter(models.Q(branch=active_branch) | models.Q(branch__isnull=True))
 
@@ -845,7 +856,7 @@ def api_update_payroll_adjustment(request, restaurant_slug=None, pk=None):
         return JsonResponse({'success': False, 'error': 'Forbidden'}, status=403)
 
     restaurant = resolve_restaurant(request, restaurant_slug)
-    payroll = get_object_or_404(MonthlyPayroll, id=pk, restaurant=restaurant)
+    payroll = get_object_or_404(MonthlyPayroll, id=pk, restaurant=restaurant, staff_member__department__in=RESTAURANT_DEPARTMENTS)
 
     try:
         data = json.loads(request.body.decode('utf-8'))
@@ -902,6 +913,7 @@ def api_finalize_all_payroll(request, restaurant_slug=None):
 
     updated = MonthlyPayroll.objects.filter(
         restaurant=restaurant,
+        staff_member__department__in=RESTAURANT_DEPARTMENTS,
         year=year,
         month=month,
         is_finalized=False
@@ -930,7 +942,7 @@ def salary_slip_view(request, restaurant_slug=None, pk=None):
         return redirect('restaurant_admin:dashboard', restaurant_slug=restaurant_slug)
 
     restaurant = resolve_restaurant(request, restaurant_slug)
-    payroll = get_object_or_404(MonthlyPayroll, id=pk, restaurant=restaurant)
+    payroll = get_object_or_404(MonthlyPayroll, id=pk, restaurant=restaurant, staff_member__department__in=RESTAURANT_DEPARTMENTS)
     staff = payroll.staff_member
 
     # Format net amount in words
@@ -986,7 +998,7 @@ def sop_dashboard_view(request, restaurant_slug=None):
     timing_filter = request.GET.get('timing', 'ALL').strip()
 
     # Fetch active templates for this branch or venue-wide
-    task_qs = DailySOPTask.objects.filter(restaurant=restaurant, is_active=True)
+    task_qs = DailySOPTask.objects.filter(restaurant=restaurant, department__in=RESTAURANT_DEPARTMENTS, is_active=True)
     if active_branch:
         task_qs = task_qs.filter(models.Q(branch=active_branch) | models.Q(branch__isnull=True))
 
@@ -1066,7 +1078,7 @@ def sop_dashboard_view(request, restaurant_slug=None):
         'skipped_count': skipped_count,
         'pending_count': pending_count,
         'completion_rate': completion_rate,
-        'departments': Department.choices,
+        'departments': RESTAURANT_DEPARTMENT_CHOICES,
         'shift_timings': SOPShiftTiming.choices,
         'selected_dept': dept_filter,
         'selected_timing': timing_filter,
@@ -1100,7 +1112,7 @@ def api_toggle_sop_task_status(request, restaurant_slug=None):
     numeric_reading = data.get('numeric_reading', '').strip()
     verifier_notes = data.get('verifier_notes', '').strip()
 
-    task = get_object_or_404(DailySOPTask, id=task_id, restaurant=restaurant)
+    task = get_object_or_404(DailySOPTask, id=task_id, restaurant=restaurant, department__in=RESTAURANT_DEPARTMENTS)
 
     try:
         log_date = datetime.strptime(date_str, '%Y-%m-%d').date()
@@ -1196,6 +1208,8 @@ def api_create_sop_task(request, restaurant_slug=None):
         return JsonResponse({'success': False, 'error': 'Task title is required.'}, status=400)
 
     department = data.get('department', Department.KITCHEN)
+    if department not in RESTAURANT_DEPARTMENTS:
+        department = Department.KITCHEN
     shift_timing = data.get('shift_timing', SOPShiftTiming.MORNING_PREP)
     description = data.get('description', '').strip()
     expected_standard = data.get('expected_standard', '').strip()
@@ -1235,7 +1249,7 @@ def api_delete_sop_task(request, restaurant_slug=None, pk=None):
     if not isinstance(restaurant, Restaurant):
         return JsonResponse({'success': False, 'error': 'Invalid venue'}, status=400)
 
-    task = get_object_or_404(DailySOPTask, id=pk, restaurant=restaurant)
+    task = get_object_or_404(DailySOPTask, id=pk, restaurant=restaurant, department__in=RESTAURANT_DEPARTMENTS)
     task_title = task.title
     task.delete()
     return JsonResponse({'success': True, 'message': f"SOP Task '{task_title}' deleted successfully."})

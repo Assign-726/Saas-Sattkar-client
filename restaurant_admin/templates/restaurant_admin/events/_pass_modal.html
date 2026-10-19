@@ -1,0 +1,129 @@
+{% comment %}Issue a door / complimentary pass. Params: event, tiers. Posts back to the current page.{% endcomment %}
+<div class="modal fade" id="manualBookingModal" tabindex="-1" aria-labelledby="manualBookingTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <form method="POST" action="{% url ns|add:':club_manual_booking_create' restaurant_slug=rslug event_id=event.id %}" id="passForm" novalidate>
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <div class="modal-header border-0 px-4 pt-4 pb-1">
+                    <div>
+                        <h5 class="modal-title fw-bold" id="manualBookingTitle"><i class="fas fa-user-plus me-2" style="color: var(--ui-accent);"></i>Issue door pass</h5>
+                        <div class="small" style="color: var(--ui-label-2);">{{ event.title }} · {{ event.start_datetime|date:"D d M, h:i A" }}</div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body px-4">
+                    <label class="form-label fw-semibold small mb-1">Ticket tier</label>
+                    <div class="pass-tiers mb-3" role="radiogroup">
+                        {% for tt in tiers %}
+                        <label class="pass-tier {% if tt.available_quantity < 1 %}off{% endif %}">
+                            <input type="radio" name="ticket_type_id" value="{{ tt.id }}" data-price="{{ tt.base_price }}" data-left="{{ tt.available_quantity }}"
+                                   {% if tt.available_quantity < 1 %}disabled{% endif %} {% if forloop.first and tt.available_quantity > 0 %}checked{% endif %}>
+                            <span class="n">{{ tt.name }}</span>
+                            <span class="p">₹{{ tt.base_price|floatformat:"0g" }}</span>
+                            <span class="l">{% if tt.available_quantity < 1 %}Sold out{% else %}{{ tt.available_quantity }} left{% endif %}</span>
+                        </label>
+                        {% empty %}
+                        <div class="small" style="color: var(--ui-red-text);">This event has no active ticket tiers — add one in Edit event.</div>
+                        {% endfor %}
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-sm-8">
+                            <label class="form-label fw-semibold small mb-1" for="passName">Guest name</label>
+                            <input type="text" name="guest_name" id="passName" class="form-control" required autocomplete="off" placeholder="Full name">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label fw-semibold small mb-1" for="passQty">Guests</label>
+                            <div class="input-group">
+                                <button class="btn btn-outline-secondary" type="button" data-step="-1" aria-label="One less">−</button>
+                                <input type="number" name="quantity" id="passQty" class="form-control text-center" min="1" max="50" value="1" required>
+                                <button class="btn btn-outline-secondary" type="button" data-step="1" aria-label="One more">+</button>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label fw-semibold small mb-1" for="passPhone">Mobile</label>
+                            <input type="tel" name="guest_phone" id="passPhone" class="form-control" required inputmode="tel" placeholder="10-digit mobile">
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label fw-semibold small mb-1" for="passEmail">Email <span style="color: var(--ui-label-3);">(sends the QR pass)</span></label>
+                            <input type="email" name="guest_email" id="passEmail" class="form-control" placeholder="Optional">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small mb-1">Payment</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="payment_method" id="payCash" value="DOOR_CASH" checked>
+                                <label class="btn btn-outline-secondary" for="payCash"><i class="fas fa-money-bill-wave me-1"></i> Paid at door</label>
+                                <input type="radio" class="btn-check" name="payment_method" id="payComp" value="COMPLIMENTARY">
+                                <label class="btn btn-outline-secondary" for="payComp"><i class="fas fa-gift me-1"></i> Complimentary</label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold small mb-1" for="passNotes">Note <span style="color: var(--ui-label-3);">(optional)</span></label>
+                            <input type="text" name="notes" id="passNotes" class="form-control" placeholder="e.g. Manager’s guest, birthday">
+                        </div>
+                    </div>
+                    <div class="pass-total mt-3"><span>To collect</span><strong id="passTotal">₹0</strong></div>
+                    <div class="small mt-2" id="passError" style="color: var(--ui-red-text); display: none;"></div>
+                </div>
+                <div class="modal-footer border-0 px-4 pb-4 pt-0">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold"><i class="fas fa-ticket-alt me-1"></i> Issue pass</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<style>
+    .pass-tiers { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    .pass-tier { position: relative; display: flex; flex-direction: column; gap: 1px; padding: 10px 12px; border-radius: 12px; cursor: pointer;
+                 border: 1.5px solid var(--ui-separator); background: var(--ui-surface); }
+    .pass-tier input { position: absolute; opacity: 0; pointer-events: none; }
+    .pass-tier .n { font-weight: 700; font-size: 0.86rem; color: var(--ui-label); }
+    .pass-tier .p { font-weight: 700; color: var(--ui-accent-text); font-size: 0.86rem; }
+    .pass-tier .l { font-size: 0.72rem; color: var(--ui-label-3); }
+    .pass-tier:has(input:checked) { border-color: var(--ui-accent); box-shadow: 0 0 0 3px rgba(var(--ui-accent-rgb), 0.18); }
+    .pass-tier:has(input:focus-visible) { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+    .pass-tier.off { opacity: 0.5; cursor: not-allowed; }
+    .pass-total { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-radius: 12px; background: var(--ui-fill); }
+    .pass-total span { color: var(--ui-label-2); font-size: 0.85rem; font-weight: 600; }
+    .pass-total strong { font-size: 1.15rem; color: var(--ui-label); font-variant-numeric: tabular-nums; }
+</style>
+<script>
+(function () {
+    const form = document.getElementById('passForm');
+    if (!form) return;
+    const qty = form.querySelector('#passQty'), total = form.querySelector('#passTotal'), err = form.querySelector('#passError');
+    function tier() { return form.querySelector('input[name="ticket_type_id"]:checked'); }
+    function comp() { return form.querySelector('#payComp').checked; }
+    function update() {
+        const t = tier(), n = Math.max(1, parseInt(qty.value, 10) || 1);
+        const price = t ? parseFloat(t.dataset.price) || 0 : 0;
+        total.textContent = comp() ? '₹0 (complimentary)' : '₹' + (price * n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+    }
+    form.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => {
+        qty.value = Math.min(50, Math.max(1, (parseInt(qty.value, 10) || 1) + parseInt(b.dataset.step, 10))); update();
+    }));
+    form.addEventListener('change', update);
+    form.addEventListener('input', update);
+    form.addEventListener('submit', e => {
+        const t = tier(), n = parseInt(qty.value, 10) || 0, phone = form.querySelector('#passPhone').value.replace(/\D/g, '');
+        let msg = '';
+        if (!t) msg = 'Pick a ticket tier.';
+        else if (!form.querySelector('#passName').value.trim()) msg = 'Enter the guest’s name.';
+        else if (phone.length < 10) msg = 'Enter a 10-digit mobile number.';
+        else if (n < 1 || n > 50) msg = 'Guests must be between 1 and 50.';
+        else if (n > parseInt(t.dataset.left, 10)) msg = 'Only ' + t.dataset.left + ' left in this tier.';
+        if (msg) { e.preventDefault(); err.textContent = msg; err.style.display = 'block'; return; }
+        form.querySelector('[type=submit]').disabled = true;
+    });
+    const modal = document.getElementById('manualBookingModal');
+    modal.addEventListener('shown.bs.modal', () => { err.style.display = 'none'; update(); form.querySelector('#passName').focus(); });
+    window.clubOpenPassModal = function (tierId, note) {
+        if (tierId) { const r = form.querySelector('input[name="ticket_type_id"][value="' + tierId + '"]:not([disabled])'); if (r) r.checked = true; }
+        form.querySelector('#passNotes').value = note || '';
+        qty.value = 1;
+        bootstrap.Modal.getOrCreateInstance(modal).show();
+    };
+    update();
+})();
+</script>

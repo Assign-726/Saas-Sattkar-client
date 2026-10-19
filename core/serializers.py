@@ -144,6 +144,8 @@ class OrderItemSerializer(serializers.ModelSerializer):
     subtotal = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     unit_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
     variant_name = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
+    quantity = serializers.IntegerField(min_value=1, max_value=500, default=1)
+    notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
 
     class Meta:
         model = OrderItem
@@ -221,7 +223,8 @@ class OrderSerializer(serializers.ModelSerializer):
             
             # Enforce that POS-only items cannot be ordered via public/online orders
             request = self.context.get('request')
-            is_staff_user = bool(request and request.user and request.user.is_staff)
+            from core.tenancy import is_business_staff
+            is_staff_user = bool(request and is_business_staff(request.user, menu_item.restaurant_id))
             if not is_staff_user:
                 channels = getattr(menu_item, 'publishing_channels', []) or []
                 if channels and 'qr' not in channels and 'online' not in channels:
@@ -335,7 +338,8 @@ class OrderSerializer(serializers.ModelSerializer):
 
         # Security Verification for Table QR Orders (prevents table tampering & spoofing)
         request = self.context.get('request')
-        is_staff_user = bool(request and request.user and request.user.is_staff)
+        from core.tenancy import is_business_staff
+        is_staff_user = bool(request and restaurant and is_business_staff(request.user, restaurant))
 
         if not is_staff_user:
             if table_number and not table_obj:
@@ -445,6 +449,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
         is_reorder = False
         new_batch_num = 1
+        total_before = Decimal(str(active_order.total_amount or 0)) if active_order else Decimal('0')
 
         if active_order:
             # Re-order: Append items to existing Master Order with incremented batch number
@@ -587,6 +592,9 @@ class OrderSerializer(serializers.ModelSerializer):
         else:
             order.update_total()
 
+        if payment_method == 'O':
+            self._check_online_payment(order, settings_obj, validated_data, total_before)
+
         try:
             from core.sse import publish
             if order.restaurant and order.restaurant.slug:
@@ -599,11 +607,61 @@ class OrderSerializer(serializers.ModelSerializer):
                     'kot_batch': new_batch_num,
                     'table_number': order.table_number,
                 }
-                publish(order.restaurant.slug, sse_payload)
+                from django.db import transaction as _tx
+                _slug = order.restaurant.slug
+                _tx.on_commit(lambda: publish(_slug, sse_payload))  # once the ticket is readable
+        except Exception:
+            pass
+
+        # Admin notification: guest QR / website orders (POS orders never come through here)
+        try:
+            from django.db import transaction as _tx
+            from notifications import service as _notify
+            _source = 'qr' if order.table_id or order.table_number else 'online'
+            _added = sum(int(i.get('quantity') or 1) for i in resolved_items)
+            _oid, _reorder = order.pk, is_reorder
+
+            def _send():
+                from core.models import Order as _O
+                o = _O.objects.select_related('restaurant', 'branch', 'table').prefetch_related('items').filter(pk=_oid).first()
+                if o is None or o.status == 'DRAFT':
+                    return
+                if _reorder:
+                    _notify.notify_addon(o, _added, _source)
+                else:
+                    _notify.notify_new_order(o, _source)
+            _tx.on_commit(_send)
         except Exception:
             pass
 
         return order
+
+    @staticmethod
+    def _check_online_payment(order, settings_obj, data, total_before):
+        """The signature only proves *a* payment was made for that Razorpay order. Make
+        sure it covers what was just ordered and hasn't paid for another order already."""
+        from core.models import GatewayPayment
+        from core import payments
+        rzp_order_id = data.get('razorpay_order_id')
+        payment_id = data.get('razorpay_payment_id')
+        order.refresh_from_db(fields=['total_amount'])
+        due = Decimal(str(order.total_amount or 0)) - total_before
+        if not GatewayPayment.claim(payment_id, 'order', order.pk, rzp_order_id, due):
+            raise serializers.ValidationError("This payment has already been used for another order.")
+        rzp = payments.fetch_order(settings_obj.razorpay_key_id, settings_obj.razorpay_key_secret, rzp_order_id)
+        if rzp is None:
+            import logging
+            logging.getLogger(__name__).warning('Order %s: Razorpay amount not verified (gateway unreachable)', order.pk)
+            return
+        if int(rzp.get('amount') or 0) + 100 < payments.paise(due):
+            raise serializers.ValidationError("The amount paid does not match the order total. Please try again.")
+
+    def validate_items(self, items):
+        if not items:
+            raise serializers.ValidationError("Add at least one item.")
+        if len(items) > 100:
+            raise serializers.ValidationError("Too many items in one order.")
+        return items
 
     def get_remaining_seconds(self, obj):
         try:
@@ -637,6 +695,11 @@ class OrderSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data['restaurant_slug'] = instance.restaurant.slug if instance.restaurant else None
+        if self.context.get('public_summary'):
+            # Listed by bare id (no secret token): no contact details, no token.
+            phone = data.get('phone') or ''
+            data['phone'] = ('•' * max(0, len(phone) - 4) + phone[-4:]) if phone else phone
+            data.pop('security_token', None)
         return data
 
     def get_bill_breakdown(self, obj):
@@ -1146,11 +1209,15 @@ class ZoneSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'branch', 'branch_slug', 'tables']
 
     def get_tables(self, obj):
-        tables_qs = obj.tables.filter(is_active=True).order_by('table_number')
         branch = self.context.get('branch')
-        if branch:
-            from django.db.models import Q
-            tables_qs = tables_qs.filter(Q(branch=branch) | Q(branch__isnull=True))
+        tables_qs = getattr(obj, '_active_tables', None)
+        if tables_qs is not None:
+            tables_qs = [t for t in tables_qs if not branch or t.branch_id in (None, branch.pk)]
+        else:
+            tables_qs = obj.tables.filter(is_active=True).order_by('table_number')
+            if branch:
+                from django.db.models import Q
+                tables_qs = tables_qs.filter(Q(branch=branch) | Q(branch__isnull=True))
         return [
             {
                 'id': t.id,

@@ -1,0 +1,65 @@
+{% extends 'guests/public/_base.html' %}
+{% block title %}How was your visit? · {{ restaurant.name }}{% endblock %}
+{% block body %}
+<div class="brand"><h1>{{ restaurant.name }}</h1><p>{{ branch.name }}</p></div>
+{% if done %}
+<div class="card done">
+  <div class="icon">✓</div>
+  <h2>Thank you{% if fb.name %}, {{ fb.name|truncatewords:1|cut:"…" }}{% endif %}!</h2>
+  <p class="muted">{% if fb and fb.rating <= 3 %}We are sorry it was not perfect. {% if fb.phone or fb.email %}A manager will get in touch with you shortly.{% else %}Your note has gone straight to the manager.{% endif %}{% else %}Your feedback goes straight to the team. We hope to see you again soon.{% endif %}</p>
+</div>
+{% else %}
+{% if error %}<div class="err" role="alert">{{ error }}</div>{% endif %}
+<form method="post" novalidate>{% csrf_token %}
+  <div class="card" style="text-align:center">
+    <h2>How was your experience?</h2>
+    <div class="stars" role="radiogroup" aria-label="Overall rating">
+      {% for n in "54321" %}<input type="radio" id="r{{ n }}" name="rating" value="{{ n }}" {% if posted.rating == n %}checked{% endif %} required><label for="r{{ n }}" title="{{ n }} star{% if n != '1' %}s{% endif %}">★</label>{% endfor %}
+    </div>
+  </div>
+  <div class="card">
+    <h2>Tell us more <span class="muted" style="font-weight:400">(optional)</span></h2>
+    <div class="seg" role="radiogroup" aria-label="About">
+      {% for v, l in areas %}<input type="radio" id="a{{ v }}" name="area" value="{{ v }}" {% if v == default_area %}checked{% endif %}><label for="a{{ v }}">{{ l }}</label>{% endfor %}
+    </div>
+    <div style="margin-top:10px">
+    {% for key, label in aspects %}
+    <div class="mini"><span>{{ label }}</span>
+      <div class="stars" role="radiogroup" aria-label="{{ label }}">{% for n in "54321" %}<input type="radio" id="{{ key }}{{ n }}" name="{{ key }}" value="{{ n }}"><label for="{{ key }}{{ n }}">★</label>{% endfor %}</div></div>
+    {% endfor %}
+    </div>
+    <label for="comment">Anything we should know?</label>
+    <textarea id="comment" name="comment" maxlength="4000" placeholder="What did you love? What could be better?">{{ posted.comment }}</textarea>
+  </div>
+  <div class="card">
+    <h2>Would you recommend us to a friend?</h2>
+    <div class="nps" role="radiogroup" aria-label="Likelihood to recommend, 0 to 10">
+      <input type="radio" id="n0" name="recommend" value="0"><label for="n0">0</label>
+      <input type="radio" id="n1" name="recommend" value="1"><label for="n1">1</label>
+      <input type="radio" id="n2" name="recommend" value="2"><label for="n2">2</label>
+      <input type="radio" id="n3" name="recommend" value="3"><label for="n3">3</label>
+      <input type="radio" id="n4" name="recommend" value="4"><label for="n4">4</label>
+      <input type="radio" id="n5" name="recommend" value="5"><label for="n5">5</label>
+      <input type="radio" id="n6" name="recommend" value="6"><label for="n6">6</label>
+      <input type="radio" id="n7" name="recommend" value="7"><label for="n7">7</label>
+      <input type="radio" id="n8" name="recommend" value="8"><label for="n8">8</label>
+      <input type="radio" id="n9" name="recommend" value="9"><label for="n9">9</label>
+      <input type="radio" id="n10" name="recommend" value="10"><label for="n10">10</label>
+    </div>
+    <div class="nps-legend"><span>Not likely</span><span>Very likely</span></div>
+  </div>
+  <div class="card">
+    <h2>Your details <span class="muted" style="font-weight:400">(optional)</span></h2>
+    <label for="name">Name</label><input type="text" id="name" name="name" autocomplete="name" value="{{ posted.name }}">
+    <div class="row2">
+      <div><label for="phone">Phone</label><input type="tel" id="phone" name="phone" autocomplete="tel" value="{{ posted.phone }}"></div>
+      <div><label for="email">Email</label><input type="email" id="email" name="email" autocomplete="email" value="{{ posted.email }}"></div>
+    </div>
+    <label class="check"><input type="checkbox" name="may_contact" checked> The manager may contact me about this feedback</label>
+    <div class="hp" aria-hidden="true"><label for="website">Website</label><input type="text" id="website" name="website" tabindex="-1" autocomplete="off"></div>
+  </div>
+  <button class="btn" type="submit">Send feedback</button>
+  <p class="muted" style="text-align:center;margin-top:14px">Only {{ restaurant.name }} sees your answers.</p>
+</form>
+{% endif %}
+{% endblock %}

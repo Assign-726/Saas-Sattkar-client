@@ -185,21 +185,9 @@ class CustomLoginView(BaseLoginView):
         """
         user = form.get_user()
         
-        # Check user's 2FA preference (ON by default for management, OFF for operational sub-roles)
-        user_2fa_active = True
-        try:
-            from super_admin.models import UserSecuritySetting
-            sec_setting = UserSecuritySetting.objects.filter(user=user).first()
-            if sec_setting is not None:
-                user_2fa_active = sec_setting.is_2fa_enabled
-            else:
-                user_role = getattr(user, 'role', None)
-                if user_role in ['CASHIER', 'KITCHEN', 'WAITER', 'HOUSEKEEPING', 'GATE_SCANNER']:
-                    user_2fa_active = False
-                else:
-                    user_2fa_active = True
-        except Exception:
-            user_2fa_active = True
+        # 2FA preference: the user's own choice, else on for management and off for floor roles
+        from core import two_factor
+        user_2fa_active = two_factor.is_enabled(user)
 
         # If 2FA is active and user has an email configured, require OTP 2FA
         if user_2fa_active and user.email and user.email.strip():

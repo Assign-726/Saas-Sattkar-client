@@ -1,0 +1,107 @@
+{# Guests (CRM) — shared by Restaurant & Hotel shells #}
+<div class="ui-logs ui-guests">
+  <div class="ui-page-header">
+    <div>
+      <h1>Guests</h1>
+      <p>Everyone who dined, stayed, booked a table or bought a ticket — one profile per guest, matched by phone and email.</p>
+    </div>
+    <div class="ui-actions">
+      {% if can_manage_guests %}
+      <a class="ui-btn ui-btn-gray" href="?export=csv{{ filter_qs_amp }}"><i class="fa-solid fa-file-arrow-down"></i><span>Export CSV</span></a>
+      <form method="post" class="ui-inline-form">{% csrf_token %}<input type="hidden" name="op" value="rebuild">
+        <button class="ui-btn ui-btn-gray" type="submit" title="Create profiles from all past orders, stays, reservations and tickets"><i class="fa-solid fa-arrows-rotate"></i><span>Sync from history</span></button>
+      </form>
+      {% endif %}
+      <a class="ui-btn ui-btn-primary" href="{{ base_url }}gift-cards/"><i class="fa-solid fa-gift"></i><span>Gift cards</span></a>
+    </div>
+  </div>
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Total guests</div><div class="kpi-icon"><i class="fa-solid fa-users"></i></div></div>
+      <div class="kpi-val">{{ stats.total }}</div><div class="kpi-sub">{{ stats.new_month }} new in the last 30 days</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Repeat guests</div><div class="kpi-icon"><i class="fa-solid fa-rotate-left"></i></div></div>
+      <div class="kpi-val">{{ stats.repeat_rate }}%</div><div class="kpi-sub">Came back two or more times</div></div>
+    <div class="ui-kpi kpi-purple"><div class="ui-kpi-head"><div class="kpi-label">VIP guests</div><div class="kpi-icon"><i class="fa-solid fa-crown"></i></div></div>
+      <div class="kpi-val">{{ stats.vip }}</div><div class="kpi-sub">{{ stats.points }} loyalty points outstanding</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Celebrations this week</div><div class="kpi-icon"><i class="fa-solid fa-cake-candles"></i></div></div>
+      <div class="kpi-val">{{ stats.occasions }}</div><div class="kpi-sub"><a href="?segment=occasions">Birthdays &amp; anniversaries →</a></div></div>
+  </div>
+
+  <form class="ui-card ui-filters" method="get">
+    <div class="ui-field ui-field-search"><label for="gq">Search</label>
+      <div class="ui-input-icon"><i class="fa-solid fa-magnifying-glass"></i>
+        <input id="gq" class="ui-input" type="search" name="q" value="{{ filters.q }}" placeholder="Name, phone, email or tag" autocomplete="off"></div></div>
+    <div class="ui-field"><label for="gseg">Segment</label>
+      <select id="gseg" class="ui-input" name="segment">{% for v, l in segments %}<option value="{{ v }}" {% if filters.segment == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    {% if all_tags %}<div class="ui-field"><label for="gtag">Tag</label>
+      <select id="gtag" class="ui-input" name="tag"><option value="">Any tag</option>{% for t in all_tags %}<option value="{{ t }}" {% if filters.tag == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></div>{% endif %}
+    <div class="ui-field"><label for="gsort">Sort by</label>
+      <select id="gsort" class="ui-input" name="sort">{% for v, l in sorts %}<option value="{{ v }}" {% if filters.sort == v or not filters.sort and v == 'recent' %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    <div class="ui-filter-actions">
+      <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-filter"></i><span>Apply</span></button>
+      {% if filters.q or filters.segment or filters.tag %}<a class="ui-btn ui-btn-gray" href="{{ request.path }}">Reset</a>{% endif %}
+    </div>
+  </form>
+
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar"><div class="ui-list-count">{% if page_obj.paginator.count %}Showing <strong>{{ page_obj.start_index }}–{{ page_obj.end_index }}</strong> of <strong>{{ page_obj.paginator.count }}</strong>{% else %}No guests{% endif %}</div></div>
+    {% if guests %}
+    <div class="table-responsive">
+      <table class="table ui-guest-table">
+        <thead><tr><th>Guest</th><th>Visits</th><th>Lifetime spend</th><th>Points</th><th>Last visit</th><th>Tags</th></tr></thead>
+        <tbody>
+          {% for g in guests %}
+          <tr class="ui-row-link" data-href="{{ base_url }}guests/{{ g.pk }}/">
+            <td><a class="ui-guest-cell" href="{{ base_url }}guests/{{ g.pk }}/">
+              <span class="ui-avatar {% if g.is_vip %}is-vip{% endif %}">{{ g.initials }}</span>
+              <span><span class="ui-log-name">{{ g.name }}{% if g.is_vip %} <i class="fa-solid fa-crown ui-vip-icon" title="VIP"></i>{% endif %}</span>
+                <span class="ui-log-sub d-block">{{ g.phone|default:g.email|default:"No contact" }}</span></span></a></td>
+            <td><strong>{{ g.visits }}</strong><div class="ui-log-sub">{% if g.restaurant_visits %}{{ g.restaurant_visits }} dine{% endif %}{% if g.hotel_stays %} · {{ g.hotel_stays }} stay{{ g.hotel_stays|pluralize }}{% endif %}{% if g.event_bookings %} · {{ g.event_bookings }} event{{ g.event_bookings|pluralize }}{% endif %}</div></td>
+            <td>₹{{ g.lifetime_spend|floatformat:0 }}</td>
+            <td>{% if g.loyalty_points %}<span class="ui-chip ui-chip-indigo"><i class="fa-solid fa-star"></i>{{ g.loyalty_points }}</span>{% else %}<span class="ui-log-sub">—</span>{% endif %}</td>
+            <td>{% if g.last_seen %}{{ g.last_seen|date:"d M Y" }}<div class="ui-log-sub">{{ g.last_seen|timesince }} ago</div>{% else %}—{% endif %}</td>
+            <td>{% for t in g.tags|slice:":3" %}<span class="ui-chip ui-chip-gray">{{ t }}</span> {% empty %}<span class="ui-log-sub">—</span>{% endfor %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="ui-pager">
+      {% if page_obj.has_previous %}<a class="ui-pager-btn" href="?page={{ page_obj.previous_page_number }}{{ filter_qs_amp }}"><i class="fa-solid fa-chevron-left"></i><span>Previous</span></a>{% else %}<span class="ui-pager-btn is-disabled"><i class="fa-solid fa-chevron-left"></i><span>Previous</span></span>{% endif %}
+      <span class="ui-pager-info">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}<a class="ui-pager-btn" href="?page={{ page_obj.next_page_number }}{{ filter_qs_amp }}"><span>Next</span><i class="fa-solid fa-chevron-right"></i></a>{% else %}<span class="ui-pager-btn is-disabled"><span>Next</span><i class="fa-solid fa-chevron-right"></i></span>{% endif %}
+    </nav>
+    {% endif %}
+    {% else %}
+    <div class="ui-empty"><div class="ui-empty-icon"><i class="fa-solid fa-users"></i></div>
+      <h3>{% if filters.q or filters.segment or filters.tag %}No guests match{% else %}No guest profiles yet{% endif %}</h3>
+      <p>{% if can_manage_guests and not filters.q %}Profiles are created automatically from new orders and bookings. Use <strong>Sync from history</strong> to import past guests.{% else %}Try a different search or segment.{% endif %}</p></div>
+    {% endif %}
+  </section>
+
+  <section class="ui-card ui-loyalty-card">
+    <div class="ui-retention">
+      <div class="ui-retention-icon ui-tint-indigo"><i class="fa-solid fa-star"></i></div>
+      <div class="ui-retention-body">
+        <h2>Loyalty programme {% if loyalty.enabled %}<span class="ui-chip ui-chip-green">On</span>{% else %}<span class="ui-chip ui-chip-gray">Off</span>{% endif %}</h2>
+        <p>Guests earn <strong>{{ loyalty.points_per_100|floatformat:"-2" }} points per ₹100</strong> on paid bills{% if loyalty.earn_on_hotel_stays %} and completed stays{% endif %}. Each point is worth <strong>₹{{ loyalty.point_value|floatformat:"-2" }}</strong>; redemption starts at {{ loyalty.min_redeem_points }} points. Cancelled or refunded bills take their points back automatically.</p>
+        {% if can_manage_guests %}
+        <form method="post" class="ui-loyalty-form">{% csrf_token %}<input type="hidden" name="op" value="loyalty_settings">
+          <label class="ui-switch"><input type="checkbox" name="enabled" {% if loyalty.enabled %}checked{% endif %}><span>Programme on</span></label>
+          <div class="ui-field"><label>Points per ₹100</label><input class="ui-input" name="points_per_100" value="{{ loyalty.points_per_100|floatformat:'-2' }}" inputmode="decimal"></div>
+          <div class="ui-field"><label>₹ value per point</label><input class="ui-input" name="point_value" value="{{ loyalty.point_value|floatformat:'-2' }}" inputmode="decimal"></div>
+          <div class="ui-field"><label>Min. points to redeem</label><input class="ui-input" name="min_redeem_points" value="{{ loyalty.min_redeem_points }}" inputmode="numeric"></div>
+          <label class="ui-switch"><input type="checkbox" name="earn_on_hotel_stays" {% if loyalty.earn_on_hotel_stays %}checked{% endif %}><span>Earn on hotel stays</span></label>
+          <button class="ui-btn ui-btn-primary" type="submit">Save</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+</div>
+<script>
+document.querySelectorAll('.ui-row-link').forEach(function (tr) {
+  tr.addEventListener('click', function (e) { if (!e.target.closest('a, button, input')) window.location = tr.dataset.href; });
+});
+</script>

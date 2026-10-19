@@ -1,0 +1,57 @@
+<div class="ui-logs ui-integrations">
+  {% include 'integrations/_head.html' with action_label='Create API key' action_dialog='keyDialog' %}
+
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar">
+      <h2 class="ui-card-title" style="margin:0">API keys</h2>
+      <nav class="ui-tabs" style="margin:0;padding:3px">
+        <a href="?{% if request.GET.branch %}branch={{ request.GET.branch }}&{% endif %}show=active" class="{% if show == 'active' %}is-active{% endif %}">Active</a>
+        <a href="?{% if request.GET.branch %}branch={{ request.GET.branch }}&{% endif %}show=all" class="{% if show == 'all' %}is-active{% endif %}">All</a>
+      </nav>
+    </div>
+    {% if page.object_list %}
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>Key</th><th>Branch</th><th>Permissions</th><th>Last used</th><th>Status</th><th></th></tr></thead>
+      <tbody>{% for k in page.object_list %}
+        <tr>
+          <td class="ui-cell-primary"><strong>{{ k.name }}</strong><div class="ui-log-sub"><code class="ui-code">{{ k.prefix }}…</code>{% if k.connection %} · {{ k.connection.get_provider_display }}{% endif %}</div></td>
+          <td>{{ k.branch.name }}</td>
+          <td><span class="ui-chipset">{% for s in k.scopes %}<span class="ui-chip ui-chip-gray">{{ s }}</span>{% endfor %}</span></td>
+          <td>{% if k.last_used_at %}{{ k.last_used_at|timesince }} ago<div class="ui-log-sub">{{ k.request_count }} call{{ k.request_count|pluralize }}{% if k.last_used_ip %} · {{ k.last_used_ip }}{% endif %}</div>{% else %}<span class="ui-log-sub">Never</span>{% endif %}</td>
+          <td>{% if k.status == 'active' %}<span class="ui-chip ui-chip-green">Active</span>{% if k.expires_at %}<div class="ui-log-sub">Expires {{ k.expires_at|date:"d M Y" }}</div>{% endif %}{% elif k.status == 'expired' %}<span class="ui-chip ui-chip-orange">Expired</span>{% else %}<span class="ui-chip ui-chip-red">Revoked</span><div class="ui-log-sub">{{ k.revoked_at|date:"d M Y" }}</div>{% endif %}</td>
+          <td class="ui-cell-actions">
+            {% if k.status == 'active' %}
+            <form method="post" style="display:inline" data-confirm="Roll “{{ k.name }}”? The current key stops working immediately and a new one is created with the same permissions.">{% csrf_token %}<input type="hidden" name="op" value="roll"><input type="hidden" name="pk" value="{{ k.pk }}"><input type="hidden" name="next" value="{{ here }}"><button class="ui-btn ui-btn-gray ui-btn-sm">Roll</button></form>
+            <form method="post" style="display:inline" data-confirm="Revoke “{{ k.name }}”? Any system using it will get 401 errors straight away.">{% csrf_token %}<input type="hidden" name="op" value="revoke"><input type="hidden" name="pk" value="{{ k.pk }}"><input type="hidden" name="next" value="{{ here }}"><button class="ui-btn ui-btn-tinted-red ui-btn-sm">Revoke</button></form>
+            {% elif k.revoked_at %}
+            <form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="op" value="delete"><input type="hidden" name="pk" value="{{ k.pk }}"><input type="hidden" name="next" value="{{ here }}"><button class="ui-btn ui-btn-gray ui-btn-sm">Remove</button></form>
+            {% endif %}
+          </td>
+        </tr>{% endfor %}</tbody>
+    </table></div>
+    {% if page.has_other_pages %}<div class="ui-pager"><span class="ui-pager-info">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_previous %}<a class="ui-pager-btn" href="?{% if request.GET.branch %}branch={{ request.GET.branch }}&{% endif %}show={{ show }}&page={{ page.previous_page_number }}">Previous</a>{% endif %}
+      {% if page.has_next %}<a class="ui-pager-btn" href="?{% if request.GET.branch %}branch={{ request.GET.branch }}&{% endif %}show={{ show }}&page={{ page.next_page_number }}">Next</a>{% endif %}</div>{% endif %}
+    {% else %}
+    <div class="ui-empty"><div class="ui-empty-icon"><i class="fa-solid fa-key"></i></div><h3>No {% if show == 'active' %}active {% endif %}API keys</h3>
+      <p>Create a key for each partner and each branch. A key can only read or change the branch it belongs to, and only with the permissions you tick.</p>
+      <button type="button" class="ui-btn ui-btn-primary" data-open-dialog="keyDialog"><i class="fa-solid fa-plus"></i><span>Create API key</span></button></div>
+    {% endif %}
+  </section>
+
+  <dialog class="ui-dialog ui-dialog-form" id="keyDialog">
+    <form method="post">{% csrf_token %}<input type="hidden" name="op" value="create">
+      <h3>Create an API key</h3>
+      <div class="ui-form-grid">
+        <div class="ui-field ui-col-2"><label>Name</label><input class="ui-input" name="name" required placeholder="e.g. Swiggy POS bridge, Website orders, STAAH"></div>
+        <div class="ui-field"><label>Branch</label><select class="ui-input" name="branch" required>{% for b in branches %}<option value="{{ b.id }}" {% if selected_branch.id == b.id %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></div>
+        <div class="ui-field"><label>Expires on (optional)</label><input class="ui-input" type="date" name="expires_on"></div>
+        {% if connections %}<div class="ui-field ui-col-2"><label>Channel (optional)</label><select class="ui-input" name="connection"><option value="">Not tied to a channel</option>{% for c in connections %}<option value="{{ c.pk }}">{{ c.label }}</option>{% endfor %}</select></div>{% endif %}
+      </div>
+      <div class="ui-field-label" style="margin:12px 0 6px;font-weight:600;font-size:13px">Permissions</div>
+      <div class="ui-check-grid">{% for s, label in scopes %}<label><input type="checkbox" class="ui-check" name="scopes" value="{{ s }}" {% if s == 'menu:read' or s == 'orders:read' %}checked{% endif %}><span>{{ label }}<code>{{ s }}</code></span></label>{% endfor %}</div>
+      <div class="ui-dialog-actions"><button class="ui-btn ui-btn-gray" type="button" data-close-dialog>Cancel</button><button class="ui-btn ui-btn-primary" type="submit">Create key</button></div>
+    </form>
+  </dialog>
+</div>
+{% include 'integrations/_scripts.html' %}

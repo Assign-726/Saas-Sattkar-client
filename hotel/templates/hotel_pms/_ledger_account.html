@@ -1,0 +1,86 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <a class="ui-back" href="{{ base_url }}finance/ledger/"><i class="fa-solid fa-chevron-left"></i> City ledger</a>
+  <div class="ui-page-header">
+    <div><h1>{{ a.name }}</h1><p>{% if a.gstin %}GSTIN {{ a.gstin }} · {% endif %}pays within {{ a.payment_terms_days }} days{% if a.contact_name %} · {{ a.contact_name }}{% endif %}{% if a.phone %} · {{ a.phone }}{% endif %}</p></div>
+    <div class="ui-actions"><a class="ui-btn ui-btn-gray" href="?export=csv"><i class="fa-solid fa-file-csv"></i><span>Statement CSV</span></a><button type="button" class="ui-btn ui-btn-gray" onclick="window.print()"><i class="fa-solid fa-print"></i><span>Print</span></button></div>
+  </div>
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi {% if balance < 0 %}kpi-green{% else %}kpi-indigo{% endif %}"><div class="ui-kpi-head"><div class="kpi-label">{% if balance < 0 %}In credit{% else %}Balance owed{% endif %}</div></div><div class="kpi-val">₹{{ balance|inr2|cut:"-" }}</div><div class="kpi-sub">{% if balance < 0 %}Paid in advance — used against the next bills{% elif available is not None %}₹{{ available|inr }} of ₹{{ a.credit_limit|inr }} credit left{% else %}No credit limit{% endif %}</div></div>
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Overdue</div></div><div class="kpi-val">₹{{ ag.overdue|inr2 }}</div></div>
+    {% for label, amt in ag.buckets %}<div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">{{ label }}</div></div><div class="kpi-val ui-kpi-val-sm">₹{{ amt|inr }}</div></div>{% endfor %}
+  </div>
+
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      {% if ag.bills %}
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Unpaid bills</h2></div>
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Bill</th><th>Guest</th><th>Billed</th><th>Due</th><th class="num">Open</th></tr></thead>
+          <tbody>{% for r in ag.bills %}<tr>
+            <td><a href="{{ base_url }}bookings/{{ r.booking.pk }}/">{{ r.booking.invoice_number|default:r.booking.booking_id }}</a></td>
+            <td>{{ r.booking.guest_name }}<br><small class="ui-log-sub">Room {{ r.booking.room.room_number }} · {{ r.booking.check_in_date|date:"d M" }}–{{ r.booking.check_out_date|date:"d M" }}</small></td>
+            <td class="nowrap">{{ r.billed_on|date:"d M Y" }}</td>
+            <td class="nowrap {% if r.overdue_days %}ui-text-red{% endif %}">{{ r.due_on|date:"d M Y" }}{% if r.overdue_days %}<br><small>{{ r.overdue_days }} day{{ r.overdue_days|pluralize }} late</small>{% endif %}</td>
+            <td class="num"><strong>₹{{ r.open|inr2 }}</strong></td></tr>{% endfor %}</tbody>
+        </table></div>
+      </section>
+      {% endif %}
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Statement</h2></div>
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Date</th><th>Details</th><th class="num">Billed</th><th class="num">Paid</th><th class="num">Balance</th></tr></thead>
+          <tbody>{% for l in lines %}<tr>
+            <td class="nowrap">{{ l.date|date:"d M Y" }}</td>
+            <td>{% if l.booking %}<a href="{{ base_url }}bookings/{{ l.booking.pk }}/">{{ l.ref }}</a>{% else %}<strong>{{ l.ref }}</strong>{% endif %}<br><small class="ui-log-sub">{{ l.text }}</small></td>
+            <td class="num">{% if l.debit %}₹{{ l.debit|inr2 }}{% endif %}</td>
+            <td class="num ui-text-green">{% if l.credit %}₹{{ l.credit|inr2 }}{% endif %}</td>
+            <td class="num"><strong>{% if l.balance < 0 %}₹{{ l.balance|inr2|cut:"-" }} cr{% else %}₹{{ l.balance|inr2 }}{% endif %}</strong></td></tr>
+          {% empty %}<tr><td colspan="5" class="ui-log-sub" style="padding:24px;text-align:center">Nothing billed yet. Bill a folio to this company from the booking page or at check-out.</td></tr>{% endfor %}</tbody>
+        </table></div>
+      </section>
+      {% if settlements %}
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Payments received</h2></div>
+        <div class="table-responsive"><table class="table"><tbody>{% for s in settlements %}<tr class="{% if s.is_void %}is-void{% endif %}">
+          <td class="nowrap">{{ s.received_on|date:"d M Y" }}</td><td>{{ s.get_method_display }}{% if s.reference %} · {{ s.reference }}{% endif %}{% if s.is_void %}<br><small class="ui-log-sub">Voided: {{ s.void_reason }}</small>{% endif %}</td>
+          <td class="num">₹{{ s.amount|inr2 }}</td>
+          <td class="num">{% if can_edit and not s.is_void %}<details class="ui-pms-void"><summary title="Void"><i class="fa-solid fa-ellipsis"></i></summary><form method="post" action="{{ base_url }}finance/ledger/{{ a.pk }}/payments/{{ s.pk }}/void/" class="ui-inline-fields">{% csrf_token %}<input class="ui-input" name="reason" placeholder="Reason" required><button class="ui-btn ui-btn-tinted-red ui-btn-sm" type="submit">Void</button></form></details>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+      </section>
+      {% endif %}
+    </div>
+    <div class="ui-g360-side">
+      {% if can_edit %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Record a payment</h2>
+        <form method="post" action="{{ base_url }}finance/ledger/{{ a.pk }}/payments/add/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-inline-fields">
+            <div class="ui-field"><label for="lpAmt">Amount ₹</label><input id="lpAmt" class="ui-input" type="number" min="0.01" step="0.01" name="amount" value="{% if balance > 0 %}{{ balance|stringformat:'s' }}{% endif %}" required></div>
+            <div class="ui-field"><label for="lpOn">Received</label><input id="lpOn" class="ui-input" type="date" name="received_on" value="{{ today|date:'Y-m-d' }}"></div>
+          </div>
+          <div class="ui-field"><label for="lpMethod">Method</label><select id="lpMethod" class="ui-input" name="method">{% for k, l in methods %}<option value="{{ k }}" {% if k == 'BANK' %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+          <div class="ui-field"><label for="lpRef">UTR / cheque no.</label><input id="lpRef" class="ui-input" name="reference" maxlength="100"></div>
+          <div class="ui-field"><label for="lpNote">Note</label><input id="lpNote" class="ui-input" name="note" maxlength="200"></div>
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-indian-rupee-sign"></i><span>Record payment</span></button>
+          <p class="ui-log-sub" style="margin:0">Payments clear the oldest bills first.</p>
+        </form>
+      </section>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Account details</h2>
+        <form method="post" action="{{ base_url }}finance/ledger/save/" class="ui-stack-form">{% csrf_token %}<input type="hidden" name="pk" value="{{ a.pk }}">
+          <div class="ui-field"><label for="aeName">Company name</label><input id="aeName" class="ui-input" name="name" value="{{ a.name }}" required></div>
+          <div class="ui-field"><label for="aeGst">GSTIN</label><input id="aeGst" class="ui-input" name="gstin" value="{{ a.gstin }}" style="text-transform:uppercase"></div>
+          <div class="ui-field"><label for="aeContact">Contact</label><input id="aeContact" class="ui-input" name="contact_name" value="{{ a.contact_name }}"></div>
+          <div class="ui-inline-fields"><div class="ui-field"><label for="aePhone">Phone</label><input id="aePhone" class="ui-input" name="phone" value="{{ a.phone }}"></div><div class="ui-field"><label for="aeEmail">Email</label><input id="aeEmail" class="ui-input" type="email" name="email" value="{{ a.email }}"></div></div>
+          <div class="ui-inline-fields"><div class="ui-field"><label for="aeLimit">Credit limit ₹</label><input id="aeLimit" class="ui-input" type="number" min="0" name="credit_limit" value="{{ a.credit_limit|default_if_none:''|floatformat:'0' }}" placeholder="No limit"></div><div class="ui-field"><label for="aeTerms">Terms (days)</label><input id="aeTerms" class="ui-input" type="number" min="0" max="365" name="payment_terms_days" value="{{ a.payment_terms_days }}"></div></div>
+          <div class="ui-field"><label for="aeAddr">Billing address</label><textarea id="aeAddr" class="ui-input" name="address" rows="2">{{ a.address }}</textarea></div>
+          <div class="ui-field"><label for="aeActive">Status</label><select id="aeActive" class="ui-input" name="is_active"><option value="1" {% if a.is_active %}selected{% endif %}>Active</option><option value="0" {% if not a.is_active %}selected{% endif %}>Inactive — no new billing</option></select></div>
+          <button class="ui-btn ui-btn-gray" type="submit"><span>Save details</span></button>
+        </form>
+      </section>
+      {% endif %}
+    </div>
+  </div>
+</div>

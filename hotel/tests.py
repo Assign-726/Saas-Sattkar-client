@@ -1,3 +1,4 @@
+from django.urls import reverse
 import datetime
 from decimal import Decimal
 from django.utils import timezone
@@ -187,9 +188,12 @@ class HotelModuleTests(TestCase):
         self.assertEqual(booking.booking_status, RoomBooking.BookingStatus.CHECKED_IN)
         self.assertEqual(self.room101.status, Room.RoomStatus.OCCUPIED)
 
-        # 2. Trigger Check-Out
-        resp_co = self.client.patch(f'/api/hotel/bookings/{booking.id}/check-out/')
+        # 2. Check-Out is refused while the bill is unpaid, unless explicitly confirmed
+        blocked = self.client.patch(f'/api/hotel/bookings/{booking.id}/check-out/')
+        self.assertEqual(blocked.status_code, status.HTTP_400_BAD_REQUEST)
+        resp_co = self.client.patch(f'/api/hotel/bookings/{booking.id}/check-out/', {"allow_balance": True}, format='json')
         self.assertEqual(resp_co.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp_co.data['invoice_number'])
         booking.refresh_from_db()
         self.room101.refresh_from_db()
         self.assertEqual(booking.booking_status, RoomBooking.BookingStatus.CHECKED_OUT)
@@ -336,7 +340,7 @@ class HotelModuleTests(TestCase):
         # 3. Rooms & Housekeeping
         resp_rooms = self.client.get(f'/hotel-admin/{self.restaurant.slug}/rooms/')
         self.assertEqual(resp_rooms.status_code, 200)
-        self.assertContains(resp_rooms, "Physical Rooms &amp; Housekeeping")
+        self.assertContains(resp_rooms, "Rooms &amp; Housekeeping Board")
         self.assertContains(resp_rooms, "101")
 
         # 4. Categories & Tariffs
@@ -353,7 +357,7 @@ class HotelModuleTests(TestCase):
         self.assertEqual(resp_settings.status_code, 200)
         self.assertContains(resp_settings, "Hotel PMS Configuration")
         self.assertContains(resp_settings, "Online Payment Gateway")
-        self.assertContains(resp_bk, "Guest Bookings")
+        self.assertContains(resp_bk, "Guest Folios &amp; Reservations")
 
     def test_restaurant_admin_blocked_from_hotel_admin(self):
         """
@@ -457,18 +461,19 @@ class HotelModuleTests(TestCase):
         self.assertFalse(resp_rooms.context['can_manage_physical_rooms'])
 
         # Sidebar content checks
-        self.assertContains(resp_rooms, "Housekeeping Operations")
+        self.assertContains(resp_rooms, '<div class="sb-section">Housekeeping</div>', html=False)
         self.assertContains(resp_rooms, "Rooms &amp; Housekeeping")
-        self.assertContains(resp_rooms, "Housekeeping Desk")
 
-        # Hidden elements checks
-        self.assertNotContains(resp_rooms, "Front Desk Operations")
-        self.assertNotContains(resp_rooms, "Front Desk Overview")
-        self.assertNotContains(resp_rooms, "Tape Chart Timeline")
-        self.assertNotContains(resp_rooms, "Guest Folios &amp; Bookings")
-        self.assertNotContains(resp_rooms, "Room Categories &amp; Tariffs")
+        # Hidden elements checks: housekeeping sees only the room board
+        self.assertNotContains(resp_rooms, '<div class="sb-section">Front Desk</div>', html=False)
+        self.assertNotContains(resp_rooms, "<span>Overview</span>", html=False)
+        self.assertNotContains(resp_rooms, "<span>Tape Chart</span>", html=False)
+        self.assertNotContains(resp_rooms, "<span>Guest Folios</span>", html=False)
+        self.assertNotContains(resp_rooms, "Categories &amp; Tariffs")
         self.assertNotContains(resp_rooms, "Hotel Settings")
-        self.assertNotContains(resp_rooms, "Staff &amp; Roles")
+        self.assertNotContains(resp_rooms, "PMS Logins &amp; Roles")
+        for hidden in ("Guests &amp; Loyalty", "Profit &amp; Loss", "Expenses", "Integrations", "Roles &amp; Permissions"):
+            self.assertNotContains(resp_rooms, f"<span>{hidden}</span>", html=False)
         self.assertNotContains(resp_rooms, "Add Physical Room")
         self.assertNotContains(resp_rooms, "New Reservation")
 
@@ -493,6 +498,24 @@ class HotelModuleTests(TestCase):
         self.assertEqual(resp_status.status_code, 302)
         self.room101.refresh_from_db()
         self.assertEqual(self.room101.status, Room.RoomStatus.CLEANING)
+
+    def test_new_reservation_modal_on_every_page(self):
+        """The header's New Reservation button must open a modal on every hotel page, not only Overview."""
+        from hotel import urls_admin
+        self.hotel_admin_user.is_staff = True
+        self.hotel_admin_user.save()
+        self.client.force_login(self.hotel_admin_user)
+        checked = 0
+        for pattern in urls_admin.urlpatterns:
+            if not pattern.name or set(pattern.pattern.regex.groupindex) - {'restaurant_slug'}:
+                continue
+            resp = self.client.get(reverse(f'hotel_admin:{pattern.name}', kwargs={'restaurant_slug': self.restaurant.slug}))
+            if resp.status_code != 200 or b'btn-new-res' not in resp.content:
+                continue
+            checked += 1
+            self.assertEqual(resp.content.count(b'id="newBookingModal"'), 1, pattern.name)
+            self.assertIn(b'Room #101', resp.content, pattern.name)
+        self.assertGreater(checked, 10)
 
     def test_front_desk_sidebar_and_feature_isolation(self):
         """
@@ -520,16 +543,19 @@ class HotelModuleTests(TestCase):
         self.assertTrue(resp_dash.context['can_create_reservation'])
         self.assertFalse(resp_dash.context['can_manage_physical_rooms'])
 
-        self.assertContains(resp_dash, "Front Desk Operations")
-        self.assertContains(resp_dash, "Front Desk Overview")
-        self.assertContains(resp_dash, "Tape Chart Timeline")
-        self.assertContains(resp_dash, "Guest Folios &amp; Bookings")
+        self.assertContains(resp_dash, '<div class="sb-section">Front Desk</div>', html=False)
+        self.assertContains(resp_dash, "<span>Overview</span>", html=False)
+        self.assertContains(resp_dash, "<span>Tape Chart</span>", html=False)
+        self.assertContains(resp_dash, "<span>Guest Folios</span>", html=False)
         self.assertContains(resp_dash, "Rooms &amp; Housekeeping")
         self.assertContains(resp_dash, "New Reservation")
+        self.assertContains(resp_dash, "<span>Guests &amp; Loyalty</span>", html=False)  # front desk works with guest profiles
 
-        self.assertNotContains(resp_dash, "Room Categories &amp; Tariffs")
+        self.assertNotContains(resp_dash, "Categories &amp; Tariffs")
         self.assertNotContains(resp_dash, "Hotel Settings")
-        self.assertNotContains(resp_dash, "Staff &amp; Roles")
+        self.assertNotContains(resp_dash, "PMS Logins &amp; Roles")
+        for hidden in ("Profit &amp; Loss", "Expenses", "Integrations", "Roles &amp; Permissions", "Campaigns"):
+            self.assertNotContains(resp_dash, f"<span>{hidden}</span>", html=False)
 
 
 class TravelDeskAndCabManagementTests(TestCase):

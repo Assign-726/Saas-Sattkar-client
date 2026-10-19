@@ -1,0 +1,140 @@
+{% load restaurant_admin_extras %}
+<div class="ui-agg" style="--brand: {{ p.color }}; --brand-rgb: {{ p.rgb }};">
+  {% include 'delivery/_head.html' %}
+
+  {% if attn.unmapped or attn.overdue or attn.failed_actions or not conn.is_active or conn.health == 'error' %}
+  <div class="ui-alerts">
+    {% if not conn.is_active %}<div class="ui-alert ui-alert-warning"><div class="ui-alert-icon"><i class="fa-solid fa-circle-pause"></i></div><div class="ui-alert-body"><h3>This outlet is paused</h3><p>New {{ p.label }} orders are refused until you switch it back on in Settings.</p></div>{% if is_admin %}<a class="ui-btn ui-btn-gray ui-btn-sm" href="{{ u.settings }}">Settings</a>{% endif %}</div>{% endif %}
+    {% if attn.overdue %}<div class="ui-alert ui-alert-critical"><div class="ui-alert-icon"><i class="fa-solid fa-stopwatch"></i></div><div class="ui-alert-body"><h3>{{ attn.overdue }} order{{ attn.overdue|pluralize }} past the acceptance time</h3><p>{{ p.label }} may auto-reject {{ attn.overdue|pluralize:"it,them" }}. Accept or reject now.</p></div></div>{% endif %}
+    {% if attn.unmapped %}<div class="ui-alert ui-alert-critical"><div class="ui-alert-icon"><i class="fa-solid fa-link-slash"></i></div><div class="ui-alert-body"><h3>{{ attn.unmapped|length }} order{{ attn.unmapped|length|pluralize }} waiting for menu mapping</h3><p>{{ p.label }} sent items we could not match: {% for e in attn.unmapped|slice:":2" %}{% for u in e.unmapped|slice:":2" %}“{{ u.name }}”{% if not forloop.last %}, {% endif %}{% endfor %}{% if not forloop.last %}; {% endif %}{% endfor %}.</p></div>{% if is_admin %}<a class="ui-btn ui-btn-primary ui-btn-sm" href="{{ u.logs }}?state=needs_mapping">Map items</a>{% endif %}</div>{% endif %}
+    {% if attn.failed_actions %}<div class="ui-alert ui-alert-warning"><div class="ui-alert-icon"><i class="fa-solid fa-rotate"></i></div><div class="ui-alert-body"><h3>{{ attn.failed_actions|length }} update{{ attn.failed_actions|length|pluralize }} did not reach {{ p.label }}</h3><p>{% with a=attn.failed_actions.0 %}Latest: {{ a.label }} — {{ a.error|default:a.get_state_display }}{% endwith %}</p></div>{% if is_admin %}<a class="ui-btn ui-btn-gray ui-btn-sm" href="{{ u.logs }}?kind=actions">Review</a>{% endif %}</div>{% endif %}
+    {% if conn.health == 'error' and not attn.failed_actions %}<div class="ui-alert ui-alert-warning"><div class="ui-alert-icon"><i class="fa-solid fa-triangle-exclamation"></i></div><div class="ui-alert-body"><h3>Connection problem</h3><p>{{ conn.last_error }} <span class="ui-log-sub">· {{ conn.last_error_at|timesince }} ago</span></p></div>{% if is_admin %}<a class="ui-btn ui-btn-gray ui-btn-sm" href="{{ u.logs }}">Logs</a>{% endif %}</div>{% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Live board -->
+  <section class="ui-card ui-pad ui-agg-live">
+    <div class="ui-dash-card-head">
+      <div><h2 class="ui-card-title"><span class="ui-live-dot"></span> Live orders</h2><p class="ui-card-subtitle">Refreshes every 10 seconds · a chime plays for each new order</p></div>
+      <div class="ui-dash-chips">
+        {% if conn.auto_accept %}<span class="ui-chip ui-chip-green"><i class="fa-solid fa-bolt"></i> Auto-accept on · {{ conn.default_prep_minutes }} min</span>{% endif %}
+        {% if conn.environment == 'sandbox' and is_admin %}
+        <form method="post" action="{{ u.simulate }}" class="ui-agg-sim">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button class="ui-btn ui-btn-gray ui-btn-sm" name="kind" value="order" title="Sandbox: send a signed test order through the real webhook"><i class="fa-solid fa-flask"></i> Test order</button>
+          <button class="ui-btn ui-btn-gray ui-btn-sm" name="kind" value="rider" title="Sandbox: assign a rider to the latest accepted order"><i class="fa-solid fa-person-biking"></i> Rider</button>
+          <button class="ui-btn ui-btn-gray ui-btn-sm" name="kind" value="delivered" title="Sandbox: mark the latest picked-up order delivered"><i class="fa-solid fa-house-circle-check"></i> Delivered</button>
+          <button class="ui-btn ui-btn-gray ui-btn-sm" name="kind" value="cancel" title="Sandbox: customer cancels the latest open order"><i class="fa-solid fa-ban"></i> Cancel</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    <div id="aggBoard" data-live="{{ u.live }}">{% include 'delivery/_board.html' %}</div>
+  </section>
+
+  <!-- Period -->
+  <form class="ui-dash-filter" method="get">
+    <nav class="ui-dash-periods" aria-label="Period">
+      {% for k, l in periods %}<a href="?period={{ k }}" class="{% if period == k %}is-on{% endif %}">{{ l }}</a>{% endfor %}
+    </nav>
+    <span class="ui-log-sub">{{ period_label }}{% if start != end %} · {{ start|date:"j M" }} – {{ end|date:"j M" }}{% endif %}</span>
+  </form>
+
+  {% with c=st.cur d=st.deltas %}
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-brand"><div class="ui-kpi-head"><div class="kpi-label">Orders</div><div class="kpi-icon"><i class="fa-solid fa-receipt"></i></div></div>
+      <div class="kpi-val">{{ c.orders }}</div>
+      <div class="kpi-sub">{% if d.orders is not None %}<span class="ui-delta {% if d.orders >= 0 %}is-up{% else %}is-down{% endif %}">{% if d.orders >= 0 %}▲{% else %}▼{% endif %} {{ d.orders|floatformat:0|cut:"-" }}%</span> · {% endif %}avg ₹{{ c.aov|inr }}</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Customer paid</div><div class="kpi-icon"><i class="fa-solid fa-indian-rupee-sign"></i></div></div>
+      <div class="kpi-val">₹{{ c.gmv|inr }}</div>
+      <div class="kpi-sub">{% if d.gmv is not None %}<span class="ui-delta {% if d.gmv >= 0 %}is-up{% else %}is-down{% endif %}">{% if d.gmv >= 0 %}▲{% else %}▼{% endif %} {{ d.gmv|floatformat:0|cut:"-" }}%</span> · {% endif %}food ₹{{ c.items|inr }}</div></div>
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Commission</div><div class="kpi-icon"><i class="fa-solid fa-percent"></i></div></div>
+      <div class="kpi-val">₹{{ c.commission|inr }}</div>
+      <div class="kpi-sub">{{ c.commission_rate }}% of order value{% if c.merchant_discount %} · ₹{{ c.merchant_discount|inr }} your discounts{% endif %}</div></div>
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Expected payout</div><div class="kpi-icon"><i class="fa-solid fa-building-columns"></i></div></div>
+      <div class="kpi-val">₹{{ c.payout|inr }}</div>
+      <div class="kpi-sub">{% if c.settled %}₹{{ c.settled|inr }} already settled{% else %}Before TDS/TCS · not settled yet{% endif %}</div></div>
+  </div>
+  <div class="ui-agg-ops">
+    <div><span>Average time to accept</span><strong>{% if c.accept_secs is not None %}{% if c.accept_secs < 60 %}{{ c.accept_secs }}s{% else %}{% widthratio c.accept_secs 60 1 %} min{% endif %}{% else %}—{% endif %}</strong></div>
+    <div><span>Average prep time</span><strong>{% if c.prep_mins is not None %}{{ c.prep_mins }} min{% else %}—{% endif %}</strong></div>
+    <div class="{% if c.late_rate >= 15 %}is-warn{% endif %}"><span>Ready later than promised</span><strong>{{ c.late }} <small>({{ c.late_rate }}%)</small></strong></div>
+    <div class="{% if c.reject_rate >= 5 %}is-warn{% endif %}"><span>Rejected by you</span><strong>{{ c.rejected }} <small>({{ c.reject_rate }}%)</small></strong></div>
+    <div><span>Cancelled</span><strong>{{ c.cancelled }} <small>({{ c.cancel_rate }}%)</small></strong></div>
+  </div>
+  {% endwith %}
+
+  <div class="ui-dash-row r-2-1">
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">{{ p.label }} orders {% if start == end %}by hour{% else %}by day{% endif %}</h2>
+      <div class="ui-dash-chart" style="height:250px"><canvas id="aggTrend" aria-label="{{ p.label }} orders over time"></canvas></div>
+    </section>
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">Best sellers on {{ p.label }}</h2>
+      {% if st.top %}<ol class="ui-dash-ol">{% for t in st.top %}<li><span>{{ t.menu_item__name }}</span><strong>{{ t.qty }}</strong></li>{% endfor %}</ol>
+      {% else %}<p class="ui-log-sub">No {{ p.label }} orders in this period.</p>{% endif %}
+      {% if st.reasons %}
+      <h3 class="ui-dash-h3">Why orders were lost</h3>
+      <ul class="ui-dash-mini">{% for r in st.reasons %}<li><span>{{ r.cancel_reason }} <small class="ui-log-sub">· {{ r.cancelled_by|default:"platform" }}</small></span><strong>{{ r.n }}</strong></li>{% endfor %}</ul>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{{ chart|json_script:"agg-data" }}
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById('agg-data').textContent);
+  var brand = getComputedStyle(document.querySelector('.ui-agg')).getPropertyValue('--brand').trim() || '#E23744';
+  function draw() {
+    var el = document.getElementById('aggTrend');
+    if (!el || !window.Chart || el.dataset.drawn) return;
+    el.dataset.drawn = '1';
+    var label = getComputedStyle(document.documentElement).getPropertyValue('--ui-label-2').trim();
+    var grid = getComputedStyle(document.documentElement).getPropertyValue('--ui-separator').trim();
+    new Chart(el, { data: { labels: data.labels, datasets: [
+        { type: 'bar', label: 'Orders', data: data.orders, backgroundColor: brand, borderRadius: 5, yAxisID: 'y' },
+        { type: 'line', label: 'Customer paid (₹)', data: data.gmv, borderColor: label, borderWidth: 1.5, pointRadius: 0, tension: .35, yAxisID: 'y1' }] },
+      options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, color: label } } },
+        scales: { x: { grid: { display: false }, ticks: { color: label, maxTicksLimit: 12, maxRotation: 0 } },
+                  y: { beginAtZero: true, grid: { color: grid }, ticks: { color: label, precision: 0 } },
+                  y1: { beginAtZero: true, position: 'right', grid: { display: false }, ticks: { color: label, callback: function (v) { return '₹' + (v >= 10000 ? Math.round(v / 1000) + 'k' : v >= 1000 ? +(v / 1000).toFixed(1) + 'k' : v); } } } } } });
+  }
+  window.addEventListener('load', function () {
+    if (window.Chart) return draw();
+    var sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js'; sc.onload = draw; document.head.appendChild(sc);
+  });
+
+  // Live board: refresh and count down acceptance timers
+  var box = document.getElementById('aggBoard');
+  var newest = null, audio = null;
+  function chime() {
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      var now = audio.currentTime;
+      [[988, 0], [1319, .14], [988, .32], [1319, .46]].forEach(function (n) {
+        var o = audio.createOscillator(), g = audio.createGain();
+        o.frequency.value = n[0]; g.gain.setValueAtTime(0.0001, now + n[1]);
+        g.gain.exponentialRampToValueAtTime(0.25, now + n[1] + .02); g.gain.exponentialRampToValueAtTime(0.0001, now + n[1] + .25);
+        o.connect(g).connect(audio.destination); o.start(now + n[1]); o.stop(now + n[1] + .3);
+      });
+    } catch (e) {}
+  }
+  function tick() {
+    box.querySelectorAll('[data-deadline]').forEach(function (el) {
+      var s = Math.max(0, Math.round((new Date(el.dataset.deadline) - new Date()) / 1000));
+      el.textContent = s >= 60 ? Math.floor(s / 60) + 'm ' + (s % 60) + 's' : s + 's';
+      el.classList.toggle('is-urgent', s < 60);
+    });
+  }
+  function refresh() {
+    if (document.hidden || box.querySelector('details[open]') || box.contains(document.activeElement) && document.activeElement.tagName === 'SELECT') return;
+    fetch(box.dataset.live, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      if (!d) return;
+      newest = d.newest;  // the sound and toast come from the global notification centre
+      box.innerHTML = d.html; tick();
+    }).catch(function () {});
+  }
+  document.addEventListener('click', function () { try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }, { once: true });
+  refresh(); setInterval(refresh, 10000); setInterval(tick, 1000); tick();
+})();
+</script>

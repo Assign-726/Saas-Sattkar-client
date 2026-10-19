@@ -1,0 +1,75 @@
+<div class="ui-logs ui-campaigns"><span hidden>{% csrf_token %}</span>
+  <a class="ui-back" href="{{ base_url }}campaigns/"><i class="fa-solid fa-chevron-left"></i> Campaigns</a>
+  <div class="ui-page-header">
+    <div><h1>{{ c.name }}</h1><p>{{ c.get_channel_display }} · {{ segment_label }}{% if c.automation %} · automatic{% endif %} · created {{ c.created_at|date:"d M Y" }}</p></div>
+    <div class="ui-actions">
+      <a class="ui-btn ui-btn-gray" href="?export=csv"><i class="fa-solid fa-file-csv"></i><span>Export CSV</span></a>
+      {% if c.channel == 'email' and pending %}<form method="post" style="display:inline" data-confirm="Send {{ pending }} email{{ pending|pluralize }} now?">{% csrf_token %}<input type="hidden" name="op" value="send_email"><button class="ui-btn ui-btn-primary"><i class="fa-solid fa-paper-plane"></i><span>Send {{ pending }} email{{ pending|pluralize }}</span></button></form>{% endif %}
+      {% if c.channel != 'email' and pending %}<form method="post" style="display:inline" data-confirm="Mark all {{ pending }} as sent? Do this after sending them from your bulk tool.">{% csrf_token %}<input type="hidden" name="op" value="mark_sent"><input type="hidden" name="all" value="1"><button class="ui-btn ui-btn-gray">Mark all sent</button></form>{% endif %}
+    </div>
+  </div>
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Audience</div><div class="kpi-icon"><i class="fa-solid fa-users"></i></div></div><div class="kpi-val">{{ c.audience_count }}</div><div class="kpi-sub">Opted-in guests</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Sent</div><div class="kpi-icon"><i class="fa-solid fa-check"></i></div></div><div class="kpi-val" id="sentCount">{{ c.sent_count }}</div><div class="kpi-sub">{% if c.sent_at %}Finished {{ c.sent_at|date:"d M, h:i A" }}{% else %}So far{% endif %}</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Still to send</div><div class="kpi-icon"><i class="fa-solid fa-hourglass-half"></i></div></div><div class="kpi-val" id="pendingCount">{{ pending }}</div><div class="kpi-sub">{% if c.channel == 'email' %}Up to 300 per click{% else %}Tap a row to open {{ c.get_channel_display }}{% endif %}</div></div>
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Failed</div><div class="kpi-icon"><i class="fa-solid fa-triangle-exclamation"></i></div></div><div class="kpi-val">{{ c.failed_count }}</div><div class="kpi-sub">Bad address or mail error</div></div>
+  </div>
+
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar">
+          <h2 class="ui-card-title" style="margin:0">Recipients</h2>
+          <nav class="ui-tabs" style="margin:0;padding:3px"><a href="?" class="{% if not show %}is-active{% endif %}">All</a><a href="?show=PENDING" class="{% if show == 'PENDING' %}is-active{% endif %}">To send</a><a href="?show=SENT" class="{% if show == 'SENT' %}is-active{% endif %}">Sent</a><a href="?show=FAILED" class="{% if show == 'FAILED' %}is-active{% endif %}">Failed</a></nav>
+        </div>
+        {% if page.object_list %}
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Guest</th><th>{% if c.channel == 'email' %}Email{% else %}Phone{% endif %}</th><th>Status</th><th></th></tr></thead>
+          <tbody>{% for r in page.object_list %}
+            <tr data-rcpt="{{ r.pk }}">
+              <td class="ui-cell-primary"><a href="{{ base_url }}guests/{{ r.guest_id }}/"><strong>{{ r.guest.name|default:"Guest" }}</strong></a></td>
+              <td>{{ r.address }}</td>
+              <td class="rc-status"><span class="ui-chip ui-chip-{% if r.status == 'SENT' %}green{% elif r.status == 'FAILED' %}red{% else %}gray{% endif %}">{{ r.get_status_display }}</span>{% if r.error %}<div class="ui-log-sub">{{ r.error|truncatechars:60 }}</div>{% endif %}</td>
+              <td class="ui-cell-actions">{% if r.link and r.status == 'PENDING' %}<a class="ui-btn ui-btn-primary ui-btn-sm" href="{{ r.link }}" target="_blank" rel="noopener" data-send="{{ r.pk }}"><i class="fa-{% if c.channel == 'whatsapp' %}brands fa-whatsapp{% else %}solid fa-comment-sms{% endif %}"></i><span>Send</span></a>{% endif %}</td>
+            </tr>{% endfor %}</tbody>
+        </table></div>
+        {% if page.has_other_pages %}<div class="ui-pager"><span class="ui-pager-info">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+          {% if page.has_previous %}<a class="ui-pager-btn" href="?show={{ show }}&page={{ page.previous_page_number }}">Previous</a>{% endif %}
+          {% if page.has_next %}<a class="ui-pager-btn" href="?show={{ show }}&page={{ page.next_page_number }}">Next</a>{% endif %}</div>{% endif %}
+        {% else %}
+        <div class="ui-empty"><div class="ui-empty-icon"><i class="fa-solid fa-user-group"></i></div><h3>No recipients</h3><p>No opted-in guest in this segment has a {% if c.channel == 'email' %}email address{% else %}phone number{% endif %}.</p></div>
+        {% endif %}
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Message</h2>
+        {% if c.subject %}<p class="ui-log-sub"><strong>Subject:</strong> {{ c.subject }}</p>{% endif %}
+        <div class="ui-preview-msg">{{ c.message }}</div>
+        {% if c.offer_code %}<p style="margin-top:10px">Offer code <code class="ui-code">{{ c.offer_code }}</code></p>{% endif %}
+      </section>
+      {% if c.status == 'DRAFT' %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Draft</h2>
+        <form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="op" value="rebuild"><button class="ui-btn ui-btn-gray"><i class="fa-solid fa-rotate"></i><span>Refresh audience</span></button></form>
+        <form method="post" style="display:inline" data-confirm="Delete this draft?">{% csrf_token %}<input type="hidden" name="op" value="delete"><button class="ui-btn ui-btn-tinted-red">Delete</button></form>
+      </section>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% include 'integrations/_scripts.html' %}
+<script>
+document.querySelectorAll('[data-send]').forEach(function (a) {
+  a.addEventListener('click', function () {
+    var body = new FormData(); body.append('op', 'mark_sent'); body.append('one', a.dataset.send);
+    body.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+    fetch(location.pathname, { method: 'POST', body: body, credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) { return r.json(); }).then(function (d) {
+        var row = a.closest('tr'); row.querySelector('.rc-status').innerHTML = '<span class="ui-chip ui-chip-green">Sent</span>'; a.remove();
+        document.getElementById('sentCount').textContent = d.sent; document.getElementById('pendingCount').textContent = d.pending;
+      });
+  });
+});
+</script>

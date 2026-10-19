@@ -1,9 +1,15 @@
 from django.urls import path
 from super_admin import views
+from super_admin import views_logs
+from guests import views as guest_views
+from integrations import views as integration_views
 
 app_name = 'super_admin'
 
 urlpatterns = [
+    path('brief/', guest_views.super_morning_brief, name='morning_brief'),
+    path('activity-logs/', views_logs.super_activity_logs, name='activity_logs'),
+    path('integrations/', integration_views.super_integrations, name='integrations'),
     path('', views.dashboard, name='dashboard'),
     path('analytics/', views.super_analytics, name='analytics'),
     path('analytics/export/', views.super_analytics_export_csv, name='analytics_export_csv'),

@@ -1,0 +1,49 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header"><div><h1>Cashier</h1><p>Front-desk cash drawer: opening float, takings, paid-outs and the end-of-shift count.</p></div></div>
+  {% if shift %}
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Cash expected in drawer</div></div><div class="kpi-val">₹{{ takings.expected|inr2 }}</div><div class="kpi-sub">Float + cash in − paid-outs</div></div>
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Opening float</div></div><div class="kpi-val">₹{{ shift.opening_float|inr }}</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Paid-outs</div></div><div class="kpi-val">₹{{ takings.paid_outs|inr }}</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Shift open since</div></div><div class="kpi-val ui-kpi-val-sm">{{ shift.opened_at|date:"d M, H:i" }}</div><div class="kpi-sub">{% firstof shift.cashier.get_full_name shift.cashier.username "—" %}</div></div>
+  </div>
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-pad"><h2 class="ui-card-title">Collections this shift</h2>
+        {% for label, amt in by_method %}<div class="ui-ops-row"><span>{{ label }}</span><strong>₹{{ amt|inr2 }}</strong></div>{% empty %}<p class="ui-log-sub" style="margin:0">Nothing collected yet.</p>{% endfor %}
+        <p class="ui-log-sub" style="margin:10px 0 0">Folio payments and refunds, banquet payments and spa walk-ins taken at this branch since the shift opened.</p></section>
+      <section class="ui-card ui-list-card"><div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Paid-outs</h2></div>
+        <div class="table-responsive"><table class="table"><tbody>{% for p in paid_outs %}<tr><td class="nowrap">{{ p.created_at|date:"H:i" }}</td><td>{{ p.purpose }}{% if p.paid_to %}<br><small class="ui-log-sub">{{ p.paid_to }}</small>{% endif %}</td><td class="num">₹{{ p.amount|inr2 }}</td></tr>
+          {% empty %}<tr><td class="ui-log-sub" style="padding:18px;text-align:center">No paid-outs.</td></tr>{% endfor %}</tbody></table></div>
+        {% if can_edit %}<form method="post" action="{{ base_url }}finance/cashier/paid-outs/add/" class="ui-ops-inline is-wide" style="padding:0 16px 16px">{% csrf_token %}
+          <input class="ui-input" name="purpose" placeholder="Purpose (courier, flowers…)" aria-label="Purpose" required><input class="ui-input" name="paid_to" placeholder="Paid to" aria-label="Paid to">
+          <input class="ui-input" type="number" min="1" step="0.01" name="amount" placeholder="₹" aria-label="Amount" required><button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">Pay out</button></form>{% endif %}
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      {% if can_edit %}<section class="ui-card ui-pad"><h2 class="ui-card-title">Close shift</h2>
+        <form method="post" action="{{ base_url }}finance/cashier/close/" class="ui-stack-form" id="csForm" onsubmit="return confirm('Close this shift with the counted amount?')">{% csrf_token %}
+          <div class="ui-ops-denoms">{% for d in denominations %}<label for="d{{ d }}">₹{{ d }} ×</label><input id="d{{ d }}" class="ui-input" type="number" min="0" name="d_{{ d }}" value="0" data-d="{{ d }}"><span data-out="{{ d }}">₹0</span>{% endfor %}</div>
+          <div class="ui-ops-row"><span>Counted</span><strong id="csC">₹0</strong></div>
+          <div class="ui-ops-row"><span>Variance</span><strong id="csV" data-expected="{{ takings.expected|stringformat:'s' }}">—</strong></div>
+          <div class="ui-field"><label for="csH">Handed over to</label><input id="csH" class="ui-input" name="handed_over_to" maxlength="120"></div>
+          <div class="ui-field"><label for="csN">Note</label><input id="csN" class="ui-input" name="notes" maxlength="255" placeholder="Explain any variance"></div>
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-lock"></i><span>Close shift</span></button></form>
+        <script>(function(){var f=document.getElementById('csForm');if(!f)return;function c(){var t=0;f.querySelectorAll('[data-d]').forEach(function(i){var v=(+i.value||0)*(+i.dataset.d);t+=v;f.querySelector('[data-out="'+i.dataset.d+'"]').textContent='₹'+v.toLocaleString('en-IN')});document.getElementById('csC').textContent='₹'+t.toLocaleString('en-IN');var e=+document.getElementById('csV').dataset.expected,v=t-e,el=document.getElementById('csV');el.textContent=(v<0?'−':'')+'₹'+Math.abs(v).toLocaleString('en-IN',{maximumFractionDigits:2});el.className=v<0?'ui-text-red':v>0?'ui-text-green':''}f.addEventListener('input',c)})();</script>
+      </section>{% endif %}
+    </div>
+  </div>
+  {% else %}
+  <section class="ui-card ui-pad" style="max-width:520px">
+    <h2 class="ui-card-title">No shift is open</h2>
+    <p class="ui-log-sub">Open a shift with the cash in the drawer to start tracking takings.</p>
+    {% if can_edit %}<form method="post" action="{{ base_url }}finance/cashier/open/" class="ui-ops-inline">{% csrf_token %}<input class="ui-input" type="number" min="0" step="1" name="opening_float" value="5000" aria-label="Opening float"><button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-cash-register"></i><span>Open shift</span></button></form>{% endif %}
+  </section>
+  {% endif %}
+  <section class="ui-card ui-list-card"><div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Shift history</h2></div>
+    <div class="table-responsive"><table class="table"><thead><tr><th>Cashier</th><th>Shift</th><th class="num">Float</th><th class="num">Expected</th><th class="num">Counted</th><th class="num">Variance</th><th>Handed to</th></tr></thead>
+      <tbody>{% for s in history %}<tr><td>{% firstof s.cashier.get_full_name s.cashier.username "—" %}</td><td class="nowrap">{{ s.opened_at|date:"d M H:i" }} – {{ s.closed_at|date:"H:i" }}</td><td class="num">₹{{ s.opening_float|inr }}</td><td class="num">₹{{ s.expected_cash|inr2 }}</td><td class="num">₹{{ s.counted_cash|inr2 }}</td>
+        <td class="num {% if s.variance < 0 %}ui-text-red{% elif s.variance > 0 %}ui-text-green{% endif %}">{% if s.variance %}{% if s.variance < 0 %}−₹{{ s.variance|inr2|cut:"-" }}{% else %}₹{{ s.variance|inr2 }}{% endif %}{% else %}—{% endif %}</td><td>{{ s.handed_over_to|default:"—" }}{% if s.notes %}<br><small class="ui-log-sub">{{ s.notes }}</small>{% endif %}</td></tr>
+      {% empty %}<tr><td colspan="7" class="ui-log-sub" style="padding:18px;text-align:center">No closed shifts yet.</td></tr>{% endfor %}</tbody></table></div></section>
+</div>

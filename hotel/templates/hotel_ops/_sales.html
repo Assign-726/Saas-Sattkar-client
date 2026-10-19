@@ -1,0 +1,55 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header"><div><h1>Sales &amp; CRM</h1><p>Corporate, MICE, wedding and travel-agent deals, with follow-ups.</p></div></div>
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Open pipeline</div></div><div class="kpi-val">₹{{ kpis.pipeline|inr }}</div><div class="kpi-sub">{{ kpis.open }} deal{{ kpis.open|pluralize }}</div></div>
+    <div class="ui-kpi kpi-purple"><div class="ui-kpi-head"><div class="kpi-label">Weighted forecast</div></div><div class="kpi-val">₹{{ kpis.weighted|inr }}</div><div class="kpi-sub">Value × stage probability</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Won · 90 days</div></div><div class="kpi-val">₹{{ kpis.won|inr }}</div><div class="kpi-sub">{{ kpis.won_n }} deal{{ kpis.won_n|pluralize }} · {{ kpis.win_rate }}% win rate</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Follow-ups due</div></div><div class="kpi-val">{{ kpis.due }}</div></div>
+  </div>
+  <nav class="ui-tabs ui-pms-tabs" aria-label="Sales">
+    <a href="?tab=pipeline" class="{% if tab == 'pipeline' %}is-active{% endif %}">Pipeline</a>
+    <a href="?tab=leads" class="{% if tab == 'leads' %}is-active{% endif %}">All deals</a>
+    <a href="?tab=activities" class="{% if tab == 'activities' %}is-active{% endif %}">Follow-ups</a>
+  </nav>
+  {% if tab == 'pipeline' %}
+  {% if can_edit %}<details class="ui-card ui-pad" style="margin-bottom:16px"><summary class="ui-card-title" style="cursor:pointer;margin:0"><i class="fa-solid fa-plus"></i> New deal</summary>
+    <form method="post" action="{{ base_url }}sales/save/" class="ui-ops-dealform" style="margin-top:12px">{% csrf_token %}{% include 'hotel_ops/_lead_form.html' with suffix='p' %}
+      <div><button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-plus"></i><span>Add deal</span></button></div></form></details>{% endif %}
+      <div class="ui-ops-kanban">{% for c in columns %}
+        <section class="ui-ops-kcol"><div class="ui-ops-khead">{{ c.label }}<span>₹{{ c.value|inr }}</span></div>
+          {% for l in c.leads %}<a class="ui-ops-kcard" href="{{ base_url }}sales/{{ l.pk }}/"><strong>{{ l.company }}</strong>
+            <span class="ui-ops-krow"><span class="ui-chip ui-chip-gray">{{ l.get_lead_type_display }}</span><b>₹{{ l.value|inr }}</b></span>
+            {% if l.next_action %}<small class="{% if l.next_action_on and l.next_action_on < today %}ui-text-red{% else %}ui-log-sub{% endif %}">{{ l.next_action }}{% if l.next_action_on %} · {{ l.next_action_on|date:"d M" }}{% endif %}</small>{% endif %}</a>
+          {% empty %}<p class="ui-log-sub" style="margin:0;font-size:12px">No deals</p>{% endfor %}
+        </section>{% endfor %}</div>
+  {% else %}
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      {% if tab == 'leads' %}
+      <section class="ui-card ui-list-card"><div class="table-responsive"><table class="table">
+        <thead><tr><th>Client</th><th>Type</th><th class="num">Value</th><th>Stage</th><th>Next step</th><th>Owner</th></tr></thead>
+        <tbody>{% for l in leads %}<tr>
+          <td><a href="{{ base_url }}sales/{{ l.pk }}/"><strong>{{ l.company }}</strong></a><br><small class="ui-log-sub">{{ l.contact_name }}{% if l.source %} · {{ l.source }}{% endif %}</small></td>
+          <td>{{ l.get_lead_type_display }}</td><td class="num">₹{{ l.value|inr }}</td>
+          <td><span class="ui-chip ui-chip-{% if l.stage == 'WON' %}green{% elif l.stage == 'LOST' %}red{% else %}blue{% endif %}">{{ l.get_stage_display }}</span></td>
+          <td>{% if l.next_action %}{{ l.next_action }}<br><small class="{% if l.next_action_on and l.next_action_on < today %}ui-text-red{% else %}ui-log-sub{% endif %}">{{ l.next_action_on|date:"d M" }}</small>{% elif l.lost_reason %}<small class="ui-log-sub">{{ l.lost_reason }}</small>{% else %}—{% endif %}</td>
+          <td>{% firstof l.owner.get_full_name l.owner.username "—" %}</td></tr>
+        {% empty %}<tr><td colspan="6" class="ui-log-sub" style="padding:24px;text-align:center">No deals yet.</td></tr>{% endfor %}</tbody></table></div></section>
+      {% else %}
+      <div class="ui-ops-2col">
+        {% include 'hotel_ops/_activity_list.html' with title='Overdue' acts=overdue tone='red' %}
+        {% include 'hotel_ops/_activity_list.html' with title='Today' acts=due_today tone='orange' %}
+        {% include 'hotel_ops/_activity_list.html' with title='Upcoming' acts=upcoming tone='blue' %}
+        {% include 'hotel_ops/_activity_list.html' with title='Recently done' acts=done tone='green' %}
+      </div>
+      {% endif %}
+    </div>
+    <div class="ui-g360-side">
+      {% if can_edit %}<section class="ui-card ui-pad"><h2 class="ui-card-title">New deal</h2>
+        <form method="post" action="{{ base_url }}sales/save/" class="ui-stack-form">{% csrf_token %}{% include 'hotel_ops/_lead_form.html' with suffix='n' %}
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-plus"></i><span>Add deal</span></button></form></section>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>

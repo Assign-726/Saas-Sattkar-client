@@ -4,7 +4,7 @@
 {% block extra_css %}
 <style>
     .kanban-col {
-        background: #f8fafc;
+        background: var(--ui-surface-2);
         border: 1px solid var(--card-border);
         border-radius: 14px;
         overflow: hidden;
@@ -60,7 +60,7 @@
     .room-card:hover {
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        border-color: #cbd5e1;
+        border-color: var(--ui-separator-strong);
     }
 
     .room-card-header {
@@ -71,9 +71,9 @@
     }
 
     .room-number-big {
-        font-family: 'JetBrains Mono', monospace;
+        font-family: var(--ui-font-mono);
         font-size: 1.1rem;
-        font-weight: 800;
+        font-weight: 700;
         color: var(--text-main);
         letter-spacing: -0.02em;
     }
@@ -88,7 +88,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        border-top: 1px solid #f1f5f9;
+        border-top: 1px solid var(--ui-separator);
         padding-top: 0.55rem;
         margin-top: 0.55rem;
     }
@@ -106,12 +106,12 @@
         gap: 0.35rem;
     }
 
-    .btn-mark-clean    { background:#f0fdf4; color:#15803d; border:1px solid #86efac; }
-    .btn-mark-clean:hover { background:#dcfce7; }
-    .btn-mark-repaired { background:#f0fdf4; color:#15803d; border:1px solid #86efac; }
-    .btn-mark-repaired:hover { background:#dcfce7; }
-    .btn-quick-status  { background:#f8fafc; color:#475569; border:1px solid #e2e8f0; }
-    .btn-quick-status:hover { background:#f1f5f9; }
+    .btn-mark-clean    { background:rgba(var(--ui-green-rgb), 0.12); color:var(--ui-green-text); border:1px solid #86efac; }
+    .btn-mark-clean:hover { background:rgba(var(--ui-green-rgb), 0.16); }
+    .btn-mark-repaired { background:rgba(var(--ui-green-rgb), 0.12); color:var(--ui-green-text); border:1px solid #86efac; }
+    .btn-mark-repaired:hover { background:rgba(var(--ui-green-rgb), 0.16); }
+    .btn-quick-status  { background:var(--ui-surface-2); color:var(--ui-label-2); border:1px solid var(--ui-separator); }
+    .btn-quick-status:hover { background:var(--ui-surface-2); }
 </style>
 {% endblock %}
 
@@ -133,10 +133,10 @@
 
 <!-- Summary Pills Row -->
 <div class="d-flex flex-wrap gap-2 mb-4">
-    <span class="pill pill-success"><span class="kanban-dot" style="background:#16a34a;"></span>{{ kanban.AVAILABLE|length }} Available</span>
-    <span class="pill pill-primary"><span class="kanban-dot" style="background:#2563eb;"></span>{{ kanban.OCCUPIED|length }} Occupied</span>
-    <span class="pill pill-warning"><span class="kanban-dot" style="background:#d97706;"></span>{{ kanban.CLEANING|length }} Needs Cleaning</span>
-    <span class="pill pill-danger"><span class="kanban-dot" style="background:#dc2626;"></span>{{ kanban.MAINTENANCE|length }} Maintenance</span>
+    <span class="pill pill-success"><span class="kanban-dot" style="background:var(--ui-green);"></span>{{ kanban.AVAILABLE|length }} Available</span>
+    <span class="pill pill-primary"><span class="kanban-dot" style="background:var(--ui-accent);"></span>{{ kanban.OCCUPIED|length }} Occupied</span>
+    <span class="pill pill-warning"><span class="kanban-dot" style="background:var(--ui-orange);"></span>{{ kanban.CLEANING|length }} Needs Cleaning</span>
+    <span class="pill pill-danger"><span class="kanban-dot" style="background:var(--ui-red);"></span>{{ kanban.MAINTENANCE|length }} Maintenance</span>
 </div>
 
 <!-- Kanban Board -->
@@ -146,21 +146,21 @@
         <div class="kanban-col">
             <div class="kanban-header">
                 <div class="kanban-title">
-                    <span class="kanban-dot" style="background:#16a34a;"></span>
+                    <span class="kanban-dot" style="background:var(--ui-green);"></span>
                     Available &amp; Clean
                 </div>
                 <span class="pill pill-success font-mono" style="font-size:0.68rem;">{{ kanban.AVAILABLE|length }}</span>
             </div>
             <div class="kanban-body">
                 {% for r in kanban.AVAILABLE %}
-                <div class="room-card" style="border-left:3px solid #16a34a;">
+                <div class="room-card" style="border-left:3px solid var(--ui-green);">
                     <div class="room-card-header">
                         <span class="room-number-big">#{{ r.room_number }}</span>
                         <span class="status-tag tag-available" style="font-size:0.68rem;">{{ r.get_status_display }}</span>
                     </div>
                     <div class="room-meta">{{ r.category.name }} &bull; Floor {{ r.floor }}</div>
                     <div class="room-card-footer">
-                        <span class="font-mono fw-semibold" style="font-size:0.8rem;color:#16a34a;">₹{{ r.category.base_price_per_night }}/nt</span>
+                        <span class="font-mono fw-semibold" style="font-size:0.8rem;color:var(--ui-green-text);">₹{{ r.category.base_price_per_night }}/nt</span>
                         <div class="dropdown">
                             <button class="btn-room-action btn-quick-status dropdown-toggle" type="button" data-bs-toggle="dropdown">Status</button>
                             <ul class="dropdown-menu dropdown-menu-end">
@@ -168,14 +168,14 @@
                                     <form method="POST" action="{% url 'hotel_admin:room_status_update' restaurant_slug=rslug room_id=r.id %}">
                                         {% csrf_token %}
                                         <input type="hidden" name="status" value="CLEANING">
-                                        <button type="submit" class="dropdown-item"><i class="fa-solid fa-broom" style="color:#d97706;"></i>Mark Dirty / Needs Cleaning</button>
+                                        <button type="submit" class="dropdown-item"><i class="fa-solid fa-broom" style="color:var(--ui-orange-text);"></i>Mark Dirty / Needs Cleaning</button>
                                     </form>
                                 </li>
                                 <li>
                                     <form method="POST" action="{% url 'hotel_admin:room_status_update' restaurant_slug=rslug room_id=r.id %}">
                                         {% csrf_token %}
                                         <input type="hidden" name="status" value="MAINTENANCE">
-                                        <button type="submit" class="dropdown-item"><i class="fa-solid fa-screwdriver-wrench" style="color:#dc2626;"></i>Mark Under Maintenance</button>
+                                        <button type="submit" class="dropdown-item"><i class="fa-solid fa-screwdriver-wrench" style="color:var(--ui-red-text);"></i>Mark Under Maintenance</button>
                                     </form>
                                 </li>
                             </ul>
@@ -197,21 +197,21 @@
         <div class="kanban-col">
             <div class="kanban-header">
                 <div class="kanban-title">
-                    <span class="kanban-dot" style="background:#2563eb;"></span>
+                    <span class="kanban-dot" style="background:var(--ui-accent);"></span>
                     Occupied (In-House)
                 </div>
                 <span class="pill pill-primary font-mono" style="font-size:0.68rem;">{{ kanban.OCCUPIED|length }}</span>
             </div>
             <div class="kanban-body">
                 {% for r in kanban.OCCUPIED %}
-                <div class="room-card" style="border-left:3px solid #2563eb;">
+                <div class="room-card" style="border-left:3px solid var(--ui-accent);">
                     <div class="room-card-header">
                         <span class="room-number-big">#{{ r.room_number }}</span>
                         <span class="status-tag tag-occupied" style="font-size:0.68rem;">{{ r.get_status_display }}</span>
                     </div>
                     <div class="room-meta">{{ r.category.name }} &bull; Floor {{ r.floor }}</div>
                     <div class="room-card-footer">
-                        <span style="font-size:0.76rem;color:#2563eb;font-weight:600;">In-House Guest</span>
+                        <span style="font-size:0.76rem;color:var(--ui-accent-text);font-weight:600;">In-House Guest</span>
                         <div class="dropdown">
                             <button class="btn-room-action btn-quick-status dropdown-toggle" type="button" data-bs-toggle="dropdown">Options</button>
                             <ul class="dropdown-menu dropdown-menu-end">
@@ -219,14 +219,14 @@
                                     <form method="POST" action="{% url 'hotel_admin:room_status_update' restaurant_slug=rslug room_id=r.id %}">
                                         {% csrf_token %}
                                         <input type="hidden" name="status" value="CLEANING">
-                                        <button type="submit" class="dropdown-item"><i class="fa-solid fa-broom" style="color:#d97706;"></i>Set to Cleaning</button>
+                                        <button type="submit" class="dropdown-item"><i class="fa-solid fa-broom" style="color:var(--ui-orange-text);"></i>Set to Cleaning</button>
                                     </form>
                                 </li>
                                 <li>
                                     <form method="POST" action="{% url 'hotel_admin:room_status_update' restaurant_slug=rslug room_id=r.id %}">
                                         {% csrf_token %}
                                         <input type="hidden" name="status" value="AVAILABLE">
-                                        <button type="submit" class="dropdown-item"><i class="fa-solid fa-check" style="color:#16a34a;"></i>Release to Available</button>
+                                        <button type="submit" class="dropdown-item"><i class="fa-solid fa-check" style="color:var(--ui-green-text);"></i>Release to Available</button>
                                     </form>
                                 </li>
                             </ul>
@@ -248,14 +248,14 @@
         <div class="kanban-col">
             <div class="kanban-header">
                 <div class="kanban-title">
-                    <span class="kanban-dot" style="background:#d97706;"></span>
+                    <span class="kanban-dot" style="background:var(--ui-orange);"></span>
                     Dirty / Cleaning
                 </div>
                 <span class="pill pill-warning font-mono" style="font-size:0.68rem;">{{ kanban.CLEANING|length }}</span>
             </div>
             <div class="kanban-body">
                 {% for r in kanban.CLEANING %}
-                <div class="room-card" style="border-left:3px solid #d97706;">
+                <div class="room-card" style="border-left:3px solid var(--ui-orange);">
                     <div class="room-card-header">
                         <span class="room-number-big">#{{ r.room_number }}</span>
                         <span class="status-tag tag-cleaning" style="font-size:0.68rem;">{{ r.get_status_display }}</span>
@@ -271,7 +271,7 @@
                 </div>
                 {% empty %}
                 <div style="text-align:center;padding:2.5rem 1rem;color:var(--text-muted);">
-                    <i class="fa-solid fa-sparkles" style="font-size:1.8rem;color:#16a34a;opacity:0.6;display:block;margin-bottom:0.5rem;"></i>
+                    <i class="fa-solid fa-sparkles" style="font-size:1.8rem;color:var(--ui-green-text);opacity:0.6;display:block;margin-bottom:0.5rem;"></i>
                     <div style="font-size:0.8rem;">All rooms are clean &amp; ready!</div>
                 </div>
                 {% endfor %}
@@ -284,21 +284,21 @@
         <div class="kanban-col">
             <div class="kanban-header">
                 <div class="kanban-title">
-                    <span class="kanban-dot" style="background:#dc2626;"></span>
+                    <span class="kanban-dot" style="background:var(--ui-red);"></span>
                     Maintenance
                 </div>
                 <span class="pill pill-danger font-mono" style="font-size:0.68rem;">{{ kanban.MAINTENANCE|length }}</span>
             </div>
             <div class="kanban-body">
                 {% for r in kanban.MAINTENANCE %}
-                <div class="room-card" style="border-left:3px solid #dc2626;">
+                <div class="room-card" style="border-left:3px solid var(--ui-red);">
                     <div class="room-card-header">
                         <span class="room-number-big">#{{ r.room_number }}</span>
                         <span class="status-tag tag-maintenance" style="font-size:0.68rem;">{{ r.get_status_display }}</span>
                     </div>
                     <div class="room-meta">{{ r.category.name }} &bull; Floor {{ r.floor }}</div>
                     {% if r.notes %}
-                    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:7px;padding:0.4rem 0.6rem;font-size:0.73rem;color:#b91c1c;margin-bottom:0.5rem;">{{ r.notes }}</div>
+                    <div style="background:rgba(var(--ui-red-rgb), 0.1);border:1px solid rgba(var(--ui-red-rgb), 0.3);border-radius:7px;padding:0.4rem 0.6rem;font-size:0.73rem;color:var(--ui-red-text);margin-bottom:0.5rem;">{{ r.notes }}</div>
                     {% endif %}
                     <form method="POST" action="{% url 'hotel_admin:room_status_update' restaurant_slug=rslug room_id=r.id %}" style="margin-top:0.3rem;">
                         {% csrf_token %}
@@ -310,7 +310,7 @@
                 </div>
                 {% empty %}
                 <div style="text-align:center;padding:2.5rem 1rem;color:var(--text-muted);">
-                    <i class="fa-solid fa-circle-check" style="font-size:1.8rem;color:#16a34a;opacity:0.5;display:block;margin-bottom:0.5rem;"></i>
+                    <i class="fa-solid fa-circle-check" style="font-size:1.8rem;color:var(--ui-green-text);opacity:0.5;display:block;margin-bottom:0.5rem;"></i>
                     <div style="font-size:0.8rem;">No rooms out of service</div>
                 </div>
                 {% endfor %}

@@ -8,3 +8,6 @@ class CoreConfig(AppConfig):
     def ready(self):
         # Import signals to register post_save hooks
         from core import signals  # noqa: F401
+        from core import api_cache
+        api_cache.connect()
+        from core import checks  # noqa: F401  (registers deploy checks)

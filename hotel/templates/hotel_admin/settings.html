@@ -5,7 +5,7 @@
 {% block extra_css %}
 <style>
     .settings-nav-tabs .nav-link {
-        color: #64748B;
+        color: var(--ui-label-2);
         font-weight: 600;
         font-size: 0.85rem;
         padding: 0.75rem 1.25rem;
@@ -15,16 +15,16 @@
         transition: all 0.2s ease;
     }
     .settings-nav-tabs .nav-link:hover {
-        color: #1E293B;
+        color: var(--ui-label);
     }
     .settings-nav-tabs .nav-link.active {
-        color: #2563EB;
-        border-bottom-color: #2563EB;
+        color: var(--ui-accent-text);
+        border-bottom-color: var(--ui-accent);
         background: transparent;
     }
     .settings-section-card {
-        background: #FFFFFF;
-        border: 1px solid #E2E8F0;
+        background: var(--ui-surface);
+        border: 1px solid var(--ui-separator);
         border-radius: 16px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
         margin-bottom: 1.5rem;
@@ -32,8 +32,8 @@
     }
     .settings-card-header {
         padding: 1.25rem 1.5rem;
-        border-bottom: 1px solid #F1F5F9;
-        background: #F8FAFC;
+        border-bottom: 1px solid var(--ui-separator);
+        background: var(--ui-surface-2);
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -42,7 +42,7 @@
         padding: 1.5rem;
     }
     .provider-card {
-        border: 2px solid #E2E8F0;
+        border: 2px solid var(--ui-separator);
         border-radius: 12px;
         padding: 1rem;
         cursor: pointer;
@@ -50,35 +50,35 @@
     }
     .provider-card:hover {
         border-color: #93C5FD;
-        background: #F8FAFC;
+        background: var(--ui-surface-2);
     }
     .provider-card.selected {
-        border-color: #2563EB;
-        background: #EFF6FF;
+        border-color: var(--ui-accent);
+        background: rgba(var(--ui-accent-rgb), 0.1);
     }
     .live-badge-test {
-        background: #FEF3C7;
-        color: #92400E;
-        border: 1px solid #FDE68A;
+        background: rgba(var(--ui-orange-rgb), 0.14);
+        color: var(--ui-orange-text);
+        border: 1px solid rgba(var(--ui-orange-rgb), 0.35);
         font-size: 0.7rem;
         padding: 0.2rem 0.5rem;
         border-radius: 20px;
         font-weight: 700;
-        text-transform: uppercase;
+        text-transform: none;
     }
     .live-badge-prod {
-        background: #D1FAE5;
+        background: rgba(var(--ui-green-rgb), 0.16);
         color: #065F46;
-        border: 1px solid #A7F3D0;
+        border: 1px solid rgba(var(--ui-green-rgb), 0.35);
         font-size: 0.7rem;
         padding: 0.2rem 0.5rem;
         border-radius: 20px;
         font-weight: 700;
-        text-transform: uppercase;
+        text-transform: none;
     }
     .gst-slab-pill {
-        background: #F1F5F9;
-        border: 1px solid #CBD5E1;
+        background: var(--ui-surface-2);
+        border: 1px solid var(--ui-separator-strong);
         border-radius: 10px;
         padding: 0.6rem 0.85rem;
         font-size: 0.8rem;
@@ -145,6 +145,11 @@
         <li class="nav-item">
             <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-email" type="button" role="tab">
                 <i class="fa-solid fa-envelope"></i> <span>Email &amp; SMTP</span>
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-security" type="button" role="tab">
+                <i class="fa-solid fa-shield-halved"></i> <span>Two-Factor Auth (2FA)</span>
             </button>
         </li>
     </ul>
@@ -485,6 +490,11 @@
         <!-- ========================================== -->
         <!-- TAB 5: HOTEL CUSTOM SMTP / EMAIL SETTINGS  -->
         <!-- ========================================== -->
+        <div class="tab-pane fade" id="tab-security" role="tabpanel">
+            {% url 'hotel_admin:two_factor_update' restaurant_slug=rslug as tfa_action %}
+            {% include 'core/_two_factor_card.html' with action=tfa_action form_id='tfaForm' with_form=False %}
+        </div>
+
         <div class="tab-pane fade" id="tab-email" role="tabpanel">
             <div class="settings-section-card">
                 <div class="settings-card-header">
@@ -503,7 +513,7 @@
                 </div>
                 <div class="settings-card-body">
                     <!-- Status / Guide Alert -->
-                    <div class="p-3 mb-4 rounded-3 border d-flex align-items-start gap-3" style="background: #F8FAFC;">
+                    <div class="p-3 mb-4 rounded-3 border d-flex align-items-start gap-3" style="background: var(--ui-surface-2);">
                         <div class="text-primary mt-1" style="font-size: 1.25rem;">
                             <i class="fa-solid fa-circle-info"></i>
                         </div>
@@ -633,6 +643,19 @@
         </div>
     </div>
 </form>
+{# Own form for the 2FA tab: its inputs live inside the settings form above and point here with form="tfaForm" #}
+<form id="tfaForm" method="post" action="{% url 'hotel_admin:two_factor_update' restaurant_slug=rslug %}">{% csrf_token %}</form>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var b = document.querySelector('[data-bs-target="#tab-security"]');
+  var bar = document.querySelector('.sticky-save-bar');
+  // The page's save bar saves hotel settings, not 2FA (which has its own button), so hide it on that tab
+  document.querySelectorAll('.pms-nav-tabs [data-bs-toggle="tab"]').forEach(function (t) {
+    t.addEventListener('shown.bs.tab', function () { if (!bar) return; if (t === b) bar.style.setProperty('display', 'none', 'important'); else bar.style.removeProperty('display'); });
+  });
+  if (b && window.bootstrap && new URLSearchParams(location.search).get('tab') === 'security') bootstrap.Tab.getOrCreateInstance(b).show();
+});
+</script>
 
 <!-- Modal: Test Payment Gateway Connection -->
 <div class="modal fade" id="testGatewayModal" tabindex="-1" aria-hidden="true">

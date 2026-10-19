@@ -1,0 +1,60 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>Banquets &amp; events</h1><p>Weddings, conferences and parties: enquiries, venue holds, BEOs and payments.</p></div>
+    <div class="ui-actions"><a class="ui-btn ui-btn-gray" href="{{ base_url }}banquets/setup/"><i class="fa-solid fa-sliders"></i><span>Venues &amp; menus</span></a></div>
+  </div>
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Upcoming events</div></div><div class="kpi-val">{{ kpis.upcoming }}</div></div>
+    <div class="ui-kpi kpi-purple"><div class="ui-kpi-head"><div class="kpi-label">Today</div></div><div class="kpi-val">{{ kpis.today }}</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Confirmed value</div></div><div class="kpi-val">₹{{ kpis.confirmed|inr }}</div><div class="kpi-sub">Incl. GST</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Enquiries &amp; tentative</div></div><div class="kpi-val">₹{{ kpis.pipeline|inr }}</div></div>
+  </div>
+  <nav class="ui-tabs ui-pms-tabs" aria-label="Banquets">
+    <a href="?tab=events" class="{% if tab == 'events' %}is-active{% endif %}">Events</a>
+    <a href="?tab=calendar" class="{% if tab == 'calendar' %}is-active{% endif %}">Venue calendar</a>
+  </nav>
+  {% if not venues %}<section class="ui-card ui-pad"><p style="margin:0">Add your <a href="{{ base_url }}banquets/setup/">venues and menu packages</a> to start booking events.</p></section>{% endif %}
+
+  {% if tab == 'calendar' %}
+  <section class="ui-card ui-pad">
+    <div class="ui-ops-calhead"><a class="ui-btn ui-btn-gray ui-btn-sm" href="?tab=calendar&month={{ prev_m|date:'Y-m' }}" aria-label="Previous month"><i class="fa-solid fa-chevron-left"></i></a><h2 class="ui-card-title" style="margin:0">{{ month|date:"F Y" }}</h2><a class="ui-btn ui-btn-gray ui-btn-sm" href="?tab=calendar&month={{ next_m|date:'Y-m' }}" aria-label="Next month"><i class="fa-solid fa-chevron-right"></i></a></div>
+    <div class="ui-ops-cal-wrap"><div class="ui-ops-cal">
+      {% for d in "MTWTFSS" %}<div class="h">{{ d }}</div>{% endfor %}
+      {% for week in cal %}{% for c in week %}<div class="{% if not c.in_month %}out{% endif %} {% if c.today %}today{% endif %}"><b>{{ c.date.day }}</b>{% for e in c.events %}<a class="chip is-{{ e.status|lower }}" href="{{ base_url }}banquets/{{ e.pk }}/" title="{{ e.name }} · {{ e.venue.name }}">{{ e.get_session_display }} · {{ e.name }}</a>{% endfor %}</div>{% endfor %}{% endfor %}
+    </div></div>
+    <div class="ui-pms-legend"><span><i class="is-confirmed"></i>Confirmed</span><span><i class="is-tentative"></i>Tentative</span><span><i class="is-enquiry"></i>Enquiry</span><span><i class="is-completed"></i>Completed</span></div>
+  </section>
+  {% else %}
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <form method="get" class="ui-card ui-filters"><input type="hidden" name="tab" value="events">
+        <div class="ui-field"><label for="bqW">When</label><select id="bqW" class="ui-input" name="when" onchange="this.form.submit()"><option value="upcoming" {% if when == 'upcoming' %}selected{% endif %}>Upcoming</option><option value="past" {% if when == 'past' %}selected{% endif %}>Past</option><option value="all" {% if when == 'all' %}selected{% endif %}>All</option></select></div>
+        <div class="ui-field"><label for="bqS">Status</label><select id="bqS" class="ui-input" name="status" onchange="this.form.submit()"><option value="">Any</option>{% for k, l in statuses %}<option value="{{ k }}" {% if status == k %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+      </form>
+      <section class="ui-card ui-list-card">
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Date</th><th>Event</th><th>Venue</th><th class="num">Pax</th><th class="num">Total</th><th class="num">Balance</th><th>Status</th></tr></thead>
+          <tbody>{% for e in events %}<tr>
+            <td class="nowrap"><strong>{{ e.date|date:"d M" }}</strong> {{ e.date|date:"D" }}<br><small class="ui-log-sub">{{ e.get_session_display }}</small></td>
+            <td><a href="{{ base_url }}banquets/{{ e.pk }}/"><strong>{{ e.name }}</strong></a><br><small class="ui-log-sub">{{ e.code }} · {{ e.client_name }} · {{ e.event_type }}</small></td>
+            <td>{{ e.venue.name }}</td>
+            <td class="num">{{ e.pax }}</td>
+            <td class="num">₹{{ e.total|inr }}</td>
+            <td class="num {% if e.balance > 0 and e.status == 'CONFIRMED' %}ui-text-red{% endif %}">{% if e.balance > 0 %}₹{{ e.balance|inr }}{% else %}—{% endif %}</td>
+            <td><span class="ui-chip ui-chip-{% if e.status == 'CONFIRMED' %}green{% elif e.status == 'TENTATIVE' %}orange{% elif e.status == 'ENQUIRY' %}blue{% elif e.status == 'COMPLETED' %}indigo{% else %}gray{% endif %}">{{ e.get_status_display }}</span></td>
+          </tr>{% empty %}<tr><td colspan="7" class="ui-log-sub" style="padding:24px;text-align:center">No events here.</td></tr>{% endfor %}</tbody>
+        </table></div>
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      {% if can_edit and venues %}<section class="ui-card ui-pad">
+        <h2 class="ui-card-title">New event enquiry</h2>
+        <form method="post" action="{{ base_url }}banquets/save/" class="ui-stack-form">{% csrf_token %}
+          {% include 'hotel_ops/_event_form.html' with suffix='n' %}
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-plus"></i><span>Save event</span></button>
+        </form></section>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>

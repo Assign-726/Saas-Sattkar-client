@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 import os
 import json
+import re
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
@@ -20,7 +21,7 @@ from django.db import transaction
 from super_admin.models import Restaurant, RestaurantUser, RestaurantBranch
 from restaurant_admin.forms import MenuItemForm, CategoryForm, SubCategoryForm, OrderStatusForm, RestaurantSettingsForm, InventoryItemForm, InventoryCategoryForm, CouponForm, RestaurantBranchComplianceForm
 
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_POST
 from django.views.decorators.csrf import csrf_exempt
 import qrcode
 from io import BytesIO
@@ -51,7 +52,7 @@ def format_local_time(dt, fmt='%I:%M %p'):
 
 @login_required
 @user_passes_test(is_admin)
-def switch_branch(request):
+def switch_branch(request, restaurant_slug=None):
     """
     POST/GET endpoint to switch the admin's active branch.
     Stores the selection in the session, then redirects back
@@ -93,16 +94,12 @@ def resolve_restaurant(request, restaurant_slug=None):
         else:
             restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
 
-        # Permission enforcement
-        if request.user.is_authenticated and hasattr(request.user, 'restaurant_profile') and request.user.is_staff:
-            try:
-                user_restaurant = request.user.restaurant_profile.restaurant
-                if user_restaurant_id := getattr(user_restaurant, 'id', None):
-                    if user_restaurant_id != restaurant.id and not request.user.is_superuser:
-                        from django.http import HttpResponseForbidden
-                        return HttpResponseForbidden("You do not have access to this restaurant.")
-            except RestaurantUser.DoesNotExist:
-                pass
+        # Permission enforcement: only platform superusers may open another business.
+        if request.user.is_authenticated and not request.user.is_superuser:
+            profile = getattr(request.user, 'restaurant_profile', None)
+            if profile is None or profile.restaurant_id != restaurant.id:
+                from django.http import HttpResponseForbidden
+                return HttpResponseForbidden("You do not have access to this restaurant.")
         return restaurant
     # Fallback to user's linked restaurant
     try:
@@ -168,76 +165,11 @@ def get_user_active_shift(user, restaurant, branch=None):
 
 
 @login_required
-@user_passes_test(lambda u: u.is_superuser)
-def test_template(request):
-    """Simple test view to check template rendering"""
-    context = {
-        'user': request.user,
-        'is_authenticated': request.user.is_authenticated,
-        'is_staff': request.user.is_staff if request.user.is_authenticated else False,
-        'static_files_debug': {
-            'STATIC_URL': settings.STATIC_URL,
-            'STATIC_ROOT': settings.STATIC_ROOT,
-            'STATICFILES_DIRS': settings.STATICFILES_DIRS,
-            'DEBUG': settings.DEBUG,
-        },
-        'template_dirs': [os.path.join(settings.BASE_DIR, 'templates')] + [os.path.join(app_config.path, 'templates') for app_config in apps.get_app_configs()]
-    }
-    return render(request, 'restaurant_admin/test.html', context)
-
-@login_required
-@user_passes_test(lambda u: u.is_superuser)
-def test_static(request):
-    """Test view to check static files loading"""
-    return render(request, 'restaurant_admin/test_static.html')
-
-@login_required
-@user_passes_test(lambda u: u.is_superuser)
-def debug_menu_list(request):
-    """Debug version of menu_list without authentication"""
-    try:
-        # Get search query
-        search_query = request.GET.get('q', '')
-        
-        # Base queryset
-        menu_items = MenuItem.objects.select_related('subcategory', 'subcategory__category').order_by('subcategory__category__name', 'subcategory__name', 'name')
-        
-        # Apply search filter if query exists
-        if search_query:
-            menu_items = menu_items.filter(
-                Q(name__icontains=search_query) |
-                Q(description__icontains=search_query) |
-                Q(subcategory__name__icontains=search_query) |
-                Q(subcategory__category__name__icontains=search_query)
-            )
-        
-        # Paginate the menu items
-        try:
-            per_page = int(request.GET.get('per_page', 20))
-        except ValueError:
-            per_page = 20
-        paginator = Paginator(menu_items, per_page)
-        page_number = request.GET.get('page')
-        page_obj = paginator.get_page(page_number)
-        
-        return render(request, 'restaurant_admin/menu/list_new.html', {
-            'menu_items': page_obj,
-            'active_menu': 'menu_list',
-            'search_query': search_query,
-            'today': timezone.now()
-        })
-    except Exception as e:
-        from django.http import HttpResponse
-        return HttpResponse(f"Error: {str(e)}", content_type="text/plain")
-
-@login_required
 @user_passes_test(is_admin)
 def order_mark_ready(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     order = get_object_or_404(Order, pk=pk, restaurant=restaurant)
 
@@ -762,14 +694,20 @@ def get_pos_active_orders(restaurant, active_branch=None):
     return results
 
 
+def _publish_kot(slug, payload):
+    try:
+        from core.sse import publish
+        publish(slug, payload)
+    except Exception:
+        pass
+
+
 @login_required
 @user_passes_test(is_admin)
 def order_create_manual(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     if request.method == 'POST':
         import json
@@ -925,14 +863,34 @@ def order_create_manual(request, restaurant_slug=None):
         # Determine payments, paid_amount, due_amount & payment_status
         payments_input = data.get('payments')
         valid_payments = []
+        clean_tenders = []
         if isinstance(payments_input, list) and len(payments_input) > 0:
             for p in payments_input:
               amt = safe_decimal(p.get('amount'))
               if amt > 0:
-                  valid_payments.append({
+                  entry = {
                       'method': str(p.get('method') or payment_method),
                       'amount': float(amt)
-                  })
+                  }
+                  # Loyalty points / gift card tenders carry what to redeem
+                  if entry['method'] == 'points':
+                      entry['points'] = p.get('points')
+                  elif entry['method'] == 'gift_card':
+                      entry['code'] = str(p.get('code') or '')[:40]
+                  elif entry['method'] == 'room':
+                      entry['booking_id'] = p.get('booking_id')
+                  valid_payments.append(entry)
+            # Points, gift cards & room charges are re-checked on the server before they count as paid
+            if any(vp['method'] in ('points', 'gift_card', 'room') for vp in valid_payments):
+                from guests.pos import TenderError, validate_tenders
+                try:
+                    clean_tenders = validate_tenders(restaurant, phone, valid_payments, max(Decimal('0.00'), grand_total_val - advance_amount_input))
+                except TenderError as te:
+                    if is_json:
+                        return JsonResponse({'success': False, 'error': str(te)}, status=400)
+                    clean_tenders = []
+                valid_payments = [vp for vp in valid_payments if vp['method'] not in ('points', 'gift_card', 'room')] + \
+                    [{k: v for k, v in t.items() if k not in ('guest_id', 'card_id')} for t in clean_tenders]
             paid_amount_val = sum(safe_decimal(p['amount']) for p in valid_payments)
         elif data.get('paid_amount') is not None and str(data.get('paid_amount')).strip() != '':
             paid_amount_val = safe_decimal(data.get('paid_amount'))
@@ -952,7 +910,7 @@ def order_create_manual(request, restaurant_slug=None):
 
         due_amount_val = max(Decimal('0.00'), grand_total_val - advance_amount_input - paid_amount_val)
 
-        if valid_items_count == 0 or grand_total_val <= Decimal('0.00'):
+        if valid_items_count == 0:
             initial_payment_status = Order.PaymentStatus.UNPAID
             due_amount_val = Decimal('0.00')
             paid_amount_val = Decimal('0.00')
@@ -1056,8 +1014,11 @@ def order_create_manual(request, restaurant_slug=None):
 
         active_shift = get_user_active_shift(request.user, restaurant, active_branch)
 
+        previous_lines = {}   # menu_item_id -> [(kot_batch, is_prepared, is_kot_printed)] before this save
+        prev_status = None
         if order_id:
             order = get_object_or_404(Order, pk=order_id, restaurant=restaurant)
+            prev_status = order.status
             if not order.shift and active_shift:
                 order.shift = active_shift
                 order.counter = active_shift.counter
@@ -1106,9 +1067,13 @@ def order_create_manual(request, restaurant_slug=None):
             else:
                 order.excise_bill_no = None
             order.save()
-            # Clear existing items if items data is provided
+            # Clear existing items if items data is provided — but remember which kitchen round
+            # each line went out in and whether the kitchen ticked it, so re-saving the order
+            # (e.g. adding a second round) does not reset the KDS.
             items_data = data.get('items')
             if isinstance(items_data, list):
+                for old_it in order.items.all():
+                    previous_lines.setdefault(old_it.menu_item_id, []).append((old_it.kot_batch, old_it.is_prepared, old_it.is_kot_printed))
                 order.items.all().delete()
 
             voided_item = data.get('voided_item_name')
@@ -1149,12 +1114,24 @@ def order_create_manual(request, restaurant_slug=None):
                 excise_bill_no=excise_bill_no or None,
             )
 
-        party_gstin_input = (data.get('party_gstin') or data.get('customer_gstin') or '').strip()
-        if party_gstin_input and len(party_gstin_input) == 15 and not order.gstin_no:
-            order.gstin_no = party_gstin_input
+        # the buyer's GSTIN belongs on their Party (bills read order.party.gstin); gstin_no is OUR invoice number
+        party_gstin_input = (data.get('party_gstin') or data.get('customer_gstin') or '').strip().upper()
 
-        # Resolve, link, or auto-create Party using phone-first matching
-        if customer_name or phone:
+        # A company picked/added at settle is linked directly; otherwise resolve by phone first
+        picked_party = None
+        if str(data.get('party_id') or '').isdigit():
+            picked_party = Party.objects.filter(pk=int(data['party_id']), restaurant=restaurant).first()
+        if picked_party:
+            order.party = picked_party
+            order.customer_name = picked_party.name
+            if phone:
+                order.phone = phone
+            order.save(update_fields=['party', 'customer_name', 'phone'])
+            if party_gstin_input and len(party_gstin_input) == 15 and not picked_party.gstin:
+                picked_party.gstin = party_gstin_input
+                picked_party.gst_registration_type = Party.GstRegistrationType.REGULAR
+                picked_party.save(update_fields=['gstin', 'gst_registration_type'])
+        elif customer_name or phone:
             order.customer_name = customer_name or order.customer_name
             order.phone = phone or order.phone
             if not order.branch and active_branch:
@@ -1199,6 +1176,8 @@ def order_create_manual(request, restaurant_slug=None):
                 })
 
         created_items = []
+        prev_round = max([b for lines in previous_lines.values() for b, _, _ in lines], default=0)
+        new_round = prev_round + 1 if prev_round else 1
         if isinstance(items_data, list):
             for item in items_data:
                 item_id = item.get('menu_item_id') or item.get('id')
@@ -1227,6 +1206,11 @@ def order_create_manual(request, restaurant_slug=None):
                 disc_reason = (item.get('discount_reason') or '').strip() or None
                 item_notes = (item.get('notes') or item.get('note') or '').strip()
 
+                kept = previous_lines.get(menu_item.pk) or []
+                if item.get('sent') and kept:
+                    batch, prepared, printed = kept.pop(0)
+                else:
+                    batch, prepared, printed = new_round, False, False
                 created_item = OrderItem.objects.create(
                     order=order,
                     menu_item=menu_item,
@@ -1237,6 +1221,9 @@ def order_create_manual(request, restaurant_slug=None):
                     discount_value=disc_val,
                     discount_amount=disc_amt,
                     discount_reason=disc_reason,
+                    kot_batch=batch,
+                    is_prepared=prepared,
+                    is_kot_printed=printed,
                 )
                 created_items.append(created_item)
 
@@ -1273,7 +1260,11 @@ def order_create_manual(request, restaurant_slug=None):
             else:
                 order.waive_service_charge = False
 
-        if grand_total_val > 0:
+        # The bill total is decided on the server. The POS figure is kept only when it is not
+        # below what the server works out for the same items (₹1 round-off tolerance) — a
+        # tampered or stale request can no longer mark a large bill "paid" with a small total.
+        server_total = order.calculate_bill_breakdown()['final_total'] if order.items.exists() else Decimal('0.00')
+        if grand_total_val > 0 and grand_total_val + Decimal('1.00') >= server_total:
             order.subtotal = subtotal_val
             order.tax_amount = tax_amount_val
             order.discount_amount = discount_amount_val
@@ -1282,15 +1273,43 @@ def order_create_manual(request, restaurant_slug=None):
             order.discount_reason = discount_reason_val
             order.round_off_amount = round_off_amount_val
             order.total_amount = grand_total_val
-            order.paid_amount = paid_amount_val
-            order.due_amount = due_amount_val
-            order.payment_status = initial_payment_status
-            order.status = initial_status
-            order.save()
         else:
+            if grand_total_val > 0:
+                import logging
+                logging.getLogger(__name__).warning('POS order %s: client total %s below server total %s; using server total',
+                                                    order.pk, grand_total_val, server_total)
             order.update_total()
+        bill_total = Decimal(str(order.total_amount or 0))
+        settling = action in ['settle_order', 'print_close'] or data.get('payment_status') == 'paid'
+        if settling and payment_method != 'credit' and bill_total > 0 and paid_amount_val <= 0:
+            paid_amount_val = max(Decimal('0.00'), bill_total - advance_amount_input)
+            valid_payments = [{'method': payment_method, 'amount': float(paid_amount_val)}]
+        due_amount_val = max(Decimal('0.00'), bill_total - advance_amount_input - paid_amount_val)
+        if bill_total <= 0:
+            initial_payment_status, paid_amount_val, due_amount_val, valid_payments = Order.PaymentStatus.UNPAID, Decimal('0.00'), Decimal('0.00'), []
+        elif due_amount_val <= Decimal('0.00'):
+            initial_payment_status = Order.PaymentStatus.PAID
+        elif (paid_amount_val + advance_amount_input) > 0:
+            initial_payment_status = Order.PaymentStatus.PARTIALLY_PAID
+        else:
+            initial_payment_status = Order.PaymentStatus.UNPAID
+        if action in ['settle_order', 'print_close']:
+            initial_status = Order.OrderStatus.COMPLETED if initial_payment_status == Order.PaymentStatus.PAID else Order.OrderStatus.SERVED
+        elif action in ['fire_kot', 'save_kot'] and prev_status == Order.OrderStatus.PREPARING:
+            initial_status = Order.OrderStatus.PREPARING  # an add-on round keeps the kitchen timer running
+        order.payments = valid_payments
+        order.paid_amount = paid_amount_val
+        order.due_amount = due_amount_val
+        order.payment_status = initial_payment_status
+        order.status = initial_status
+        order.save()
 
         order.assign_invoice_numbers()
+
+        tender_failures = []
+        if clean_tenders and order.payment_status in (Order.PaymentStatus.PAID, Order.PaymentStatus.PARTIALLY_PAID):
+            from guests.pos import apply_tenders
+            tender_failures = apply_tenders(order, clean_tenders, request.user)
 
         # Check if only new items are being fired in KOT
         items_data = data.get('items')
@@ -1299,6 +1318,18 @@ def order_create_manual(request, restaurant_slug=None):
             for ci, item_data in zip(created_items, items_data):
                 if not item_data.get('sent'):
                     new_item_ids.append(str(ci.id))
+
+        # Tell the kitchen: a bell notification for the KDS / admins and a live push so every
+        # open KDS refreshes at once (after commit, so the new ticket is already readable).
+        if action in ['fire_kot', 'save_kot']:
+            fresh = [ci for ci in created_items if ci.kot_batch == new_round and not ci.is_kot_printed]
+            if fresh:
+                from django.db import transaction as _tx
+                from notifications import service as _notify
+                lines = ', '.join(f'{ci.quantity}× {ci.menu_item.name}' for ci in fresh)
+                _notify.notify_kot(order, lines, sum(ci.quantity for ci in fresh), new_round)
+                payload = {'type': 'kot', 'order_id': order.id, 'round': new_round}
+                _tx.on_commit(lambda: _publish_kot(restaurant.slug, payload))
 
         kot_url = reverse('restaurant_admin:order_kot', kwargs={'restaurant_slug': restaurant.slug, 'pk': order.id})
         if new_item_ids and len(new_item_ids) < len(created_items):
@@ -1377,7 +1408,8 @@ def order_create_manual(request, restaurant_slug=None):
                 'combined_invoice_url': combined_invoice_url,
                 'kot_url': kot_url,
                 'redirect_url': target_url,
-                'active_orders': active_orders_resp
+                'active_orders': active_orders_resp,
+                'tender_warnings': [f"{'Points' if f['method'] == 'points' else ('Room ' + str(f.get('room', '')) + ' charge') if f['method'] == 'room' else 'Gift card ' + f.get('code', '')} not applied: {f['error']}" for f in tender_failures],
             })
 
         messages.success(request, f'Order #{order.branch_order_number or order.id} updated/created successfully.')
@@ -1600,17 +1632,7 @@ def order_create_manual(request, restaurant_slug=None):
     if branch_obj:
         cust_parties_qs = cust_parties_qs.filter(Q(branch=branch_obj) | Q(branch__isnull=True))
     cust_parties_qs = cust_parties_qs.order_by('name')
-    cust_parties_list = [
-        {
-            'id': p.id,
-            'name': p.name,
-            'phone': p.phone or '',
-            'email': p.email or '',
-            'gstin': p.gstin or '',
-            'full_address': p.full_address or ''
-        }
-        for p in cust_parties_qs
-    ]
+    cust_parties_list = [_party_json(p) for p in cust_parties_qs]
     active_branch_gstin_manual = get_branch_gstin_str(branch_obj, restaurant)
 
     service_charge_pct_val = float(branch_obj.service_charge_percentage if (branch_obj and branch_obj.service_charge_percentage is not None) else (settings_obj.service_charge_percentage or 0))
@@ -1661,9 +1683,8 @@ def order_create_manual(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def pos_draft_order_api(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
         return JsonResponse({'success': False, 'error': 'No restaurant profile'}, status=403)
 
     active_branch = get_active_branch(request, restaurant)
@@ -1750,15 +1771,91 @@ def pos_draft_order_api(request, restaurant_slug=None):
         })
 
 
+def _party_json(p):
+    return {'id': p.id, 'name': p.name, 'phone': p.phone or '', 'email': p.email or '', 'gstin': p.gstin or '',
+            'gst_registration_type': p.gst_registration_type or '', 'state': p.state or '',
+            'full_address': p.full_address or ''}
+
+
+@login_required
+@user_passes_test(is_admin)
+def pos_gst_company_api(request, restaurant_slug=None):
+    """Settle → "Company (has GSTIN)": save the billed company as a customer Party (same record as
+    Parties → Add New Party). A GSTIN already on file updates that party instead of duplicating it."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST required'}, status=405)
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return JsonResponse({'success': False, 'error': 'Not allowed'}, status=403)
+    try:
+        data = json.loads(request.body or b'{}')
+    except ValueError:
+        return JsonResponse({'success': False, 'error': 'Invalid request'}, status=400)
+
+    from super_admin.forms import GST_STATE_CODE_MAP, is_valid_gstin_checksum, normalize_pan_or_gstin
+    name = ' '.join(str(data.get('name') or '').split())
+    gstin = normalize_pan_or_gstin(data.get('gstin') or '')
+    reg_type = data.get('gst_registration_type') or Party.GstRegistrationType.REGULAR
+    if reg_type not in (Party.GstRegistrationType.REGULAR, Party.GstRegistrationType.COMPOSITION):
+        reg_type = Party.GstRegistrationType.REGULAR
+    errors = {}
+    if not name:
+        errors['name'] = 'Enter the registered company name.'
+    if not re.match(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$', gstin):
+        errors['gstin'] = 'Enter a valid 15-character GSTIN (e.g. 27AAACT2727Q1ZW).'
+    elif gstin[:2] not in GST_STATE_CODE_MAP:
+        errors['gstin'] = f'GSTIN starts with an unknown state code ({gstin[:2]}).'
+    elif not is_valid_gstin_checksum(gstin):
+        errors['gstin'] = 'This GSTIN fails the check digit — please re-check it.'
+    email = (data.get('email') or '').strip()
+    if email:
+        from django.core.validators import validate_email
+        try:
+            validate_email(email)
+        except ValidationError:
+            errors['email'] = 'Enter a valid email address.'
+    if errors:
+        return JsonResponse({'success': False, 'errors': errors}, status=400)
+
+    state = (data.get('state') or '').strip() or GST_STATE_CODE_MAP[gstin[:2]]
+    fields = {
+        'name': name, 'party_type': Party.PartyType.CUSTOMER, 'gstin': gstin, 'gst_registration_type': reg_type,
+        'place_of_supply': GST_STATE_CODE_MAP[gstin[:2]], 'phone': (data.get('phone') or '').strip(), 'email': email,
+        'address_line1': (data.get('address_line1') or '').strip(), 'city': (data.get('city') or '').strip(),
+        'state': state, 'pincode': (data.get('pincode') or '').strip(),
+    }
+    fields['address'] = ', '.join(v for v in [fields['address_line1'], fields['city'], state, fields['pincode']] if v)
+    branch = get_active_branch(request, restaurant)
+    party = Party.objects.filter(restaurant=restaurant, gstin__iexact=gstin).first()
+    # adding a GSTIN to a party picked from Parties: update that party, not a new one
+    picked = None
+    if str(data.get('party_id') or '').isdigit():
+        picked = Party.objects.filter(restaurant=restaurant, pk=int(data['party_id'])).first()
+    if picked:
+        if party and party.pk != picked.pk:
+            return JsonResponse({'success': False, 'errors': {
+                'gstin': f'This GSTIN already belongs to “{party.name}” in Parties — pick that party instead.'}}, status=400)
+        party = picked
+    created = party is None
+    if created:
+        party = Party.objects.create(restaurant=restaurant, branch=branch, opening_balance=Decimal('0.00'),
+                                     balance_type=Party.BalanceType.RECEIVABLE, **fields)
+    else:
+        for k, v in fields.items():  # keep its type (it may also be a vendor) and any details not re-entered
+            if k != 'party_type' and (v or k in ('name', 'gstin', 'gst_registration_type', 'place_of_supply')):
+                setattr(party, k, v)
+        party.save()
+    return JsonResponse({'success': True, 'created': created, 'party': _party_json(party)})
+
+
 @login_required
 @user_passes_test(is_admin)
 def pos_sync_draft_items_api(request, restaurant_slug=None):
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'POST required'}, status=405)
 
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
         return JsonResponse({'success': False, 'error': 'No restaurant profile'}, status=403)
 
     active_branch = get_active_branch(request, restaurant)
@@ -1934,11 +2031,9 @@ def pos_finalize_order_api(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def order_edit_manual(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     order = get_object_or_404(Order.objects.prefetch_related('items', 'items__menu_item').filter(restaurant=restaurant), pk=pk)
 
@@ -1980,9 +2075,8 @@ def order_edit_manual(request, pk, restaurant_slug=None):
         excise_bill_no = (data.get('excise_bill_no') or data.get('excise') or '').strip()
         if gstin_no: order.gstin_no = gstin_no
         if excise_bill_no: order.excise_bill_no = excise_bill_no
-        party_gstin_input = (data.get('party_gstin') or data.get('customer_gstin') or '').strip()
-        if party_gstin_input and len(party_gstin_input) == 15 and not order.gstin_no:
-            order.gstin_no = party_gstin_input
+        # the buyer's GSTIN belongs on their Party (bills read order.party.gstin); gstin_no is OUR invoice number
+        party_gstin_input = (data.get('party_gstin') or data.get('customer_gstin') or '').strip().upper()
 
         # Sync party
         if order.customer_name or order.phone:
@@ -2423,11 +2517,9 @@ def inventory_edit(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def inventory_delete(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     item = get_object_or_404(InventoryItem, pk=pk, restaurant=restaurant)
     if request.method == 'POST':
         item.delete()
@@ -2440,11 +2532,9 @@ def inventory_delete(request, pk, restaurant_slug=None):
 def inventory_adjust(request, pk, restaurant_slug=None):
     if request.method != 'POST':
         return HttpResponseBadRequest('POST required')
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     item = get_object_or_404(InventoryItem, pk=pk, restaurant=restaurant)
     try:
         delta = int(request.POST.get('delta', '0'))
@@ -2466,11 +2556,9 @@ def inventory_adjust(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def menu_recipe(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     menu_item = get_object_or_404(MenuItem, pk=pk, restaurant=restaurant)
     ingredients = MenuItemIngredient.objects.filter(menu_item=menu_item).select_related('inventory_item')
@@ -2518,11 +2606,9 @@ def menu_recipe(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def menu_recipe_delete(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     recipe_item = get_object_or_404(MenuItemIngredient, pk=pk, menu_item__restaurant=restaurant)
     menu_item_id = recipe_item.menu_item.id
@@ -2534,11 +2620,9 @@ def menu_recipe_delete(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def inventory_logs(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     active_branch = get_active_branch(request, restaurant)
     base_qs = InventoryTransaction.objects.filter(inventory_item__restaurant=restaurant)
@@ -2708,10 +2792,9 @@ def party_list(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def party_edit_api(request, restaurant_slug, pk):
-    if restaurant_slug:
-        restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
-    else:
-        restaurant = request.user.restaurant_profile.restaurant
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     party = get_object_or_404(Party, pk=pk, restaurant=restaurant)
 
@@ -2738,10 +2821,9 @@ def party_edit_api(request, restaurant_slug, pk):
 @login_required
 @user_passes_test(is_admin)
 def party_ledger_detail(request, restaurant_slug, pk):
-    if restaurant_slug:
-        restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
-    else:
-        restaurant = request.user.restaurant_profile.restaurant
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     party = get_object_or_404(Party, pk=pk, restaurant=restaurant)
 
@@ -2851,14 +2933,9 @@ def party_ledger_detail(request, restaurant_slug, pk):
 @login_required
 @user_passes_test(is_admin)
 def purchase_create(request, restaurant_slug=None):
-    if restaurant_slug:
-        restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
-    else:
-        try:
-            restaurant = request.user.restaurant_profile.restaurant
-        except RestaurantUser.DoesNotExist:
-            from django.http import HttpResponseForbidden
-            return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     active_branch = get_active_branch(request, restaurant)
 
@@ -4039,99 +4116,79 @@ def dashboard(request, restaurant_slug=None):
     if not isinstance(restaurant, Restaurant):
         return restaurant  # HttpResponse
 
-    # Resolve active branch
+    from restaurant_admin import dashboard_metrics as DM
+
+    # Branch scope: a branch-bound login always sees its branch; others pick one branch or all of them
     profile = getattr(request.user, 'restaurant_profile', None)
-    active_branch = profile.branch if profile else None
-    if not active_branch and restaurant:
-        branch_id = request.GET.get('branch_id') or request.session.get(f'active_branch_{restaurant.id}')
+    all_branches = list(restaurant.branches.all().order_by('name'))
+    branch_locked = bool(profile and profile.branch)
+    wanted = request.GET.get('branch_id', '')
+    if branch_locked:
+        active_branch = profile.branch
+    elif wanted == 'all' and len(all_branches) > 1:
+        active_branch = None
+    else:
+        active_branch = None
+        branch_id = wanted or request.session.get(f'active_branch_{restaurant.id}')
         if branch_id and str(branch_id).isdigit():
-            active_branch = restaurant.branches.filter(id=int(branch_id)).first()
-            if active_branch:
-                request.session[f'active_branch_{restaurant.id}'] = active_branch.id
-        if not active_branch:
-            active_branch = restaurant.branches.first()
-            if active_branch:
-                request.session[f'active_branch_{restaurant.id}'] = active_branch.id
+            active_branch = next((b for b in all_branches if b.id == int(branch_id)), None)
+        active_branch = active_branch or (all_branches[0] if all_branches else None)
+        if active_branch:
+            request.session[f'active_branch_{restaurant.id}'] = active_branch.id
+    branches = [active_branch] if active_branch else (None if not branch_locked else [])
 
-    # Get today's date
-    today = timezone.now()
-    
-    # Base order queryset scoped to active_branch
-    base_orders = Order.objects.filter(restaurant=restaurant)
-    if active_branch:
-        base_orders = base_orders.filter(branch=active_branch)
+    period, period_label, start, end = DM.resolve_period(request.GET.get('period', 'today'), request.GET.get('from', ''), request.GET.get('to', ''))
+    data = DM.compute(restaurant, branches, start, end)
 
-    # Get statistics (scoped to branch)
-    total_orders = base_orders.exclude(status=Order.OrderStatus.DRAFT).count()
-    today_orders = base_orders.filter(order_time__date=today.date()).exclude(status=Order.OrderStatus.DRAFT).count()
-    menu_items_qs_dash = MenuItem.objects.filter(restaurant=restaurant)
-    if active_branch:
-        menu_items_qs_dash = menu_items_qs_dash.filter(branch=active_branch)
-    total_menu_items = menu_items_qs_dash.count()
-    
-    # Calculate total revenue from completed/served orders only (excluding drafts, cancelled, and refunded)
-    total_revenue = base_orders.filter(
-        status__in=[Order.OrderStatus.COMPLETED, Order.OrderStatus.SERVED]
-    ).exclude(
-        status__in=[Order.OrderStatus.DRAFT, Order.OrderStatus.CANCELLED]
-    ).exclude(
-        payment_status=Order.PaymentStatus.REFUNDED
-    ).aggregate(Sum('total_amount'))['total_amount__sum'] or Decimal('0.00')
+    if request.GET.get('export') == 'csv':
+        import csv
+        from django.http import HttpResponse as _HR
+        resp = _HR(content_type='text/csv')
+        resp['Content-Disposition'] = f'attachment; filename="sales-{start:%Y%m%d}-{end:%Y%m%d}.csv"'
+        w = csv.writer(resp)
+        w.writerow(['Hour' if data['single_day'] else 'Date', 'Orders', 'Sales (incl. tax)'])
+        for row in data['series']:
+            w.writerow([row.get('date', row['label']), row['orders'], f"{row['sales']:.2f}"])
+        w.writerow([])
+        w.writerow(['Total', data['cur']['orders'], f"{data['cur']['gross']:.2f}"])
+        return resp
 
-    # Today's advance collections (Cashflow for end-of-day drawer balance)
-    today_advance_collected = base_orders.filter(
-        order_time__date=today.date()
-    ).aggregate(s=Sum('advance_amount_paid'))['s'] or Decimal('0.00')
-    
-    # Get recent orders
-    recent_orders = base_orders.order_by('-order_time')[:5]
-    
-    # Get top selling items
-    top_items = OrderItem.objects.filter(order__in=base_orders).values(
-        'menu_item__name'
-    ).annotate(
-        total_ordered=Sum('quantity')
-    ).order_by('-total_ordered')[:5]
-    
-    agg_dash = base_orders.aggregate(
-        latest_order_time=Max('order_time'),
-        total_orders=Count('id'),
-    )
+    chart = {
+        'labels': [r['label'] for r in data['series']],
+        'sales': [r['sales'] for r in data['series']],
+        'orders': [r['orders'] for r in data['series']],
+        'prev': [r['sales'] for r in data['prev_series']][:len(data['series'])],
+        'channels': [{'label': c['label'], 'value': float(c['sales'])} for c in data['channels']],
+        'payments': [{'label': p['label'], 'value': float(p['amount'])} for p in data['payments']],
+        'categories': [{'label': c['name'], 'value': float(c['sales'])} for c in data['menu']['categories']],
+    }
+    live = DM.live(restaurant, branches)
+    agg_dash = Order.objects.filter(restaurant=restaurant).filter(**({'branch': active_branch} if active_branch else {})).aggregate(
+        latest_order_time=Max('order_time'), total_orders=Count('id'))
 
-    # Notification sound URL
     try:
         notif_url = RestaurantSettings.get_settings(restaurant).notification_sound.url
     except Exception:
         notif_url = ''
     notif_abs_url = request.build_absolute_uri(notif_url) if notif_url else ''
-    notif_abs_url = request.build_absolute_uri(notif_url) if notif_url else ''
-    notif_abs_url = request.build_absolute_uri(notif_url) if notif_url else ''
-    notif_abs_url = request.build_absolute_uri(notif_url) if notif_url else ''
-    notif_abs_url = request.build_absolute_uri(notif_url) if notif_url else ''
-    notif_abs_url = request.build_absolute_uri(notif_url) if notif_url else ''
-    notif_abs_url = request.build_absolute_uri(notif_url) if notif_url else ''
-    notif_abs_url = request.build_absolute_uri(notif_url) if notif_url else ''
-    notif_abs_url = request.build_absolute_uri(notif_url) if notif_url else ''
-    notif_abs_url = request.build_absolute_uri(notif_url) if notif_url else ''
-    notif_abs_url = request.build_absolute_uri(notif_url) if notif_url else ''
 
+    hour = timezone.localtime().hour
     context = {
         'active_menu': 'dashboard',
         'user': request.user,
-        'total_orders': total_orders,
-        'today_orders': today_orders,
-        'total_menu_items': total_menu_items,
-        'total_revenue': total_revenue,
-        'recent_orders': recent_orders,
-        'top_items': top_items,
-        'today': today,
         'restaurant': restaurant,
+        'today': timezone.localtime(),
+        'greeting': 'Good morning' if hour < 12 else ('Good afternoon' if hour < 17 else 'Good evening'),
+        'd': data, 'live': live, 'chart_data': chart,
+        'period': period, 'period_label': period_label, 'periods': DM.PERIODS,
+        'dash_branches': all_branches, 'dash_branch': active_branch, 'branch_locked': branch_locked,
+        'compare': DM.branch_comparison(restaurant, all_branches, start, end) if (active_branch is None and len(all_branches) > 1) else None,
         'baseline_total_orders': agg_dash.get('total_orders') or 0,
         'baseline_latest_order_iso': agg_dash.get('latest_order_time').isoformat() if agg_dash.get('latest_order_time') else '',
         'notification_sound_url': notif_url,
         'notification_sound_abs_url': notif_abs_url,
     }
-    
+
     return render(request, 'restaurant_admin/dashboard.html', context)
 
 # Menu Management
@@ -4797,137 +4854,14 @@ def menu_delete(request, pk, restaurant_slug=None):
         'rslug': rslug,
         'current_branch': active_branch,
     })
-@login_required
-@user_passes_test(is_admin)
-def order_notifications_poll(request, restaurant_slug=None):
-    """
-    Lightweight, high-performance polling endpoint for global order notifications.
-    Returns:
-      - total_orders: total count of orders for branch/restaurant
-      - latest_id: the most recent order PK
-      - new_orders: list of any orders created with ID > since_id
-      - recent_orders: latest 5 orders for the dropdown preview
-      - sound_url: custom alert sound URL if configured in RestaurantSettings
-    """
-    restaurant = resolve_restaurant(request, restaurant_slug)
-    if not isinstance(restaurant, Restaurant):
-        return JsonResponse({'success': False, 'error': 'Invalid restaurant'}, status=403)
-
-    active_branch = get_active_branch(request, restaurant)
-    orders_qs = Order.objects.filter(restaurant=restaurant)
-    if active_branch:
-        orders_qs = orders_qs.filter(branch=active_branch)
-
-    # 1. Fast indexed-only lookup for latest order id (B-Tree PK index, no heavy joins)
-    latest_id = orders_qs.values_list('id', flat=True).order_by('-id').first() or 0
-
-    ready_orders_count = orders_qs.filter(status=Order.OrderStatus.READY).count()
-    since_ready_raw = request.GET.get('since_ready')
-    since_ready = int(since_ready_raw) if (since_ready_raw and str(since_ready_raw).isdigit()) else -1
-    has_new_ready = (since_ready >= 0 and ready_orders_count > since_ready)
-
-    since_id_raw = request.GET.get('since_id')
-    since_id = int(since_id_raw) if (since_id_raw and str(since_id_raw).isdigit()) else 0
-
-    # 2. ULTRA-FAST SHORT-CIRCUIT: If client is up to date on both new orders and ready status, return immediately!
-    if since_id > 0 and latest_id <= since_id and not has_new_ready:
-        return JsonResponse({
-            'success': True,
-            'has_new': False,
-            'has_new_ready': False,
-            'latest_id': latest_id,
-            'ready_count': ready_orders_count,
-        })
-
-    # 3. If since_id == 0 (initial dashboard load) or latest_id > since_id (new order arrived!):
-    new_orders = []
-    if since_id > 0 and latest_id > since_id:
-        new_items = orders_qs.filter(id__gt=since_id).select_related('table').order_by('-id')[:10]
-        for o in new_items:
-            table_name = o.table.name if o.table else (f"Table {o.table_number}" if o.table_number else (o.get_order_type_display() or "Takeaway"))
-            new_orders.append({
-                'id': o.id,
-                'order_number': o.order_number or f"#{o.id}",
-                'order_type': o.get_order_type_display(),
-                'order_type_raw': o.order_type,
-                'table_name': table_name,
-                'customer_name': o.customer_name or 'Customer',
-                'total_amount': float(o.total_amount or 0),
-                'status': o.get_status_display(),
-                'status_raw': o.status,
-                'time_str': format_local_time(o.order_time),
-                'detail_url': reverse('restaurant_admin:order_detail', kwargs={'restaurant_slug': restaurant.slug, 'pk': o.id}),
-            })
-
-    # 4. Newly ready orders to alert floor staff / cashier
-    new_ready_orders = []
-    if has_new_ready:
-        ready_items = orders_qs.filter(status=Order.OrderStatus.READY).select_related('table').order_by('-ready_at')[:5]
-        for o in ready_items:
-            table_name = o.table.name if o.table else (f"Table {o.table_number}" if o.table_number else (o.get_order_type_display() or "Takeaway"))
-            new_ready_orders.append({
-                'id': o.id,
-                'order_number': o.order_number or f"#{o.id}",
-                'order_type': o.get_order_type_display(),
-                'table_name': table_name,
-                'customer_name': o.customer_name or 'Customer',
-                'total_amount': float(o.total_amount or 0),
-                'status': 'Ready to Serve',
-                'time_str': format_local_time(o.ready_at or o.order_time),
-                'detail_url': reverse('restaurant_admin:order_detail', kwargs={'restaurant_slug': restaurant.slug, 'pk': o.id}),
-            })
-
-    # Recent 5 orders for dropdown preview (only fetched on initial load or new order arrival)
-    recent_items = orders_qs.select_related('table').order_by('-id')[:5]
-    recent_orders = []
-    for o in recent_items:
-        table_name = o.table.name if o.table else (f"Table {o.table_number}" if o.table_number else (o.get_order_type_display() or "Takeaway"))
-        recent_orders.append({
-            'id': o.id,
-            'order_number': o.order_number or f"#{o.id}",
-            'order_type': o.get_order_type_display(),
-            'order_type_raw': o.order_type,
-            'table_name': table_name,
-            'customer_name': o.customer_name or 'Customer',
-            'total_amount': float(o.total_amount or 0),
-            'status': o.get_status_display(),
-            'status_raw': o.status,
-            'time_str': format_local_time(o.order_time),
-            'detail_url': reverse('restaurant_admin:order_detail', kwargs={'restaurant_slug': restaurant.slug, 'pk': o.id}),
-        })
-
-    # Sound URL (with cache-busting timestamp so track updates apply instantly)
-    sound_url = ''
-    try:
-        settings_obj = RestaurantSettings.get_settings(restaurant)
-        if settings_obj and settings_obj.notification_sound and settings_obj.notification_sound.name:
-            base_url = request.build_absolute_uri(settings_obj.notification_sound.url)
-            ts = int(settings_obj.updated_at.timestamp()) if getattr(settings_obj, 'updated_at', None) else int(datetime.now().timestamp())
-            sound_url = f"{base_url}?v={ts}"
-    except Exception:
-        sound_url = ''
-
-    return JsonResponse({
-        'success': True,
-        'has_new': bool(new_orders),
-        'has_new_ready': has_new_ready,
-        'latest_id': latest_id,
-        'ready_count': ready_orders_count,
-        'new_orders': new_orders,
-        'new_ready_orders': new_ready_orders,
-        'recent_orders': recent_orders,
-        'sound_url': sound_url,
-    })
 
 
 @login_required
 @user_passes_test(is_admin)
 def order_list(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     query_params = request.GET.urlencode()
     redirect_url = reverse('restaurant_admin:order_records', kwargs={'restaurant_slug': restaurant.slug})
@@ -5585,11 +5519,9 @@ def _export_tally_vouchers(request, restaurant):
 @login_required
 @user_passes_test(is_admin)
 def order_records_export(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     # ── Dispatch: Tally Accounting Voucher export ──────────────────────────
     if request.GET.get('format') == 'tally':
@@ -5819,17 +5751,12 @@ def order_records_export(request, restaurant_slug=None):
 @user_passes_test(is_admin)
 def orders_stream(request, restaurant_slug=None):
     """Server-Sent Events stream for new orders for the admin's restaurant."""
-    # Resolve restaurant
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    # Your own restaurant (by its slug or a branch slug); platform admins may watch any
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
 
     slug = getattr(restaurant, 'slug', None)
-    if restaurant_slug and slug != restaurant_slug:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("You do not have permission for this restaurant.")
     if not slug:
         return HttpResponseBadRequest('Missing restaurant slug')
 
@@ -5869,11 +5796,9 @@ def orders_stream(request, restaurant_slug=None):
 @user_passes_test(is_admin)
 def order_detail(request, pk, restaurant_slug=None):
     # Scope to restaurant
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     order = get_object_or_404(Order.objects.prefetch_related('items', 'items__menu_item').filter(restaurant=restaurant), pk=pk)
 
     # Calculate subtotal, taxes, round off, and totals using Order breakdown
@@ -5942,11 +5867,9 @@ def order_detail(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def order_set_prep_time(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     order = get_object_or_404(Order, pk=pk, restaurant=restaurant)
 
@@ -6003,13 +5926,9 @@ def order_settle_api(request, pk, restaurant_slug=None):
     if request.method not in ['POST', 'PATCH']:
         return JsonResponse({'success': False, 'error': 'POST or PATCH method required'}, status=405)
 
-    if restaurant_slug:
-        restaurant = get_object_or_404(Restaurant, slug=restaurant_slug)
-    else:
-        try:
-            restaurant = request.user.restaurant_profile.restaurant
-        except Exception:
-            return JsonResponse({'success': False, 'error': 'No restaurant profile found'}, status=403)
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return JsonResponse({'success': False, 'error': 'No restaurant profile found'}, status=403)
 
     order = get_object_or_404(Order, pk=pk, restaurant=restaurant)
 
@@ -6239,11 +6158,9 @@ def coupon_add(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def coupon_edit(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     coupon = get_object_or_404(Coupon, pk=pk)
     # Only allow editing if global (restaurant null) or matches restaurant
@@ -6273,11 +6190,9 @@ def coupon_edit(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def coupon_delete(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     coupon = get_object_or_404(Coupon, pk=pk)
     if request.method == 'POST':
@@ -6299,11 +6214,9 @@ def coupon_delete(request, pk, restaurant_slug=None):
 @user_passes_test(is_admin)
 def order_invoice(request, pk, restaurant_slug=None):
     # Ensure the order belongs to current admin's restaurant
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     order = get_object_or_404(
         Order.objects.prefetch_related('items', 'items__menu_item').filter(restaurant=restaurant),
@@ -6387,10 +6300,9 @@ def order_invoice(request, pk, restaurant_slug=None):
 
 @login_required
 def order_kot(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except Exception:
-        restaurant = getattr(request.user, 'restaurant', None)
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        restaurant = None
 
     if not restaurant:
         from django.http import HttpResponseForbidden
@@ -6482,11 +6394,9 @@ def order_kot(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def order_update_status(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     try:
         order = get_object_or_404(Order, pk=pk, restaurant=restaurant)
         
@@ -6990,11 +6900,9 @@ def category_list(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def category_detail(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     category = get_object_or_404(Category.objects.prefetch_related('subcategories').filter(restaurant=restaurant), pk=pk)
     subcategories = category.subcategories.all()
     
@@ -7008,11 +6916,9 @@ def category_detail(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def category_add(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     active_branch = get_active_branch(request, restaurant)
     if request.method == 'POST':
         form = CategoryForm(request.POST, request.FILES, restaurant=restaurant, branch=active_branch)
@@ -7033,11 +6939,9 @@ def category_add(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def category_edit(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     active_branch = get_active_branch(request, restaurant)
     category = get_object_or_404(Category, pk=pk, restaurant=restaurant)
     if request.method == 'POST':
@@ -7060,11 +6964,9 @@ def category_edit(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def category_delete(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     category = get_object_or_404(Category, pk=pk, restaurant=restaurant)
     if request.method == 'POST':
         category.delete()
@@ -7076,11 +6978,9 @@ def category_delete(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def subcategory_list(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     subcategories_qs = SubCategory.objects.select_related('category').filter(category__restaurant=restaurant)
 
     try:
@@ -7092,17 +6992,16 @@ def subcategory_list(request, restaurant_slug=None):
     subcategories = paginator.get_page(page_number)
     return render(request, 'restaurant_admin/subcategories/list.html', {
         'subcategories': subcategories,
+        'categories': Category.objects.filter(restaurant=restaurant).order_by('name'),
         'active_menu': 'subcategory_list'
     })
 
 @login_required
 @user_passes_test(is_admin)
 def subcategory_add(request, category_id=None, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     category = get_object_or_404(Category, pk=category_id, restaurant=restaurant) if category_id else None
     
     if request.method == 'POST':
@@ -7130,11 +7029,9 @@ def subcategory_add(request, category_id=None, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def subcategory_edit(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     subcategory = get_object_or_404(SubCategory.objects.select_related('category'), pk=pk, category__restaurant=restaurant)
     
     if request.method == 'POST':
@@ -7157,11 +7054,9 @@ def subcategory_edit(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def subcategory_delete(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     subcategory = get_object_or_404(SubCategory, pk=pk, category__restaurant=restaurant)
     category_pk = subcategory.category.pk if subcategory.category else None
     
@@ -7177,49 +7072,31 @@ def subcategory_delete(request, pk, restaurant_slug=None):
         'cancel_url': reverse_lazy('restaurant_admin:category_detail', kwargs={'restaurant_slug': restaurant.slug, 'pk': category_pk}) if category_pk else reverse_lazy('restaurant_admin:category_list', kwargs={'restaurant_slug': restaurant.slug})
     })
 
+@login_required
+@user_passes_test(is_admin)
 @require_http_methods(["GET"])
 def get_subcategories(request, restaurant_slug=None):
-
-    # 
-    #     AJAX view to get subcategories for a given category.
-    #     
+    """AJAX: subcategories of one of this business's categories."""
     category_id = request.GET.get('category_id')
     if not category_id:
         return JsonResponse({'error': 'Category ID is required'}, status=400)
-    
-    try:
-        # Optionally verify category belongs to current admin's restaurant
-        if request.user.is_authenticated and hasattr(request.user, 'restaurant_profile'):
-            try:
-                restaurant = request.user.restaurant_profile.restaurant
-                subcategories = SubCategory.objects.filter(category_id=category_id, category__restaurant=restaurant).values('id', 'name')
-            except RestaurantUser.DoesNotExist:
-                subcategories = SubCategory.objects.none().values('id', 'name')
-        else:
-            subcategories = SubCategory.objects.filter(category_id=category_id).values('id', 'name')
-        return JsonResponse(list(subcategories), safe=False)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return JsonResponse({'error': 'No access to this business'}, status=403)
+    subcategories = SubCategory.objects.filter(category_id=category_id, category__restaurant=restaurant).values('id', 'name')
+    return JsonResponse(list(subcategories), safe=False)
 
 
+@login_required
+@user_passes_test(is_admin)
 def qr_code_generator(request, restaurant_slug=None):
     """View for the QR code generator page"""
-    # Get categories and menu items for the form
-    if request.user.is_authenticated and hasattr(request.user, 'restaurant_profile'):
-        try:
-            restaurant = request.user.restaurant_profile.restaurant
-            categories = Category.objects.filter(restaurant=restaurant)
-            menu_items = MenuItem.objects.filter(restaurant=restaurant)
-        except RestaurantUser.DoesNotExist:
-            categories = Category.objects.none()
-            menu_items = MenuItem.objects.none()
-    else:
-        categories = Category.objects.all()
-        menu_items = MenuItem.objects.all()
-    
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     return render(request, 'restaurant_admin/qr_code_generator.html', {
-        'categories': categories,
-        'menu_items': menu_items,
+        'categories': Category.objects.filter(restaurant=restaurant),
+        'menu_items': MenuItem.objects.filter(restaurant=restaurant),
         'active_menu': 'qr_generator',
     })
 
@@ -7464,7 +7341,9 @@ def settings_view(request, restaurant_slug=None):
 
     branch_operating_status = branch.get_operating_status() if branch else None
 
+    from core import two_factor
     return render(request, 'restaurant_admin/settings.html', {
+        'two_factor_on': two_factor.is_enabled(request.user),
         'form': form,
         'branch_form': branch_form,
         'branch': branch,
@@ -7588,11 +7467,9 @@ def custom_charge_delete(request, restaurant_slug=None, pk=None):
 @login_required
 @user_passes_test(is_admin)
 def sales_analytics(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     active_branch = get_active_branch(request, restaurant)
 
@@ -7861,11 +7738,9 @@ def sales_analytics(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def receipt_list(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     active_branch = get_active_branch(request, restaurant)
     qs = AdvanceReceipt.objects.filter(restaurant=restaurant)
@@ -7930,11 +7805,9 @@ def receipt_list(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def receipt_create_page(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     active_branch = get_active_branch(request, restaurant)
 
@@ -8140,11 +8013,9 @@ def receipt_create_page(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def receipt_edit_page(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     receipt = get_object_or_404(AdvanceReceipt, pk=pk, restaurant=restaurant)
 
@@ -8330,9 +8201,8 @@ def receipt_edit_page(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def receipt_create_api(request, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
         return JsonResponse({'success': False, 'error': 'No restaurant associated with account.'}, status=403)
 
     active_branch = get_active_branch(request, restaurant)
@@ -8465,11 +8335,9 @@ def receipt_create_api(request, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def receipt_print(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
 
     receipt = get_object_or_404(AdvanceReceipt, pk=pk, restaurant=restaurant)
     branch = restaurant.branches.first() if hasattr(restaurant, 'branches') else None
@@ -8484,9 +8352,8 @@ def receipt_print(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def receipt_cancel_api(request, pk, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
         return JsonResponse({'success': False, 'error': 'No restaurant associated with account.'}, status=403)
 
     if request.method != 'POST':
@@ -8505,9 +8372,8 @@ def receipt_cancel_api(request, pk, restaurant_slug=None):
 @login_required
 @user_passes_test(is_admin)
 def receipt_detail_api(request, receipt_no, restaurant_slug=None):
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
         return JsonResponse({'success': False, 'error': 'No restaurant associated with account.'}, status=403)
 
     receipt = get_object_or_404(AdvanceReceipt, restaurant=restaurant, receipt_no=receipt_no)
@@ -9249,10 +9115,9 @@ def kitchen_kds_view(request, restaurant_slug=None):
     Main Kitchen Display System (KDS) View.
     Displays active KOT and BOT tickets for Kitchen and Bar.
     """
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except Exception:
-        restaurant = getattr(request.user, 'restaurant', None)
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        restaurant = None
 
     if not restaurant:
         from django.http import HttpResponseForbidden
@@ -9277,10 +9142,9 @@ def kitchen_kds_orders_api(request, restaurant_slug=None):
     """
     JSON API for KDS to fetch live tickets, filter by station, and update timers.
     """
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except Exception:
-        restaurant = getattr(request.user, 'restaurant', None)
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        restaurant = None
 
     if not restaurant:
         return JsonResponse({'success': False, 'error': 'No restaurant found'}, status=403)
@@ -9290,64 +9154,60 @@ def kitchen_kds_orders_api(request, restaurant_slug=None):
     status_filter = request.GET.get('status', 'all').lower()  # all, new, in_kitchen, delayed, completed
     search_q = (request.GET.get('search') or '').strip().lower()
 
+    from django.db.models import Prefetch
     from django.utils import timezone
-    from datetime import timedelta
-    now = timezone.now()
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    from restaurant_admin import kds
 
-    # Base queryset: orders from today or active non-cancelled/non-draft orders
+    now = timezone.now()
+    range_key, start_date, end_date = kds.resolve_window(request.GET)
+    window_lo, window_hi = kds.window_bounds(start_date, end_date)
+    includes_today = end_date >= timezone.localdate()
+
+    open_statuses = [Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING]
+    done_statuses = [Order.OrderStatus.READY, Order.OrderStatus.SERVED, Order.OrderStatus.COMPLETED]
+
     orders_qs = Order.objects.filter(restaurant=restaurant).exclude(status__in=[Order.OrderStatus.CANCELLED, Order.OrderStatus.DRAFT])
     if active_branch:
         orders_qs = orders_qs.filter(branch=active_branch)
 
-    # For completed orders, show orders from today only so old orders don't clutter the display
-    orders_qs = orders_qs.filter(
-        Q(status__in=[Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING]) |
-        Q(status__in=[Order.OrderStatus.READY, Order.OrderStatus.SERVED, Order.OrderStatus.COMPLETED], order_time__gte=today_start - timedelta(hours=6))
-    ).prefetch_related('items', 'items__menu_item', 'table').order_by('order_time')
+    # Tickets fired inside the window, plus (when the window reaches today) any ticket
+    # still open on the line from before it, so nothing cooking drops off the board.
+    in_window = Q(order_time__gte=window_lo, order_time__lt=window_hi)
+    if includes_today:
+        in_window |= Q(status__in=open_statuses, order_time__lt=window_lo)
+    orders_qs = (orders_qs.filter(in_window)
+                 .select_related('table')
+                 .prefetch_related(Prefetch('items', queryset=OrderItem.objects.select_related('menu_item').order_by('kot_batch', 'id')))
+                 .order_by('order_time'))
 
-    counts = {
-        'new': 0,
-        'in_kitchen': 0,
-        'delayed': 0,
-        'completed': 0,
-        'total_active': 0
-    }
-
-    serialized_orders = []
+    bar_tax_types = {MenuItem.TaxType.VAT_BEER, MenuItem.TaxType.VAT_IMFL, MenuItem.TaxType.VAT_WINE, MenuItem.TaxType.VAT_LIQUOR}
+    counts = {'all': 0, 'new': 0, 'in_kitchen': 0, 'delayed': 0, 'completed': 0, 'ready': 0, 'total_active': 0}
+    summary = kds.Summary()
+    open_cards, done_cards = [], []
 
     for ord_obj in orders_qs:
-        # Check items and station filtering
-        items_qs = ord_obj.items.select_related('menu_item').all()
-        if not items_qs.exists():
+        items = list(ord_obj.items.all())
+        if not items:
             continue
 
-        food_items = []
-        bar_items = []
-        for it in items_qs:
+        food_items, bar_items = [], []
+        for it in items:
             mi = it.menu_item
-            is_bar_item = mi.tax_type in [MenuItem.TaxType.VAT_BEER, MenuItem.TaxType.VAT_IMFL, MenuItem.TaxType.VAT_WINE, MenuItem.TaxType.VAT_LIQUOR] if mi else False
-            is_item_prepared = bool(it.is_prepared)
+            food_type = getattr(mi, 'food_type', 'veg') if mi else 'veg'
             item_data = {
                 'id': it.id,
                 'name': mi.name if mi else 'Item',
                 'quantity': it.quantity,
-                'food_type': getattr(mi, 'food_type', 'veg') if mi else 'veg',
-                'is_veg': getattr(mi, 'food_type', 'veg') == 'veg' if mi else True,
-                'is_bar': is_bar_item,
+                'food_type': food_type,
+                'is_veg': food_type == 'veg',
+                'is_bar': bool(mi and mi.tax_type in bar_tax_types),
                 'notes': it.notes or '',
                 'kot_batch': it.kot_batch,
-                'is_prepared': is_item_prepared,
+                'is_prepared': bool(it.is_prepared),
             }
-            if is_bar_item:
-                bar_items.append(item_data)
-            else:
-                food_items.append(item_data)
+            (bar_items if item_data['is_bar'] else food_items).append(item_data)
 
-        has_food = len(food_items) > 0
-        has_bar = len(bar_items) > 0
-
-        # Filter by requested station
+        has_food, has_bar = bool(food_items), bool(bar_items)
         if station == 'kitchen':
             if not has_food:
                 continue
@@ -9359,83 +9219,46 @@ def kitchen_kds_orders_api(request, restaurant_slug=None):
         else:
             display_items = food_items + bar_items
 
-        # Prep timing and status logic: dynamic based on items in order or custom set
         target_minutes = ord_obj.get_target_prep_minutes()
         target_seconds = target_minutes * 60
-
-        # Calculate current elapsed seconds
-        accumulated_seconds = ord_obj.prep_elapsed_seconds or 0
         is_paused = ord_obj.is_prep_paused
-        
+        total_elapsed_seconds = ord_obj.prep_elapsed_seconds or 0
         if ord_obj.status == Order.OrderStatus.PREPARING and not is_paused and ord_obj.prep_start:
-            live_add = max(0, int((now - ord_obj.prep_start).total_seconds()))
-            total_elapsed_seconds = accumulated_seconds + live_add
-        else:
-            total_elapsed_seconds = accumulated_seconds
+            total_elapsed_seconds += max(0, int((now - ord_obj.prep_start).total_seconds()))
 
-        # Determine KDS status
-        if ord_obj.status in [Order.OrderStatus.READY, Order.OrderStatus.SERVED, Order.OrderStatus.COMPLETED]:
+        if ord_obj.status in done_statuses:
             kds_status = 'COMPLETED'
-            counts['completed'] += 1
         elif total_elapsed_seconds > target_seconds:
             kds_status = 'DELAYED'
-            counts['delayed'] += 1
-            counts['total_active'] += 1
         elif ord_obj.status == Order.OrderStatus.PREPARING:
             kds_status = 'IN_KITCHEN'
-            counts['in_kitchen'] += 1
-            counts['total_active'] += 1
         else:
             kds_status = 'NEW'
-            counts['new'] += 1
+
+        if kds_status == 'COMPLETED':
+            # Finished tickets left the pass; show every line as done even if the POS closed it.
+            for it in display_items:
+                it['is_prepared'] = True
+
+        is_carried_over = ord_obj.order_time < window_lo
+        if not is_carried_over:
+            summary.add(kds_status, total_elapsed_seconds, target_seconds, display_items, ord_obj.order_time)
+
+        counts['all'] += 1
+        if kds_status == 'COMPLETED':
+            counts['completed'] += 1
+            if ord_obj.status == Order.OrderStatus.READY:
+                counts['ready'] += 1
+        else:
             counts['total_active'] += 1
+            counts[{'NEW': 'new', 'IN_KITCHEN': 'in_kitchen', 'DELAYED': 'delayed'}[kds_status]] += 1
 
-        # Check status filter
-        if status_filter != 'all':
-            if status_filter == 'new' and kds_status != 'NEW':
-                continue
-            elif status_filter == 'in_kitchen' and kds_status != 'IN_KITCHEN':
-                continue
-            elif status_filter == 'delayed' and kds_status != 'DELAYED':
-                continue
-            elif status_filter == 'completed' and kds_status != 'COMPLETED':
-                continue
+        if status_filter in ('new', 'in_kitchen', 'delayed', 'completed') and kds_status != status_filter.upper():
+            continue
 
-        # Format Token Number
         token_no = f"{ord_obj.branch_order_number:02d}" if ord_obj.branch_order_number is not None else f"{ord_obj.id:02d}"
         cust_name = ord_obj.customer_name or 'Walk in Customer'
         ord_num_display = f"#{ord_obj.branch_order_number or ord_obj.id}"
-
-        # Text search matching
-        if search_q:
-            matched = (
-                search_q in token_no.lower() or
-                search_q in cust_name.lower() or
-                search_q in ord_num_display.lower() or
-                (ord_obj.table and search_q in ord_obj.table.name.lower()) or
-                (ord_obj.table_number and search_q in str(ord_obj.table_number)) or
-                any(search_q in it['name'].lower() for it in display_items)
-            )
-            if not matched:
-                continue
-
-        # Progress calculation
-        progress_pct = min(100, int((total_elapsed_seconds / target_seconds) * 100)) if target_seconds > 0 else 0
-        delayed_seconds = max(0, total_elapsed_seconds - target_seconds)
-        delayed_minutes = int(delayed_seconds // 60)
-
-        # Elapsed minutes/seconds string for timers (MM:SS)
-        disp_mins = total_elapsed_seconds // 60
-        disp_secs = total_elapsed_seconds % 60
-        elapsed_timer_str = f"{disp_mins:02d}:{disp_secs:02d}"
-
-        # Completed elapsed string
-        completed_elapsed_str = ""
-        if kds_status == 'COMPLETED':
-            served_diff_mins = max(1, int((now - (ord_obj.ready_at or ord_obj.order_time)).total_seconds() // 60))
-            completed_elapsed_str = f"{disp_mins}:{disp_secs:02d} Mins - Served Before {served_diff_mins} Mins"
-
-        # Table display
         if ord_obj.table:
             table_display = ord_obj.table.name
         elif ord_obj.table_number:
@@ -9443,9 +9266,15 @@ def kitchen_kds_orders_api(request, restaurant_slug=None):
         else:
             table_display = ord_obj.get_order_type_display()
 
-        kot_url = reverse('restaurant_admin:order_kot', kwargs={'restaurant_slug': restaurant.slug, 'pk': ord_obj.id})
+        if search_q:
+            haystack = ' '.join([token_no, cust_name, ord_num_display, table_display, str(ord_obj.table_number or '')]
+                                + [it['name'] for it in display_items]).lower()
+            if search_q not in haystack:
+                continue
 
-        serialized_orders.append({
+        local_time = timezone.localtime(ord_obj.order_time)
+        ready_moment = ord_obj.ready_at if kds_status == 'COMPLETED' else None
+        card = {
             'id': ord_obj.id,
             'order_number': ord_num_display,
             'token_no': token_no,
@@ -9453,27 +9282,54 @@ def kitchen_kds_orders_api(request, restaurant_slug=None):
             'order_type': ord_obj.order_type,
             'order_type_display': ord_obj.get_order_type_display(),
             'table_display': table_display,
-            'order_time': ord_obj.order_time.strftime('%d %b %Y, %I:%M %p'),
+            'order_time': local_time.strftime('%d %b %Y, %I:%M %p'),
+            'order_clock': local_time.strftime('%I:%M %p').lstrip('0'),
+            'order_date': local_time.strftime('%d %b'),
+            'is_today': local_time.date() == timezone.localdate(),
+            'is_carried_over': is_carried_over,
+            'waiting_seconds': max(0, int((now - ord_obj.order_time).total_seconds())),
             'status': ord_obj.status,
             'kds_status': kds_status,
+            'is_ready_for_pickup': ord_obj.status == Order.OrderStatus.READY,
             'prep_minutes': target_minutes,
             'target_time_display': f"{target_minutes:02d}:00",
             'is_prep_paused': is_paused,
             'elapsed_seconds': total_elapsed_seconds,
-            'elapsed_timer_str': elapsed_timer_str,
-            'progress_pct': progress_pct,
-            'delayed_minutes': delayed_minutes,
-            'completed_elapsed_str': completed_elapsed_str,
+            'elapsed_timer_str': f"{total_elapsed_seconds // 60:02d}:{total_elapsed_seconds % 60:02d}",
+            'progress_pct': min(100, int(total_elapsed_seconds * 100 / target_seconds)) if target_seconds > 0 else 0,
+            'delayed_minutes': int(max(0, total_elapsed_seconds - target_seconds) // 60),
+            'cook_time_display': kds.fmt_duration(total_elapsed_seconds) if total_elapsed_seconds else '',
+            'was_late': kds_status == 'COMPLETED' and total_elapsed_seconds > target_seconds,
+            'ready_ago': kds.ago(ready_moment, now) if ready_moment and ready_moment <= now else '',
             'has_food': has_food,
             'has_bar': has_bar,
             'items': display_items,
-            'kot_url': kot_url,
-        })
+            'kot_url': reverse('restaurant_admin:order_kot', kwargs={'restaurant_slug': restaurant.slug, 'pk': ord_obj.id}),
+        }
+        if kds_status == 'COMPLETED':
+            card['_sort'] = ready_moment or ord_obj.order_time
+            done_cards.append(card)
+        else:
+            open_cards.append(card)
+
+    # Line first (oldest ticket first, like a rail), then finished tickets newest first.
+    done_cards.sort(key=lambda c: c.pop('_sort'), reverse=True)
+    completed_hidden = max(0, len(done_cards) - kds.COMPLETED_LIST_CAP)
+    serialized_orders = open_cards + done_cards[:kds.COMPLETED_LIST_CAP]
 
     return JsonResponse({
         'success': True,
         'counts': counts,
         'orders': serialized_orders,
+        'completed_hidden': completed_hidden,
+        'window': {
+            'range': range_key,
+            'from': start_date.isoformat(),
+            'to': end_date.isoformat(),
+            'label': kds.window_label(range_key, start_date, end_date),
+            'includes_today': includes_today,
+        },
+        'summary': summary.as_dict(),
     })
 
 
@@ -9490,10 +9346,9 @@ def kitchen_kds_action_api(request, pk, restaurant_slug=None):
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'POST method required'}, status=405)
 
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except Exception:
-        restaurant = getattr(request.user, 'restaurant', None)
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        restaurant = None
 
     if not restaurant:
         return JsonResponse({'success': False, 'error': 'No restaurant associated with account'}, status=403)
@@ -9608,10 +9463,9 @@ def kitchen_kds_item_toggle_api(request, order_pk, item_pk, restaurant_slug=None
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'POST required'}, status=405)
 
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except Exception:
-        restaurant = getattr(request.user, 'restaurant', None)
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        restaurant = None
 
     if not restaurant:
         return JsonResponse({'success': False, 'error': 'No restaurant found'}, status=403)
@@ -9632,3 +9486,21 @@ def kitchen_kds_item_toggle_api(request, order_pk, item_pk, restaurant_slug=None
         'is_prepared': item.is_prepared,
         'all_prepared': all_prepared,
     })
+
+@login_required
+@user_passes_test(is_admin)
+@require_POST
+def two_factor_update(request, restaurant_slug=None):
+    """The signed-in user's own email-OTP sign-in preference (Settings → Security)."""
+    from core import two_factor
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return restaurant
+    on = request.POST.get('is_2fa_enabled') == 'on'
+    err = two_factor.set_enabled(request.user, on, request.POST.get('current_password', ''))
+    if err:
+        messages.error(request, err)
+    else:
+        messages.success(request, 'Two-factor sign-in is on. You will get a code by email each time you sign in.' if on
+                         else 'Two-factor sign-in is off. You will sign in with your password only.')
+    return redirect('restaurant_admin:settings', restaurant_slug=restaurant.slug)

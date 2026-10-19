@@ -1,0 +1,44 @@
+<div class="ui-logs ui-roles">
+  <div class="ui-page-header">
+    <div><h1>Roles &amp; Permissions</h1><p>Build roles area by area (no access, view only, or manage) and give them to logins. Changes apply the moment you save.</p></div>
+    <div class="ui-actions"><a class="ui-btn ui-btn-primary" href="{{ new_role_url }}"><i class="fa-solid fa-plus"></i><span>New role</span></a></div>
+  </div>
+
+  {% if cards %}
+  <div class="ui-role-grid">
+    {% for c in cards %}
+    <a class="ui-card ui-pad ui-role-card" href="{{ roles_url }}{{ c.role.pk }}/">
+      <div class="ui-role-head"><span class="ui-role-icon"><i class="fa-solid fa-user-shield"></i></span>
+        <div><h3>{{ c.role.name }}</h3><p>{{ c.role.description|default:c.base }}</p></div></div>
+      <div class="ui-role-meta"><span class="ui-chip ui-chip-indigo">{{ c.base }}</span><span class="ui-chip ui-chip-gray">{{ c.role.members.all|length }} member{{ c.role.members.all|length|pluralize }}</span></div>
+      {% if c.manage %}<div class="ui-role-line"><strong>Manage</strong> {{ c.manage|join:", " }}</div>{% endif %}
+      {% if c.view %}<div class="ui-role-line"><strong>View</strong> {{ c.view|join:", " }}</div>{% endif %}
+      {% if c.role.members.all %}<div class="ui-role-people">{% for m in c.role.members.all|slice:":5" %}<span class="ui-avatar" title="{{ m.user.get_full_name|default:m.user.username }}">{{ m.user.get_full_name|default:m.user.username|slice:":1"|upper }}</span>{% endfor %}{% if c.role.members.all|length > 5 %}<span class="ui-log-sub">+{{ c.role.members.all|length|add:"-5" }}</span>{% endif %}</div>{% endif %}
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <section class="ui-card ui-empty"><div class="ui-empty-icon"><i class="fa-solid fa-user-shield"></i></div><h3>No custom roles yet</h3>
+    <p>The built-in roles (Cashier, Waiter, Kitchen, Front Desk…) still work. Create a custom role when someone needs a different mix, such as an accountant who sees the P&amp;L but not the POS.</p>
+    <a class="ui-btn ui-btn-primary" href="{{ new_role_url }}"><i class="fa-solid fa-plus"></i><span>Create a role</span></a></section>
+  {% endif %}
+
+  <h2 class="ui-section-title">Start from a template</h2>
+  <div class="ui-role-grid">
+    {% for name, desc, perms in presets %}
+    <a class="ui-card ui-pad ui-role-card is-preset" href="{{ new_role_url }}?preset={{ name|urlencode }}">
+      <div class="ui-role-head"><span class="ui-role-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></span><div><h3>{{ name }}</h3><p>{{ desc }}</p></div></div>
+    </a>
+    {% endfor %}
+  </div>
+
+  <section class="ui-card ui-pad">
+    <h2 class="ui-card-title">How roles work</h2>
+    <ul class="ui-ledger">
+      <li><span class="ui-ledger-text"><strong>No access</strong><span class="ui-log-sub">Hidden from the menu. Opening it takes the person to a screen they can use.</span></span></li>
+      <li><span class="ui-ledger-text"><strong>View</strong><span class="ui-log-sub">Can open lists, reports and details, but cannot add, edit, delete, bill or export changes.</span></span></li>
+      <li><span class="ui-ledger-text"><strong>Manage</strong><span class="ui-log-sub">Full use of that area.</span></span></li>
+      <li><span class="ui-ledger-text"><strong>Which admin they sign in to</strong><span class="ui-log-sub">Restaurant areas open the Restaurant admin, hotel areas the Hotel PMS, both open either. Every change is recorded in Activity Logs.</span></span></li>
+    </ul>
+  </section>
+</div>

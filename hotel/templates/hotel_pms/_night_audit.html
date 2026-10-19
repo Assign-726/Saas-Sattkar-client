@@ -1,0 +1,80 @@
+{% load restaurant_admin_extras %}
+{# Night audit — close the business day #}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>Night audit</h1><p>Business date <strong>{{ day|date:"l, d M Y" }}</strong>{% if already %} · closed{% endif %}</p></div>
+  </div>
+
+  {% if already %}
+  <div class="ui-alert ui-alert-good"><i class="fa-solid fa-circle-check ui-alert-icon"></i><div class="ui-alert-body"><strong>{{ day|date:"d M Y" }} is closed.</strong> The next audit opens tomorrow. <a href="{{ base_url }}night-audit/{{ already.pk }}/">See the summary</a>.</div></div>
+  {% endif %}
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Occupancy</div></div><div class="kpi-val">{{ snap.occupancy }}%</div><div class="kpi-sub">{{ snap.sold }} of {{ snap.sellable }} rooms</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Room revenue</div></div><div class="kpi-val">₹{{ snap.room_revenue|inr }}</div><div class="kpi-sub">ADR ₹{{ snap.adr|inr }} · RevPAR ₹{{ snap.revpar|inr }}</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Extras</div></div><div class="kpi-val">₹{{ snap.extras_revenue|inr }}</div><div class="kpi-sub">Posted to folios</div></div>
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Collected</div></div><div class="kpi-val">₹{{ snap.collected|inr }}</div><div class="kpi-sub">{% for k, v in snap.payments %}{{ k }} ₹{{ v|inr }}{% if not forloop.last %} · {% endif %}{% empty %}No payments{% endfor %}</div></div>
+  </div>
+
+  {% if not already %}
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0"><i class="fa-solid {% if checks.pending_departures %}fa-circle-xmark ui-text-red{% else %}fa-circle-check ui-text-green{% endif %}"></i> Departures still in house</h2><span class="ui-list-count">{{ checks.pending_departures|length }}</span></div>
+        {% if checks.pending_departures %}
+        <p class="ui-pad ui-log-sub" style="margin:0;padding-top:0">These must be checked out or extended before the day can close.</p>
+        <ul class="ui-dash-mini ui-pad" style="padding-top:0">{% for b in checks.pending_departures %}<li><a href="{{ base_url }}bookings/{{ b.pk }}/">Room {{ b.room.room_number }} · {{ b.guest_name }}</a><strong>due {{ b.check_out_date|date:"d M" }}</strong></li>{% endfor %}</ul>
+        {% endif %}
+      </section>
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0"><i class="fa-solid {% if checks.pending_arrivals %}fa-circle-exclamation is-warn{% else %}fa-circle-check ui-text-green{% endif %}"></i> Arrivals not checked in</h2><span class="ui-list-count">{{ checks.pending_arrivals|length }}</span></div>
+        {% if checks.pending_arrivals %}
+        <ul class="ui-dash-mini ui-pad" style="padding-top:0">{% for b in checks.pending_arrivals %}<li><a href="{{ base_url }}bookings/{{ b.pk }}/">Room {{ b.room.room_number }} · {{ b.guest_name }}</a><strong>due {{ b.check_in_date|date:"d M" }}</strong></li>{% endfor %}</ul>
+        {% endif %}
+      </section>
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0"><i class="fa-solid {% if checks.open_balances %}fa-circle-exclamation is-warn{% else %}fa-circle-check ui-text-green{% endif %}"></i> Checked-out guests with money due (30 days)</h2><span class="ui-list-count">{{ checks.open_balances|length }}</span></div>
+        {% if checks.open_balances %}
+        <ul class="ui-dash-mini ui-pad" style="padding-top:0">{% for b, bal in checks.open_balances %}<li><a href="{{ base_url }}bookings/{{ b.pk }}/#payments">{{ b.guest_name }}{% if b.company_name %} · {{ b.company_name }}{% endif %}</a><strong class="ui-text-red">₹{{ bal|inr2 }}</strong></li>{% endfor %}</ul>
+        {% endif %}
+      </section>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title" style="margin:0"><i class="fa-solid {% if checks.open_tasks %}fa-circle-info{% else %}fa-circle-check ui-text-green{% endif %}"></i> Housekeeping tasks still open: {{ checks.open_tasks }}</h2>
+        {% if checks.open_tasks %}<p class="ui-log-sub" style="margin:6px 0 0"><a href="{{ base_url }}rooms/housekeeping/">Open the housekeeping board</a></p>{% endif %}
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Close {{ day|date:"d M" }}</h2>
+        {% if can_edit %}
+        <form method="post" action="{{ base_url }}night-audit/close/" class="ui-stack-form" onsubmit="return confirm('Close the business day {{ day|date:"d M Y" }}? This can’t be undone.');">{% csrf_token %}
+          <input type="hidden" name="business_date" value="{{ day|date:'Y-m-d' }}">
+          {% if checks.pending_arrivals %}
+          <label class="ui-pms-check"><input type="checkbox" name="mark_no_shows" value="1" checked> Mark the {{ checks.pending_arrivals|length }} missing arrival{{ checks.pending_arrivals|length|pluralize }} as no-show</label>
+          <label class="ui-pms-check"><input type="checkbox" name="charge_no_shows" value="1"> …and charge them the first night</label>
+          {% endif %}
+          <label class="ui-pms-check"><input type="checkbox" name="stayovers" value="1" checked> Create tomorrow’s stay-over cleaning tasks</label>
+          <div class="ui-field"><label for="naNotes">Notes for the morning team</label><textarea id="naNotes" class="ui-input" name="notes" rows="3"></textarea></div>
+          <button class="ui-btn ui-btn-primary" type="submit" {% if blockers %}disabled{% endif %}><i class="fa-solid fa-moon"></i><span>Close the day</span></button>
+          {% if blockers %}<p class="ui-log-sub" style="margin:0">Sort out the departures first.</p>{% endif %}
+        </form>
+        {% else %}<p class="ui-log-sub">Your role can view the audit but not close the day.</p>{% endif %}
+      </section>
+    </div>
+  </div>
+  {% endif %}
+
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Closed days</h2></div>
+    {% if history %}
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>Business date</th><th class="num">Occupancy</th><th class="num">Room revenue</th><th class="num">ADR</th><th class="num">Collected</th><th class="num">No-shows</th><th>Closed by</th></tr></thead>
+      <tbody>{% for a in history %}<tr>
+        <td><a href="{{ base_url }}night-audit/{{ a.pk }}/"><strong>{{ a.business_date|date:"D d M Y" }}</strong></a></td>
+        <td class="num">{{ a.summary.occupancy }}%</td><td class="num">₹{{ a.summary.room_revenue|inr }}</td><td class="num">₹{{ a.summary.adr|inr }}</td>
+        <td class="num">₹{{ a.summary.collected|inr }}</td><td class="num">{{ a.summary.no_shows|default:0 }}</td>
+        <td>{{ a.closed_by.username|default:"—" }}<br><small class="ui-log-sub">{{ a.closed_at|date:"d M, h:i A" }}</small></td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="ui-pad ui-log-sub" style="margin:0">No days closed yet.</p>{% endif %}
+  </section>
+</div>

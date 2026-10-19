@@ -1,0 +1,54 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <a class="ui-back" href="{{ base_url }}inventory/counts/"><i class="fa-solid fa-chevron-left"></i> Stock counts</a>
+  <div class="ui-page-header">
+    <div><h1>{{ count.title }}</h1><p><span class="ui-chip ui-chip-{% if count.status == 'POSTED' %}green{% elif count.status == 'DRAFT' %}orange{% else %}gray{% endif %}">{{ count.get_status_display }}</span> · started {{ count.created_at|date:"d M Y, h:i A" }}{% if count.posted_at %} · posted {{ count.posted_at|date:"d M, h:i A" }}{% if count.posted_by %} by {{ count.posted_by.username }}{% endif %}{% endif %}</p></div>
+    <div class="ui-actions" style="gap:8px">{% url 'restaurant_admin:inventory_count_export' restaurant_slug=restaurant.slug pk=count.pk as mio_export %}{% if count.status == 'DRAFT' %}{% url 'restaurant_admin:inventory_count_import' restaurant_slug=restaurant.slug pk=count.pk as mio_import %}{% endif %}{% include 'restaurant_admin/menu/_import_export.html' with noun='counted quantities' export_noun='count sheet' export_url=mio_export import_url=mio_import modes='0' templates='0' tip='Export the count sheet, fill in the “Counted” column on the shelf, and import it here. The quantities are filled into this count for you to review — nothing is posted until you press Post count.' col_a='Book' col_b='Counted' %}<button type="button" class="ui-btn ui-btn-gray" onclick="window.print()"><i class="fa-solid fa-print"></i><span>Count sheet</span></button></div>
+  </div>
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Counted</div></div><div class="kpi-val">{{ counted }} / {{ lines|length }}</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Found extra</div></div><div class="kpi-val">₹{{ over|inr }}</div></div>
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Missing</div></div><div class="kpi-val">₹{{ under|inr }}</div></div>
+    <div class="ui-kpi {% if net < 0 %}kpi-orange{% else %}kpi-indigo{% endif %}"><div class="ui-kpi-head"><div class="kpi-label">Net variance</div></div><div class="kpi-val">{{ net|signed_inr }}</div></div>
+  </div>
+
+  <form method="post" action="{{ base_url }}inventory/counts/{{ count.pk }}/save/" id="countForm">{% csrf_token %}
+    <section class="ui-card ui-list-card">
+      <div class="ui-list-toolbar"><input type="search" class="ui-input" id="countFilter" placeholder="Find an item…" style="max-width:260px" aria-label="Filter items"></div>
+      <div class="table-responsive"><table class="table" id="countTable">
+        <thead><tr><th>Item</th><th class="num">Book</th><th class="num">Counted</th><th class="num">Variance</th><th class="num">Value</th></tr></thead>
+        <tbody>{% for l in lines %}<tr data-name="{{ l.item.name|lower }}" data-book="{{ l.expected }}" data-cost="{{ l.unit_cost }}">
+          <td><strong>{{ l.item.name }}</strong><br><small class="ui-log-sub">{{ l.item.category.name|default:"" }} · {{ l.item.unit }} · ₹{{ l.unit_cost|inr2 }}</small></td>
+          <td class="num">{{ l.expected }}</td>
+          <td class="num">{% if count.status == 'DRAFT' %}<input class="ui-input" type="number" min="0" step="1" name="c_{{ l.pk }}" value="{% if l.counted is not None %}{{ l.counted }}{% endif %}" style="max-width:110px;margin-left:auto;text-align:right" aria-label="Counted {{ l.item.name }}">{% else %}{{ l.counted|default_if_none:"—" }}{% endif %}</td>
+          <td class="num var">{% if l.variance is not None %}{% if l.variance > 0 %}+{% endif %}{{ l.variance }}{% else %}—{% endif %}</td>
+          <td class="num val">{% if l.variance_value is not None %}{{ l.variance_value|signed_inr }}{% else %}—{% endif %}</td></tr>{% endfor %}</tbody>
+      </table></div>
+      {% if count.status == 'DRAFT' %}
+      <div class="ui-pms-addform" style="grid-template-columns:1fr auto auto auto">
+        <div class="ui-field"><label for="cNote">Note</label><input id="cNote" class="ui-input" name="note" value="{{ count.note }}"></div>
+        <div class="ui-filter-actions"><button class="ui-btn ui-btn-gray" type="submit" name="op" value="save"><span>Save progress</span></button></div>
+        <div class="ui-filter-actions"><button class="ui-btn ui-btn-primary" type="submit" name="op" value="post" onclick="return confirm('Post this count? Stock for every counted item is corrected to what you counted.');"><i class="fa-solid fa-check"></i><span>Post count</span></button></div>
+        <div class="ui-filter-actions"><button class="ui-btn ui-btn-tinted-red" type="submit" name="op" value="cancel" formnovalidate onclick="return confirm('Cancel this count? Nothing is changed.');"><span>Cancel</span></button></div>
+      </div>
+      {% endif %}
+    </section>
+  </form>
+</div>
+<script>
+(function () {
+  var f = document.getElementById('countFilter');
+  if (f) f.addEventListener('input', function () { var q = this.value.trim().toLowerCase(); document.querySelectorAll('#countTable tbody tr').forEach(function (tr) { tr.hidden = q && tr.dataset.name.indexOf(q) === -1; }); });
+  document.querySelectorAll('#countTable input[type=number]').forEach(function (inp) {
+    inp.addEventListener('input', function () {
+      var tr = inp.closest('tr'), book = +tr.dataset.book, cost = parseFloat(tr.dataset.cost) || 0;
+      if (inp.value === '') { tr.querySelector('.var').textContent = '—'; tr.querySelector('.val').textContent = '—'; return; }
+      var v = (parseInt(inp.value, 10) || 0) - book, val = v * cost;
+      tr.querySelector('.var').textContent = (v > 0 ? '+' : '') + v;
+      tr.querySelector('.val').textContent = (val < 0 ? '−' : '+') + '₹' + Math.abs(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      tr.querySelector('.var').classList.toggle('ui-text-red', v < 0);
+    });
+  });
+})();
+</script>

@@ -1,0 +1,82 @@
+<div class="ui-logs ui-feedback">
+  <a class="ui-back" href="{{ base_url }}feedback/"><i class="fa-solid fa-chevron-left"></i> Feedback</a>
+  <div class="ui-page-header">
+    <div><h1>{% include 'guests/_stars.html' with value=fb.rating %} <span style="font-size:.8em">{{ fb.name|default:"Anonymous guest" }}</span></h1>
+      <p>{{ fb.get_area_display }}{% if fb.branch %} · {{ fb.branch.name }}{% endif %} · {{ fb.get_source_display }} · {{ fb.created_at|date:"d M Y, h:i A" }}</p></div>
+    <div class="ui-actions">
+      {% if fb.phone %}<a class="ui-btn ui-btn-gray" href="tel:{{ fb.phone }}"><i class="fa-solid fa-phone"></i><span>Call</span></a>
+      <a class="ui-btn ui-btn-gray" href="{{ wa }}" target="_blank" rel="noopener"><i class="fa-brands fa-whatsapp"></i><span>WhatsApp</span></a>{% endif %}
+      {% if not fb.assigned_to or fb.assigned_to != request.user %}<form method="post" style="display:inline">{% csrf_token %}<input type="hidden" name="op" value="assign_me"><button class="ui-btn ui-btn-primary"><i class="fa-solid fa-hand"></i><span>Take it</span></button></form>{% endif %}
+    </div>
+  </div>
+
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">What they said</h2>
+        {% if fb.comment %}<p style="font-size:15px;line-height:1.6;white-space:pre-wrap;margin:0 0 12px">{{ fb.comment }}</p>{% else %}<p class="ui-log-sub">No comment, rating only.</p>{% endif %}
+        {% if fb.aspects or fb.recommend is not None %}
+        <ul class="ui-ledger">
+          {% for label, score in fb.aspects %}<li><span class="ui-ledger-text">{{ label }}</span>{% include 'guests/_stars.html' with value=score %}</li>{% endfor %}
+          {% if fb.recommend is not None %}<li><span class="ui-ledger-text">Would recommend us</span><strong>{{ fb.recommend }}/10</strong></li>{% endif %}
+        </ul>
+        {% endif %}
+      </section>
+
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Follow-up</h2>
+        <ul class="ui-timeline">
+          <li class="ui-tl-event"><span class="ui-tl-dot"></span><div class="ui-tl-body"><strong>Feedback received</strong><div class="ui-tl-meta">{{ fb.created_at|date:"d M, h:i A" }}</div></div></li>
+          {% for u in updates %}
+          <li class="ui-tl-event"><span class="ui-tl-dot"></span><div class="ui-tl-body">
+            <strong>{% if u.kind == 'status' %}Status{% elif u.kind == 'make_good' %}Make-good{% elif u.kind == 'assigned' %}Assigned{% else %}Note{% endif %}</strong> · {{ u.text }}
+            <div class="ui-tl-meta">{{ u.author.get_full_name|default:u.author.username|default:"System" }} · {{ u.created_at|date:"d M, h:i A" }}</div></div></li>
+          {% endfor %}
+        </ul>
+        <form method="post" class="ui-note-form" style="margin-top:12px">{% csrf_token %}<input type="hidden" name="op" value="note">
+          <textarea class="ui-input" name="text" rows="2" placeholder="Called the guest, apologised, offered a table next week…" required></textarea>
+          <button class="ui-btn ui-btn-primary" type="submit">Add note</button>
+        </form>
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Status</h2>
+        <p><span class="ui-chip ui-chip-{% if fb.status == 'NEW' %}{% if fb.is_complaint %}red{% else %}blue{% endif %}{% elif fb.status == 'IN_PROGRESS' %}orange{% elif fb.status == 'RESOLVED' %}green{% else %}gray{% endif %}">{{ fb.get_status_display }}</span>
+          {% if fb.assigned_to %}<span class="ui-log-sub"> · {{ fb.assigned_to.get_full_name|default:fb.assigned_to.username }}</span>{% endif %}</p>
+        <form method="post" class="ui-stack-form">{% csrf_token %}<input type="hidden" name="op" value="status">
+          <select class="ui-input" name="status">{% for v, l in statuses %}<option value="{{ v }}" {% if fb.status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>
+          <input class="ui-input" name="note" placeholder="How it was resolved (optional)">
+          <button class="ui-btn ui-btn-gray" type="submit">Update status</button>
+        </form>
+        {% if fb.resolution %}<p class="ui-log-sub" style="margin-top:10px"><strong>Resolution:</strong> {{ fb.resolution }}</p>{% endif %}
+      </section>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Guest</h2>
+        <ul class="ui-ledger">
+          <li><span class="ui-ledger-text">Phone</span><span>{{ fb.phone|default:"—" }}</span></li>
+          <li><span class="ui-ledger-text">Email</span><span style="word-break:break-all">{{ fb.email|default:"—" }}</span></li>
+          <li><span class="ui-ledger-text">May contact</span><span>{{ fb.may_contact|yesno:"Yes,No" }}</span></li>
+          {% if fb.order %}<li><span class="ui-ledger-text">Order</span><span>#{{ fb.order.order_number }}</span></li>{% endif %}
+        </ul>
+        {% if fb.guest %}<a class="ui-btn ui-btn-gray" style="margin-top:10px" href="{{ base_url }}guests/{{ fb.guest.pk }}/"><i class="fa-solid fa-address-card"></i><span>Open guest profile</span></a>{% endif %}
+      </section>
+      {% if can_manage_guests %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Make it right</h2>
+        <p class="ui-log-sub">A small gesture turns most complaints into return visits.</p>
+        <form method="post" class="ui-inline-form">{% csrf_token %}<input type="hidden" name="op" value="gift_card">
+          <input class="ui-input" name="value" inputmode="decimal" placeholder="₹ value" required style="max-width:120px">
+          <button class="ui-btn ui-btn-gray" type="submit"><i class="fa-solid fa-gift"></i><span>Send gift card</span></button>
+        </form>
+        {% if fb.phone or fb.email %}
+        <form method="post" class="ui-inline-form" style="margin-top:8px">{% csrf_token %}<input type="hidden" name="op" value="points">
+          <input class="ui-input" name="points" inputmode="numeric" placeholder="Points" required style="max-width:120px">
+          <button class="ui-btn ui-btn-gray" type="submit"><i class="fa-solid fa-star"></i><span>Add points</span></button>
+        </form>
+        {% endif %}
+      </section>
+      {% endif %}
+    </div>
+  </div>
+</div>

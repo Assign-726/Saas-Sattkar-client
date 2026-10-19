@@ -1,0 +1,67 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-integrations ui-pms">
+  {% include 'integrations/_head.html' %}
+
+  {% if not conns %}
+  <section class="ui-card ui-empty"><div class="ui-empty-icon"><i class="fa-solid fa-sitemap"></i></div>
+    <h3>No OTA or channel manager connected{% if branch %} for {{ branch.name }}{% endif %}</h3>
+    <p>Add a channel under <a href="{{ nav.overview }}">Channels</a> (Booking.com, MakeMyTrip, Agoda, or your channel manager such as STAAH or SiteMinder), then choose which room types it may sell here.</p></section>
+  {% else %}
+  <div class="ui-tabs" role="tablist" aria-label="Channel">
+    {% for c in conns %}<a href="?connection={{ c.pk }}{% if request.GET.branch %}&branch={{ request.GET.branch }}{% endif %}" class="{% if c.pk == conn.pk %}is-active{% endif %}">{{ c.name|default:c.get_provider_display }}</a>{% endfor %}
+  </div>
+
+  {% if stats %}
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Bookings (30 days)</div></div><div class="kpi-val">{{ stats.bookings }}</div><div class="kpi-sub">{% if stats.last %}Last {{ stats.last.created_at|timesince }} ago{% else %}None yet{% endif %}</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Booking value</div></div><div class="kpi-val">₹{{ stats.revenue|inr }}</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Commission</div></div><div class="kpi-val">₹{{ stats.commission|inr }}</div><div class="kpi-sub">{{ conn.commission_pct|floatformat:"-2" }}% of booking value</div></div>
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Cancelled / no-show</div></div><div class="kpi-val">{{ stats.cancelled }}</div></div>
+  </div>
+  {% endif %}
+
+  <form method="post" class="ui-card ui-list-card">{% csrf_token %}<input type="hidden" name="connection" value="{{ conn.pk }}">
+    <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">What {{ conn.name|default:conn.get_provider_display }} may sell</h2></div>
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>Sell</th><th>Room type</th><th>Channel room code</th><th>Rate plan code</th><th class="num">Price ±%</th><th class="num">Max rooms</th><th>Paused</th></tr></thead>
+      <tbody>{% for r in rows %}<tr>
+        <td><label class="ui-pms-check"><input type="checkbox" name="c{{ r.cat.id }}_on" value="1" {% if r.m %}checked{% endif %} aria-label="Sell {{ r.cat.name }} on this channel"></label></td>
+        <td><strong>{{ r.cat.name }}</strong><br><small class="ui-log-sub">Base ₹{{ r.cat.base_price_per_night|inr }}</small></td>
+        <td><input class="ui-input" name="c{{ r.cat.id }}_room" value="{{ r.m.external_room_id|default:'' }}" maxlength="120" placeholder="e.g. DLX"></td>
+        <td><input class="ui-input" name="c{{ r.cat.id }}_plan" value="{{ r.m.external_rate_plan_id|default:'' }}" maxlength="120" placeholder="e.g. BAR-CP"></td>
+        <td class="num"><input class="ui-input" type="number" step="0.5" min="-50" max="100" name="c{{ r.cat.id }}_adjust" value="{{ r.m.rate_adjust_pct|default:'0'|floatformat:'-2' }}" style="max-width:90px;margin-left:auto;text-align:right"></td>
+        <td class="num"><input class="ui-input" type="number" min="0" name="c{{ r.cat.id }}_allotment" value="{{ r.m.allotment|default_if_none:'' }}" placeholder="All" style="max-width:80px;margin-left:auto;text-align:right"></td>
+        <td><label class="ui-pms-check"><input type="checkbox" name="c{{ r.cat.id }}_closed" value="1" {% if r.m.is_closed %}checked{% endif %}> Stop</label></td>
+      </tr>{% empty %}<tr><td colspan="7" class="ui-log-sub">Add room types under Categories &amp; Tariffs first.</td></tr>{% endfor %}</tbody>
+    </table></div>
+    <div class="ui-pms-addform" style="grid-template-columns:1fr auto">
+      <p class="ui-log-sub" style="margin:0">Unticked room types are hidden from this channel. “Price ±%” lifts or lowers your own rates for this channel only (e.g. +15 to cover commission). Seasonal rates, closed dates, minimum stay and out-of-order rooms always apply.</p>
+      <div class="ui-filter-actions"><button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-floppy-disk"></i><span>Save</span></button></div>
+    </div>
+  </form>
+
+  {% if preview %}
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">What the channel sees — next 7 nights</h2></div>
+    <div class="ui-pms-cal-wrap"><table class="ui-pms-cal">
+      <thead><tr><th class="sticky">Room type</th>{% for d in preview_dates %}<th class="{% if d.weekday >= 5 %}is-weekend{% endif %}"><small>{{ d|date:"D" }}</small>{{ d|date:"d" }}<small>{{ d|date:"M" }}</small></th>{% endfor %}</tr></thead>
+      <tbody>{% for rt in preview %}<tr>
+        <th class="sticky"><strong>{{ rt.name }}</strong><small>{% if rt.external_room_id %}{{ rt.external_room_id }}{% else %}no room code{% endif %}{% if rt.rate_adjust_pct != '0' and rt.rate_adjust_pct != '0.00' %} · {{ rt.rate_adjust_pct|floatformat:"-2" }}%{% endif %}</small></th>
+        {% for n in rt.nights %}<td class="{% if n.closed %}is-closed{% elif n.special_rate %}is-special{% endif %}" title="{% if n.special_rate %}{{ n.special_rate }} · {% endif %}your price ₹{{ n.base_price|inr }}">
+          <span class="p">{% if n.closed %}Closed{% else %}₹{{ n.price|inr }}{% endif %}</span><span class="l">{{ n.available }} left</span>{% if n.min_stay > 1 %}<span class="m">{{ n.min_stay }}N min</span>{% endif %}</td>{% endfor %}
+      </tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+  {% endif %}
+
+  <section class="ui-card ui-pad">
+    <h2 class="ui-card-title">Connecting a channel manager</h2>
+    <ol class="ui-log-sub" style="margin:0;padding-left:18px;line-height:1.7">
+      <li>Create an API key for this channel under <a href="{{ nav.keys }}">API keys</a> with <code>rooms:read</code>, <code>bookings:read</code> and <code>bookings:write</code>.</li>
+      <li>The channel reads prices, rooms left and restrictions from <code>{{ rates_url }}?from=YYYY-MM-DD&amp;to=YYYY-MM-DD</code>.</li>
+      <li>Subscribe its webhook to <code>ari.changed</code> under <a href="{{ nav.webhooks }}">Webhooks</a> so it re-reads the feed the moment a booking, rate or closure changes.</li>
+      <li>It sends reservations to <code>/api/v1/bookings</code> (with your room code as <code>external_room_id</code>), and changes or cancellations to <code>/modify</code> and <code>/cancel</code>. See the <a href="{{ nav.docs }}">developer guide</a>.</li>
+    </ol>
+  </section>
+  {% endif %}
+</div>

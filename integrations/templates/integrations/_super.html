@@ -1,0 +1,60 @@
+<div class="ui-logs ui-integrations">
+  <div class="ui-page-header"><div><h1>Integrations</h1><p>Every partner channel, API key and webhook across the platform, and which ones need attention.</p></div></div>
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Businesses integrated</div><div class="kpi-icon"><i class="fa-solid fa-building"></i></div></div><div class="kpi-val">{{ kpis.businesses }}</div><div class="kpi-sub">{{ kpis.channels }} live channel{{ kpis.channels|pluralize }}</div></div>
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Active API keys</div><div class="kpi-icon"><i class="fa-solid fa-key"></i></div></div><div class="kpi-val">{{ kpis.keys }}</div><div class="kpi-sub">Branch-scoped</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Partner orders · 30d</div><div class="kpi-icon"><i class="fa-solid fa-bag-shopping"></i></div></div><div class="kpi-val">{{ kpis.orders_30d }}</div><div class="kpi-sub">Pushed through the API</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Webhooks · 24h</div><div class="kpi-icon"><i class="fa-solid fa-paper-plane"></i></div></div><div class="kpi-val">{{ kpis.deliveries }}</div><div class="kpi-sub">{% if kpis.success_rate is not None %}{{ kpis.success_rate }}% delivered{% else %}None sent{% endif %}</div></div>
+  </div>
+
+  {% if failing %}
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Needs attention</h2><span class="ui-chip ui-chip-red">{{ failing|length }}</span></div>
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>Webhook</th><th>Business</th><th>Problem</th><th></th></tr></thead>
+      <tbody>{% for ep in failing %}<tr>
+        <td class="ui-cell-primary"><strong>{{ ep.name }}</strong><div class="ui-log-sub" style="word-break:break-all">{{ ep.url }}</div></td>
+        <td>{{ ep.restaurant.name }}<div class="ui-log-sub">{{ ep.branch.name|default:"All branches" }}</div></td>
+        <td>{% if not ep.is_active %}<span class="ui-health is-bad">{{ ep.disabled_reason|default:"Paused" }}</span>{% else %}<span class="ui-health is-warn">{{ ep.failure_streak }} failures in a row · last HTTP {{ ep.last_status_code|default:"—" }}</span>{% endif %}</td>
+        <td class="ui-cell-actions">{% if ep.is_active %}<form method="post" onsubmit="return confirm('Pause this webhook?')">{% csrf_token %}<input type="hidden" name="op" value="pause_webhook"><input type="hidden" name="pk" value="{{ ep.pk }}"><button class="ui-btn ui-btn-gray ui-btn-sm">Pause</button></form>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+  {% endif %}
+
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">By business</h2></div>
+    {% if businesses %}
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>Business</th><th>Channels</th><th>Keys</th><th>Webhooks</th><th>Deliveries · 24h</th><th>Partner orders · 30d</th></tr></thead>
+      <tbody>{% for b in businesses %}<tr>
+        <td class="ui-cell-primary"><strong>{{ b.r.name }}</strong></td>
+        <td>{{ b.channels }}<div class="ui-log-sub">{{ b.providers|join:", " }}</div></td>
+        <td>{{ b.keys }}</td>
+        <td>{{ b.webhooks }}{% if b.disabled %} <span class="ui-chip ui-chip-red">{{ b.disabled }} off</span>{% endif %}</td>
+        <td>{{ b.deliveries }}{% if b.success_rate is not None %} <span class="ui-log-sub">· {{ b.success_rate }}%</span>{% endif %}</td>
+        <td>{{ b.orders_30d }}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}
+    <div class="ui-empty"><div class="ui-empty-icon"><i class="fa-solid fa-plug"></i></div><h3>No integrations yet</h3><p>Businesses connect channels and create keys from Integrations in their admin.</p></div>
+    {% endif %}
+  </section>
+
+  {% if keys %}
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Active API keys</h2></div>
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>Key</th><th>Business · branch</th><th>Permissions</th><th>Last used</th><th></th></tr></thead>
+      <tbody>{% for k in keys %}<tr>
+        <td class="ui-cell-primary"><strong>{{ k.name }}</strong><div class="ui-log-sub"><code class="ui-code">{{ k.prefix }}…</code></div></td>
+        <td>{{ k.restaurant.name }}<div class="ui-log-sub">{{ k.branch.name }}</div></td>
+        <td>{{ k.scopes|join:", " }}</td>
+        <td>{% if k.last_used_at %}{{ k.last_used_at|timesince }} ago{% else %}Never{% endif %}</td>
+        <td class="ui-cell-actions"><form method="post" onsubmit="return confirm('Revoke this key? The partner will get 401 errors immediately.')">{% csrf_token %}<input type="hidden" name="op" value="revoke_key"><input type="hidden" name="pk" value="{{ k.pk }}"><button class="ui-btn ui-btn-tinted-red ui-btn-sm">Revoke</button></form></td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+  {% endif %}
+</div>

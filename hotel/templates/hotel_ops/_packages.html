@@ -1,0 +1,51 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header"><div><h1>Packages &amp; promotions</h1><p>Stay packages and promo codes. Apply them to a booking from its folio page.</p></div></div>
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-list-card"><div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Stay packages</h2></div>
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Package</th><th>Meals</th><th class="num">Per night</th><th>Valid</th><th class="num">Sold</th><th>Status</th>{% if can_edit %}<th></th>{% endif %}</tr></thead>
+          <tbody>{% for p in pkgs %}<tr>
+            <td><strong>{{ p.name }}</strong><br><small class="ui-log-sub">{{ p.inclusions|truncatechars:110 }}{% if p.min_nights > 1 %} · min {{ p.min_nights }} nights{% endif %}</small></td>
+            <td>{{ p.get_meal_plan_display }}</td><td class="num">+₹{{ p.price_per_night|inr }}<br><small class="ui-log-sub">+{{ p.gst_percent|floatformat:'0' }}% GST</small></td>
+            <td class="nowrap">{% if p.valid_from or p.valid_until %}{{ p.valid_from|date:"d M"|default:"…" }} – {{ p.valid_until|date:"d M Y"|default:"…" }}{% else %}Always{% endif %}</td>
+            <td class="num">{{ p.sold }}</td>
+            <td><span class="ui-chip ui-chip-{% if p.is_active %}green{% else %}gray{% endif %}">{% if p.is_active %}On sale{% else %}Paused{% endif %}</span></td>
+            {% if can_edit %}<td><form method="post" action="{{ base_url }}packages/save/">{% csrf_token %}<input type="hidden" name="op" value="toggle"><input type="hidden" name="pk" value="{{ p.pk }}"><button class="ui-link-btn" type="submit">{% if p.is_active %}Pause{% else %}Put on sale{% endif %}</button></form></td>{% endif %}
+          </tr>{% empty %}<tr><td colspan="7" class="ui-log-sub" style="padding:24px;text-align:center">No packages yet.</td></tr>{% endfor %}</tbody>
+        </table></div></section>
+      <section class="ui-card ui-list-card"><div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Promo codes</h2></div>
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Code</th><th class="num">Off room</th><th>Valid until</th><th class="num">Used</th><th>Status</th>{% if can_edit %}<th></th>{% endif %}</tr></thead>
+          <tbody>{% for p in promos %}<tr>
+            <td><strong class="ui-ops-mono">{{ p.code }}</strong>{% if p.description %}<br><small class="ui-log-sub">{{ p.description }}</small>{% endif %}</td>
+            <td class="num">{{ p.percent|floatformat:'-2' }}%{% if p.max_discount %}<br><small class="ui-log-sub">max ₹{{ p.max_discount|inr }}</small>{% endif %}</td>
+            <td>{{ p.valid_until|date:"d M Y"|default:"No end" }}</td>
+            <td class="num">{{ p.uses }}{% if p.max_uses %} / {{ p.max_uses }}{% endif %}</td>
+            <td>{% if p.state %}<span class="ui-chip ui-chip-{% if p.is_active %}orange{% else %}gray{% endif %}">{{ p.state|capfirst }}</span>{% else %}<span class="ui-chip ui-chip-green">Active</span>{% endif %}</td>
+            {% if can_edit %}<td><form method="post" action="{{ base_url }}packages/promos/save/">{% csrf_token %}<input type="hidden" name="op" value="toggle"><input type="hidden" name="pk" value="{{ p.pk }}"><button class="ui-link-btn" type="submit">{% if p.is_active %}Pause{% else %}Activate{% endif %}</button></form></td>{% endif %}
+          </tr>{% empty %}<tr><td colspan="6" class="ui-log-sub" style="padding:24px;text-align:center">No promo codes yet.</td></tr>{% endfor %}</tbody>
+        </table></div></section>
+    </div>
+    <div class="ui-g360-side">
+      {% if can_edit %}
+      <section class="ui-card ui-pad"><h2 class="ui-card-title">New package</h2>
+        <form method="post" action="{{ base_url }}packages/save/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-field"><label for="pkN">Name</label><input id="pkN" class="ui-input" name="name" maxlength="120" required placeholder="e.g. Honeymoon at the Haveli"></div>
+          <div class="ui-field"><label for="pkI">Inclusions</label><textarea id="pkI" class="ui-input" name="inclusions" rows="2" required placeholder="Floral décor, candlelight dinner, couple spa"></textarea></div>
+          <div class="ui-inline-fields"><div class="ui-field"><label for="pkP">₹ per night</label><input id="pkP" class="ui-input" type="number" min="1" name="price_per_night" required></div><div class="ui-field"><label for="pkG">GST %</label><input id="pkG" class="ui-input" type="number" min="0" max="28" name="gst_percent" value="18"></div></div>
+          <div class="ui-inline-fields"><div class="ui-field"><label for="pkM">Meals</label><select id="pkM" class="ui-input" name="meal_plan">{% for k, v in plans %}<option value="{{ k }}" {% if k == 'CP' %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></div><div class="ui-field"><label for="pkMn">Min nights</label><input id="pkMn" class="ui-input" type="number" min="1" name="min_nights" value="1"></div></div>
+          <div class="ui-inline-fields"><div class="ui-field"><label for="pkF">From</label><input id="pkF" class="ui-input" type="date" name="valid_from"></div><div class="ui-field"><label for="pkU">Until</label><input id="pkU" class="ui-input" type="date" name="valid_until"></div></div>
+          <button class="ui-btn ui-btn-primary" type="submit">Add package</button></form></section>
+      <section class="ui-card ui-pad"><h2 class="ui-card-title">New promo code</h2>
+        <form method="post" action="{{ base_url }}packages/promos/save/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-inline-fields"><div class="ui-field"><label for="prC">Code</label><input id="prC" class="ui-input" name="code" maxlength="30" required style="text-transform:uppercase" placeholder="DIRECT10"></div><div class="ui-field"><label for="prP">% off room</label><input id="prP" class="ui-input" type="number" min="1" max="50" step="0.5" name="percent" required></div></div>
+          <div class="ui-field"><label for="prD">Description</label><input id="prD" class="ui-input" name="description" maxlength="150"></div>
+          <div class="ui-inline-fields"><div class="ui-field"><label for="prX">Max discount ₹</label><input id="prX" class="ui-input" type="number" min="1" name="max_discount" placeholder="No cap"></div><div class="ui-field"><label for="prU">Max uses</label><input id="prU" class="ui-input" type="number" min="1" name="max_uses" placeholder="Unlimited"></div></div>
+          <div class="ui-inline-fields"><div class="ui-field"><label for="prF">From</label><input id="prF" class="ui-input" type="date" name="valid_from"></div><div class="ui-field"><label for="prT">Until</label><input id="prT" class="ui-input" type="date" name="valid_until"></div></div>
+          <button class="ui-btn ui-btn-primary" type="submit">Add code</button></form></section>
+      {% endif %}
+    </div>
+  </div>
+</div>

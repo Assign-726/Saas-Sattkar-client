@@ -1,0 +1,86 @@
+{% load restaurant_admin_extras %}
+{# Rate & availability calendar — hotel admin #}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>Rates &amp; availability</h1><p>Nightly price and rooms left per room type. Special rates apply to the website and the front desk straight away.</p></div>
+    <div class="ui-actions">
+      <a class="ui-btn ui-btn-gray" href="?start={{ prev|date:'Y-m-d' }}&days={{ days }}" aria-label="Earlier"><i class="fa-solid fa-chevron-left"></i></a>
+      <a class="ui-btn ui-btn-gray" href="?days={{ days }}">Today</a>
+      <a class="ui-btn ui-btn-gray" href="?start={{ next|date:'Y-m-d' }}&days={{ days }}" aria-label="Later"><i class="fa-solid fa-chevron-right"></i></a>
+      <a class="ui-btn {% if days == 14 %}ui-btn-primary{% else %}ui-btn-gray{% endif %}" href="?start={{ start|date:'Y-m-d' }}&days=14">14 days</a>
+      <a class="ui-btn {% if days == 30 %}ui-btn-primary{% else %}ui-btn-gray{% endif %}" href="?start={{ start|date:'Y-m-d' }}&days=30">30 days</a>
+    </div>
+  </div>
+
+  <section class="ui-card ui-list-card">
+    <div class="ui-pms-cal-wrap">
+      <table class="ui-pms-cal">
+        <thead><tr><th class="sticky">Room type</th>{% for d in dates %}<th class="{% if d.weekday >= 5 %}is-weekend{% endif %}{% if d == today %} is-today{% endif %}"><small>{{ d|date:"D" }}</small>{{ d|date:"d" }}<small>{{ d|date:"M" }}</small></th>{% endfor %}</tr></thead>
+        <tbody>
+          {% for row in grid %}
+          <tr>
+            <th class="sticky"><strong>{{ row.cat.name }}</strong><small>{{ row.rooms }} room{{ row.rooms|pluralize }} · base ₹{{ row.cat.base_price_per_night|inr }}</small></th>
+            {% for c in row.cells %}
+            <td class="{% if c.stop %}is-closed{% elif c.special %}is-special{% endif %}{% if c.weekend %} is-weekend{% endif %}{% if c.left <= 0 %} is-full{% endif %}" title="{% if c.label %}{{ c.label }} · {% endif %}{% if c.stop %}Closed{% else %}₹{{ c.price|inr }}{% endif %}{% if c.min_stay > 1 %} · min {{ c.min_stay }} nights{% endif %} · {{ c.left }} left">
+              <span class="p">{% if c.stop %}Closed{% else %}₹{{ c.price|inr }}{% endif %}</span>
+              <span class="l">{% if c.left <= 0 %}Sold out{% else %}{{ c.left }} left{% endif %}</span>
+              {% if c.min_stay > 1 %}<span class="m">{{ c.min_stay }}N min</span>{% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% empty %}
+          <tr><td colspan="{{ dates|length|add:1 }}" class="ui-log-sub" style="padding:24px">Add room types under Categories &amp; Tariffs first.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="ui-pms-legend"><span class="sw is-special"></span> Special rate <span class="sw is-closed"></span> Closed <span class="sw is-full"></span> Sold out</div>
+  </section>
+
+  <div class="ui-g360-grid" style="margin-top:16px">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Current &amp; upcoming rules</h2><span class="ui-list-count">{{ rules|length }}</span></div>
+        {% if rules %}
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Room type</th><th>Dates</th><th>Nights</th><th>Price</th><th>Restriction</th><th></th></tr></thead>
+          <tbody>{% for r in rules %}<tr>
+            <td><strong>{{ r.category.name }}</strong>{% if r.label %}<br><small class="ui-log-sub">{{ r.label }}</small>{% endif %}</td>
+            <td class="nowrap">{{ r.start_date|date:"d M" }} – {{ r.end_date|date:"d M Y" }}</td>
+            <td>{% if r.weekdays %}{% for n, l in weekdays %}{% if n in r.weekdays %}{{ l }} {% endif %}{% endfor %}{% else %}Every night{% endif %}</td>
+            <td>{% if r.price_per_night %}₹{{ r.price_per_night|inr }}{% else %}<span class="ui-log-sub">Base</span>{% endif %}</td>
+            <td>{% if r.stop_sell %}<span class="ui-chip ui-chip-red">Closed</span>{% endif %}{% if r.min_stay > 1 %}<span class="ui-chip ui-chip-indigo">Min {{ r.min_stay }} nights</span>{% endif %}</td>
+            <td class="num">{% if can_edit %}<form method="post" action="{{ base_url }}rates/{{ r.pk }}/delete/" onsubmit="return confirm('Remove this rule?');">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="ui-icon-btn" type="submit" aria-label="Remove rule"><i class="fa-solid fa-trash"></i></button></form>{% endif %}</td>
+          </tr>{% endfor %}</tbody>
+        </table></div>
+        {% else %}<p class="ui-pad ui-log-sub" style="margin:0">No special rates yet — every night sells at the base price.</p>{% endif %}
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      {% if can_edit %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">New rate rule</h2>
+        <form method="post" action="{{ base_url }}rates/save/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-field"><span class="ui-field-label">Room types</span>
+            <div class="ui-check-grid">{% for c in categories %}<label class="ui-pms-check"><input type="checkbox" name="category" value="{{ c.pk }}"> {{ c.name }}</label>{% endfor %}</div></div>
+          <div class="ui-field"><label for="rtLabel">Name</label><input id="rtLabel" class="ui-input" name="label" maxlength="80" placeholder="e.g. Diwali peak, Weekend"></div>
+          <div class="ui-inline-fields">
+            <div class="ui-field"><label for="rtFrom">From</label><input id="rtFrom" class="ui-input" type="date" name="start_date" value="{{ start|date:'Y-m-d' }}" required></div>
+            <div class="ui-field"><label for="rtTo">To (last night)</label><input id="rtTo" class="ui-input" type="date" name="end_date" required></div>
+          </div>
+          <div class="ui-field"><span class="ui-field-label">Only on</span>
+            <div class="ui-pms-weekdays">{% for n, l in weekdays %}<label><input type="checkbox" name="weekdays" value="{{ n }}"><span>{{ l }}</span></label>{% endfor %}</div>
+            <small class="ui-log-sub">Leave all unticked for every night.</small></div>
+          <div class="ui-inline-fields">
+            <div class="ui-field"><label for="rtPrice">Price / night ₹</label><input id="rtPrice" class="ui-input" type="number" name="price" min="1" step="1" placeholder="Keep base"></div>
+            <div class="ui-field"><label for="rtMin">Min stay</label><input id="rtMin" class="ui-input" type="number" name="min_stay" min="1" max="30" value="1"></div>
+          </div>
+          <label class="ui-pms-check"><input type="checkbox" name="stop_sell" value="1"> Close these nights (stop sell)</label>
+          <p class="ui-log-sub" style="margin:0">Prices follow each room type’s “tax inclusive” setting. Newer rules win where they overlap.</p>
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-floppy-disk"></i><span>Save rule</span></button>
+        </form>
+      </section>
+      {% endif %}
+    </div>
+  </div>
+</div>

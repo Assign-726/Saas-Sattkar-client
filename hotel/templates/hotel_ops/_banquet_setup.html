@@ -1,0 +1,29 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <a class="ui-back" href="{{ base_url }}banquets/"><i class="fa-solid fa-chevron-left"></i> Banquets</a>
+  <div class="ui-page-header"><div><h1>Venues &amp; menu packages</h1><p>Single-session hire is 60% of the full-day rate. Prices are before GST.</p></div></div>
+  <div class="ui-ops-2col">
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">Venues</h2>
+      {% for v in venues %}<form method="post" action="{{ base_url }}banquets/setup/save/" class="ui-ops-inline is-wide">{% csrf_token %}<input type="hidden" name="kind" value="venue"><input type="hidden" name="pk" value="{{ v.pk }}">
+        <input class="ui-input" name="name" value="{{ v.name }}" aria-label="Venue" {% if not can_edit %}disabled{% endif %}><input class="ui-input" name="venue_kind" value="{{ v.kind }}" placeholder="Type" aria-label="Type" {% if not can_edit %}disabled{% endif %}>
+        <input class="ui-input" type="number" name="capacity" value="{{ v.capacity }}" min="1" aria-label="Capacity" title="Capacity" {% if not can_edit %}disabled{% endif %}><input class="ui-input" type="number" name="full_day_rate" value="{{ v.full_day_rate|floatformat:'0' }}" min="0" aria-label="Full-day rate" title="Full-day rate ₹" {% if not can_edit %}disabled{% endif %}>
+        <select class="ui-input" name="is_active" aria-label="Status" {% if not can_edit %}disabled{% endif %}><option value="1" {% if v.is_active %}selected{% endif %}>Active</option><option value="0" {% if not v.is_active %}selected{% endif %}>Inactive</option></select>
+        {% if can_edit %}<button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">Save</button>{% endif %}</form>{% empty %}<p class="ui-log-sub">No venues yet.</p>{% endfor %}
+      {% if can_edit %}<form method="post" action="{{ base_url }}banquets/setup/save/" class="ui-ops-inline is-wide" style="margin-top:10px">{% csrf_token %}<input type="hidden" name="kind" value="venue">
+        <input class="ui-input" name="name" placeholder="New venue" aria-label="New venue" required><input class="ui-input" name="venue_kind" placeholder="Ballroom, lawn…" aria-label="Type">
+        <input class="ui-input" type="number" name="capacity" placeholder="Capacity" min="1" aria-label="Capacity" required><input class="ui-input" type="number" name="full_day_rate" placeholder="Day rate ₹" min="0" aria-label="Full-day rate" required>
+        <input type="hidden" name="is_active" value="1"><button class="ui-btn ui-btn-primary ui-btn-sm" type="submit">Add</button></form>{% endif %}
+    </section>
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">Menu packages</h2>
+      {% for m in menus %}<form method="post" action="{{ base_url }}banquets/setup/save/" class="ui-ops-inline">{% csrf_token %}<input type="hidden" name="kind" value="menu"><input type="hidden" name="pk" value="{{ m.pk }}">
+        <input class="ui-input" name="name" value="{{ m.name }}" aria-label="Menu" {% if not can_edit %}disabled{% endif %}><input class="ui-input" type="number" name="price_per_cover" value="{{ m.price_per_cover|floatformat:'0' }}" min="1" aria-label="Price per cover" title="₹ per cover" {% if not can_edit %}disabled{% endif %}>
+        <select class="ui-input" name="is_active" aria-label="Status" {% if not can_edit %}disabled{% endif %}><option value="1" {% if m.is_active %}selected{% endif %}>Offered</option><option value="0" {% if not m.is_active %}selected{% endif %}>Hidden</option></select>
+        {% if can_edit %}<button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">Save</button>{% endif %}</form>{% empty %}<p class="ui-log-sub">No menu packages yet.</p>{% endfor %}
+      {% if can_edit %}<form method="post" action="{{ base_url }}banquets/setup/save/" class="ui-ops-inline" style="margin-top:10px">{% csrf_token %}<input type="hidden" name="kind" value="menu">
+        <input class="ui-input" name="name" placeholder="e.g. Royal veg feast" aria-label="New menu" required><input class="ui-input" type="number" name="price_per_cover" placeholder="₹ / cover" min="1" aria-label="Price per cover" required>
+        <input type="hidden" name="is_active" value="1"><button class="ui-btn ui-btn-primary ui-btn-sm" type="submit">Add</button></form>{% endif %}
+    </section>
+  </div>
+</div>

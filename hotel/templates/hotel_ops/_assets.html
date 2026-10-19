@@ -1,0 +1,48 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header"><div><h1>Assets &amp; contracts</h1><p>Fixed asset register with straight-line depreciation, and service contracts (AMCs) with renewal dates.</p></div></div>
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Assets in use</div></div><div class="kpi-val">{{ kpis.count }}</div></div>
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Cost</div></div><div class="kpi-val">₹{{ kpis.cost|inr }}</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">Book value today</div></div><div class="kpi-val">₹{{ kpis.book|inr }}</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Contracts ending ≤ 30 days</div></div><div class="kpi-val">{{ kpis.contracts }}</div><div class="kpi-sub">{{ kpis.warranty }} warrant{{ kpis.warranty|pluralize:"y,ies" }} ending ≤ 60 days</div></div>
+  </div>
+  <nav class="ui-tabs ui-pms-tabs" aria-label="Assets"><a href="?tab=assets" class="{% if tab == 'assets' %}is-active{% endif %}">Fixed assets</a><a href="?tab=contracts" class="{% if tab == 'contracts' %}is-active{% endif %}">Service contracts</a></nav>
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main"><section class="ui-card ui-list-card"><div class="table-responsive"><table class="table">
+      {% if tab == 'contracts' %}
+      <thead><tr><th>Vendor</th><th>Period</th><th class="num">Per year</th><th>Status</th>{% if can_edit %}<th></th>{% endif %}</tr></thead>
+      <tbody>{% for c in contracts %}<tr><td><strong>{{ c.vendor }}</strong><br><small class="ui-log-sub">{{ c.scope }}{% if c.contact %} · {{ c.contact }}{% endif %}</small></td><td class="nowrap">{{ c.start_on|date:"d M Y" }} – {{ c.end_on|date:"d M Y" }}</td><td class="num">₹{{ c.annual_value|inr }}</td>
+        <td>{% if c.days_left < 0 %}<span class="ui-chip ui-chip-red">Expired</span>{% elif c.days_left <= 30 %}<span class="ui-chip ui-chip-orange">{{ c.days_left }} days left</span>{% else %}<span class="ui-chip ui-chip-green">Active</span>{% endif %}</td>
+        {% if can_edit %}<td class="nowrap"><details class="ui-pms-void"><summary class="ui-btn ui-btn-gray ui-btn-sm">Renew</summary><form method="post" action="{{ base_url }}assets/contracts/save/" class="ui-stack-form ui-ops-pop">{% csrf_token %}<input type="hidden" name="op" value="renew"><input type="hidden" name="pk" value="{{ c.pk }}"><label class="ui-log-sub">New end date<input class="ui-input" type="date" name="end_on" required></label><label class="ui-log-sub">Annual value ₹<input class="ui-input" type="number" min="0" name="annual_value" value="{{ c.annual_value|floatformat:'0' }}"></label><button class="ui-btn ui-btn-primary ui-btn-sm" type="submit">Renew</button></form></details>
+          <form method="post" action="{{ base_url }}assets/contracts/save/" style="display:inline" onsubmit="return confirm('Remove this contract?')">{% csrf_token %}<input type="hidden" name="op" value="delete"><input type="hidden" name="pk" value="{{ c.pk }}"><button class="ui-link-btn" type="submit" aria-label="Remove"><i class="fa-solid fa-trash"></i></button></form></td>{% endif %}
+      </tr>{% empty %}<tr><td colspan="5" class="ui-log-sub" style="padding:24px;text-align:center">No contracts recorded.</td></tr>{% endfor %}</tbody>
+      {% else %}
+      <thead><tr><th>Asset</th><th>Bought</th><th class="num">Cost</th><th class="num">Book value</th><th>Warranty</th>{% if can_edit %}<th></th>{% endif %}</tr></thead>
+      <tbody>{% for a in items %}<tr class="{% if a.is_disposed %}is-void{% endif %}"><td><strong>{{ a.name }}</strong>{% if a.is_disposed %} <span class="ui-chip ui-chip-gray">Disposed</span>{% endif %}<br><small class="ui-log-sub">{{ a.tag }} · {{ a.category }}{% if a.location %} · {{ a.location }}{% endif %}{% if a.vendor %} · {{ a.vendor }}{% endif %}</small></td>
+        <td class="nowrap">{{ a.purchased_on|date:"d M Y" }}</td><td class="num">₹{{ a.cost|inr }}<br><small class="ui-log-sub">{{ a.depreciation_percent|floatformat:'-2' }}%/yr</small></td><td class="num"><strong>₹{{ a.bv|inr }}</strong></td>
+        <td>{% if a.warranty_until %}{% if a.warranty_until < today %}<span class="ui-log-sub">Ended {{ a.warranty_until|date:"M Y" }}</span>{% else %}{{ a.warranty_until|date:"d M Y" }}{% endif %}{% else %}—{% endif %}</td>
+        {% if can_edit %}<td>{% if not a.is_disposed %}<form method="post" action="{{ base_url }}assets/save/" onsubmit="var n = prompt('How was it disposed? (sold, scrapped, written off)', 'Scrapped'); if (n === null) return false; this.notes.value = n;">{% csrf_token %}<input type="hidden" name="op" value="dispose"><input type="hidden" name="pk" value="{{ a.pk }}"><input type="hidden" name="notes"><button class="ui-link-btn" type="submit">Dispose</button></form>{% endif %}</td>{% endif %}
+      </tr>{% empty %}<tr><td colspan="6" class="ui-log-sub" style="padding:24px;text-align:center">No assets recorded.</td></tr>{% endfor %}</tbody>
+      {% endif %}
+    </table></div></section></div>
+    <div class="ui-g360-side">{% if can_edit %}<section class="ui-card ui-pad">
+      {% if tab == 'contracts' %}<h2 class="ui-card-title">Add a contract</h2>
+        <form method="post" action="{{ base_url }}assets/contracts/save/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-field"><label for="ctV">Vendor</label><input id="ctV" class="ui-input" name="vendor" maxlength="150" required></div>
+          <div class="ui-field"><label for="ctS">Scope</label><input id="ctS" class="ui-input" name="scope" maxlength="200" required placeholder="Lift AMC, pest control…"></div>
+          <div class="ui-inline-fields"><div class="ui-field"><label for="ctF">Start</label><input id="ctF" class="ui-input" type="date" name="start_on" value="{{ today|date:'Y-m-d' }}" required></div><div class="ui-field"><label for="ctE">End</label><input id="ctE" class="ui-input" type="date" name="end_on" required></div></div>
+          <div class="ui-inline-fields"><div class="ui-field"><label for="ctA">Per year ₹</label><input id="ctA" class="ui-input" type="number" min="0" name="annual_value"></div><div class="ui-field"><label for="ctC">Contact</label><input id="ctC" class="ui-input" name="contact" maxlength="150"></div></div>
+          <button class="ui-btn ui-btn-primary" type="submit">Add contract</button></form>
+      {% else %}<h2 class="ui-card-title">Add an asset</h2>
+        <form method="post" action="{{ base_url }}assets/save/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-field"><label for="asN">Asset</label><input id="asN" class="ui-input" name="name" maxlength="150" required placeholder="e.g. DG set 250 kVA"></div>
+          <div class="ui-inline-fields"><div class="ui-field"><label for="asC">Category</label><select id="asC" class="ui-input" name="category">{% for c in categories %}<option>{{ c }}</option>{% endfor %}</select></div><div class="ui-field"><label for="asL">Location</label><input id="asL" class="ui-input" name="location" maxlength="120"></div></div>
+          <div class="ui-inline-fields"><div class="ui-field"><label for="asD">Bought on</label><input id="asD" class="ui-input" type="date" name="purchased_on" required></div><div class="ui-field"><label for="asP">Cost ₹</label><input id="asP" class="ui-input" type="number" min="1" name="cost" required></div></div>
+          <div class="ui-inline-fields"><div class="ui-field"><label for="asR">Depreciation %/yr</label><input id="asR" class="ui-input" type="number" min="0" max="100" step="0.01" name="depreciation_percent" value="10"></div><div class="ui-field"><label for="asW">Warranty until</label><input id="asW" class="ui-input" type="date" name="warranty_until"></div></div>
+          <div class="ui-field"><label for="asV">Vendor</label><input id="asV" class="ui-input" name="vendor" maxlength="120"></div>
+          <button class="ui-btn ui-btn-primary" type="submit">Add asset</button></form>
+      {% endif %}</section>{% endif %}
+    </div>
+  </div>
+</div>

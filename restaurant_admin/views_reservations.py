@@ -3,7 +3,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
-from django.http import HttpResponseBadRequest
+from django.http import HttpResponse, HttpResponseBadRequest
 
 from super_admin.models import Restaurant, RestaurantUser
 from reservations.models import Reservation, ReservationSetting
@@ -57,11 +57,9 @@ def reservation_list(request, restaurant_slug=None):
 def reservation_confirm(request, pk, restaurant_slug=None):
     if request.method != 'POST':
         return HttpResponseBadRequest('POST required')
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     reservation = get_object_or_404(Reservation, pk=pk, restaurant=restaurant)
     reservation.status = Reservation.ReservationStatus.CONFIRMED
     reservation.save(update_fields=['status'])
@@ -74,11 +72,9 @@ def reservation_confirm(request, pk, restaurant_slug=None):
 def reservation_cancel(request, pk, restaurant_slug=None):
     if request.method != 'POST':
         return HttpResponseBadRequest('POST required')
-    try:
-        restaurant = request.user.restaurant_profile.restaurant
-    except RestaurantUser.DoesNotExist:
-        from django.http import HttpResponseForbidden
-        return HttpResponseForbidden("No restaurant associated with this account.")
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     reservation = get_object_or_404(Reservation, pk=pk, restaurant=restaurant)
     reservation.status = Reservation.ReservationStatus.CANCELLED
     reservation.save(update_fields=['status'])

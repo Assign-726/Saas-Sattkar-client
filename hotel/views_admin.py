@@ -9,6 +9,7 @@ from PIL import Image
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
+from django.views.decorators.http import require_POST
 from django.http import JsonResponse, HttpResponseForbidden
 from django.contrib import messages
 from django.utils import timezone
@@ -28,8 +29,12 @@ from hotel.models import (
     CabServicePackage,
     FleetVehicle,
     CabBooking,
+    FolioPayment,
 )
 from hotel.forms import HotelSettingsForm
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def optimize_image_to_webp(uploaded_file, max_size=(1920, 1080), quality=85):
@@ -206,6 +211,16 @@ def hotel_admin_required(view_func):
         ctx = get_hotel_context(request, restaurant_slug)
         branch = ctx['current_branch']
 
+        # Tenant isolation: a login only ever opens its own business (and its own branch
+        # when branch-locked). Only platform superusers may look at another hotel.
+        if not request.user.is_superuser:
+            from django.http import HttpResponseForbidden
+            profile = getattr(request.user, 'restaurant_profile', None)
+            if profile is None or profile.restaurant_id != ctx['restaurant'].id:
+                return HttpResponseForbidden("You do not have access to this hotel.")
+            if profile.branch_id and branch is not None and branch.id != profile.branch_id:
+                return HttpResponseForbidden("You do not have access to this branch.")
+
         if branch and not branch.has_hotel_module and not request.user.is_superuser:
             return render(request, 'hotel_admin/feature_disabled.html', {
                 **ctx,
@@ -296,6 +311,11 @@ def dashboard_view(request, restaurant_slug, ctx):
         'booking_map': booking_map,
         'categories': categories,
     }
+    if branch:
+        from hotel import ops
+        from super_admin import permissions as P
+        attention = ops.action_items(branch, P.access_map(request.user))
+        context.update({'attention': attention, 'attention_total': len(attention)})
     return render(request, 'hotel_admin/dashboard.html', context)
 
 
@@ -478,74 +498,54 @@ def bookings_view(request, restaurant_slug, ctx):
 
 @hotel_admin_required
 def booking_check_in_action(request, restaurant_slug, ctx, booking_id):
-    """
-    Check-In guest: Flips booking to CHECKED_IN and associated room to OCCUPIED.
-    """
+    """Check the guest in (rules in hotel/folio.py: status, ID requirement, room free and in order)."""
+    from hotel import folio
     branch = ctx['current_branch']
     booking = get_object_or_404(RoomBooking, id=booking_id, branch=branch)
-
-    if booking.booking_status == RoomBooking.BookingStatus.CANCELLED:
-        messages.error(request, "Cannot check in a cancelled reservation.")
-    else:
-        booking.booking_status = RoomBooking.BookingStatus.CHECKED_IN
-        booking.check_in_time = timezone.now()
-        booking.save(update_fields=['booking_status', 'check_in_time', 'updated_at'])
-
-        room = booking.room
-        room.status = Room.RoomStatus.OCCUPIED
-        room.save(update_fields=['status', 'updated_at'])
-
-        messages.success(request, f"Guest {booking.guest_name} successfully checked into Room {room.room_number}.")
-
+    if request.method != 'POST':
+        return redirect('hotel_admin:booking_detail', restaurant_slug=restaurant_slug, booking_id=booking.pk)
+    error = folio.check_in(booking, request.user)
+    if error:
+        messages.error(request, error)
+        return redirect('hotel_admin:booking_detail', restaurant_slug=restaurant_slug, booking_id=booking.pk)
+    messages.success(request, f"Guest {booking.guest_name} successfully checked into Room {booking.room.room_number}.")
     next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('hotel_admin:dashboard', kwargs={'restaurant_slug': restaurant_slug})
     return redirect(next_url)
 
 
 @hotel_admin_required
 def booking_check_out_action(request, restaurant_slug, ctx, booking_id):
-    """
-    Check-Out guest: Flips booking to CHECKED_OUT and associated room to CLEANING.
-    """
+    """Check the guest out: the folio must be settled (or the balance confirmed), an invoice number is issued
+    and the room goes to housekeeping with a departure-clean task."""
+    from hotel import folio
     branch = ctx['current_branch']
     booking = get_object_or_404(RoomBooking, id=booking_id, branch=branch)
-
-    booking.booking_status = RoomBooking.BookingStatus.CHECKED_OUT
-    booking.check_out_time = timezone.now()
-    booking.save(update_fields=['booking_status', 'check_out_time', 'updated_at'])
-
-    room = booking.room
-    room.status = Room.RoomStatus.CLEANING
-    room.save(update_fields=['status', 'updated_at'])
-
-    messages.success(request, f"Guest {booking.guest_name} checked out. Room {room.room_number} marked for Housekeeping/Cleaning.")
-
+    if request.method != 'POST':
+        return redirect('hotel_admin:booking_detail', restaurant_slug=restaurant_slug, booking_id=booking.pk)
+    error = folio.check_out(booking, request.user, allow_balance=request.POST.get('allow_balance') == '1')
+    if error:
+        messages.error(request, error)
+        return redirect('hotel_admin:booking_detail', restaurant_slug=restaurant_slug, booking_id=booking.pk)
+    messages.success(request, f"Guest {booking.guest_name} checked out (invoice {booking.invoice_number}). Room {booking.room.room_number} sent to housekeeping.")
     next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('hotel_admin:dashboard', kwargs={'restaurant_slug': restaurant_slug})
     return redirect(next_url)
 
 
 @hotel_admin_required
 def booking_cancel_action(request, restaurant_slug, ctx, booking_id):
-    """
-    Cancel booking and release room back to AVAILABLE if occupied by this booking.
-    """
+    """Cancel a booking (with an optional reason) and release the room if the guest was in it."""
+    from hotel import folio
     branch = ctx['current_branch']
     booking = get_object_or_404(RoomBooking, id=booking_id, branch=branch)
-
-    booking.booking_status = RoomBooking.BookingStatus.CANCELLED
-    booking.save(update_fields=['booking_status', 'updated_at'])
-
-    room = booking.room
-    other_active = RoomBooking.objects.filter(
-        room=room,
-        booking_status=RoomBooking.BookingStatus.CHECKED_IN
-    ).exclude(pk=booking.pk).exists()
-
-    if not other_active and room.status == Room.RoomStatus.OCCUPIED:
-        room.status = Room.RoomStatus.AVAILABLE
-        room.save(update_fields=['status', 'updated_at'])
-
-    messages.info(request, f"Reservation {booking.booking_id} has been cancelled.")
-
+    if request.method != 'POST':
+        return redirect('hotel_admin:booking_detail', restaurant_slug=restaurant_slug, booking_id=booking.pk)
+    error = folio.cancel(booking, request.user, request.POST.get('reason', ''))
+    if error:
+        messages.error(request, error)
+    else:
+        balance = folio.Folio(booking).paid
+        messages.info(request, f"Reservation {booking.booking_id} has been cancelled."
+                      + (f" ₹{balance:,.2f} was paid — record a refund on the folio if one is due." if balance > 0 else ""))
     next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug})
     return redirect(next_url)
 
@@ -560,8 +560,15 @@ def room_status_update_action(request, restaurant_slug, ctx, room_id):
 
     new_status = request.POST.get('status', '').upper()
     if new_status in Room.RoomStatus.values:
+        was_cleaning = room.status == Room.RoomStatus.CLEANING
         room.status = new_status
         room.save(update_fields=['status', 'updated_at'])
+        if was_cleaning and new_status == Room.RoomStatus.AVAILABLE:
+            # "Mark clean" closes the room's open cleaning tasks on the housekeeping board
+            from hotel.models import HousekeepingTask
+            HousekeepingTask.objects.filter(room=room, status__in=['PENDING', 'IN_PROGRESS'],
+                                            kind__in=['CHECKOUT_CLEAN', 'DEEP_CLEAN']).update(
+                status='DONE', completed_at=timezone.now(), completed_by=request.user)
         messages.success(request, f"Room {room.room_number} status updated to '{room.get_status_display()}'.")
     else:
         messages.error(request, f"Invalid room status '{new_status}'.")
@@ -967,8 +974,12 @@ def booking_create_action(request, restaurant_slug, ctx):
         guest_phone = request.POST.get('guest_phone', '').strip()
         check_in_str = request.POST.get('check_in_date')
         check_out_str = request.POST.get('check_out_date')
-        num_guests = int(request.POST.get('num_guests', 1))
+        try:
+            num_guests = max(1, int(request.POST.get('num_guests') or 1))
+        except ValueError:
+            num_guests = 1
         payment_status = request.POST.get('payment_status', RoomBooking.PaymentStatus.PENDING)
+        source = request.POST.get('source') if request.POST.get('source') in RoomBooking.Source.values else RoomBooking.Source.DIRECT
         special_requests = request.POST.get('special_requests', '').strip()
 
         if not room_id or not guest_name or not check_in_str or not check_out_str:
@@ -988,20 +999,23 @@ def booking_create_action(request, restaurant_slug, ctx):
             messages.error(request, "Check-out date must be strictly after check-in date.")
             return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
 
-        # Overlap Validation
-        conflict = RoomBooking.objects.filter(
-            room=room,
-            booking_status__in=[RoomBooking.BookingStatus.RESERVED, RoomBooking.BookingStatus.CHECKED_IN],
-            check_in_date__lt=check_out_date,
-            check_out_date__gt=check_in_date
-        ).first()
-
+        # Overlap, out-of-order and rate restrictions (hotel/pricing.py)
+        from hotel import pricing, folio
+        conflict = pricing.room_conflict(room, check_in_date, check_out_date)
         if conflict:
-            messages.error(
-                request,
-                f"Room {room.room_number} is already booked from {conflict.check_in_date} to {conflict.check_out_date} "
-                f"by {conflict.guest_name}. Please choose another room or date."
-            )
+            messages.error(request, conflict + " Please choose another room or date.")
+            return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
+        quote = pricing.quote(room.category, check_in_date, check_out_date, HotelSettings.get_settings(branch))
+        if quote['restriction'] and request.POST.get('override_restriction') != '1':
+            messages.error(request, quote['restriction'] + " Tick “Override rate restrictions” to book it anyway.")
+            return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
+        advance = None
+        try:
+            advance = Decimal(str(request.POST.get('advance_amount') or '0').replace(',', ''))
+        except Exception:
+            advance = None
+        if payment_status == RoomBooking.PaymentStatus.PARTIALLY_PAID and not (advance and advance > 0):
+            messages.error(request, "Enter the advance amount received for a partially paid booking.")
             return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
 
         booking = RoomBooking.objects.create(
@@ -1013,10 +1027,19 @@ def booking_create_action(request, restaurant_slug, ctx):
             check_in_date=check_in_date,
             check_out_date=check_out_date,
             num_guests=num_guests,
+            adults=num_guests,
+            source=source,
+            total_room_charges=quote['net'],
+            taxes=quote['tax'],
+            grand_total=quote['total'],
             booking_status=RoomBooking.BookingStatus.RESERVED,
-            payment_status=payment_status if payment_status in RoomBooking.PaymentStatus.values else RoomBooking.PaymentStatus.PENDING,
+            payment_status=RoomBooking.PaymentStatus.PAID if payment_status == RoomBooking.PaymentStatus.PAID else RoomBooking.PaymentStatus.PENDING,
+            payment_method=request.POST.get('payment_method') or 'PAY_AT_DESK',
             special_requests=special_requests
         )
+        if payment_status == RoomBooking.PaymentStatus.PARTIALLY_PAID and advance:
+            method = request.POST.get('payment_method') if request.POST.get('payment_method') in FolioPayment.Method.values else 'CASH'
+            folio.record_payment(booking, request.user, advance, method, note='Advance at booking')
 
         # Dispatch hotel reservation voucher email
         try:
@@ -1062,8 +1085,10 @@ def hotel_settings_view(request, restaurant_slug, ctx):
     else:
         form = HotelSettingsForm(instance=settings_obj)
 
+    from core import two_factor
     return render(request, 'hotel_admin/settings.html', {
         **ctx,
+        'two_factor_on': two_factor.is_enabled(request.user),
         'active_menu': 'settings',
         'settings_obj': settings_obj,
         'form': form,
@@ -2253,3 +2278,18 @@ def cab_payment_status_action(request, restaurant_slug, ctx, cab_id):
     return redirect(f"{reverse('hotel_admin:cabs_dispatch', kwargs={'restaurant_slug': restaurant_slug})}?date={date_param}")
 
 
+
+
+@hotel_admin_required
+@require_POST
+def two_factor_update(request, restaurant_slug, ctx):
+    """The signed-in user's own email-OTP sign-in preference (Settings → Security)."""
+    from core import two_factor
+    on = request.POST.get('is_2fa_enabled') == 'on'
+    err = two_factor.set_enabled(request.user, on, request.POST.get('current_password', ''))
+    if err:
+        messages.error(request, err)
+    else:
+        messages.success(request, 'Two-factor sign-in is on. You will get a code by email each time you sign in.' if on
+                         else 'Two-factor sign-in is off. You will sign in with your password only.')
+    return redirect(reverse('hotel_admin:settings', kwargs={'restaurant_slug': restaurant_slug}) + '?tab=security')

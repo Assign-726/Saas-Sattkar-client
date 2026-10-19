@@ -1,0 +1,21 @@
+{% comment %}Event picker. Params: url_name (route taking event_id), events (queryset). Uses ns, rslug, selected_event.{% endcomment %}
+{% if events %}
+<div class="dropdown club-switch">
+    <button type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Switch event">
+        <i class="fas fa-calendar-day" style="color: var(--ui-accent);"></i>
+        <span>{{ selected_event.title|default:"Choose an event" }}</span>
+        <i class="fas fa-chevron-down" style="font-size: 0.7rem; opacity: 0.6;"></i>
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end shadow border-0 rounded-3 p-1">
+        {% for ev in events %}
+        <li>
+            <a class="dropdown-item rounded-2 py-2 {% if selected_event and ev.id == selected_event.id %}active{% endif %}"
+               href="{% url ns|add:url_name restaurant_slug=rslug event_id=ev.id %}">
+                {{ ev.title }}
+                <small>{{ ev.start_datetime|date:"D d M Y · h:i A" }}{% if not ev.is_published %} · Draft{% endif %}</small>
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}

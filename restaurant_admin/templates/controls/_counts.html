@@ -1,0 +1,34 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>Stock counts</h1><p>Count what’s on the shelf. Posting a count corrects the books and records every difference.</p></div>
+  </div>
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-list-card">
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Count</th><th>Status</th><th class="num">Items counted</th><th class="num">Variance value</th><th>Started</th></tr></thead>
+          <tbody>{% for r in rows %}<tr>
+            <td><a href="{{ base_url }}inventory/counts/{{ r.c.pk }}/"><strong>{{ r.c.title }}</strong></a>{% if r.c.branch %}<br><small class="ui-log-sub">{{ r.c.branch.name }}</small>{% endif %}</td>
+            <td><span class="ui-chip ui-chip-{% if r.c.status == 'POSTED' %}green{% elif r.c.status == 'DRAFT' %}orange{% else %}gray{% endif %}">{{ r.c.get_status_display }}</span></td>
+            <td class="num">{{ r.counted }} / {{ r.items }}</td>
+            <td class="num {% if r.value < 0 %}ui-text-red{% endif %}">{{ r.value|signed_inr }}</td>
+            <td class="nowrap">{{ r.c.created_at|date:"d M Y" }}{% if r.c.created_by %}<br><small class="ui-log-sub">{{ r.c.created_by.username }}</small>{% endif %}</td></tr>
+          {% empty %}<tr><td colspan="5" class="ui-log-sub" style="padding:24px;text-align:center">No counts yet. Most kitchens count weekly, or at least at month end.</td></tr>{% endfor %}</tbody>
+        </table></div>
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Start a count</h2>
+        {% if open_draft %}<div class="ui-alert ui-alert-info" style="margin-bottom:12px"><i class="fa-solid fa-circle-info ui-alert-icon"></i><div class="ui-alert-body"><a href="{{ base_url }}inventory/counts/{{ open_draft.pk }}/">{{ open_draft.title }}</a> is still open.</div></div>{% endif %}
+        <form method="post" action="{{ base_url }}inventory/counts/new/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-field"><label for="scTitle">Name</label><input id="scTitle" class="ui-input" name="title" maxlength="120" placeholder="e.g. Month-end count"></div>
+          <div class="ui-field"><label for="scCat">Only this category</label><select id="scCat" class="ui-input" name="category"><option value="">All items</option>{% for c in categories %}<option value="{{ c.pk }}">{{ c.name }}</option>{% endfor %}</select></div>
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-clipboard-list"></i><span>Start counting</span></button>
+          <p class="ui-log-sub" style="margin:0">Sales during the count are fine: only the difference you find is applied.</p>
+        </form>
+      </section>
+    </div>
+  </div>
+</div>

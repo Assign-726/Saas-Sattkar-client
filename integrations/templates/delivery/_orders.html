@@ -1,0 +1,32 @@
+{% load restaurant_admin_extras %}
+<div class="ui-agg" style="--brand: {{ p.color }}; --brand-rgb: {{ p.rgb }};">
+  {% include 'delivery/_head.html' %}
+  <form class="ui-card ui-filters" method="get">
+    <div class="ui-field"><label for="aq">Search</label><input id="aq" class="ui-input" name="q" value="{{ q }}" placeholder="Order ID, customer or rider"></div>
+    <div class="ui-field"><label for="as">Status</label><select id="as" class="ui-input" name="status"><option value="">All</option>{% for k, l in filters %}<option value="{{ k }}" {% if status == k %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    <div class="ui-field"><label for="af">From</label><input id="af" class="ui-input" type="date" name="from" value="{{ d_from }}"></div>
+    <div class="ui-field"><label for="at">To</label><input id="at" class="ui-input" type="date" name="to" value="{{ d_to }}"></div>
+    <div class="ui-filter-actions">
+      <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-magnifying-glass"></i><span>Filter</span></button>
+      <a class="ui-btn ui-btn-gray" href="?{{ qs_no_page }}&export=csv"><i class="fa-solid fa-file-csv"></i><span>CSV</span></a>
+    </div>
+  </form>
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">{{ page.paginator.count }} order{{ page.paginator.count|pluralize }}</h2>
+      <div class="ui-chipset">{% for k, l in filters %}{% if k != 'open' %}{% with n=counts|get_item:k %}{% if n %}<a class="ui-chip {% if status == k %}ui-chip-indigo{% else %}ui-chip-gray{% endif %}" href="?status={{ k }}">{{ l }} · {{ n }}</a>{% endif %}{% endwith %}{% endif %}{% endfor %}</div></div>
+    {% if page.object_list %}
+    <div class="table-responsive"><table class="table ui-dash-table">
+      <thead><tr><th>Order</th><th>Customer</th><th>Status</th><th class="num">Customer paid</th><th class="num d-none d-lg-table-cell">Commission</th><th class="num d-none d-md-table-cell">Payout</th></tr></thead>
+      <tbody>{% for l in page %}<tr class="ui-row-link" onclick="location.href='{% url 'restaurant_admin:delivery_order_detail' restaurant_slug=env.slug platform=env.platform pk=l.pk %}'">
+        <td><a href="{% url 'restaurant_admin:delivery_order_detail' restaurant_slug=env.slug platform=env.platform pk=l.pk %}"><strong>#{{ l.external_id }}</strong></a><div class="ui-log-sub">{{ l.created_at|date:"j M, g:i a" }} · our #{{ l.order.branch_order_number|default:l.order_id }}</div></td>
+        <td>{{ l.order.customer_name }}</td>
+        <td>{% include 'delivery/_status_chip.html' %}</td>
+        <td class="num"><strong>₹{{ l.customer_payable|inr }}</strong></td>
+        <td class="num d-none d-lg-table-cell">₹{{ l.commission_amount|inr }}</td>
+        <td class="num d-none d-md-table-cell">{% if l.settled_amount is not None %}<span class="ui-text-green">₹{{ l.settled_amount|inr }}</span><div class="ui-log-sub">settled</div>{% elif l.platform_status == 'rejected' or l.platform_status == 'cancelled' %}—{% else %}₹{{ l.expected_payout|inr }}<div class="ui-log-sub">expected</div>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+    {% if page.has_other_pages %}<nav class="ui-pager">{% if page.has_previous %}<a class="ui-pager-btn" href="?{{ qs_no_page }}&page={{ page.previous_page_number }}">‹ Previous</a>{% endif %}<span class="ui-pager-info">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="ui-pager-btn" href="?{{ qs_no_page }}&page={{ page.next_page_number }}">Next ›</a>{% endif %}</nav>{% endif %}
+    {% else %}<div class="ui-empty"><i class="fa-solid fa-receipt ui-empty-icon"></i><p class="ui-log-sub">No {{ p.label }} orders match.</p></div>{% endif %}
+  </section>
+</div>

@@ -1,0 +1,138 @@
+{% load hotel_booking %}{% bookable_rooms current_branch as nb_rooms %}
+<!-- New Reservation (header button, available on every hotel page) -->
+<div class="modal fade" id="newBookingModal" tabindex="-1" aria-labelledby="newBookingModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <form method="POST" action="{% url 'hotel_admin:booking_create' restaurant_slug=rslug %}" id="pmsBookingForm">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="stat-icon" style="width:34px;height:34px;font-size:0.9rem;background:rgba(99,102,241,0.2);color:#a5b4fc;"><i class="fa-solid fa-calendar-plus"></i></div>
+                        <div>
+                            <div class="modal-title" id="newBookingModalLabel">New Guest Reservation</div>
+                            <div style="font-size:0.73rem;color:var(--ui-label-3);">Create a direct walk-in or advance booking</div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-section-title"><i class="fa-solid fa-bed me-1"></i>Room &amp; Stay Details</div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Physical Room *</label>
+                            <select name="room_id" id="nbRoom" class="form-select" required>
+                                <option value="" data-price="0">— Select Physical Room —</option>
+                                {% for r in nb_rooms %}
+                                <option value="{{ r.id }}" data-price="{{ r.category.base_price_per_night }}">Room #{{ r.room_number }} ({{ r.category.name }}) — ₹{{ r.category.base_price_per_night }}/nt [{{ r.get_status_display }}]</option>
+                                {% empty %}
+                                <option value="" disabled>No rooms set up for this branch yet</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Number of Guests</label>
+                            <input type="number" name="num_guests" class="form-control" value="1" min="1" max="10">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Check-In Date *</label>
+                            <input type="date" name="check_in_date" id="nbIn" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Check-Out Date *</label>
+                            <input type="date" name="check_out_date" id="nbOut" class="form-control" required>
+                        </div>
+                    </div>
+                    <div style="padding:0.7rem 1rem;background:rgba(var(--ui-accent-rgb), 0.1);border:1px solid rgba(var(--ui-accent-rgb), 0.3);border-radius:9px;display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">
+                        <span style="font-size:0.82rem;font-weight:600;color:var(--ui-accent-text);"><i class="fa-solid fa-receipt me-1"></i>Estimated Stay Cost</span>
+                        <span class="font-mono fw-bold" style="color:var(--ui-accent-text);" id="nbEstimate">₹0 (0 Nights)</span>
+                    </div>
+
+                    <div class="modal-section-title"><i class="fa-solid fa-user me-1"></i>Guest Information</div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Guest Full Name *</label>
+                            <input type="text" name="guest_name" class="form-control" placeholder="e.g. Rahul Sharma" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Phone Number *</label>
+                            <input type="tel" name="guest_phone" class="form-control" placeholder="+91 98765 43210" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Email Address</label>
+                            <input type="email" name="guest_email" class="form-control" placeholder="guest@example.com">
+                        </div>
+                    </div>
+
+                    <div class="modal-section-title"><i class="fa-solid fa-credit-card me-1"></i>Payment &amp; Notes</div>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Payment</label>
+                            <select name="payment_status" class="form-select" onchange="document.getElementById('nbAdvWrap').hidden = this.value !== 'PARTIALLY_PAID'">
+                                <option value="PENDING">Pending (Pay at Check-In)</option>
+                                <option value="PAID">Paid in Full</option>
+                                <option value="PARTIALLY_PAID">Advance received</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Paid by</label>
+                            <select name="payment_method" class="form-select">
+                                <option value="CASH">Cash</option>
+                                <option value="UPI">UPI</option>
+                                <option value="CARD">Card</option>
+                                <option value="BANK">Bank transfer</option>
+                                <option value="OTA">Collected by OTA</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4" id="nbAdvWrap" hidden>
+                            <label class="form-label">Advance amount (₹)</label>
+                            <input type="number" name="advance_amount" class="form-control" min="1" step="0.01" placeholder="e.g. 2000">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Booking source</label>
+                            <select name="source" class="form-select">
+                                <option value="DIRECT">Front desk / phone</option>
+                                <option value="WALK_IN">Walk-in</option>
+                                <option value="CORPORATE">Corporate</option>
+                                <option value="AGENT">Travel agent</option>
+                                <option value="OTA">OTA / channel</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Special Requests / Notes</label>
+                            <input type="text" name="special_requests" class="form-control" placeholder="e.g. Extra pillows, late arrival">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-check-label" style="font-size:0.8rem;"><input type="checkbox" class="form-check-input me-1" name="override_restriction" value="1">Override rate restrictions (minimum stay / closed dates)</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer d-flex justify-content-between">
+                    <button type="button" class="btn-pms-outline" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-pms-primary"><i class="fa-solid fa-check"></i>Confirm Reservation</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    var room = document.getElementById('nbRoom'), inD = document.getElementById('nbIn'),
+        outD = document.getElementById('nbOut'), est = document.getElementById('nbEstimate');
+    if (!room || !inD || !outD || !est) return;
+    function iso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+    var t = new Date(), tm = new Date(t); tm.setDate(t.getDate() + 1);
+    inD.value = iso(t); outD.value = iso(tm);
+    function calc() {
+        var price = parseFloat((room.options[room.selectedIndex] || {}).getAttribute && room.options[room.selectedIndex].getAttribute('data-price') || 0);
+        var nights = Math.max(1, Math.round((new Date(outD.value) - new Date(inD.value)) / 86400000)) || 1;
+        est.textContent = '₹' + (price * nights).toLocaleString('en-IN') + ' (' + nights + ' Night' + (nights > 1 ? 's' : '') + ' @ ₹' + price + '/nt)';
+    }
+    inD.addEventListener('change', function () {
+        if (outD.value <= inD.value) { var d = new Date(inD.value); d.setDate(d.getDate() + 1); outD.value = iso(d); }
+        calc();
+    });
+    room.addEventListener('change', calc);
+    outD.addEventListener('change', calc);
+    calc();
+})();
+</script>

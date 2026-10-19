@@ -1,0 +1,16 @@
+<script>
+(function () {
+  document.querySelectorAll('[data-open-dialog]').forEach(function (b) { b.addEventListener('click', function () { var d = document.getElementById(b.dataset.openDialog); if (d && d.showModal) d.showModal(); }); });
+  document.querySelectorAll('[data-close-dialog]').forEach(function (b) { b.addEventListener('click', function () { b.closest('dialog').close(); }); });
+  document.querySelectorAll('[data-copy]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var el = document.querySelector(b.dataset.copy); if (!el) return;
+      var text = el.innerText.trim(), label = b.querySelector('span');
+      var done = function () { if (label) { var old = label.textContent; label.textContent = 'Copied'; setTimeout(function () { label.textContent = old; }, 1600); } };
+      if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () {}); else { var r = document.createRange(); r.selectNodeContents(el); var s = getSelection(); s.removeAllRanges(); s.addRange(r); document.execCommand('copy'); done(); }
+    });
+  });
+  document.querySelectorAll('form[data-confirm]').forEach(function (f) { f.addEventListener('submit', function (e) { if (!confirm(f.dataset.confirm)) e.preventDefault(); }); });
+  document.querySelectorAll('.ui-row-link').forEach(function (tr) { tr.addEventListener('click', function (e) { if (!e.target.closest('a, button, form, input, select')) window.location = tr.dataset.href; }); });
+})();
+</script>

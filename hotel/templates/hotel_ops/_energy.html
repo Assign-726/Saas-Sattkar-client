@@ -1,0 +1,39 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header"><div><h1>Energy &amp; utilities</h1><p>Daily meter readings, cost and electricity per occupied room against your target.</p></div></div>
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi {% if kpis.per_room and kpis.per_room > s.energy_target_kwh %}kpi-rose{% else %}kpi-green{% endif %}"><div class="ui-kpi-head"><div class="kpi-label">kWh per occupied room</div></div><div class="kpi-val">{{ kpis.per_room|default:"—" }}</div><div class="kpi-sub">Last 7 days · target {{ s.energy_target_kwh|floatformat:'-1' }}{% if kpis.per_room_prev %} · was {{ kpis.per_room_prev }}{% endif %}</div></div>
+    <div class="ui-kpi kpi-cyan"><div class="ui-kpi-head"><div class="kpi-label">Water per occupied room</div></div><div class="kpi-val">{% if kpis.water %}{{ kpis.water }} L{% else %}—{% endif %}</div><div class="kpi-sub">Last 7 days</div></div>
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Utility cost this month</div></div><div class="kpi-val">₹{{ kpis.month_cost|inr }}</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Generator diesel · 30 days</div></div><div class="kpi-val">{{ kpis.diesel|floatformat:'0' }} L</div></div>
+  </div>
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-pad"><h2 class="ui-card-title">Electricity · last 30 days</h2>
+        {% if readings %}<div class="ui-ops-bars">{% for r in readings %}<div title="{{ r.date|date:'d M' }}: {{ r.electricity_kwh|floatformat:'0' }} kWh · {{ r.occupied_rooms }} rooms{% if r.kwh_per_room %} · {{ r.kwh_per_room }}/room{% endif %}"><i style="height:{{ r.bar }}%" class="{% if r.kwh_per_room and r.kwh_per_room > s.energy_target_kwh %}is-over{% endif %}"></i><small>{{ r.date|date:"j" }}</small></div>{% endfor %}</div>
+        <div class="ui-pms-legend"><span><i class="is-confirmed"></i>Within target</span><span><i class="is-enquiry" style="background:var(--ui-red)"></i>Above target per room</span></div>
+        {% else %}<p class="ui-log-sub" style="margin:0">Record the first day’s readings to start the chart.</p>{% endif %}</section>
+      <section class="ui-card ui-list-card"><div class="table-responsive"><table class="table">
+        <thead><tr><th>Date</th><th class="num">Rooms</th><th class="num">kWh</th><th class="num">Water kL</th><th class="num">LPG kg</th><th class="num">Diesel L</th><th class="num">kWh/room</th><th class="num">Cost</th></tr></thead>
+        <tbody>{% for r in recent %}<tr><td class="nowrap">{{ r.date|date:"D d M" }}</td><td class="num">{{ r.occupied_rooms }}</td><td class="num">{{ r.electricity_kwh|floatformat:'0' }}</td><td class="num">{{ r.water_kl }}</td><td class="num">{{ r.lpg_kg }}</td><td class="num">{{ r.diesel_l|default:"—" }}</td>
+          <td class="num {% if r.kwh_per_room and r.kwh_per_room > s.energy_target_kwh %}ui-text-red{% endif %}">{{ r.kwh_per_room|default:"—" }}</td><td class="num">₹{{ r.total_cost|inr }}</td></tr>
+        {% empty %}<tr><td colspan="8" class="ui-log-sub" style="padding:24px;text-align:center">No readings yet.</td></tr>{% endfor %}</tbody></table></div></section>
+    </div>
+    <div class="ui-g360-side">{% if can_edit %}
+      <section class="ui-card ui-pad"><h2 class="ui-card-title">{% if recorded_today %}Update{% else %}Record{% endif %} readings</h2>
+        <form method="post" action="{{ base_url }}energy/save/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-field"><label for="enD">Day</label><input id="enD" class="ui-input" type="date" name="date" value="{{ today|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}"></div>
+          <div class="ui-inline-fields"><div class="ui-field"><label for="enE">Electricity kWh</label><input id="enE" class="ui-input" type="number" min="0" step="0.1" name="electricity_kwh" required></div><div class="ui-field"><label for="enW">Water kL</label><input id="enW" class="ui-input" type="number" min="0" step="0.1" name="water_kl"></div></div>
+          <div class="ui-inline-fields"><div class="ui-field"><label for="enL">LPG kg</label><input id="enL" class="ui-input" type="number" min="0" step="0.1" name="lpg_kg"></div><div class="ui-field"><label for="enX">Diesel L</label><input id="enX" class="ui-input" type="number" min="0" step="0.1" name="diesel_l" value="0"></div></div>
+          <div class="ui-field"><label for="enN">Note</label><input id="enN" class="ui-input" name="notes" maxlength="200" placeholder="e.g. 3-hour power cut"></div>
+          <button class="ui-btn ui-btn-primary" type="submit">Save readings</button>
+          <p class="ui-log-sub" style="margin:0">Occupied rooms for the night are counted from bookings ({{ occupied }} in house now).</p></form></section>
+      <section class="ui-card ui-pad"><details><summary class="ui-card-title" style="cursor:pointer">Tariffs &amp; target</summary>
+        <form method="post" action="{{ base_url }}energy/save/" class="ui-stack-form" style="margin-top:10px">{% csrf_token %}<input type="hidden" name="op" value="settings">
+          <div class="ui-inline-fields"><div class="ui-field"><label for="tE">₹ / kWh</label><input id="tE" class="ui-input" type="number" min="0" step="0.01" name="tariff_electricity" value="{{ s.tariff_electricity|stringformat:'s' }}"></div><div class="ui-field"><label for="tW">₹ / kL water</label><input id="tW" class="ui-input" type="number" min="0" step="0.01" name="tariff_water" value="{{ s.tariff_water|stringformat:'s' }}"></div></div>
+          <div class="ui-inline-fields"><div class="ui-field"><label for="tL">₹ / kg LPG</label><input id="tL" class="ui-input" type="number" min="0" step="0.01" name="tariff_lpg" value="{{ s.tariff_lpg|stringformat:'s' }}"></div><div class="ui-field"><label for="tD">₹ / L diesel</label><input id="tD" class="ui-input" type="number" min="0" step="0.01" name="tariff_diesel" value="{{ s.tariff_diesel|stringformat:'s' }}"></div></div>
+          <div class="ui-field"><label for="tT">Target kWh per occupied room</label><input id="tT" class="ui-input" type="number" min="0" step="0.1" name="energy_target_kwh" value="{{ s.energy_target_kwh|stringformat:'s' }}"></div>
+          <button class="ui-btn ui-btn-gray" type="submit">Save</button></form></details></section>
+    {% endif %}</div>
+  </div>
+</div>

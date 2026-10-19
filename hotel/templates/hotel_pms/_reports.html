@@ -1,0 +1,171 @@
+{% load restaurant_admin_extras %}
+{# Hotel reports — performance, front-office lists, Form C #}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>Reports</h1><p>{% if tab == 'lists' %}Front-office lists for {{ day|date:"l, d M Y" }}{% else %}{{ label }} · {{ start|date:"d M Y" }} – {{ end|date:"d M Y" }}{% endif %}</p></div>
+    <div class="ui-actions">
+      <a class="ui-btn ui-btn-gray" href="?{{ request.GET.urlencode }}&export=csv"><i class="fa-solid fa-file-csv"></i><span>CSV</span></a>
+      <button type="button" class="ui-btn ui-btn-gray" onclick="window.print()"><i class="fa-solid fa-print"></i><span>Print</span></button>
+    </div>
+  </div>
+
+  <nav class="ui-tabs ui-pms-tabs" aria-label="Report">
+    <a href="?tab=performance" class="{% if tab == 'performance' %}is-active{% endif %}">Performance</a>
+    <a href="?tab=lists" class="{% if tab == 'lists' %}is-active{% endif %}">Arrivals, departures &amp; in-house</a>
+    <a href="?tab=formc" class="{% if tab == 'formc' %}is-active{% endif %}">Foreign guests (Form C)</a>
+    <a href="{{ base_url }}reports/forecast/">Forecast</a>
+  </nav>
+
+  {% if tab == 'lists' %}
+  <form method="get" class="ui-card ui-filters">
+    <input type="hidden" name="tab" value="lists"><input type="hidden" name="list" value="{{ which }}">
+    <div class="ui-field"><label for="rlDate">Date</label><input id="rlDate" class="ui-input" type="date" name="date" value="{{ day|date:'Y-m-d' }}" onchange="this.form.submit()"></div>
+    <div class="ui-filter-actions"><a class="ui-btn ui-btn-gray" href="?tab=lists&list={{ which }}&date={{ prev_day|date:'Y-m-d' }}"><i class="fa-solid fa-chevron-left"></i></a><a class="ui-btn ui-btn-gray" href="?tab=lists&list={{ which }}&date={{ next_day|date:'Y-m-d' }}"><i class="fa-solid fa-chevron-right"></i></a></div>
+  </form>
+  <div class="ui-seg ui-pms-seg">
+    <a href="?tab=lists&list=arrivals&date={{ day|date:'Y-m-d' }}" class="{% if which == 'arrivals' %}active{% endif %}">Arrivals <span>{{ lists.arrivals|length }}</span></a>
+    <a href="?tab=lists&list=departures&date={{ day|date:'Y-m-d' }}" class="{% if which == 'departures' %}active{% endif %}">Departures <span>{{ lists.departures|length }}</span></a>
+    <a href="?tab=lists&list=in_house&date={{ day|date:'Y-m-d' }}" class="{% if which == 'in_house' %}active{% endif %}">In-house now <span>{{ lists.in_house|length }}</span></a>
+  </div>
+  <section class="ui-card ui-list-card">
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>Room</th><th>Guest</th><th>Stay</th><th>Guests</th><th>Status</th><th class="num">Balance</th><th>Requests</th></tr></thead>
+      <tbody>
+        {% for b in lists|get_item:which %}
+        <tr>
+          <td><strong>{{ b.room.room_number }}</strong><br><small class="ui-log-sub">{{ b.room.category.name }}</small></td>
+          <td><a href="{{ base_url }}bookings/{{ b.pk }}/"><strong>{{ b.guest_name }}</strong></a><br><small class="ui-log-sub">{{ b.guest_phone }}</small></td>
+          <td class="nowrap">{{ b.check_in_date|date:"d M" }} → {{ b.check_out_date|date:"d M" }}</td>
+          <td>{{ b.num_guests }}</td>
+          <td><span class="ui-chip ui-chip-{% if b.booking_status == 'CHECKED_IN' %}green{% elif b.booking_status == 'RESERVED' %}blue{% elif b.booking_status == 'NO_SHOW' %}red{% else %}gray{% endif %}">{{ b.get_booking_status_display }}</span></td>
+          <td class="num">{% with bal=b.folio.balance %}{% if bal > 0 %}<strong class="ui-text-red">₹{{ bal|inr2 }}</strong>{% else %}—{% endif %}{% endwith %}</td>
+          <td>{{ b.special_requests|truncatechars:60|default:"—" }}</td>
+        </tr>
+        {% empty %}<tr><td colspan="7" class="ui-log-sub" style="padding:24px;text-align:center">Nobody on this list.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+
+  {% else %}
+  <form class="ui-card ui-filters" method="get">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <div class="ui-field"><label for="rpP">Period</label><select id="rpP" class="ui-input" name="period" onchange="document.getElementById('rpCustom').hidden = this.value !== 'custom'">{% for k, l in periods %}<option value="{{ k }}" {% if period == k %}selected{% endif %}>{{ l }}</option>{% endfor %}<option value="custom" {% if period == 'custom' %}selected{% endif %}>Custom dates…</option></select></div>
+    <div id="rpCustom" style="display:contents" {% if period != 'custom' %}hidden{% endif %}>
+      <div class="ui-field"><label for="rpF">From</label><input id="rpF" class="ui-input" type="date" name="from" value="{{ start|date:'Y-m-d' }}"></div>
+      <div class="ui-field"><label for="rpT">To</label><input id="rpT" class="ui-input" type="date" name="to" value="{{ end|date:'Y-m-d' }}"></div>
+    </div>
+    <div class="ui-filter-actions"><button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-rotate"></i><span>Update</span></button></div>
+  </form>
+
+  {% if tab == 'formc' %}
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Foreign nationals arriving</h2><span class="ui-list-count">{{ guests|length }}</span></div>
+    <p class="ui-pad ui-log-sub" style="margin:0;padding-top:0">Hotels must report every foreign guest to the FRRO (Form C) within 24 hours of arrival. Export the CSV to fill the portal.</p>
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>Guest</th><th>Nationality</th><th>Passport</th><th>Visa</th><th>Stay</th><th>Room</th><th>Status</th></tr></thead>
+      <tbody>{% for b in guests %}
+        <tr><td><a href="{{ base_url }}bookings/{{ b.pk }}/#guest"><strong>{{ b.guest_name }}</strong></a></td><td>{{ b.nationality }}</td>
+          <td>{% if b.id_type == 'PASSPORT' and b.id_number %}{{ b.id_number }}{% else %}<span class="ui-chip ui-chip-red">Missing</span>{% endif %}</td>
+          <td>{% if b.visa_number %}{{ b.visa_number }}{% if b.visa_valid_till %}<br><small class="ui-log-sub">till {{ b.visa_valid_till|date:"d M Y" }}</small>{% endif %}{% else %}<span class="ui-chip ui-chip-red">Missing</span>{% endif %}</td>
+          <td class="nowrap">{{ b.check_in_date|date:"d M" }} → {{ b.check_out_date|date:"d M" }}</td><td>{{ b.room.room_number }}</td><td>{{ b.get_booking_status_display }}</td></tr>
+      {% empty %}<tr><td colspan="7" class="ui-log-sub" style="padding:24px;text-align:center">No foreign guests in this period.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+
+  {% else %}
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Occupancy</div><div class="kpi-icon"><i class="fa-solid fa-bed"></i></div></div><div class="kpi-val">{{ s.occupancy }}%</div><div class="kpi-sub">{{ s.sold }} of {{ s.sellable }} room nights</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">ADR</div><div class="kpi-icon"><i class="fa-solid fa-tag"></i></div></div><div class="kpi-val">₹{{ s.adr|inr }}</div><div class="kpi-sub">Average rate per sold room</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">RevPAR</div><div class="kpi-icon"><i class="fa-solid fa-chart-line"></i></div></div><div class="kpi-val">₹{{ s.revpar|inr }}</div><div class="kpi-sub">Room revenue per available room</div></div>
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Total revenue</div><div class="kpi-icon"><i class="fa-solid fa-indian-rupee-sign"></i></div></div><div class="kpi-val">₹{{ s.total_revenue|inr }}</div><div class="kpi-sub">Rooms ₹{{ s.room_revenue|inr }} · extras ₹{{ s.extras_revenue|inr }} (net of GST)</div></div>
+  </div>
+  {% if s.has_forecast %}<p class="ui-log-sub">Nights from today on include confirmed reservations (“on the books”).</p>{% endif %}
+
+  <section class="ui-card ui-pad">
+    <div class="ui-dash-card-head"><h2 class="ui-card-title" style="margin:0">Occupancy &amp; ADR by night</h2></div>
+    <div class="ui-dash-chart" style="height:280px"><canvas id="rpChart" aria-label="Occupancy and ADR chart"></canvas></div>
+  </section>
+
+  <div class="ui-pms-3col">
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">Bookings</h2>
+      <ul class="ui-dash-mini">
+        <li><span>Arrivals in period</span><strong>{{ s.arrivals }}</strong></li>
+        <li><span>Average length of stay</span><strong>{{ s.avg_stay }} nights</strong></li>
+        <li><span>Average booking lead time</span><strong>{{ s.avg_lead }} days</strong></li>
+        <li><span>Bookings made</span><strong>{{ s.bookings_made }}</strong></li>
+        <li><span>Cancellations</span><strong>{{ s.cancelled }}{% if s.bookings_made %} ({{ s.cancel_rate }}%){% endif %}</strong></li>
+        <li><span>No-shows</span><strong>{{ s.no_shows }}</strong></li>
+        <li><span>TRevPAR (rooms + extras)</span><strong>₹{{ s.trevpar|inr }}</strong></li>
+      </ul>
+    </section>
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">Where bookings came from</h2>
+      {% if sources %}<ul class="ui-dash-bars">{% for x in sources %}<li><div class="bh"><span>{{ x.source }} <small>· ₹{{ x.revenue|inr }}</small></span><strong>{{ x.bookings }}</strong></div><div class="ui-bar-mini is-indigo"><span style="width:{{ x.share }}%"></span></div></li>{% endfor %}</ul>
+      {% else %}<p class="ui-log-sub">No arrivals in this period.</p>{% endif %}
+    </section>
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">Money collected</h2>
+      {% if payments %}<ul class="ui-dash-bars">{% for k, v, share in payments %}<li><div class="bh"><span>{{ k }}</span><strong>₹{{ v|inr }}</strong></div><div class="ui-bar-mini"><span style="width:{{ share }}%"></span></div></li>{% endfor %}</ul>
+      <p class="ui-dash-foot">₹{{ s.collected|inr }} in total, net of refunds.</p>
+      {% else %}<p class="ui-log-sub">No payments recorded in this period.</p>{% endif %}
+    </section>
+  </div>
+
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Room types</h2></div>
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>Room type</th><th class="num">Rooms</th><th class="num">Nights sold</th><th class="num">Occupancy</th><th class="num">ADR</th><th class="num">Revenue</th></tr></thead>
+      <tbody>{% for c in s.categories %}<tr><td><strong>{{ c.name }}</strong></td><td class="num">{{ c.rooms }}</td><td class="num">{{ c.sold }}</td><td class="num">{{ c.occupancy }}%</td><td class="num">₹{{ c.adr|inr }}</td><td class="num">₹{{ c.revenue|inr }}</td></tr>{% empty %}<tr><td colspan="6" class="ui-log-sub">No rooms yet.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+
+  {% if s.channels %}
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">OTA &amp; channel bookings (arrivals in period)</h2></div>
+    <div class="table-responsive"><table class="table"><thead><tr><th>Channel</th><th class="num">Bookings</th><th class="num">Value</th><th class="num">Commission</th><th class="num">Net to you</th></tr></thead>
+      <tbody>{% for c in s.channels %}<tr><td><strong>{{ c.name }}</strong></td><td class="num">{{ c.bookings }}</td><td class="num">₹{{ c.revenue|inr }}</td><td class="num">₹{{ c.commission|inr }}</td><td class="num">₹{{ c.net|inr }}</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+  {% endif %}
+
+  {% if s.extras_by_kind %}
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Extras posted to folios</h2></div>
+    <div class="table-responsive"><table class="table"><thead><tr><th>Charge</th><th class="num">Lines</th><th class="num">Net</th></tr></thead>
+      <tbody>{% for x in s.extras_by_kind %}<tr><td>{{ x.kind }}</td><td class="num">{{ x.count }}</td><td class="num">{% if x.net < 0 %}−₹{{ x.net|inr2|cut:"-" }}{% else %}₹{{ x.net|inr2 }}{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+  {% endif %}
+
+  <section class="ui-card ui-list-card">
+    <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Night by night</h2></div>
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>Date</th><th class="num">Sold</th><th class="num">Available</th><th class="num">Out of order</th><th class="num">Occupancy</th><th class="num">ADR</th><th class="num">RevPAR</th><th class="num">Room revenue</th></tr></thead>
+      <tbody>{% for r in s.rows %}<tr class="{% if r.forecast %}is-forecast{% endif %}"><td class="nowrap">{{ r.date|date:"D d M" }}</td><td class="num">{{ r.sold }}</td><td class="num">{{ r.sellable }}</td><td class="num">{{ r.ooo|default:"—" }}</td><td class="num">{{ r.occupancy }}%</td><td class="num">₹{{ r.adr|inr }}</td><td class="num">₹{{ r.revpar|inr }}</td><td class="num">₹{{ r.revenue|inr }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+  {{ chart|json_script:"rp-data" }}
+  <script>
+  (function () {
+    function draw() {
+      var el = document.getElementById('rpChart'); if (!el || !window.Chart || el.dataset.drawn) return; el.dataset.drawn = '1';
+      var d = JSON.parse(document.getElementById('rp-data').textContent);
+      var css = function (n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); };
+      Chart.defaults.color = css('--ui-label-2') || '#6E6E73';
+      new Chart(el, { data: { labels: d.labels, datasets: [
+          { type: 'bar', label: 'Occupancy %', data: d.occupancy, backgroundColor: 'rgba(88,86,214,.55)', borderRadius: 4, yAxisID: 'y' },
+          { type: 'line', label: 'ADR ₹', data: d.adr, borderColor: '#34C759', backgroundColor: '#34C759', tension: .3, pointRadius: d.labels.length > 40 ? 0 : 2.5, yAxisID: 'y1' } ] },
+        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+          plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } } },
+          scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 12, maxRotation: 0 } },
+            y: { beginAtZero: true, max: 100, grid: { color: css('--ui-separator') || 'rgba(0,0,0,.08)' }, ticks: { callback: function (v) { return v + '%'; } } },
+            y1: { beginAtZero: true, position: 'right', grid: { display: false }, ticks: { callback: function (v) { return '₹' + Math.round(v).toLocaleString('en-IN'); } } } } } });
+    }
+    if (window.Chart) return draw();
+    var sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
+    sc.onload = draw; document.head.appendChild(sc);
+  })();
+  </script>
+  {% endif %}
+  {% endif %}
+</div>

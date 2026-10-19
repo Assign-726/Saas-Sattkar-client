@@ -53,3 +53,40 @@ class ReservationSetting(models.Model):
 
     def __str__(self):
         return f"Settings for {self.restaurant.name}"
+
+
+class WaitlistEntry(models.Model):
+    """A walk-in party waiting for a table."""
+    class Status(models.TextChoices):
+        WAITING = 'WAITING', _('Waiting')
+        NOTIFIED = 'NOTIFIED', _('Called')
+        SEATED = 'SEATED', _('Seated')
+        LEFT = 'LEFT', _('Left')
+
+    restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='waitlist')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='waitlist')
+    name = models.CharField(max_length=120)
+    phone = models.CharField(max_length=20, blank=True)
+    party_size = models.PositiveIntegerField(default=2, validators=[MinValueValidator(1)])
+    quoted_minutes = models.PositiveIntegerField(default=15)
+    preference = models.CharField(max_length=60, blank=True, help_text="e.g. Outdoor, Window, High chair")
+    notes = models.CharField(max_length=255, blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.WAITING, db_index=True)
+    table = models.ForeignKey('core.Table', on_delete=models.SET_NULL, null=True, blank=True, related_name='waitlist_entries')
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    notified_at = models.DateTimeField(null=True, blank=True)
+    seated_at = models.DateTimeField(null=True, blank=True)
+    left_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.party_size})"
+
+    @property
+    def waited_minutes(self):
+        from django.utils import timezone
+        end = self.seated_at or self.left_at or timezone.now()
+        return max(0, int((end - self.created_at).total_seconds() // 60))

@@ -1,0 +1,49 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>Action centre</h1><p>What needs attention across the hotel, {{ today|date:"l, d M Y" }}.</p></div>
+  </div>
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-indigo"><div class="ui-kpi-head"><div class="kpi-label">Arrivals due</div></div><div class="kpi-val">{{ snapshot.arrivals }}</div><div class="kpi-sub">Not yet checked in</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Departures due</div></div><div class="kpi-val">{{ snapshot.departures }}</div><div class="kpi-sub">Still in house</div></div>
+    <div class="ui-kpi kpi-green"><div class="ui-kpi-head"><div class="kpi-label">In house</div></div><div class="kpi-val">{{ snapshot.in_house }}</div><div class="kpi-sub">Rooms occupied</div></div>
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Open guest requests</div></div><div class="kpi-val">{{ snapshot.requests }}</div></div>
+    <div class="ui-kpi kpi-purple"><div class="ui-kpi-head"><div class="kpi-label">Events today</div></div><div class="kpi-val">{{ snapshot.events }}</div></div>
+    <div class="ui-kpi kpi-cyan"><div class="ui-kpi-head"><div class="kpi-label">Spa today</div></div><div class="kpi-val">{{ snapshot.spa }}</div></div>
+  </div>
+
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Needs attention</h2>
+        {% if items %}
+        <ul class="ui-ops-actions">
+          {% for i in items %}
+          <li class="is-{{ i.tone }}">
+            <span class="ui-ops-actions-icon"><i class="fa-solid {{ i.icon }}"></i></span>
+            <span class="ui-ops-actions-text"><strong>{{ i.title }}</strong>{% if i.detail %}<small class="ui-log-sub">{{ i.detail }}</small>{% endif %}</span>
+            <span class="ui-ops-actions-count">{{ i.count }}</span>
+            <a class="ui-btn ui-btn-gray ui-btn-sm" href="{{ i.url }}">Open</a>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="ui-log-sub" style="margin:0;padding:12px 0"><i class="fa-solid fa-circle-check ui-text-green"></i> All clear. Nothing is overdue or waiting on a decision.</p>
+        {% endif %}
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Events today</h2>
+        {% for e in events %}<div class="ui-ops-row"><div><a href="{{ base_url }}banquets/{{ e.pk }}/"><strong>{{ e.name }}</strong></a><br><small class="ui-log-sub">{{ e.get_session_display }} · {{ e.venue.name }} · {{ e.pax }} pax</small></div><span class="ui-chip ui-chip-{% if e.status == 'CONFIRMED' %}green{% else %}orange{% endif %}">{{ e.get_status_display }}</span></div>
+        {% empty %}<p class="ui-log-sub" style="margin:0">No events today.</p>{% endfor %}
+      </section>
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Spa still to come</h2>
+        {% for a in spa %}<div class="ui-ops-row"><div><strong>{{ a.start_time|time:"H:i" }}</strong> {{ a.guest_name }}<br><small class="ui-log-sub">{{ a.treatment.name }} · {{ a.therapist.name }}</small></div></div>
+        {% empty %}<p class="ui-log-sub" style="margin:0">Nothing booked.</p>{% endfor %}
+      </section>
+    </div>
+  </div>
+</div>
