@@ -48,6 +48,7 @@ from super_admin.models import (
     JobApplication,
 )
 from core.models import RestaurantLanding, GalleryImage, TeamMember, Review, Event, BlogPost, BlogComment, Order, OrderItem, MenuItem, Table, WhyChooseUs
+from restaurant_project import features
 from super_admin.services import MasterBillingService
 from restaurant_project import constants
 
@@ -60,8 +61,8 @@ def superuser_required(view):
 
 @superuser_required
 def landing_index(request):
-    if not constants.SHOW_WEBSITE_PAGES:
-        messages.warning(request, "Website Pages CMS is disabled in system configuration.")
+    if not constants.SHOW_WEBSITE_PAGES or not constants.is_module_enabled('ENABLE_WEBSITE_CMS'):
+        messages.warning(request, "Website Pages CMS is not included in your current subscription plan. Digital menu ordering is active.")
         return redirect('super_admin:dashboard')
     restaurants = Restaurant.objects.all().order_by('name')
     return render(request, 'super_admin/landing_list.html', {
@@ -184,6 +185,7 @@ def onboard_restaurant(request):
     return render(request, 'super_admin/onboard.html', {
         'form': form,
         'all_restaurants': all_restaurants,
+        'features_config_json': json.dumps(features.get_features_js_config()),
     })
 
 
@@ -245,31 +247,47 @@ def restaurant_edit(request, pk):
 
     existing_branches = []
     for b in restaurant.branches.all():
-        existing_branches.append({
-            'id': b.id,
-            'name': b.name,
-            'outlet_type': getattr(b, 'outlet_type', 'dine_in') or 'dine_in',
-            'phone': b.phone,
-            'use_company_address': b.use_company_address,
-            'address_line_1': b.address_line_1,
-            'address_line_2': b.address_line_2,
-            'city': b.city,
-            'state': b.state or restaurant.state,
-            'pincode': b.pincode,
-            'fssai_license_no': b.fssai_license_no,
-            'serves_alcohol': b.serves_alcohol,
-            'vat_tin': b.vat_tin or '',
-            'excise_license_no': b.excise_license_no or '',
-            'vat_beer_rate': float(b.vat_beer_rate) if b.vat_beer_rate is not None else 60.0,
-            'vat_imfl_rate': float(b.vat_imfl_rate) if b.vat_imfl_rate is not None else 65.0,
-            'vat_wine_rate': float(b.vat_wine_rate) if b.vat_wine_rate is not None else 60.0,
-            'gstin': b.gst_registration.gstin if b.gst_registration else b.gstin,
-            'gst_registration_type': b.gst_registration_type,
-            'is_hotel_tariff_7500_plus': b.is_hotel_tariff_7500_plus,
-            'e_invoicing_enabled': b.e_invoicing_enabled,
-            'has_club_module': bool(getattr(b, 'has_club_module', False)),
-            'has_hotel_module': bool(getattr(b, 'has_hotel_module', False)),
-        })
+            b_type = getattr(b, 'outlet_type', 'restaurant_standard') or 'restaurant_standard'
+            existing_branches.append({
+                'id': b.id,
+                'name': b.name,
+                'outlet_type': b_type,
+                'branch_type': b_type,
+                'branch_addons': getattr(b, 'branch_addons', []) or [],
+                'phone': b.phone,
+                'use_company_address': b.use_company_address,
+                'address_line_1': b.address_line_1,
+                'address_line_2': b.address_line_2,
+                'city': b.city,
+                'state': b.state or restaurant.state,
+                'pincode': b.pincode,
+                'fssai_license_no': b.fssai_license_no,
+                'serves_alcohol': b.serves_alcohol,
+                'vat_tin': b.vat_tin or '',
+                'excise_license_no': b.excise_license_no or '',
+                'vat_beer_rate': float(b.vat_beer_rate) if b.vat_beer_rate is not None else 60.0,
+                'vat_imfl_rate': float(b.vat_imfl_rate) if b.vat_imfl_rate is not None else 65.0,
+                'vat_wine_rate': float(b.vat_wine_rate) if b.vat_wine_rate is not None else 60.0,
+                'gstin': b.gst_registration.gstin if b.gst_registration else b.gstin,
+                'gst_registration_type': b.gst_registration_type,
+                'is_hotel_tariff_7500_plus': b.is_hotel_tariff_7500_plus,
+                'e_invoicing_enabled': b.e_invoicing_enabled,
+                'has_club_module': bool(getattr(b, 'has_club_module', False)),
+                'is_club_licensed': bool(getattr(b, 'is_club_licensed', False)),
+                'has_hotel_module': bool(getattr(b, 'has_hotel_module', False)),
+                'is_hotel_licensed': bool(getattr(b, 'is_hotel_licensed', False)),
+                'is_spa_licensed': bool(getattr(b, 'is_spa_licensed', False)),
+                'is_cabs_licensed': bool(getattr(b, 'is_cabs_licensed', False)),
+                'branch_addons': getattr(b, 'branch_addons', []) or [],
+                'has_restaurant_module': bool(getattr(b, 'has_restaurant_module', True)),
+                'is_restaurant_licensed': bool(getattr(b, 'is_restaurant_licensed', True)),
+                'is_alcohol_licensed': bool(getattr(b, 'is_alcohol_licensed', False)),
+                'has_hotel_website': bool(getattr(b, 'has_hotel_website', False)),
+                'plan_entitlements': getattr(b, 'plan_entitlements', {}) or {},
+            })
+
+    is_master_synced = bool(restaurant and restaurant.master_sync_status == 'SYNCED' and restaurant.master_license_key)
+    master_plan_name = getattr(restaurant, 'subscription_plan_name', '') or 'Sattkar Cloud Plan'
 
     return render(request, 'super_admin/onboard.html', {
         'form': form,
@@ -278,6 +296,9 @@ def restaurant_edit(request, pk):
         'branches': restaurant.branches.all() if restaurant else [],
         'all_restaurants': [restaurant],
         'initial_branches_json': json.dumps(existing_branches),
+        'features_config_json': json.dumps(features.get_features_js_config()),
+        'is_master_synced': is_master_synced,
+        'master_plan_name': master_plan_name,
     })
 
 
@@ -343,8 +364,9 @@ def restaurant_admin_delete(request, pk):
 # --- Landing page management ---
 @superuser_required
 def landing_edit(request, pk):
-    if not constants.SHOW_WEBSITE_PAGES:
-        messages.warning(request, "Website Pages CMS is disabled in system configuration.")
+    restaurant = get_object_or_404(Restaurant, pk=pk)
+    if not constants.SHOW_WEBSITE_PAGES or not constants.is_module_enabled('ENABLE_WEBSITE_CMS', restaurant):
+        messages.warning(request, "Website Pages CMS is not included in your current subscription plan. Digital menu ordering is active.")
         return redirect('super_admin:dashboard')
     restaurant = get_object_or_404(Restaurant, pk=pk)
     landing, _ = RestaurantLanding.objects.get_or_create(restaurant=restaurant)
@@ -1015,7 +1037,9 @@ def api_branches_by_restaurant(request):
                 branches.append({
                     'id': b.id,
                     'name': b.name,
-                    'outlet_type': getattr(b, 'outlet_type', 'dine_in') or 'dine_in',
+                    'outlet_type': getattr(b, 'outlet_type', 'restaurant_standard') or 'restaurant_standard',
+                    'branch_type': getattr(b, 'outlet_type', 'restaurant_standard') or 'restaurant_standard',
+                    'branch_addons': getattr(b, 'branch_addons', []) or [],
                     'phone': b.phone,
                     'use_company_address': b.use_company_address,
                     'address_line_1': b.address_line_1,
@@ -1036,6 +1060,8 @@ def api_branches_by_restaurant(request):
                     'e_invoicing_enabled': b.e_invoicing_enabled,
                     'has_club_module': bool(getattr(b, 'has_club_module', False)),
                     'has_hotel_module': bool(getattr(b, 'has_hotel_module', False)),
+                    'has_restaurant_module': bool(getattr(b, 'has_restaurant_module', True)),
+                    'has_hotel_website': bool(getattr(b, 'has_hotel_website', False)),
                 })
     return JsonResponse({'restaurant': restaurant_data, 'branches': branches})
 
@@ -1048,13 +1074,18 @@ def api_toggle_branch_club_module(request, pk):
     if request.method == 'POST':
         try:
             body = json.loads(request.body.decode('utf-8'))
-            if 'has_club_module' in body:
-                branch.has_club_module = bool(body['has_club_module'])
-            else:
-                branch.has_club_module = not branch.has_club_module
+            target_state = bool(body['has_club_module']) if 'has_club_module' in body else not branch.has_club_module
         except Exception:
-            branch.has_club_module = not branch.has_club_module
+            target_state = not branch.has_club_module
 
+        # Enforce branch-level licensing from Sattkar Master Admin
+        if target_state and not branch.is_module_licensed('club'):
+            return JsonResponse({
+                'success': False,
+                'error': f"Club & Events Module is not licensed for '{branch.name}' in your Sattkar subscription plan. Please request an add-on or tier upgrade from Master Admin to activate it."
+            }, status=403)
+
+        branch.has_club_module = target_state
         branch.save(update_fields=['has_club_module'])
         return JsonResponse({
             'success': True,
@@ -1072,13 +1103,18 @@ def api_toggle_branch_hotel_module(request, pk):
     if request.method == 'POST':
         try:
             body = json.loads(request.body.decode('utf-8'))
-            if 'has_hotel_module' in body:
-                branch.has_hotel_module = bool(body['has_hotel_module'])
-            else:
-                branch.has_hotel_module = not branch.has_hotel_module
+            target_state = bool(body['has_hotel_module']) if 'has_hotel_module' in body else not branch.has_hotel_module
         except Exception:
-            branch.has_hotel_module = not branch.has_hotel_module
+            target_state = not branch.has_hotel_module
 
+        # Enforce branch-level licensing from Sattkar Master Admin
+        if target_state and not branch.is_module_licensed('hotel'):
+            return JsonResponse({
+                'success': False,
+                'error': f"Hotel PMS Module is not licensed for '{branch.name}' in your Sattkar subscription plan. Please request an add-on or tier upgrade from Master Admin to activate it."
+            }, status=403)
+
+        branch.has_hotel_module = target_state
         branch.save(update_fields=['has_hotel_module'])
         return JsonResponse({
             'success': True,
@@ -2661,4 +2697,9 @@ def job_applications_export_csv(request):
     return response
 
 
-
+def api_features_config(request):
+    """
+    Returns the centralized branch tags and features configuration JSON.
+    Can be consumed by Super Admin UI and frontend applications.
+    """
+    return JsonResponse(features.get_features_js_config())

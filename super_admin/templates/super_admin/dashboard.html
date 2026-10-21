@@ -268,7 +268,7 @@
                 {% endif %}
               </td>
               <td style="padding: 12px 14px;">
-                {% if ENABLE_RESTAURANT_MODULE %}
+                {% if ENABLE_RESTAURANT_MODULE and b.is_restaurant_licensed %}
                 <button type="button"
                   class="btn small restro-module-toggle-btn {% if b.has_restaurant_module %}restro-enabled{% else %}restro-disabled{% endif %}"
                   data-branch-id="{{ b.id }}"
@@ -279,15 +279,19 @@
                   <span class="restro-toggle-text">{% if b.has_restaurant_module %}POS Active{% else %}Disabled{% endif %}</span>
                 </button>
                 {% else %}
-                <span class="btn small"
-                  style="background: var(--ui-surface-2); color: var(--ui-label-3); cursor: not-allowed; border: 1px solid var(--ui-separator-strong); font-weight: normal; font-size: 0.78rem;"
-                  title="Restaurant POS Module is disabled in your subscription plan.">
-                  <i class="fa-solid fa-lock" style="font-size: 0.75rem; margin-right: 4px;"></i> Disabled
-                </span>
+                <button type="button" class="btn small"
+                  style="background: var(--ui-surface-2); color: var(--ui-label-3); border: 1px solid var(--ui-separator-strong); font-size: 0.78rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; padding: 4px 8px;"
+                  onclick="openDashboardRequestAddonModal({{ b.id }}, 'pos', '{{ b.name|escapejs }}', 'Restaurant POS Module')"
+                  title="Restaurant POS is not included in the plan for this outlet. Click to request an add-on.">
+                  <i class="fa-solid fa-lock" style="font-size: 0.72rem; color: #94a3b8;"></i>
+                  <span>Disabled</span>
+                  <span style="font-size: 0.68rem; background: rgba(37,99,235,0.1); color: #2563eb; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-left: 2px;">+ Add-on</span>
+                </button>
                 {% endif %}
               </td>
               {% if ENABLE_HOTEL_MODULE %}
               <td style="padding: 12px 14px;">
+                {% if b.is_hotel_licensed %}
                 <button type="button"
                   class="btn small hotel-module-toggle-btn {% if b.has_hotel_module %}hotel-enabled{% else %}hotel-disabled{% endif %}"
                   data-branch-id="{{ b.id }}"
@@ -297,9 +301,19 @@
                   <i class="fa-solid fa-hotel"></i>
                   <span class="hotel-toggle-text">{% if b.has_hotel_module %}Hotel Active{% else %}Disabled{% endif %}</span>
                 </button>
+                {% else %}
+                <button type="button" class="btn small"
+                  style="background: var(--ui-surface-2); color: var(--ui-label-3); border: 1px solid var(--ui-separator-strong); font-size: 0.78rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; padding: 4px 8px;"
+                  onclick="openDashboardRequestAddonModal({{ b.id }}, 'hotel', '{{ b.name|escapejs }}', 'Hotel PMS Module')"
+                  title="Hotel PMS is not included in the plan for this outlet. Click to request an add-on.">
+                  <i class="fa-solid fa-lock" style="font-size: 0.72rem; color: #94a3b8;"></i>
+                  <span>Disabled</span>
+                  <span style="font-size: 0.68rem; background: rgba(37,99,235,0.1); color: #2563eb; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-left: 2px;">+ Add-on</span>
+                </button>
+                {% endif %}
               </td>
               <td style="padding: 12px 14px;">
-                {% if ENABLE_HOTEL_WEBSITE %}
+                {% if ENABLE_HOTEL_WEBSITE and b.is_hotel_licensed %}
                 <button type="button"
                   class="btn small hotel-site-toggle-btn {% if b.has_hotel_website %}site-hotel{% else %}site-standard{% endif %}"
                   data-branch-id="{{ b.id }}"
@@ -320,6 +334,7 @@
               {% endif %}
               {% if ENABLE_CLUB_EVENTS_MODULE %}
               <td style="padding: 12px 14px;">
+                {% if b.is_club_licensed %}
                 <button type="button"
                   class="btn small club-module-toggle-btn {% if b.has_club_module %}club-enabled{% else %}club-disabled{% endif %}"
                   data-branch-id="{{ b.id }}"
@@ -329,6 +344,16 @@
                   <i class="fa-solid fa-ticket"></i>
                   <span class="club-toggle-text">{% if b.has_club_module %}Active (Enabled){% else %}Disabled{% endif %}</span>
                 </button>
+                {% else %}
+                <button type="button" class="btn small"
+                  style="background: var(--ui-surface-2); color: var(--ui-label-3); border: 1px solid var(--ui-separator-strong); font-size: 0.78rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; padding: 4px 8px;"
+                  onclick="openDashboardRequestAddonModal({{ b.id }}, 'events', '{{ b.name|escapejs }}', 'Club & Events Module')"
+                  title="Club & Events is not included in the plan for this outlet. Click to request an add-on.">
+                  <i class="fa-solid fa-lock" style="font-size: 0.72rem; color: #94a3b8;"></i>
+                  <span>Disabled</span>
+                  <span style="font-size: 0.68rem; background: rgba(37,99,235,0.1); color: #2563eb; padding: 1px 5px; border-radius: 4px; font-weight: 700; margin-left: 2px;">+ Add-on</span>
+                </button>
+                {% endif %}
               </td>
               {% endif %}
             </tr>
@@ -1142,5 +1167,26 @@
       }
     });
   }
+
+  // Dashboard Request Addon Modal Handler
+  function openDashboardRequestAddonModal(branchId, moduleKey, branchName, moduleTitle) {
+    openModuleConfirmModal({
+      title: `Request ${moduleTitle}?`,
+      outletName: branchName,
+      fromText: 'Unlicensed',
+      toText: 'Request Add-on',
+      iconClass: moduleKey === 'events' ? 'fa-solid fa-ticket' : (moduleKey === 'hotel' ? 'fa-solid fa-hotel' : 'fa-solid fa-puzzle-piece'),
+      iconBg: 'rgba(37, 99, 235, 0.12)',
+      iconColor: '#2563eb',
+      message: `<strong>${escapeHtml(moduleTitle)}</strong> is not included in your Sattkar plan for outlet <strong>${escapeHtml(branchName)}</strong>.<br><br>Would you like to open the Billing & Add-on Store to request and activate this module?`,
+      warning: 'Self-serve add-ons are prorated for the current billing cycle and activate instantly or via Razorpay payment.',
+      confirmBtnBg: '#2563eb',
+      confirmText: 'Go to Add-on Store',
+      onConfirm: function() {
+        window.location.href = "{% url 'super_admin:billing' %}?addon=" + encodeURIComponent(moduleKey);
+      }
+    });
+  }
+
 </script>
 {% endblock %}

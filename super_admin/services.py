@@ -172,6 +172,20 @@ class MasterBillingService:
                                 restaurant.feature_website_pages = has_website
                                 mod_updates['is_active'] = has_website
                                 restaurant.is_active = has_website
+                            if 'ENABLE_WEBSITE_CMS' in modules:
+                                has_cms = bool(modules['ENABLE_WEBSITE_CMS'])
+                                mod_updates['feature_website_cms'] = has_cms
+                                restaurant.feature_website_cms = has_cms
+                            if 'WEBSITE_MODE' in modules:
+                                w_mode = str(modules['WEBSITE_MODE']).lower()
+                                mod_updates['feature_website_type'] = w_mode
+                                restaurant.feature_website_type = w_mode
+                            if 'feature_website_cms' in client_payload:
+                                mod_updates['feature_website_cms'] = bool(client_payload['feature_website_cms'])
+                                restaurant.feature_website_cms = mod_updates['feature_website_cms']
+                            if 'website_mode' in client_payload:
+                                mod_updates['feature_website_type'] = str(client_payload['website_mode']).lower()
+                                restaurant.feature_website_type = mod_updates['feature_website_type']
                             if 'ENABLE_ALCOHOL_VAT' in modules:
                                 mod_updates['feature_alcohol_vat'] = bool(modules['ENABLE_ALCOHOL_VAT'])
                                 restaurant.feature_alcohol_vat = mod_updates['feature_alcohol_vat']
@@ -207,6 +221,146 @@ class MasterBillingService:
                                 logger.info(f"[MasterBillingService] Synced modules for '{restaurant.name}': {mod_updates}")
                         except Exception as mod_err:
                             logger.warning(f"[MasterBillingService] Could not persist modules to DB: {mod_err}")
+
+                    # Sync remote branch-level plan tags, tier types & add-ons from Master Admin
+                    feature_flags = data.get('feature_flags') or {}
+                    remote_branches = feature_flags.get('branches') or []
+                    if restaurant and remote_branches and isinstance(remote_branches, list):
+                        try:
+                            from super_admin.models import RestaurantBranch
+                            db_branches = list(restaurant.branches.all().order_by('id'))
+                            for idx, rem_b in enumerate(remote_branches):
+                                rem_name = (rem_b.get('name') or '').strip()
+                                rem_key = (rem_b.get('key') or '').strip()
+                                flags = rem_b.get('flags') or {}
+                                if not flags:
+                                    continue
+
+                                # Match branch by slug/key, name, or index fallback
+                                target_branch = None
+                                if rem_key:
+                                    for b in db_branches:
+                                        if b.slug and (b.slug.lower() == rem_key.lower() or rem_key.lower().startswith(b.slug.lower())):
+                                            target_branch = b
+                                            break
+                                if not target_branch and rem_name:
+                                    for b in db_branches:
+                                        if b.name.strip().lower() == rem_name.lower():
+                                            target_branch = b
+                                            break
+                                if not target_branch and idx < len(db_branches):
+                                    target_branch = db_branches[idx]
+
+                                if target_branch:
+                                    branch_updates = {}
+                                    # Always persist raw plan entitlements from Master Admin
+                                    if target_branch.plan_entitlements != flags:
+                                        branch_updates['plan_entitlements'] = flags
+                                        target_branch.plan_entitlements = flags
+
+                                    # 1. Resolve Dynamic Branch Outlet Type
+                                    new_type = None
+                                    if flags.get('has_only_pos'):
+                                        new_type = 'only_pos'
+                                    elif flags.get('has_starter'):
+                                        new_type = 'starter_dhaba'
+                                    elif flags.get('has_takeaway_qsr') or flags.get('has_qsr'):
+                                        new_type = 'takeaway_qsr'
+                                    elif flags.get('has_cloud_kitchen'):
+                                        new_type = 'cloud_kitchen'
+                                    elif flags.get('has_complete_restaurant_with_alcohol') or flags.get('has_fine_dine_bar') or flags.get('has_fine_dine'):
+                                        new_type = 'fine_dine_bar'
+                                    elif flags.get('has_hotel_resort'):
+                                        new_type = 'hotel_resort'
+                                    elif flags.get('has_club_lounge'):
+                                        new_type = 'club_lounge'
+                                    elif flags.get('has_complete_restaurant_without_alcohol'):
+                                        new_type = 'restaurant_standard'
+                                    elif flags.get('has_restaurant') or flags.get('is_restaurant'):
+                                        new_type = 'restaurant_standard'
+
+                                    if new_type and target_branch.outlet_type != new_type:
+                                        branch_updates['outlet_type'] = new_type
+                                        target_branch.outlet_type = new_type
+
+                                    # 2. Resolve Serves Alcohol
+                                    has_alcohol = bool(
+                                        flags.get('has_complete_restaurant_with_alcohol') or
+                                        flags.get('is_alcohol') or
+                                        flags.get('has_alcohol') or
+                                        flags.get('has_fine_dine_bar')
+                                    )
+                                    if not has_alcohol and (flags.get('has_only_pos') or flags.get('has_starter') or flags.get('has_complete_restaurant_without_alcohol')):
+                                        has_alcohol = False
+
+                                    if not getattr(restaurant, 'feature_alcohol_vat', True):
+                                        has_alcohol = False
+
+                                    if target_branch.serves_alcohol != has_alcohol:
+                                        branch_updates['serves_alcohol'] = has_alcohol
+                                        target_branch.serves_alcohol = has_alcohol
+
+                                    # 3. Resolve Module Booleans
+                                    has_rest = bool(
+                                        flags.get('has_restaurant', True) or
+                                        flags.get('is_restaurant', True) or
+                                        flags.get('has_only_pos') or
+                                        flags.get('has_starter') or
+                                        flags.get('has_complete_restaurant_without_alcohol') or
+                                        flags.get('has_complete_restaurant_with_alcohol') or
+                                        flags.get('has_takeaway_qsr') or
+                                        flags.get('has_cloud_kitchen') or
+                                        flags.get('has_fine_dine_bar')
+                                    ) and getattr(restaurant, 'feature_restaurant_pos', True)
+                                    if target_branch.has_restaurant_module != has_rest:
+                                        branch_updates['has_restaurant_module'] = has_rest
+                                        target_branch.has_restaurant_module = has_rest
+
+                                    has_htl = bool(
+                                        flags.get('has_hotel') or
+                                        flags.get('is_hotel') or
+                                        flags.get('has_hotel_management') or
+                                        flags.get('has_hotel_management_room_pms') or
+                                        flags.get('has_hotel_resort')
+                                    ) and getattr(restaurant, 'feature_hotel_pms', True)
+                                    if target_branch.has_hotel_module != has_htl:
+                                        branch_updates['has_hotel_module'] = has_htl
+                                        target_branch.has_hotel_module = has_htl
+
+                                    has_clb = bool(
+                                        flags.get('has_club') or
+                                        flags.get('is_bar_club') or
+                                        flags.get('has_club_events') or
+                                        flags.get('has_event_management') or
+                                        flags.get('has_club_event_ticketing_passes') or
+                                        flags.get('has_club_lounge')
+                                    ) and getattr(restaurant, 'feature_club_events', True)
+                                    if target_branch.has_club_module != has_clb:
+                                        branch_updates['has_club_module'] = has_clb
+                                        target_branch.has_club_module = has_clb
+
+                                    # 4. Resolve Branch Add-ons list
+                                    # Major standalone modules only; base tier features are bundled in the tier
+                                    active_addons = set()
+                                    if has_htl:
+                                        active_addons.add('hotel')
+                                        if flags.get('has_spas_wellness') or flags.get('has_spa') or flags.get('has_wellness'):
+                                            active_addons.add('hotel_spa')
+                                        if flags.get('has_cabs') or flags.get('has_cab') or flags.get('has_transport'):
+                                            active_addons.add('hotel_cabs')
+                                    if has_clb:
+                                        active_addons.add('events')
+
+                                    new_addons_list = sorted(list(active_addons))
+                                    if target_branch.branch_addons != new_addons_list:
+                                        branch_updates['branch_addons'] = new_addons_list
+                                        target_branch.branch_addons = new_addons_list
+
+                                    if branch_updates:
+                                        RestaurantBranch.objects.filter(pk=target_branch.pk).update(**branch_updates)
+                                        logger.info(f"[MasterBillingService] Synced branch '{target_branch.name}' from Master Admin: {branch_updates}")
+                        except Exception as br_err:
+                            logger.warning(f"[MasterBillingService] Error syncing branch feature flags: {br_err}")
 
                     # Sync remote subscription & overdue lockout state from Master Admin
                     sub_payload = data.get('subscription') or {}

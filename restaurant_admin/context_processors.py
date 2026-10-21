@@ -69,17 +69,20 @@ def restaurant_context(request):
     enable_restaurant_globally = getattr(constants, 'ENABLE_RESTAURANT_MODULE', True)
     branch_has_restaurant = (getattr(active_branch, 'has_restaurant_module', True) if active_branch else True) and enable_restaurant_globally
 
+    # Branch Feature Check helper
+    branch_feat = lambda k: (active_branch.is_feature_enabled(k) if (active_branch and hasattr(active_branch, 'is_feature_enabled')) else True)
+
     # Feature Section Visibility Flags:
     show_dining_dashboard = is_dining_mgmt and branch_has_restaurant and not is_club_user and not is_kitchen_user and not is_hotel_user
-    show_dining_analytics = can_analytics and branch_has_restaurant and not is_club_user and not is_hotel_user
-    show_pos_group = (is_dining_mgmt or is_cashier_user or is_waiter_user) and branch_has_restaurant and not is_club_user and not is_kitchen_user and not is_hotel_user
-    show_dinein_group = (is_dining_mgmt or is_cashier_user or is_waiter_user) and branch_has_restaurant and not is_club_user and not is_kitchen_user and not is_hotel_user
-    show_menu_group = (is_dining_mgmt or can_menu or is_cashier_user or is_waiter_user) and branch_has_restaurant and not is_club_user and not is_hotel_user
-    show_stock_group = can_inventory and branch_has_restaurant and not is_club_user and not is_hotel_user
-    show_parties = is_dining_mgmt and branch_has_restaurant and not is_club_user and not is_kitchen_user and not is_cashier_user and not is_waiter_user and not is_hotel_user
-    show_staff = (is_dining_mgmt or user_role == 'CLUB_ADMIN') and not is_kitchen_user and not is_cashier_user and not is_waiter_user and not is_hotel_user and not (user_role in ['GATE_SCANNER', 'FRONT_DESK', 'HOUSEKEEPING'])
+    show_dining_analytics = can_analytics and branch_has_restaurant and not is_club_user and not is_hotel_user and branch_feat('analytics')
+    show_pos_group = (is_dining_mgmt or is_cashier_user or is_waiter_user) and branch_has_restaurant and not is_club_user and not is_kitchen_user and not is_hotel_user and branch_feat('pos')
+    show_dinein_group = (is_dining_mgmt or is_cashier_user or is_waiter_user) and branch_has_restaurant and not is_club_user and not is_kitchen_user and not is_hotel_user and branch_feat('dine_in')
+    show_menu_group = (is_dining_mgmt or can_menu or is_cashier_user or is_waiter_user) and branch_has_restaurant and not is_club_user and not is_hotel_user and branch_feat('menu')
+    show_stock_group = can_inventory and branch_has_restaurant and not is_club_user and not is_hotel_user and branch_feat('inventory')
+    show_parties = is_dining_mgmt and branch_has_restaurant and not is_club_user and not is_kitchen_user and not is_cashier_user and not is_waiter_user and not is_hotel_user and branch_feat('inventory')
+    show_staff = (is_dining_mgmt or user_role == 'CLUB_ADMIN') and not is_kitchen_user and not is_cashier_user and not is_waiter_user and not is_hotel_user and not (user_role in ['GATE_SCANNER', 'FRONT_DESK', 'HOUSEKEEPING']) and branch_feat('staff')
     show_settings = can_settings and not is_club_user and not is_hotel_user
-    show_delivery = (is_dining_mgmt or is_cashier_user) and branch_has_restaurant and not is_club_user and not is_kitchen_user and not is_hotel_user
+    show_delivery = (is_dining_mgmt or is_cashier_user) and branch_has_restaurant and not is_club_user and not is_kitchen_user and not is_hotel_user and branch_feat('delivery')
 
     # Club module visibility
     enable_club_globally = getattr(constants, 'ENABLE_CLUB_EVENTS_MODULE', True)

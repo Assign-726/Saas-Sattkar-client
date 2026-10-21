@@ -61,6 +61,7 @@ urlpatterns = [
     path('billing/addons/quote/', views.api_billing_addon_quote, name='api_billing_addon_quote'),
     path('billing/addons/order/', views.api_billing_addon_order, name='api_billing_addon_order'),
     path('billing/addons/cancel/', views.api_billing_addon_cancel, name='api_billing_addon_cancel'),
+    path('api/features-config/', views.api_features_config, name='api_features_config'),
     path('api/gstins-by-state/', views.api_gstins_by_state, name='api_gstins_by_state'),
     path('api/branches-by-restaurant/', views.api_branches_by_restaurant, name='api_branches_by_restaurant'),
     path('api/branches/<int:pk>/toggle-club-module/', views.api_toggle_branch_club_module, name='api_toggle_branch_club_module'),
