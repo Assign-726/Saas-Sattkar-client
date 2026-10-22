@@ -1,6 +1,7 @@
 {% extends 'super_admin/base.html' %}
 
-{% block title %}{% if is_edit %}Edit Business & Outlets{% else %}Onboard Restaurant{% endif %} | Super Admin{% endblock %}
+{% block title %}{% if is_edit %}Edit Business & Outlets{% else %}Onboard Restaurant{% endif %} | Super Admin
+{% endblock %}
 
 {% block header_title %}
 <i class="fa-solid fa-building-circle-check" style="color: var(--primary); margin-right: 4px;"></i>
@@ -21,6 +22,61 @@
 {% endblock %}
 
 {% block content %}
+<!-- Modal: Request Add-on or Module Upgrade to Sattkar -->
+<div id="sattkarRequestModal" style="display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.65); backdrop-filter: blur(4px); z-index: 99999; align-items: center; justify-content: center; padding: 16px;">
+  <div style="background: var(--ui-surface); width: 100%; max-width: 520px; border-radius: 16px; border: 1px solid var(--ui-separator); box-shadow: 0 20px 40px rgba(0,0,0,0.3); overflow: hidden; display: flex; flex-direction: column;">
+    <!-- Modal Header -->
+    <div style="padding: 16px 20px; border-bottom: 1px solid var(--ui-separator); display: flex; align-items: center; justify-content: space-between; background: var(--ui-surface-2);">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <i class="fa-solid fa-cloud-arrow-up" style="color: var(--primary); font-size: 16px;"></i>
+        <span style="font-weight: 700; font-size: 15px; color: var(--ui-label);" id="reqModalHeaderTitle">Request Add-on / Module Upgrade</span>
+      </div>
+      <button type="button" onclick="closeSattkarRequestModal()" style="background: none; border: none; font-size: 20px; color: var(--ui-label-3); cursor: pointer; padding: 4px;">&times;</button>
+    </div>
+    <!-- Modal Body -->
+    <div style="padding: 20px; overflow-y: auto; max-height: calc(85vh - 120px);">
+      <div style="background: rgba(37,99,235,0.06); border: 1px solid rgba(37,99,235,0.2); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px;">
+        <div style="font-size: 11.5px; color: var(--ui-label-3); margin-bottom: 2px;">Target Branch Outlet</div>
+        <div style="font-weight: 700; font-size: 14.5px; color: var(--ui-label);" id="reqModalBranchName">Sharma Hotel Murlipura</div>
+        <div style="font-size: 12px; color: #2563eb; margin-top: 3px;" id="reqModalBranchCurrentTier">Current Format: Standard Restaurant</div>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label class="form-label" style="font-weight: 600; font-size: 12.5px;">Select Module / Capability</label>
+        <select class="form-select" id="reqModalItemSelect" onchange="onRequestModalItemChange()" style="font-weight: 600; font-size: 13px;">
+        </select>
+        <span class="form-hint" id="reqModalItemDesc" style="margin-top: 4px; display: block;"></span>
+      </div>
+
+      <!-- Pricing / Quote Box -->
+      <div id="reqModalQuoteBox" style="background: #0f172a; color: #fff; border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <span style="font-size: 12px; color: #94a3b8;">Add-on Rate:</span>
+          <span style="font-weight: 700; font-size: 13.5px;" id="reqModalQuoteRate">₹499/mo (+18% GST)</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <span style="font-size: 12px; color: #94a3b8;">Charge Now (Prorated):</span>
+          <span style="font-weight: 800; font-size: 15px; color: #38bdf8;" id="reqModalQuoteChargeNow">₹0 (Free Trial Active)</span>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 8px;">
+        <label class="form-label" style="font-weight: 600; font-size: 12.5px;">Notes for Sattkar Admin (Optional)</label>
+        <textarea id="reqModalNotes" class="form-input" rows="3" placeholder="e.g. Please activate Stock & Inventory before weekend rush..." style="font-size: 12.5px; resize: vertical;"></textarea>
+      </div>
+
+      <div id="reqModalStatusMessage" style="display: none; padding: 12px 14px; border-radius: 8px; font-size: 12.5px; margin-top: 12px;"></div>
+    </div>
+    <!-- Modal Footer -->
+    <div style="padding: 14px 20px; border-top: 1px solid var(--ui-separator); background: var(--ui-surface-2); display: flex; justify-content: flex-end; gap: 10px;">
+      <button type="button" onclick="closeSattkarRequestModal()" class="btn" style="padding: 7px 16px; font-size: 13px; font-weight: 600;">Cancel</button>
+      <button type="button" id="reqModalSubmitBtn" onclick="submitSattkarRequest()" class="btn primary" style="padding: 7px 18px; font-size: 13px; font-weight: 700; background: #2563eb; color: #fff; border: none; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;">
+        <i class="fa-solid fa-paper-plane"></i> Submit Request to Sattkar
+      </button>
+    </div>
+  </div>
+</div>
+
 <style>
   :root {
     --brand-primary: #0f5132;
@@ -957,7 +1013,7 @@
         <div class="step-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
           <div>
             <h2>Add your outlets</h2>
-            <p>Configure outlet locations, contact information, outlet types, and state-level GSTINs.</p>
+            <p>Configure outlet locations, contact information, branch types, active capabilities, and state-level GSTINs.</p>
           </div>
           {% with eff_max=form.instance.get_max_allowed_branches|default:MAX_ALLOWED_BRANCHES %}
           {% if eff_max > 0 %}
@@ -1706,6 +1762,207 @@
   }
 
 
+  // Centralized Dynamic Features Configuration from features.py
+  let SERVER_FEATURES_CONFIG = null;
+  try {
+    const rawFeaturesCfg = '{{ features_config_json|escapejs }}';
+    if (rawFeaturesCfg) SERVER_FEATURES_CONFIG = JSON.parse(rawFeaturesCfg);
+  } catch (err) {
+    SERVER_FEATURES_CONFIG = null;
+  }
+  const IS_MASTER_SYNCED = {% if is_master_synced %}true{% else %}false{% endif %};
+  const MASTER_PLAN_NAME = "{{ master_plan_name|default:'Sattkar Plan'|escapejs }}";
+
+  const BRANCH_TYPE_CONFIG = (SERVER_FEATURES_CONFIG && SERVER_FEATURES_CONFIG.branch_tags) ? SERVER_FEATURES_CONFIG.branch_tags : {
+    'only_pos': {
+      name: 'POS Only (Billing & Quick Order)',
+      label: 'POS Only (Billing & Quick Order)',
+      tag: 'POS ONLY',
+      badge_color: '#6366f1',
+      icon: 'fa-cash-register',
+      description: 'Quick counter billing, token issuance, and order taking for sweets shops, bakeries, and kiosks.',
+      base_features: ['pos', 'menu', 'website_minimal'],
+      included: [
+        { key: 'pos', name: 'Counter POS & Fast Billing', icon: 'fa-cash-register' },
+        { key: 'menu', name: 'Digital Menu Items', icon: 'fa-utensils' },
+        { key: 'website_minimal', name: 'Minimal Ordering Website', icon: 'fa-globe' }
+      ]
+    },
+    'starter_dhaba': {
+      name: 'Starter / Dhaba',
+      label: 'Starter / Dhaba',
+      tag: 'STARTER',
+      badge_color: '#f59e0b',
+      icon: 'fa-utensils',
+      description: 'Ideal for dhabas & small diners: Fast counter/table orders, table QR & digital menu.',
+      base_features: ['pos', 'dine_in', 'menu', 'website_minimal'],
+      included: [
+        { key: 'pos', name: 'POS & Billing Orders', icon: 'fa-cash-register' },
+        { key: 'dine_in', name: 'Table QR & Floor Management', icon: 'fa-chair' },
+        { key: 'menu', name: 'Digital Menu Items', icon: 'fa-utensils' },
+        { key: 'website_minimal', name: 'Minimal Ordering Website (Menu & Cart Only)', icon: 'fa-globe' }
+      ]
+    },
+    'takeaway_qsr': {
+      name: 'Takeaway / QSR',
+      label: 'Takeaway / QSR',
+      tag: 'QSR',
+      badge_color: '#0ea5e9',
+      icon: 'fa-burger',
+      description: 'Quick bites, counter cafes, bakeries & takeaways.',
+      base_features: ['pos', 'kitchen', 'menu', 'delivery', 'website_minimal'],
+      included: [
+        { key: 'pos', name: 'Counter POS Billing', icon: 'fa-cash-register' },
+        { key: 'kitchen', name: 'Kitchen KDS Station', icon: 'fa-fire-burner' },
+        { key: 'menu', name: 'Digital Menu', icon: 'fa-utensils' },
+        { key: 'delivery', name: 'Online Takeaway & Delivery', icon: 'fa-motorcycle' }
+      ]
+    },
+    'cloud_kitchen': {
+      name: 'Cloud Kitchen',
+      label: 'Cloud Kitchen',
+      tag: 'CLOUD KITCHEN',
+      badge_color: '#8b5cf6',
+      icon: 'fa-fire-burner',
+      description: 'Delivery-only dark kitchens with aggregator menu sync.',
+      base_features: ['pos', 'kitchen', 'menu', 'inventory', 'delivery'],
+      included: [
+        { key: 'pos', name: 'Cloud POS Orders', icon: 'fa-cash-register' },
+        { key: 'kitchen', name: 'Kitchen KDS Station', icon: 'fa-fire-burner' },
+        { key: 'menu', name: 'Digital Menu', icon: 'fa-utensils' },
+        { key: 'delivery', name: 'Swiggy & Zomato Integrations', icon: 'fa-motorcycle' },
+        { key: 'inventory', name: 'Stock & Inventory', icon: 'fa-boxes-stacked' }
+      ]
+    },
+    'restaurant_standard': {
+      name: 'Standard Restaurant',
+      label: 'Standard Restaurant',
+      tag: 'STANDARD RESTAURANT',
+      badge_color: '#10b981',
+      icon: 'fa-store',
+      description: 'Full dining restaurant with tables, kitchen KDS, stock and staff operations.',
+      base_features: ['pos', 'dine_in', 'kitchen', 'menu', 'inventory', 'staff', 'website_cms', 'website_minimal', 'analytics'],
+      included: [
+        { key: 'pos', name: 'Point of Sale & Billing', icon: 'fa-cash-register' },
+        { key: 'dine_in', name: 'Tables, Floor Plan & Reservations', icon: 'fa-chair' },
+        { key: 'kitchen', name: 'Kitchen Display (KDS)', icon: 'fa-fire-burner' },
+        { key: 'menu', name: 'Menu & Coupons', icon: 'fa-utensils' },
+        { key: 'inventory', name: 'Stock & Purchases', icon: 'fa-boxes-stacked' },
+        { key: 'staff', name: 'Staff & Muster Roll', icon: 'fa-users-gear' },
+        { key: 'website_cms', name: 'Full Restaurant Website Showcase', icon: 'fa-globe' }
+      ]
+    },
+    'fine_dine_bar': {
+      name: 'Fine Dine & Bar',
+      label: 'Fine Dine & Bar',
+      tag: 'FINE DINE & BAR',
+      badge_color: '#ec4899',
+      icon: 'fa-wine-glass',
+      description: 'Premium restro-bar with liquor VAT compliance, CRM loyalty and P&L ledger.',
+      base_features: ['pos', 'dine_in', 'kitchen', 'menu', 'inventory', 'staff', 'finance', 'alcohol_vat', 'website_cms', 'website_minimal', 'analytics'],
+      included: [
+        { key: 'pos', name: 'POS & Bar Billing', icon: 'fa-cash-register' },
+        { key: 'dine_in', name: 'Tables & VIP Reservations', icon: 'fa-chair' },
+        { key: 'inventory', name: 'Stock & Liquor Compliance', icon: 'fa-boxes-stacked' },
+        { key: 'staff', name: 'Staff, Payroll & SOPs', icon: 'fa-users-gear' },
+        { key: 'finance', name: 'Finance & P&L', icon: 'fa-scale-balanced' },
+        { key: 'website_cms', name: 'Full Brand Website CMS', icon: 'fa-globe' }
+      ]
+    },
+    'hotel_resort': {
+      name: 'Hotel & Resort',
+      label: 'Hotel & Resort',
+      tag: 'HOTEL & RESORT',
+      badge_color: '#3b82f6',
+      icon: 'fa-hotel',
+      description: 'Lodging properties with rooms PMS, front desk, and multi-outlet dining.',
+      base_features: ['pos', 'dine_in', 'kitchen', 'menu', 'inventory', 'staff', 'finance', 'hotel', 'hotel_rooms', 'front_desk', 'tape_chart', 'hotel_folios', 'website_cms', 'website_minimal', 'analytics'],
+      included: [
+        { key: 'hotel', name: 'Hotel PMS & Rooms Front Desk', icon: 'fa-hotel' },
+        { key: 'pos', name: 'Restaurant POS & Room Service', icon: 'fa-cash-register' },
+        { key: 'staff', name: 'Hospitality Staff & SOPs', icon: 'fa-users-gear' },
+        { key: 'finance', name: 'Finance & P&L', icon: 'fa-scale-balanced' },
+        { key: 'website_cms', name: 'Hotel Website Mode', icon: 'fa-globe' }
+      ]
+    },
+    'club_lounge': {
+      name: 'Club & Lounge',
+      label: 'Club & Lounge',
+      tag: 'CLUB & LOUNGE',
+      badge_color: '#a855f7',
+      icon: 'fa-champagne-glasses',
+      description: 'Nightclubs, concert venues, ticketed door passes and bar service.',
+      base_features: ['pos', 'menu', 'events', 'club_events', 'ticket_tiers', 'gate_scanner', 'alcohol_vat', 'website_cms', 'analytics'],
+      included: [
+        { key: 'events', name: 'Club Events & Door Passes', icon: 'fa-ticket' },
+        { key: 'pos', name: 'Bar POS & VIP Tables', icon: 'fa-cash-register' },
+        { key: 'website_cms', name: 'Events Ticket Showcase', icon: 'fa-globe' }
+      ]
+    },
+    'custom': {
+      name: 'Custom Enterprise',
+      label: 'Custom Enterprise',
+      tag: 'ENTERPRISE',
+      badge_color: '#64748b',
+      icon: 'fa-sliders',
+      description: 'Enterprise venue with fully customizable module selections.',
+      base_features: ['pos', 'menu'],
+      included: [
+        { key: 'pos', name: 'POS Billing', icon: 'fa-cash-register' }
+      ]
+    }
+  };
+
+  const ADDON_CATALOG = (SERVER_FEATURES_CONFIG && SERVER_FEATURES_CONFIG.addon_catalog) ? SERVER_FEATURES_CONFIG.addon_catalog : {
+    'staff': { name: 'Staff & Operations', hint: 'Muster roll, payroll slips, daily SOPs, ground staff', icon: 'fa-users-gear' },
+    'inventory': { name: 'Inventory & Purchases', hint: 'Purchase register, supplier challans, stock counts, wastage audits', icon: 'fa-boxes-stacked' },
+    'finance': { name: 'Finance (P&L)', hint: 'Expense tracking, profit & loss analytics, city ledger', icon: 'fa-scale-balanced' },
+    'website_cms': { name: 'Full Website CMS', hint: 'About Us, Chefs bio, Photo Gallery, Customer Reviews & Careers (Disabling keeps strictly Menu & Orders)', icon: 'fa-globe' },
+    'delivery': { name: 'Online Delivery Integrations', hint: 'Auto-sync online orders from Zomato and Swiggy into POS', icon: 'fa-motorcycle' },
+    'events': { name: 'Club & Ticketed Events', hint: 'Concert passes, ticket tiers, gate pass QR scanning', icon: 'fa-champagne-glasses' },
+    'hotel': { name: 'Hotel Lodging & PMS', hint: 'Room inventory, tape chart, guest folios & housekeeping', icon: 'fa-hotel' },
+    'alcohol_vat': { name: 'State VAT & Liquor Service', hint: 'Separate state VAT, excise license & liquor stocks', icon: 'fa-wine-glass' },
+    'table_booking': { name: 'Online Table Reservations', hint: 'Table reservation requests from public website', icon: 'fa-calendar-check' },
+    'online_payments': { name: 'Digital Payment Gateway', hint: 'Razorpay / UPI digital payments for customer orders', icon: 'fa-credit-card' }
+  };
+
+  function isAddonInBase(branchType, addonKey) {
+    const cfg = BRANCH_TYPE_CONFIG[branchType] || BRANCH_TYPE_CONFIG['restaurant_standard'];
+    if (cfg && Array.isArray(cfg.base_features)) {
+      return cfg.base_features.includes(addonKey);
+    }
+    const list = (cfg && Array.isArray(cfg.included)) ? cfg.included.map(i => i.key) : [];
+    return list.includes(addonKey);
+  }
+
+  function isBranchAddonActive(b, addonKey) {
+    if (isAddonInBase(b.outlet_type || 'restaurant_standard', addonKey)) {
+      return true;
+    }
+    const addons = b.branch_addons || [];
+    return Array.isArray(addons) && addons.includes(addonKey);
+  }
+
+  function toggleBranchAddon(idx, key) {
+    syncBranchesFromDOM();
+    if (!Array.isArray(branches[idx].branch_addons)) {
+      branches[idx].branch_addons = [];
+    }
+    const pos = branches[idx].branch_addons.indexOf(key);
+    if (pos === -1) {
+      branches[idx].branch_addons.push(key);
+    } else {
+      branches[idx].branch_addons.splice(pos, 1);
+    }
+    renderBranchCards();
+  }
+
+  function setBranchType(idx, val) {
+    syncBranchesFromDOM();
+    branches[idx].outlet_type = val;
+    renderBranchCards();
+  }
+
   function addNewBranchCard(isFirst = false) {
     if (!isFirst) {
       syncBranchesFromDOM();
@@ -1723,7 +1980,8 @@
     const newBranch = {
       id: null,
       name: branchName,
-      outlet_type: "dine_in",
+      outlet_type: "restaurant_standard",
+      branch_addons: [],
       phone: "",
       use_company_address: true,
       address_line_1: "",
@@ -1784,6 +2042,47 @@
     renderBranchCards();
   }
 
+  
+  function isBranchClubLicensed(b) {
+    if (!IS_MASTER_SYNCED) return true;
+    if (b.is_club_licensed !== undefined) return Boolean(b.is_club_licensed);
+    const ent = b.plan_entitlements || {};
+    const addons = b.branch_addons || [];
+    return Boolean(ent.has_club || ent.has_club_events || ent.is_bar_club || ent.has_event_management || ent.has_club_lounge || addons.includes('events'));
+  }
+
+  function isBranchHotelLicensed(b) {
+    if (!IS_MASTER_SYNCED) return true;
+    if (b.is_hotel_licensed !== undefined) return Boolean(b.is_hotel_licensed);
+    const ent = b.plan_entitlements || {};
+    const addons = b.branch_addons || [];
+    return Boolean(ent.has_hotel || ent.has_hotel_management || ent.is_hotel || ent.has_hotel_resort || addons.includes('hotel'));
+  }
+
+  function isBranchSpaLicensed(b) {
+    if (!IS_MASTER_SYNCED) return true;
+    if (b.is_spa_licensed !== undefined) return Boolean(b.is_spa_licensed);
+    const ent = b.plan_entitlements || {};
+    const addons = b.branch_addons || [];
+    return isBranchHotelLicensed(b) && Boolean(ent.has_spas_wellness || ent.has_spa || ent.has_wellness || addons.includes('hotel_spa') || addons.includes('spa'));
+  }
+
+  function isBranchCabsLicensed(b) {
+    if (!IS_MASTER_SYNCED) return true;
+    if (b.is_cabs_licensed !== undefined) return Boolean(b.is_cabs_licensed);
+    const ent = b.plan_entitlements || {};
+    const addons = b.branch_addons || [];
+    return isBranchHotelLicensed(b) && Boolean(ent.has_cabs || ent.has_cab || ent.has_transport || addons.includes('hotel_cabs') || addons.includes('cabs'));
+  }
+
+  function isBranchAlcoholLicensed(b) {
+    if (!IS_MASTER_SYNCED) return true;
+    if (b.is_alcohol_licensed !== undefined) return Boolean(b.is_alcohol_licensed);
+    const ent = b.plan_entitlements || {};
+    const addons = b.branch_addons || [];
+    return Boolean(ent.has_complete_restaurant_with_alcohol || ent.is_alcohol || ent.has_alcohol || ent.has_fine_dine_bar || addons.includes('alcohol_vat'));
+  }
+
   function renderBranchCards() {
     const container = document.getElementById("branches-container");
     container.innerHTML = "";
@@ -1825,8 +2124,8 @@
             <span class="badge-tag state" style="background: rgba(var(--ui-orange-rgb), 0.14); color: var(--ui-orange-text); padding: 3px 8px; border-radius: 6px; font-weight: 600; font-size: 11px;">
               ${state || 'State'}
             </span>
-            <span class="badge-tag" style="background: #e0f2fe; color: #0369a1; padding: 3px 8px; border-radius: 6px; font-weight: 600; font-size: 11px;">
-              ${outletType === 'dine_in' ? 'Dine-in' : (outletType === 'takeaway_qsr' ? 'Takeaway/QSR' : 'Cloud Kitchen')}
+            <span class="badge-tag" style="background: ${escapeHtml(BRANCH_TYPE_CONFIG[outletType]?.badge_color || '#0369a1')}1a; color: ${escapeHtml(BRANCH_TYPE_CONFIG[outletType]?.badge_color || '#0369a1')}; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 11px; border: 1px solid ${escapeHtml(BRANCH_TYPE_CONFIG[outletType]?.badge_color || '#0369a1')}44; display: inline-flex; align-items: center; gap: 4px;">
+              <i class="fa-solid ${escapeHtml(BRANCH_TYPE_CONFIG[outletType]?.icon || 'fa-store')}"></i> ${escapeHtml(BRANCH_TYPE_CONFIG[outletType]?.tag || BRANCH_TYPE_CONFIG[outletType]?.name || BRANCH_TYPE_CONFIG[outletType]?.label || 'Standard Restaurant')}
             </span>
             ${b.use_company_address ? `<span style="font-size: 11px; color: var(--ui-green-text); font-weight: 600; background: rgba(var(--ui-green-rgb), 0.12); padding: 2px 7px; border-radius: 6px; border: 1px solid rgba(var(--ui-green-rgb), 0.35);"><i class="fa-solid fa-link"></i> HQ Address</span>` : ''}
             {% if ENABLE_ALCOHOL_VAT %}
@@ -1836,7 +2135,9 @@
             ${b.has_club_module ? `<span class="badge-tag" style="background: #f3e8ff; color: #7e22ce; padding: 3px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; border: 1px solid #d8b4fe;"><i class="fa-solid fa-ticket"></i> Club Events Active</span>` : ''}
             {% endif %}
             {% if ENABLE_HOTEL_MODULE %}
-            ${b.has_hotel_module ? `<span class="badge-tag" style="background: #e0f2fe; color: #0369a1; padding: 3px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; border: 1px solid #bae6fd;"><i class="fa-solid fa-hotel"></i> Hotel & Rooms Active</span>` : ''}
+            ${b.has_hotel_module ? `<span class="badge-tag" style="background: #e0f2fe; color: #0369a1; padding: 3px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; border: 1px solid #bae6fd;"><i class="fa-solid fa-hotel"></i> Hotel PMS Active</span>` : ''}
+            ${b.has_hotel_module && isBranchSpaLicensed(b) ? `<span class="badge-tag" style="background: #fdf2f8; color: #db2777; padding: 3px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; border: 1px solid #fbcfe8;"><i class="fa-solid fa-spa"></i> + Spa & Wellness</span>` : ''}
+            ${b.has_hotel_module && isBranchCabsLicensed(b) ? `<span class="badge-tag" style="background: #fefce8; color: #ca8a04; padding: 3px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; border: 1px solid #fef08a;"><i class="fa-solid fa-taxi"></i> + Cabs & Transport</span>` : ''}
             {% endif %}
           </div>
 
@@ -1861,14 +2162,67 @@
               <input type="text" class="form-input" id="branch-name-${idx}" maxlength="60" placeholder="e.g. Spice Villa — Main Branch (2–60 chars)" value="${escapeHtml(b.name)}" oninput="branches[${idx}].name = this.value" onblur="this.value = normalizeTextSpaces(this.value); branches[${idx}].name = this.value">
             </div>
 
-            <!-- Outlet Type (§4) -->
-            <div class="form-group">
-              <label class="form-label">Outlet Type <span class="req">*</span></label>
-              <select class="form-select" id="branch-outlettype-${idx}" onchange="branches[${idx}].outlet_type = this.value; renderBranchCards();">
-                <option value="dine_in" ${outletType === 'dine_in' ? 'selected' : ''}>Dine-in</option>
-                <option value="takeaway_qsr" ${outletType === 'takeaway_qsr' ? 'selected' : ''}>Takeaway / QSR</option>
-                <option value="cloud_kitchen" ${outletType === 'cloud_kitchen' ? 'selected' : ''}>Cloud Kitchen</option>
-              </select>
+            <!-- Branch Type (§4) -->
+            <div class="form-group full-width" style="margin-top: 4px;">
+              ${IS_MASTER_SYNCED ? `
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;">
+                  <label class="form-label" style="font-weight: 700; font-size: 13.5px; color: var(--ui-label); margin-bottom: 0;">
+                    <i class="fa-solid fa-layer-group" style="color: var(--primary);"></i> Branch Type <span class="req">*</span>
+                  </label>
+                  <div style="display: inline-flex; align-items: center; gap: 8px;">
+                    <span style="display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; color: #2563eb; background: rgba(37,99,235,0.08); padding: 3px 9px; border-radius: 6px; border: 1px solid rgba(37,99,235,0.25);">
+                      <i class="fa-solid fa-lock"></i> Plan-Enforced by Sattkar (${escapeHtml(MASTER_PLAN_NAME)})
+                    </span>
+                    <button type="button" onclick="openRequestUpgradeModal(${idx})" class="btn small" style="font-size: 11.5px; font-weight: 700; color: #2563eb; background: var(--ui-surface); border: 1px solid rgba(37,99,235,0.3); padding: 3px 9px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;">
+                      <i class="fa-solid fa-arrow-up-right-from-square"></i> Request Tier Upgrade
+                    </button>
+                  </div>
+                </div>
+                <select class="form-select" id="branch-outlettype-${idx}" disabled style="font-weight: 600; font-size: 13.5px; background: var(--ui-surface-2); color: var(--ui-label); cursor: not-allowed; opacity: 0.95;">
+                  ${Object.entries(BRANCH_TYPE_CONFIG).filter(([k]) => k !== 'dine_in').map(([k, cfg]) => `
+                    <option value="${k}" ${(outletType === k || (k === 'restaurant_standard' && outletType === 'dine_in')) ? 'selected' : ''}>
+                      ${escapeHtml(cfg.name || cfg.label || k)} (${escapeHtml(cfg.description || '')})
+                    </option>
+                  `).join('')}
+                </select>
+                <span class="form-hint" style="color: var(--ui-label-3);"><i class="fa-solid fa-circle-info" style="color: #2563eb;"></i> This branch type and its base feature entitlements are synchronized dynamically from Sattkar Master Admin. Client Super Admin cannot change it locally. To change this branch package, click <strong>Request Tier Upgrade</strong>.</span>
+              ` : `
+                <label class="form-label" style="font-weight: 700; font-size: 13.5px; color: var(--ui-label);">
+                  <i class="fa-solid fa-layer-group" style="color: var(--primary);"></i> Branch Type <span class="req">*</span>
+                </label>
+                <select class="form-select" id="branch-outlettype-${idx}" onchange="setBranchType(${idx}, this.value)" style="font-weight: 600; font-size: 13.5px;">
+                  ${Object.entries(BRANCH_TYPE_CONFIG).filter(([k]) => k !== 'dine_in').map(([k, cfg]) => `
+                    <option value="${k}" ${(outletType === k || (k === 'restaurant_standard' && outletType === 'dine_in')) ? 'selected' : ''}>
+                      ${escapeHtml(cfg.name || cfg.label || k)} (${escapeHtml(cfg.description || '')})
+                    </option>
+                  `).join('')}
+                </select>
+                <span class="form-hint">${escapeHtml(BRANCH_TYPE_CONFIG[outletType]?.description || 'Controls which features and public website pages are active for this branch.')}</span>
+              `}
+            </div>
+
+            <!-- Active Capabilities & Included Features Bar -->
+            <div class="form-group full-width" style="margin-top: -4px; margin-bottom: 8px; padding: 12px 16px; border-radius: 10px; background: var(--ui-surface-2); border: 1px solid var(--ui-separator);">
+              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+                <span style="font-weight: 700; font-size: 11.5px; color: var(--ui-label); text-transform: uppercase; letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 6px;">
+                  <i class="fa-solid fa-circle-check" style="color: var(--ui-green-text);"></i> Included in ${escapeHtml(BRANCH_TYPE_CONFIG[outletType]?.name || BRANCH_TYPE_CONFIG[outletType]?.label || 'Branch Plan')}:
+                </span>
+                <button type="button" onclick="openRequestUpgradeModal(${idx})" class="btn small" style="font-size: 11.5px; font-weight: 700; color: #2563eb; background: rgba(37,99,235,0.08); border: 1px solid rgba(37,99,235,0.25); padding: 3px 10px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;">
+                  <i class="fa-solid fa-cloud-arrow-up"></i> Request Add-ons / Tier Upgrade
+                </button>
+              </div>
+              <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+                ${(BRANCH_TYPE_CONFIG[outletType]?.included || []).map(inc => `
+                  <span style="font-size: 11px; font-weight: 600; background: rgba(var(--ui-green-rgb), 0.12); color: var(--ui-green-text); padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(var(--ui-green-rgb), 0.25); display: inline-flex; align-items: center; gap: 4px;">
+                    <i class="fa-solid ${inc.icon}" style="font-size: 10px;"></i> ${escapeHtml(inc.name)}
+                  </span>
+                `).join('')}
+                ${(b.branch_addons || []).filter(aKey => ['hotel', 'events'].includes(aKey) && !(BRANCH_TYPE_CONFIG[outletType]?.base_features || []).includes(aKey)).map(aKey => `
+                  <span style="font-size: 11px; font-weight: 700; background: rgba(37,99,235,0.12); color: #2563eb; padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(37,99,235,0.25); display: inline-flex; align-items: center; gap: 4px;">
+                    <i class="fa-solid ${aKey === 'hotel' ? 'fa-hotel' : 'fa-ticket'}" style="font-size: 10px;"></i> ${aKey === 'hotel' ? 'Hotel PMS Module (Active)' : 'Club & Events Module (Active)'}
+                  </span>
+                `).join('')}
+              </div>
             </div>
 
             <!-- Branch Phone -->
@@ -1929,62 +2283,160 @@
             </div>
 
             {% if ENABLE_ALCOHOL_VAT %}
-            <!-- Alcohol Service Toggle -->
-            <div class="form-group full-width" style="margin-top: 4px;">
-              <label class="form-label">Does this outlet serve alcohol?</label>
-              <div class="toggle-group" style="width: 100%; max-width: 240px;">
-                <button type="button" class="toggle-btn ${b.serves_alcohol ? 'active' : ''}" style="flex: 1;" onclick="setBranchAlcohol(${idx}, true)">Yes</button>
-                <button type="button" class="toggle-btn ${!b.serves_alcohol ? 'active' : ''}" style="flex: 1;" onclick="setBranchAlcohol(${idx}, false)">No</button>
+            <!-- Alcohol / State VAT Question -->
+            <div class="form-group full-width" style="margin-top: 8px; padding: 12px 16px; border-radius: 10px; background: var(--ui-surface-2); border: 1px solid var(--ui-separator);">
+              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+                <div>
+                  <label class="form-label" style="margin-bottom: 2px; font-weight: 700; font-size: 13.5px; display: flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-martini-glass-citrus" style="color: var(--ui-orange-text);"></i> Does this outlet serve alcohol?
+                  </label>
+                  <span class="form-hint" style="font-size: 12px;">${b.serves_alcohol ? 'Liquor is billed under state VAT, outside GST' : 'Pure food service — standard GST applies, State VAT disabled'}</span>
+                </div>
+                <div>
+                  ${isBranchAlcoholLicensed(b) ? `
+                    <div class="toggle-group" style="width: 140px;">
+                      <button type="button" class="toggle-btn ${b.serves_alcohol ? 'active' : ''}" style="flex: 1;" onclick="setBranchAlcohol(${idx}, true)">Yes</button>
+                      <button type="button" class="toggle-btn ${!b.serves_alcohol ? 'active' : ''}" style="flex: 1;" onclick="setBranchAlcohol(${idx}, false)">No</button>
+                    </div>
+                  ` : `
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 12px; font-weight: 600; color: #94a3b8; display: inline-flex; align-items: center; gap: 5px; background: var(--ui-surface); padding: 5px 10px; border-radius: 6px; border: 1px solid var(--ui-separator);">
+                        <i class="fa-solid fa-lock" style="font-size: 11px;"></i> Food Only (No VAT License)
+                      </span>
+                      <button type="button" class="btn small" onclick="openRequestAddonModal(${idx}, 'alcohol_vat', 'Bar & State VAT Module')" style="font-size: 12px; font-weight: 700; background: rgba(242,108,13,0.1); color: var(--ui-orange-text); border: 1px solid rgba(242,108,13,0.3); padding: 5px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer;">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Request Add-on
+                      </button>
+                    </div>
+                  `}
+                </div>
               </div>
-              <span class="form-hint">${b.serves_alcohol ? 'Liquor is billed under state VAT, outside GST' : 'Pure food service — standard GST applies, State VAT disabled'}</span>
             </div>
             {% endif %}
 
-            {% if ENABLE_CLUB_EVENTS_MODULE %}
+                        {% if ENABLE_CLUB_EVENTS_MODULE %}
             <!-- Club Events & Ticketing Module Permission Toggle -->
-            <div class="form-group full-width branch-module-card club-module-card" style="margin-top: 8px; padding: 14px 16px; border-radius: 12px;">
+            <div class="form-group full-width branch-module-card club-module-card" style="margin-top: 8px; padding: 14px 16px; border-radius: 12px; ${isBranchClubLicensed(b) ? '' : 'background: var(--ui-surface-2); border: 1px dashed var(--ui-separator-strong);'}">
               <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
                 <div>
                   <label class="form-label" style="font-size: 14px; font-weight: 700; margin-bottom: 2px; display: flex; align-items: center; gap: 8px;">
-                    <i class="fa-solid fa-ticket" style="font-size: 15px;"></i> Enable Club & Events Ticketing Module
+                    <i class="fa-solid fa-ticket" style="font-size: 15px; color: #7e22ce;"></i> Enable Club & Events Ticketing Module
                   </label>
                   <span class="form-hint" style="font-size: 12px; line-height: 1.4; display: block;">
                     Grants this branch permission to host ticketed club nights, live music, sell passes online, and scan entry QR codes.
                   </span>
                 </div>
-                <div class="toggle-group" style="width: 100%; max-width: 220px;">
-                  <button type="button" class="toggle-btn ${b.has_club_module ? 'active' : ''}" style="flex: 1; ${b.has_club_module ? 'background-color: #7e22ce !important; color: #ffffff !important;' : ''}" onclick="setBranchClubModule(${idx}, true)">
-                    <i class="fa-solid fa-check"></i> Enabled
-                  </button>
-                  <button type="button" class="toggle-btn ${!b.has_club_module ? 'active' : ''}" style="flex: 1;" onclick="setBranchClubModule(${idx}, false)">
-                    Disabled
-                  </button>
+                <div>
+                  ${isBranchClubLicensed(b) ? `
+                    <div class="toggle-group" style="width: 100%; max-width: 220px;">
+                      <button type="button" class="toggle-btn ${b.has_club_module ? 'active' : ''}" style="flex: 1; ${b.has_club_module ? 'background-color: #7e22ce !important; color: #ffffff !important;' : ''}" onclick="setBranchClubModule(${idx}, true)">
+                        <i class="fa-solid fa-check"></i> Enabled
+                      </button>
+                      <button type="button" class="toggle-btn ${!b.has_club_module ? 'active' : ''}" style="flex: 1;" onclick="setBranchClubModule(${idx}, false)">
+                        Disabled
+                      </button>
+                    </div>
+                  ` : `
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 12px; font-weight: 600; color: #94a3b8; display: inline-flex; align-items: center; gap: 5px; background: var(--ui-surface); padding: 5px 10px; border-radius: 6px; border: 1px solid var(--ui-separator);">
+                        <i class="fa-solid fa-lock" style="font-size: 11px;"></i> Not in Plan (Disabled)
+                      </span>
+                      <button type="button" class="btn small" onclick="openRequestAddonModal(${idx}, 'events', 'Club & Events Module')" style="font-size: 12px; font-weight: 700; background: rgba(126,34,206,0.1); color: #7e22ce; border: 1px solid rgba(126,34,206,0.3); padding: 5px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer;">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Request Add-on
+                      </button>
+                    </div>
+                  `}
                 </div>
               </div>
             </div>
             {% endif %}
 
-            {% if ENABLE_HOTEL_MODULE %}
+                        {% if ENABLE_HOTEL_MODULE %}
             <!-- Hotel & Rooms PMS Module Permission Toggle -->
-            <div class="form-group full-width branch-module-card hotel-module-card" style="margin-top: 8px; padding: 14px 16px; border-radius: 12px;">
+            <div class="form-group full-width branch-module-card hotel-module-card" style="margin-top: 8px; padding: 14px 16px; border-radius: 12px; ${isBranchHotelLicensed(b) ? '' : 'background: var(--ui-surface-2); border: 1px dashed var(--ui-separator-strong);'}">
               <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
                 <div>
                   <label class="form-label" style="font-size: 14px; font-weight: 700; margin-bottom: 2px; display: flex; align-items: center; gap: 8px;">
-                    <i class="fa-solid fa-hotel" style="font-size: 15px;"></i> Enable Hotel & Rooms PMS Module
+                    <i class="fa-solid fa-hotel" style="font-size: 15px; color: #0284c7;"></i> Enable Hotel & Rooms PMS Module
                   </label>
                   <span class="form-hint" style="font-size: 12px; line-height: 1.4; display: block;">
                     Grants this branch permission to manage front desk, tape chart, room categories, live room inventory, bookings, and guest folios.
                   </span>
                 </div>
-                <div class="toggle-group" style="width: 100%; max-width: 220px;">
-                  <button type="button" class="toggle-btn ${b.has_hotel_module ? 'active' : ''}" style="flex: 1; ${b.has_hotel_module ? 'background-color: #0284c7 !important; color: #ffffff !important;' : ''}" onclick="setBranchHotelModule(${idx}, true)">
-                    <i class="fa-solid fa-check"></i> Enabled
-                  </button>
-                  <button type="button" class="toggle-btn ${!b.has_hotel_module ? 'active' : ''}" style="flex: 1;" onclick="setBranchHotelModule(${idx}, false)">
-                    Disabled
-                  </button>
+                <div>
+                  ${isBranchHotelLicensed(b) ? `
+                    <div class="toggle-group" style="width: 100%; max-width: 220px;">
+                      <button type="button" class="toggle-btn ${b.has_hotel_module ? 'active' : ''}" style="flex: 1; ${b.has_hotel_module ? 'background-color: #0284c7 !important; color: #ffffff !important;' : ''}" onclick="setBranchHotelModule(${idx}, true)">
+                        <i class="fa-solid fa-check"></i> Enabled
+                      </button>
+                      <button type="button" class="toggle-btn ${!b.has_hotel_module ? 'active' : ''}" style="flex: 1;" onclick="setBranchHotelModule(${idx}, false)">
+                        Disabled
+                      </button>
+                    </div>
+                  ` : `
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="font-size: 12px; font-weight: 600; color: #94a3b8; display: inline-flex; align-items: center; gap: 5px; background: var(--ui-surface); padding: 5px 10px; border-radius: 6px; border: 1px solid var(--ui-separator);">
+                        <i class="fa-solid fa-lock" style="font-size: 11px;"></i> Not in Plan (Disabled)
+                      </span>
+                      <button type="button" class="btn small" onclick="openRequestAddonModal(${idx}, 'hotel', 'Hotel PMS Module')" style="font-size: 12px; font-weight: 700; background: rgba(2,132,199,0.1); color: #0284c7; border: 1px solid rgba(2,132,199,0.3); padding: 5px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer;">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Request Add-on
+                      </button>
+                    </div>
+                  `}
                 </div>
               </div>
+
+              ${isBranchHotelLicensed(b) && b.has_hotel_module ? `
+                <div style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--ui-separator); width: 100%;">
+                  <div style="font-size: 12px; font-weight: 700; color: var(--ui-label); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-bell-concierge" style="color: #0284c7;"></i> Hotel Add-on Services:
+                  </div>
+                  <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                    <!-- Spa & Wellness Service -->
+                    <div style="display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--ui-surface); border: 1px solid ${isBranchSpaLicensed(b) ? 'rgba(219,39,119,0.3)' : 'var(--ui-separator)'}; padding: 6px 12px; border-radius: 8px; min-width: 260px;">
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-spa" style="color: ${isBranchSpaLicensed(b) ? '#db2777' : '#94a3b8'};"></i>
+                        <div>
+                          <div style="font-size: 12px; font-weight: 600; color: var(--ui-label);">Spas & Wellness</div>
+                          <div style="font-size: 10.5px; color: var(--ui-label-3);">${isBranchSpaLicensed(b) ? 'Treatment packages & booking' : '₹199/mo optional add-on'}</div>
+                        </div>
+                      </div>
+                      <div>
+                        ${isBranchSpaLicensed(b) ? `
+                          <span style="font-size: 11px; font-weight: 700; color: #db2777; background: #fdf2f8; padding: 2px 7px; border-radius: 4px; border: 1px solid #fbcfe8;">
+                            <i class="fa-solid fa-check"></i> Active
+                          </span>
+                        ` : `
+                          <button type="button" class="btn small" onclick="openRequestAddonModal(${idx}, 'hotel_spa', 'Spa & Wellness Add-on')" style="font-size: 11px; font-weight: 700; background: rgba(219,39,119,0.08); color: #db2777; border: 1px solid rgba(219,39,119,0.25); padding: 2px 8px; border-radius: 5px; cursor: pointer;">
+                            + Request ₹199
+                          </button>
+                        `}
+                      </div>
+                    </div>
+
+                    <!-- Cabs & Transport Service -->
+                    <div style="display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--ui-surface); border: 1px solid ${isBranchCabsLicensed(b) ? 'rgba(202,138,4,0.3)' : 'var(--ui-separator)'}; padding: 6px 12px; border-radius: 8px; min-width: 260px;">
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-taxi" style="color: ${isBranchCabsLicensed(b) ? '#ca8a04' : '#94a3b8'};"></i>
+                        <div>
+                          <div style="font-size: 12px; font-weight: 600; color: var(--ui-label);">Cabs & Transportation</div>
+                          <div style="font-size: 10.5px; color: var(--ui-label-3);">${isBranchCabsLicensed(b) ? 'Airport pickup & cab billing' : '₹199/mo optional add-on'}</div>
+                        </div>
+                      </div>
+                      <div>
+                        ${isBranchCabsLicensed(b) ? `
+                          <span style="font-size: 11px; font-weight: 700; color: #ca8a04; background: #fefce8; padding: 2px 7px; border-radius: 4px; border: 1px solid #fef08a;">
+                            <i class="fa-solid fa-check"></i> Active
+                          </span>
+                        ` : `
+                          <button type="button" class="btn small" onclick="openRequestAddonModal(${idx}, 'hotel_cabs', 'Cabs & Transportation Add-on')" style="font-size: 11px; font-weight: 700; background: rgba(202,138,4,0.08); color: #ca8a04; border: 1px solid rgba(202,138,4,0.25); padding: 2px 8px; border-radius: 5px; cursor: pointer;">
+                            + Request ₹199
+                          </button>
+                        `}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ` : ''}
             </div>
             {% endif %}
           </div>
@@ -2108,6 +2560,10 @@
 
   function setBranchClubModule(idx, val) {
     syncBranchesFromDOM();
+    if (val && !isBranchClubLicensed(branches[idx])) {
+      openRequestAddonModal(idx, 'events', 'Club & Events Module');
+      return;
+    }
     branches[idx].has_club_module = val;
     renderBranchCards();
     const branchesJsonElem = document.getElementById("branches_json");
@@ -2124,8 +2580,10 @@
         },
         body: JSON.stringify({ has_club_module: val })
       }).then(res => res.json()).then(data => {
-        if (data.success) {
-          console.log(data.message);
+        if (!data.success) {
+          alert(data.error || 'Club & Events Module is not licensed for this outlet.');
+          branches[idx].has_club_module = false;
+          renderBranchCards();
         }
       }).catch(err => console.warn('Club module instant toggle warning:', err));
     }
@@ -2316,6 +2774,7 @@
 
       const outletTypeElem = document.getElementById(`branch-outlettype-${idx}`);
       if (outletTypeElem) b.outlet_type = outletTypeElem.value;
+      if (!Array.isArray(b.branch_addons)) b.branch_addons = [];
 
       const phoneElem = document.getElementById(`branch-phone-${idx}`);
       if (phoneElem) b.phone = normalizePhone(phoneElem.value);
@@ -2742,5 +3201,311 @@
     if (!str) return '';
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
+
+  // ==============================================================================
+  // SATTKAR MASTER ADMIN REQUEST MODAL (UPGRADES & ADD-ONS)
+  // ==============================================================================
+  let currentReqBranchIdx = 0;
+  let currentReqType = 'addon'; // 'addon' or 'tier'
+
+    // Package Tiers and Standalone Major Modules Definitions
+  const PACKAGE_TIER_CATALOG = {
+    'tier_only_pos': {
+      name: 'POS Only (Billing & Quick Order)',
+      price: '₹599/mo',
+      badge: 'Sweets Shop / Bakery',
+      description: 'Provides counter POS checkout, order tracking, and lightweight ordering menu. Designed for small sweets shops and bakeries that do not require table floor management or kitchen displays.',
+      features: ['Counter POS Billing', 'Order Management', 'Digital Ordering Menu'],
+      rate: 599,
+    },
+    'tier_starter_dhaba': {
+      name: 'Starter Package (Dhaba & Cafe)',
+      price: '₹799/mo',
+      badge: 'Dhaba / Cafe',
+      description: 'Provides counter POS billing, Kitchen Display System (KDS), table floor layouts with QR ordering, and complete menu management. Ideal for dhabas and fast-casual cafes.',
+      features: ['POS Checkout', 'Kitchen Display (KDS)', 'Dine-In Tables & Floor', 'QR Table Ordering', 'Menu Management'],
+      rate: 799,
+    },
+    'tier_restaurant_standard': {
+      name: 'Complete Restaurant without Alcohol',
+      price: '₹999/mo',
+      badge: 'Standard Restaurant',
+      description: 'Full restaurant operations suite: POS billing, Dine-in tables, Kitchen Display (KDS), raw stock inventory, supplier purchase orders, staff management, cashflow P&L statements, and branded website CMS.',
+      features: ['POS Billing', 'Floor Tables', 'Kitchen KDS', 'Stock & Purchases Inventory', 'Staff & Payroll', 'Finance Cashflow P&L', 'Full Branded Website CMS', 'Sales Analytics'],
+      rate: 999,
+    },
+    'tier_fine_dine_bar': {
+      name: 'Complete Restaurant with Bar / Fine Dine',
+      price: '₹1,499/mo',
+      badge: 'Fine Dine & Bar',
+      description: 'All Complete Restaurant capabilities PLUS State VAT tax calculations, liquor stock tracking, excise license compliance, and beverage billing.',
+      features: ['Complete Restaurant Suite', 'State VAT & Excise Compliance', 'Liquor & Bar Inventory', 'Separate State VAT Invoicing'],
+      rate: 1499,
+    },
+  };
+
+  const MAJOR_MODULE_CATALOG = {
+    'hotel': {
+      name: 'Hotel PMS & Rooms Management Module',
+      price: '₹1,499/mo',
+      badge: 'Hotel Lodging',
+      description: 'Comprehensive property management system: room inventory, suites, front desk check-in/out, visual tape chart timeline, guest folios & room billing, and housekeeping maintenance.',
+      features: ['Master Room Inventory', 'Front Desk Check-in', 'Room Tape Chart', 'Guest Folios & Billing', 'Housekeeping Maintenance'],
+      rate: 1499,
+    },
+    'events': {
+      name: 'Club & Event Ticketing Passes Module',
+      price: '₹599/mo',
+      badge: 'Nightlife & Events',
+      description: 'Entertainment & event operations: ticketed events, concert scheduling, VIP bottle & admission pass tiers, gate entry QR code scanner, and VIP guestlist management.',
+      features: ['Ticketed Club Nights', 'VIP Bottle & Admission Tiers', 'Gate Entry QR Code Scanner', 'VIP Guestlist'],
+      rate: 599,
+    },
+    'hotel_spa': {
+      name: 'Spas & Wellness (Hotel Add-on)',
+      price: '₹199/mo',
+      badge: 'Spa & Wellness',
+      description: 'Complete spa & wellness services: treatment appointments, guest wellness therapy packages, and integrated folio billing.',
+      features: ['Spa Services & Packages', 'Therapy Appointments & Booking', 'Guest Billing Integration'],
+      rate: 199,
+    },
+    'hotel_cabs': {
+      name: 'Cabs & Guest Transportation (Hotel Add-on)',
+      price: '₹199/mo',
+      badge: 'Cabs & Transport',
+      description: 'Additional hotel services: cab booking, guest transportation, airport transfers, chauffeur dispatch, and driver billing.',
+      features: ['Cab Booking System', 'Airport Transfers', 'Guest Transport Billing'],
+      rate: 199,
+    },
+  };
+
+  function openRequestAddonModal(branchIdx, targetKey, targetName) {
+    // If target is alcohol_vat, route to fine_dine_bar package tier upgrade
+    if (targetKey === 'alcohol_vat') {
+      openRequestUpgradeModal(branchIdx, 'tier_fine_dine_bar');
+      return;
+    }
+    openRequestUpgradeModal(branchIdx, targetKey);
+  }
+
+  function openRequestUpgradeModal(branchIdx, preselectedKey) {
+    currentReqBranchIdx = branchIdx;
+    const b = branches[branchIdx] || {};
+
+    const modal = document.getElementById('sattkarRequestModal');
+    if (!modal) return;
+
+    document.getElementById('reqModalHeaderTitle').textContent = 'Request Package Upgrade or Module Add-on';
+    document.getElementById('reqModalBranchName').textContent = b.name || `Outlet #${branchIdx+1}`;
+    const currCfg = BRANCH_TYPE_CONFIG[b.outlet_type || b.branch_type] || {};
+    document.getElementById('reqModalBranchCurrentTier').textContent = `Current Format: ${currCfg.name || 'Standard Restaurant'}`;
+
+    const select = document.getElementById('reqModalItemSelect');
+    select.innerHTML = '';
+
+    const currType = b.outlet_type || b.branch_type || 'restaurant_standard';
+
+    // Group 1: 🍽️ Restaurant Operation Package Tiers
+    const tierGroup = document.createElement('optgroup');
+    tierGroup.label = '🍽️ Restaurant Operation Package Tiers';
+    Object.entries(PACKAGE_TIER_CATALOG).forEach(([k, pkg]) => {
+      const isCurrent = (k === `tier_${currType}` || (currType === 'restaurant_standard' && k === 'tier_restaurant_standard') || (currType === 'fine_dine_bar' && k === 'tier_fine_dine_bar') || (currType === 'starter_dhaba' && k === 'tier_starter_dhaba') || (currType === 'only_pos' && k === 'tier_only_pos'));
+      const opt = document.createElement('option');
+      opt.value = k;
+      opt.textContent = `${pkg.name} — ${pkg.price}${isCurrent ? ' (Current Package)' : ''}`;
+      if (isCurrent) opt.disabled = true;
+      if (preselectedKey && preselectedKey === k) opt.selected = true;
+      tierGroup.appendChild(opt);
+    });
+    select.appendChild(tierGroup);
+
+    // Group 2: 🏢 Major Branch Add-on Modules
+    const moduleGroup = document.createElement('optgroup');
+    moduleGroup.label = '🏢 Major Branch Add-on Modules';
+    Object.entries(MAJOR_MODULE_CATALOG).forEach(([k, mod]) => {
+      let isAlreadyActive = false;
+      let isPrereqMissing = false;
+      let note = '';
+      if (k === 'hotel' && b.has_hotel_module && isBranchHotelLicensed(b)) isAlreadyActive = true;
+      if (k === 'events' && b.has_club_module && isBranchClubLicensed(b)) isAlreadyActive = true;
+      if (k === 'hotel_spa') {
+        if (!b.has_hotel_module || !isBranchHotelLicensed(b)) {
+          isPrereqMissing = true;
+          note = ' (Requires Hotel Module)';
+        } else if (isBranchSpaLicensed(b)) {
+          isAlreadyActive = true;
+        }
+      }
+      if (k === 'hotel_cabs') {
+        if (!b.has_hotel_module || !isBranchHotelLicensed(b)) {
+          isPrereqMissing = true;
+          note = ' (Requires Hotel Module)';
+        } else if (isBranchCabsLicensed(b)) {
+          isAlreadyActive = true;
+        }
+      }
+
+      const opt = document.createElement('option');
+      opt.value = k;
+      opt.textContent = `${mod.name} — ${mod.price}${isAlreadyActive ? ' (Active on Outlet)' : (isPrereqMissing ? note : '')}`;
+      if (isAlreadyActive || isPrereqMissing) opt.disabled = true;
+      if (preselectedKey && preselectedKey === k) opt.selected = true;
+      moduleGroup.appendChild(opt);
+    });
+    select.appendChild(moduleGroup);
+
+    // If nothing selected yet, select first enabled option
+    if (!select.value || select.options[select.selectedIndex]?.disabled) {
+      for (let i = 0; i < select.options.length; i++) {
+        if (!select.options[i].disabled) {
+          select.selectedIndex = i;
+          break;
+        }
+      }
+    }
+
+    document.getElementById('reqModalNotes').value = '';
+    const statusMsg = document.getElementById('reqModalStatusMessage');
+    statusMsg.style.display = 'none';
+
+    modal.style.display = 'flex';
+    onRequestModalItemChange();
+  }
+
+  function closeSattkarRequestModal() {
+    const modal = document.getElementById('sattkarRequestModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  async function onRequestModalItemChange() {
+    const select = document.getElementById('reqModalItemSelect');
+    const val = select.value;
+    const descElem = document.getElementById('reqModalItemDesc');
+    const quoteBox = document.getElementById('reqModalQuoteBox');
+    const isTier = val.startsWith('tier_');
+    currentReqType = isTier ? 'tier' : 'addon';
+
+    quoteBox.style.display = 'block';
+
+    if (isTier) {
+      const pkg = PACKAGE_TIER_CATALOG[val];
+      if (pkg) {
+        descElem.innerHTML = `<strong>${escapeHtml(pkg.name)} (${pkg.badge}):</strong><br>${escapeHtml(pkg.description)}<br><div style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;">${pkg.features.map(f => `<span style="font-size: 11px; background: rgba(37,99,235,0.08); color: #2563eb; padding: 2px 7px; border-radius: 4px; font-weight: 600;">✓ ${escapeHtml(f)}</span>`).join('')}</div>`;
+        document.getElementById('reqModalQuoteRate').textContent = `${pkg.price} (+18% GST)`;
+        document.getElementById('reqModalQuoteChargeNow').textContent = 'Prorated on next invoice / Free trial';
+      }
+    } else {
+      const mod = MAJOR_MODULE_CATALOG[val];
+      if (mod) {
+        descElem.innerHTML = `<strong>${escapeHtml(mod.name)}:</strong><br>${escapeHtml(mod.description)}<br><div style="margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;">${mod.features.map(f => `<span style="font-size: 11px; background: rgba(37,99,235,0.08); color: #2563eb; padding: 2px 7px; border-radius: 4px; font-weight: 600;">✓ ${escapeHtml(f)}</span>`).join('')}</div>`;
+        document.getElementById('reqModalQuoteRate').textContent = `${mod.price} (+18% GST)`;
+        document.getElementById('reqModalQuoteChargeNow').textContent = '₹0 (Free Trial Active)';
+      }
+
+      // Live quote check if available
+      try {
+        const resp = await fetch("{% url 'super_admin:api_billing_addon_quote' %}", {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
+          },
+          body: JSON.stringify({
+            items: [{ key: val, outlet_index: currentReqBranchIdx }],
+          })
+        });
+        const data = await resp.json();
+        if (data.status === 'success' && data.quote) {
+          const q = data.quote;
+          const rate = q.items && q.items[0] ? q.items[0].monthly_price : (mod ? mod.rate : 499);
+          document.getElementById('reqModalQuoteRate').textContent = `₹${rate}/mo (+18% GST)`;
+          if (q.in_trial) {
+            document.getElementById('reqModalQuoteChargeNow').textContent = '₹0 (Free Trial Active)';
+          } else {
+            document.getElementById('reqModalQuoteChargeNow').textContent = `₹${q.charge_now} (incl. GST)`;
+          }
+        }
+      } catch (err) {
+        // Fallback display
+      }
+    }
+  }
+
+  async function submitSattkarRequest() {
+    const select = document.getElementById('reqModalItemSelect');
+    const val = select.value;
+    const notes = document.getElementById('reqModalNotes').value;
+    const submitBtn = document.getElementById('reqModalSubmitBtn');
+    const statusMsg = document.getElementById('reqModalStatusMessage');
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting...';
+    statusMsg.style.display = 'none';
+
+    try {
+      const mappedKey = (val === 'alcohol_vat') ? 'alcohol' : (val === 'events' ? 'club' : (val === 'website_cms' ? 'website' : val));
+      const isTier = val.startsWith('tier_');
+      const bName = branches[currentReqBranchIdx]?.name || `Outlet #${currentReqBranchIdx+1}`;
+      const finalNotes = isTier
+        ? `[TIER UPGRADE] Branch '${bName}' -> ${val.replace('tier_', '')}. ${notes}`.trim()
+        : `[ADD-ON REQUEST] Branch '${bName}'. ${notes}`.trim();
+
+      const resp = await fetch("{% url 'super_admin:api_billing_addon_order' %}", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
+        },
+        body: JSON.stringify({
+          items: isTier ? [] : [{ key: mappedKey, outlet_index: (mappedKey === 'alcohol' || mappedKey === 'website') ? null : currentReqBranchIdx }],
+          notes: finalNotes,
+        })
+      });
+
+      const res = await resp.json();
+      if (res.status === 'success') {
+        const order = res.order || {};
+        if (order.status === 'CAPTURED' || !order.payment_url) {
+          statusMsg.style.display = 'block';
+          statusMsg.style.background = 'rgba(16,185,129,0.12)';
+          statusMsg.style.color = '#065f46';
+          statusMsg.style.border = '1px solid rgba(16,185,129,0.3)';
+          statusMsg.innerHTML = '<i class="fa-solid fa-circle-check"></i> <strong>Success!</strong> Add-on has been requested and activated immediately on Sattkar. Refreshing page...';
+          setTimeout(() => location.reload(), 1500);
+        } else {
+          statusMsg.style.display = 'block';
+          statusMsg.style.background = 'rgba(37,99,235,0.08)';
+          statusMsg.style.color = '#1e40af';
+          statusMsg.style.border = '1px solid rgba(37,99,235,0.25)';
+          statusMsg.innerHTML = `
+            <div style="margin-bottom: 8px;"><i class="fa-solid fa-paper-plane"></i> <strong>Request submitted to Sattkar!</strong></div>
+            <div style="font-size: 12px; margin-bottom: 10px;">To activate immediately, complete the invoice payment via Razorpay:</div>
+            <a href="${order.payment_url}" target="_blank" class="btn" style="background: #2563eb; color: #fff; padding: 6px 14px; font-weight: 700; border-radius: 6px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; font-size: 12px;">
+              <i class="fa-solid fa-credit-card"></i> Pay Invoice Now
+            </a>
+          `;
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<i class="fa-solid fa-check"></i> Request Created';
+        }
+      } else {
+        statusMsg.style.display = 'block';
+        statusMsg.style.background = 'rgba(239,68,68,0.1)';
+        statusMsg.style.color = '#991b1b';
+        statusMsg.style.border = '1px solid rgba(239,68,68,0.25)';
+        statusMsg.textContent = res.message || 'Could not process request with Sattkar. Please try again.';
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Request to Sattkar';
+      }
+    } catch (err) {
+      statusMsg.style.display = 'block';
+      statusMsg.style.background = 'rgba(239,68,68,0.1)';
+      statusMsg.style.color = '#991b1b';
+      statusMsg.style.border = '1px solid rgba(239,68,68,0.25)';
+      statusMsg.textContent = 'Network error connecting to Sattkar server. Please check your connection.';
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Request to Sattkar';
+    }
+  }
+
 </script>
 {% endblock %}

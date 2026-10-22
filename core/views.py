@@ -791,6 +791,18 @@ class RestaurantSettingsViewSet(viewsets.ReadOnlyModelViewSet):
 
             data['zones'] = zones_data
 
+        is_menu_only = getattr(restaurant, 'is_menu_only_website', False) if restaurant else False
+        has_full_web = getattr(restaurant, 'has_full_website', True) if restaurant else True
+        if hasattr(restaurant, 'feature_website_cms') and not restaurant.feature_website_cms:
+            has_full_web = False
+            is_menu_only = True
+
+        data['is_menu_only_website'] = is_menu_only
+        data['has_full_website'] = has_full_web
+        data['has_menu_website'] = is_menu_only
+        data['website_mode'] = 'minimal_ordering' if is_menu_only else 'full'
+        data['enable_website_cms'] = has_full_web and not is_menu_only
+
         return Response(data)
 
 
@@ -801,7 +813,7 @@ class BlogPostViewSet(CatalogCacheMixin, viewsets.ReadOnlyModelViewSet):
     lookup_field = 'slug'
 
     def get_queryset(self):
-        if not constants.SHOW_WEBSITE_PAGES:
+        if not constants.SHOW_WEBSITE_PAGES or not constants.is_module_enabled('ENABLE_WEBSITE_CMS'):
             return BlogPost.objects.none()
         qs = super().get_queryset().filter(restaurant__is_active=True, restaurant__feature_website_pages=True)
         restaurant_id = self.request.query_params.get('restaurant')
