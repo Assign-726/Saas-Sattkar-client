@@ -1,0 +1,43 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>Purchase orders</h1><p>Order from suppliers, receive against the order, then book the bill{% if current_branch %} · {{ current_branch.name }}{% endif %}</p></div>
+    <div class="ui-actions" style="gap:8px">
+      <a class="ui-btn ui-btn-gray" href="?{% if status %}status={{ status }}&{% endif %}{% if q %}q={{ q|urlencode }}&{% endif %}export=csv"><i class="fa-solid fa-file-csv"></i><span>Export</span></a>
+      <a class="ui-btn ui-btn-gray" href="{{ base_url }}purchases/reports/?tab=reorder"><i class="fa-solid fa-arrows-rotate"></i><span>Reorder ({{ kpi_reorder }})</span></a>
+      <a class="ui-btn ui-btn-primary" href="{{ base_url }}purchases/orders/new/"><i class="fa-solid fa-plus"></i><span>New purchase order</span></a>
+    </div>
+  </div>
+  {% include 'procurement/_nav.html' %}
+
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-blue"><div class="ui-kpi-head"><div class="kpi-label">Open orders</div><div class="kpi-icon"><i class="fa-solid fa-cart-shopping"></i></div></div><div class="kpi-val">{{ kpi_open }}</div><div class="kpi-sub">₹{{ kpi_open_value|inr }} committed</div></div>
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Delivery overdue</div><div class="kpi-icon"><i class="fa-solid fa-clock"></i></div></div><div class="kpi-val">{{ kpi_overdue }}</div><div class="kpi-sub">Past expected date</div></div>
+    <div class="ui-kpi"><div class="ui-kpi-head"><div class="kpi-label">Awaiting approval</div><div class="kpi-icon"><i class="fa-solid fa-user-check"></i></div></div><div class="kpi-val">{{ kpi_drafts }}</div><div class="kpi-sub">Drafts</div></div>
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Below reorder level</div><div class="kpi-icon"><i class="fa-solid fa-triangle-exclamation"></i></div></div><div class="kpi-val">{{ kpi_reorder }}</div><div class="kpi-sub"><a href="{{ base_url }}purchases/orders/new/?reorder=1">Raise PO for all</a></div></div>
+  </div>
+
+  <form class="ui-card ui-filters" method="get">
+    <div class="ui-field"><label for="poS">Status</label><select id="poS" class="ui-input" name="status" onchange="this.form.submit()"><option value="">All</option><option value="pending" {% if status == 'pending' %}selected{% endif %}>Pending (open + partly received)</option>{% for k, l in statuses %}<option value="{{ k }}" {% if status == k %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    <div class="ui-field"><label for="poQ">Search</label><input id="poQ" class="ui-input" name="q" value="{{ q }}" placeholder="PO no. or supplier"></div>
+    <div class="ui-filter-actions"><button class="ui-btn ui-btn-gray" type="submit">Apply</button></div>
+  </form>
+
+  <section class="ui-card ui-list-card">
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>PO no.</th><th>Date</th><th>Supplier</th><th>Expected</th><th class="num">Items</th><th class="num">Total</th><th>Status</th></tr></thead>
+      <tbody>{% for o in page %}<tr>
+        <td><a href="{{ base_url }}purchases/orders/{{ o.pk }}/"><strong>{{ o.number }}</strong></a></td>
+        <td class="nowrap">{{ o.order_date|date:"d M Y" }}</td>
+        <td>{{ o.supplier_name }}{% if o.supplier_gstin %}<br><small class="ui-log-sub">{{ o.supplier_gstin }}</small>{% endif %}</td>
+        <td class="nowrap">{{ o.expected_date|date:"d M Y"|default:"—" }}{% if o.is_overdue %} <span class="ui-chip ui-chip-red">Late</span>{% endif %}</td>
+        <td class="num">{{ o.n_lines }}</td>
+        <td class="num">₹{{ o.grand_total|inr2 }}</td>
+        <td>{% include 'procurement/_status.html' with s=o.status %}</td></tr>
+      {% empty %}<tr><td colspan="7" class="ui-log-sub" style="padding:24px;text-align:center">No purchase orders yet. Raise one, or start from the reorder list.</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% if page.has_other_pages %}<div class="ui-pager"><span class="ui-pager-info">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_previous %}<a class="ui-pager-btn" href="?status={{ status }}&q={{ q|urlencode }}&page={{ page.previous_page_number }}">Previous</a>{% endif %}
+      {% if page.has_next %}<a class="ui-pager-btn" href="?status={{ status }}&q={{ q|urlencode }}&page={{ page.next_page_number }}">Next</a>{% endif %}</div>{% endif %}
+  </section>
+</div>

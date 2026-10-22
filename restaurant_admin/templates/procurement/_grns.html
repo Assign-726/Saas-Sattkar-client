@@ -1,0 +1,32 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>Goods receipts</h1><p>Receipt notes against purchase orders. Stock is in; book the supplier's bill to clear "bill pending".</p></div>
+    <div class="ui-actions"><a class="ui-btn ui-btn-primary" href="{{ base_url }}purchases/orders/?status=pending"><i class="fa-solid fa-box-open"></i><span>Receive against a PO</span></a></div>
+  </div>
+  {% include 'procurement/_nav.html' %}
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-orange"><div class="ui-kpi-head"><div class="kpi-label">Bills pending</div><div class="kpi-icon"><i class="fa-solid fa-hourglass-half"></i></div></div><div class="kpi-val">{{ kpi_pending }}</div><div class="kpi-sub">₹{{ kpi_pending_value|inr }} received, not billed</div></div>
+    <div class="ui-kpi kpi-blue"><div class="ui-kpi-head"><div class="kpi-label">Orders open for receiving</div></div><div class="kpi-val">{{ kpi_open_orders }}</div><div class="kpi-sub"><a href="{{ base_url }}purchases/orders/?status=pending">See orders</a></div></div>
+  </div>
+  <form class="ui-card ui-filters" method="get">
+    <div class="ui-field"><label for="gS">Status</label><select id="gS" class="ui-input" name="status" onchange="this.form.submit()"><option value="">All</option>{% for k, l in statuses %}<option value="{{ k }}" {% if status == k %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+    <div class="ui-field"><label for="gQ">Search</label><input id="gQ" class="ui-input" name="q" value="{{ q }}" placeholder="GRN, PO, challan or supplier"></div>
+    <div class="ui-filter-actions"><button class="ui-btn ui-btn-gray" type="submit">Apply</button></div>
+  </form>
+  <section class="ui-card ui-list-card">
+    <div class="table-responsive"><table class="table">
+      <thead><tr><th>GRN</th><th>Date</th><th>Supplier</th><th>PO</th><th>Challan</th><th class="num">Value</th><th>Status</th></tr></thead>
+      <tbody>{% for g in page %}<tr>
+        <td><a href="{{ base_url }}purchases/grn/{{ g.pk }}/"><strong>{{ g.number }}</strong></a></td>
+        <td class="nowrap">{{ g.receipt_date|date:"d M Y" }}</td><td>{{ g.supplier_name }}</td>
+        <td>{% if g.order %}<a href="{{ base_url }}purchases/orders/{{ g.order.pk }}/">{{ g.order.number }}</a>{% else %}—{% endif %}</td>
+        <td>{{ g.challan_no|default:"—" }}</td><td class="num">₹{{ g.value|inr2 }}</td>
+        <td>{% if g.bill %}<a href="{{ base_url }}purchases/{{ g.bill.pk }}/invoice/">{{ g.bill.invoice_number }}</a>{% else %}{% include 'procurement/_status.html' with s=g.status %}{% endif %}</td></tr>
+      {% empty %}<tr><td colspan="7" class="ui-log-sub" style="padding:24px;text-align:center">No goods received yet.</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% if page.has_other_pages %}<div class="ui-pager"><span class="ui-pager-info">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_previous %}<a class="ui-pager-btn" href="?status={{ status }}&q={{ q|urlencode }}&page={{ page.previous_page_number }}">Previous</a>{% endif %}
+      {% if page.has_next %}<a class="ui-pager-btn" href="?status={{ status }}&q={{ q|urlencode }}&page={{ page.next_page_number }}">Next</a>{% endif %}</div>{% endif %}
+  </section>
+</div>

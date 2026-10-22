@@ -37,7 +37,7 @@ def compute_pnl(restaurant, start, end, branch=None, module='all'):
     """``module`` = 'restaurant' (dining, events, purchases), 'hotel' (rooms) or 'all' (consolidated, incl. shared costs)."""
     from super_admin.modules import PAYROLL_DEPARTMENTS
     fb, rooms_on = module in ('all', 'restaurant'), module in ('all', 'hotel')
-    from core.models import Order, PurchaseOrder
+    from core.models import Order, PurchaseOrder, PurchaseReturn
     from events.models import EventBooking
     from finance.models import Expense
     from hotel.models import RoomBooking
@@ -89,8 +89,11 @@ def compute_pnl(restaurant, start, end, branch=None, module='all'):
     commission = commission_orders + commission_rooms
 
     purchases_qs = by_branch(PurchaseOrder.objects.filter(restaurant=restaurant, purchase_date__gte=start, purchase_date__lte=end))
-    pu = purchases_qs.aggregate(n=Count('id'), net=Sum('subtotal'))
-    purchases = _d(pu['net']) if fb else ZERO
+    pu = purchases_qs.aggregate(n=Count('id'), net=Sum('subtotal'), freight=Sum('freight_amount'))
+    # Freight is part of landed cost; debit notes (goods sent back) come off purchases.
+    returned = _d(by_branch(PurchaseReturn.objects.filter(restaurant=restaurant, return_date__gte=start, return_date__lte=end))
+                  .aggregate(s=Sum('subtotal'))['s'])
+    purchases = _d(pu['net']) + _d(pu['freight']) - returned if fb else ZERO
 
     month_q = Q()
     for y, m in _months(start, end):

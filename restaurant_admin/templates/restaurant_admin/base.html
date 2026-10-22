@@ -20,6 +20,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{% static 'restaurant_admin/css/admin.css' %}">
+    <link rel="stylesheet" href="{% static 'restaurant_admin/css/smart-select.css' %}?v=1">
     <!-- jQuery -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <!-- Alpine.js for lightweight reactive data grids -->
@@ -768,7 +769,7 @@
     <link rel="stylesheet" href="{% static 'css/apple-ui.css' %}?v=2.1">
 </head>
 
-<body>
+<body{% with ','|add:active_menu|add:',' as am %}{% if am in ',inventory,inventory_categories,purchases,purchase_orders,purchase_grns,purchase_returns,purchase_reports,challans,inventory_logs,inventory_wastage,inventory_counts,parties,' %} data-smart-select="8"{% endif %}{% endwith %}>
     {% with rslug=restaurant.slug|default:request.user.restaurant_profile.restaurant.slug %}
     {% if user.is_authenticated and user.is_staff %}
     <!-- Mobile Navigation Topbar -->
@@ -1251,7 +1252,7 @@
                 {% if show_stock_group %}
                 <!-- Group 5: Stock & Supply Chain -->
                 <div class="sidebar-group">
-                    <div class="sidebar-group-header {% if active_menu == 'inventory' or active_menu == 'inventory_categories' or active_menu == 'purchases' or active_menu == 'challans' or active_menu == 'inventory_logs' or active_menu == 'inventory_wastage' or active_menu == 'inventory_counts' %}open active-group{% endif %}"
+                    <div class="sidebar-group-header {% if active_menu == 'inventory' or active_menu == 'inventory_categories' or active_menu == 'purchases' or active_menu == 'purchase_orders' or active_menu == 'purchase_grns' or active_menu == 'purchase_returns' or active_menu == 'purchase_reports' or active_menu == 'challans' or active_menu == 'inventory_logs' or active_menu == 'inventory_wastage' or active_menu == 'inventory_counts' %}open active-group{% endif %}"
                         data-group-target="#group-stock">
                         <div class="group-title">
                             <i class="fas fa-boxes"></i>
@@ -1259,7 +1260,7 @@
                         </div>
                         <i class="fas fa-chevron-down group-chevron"></i>
                     </div>
-                    <div class="sidebar-group-content {% if active_menu == 'inventory' or active_menu == 'inventory_categories' or active_menu == 'purchases' or active_menu == 'challans' or active_menu == 'inventory_logs' or active_menu == 'inventory_wastage' or active_menu == 'inventory_counts' %}show{% endif %}"
+                    <div class="sidebar-group-content {% if active_menu == 'inventory' or active_menu == 'inventory_categories' or active_menu == 'purchases' or active_menu == 'purchase_orders' or active_menu == 'purchase_grns' or active_menu == 'purchase_returns' or active_menu == 'purchase_reports' or active_menu == 'challans' or active_menu == 'inventory_logs' or active_menu == 'inventory_wastage' or active_menu == 'inventory_counts' %}show{% endif %}"
                         id="group-stock">
                         <ul class="nav flex-column">
                             {% if access.inventory %}
@@ -1284,11 +1285,47 @@
                             {% endif %}
                             {% if access.inventory %}
                             <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'purchase_orders' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:purchase_orders' restaurant_slug=rslug %}"
+                                    title="Purchase Orders">
+                                    <i class="bi bi-cart-plus"></i>
+                                    <span>Purchase Orders</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'purchase_grns' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:purchase_grns' restaurant_slug=rslug %}"
+                                    title="Goods Receipt Notes">
+                                    <i class="bi bi-box-seam"></i>
+                                    <span>Goods Receipts (GRN)</span>
+                                </a>
+                            </li>
+                            {% endif %}
+                            {% if access.inventory %}
+                            <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'purchases' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:purchase_list' restaurant_slug=rslug %}"
                                     title="Goods Inward">
                                     <i class="bi bi-box-arrow-in-down"></i>
                                     <span>Purchase Register</span>
+                                </a>
+                            </li>
+                            {% endif %}
+                            {% if access.inventory %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'purchase_returns' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:purchase_returns' restaurant_slug=rslug %}"
+                                    title="Purchase Returns / Debit Notes">
+                                    <i class="bi bi-arrow-return-left"></i>
+                                    <span>Purchase Returns</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'purchase_reports' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:purchase_reports' restaurant_slug=rslug %}"
+                                    title="Purchase Reports">
+                                    <i class="bi bi-bar-chart-line"></i>
+                                    <span>Purchase Reports</span>
                                 </a>
                             </li>
                             {% endif %}
@@ -1917,6 +1954,7 @@
         <script src="{% static 'restaurant_admin/js/tally_credit_note.js' %}?v=8.0"></script>
         <script src="{% static 'js/theme-manager.js' %}"></script>
         <script src="{% static 'js/apple-ui.js' %}?v=1.2"></script>
+        <script src="{% static 'restaurant_admin/js/smart-select.js' %}?v=1"></script>
 
         {% block extra_js %}{% endblock %}
         {% endwith %}

@@ -15,7 +15,7 @@ from decimal import Decimal
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
 from django.conf import settings
 from django.apps import apps
-from core.models import Zone, Table, Category, SubCategory, MenuItem, Order, OrderItem, RestaurantSettings, RestaurantLanding, InventoryItem, InventoryCategory, Coupon, MenuItemIngredient, InventoryTransaction, Supplier, PurchaseOrder, PurchaseOrderItem, Party, CustomCharge, AdvanceReceipt, Branch, DeliveryChallan, DeliveryChallanItem, DocumentSequenceSetting, CreditNote, POSCounter, POSShift
+from core.models import Zone, Table, Category, SubCategory, MenuItem, Order, OrderItem, RestaurantSettings, RestaurantLanding, InventoryItem, InventoryCategory, Coupon, MenuItemIngredient, InventoryTransaction, Supplier, PurchaseOrder, PurchaseOrderItem, Party, CustomCharge, AdvanceReceipt, Branch, DeliveryChallan, DeliveryChallanItem, DocumentSequenceSetting, CreditNote, POSCounter, POSShift, PurchasePayment, PurchaseReturn
 from restaurant_admin.sequence_helpers import get_document_sequence_info, get_and_increment_document_number, validate_unique_document_number
 from django.db import transaction
 from super_admin.models import Restaurant, RestaurantUser, RestaurantBranch
@@ -2652,7 +2652,7 @@ def inventory_logs(request, restaurant_slug=None):
     if to_date:
         filtered_qs = filtered_qs.filter(created_at__date__lte=to_date)
 
-    logs_qs = filtered_qs.select_related('inventory_item', 'order', 'performed_by').order_by('-created_at')
+    logs_qs = filtered_qs.select_related('inventory_item', 'order', 'performed_by', 'purchase_order', 'goods_receipt', 'purchase_return').order_by('-created_at')
 
     try:
         per_page = int(request.GET.get('per_page', 20))
@@ -2866,7 +2866,34 @@ def party_ledger_detail(request, restaurant_slug, pk):
             'type_code': 'PURCHASE',
             'amount': po.grand_total,
             'payment_status': po.payment_status,
-            'url': reverse('restaurant_admin:purchase_list', kwargs={'restaurant_slug': restaurant.slug})
+            'url': reverse('restaurant_admin:purchase_invoice', kwargs={'restaurant_slug': restaurant.slug, 'pk': po.pk})
+        })
+
+    for pay in PurchasePayment.objects.filter(bill__in=purchases).select_related('bill'):
+        ledger.append({
+            'date': pay.paid_on,
+            'created_at': pay.created_at,
+            'ref_no': pay.reference or pay.bill.invoice_number,
+            'type_label': f'Payment · {pay.bill.invoice_number}',
+            'type_code': 'RECEIPT',
+            'amount': pay.amount,
+            'payment_status': 'paid',
+            'url': reverse('restaurant_admin:purchase_invoice', kwargs={'restaurant_slug': restaurant.slug, 'pk': pay.bill_id})
+        })
+
+    debit_notes = PurchaseReturn.objects.filter(restaurant=restaurant, party=party)
+    if active_branch:
+        debit_notes = debit_notes.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+    for dn in debit_notes:
+        ledger.append({
+            'date': dn.return_date,
+            'created_at': dn.created_at,
+            'ref_no': dn.number,
+            'type_label': 'Debit Note (Purchase Return)',
+            'type_code': 'PURCHASE',
+            'amount': dn.grand_total,
+            'payment_status': 'adjusted',
+            'url': reverse('restaurant_admin:purchase_return_detail', kwargs={'restaurant_slug': restaurant.slug, 'pk': dn.pk})
         })
 
     for ord_obj in sales:
@@ -3943,7 +3970,9 @@ def purchase_invoice(request, pk, restaurant_slug=None):
     supplier_state = (po.party.state if po.party and po.party.state else '') or ''
     supplier_state_code = supplier_gstin[:2] if len(supplier_gstin) >= 2 and supplier_gstin[:2].isdigit() else ''
 
-    if supplier_state_code:
+    if po.cgst_amount or po.sgst_amount or po.igst_amount:
+        is_interstate = po.is_interstate  # booked from a GRN: the split was fixed at billing
+    elif supplier_state_code:
         is_interstate = (supplier_state_code != branch_state_code)
     elif supplier_state and branch_state:
         is_interstate = (supplier_state.strip().lower() != branch_state.strip().lower())
@@ -4015,7 +4044,8 @@ def purchase_invoice(request, pk, restaurant_slug=None):
         total_sgst = total_tax_val - total_cgst
         total_igst = Decimal('0.00')
 
-    round_off = (po.grand_total - (total_taxable + (po.tax_amount or total_tax))).quantize(Decimal('0.01'))
+    charged_tax = Decimal('0.00') if po.reverse_charge else (po.tax_amount or total_tax)
+    round_off = (po.grand_total - (total_taxable + charged_tax + (po.freight_amount or 0))).quantize(Decimal('0.01'))
 
     # JSON response for quick modal preview
     if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('format') == 'json':
@@ -4089,6 +4119,11 @@ def purchase_invoice(request, pk, restaurant_slug=None):
         'total_sgst': total_sgst,
         'total_igst': total_igst,
         'round_off': round_off,
+        'payments': po.payments.all(),
+        'debit_notes': po.returns.all(),
+        'receipts': po.receipts.select_related('order'),
+        'payment_methods': [c for c in PurchaseOrder.PaymentMethod.choices if c[0] != 'credit'],
+        'today': timezone.localdate(),
         'active_menu': 'purchases',
     })
 
@@ -7223,7 +7258,7 @@ def settings_view(request, restaurant_slug=None):
         custom_charges = custom_charges.filter(Q(branch=active_branch) | Q(branch__isnull=True))
     custom_charges = custom_charges.order_by('charge_name')
 
-    doc_types = ['sales', 'purchase', 'receipt', 'challan']
+    doc_types = ['sales', 'purchase', 'purchase_order', 'grn', 'debit_note', 'receipt', 'challan']
     if branch and branch.serves_alcohol:
         doc_types.append('vat_bill')
 

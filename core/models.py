@@ -1361,6 +1361,9 @@ class DocumentSequenceSetting(models.Model):
         RECEIPT = 'receipt', _('Advance Receipt')
         CHALLAN = 'challan', _('Delivery Challan')
         VAT_BILL = 'vat_bill', _('VAT Liquor Bill')
+        PURCHASE_ORDER = 'purchase_order', _('Purchase Order')
+        GRN = 'grn', _('Goods Receipt Note')
+        DEBIT_NOTE = 'debit_note', _('Purchase Return / Debit Note')
 
     class GenerationMode(models.TextChoices):
         AUTOMATIC = 'automatic', _('Automatic')
@@ -1373,6 +1376,9 @@ class DocumentSequenceSetting(models.Model):
         'receipt': 'REC-',
         'challan': 'DC-',
         'vat_bill': 'VAT-',
+        'purchase_order': 'PORD-',
+        'grn': 'GRN-',
+        'debit_note': 'DN-',
     }
 
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='document_sequence_settings')
@@ -2141,6 +2147,7 @@ class Party(models.Model):
         from core.models import AdvanceReceipt
 
         po_paid = Decimal(str(self.purchase_orders.filter(payment_status__in=['paid', 'P']).aggregate(s=Sum('grand_total'))['s'] or 0))
+        po_paid += Decimal(str(self.purchase_orders.exclude(payment_status__in=['paid', 'P']).aggregate(s=Sum('paid_amount'))['s'] or 0))
         sales_qs = self.get_sales_queryset().exclude(status='C')
 
         sales_paid_direct = Decimal(str(sales_qs.aggregate(s=Sum('paid_amount'))['s'] or 0))
@@ -2169,7 +2176,12 @@ class Party(models.Model):
 
         base_bal = Decimal(str(self.opening_balance or 0))
         
-        unpaid_po = Decimal(str(self.purchase_orders.exclude(payment_status__in=['paid', 'P']).aggregate(s=Sum('grand_total'))['s'] or 0))
+        # Bills marked paid without bill-wise payments (older entries) are fully settled; the rest
+        # owe their total less payments and debit notes against them.
+        open_bills = self.purchase_orders.exclude(Q(payment_status__in=['paid', 'P']) & Q(paid_amount=0))
+        open_sums = open_bills.aggregate(t=Sum('grand_total'), p=Sum('paid_amount'))
+        debit_notes = Decimal(str(self.purchase_returns.filter(bill__in=open_bills).aggregate(s=Sum('grand_total'))['s'] or 0))
+        unpaid_po = Decimal(str(open_sums['t'] or 0)) - Decimal(str(open_sums['p'] or 0)) - debit_notes
         sales_due_explicit = Decimal(str(self.get_sales_queryset().exclude(status='C').aggregate(s=Sum('due_amount'))['s'] or 0))
         sales_due_legacy = Decimal(str(self.get_sales_queryset().filter(due_amount=0).exclude(payment_status__in=['paid', 'P']).exclude(status='C').aggregate(s=Sum('total_amount'))['s'] or 0))
         unpaid_sales = sales_due_explicit + sales_due_legacy
@@ -2240,6 +2252,19 @@ class PurchaseOrder(models.Model):
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.BANK_TRANSFER)
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.PAID)
+    due_date = models.DateField(null=True, blank=True, help_text="Bill-wise due date (bill date + supplier credit days)")
+    paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Settled through bill-wise payments")
+    freight_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Additional cost: freight, loading, packing")
+    round_off = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    cgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    sgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    igst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    is_interstate = models.BooleanField(default=False)
+    reverse_charge = models.BooleanField(default=False, help_text="Tax payable by us under RCM")
+    itc_eligible = models.BooleanField(default=True, help_text="Input tax credit can be claimed")
+    narration = models.TextField(blank=True, default='')
+    source_order = models.ForeignKey('ProcurementOrder', on_delete=models.SET_NULL, null=True, blank=True, related_name='bills')
+    stock_via_grn = models.BooleanField(default=False, help_text="Stock was already taken in by a Goods Receipt Note")
     created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -2250,6 +2275,18 @@ class PurchaseOrder(models.Model):
     def __str__(self):
         return f"PO #{self.id} - {self.supplier_name} ({self.invoice_number})"
 
+    @property
+    def returned_amount(self):
+        from django.db.models import Sum
+        return self.returns.aggregate(s=Sum('grand_total'))['s'] or Decimal('0.00')
+
+    @property
+    def balance_due(self):
+        """What we still owe on this bill after payments and debit notes."""
+        if self.payment_status == self.PaymentStatus.PAID:
+            return Decimal('0.00')
+        return max((self.grand_total or 0) - (self.paid_amount or 0) - self.returned_amount, Decimal('0.00'))
+
 
 class PurchaseOrderItem(models.Model):
     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='items')
@@ -2259,6 +2296,7 @@ class PurchaseOrderItem(models.Model):
     gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, null=True, blank=True)
     hsn_code = models.CharField(max_length=50, null=True, blank=True)
     line_total = models.DecimalField(max_digits=12, decimal_places=2)
+    grn_line = models.ForeignKey('GoodsReceiptLine', on_delete=models.SET_NULL, null=True, blank=True, related_name='bill_lines')
 
     class Meta:
         ordering = ['id']
@@ -2276,6 +2314,7 @@ class InventoryTransaction(models.Model):
         INWARD_PURCHASE = 'P', _('Inward Purchase')
         WASTAGE = 'W', _('Wastage')
         STOCK_COUNT = 'S', _('Stock count correction')
+        RETURN_OUT = 'V', _('Return to supplier')
 
     class WastageReason(models.TextChoices):
         SPOILED = 'SPOILED', _('Spoiled / expired')
@@ -2292,6 +2331,8 @@ class InventoryTransaction(models.Model):
     delta = models.IntegerField(help_text="Positive for restock/returns/purchase, negative for consumption")
     order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, related_name='inventory_transactions')
     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.SET_NULL, null=True, blank=True, related_name='inventory_transactions')
+    goods_receipt = models.ForeignKey('GoodsReceiptNote', on_delete=models.SET_NULL, null=True, blank=True, related_name='inventory_transactions')
+    purchase_return = models.ForeignKey('PurchaseReturn', on_delete=models.SET_NULL, null=True, blank=True, related_name='inventory_transactions')
     reason = models.CharField(max_length=20, choices=WastageReason.choices, blank=True)
     note = models.CharField(max_length=255, blank=True)
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Cost per unit when this happened")
@@ -3013,6 +3054,202 @@ class GatewayPayment(models.Model):
         except IntegrityError:
             return cls.objects.filter(provider=provider, payment_id=payment_id, kind=kind, object_id=object_id).exists()
         return True
+
+
+class ProcurementOrder(models.Model):
+    """TallyPrime-style Purchase Order: what we have asked a supplier for. It moves no stock and
+    no money; Goods Receipt Notes are tracked against it until it is received or short-closed."""
+    class Status(models.TextChoices):
+        DRAFT = 'draft', _('Draft')
+        OPEN = 'open', _('Approved / open')
+        PARTIAL = 'partial', _('Partly received')
+        RECEIVED = 'received', _('Fully received')
+        CLOSED = 'closed', _('Short-closed')
+        CANCELLED = 'cancelled', _('Cancelled')
+
+    restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='procurement_orders')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='procurement_orders')
+    party = models.ForeignKey(Party, on_delete=models.SET_NULL, null=True, blank=True, related_name='procurement_orders')
+    supplier_name = models.CharField(max_length=200)
+    supplier_gstin = models.CharField(max_length=50, blank=True, default='')
+    supplier_state = models.CharField(max_length=100, blank=True, default='')
+    number = models.CharField(max_length=100)
+    order_date = models.DateField()
+    expected_date = models.DateField(null=True, blank=True, help_text="Due date for delivery")
+    credit_days = models.PositiveIntegerField(default=0, help_text="Supplier credit period, copied to the bill due date")
+    is_interstate = models.BooleanField(default=False)
+    reverse_charge = models.BooleanField(default=False)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.DRAFT)
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    sgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    igst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    freight_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    terms = models.TextField(blank=True, default='')
+    narration = models.TextField(blank=True, default='')
+    close_reason = models.CharField(max_length=255, blank=True, default='')
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    approved_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    approved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    OPEN_STATUSES = ('open', 'partial')
+
+    class Meta:
+        ordering = ['-order_date', '-id']
+
+    def __str__(self):
+        return f"{self.number} - {self.supplier_name}"
+
+    @property
+    def is_overdue(self):
+        from django.utils import timezone
+        return bool(self.status in self.OPEN_STATUSES and self.expected_date and self.expected_date < timezone.localdate())
+
+
+class ProcurementOrderLine(models.Model):
+    order = models.ForeignKey(ProcurementOrder, on_delete=models.CASCADE, related_name='lines')
+    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, related_name='order_lines')
+    quantity = models.DecimalField(max_digits=12, decimal_places=3)
+    received_qty = models.DecimalField(max_digits=12, decimal_places=3, default=0, help_text="Accepted on GRNs")
+    rate = models.DecimalField(max_digits=12, decimal_places=2)
+    discount_pct = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    hsn_code = models.CharField(max_length=50, blank=True, default='')
+    taxable_value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ['id']
+
+    @property
+    def pending_qty(self):
+        return max((self.quantity or 0) - (self.received_qty or 0), Decimal('0'))
+
+    @property
+    def net_rate(self):
+        return (self.rate * (Decimal('100') - (self.discount_pct or 0)) / Decimal('100')).quantize(Decimal('0.01'))
+
+
+class GoodsReceiptNote(models.Model):
+    """Receipt Note: goods physically received (stock goes up), waiting for the supplier's bill."""
+    class Status(models.TextChoices):
+        PENDING_BILL = 'pending', _('Bill pending')
+        BILLED = 'billed', _('Billed')
+        CANCELLED = 'cancelled', _('Cancelled')
+
+    restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='goods_receipts')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='goods_receipts')
+    party = models.ForeignKey(Party, on_delete=models.SET_NULL, null=True, blank=True, related_name='goods_receipts')
+    order = models.ForeignKey(ProcurementOrder, on_delete=models.SET_NULL, null=True, blank=True, related_name='receipts')
+    bill = models.ForeignKey('PurchaseOrder', on_delete=models.SET_NULL, null=True, blank=True, related_name='receipts')
+    supplier_name = models.CharField(max_length=200)
+    supplier_gstin = models.CharField(max_length=50, blank=True, default='')
+    number = models.CharField(max_length=100)
+    receipt_date = models.DateField()
+    challan_no = models.CharField(max_length=100, blank=True, default='', help_text="Supplier delivery challan / dispatch no.")
+    vehicle_no = models.CharField(max_length=50, blank=True, default='')
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING_BILL)
+    value = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Accepted quantity at order rate, before tax")
+    note = models.TextField(blank=True, default='')
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-receipt_date', '-id']
+
+    def __str__(self):
+        return f"{self.number} - {self.supplier_name}"
+
+
+class GoodsReceiptLine(models.Model):
+    grn = models.ForeignKey(GoodsReceiptNote, on_delete=models.CASCADE, related_name='lines')
+    order_line = models.ForeignKey(ProcurementOrderLine, on_delete=models.SET_NULL, null=True, blank=True, related_name='receipt_lines')
+    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, related_name='receipt_lines')
+    received_qty = models.DecimalField(max_digits=12, decimal_places=3)
+    rejected_qty = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    rejection_reason = models.CharField(max_length=255, blank=True, default='')
+    rate = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    hsn_code = models.CharField(max_length=50, blank=True, default='')
+    batch_no = models.CharField(max_length=60, blank=True, default='')
+    expiry_date = models.DateField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['id']
+
+    @property
+    def accepted_qty(self):
+        return max((self.received_qty or 0) - (self.rejected_qty or 0), Decimal('0'))
+
+
+class PurchaseReturn(models.Model):
+    """Rejection Out / Debit Note: goods sent back to the supplier after the bill. Stock goes down
+    and the supplier owes us (reduces the bill's balance)."""
+    class Reason(models.TextChoices):
+        DAMAGED = 'damaged', _('Damaged / broken')
+        EXPIRED = 'expired', _('Expired / near expiry')
+        QUALITY = 'quality', _('Quality not as ordered')
+        EXCESS = 'excess', _('Excess / not ordered')
+        RATE = 'rate', _('Rate difference')
+        OTHER = 'other', _('Other')
+
+    restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='purchase_returns')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='purchase_returns')
+    party = models.ForeignKey(Party, on_delete=models.SET_NULL, null=True, blank=True, related_name='purchase_returns')
+    bill = models.ForeignKey('PurchaseOrder', on_delete=models.SET_NULL, null=True, blank=True, related_name='returns')
+    supplier_name = models.CharField(max_length=200)
+    supplier_gstin = models.CharField(max_length=50, blank=True, default='')
+    number = models.CharField(max_length=100)
+    return_date = models.DateField()
+    reason = models.CharField(max_length=10, choices=Reason.choices, default=Reason.DAMAGED)
+    is_interstate = models.BooleanField(default=False)
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    sgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    igst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    note = models.TextField(blank=True, default='')
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-return_date', '-id']
+
+    def __str__(self):
+        return f"{self.number} - {self.supplier_name}"
+
+
+class PurchaseReturnLine(models.Model):
+    purchase_return = models.ForeignKey(PurchaseReturn, on_delete=models.CASCADE, related_name='lines')
+    bill_line = models.ForeignKey(PurchaseOrderItem, on_delete=models.SET_NULL, null=True, blank=True, related_name='return_lines')
+    inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, related_name='return_lines')
+    quantity = models.DecimalField(max_digits=12, decimal_places=3)
+    rate = models.DecimalField(max_digits=12, decimal_places=2)
+    gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    taxable_value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ['id']
+
+
+class PurchasePayment(models.Model):
+    """Bill-wise payment to a supplier (Tally's 'Agst Ref' settlement)."""
+    bill = models.ForeignKey('PurchaseOrder', on_delete=models.CASCADE, related_name='payments')
+    paid_on = models.DateField()
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    method = models.CharField(max_length=20, choices=PurchaseOrder.PaymentMethod.choices, default=PurchaseOrder.PaymentMethod.BANK_TRANSFER)
+    reference = models.CharField(max_length=100, blank=True, default='', help_text="UTR / cheque / UPI ref")
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-paid_on', '-id']
 
 
 # Keep the per-request memo (core.request_cache) honest when these change mid-request.

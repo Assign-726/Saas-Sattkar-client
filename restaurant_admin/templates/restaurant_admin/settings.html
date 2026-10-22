@@ -582,6 +582,24 @@
                       <i class="bi bi-truck me-1"></i> Delivery Challan
                     </button>
                   </li>
+                  <li class="nav-item" role="presentation">
+                    <button class="nav-link py-1 px-3 small rounded-pill" id="tab-purchase_order-tab" data-bs-toggle="tab"
+                      data-bs-target="#tab-purchase_order" type="button" role="tab">
+                      <i class="bi bi-cart-plus me-1"></i> Purchase Order
+                    </button>
+                  </li>
+                  <li class="nav-item" role="presentation">
+                    <button class="nav-link py-1 px-3 small rounded-pill" id="tab-grn-tab" data-bs-toggle="tab"
+                      data-bs-target="#tab-grn" type="button" role="tab">
+                      <i class="bi bi-box-seam me-1"></i> Goods Receipt
+                    </button>
+                  </li>
+                  <li class="nav-item" role="presentation">
+                    <button class="nav-link py-1 px-3 small rounded-pill" id="tab-debit_note-tab" data-bs-toggle="tab"
+                      data-bs-target="#tab-debit_note" type="button" role="tab">
+                      <i class="bi bi-arrow-return-left me-1"></i> Debit Note
+                    </button>
+                  </li>
                   {% if branch and branch.serves_alcohol %}
                   <li class="nav-item" role="presentation">
                     <button class="nav-link py-1 px-3 small rounded-pill" id="tab-vat_bill-tab" data-bs-toggle="tab"
@@ -753,6 +771,10 @@
                     </div>
                   </div>
                   {% endwith %}
+
+                  {% include 'restaurant_admin/includes/_seq_pane.html' with seq=doc_sequences.purchase_order dt='purchase_order' label='Purchase Orders' example='PORD-' %}
+                  {% include 'restaurant_admin/includes/_seq_pane.html' with seq=doc_sequences.grn dt='grn' label='Goods Receipt Notes' example='GRN-' %}
+                  {% include 'restaurant_admin/includes/_seq_pane.html' with seq=doc_sequences.debit_note dt='debit_note' label='Purchase Returns / Debit Notes' example='DN-' %}
 
                   <!-- 3. ADVANCE RECEIPT VOUCHER CONFIG -->
                   {% with seq=doc_sequences.receipt dt="receipt" %}
@@ -1869,7 +1891,7 @@
 
     // Initialize document sequence conditional fields & previews
     const servesAlcohol = '{{ branch.serves_alcohol|yesno:"1,0" }}' === '1';
-    const docTypes = ['sales', 'purchase', 'receipt', 'challan'];
+    const docTypes = ['sales', 'purchase', 'purchase_order', 'grn', 'debit_note', 'receipt', 'challan'];
     if (servesAlcohol) {
       docTypes.push('vat_bill');
     }

@@ -213,6 +213,10 @@
                 <span class="badge bg-secondary-subtle text-secondary border px-2.5 py-1 extra-small">
                   <i class="fas fa-sliders me-1"></i> Manual Correction
                 </span>
+                {% elif log.transaction_type == 'V' %}
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2.5 py-1 extra-small">
+                  <i class="fas fa-truck-arrow-right me-1"></i> Return to Supplier
+                </span>
                 {% elif log.transaction_type == 'C' %}
                 <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2.5 py-1 extra-small">
                   <i class="fas fa-rotate-left me-1"></i> Order Cancel
@@ -235,6 +239,14 @@
                 {% if log.order %}
                 <a href="{% url 'restaurant_admin:order_invoice' restaurant_slug=restaurant.slug pk=log.order.id %}" class="badge bg-primary-subtle text-primary border border-primary-subtle text-decoration-none font-monospace px-2 py-1">
                   <i class="fas fa-receipt me-1"></i>#{{ log.order.branch_order_number|default:log.order.id }}
+                </a>
+                {% elif log.goods_receipt %}
+                <a href="{% url 'restaurant_admin:purchase_grn_detail' restaurant_slug=restaurant.slug pk=log.goods_receipt.id %}" class="badge bg-success-subtle text-success border border-success-subtle text-decoration-none font-monospace px-2 py-1">
+                  <i class="fas fa-box-open me-1"></i>{{ log.goods_receipt.number }}
+                </a>
+                {% elif log.purchase_return %}
+                <a href="{% url 'restaurant_admin:purchase_return_detail' restaurant_slug=restaurant.slug pk=log.purchase_return.id %}" class="badge bg-danger-subtle text-danger border border-danger-subtle text-decoration-none font-monospace px-2 py-1">
+                  <i class="fas fa-rotate-left me-1"></i>{{ log.purchase_return.number }}
                 </a>
                 {% elif log.purchase_order %}
                 <a href="{% url 'restaurant_admin:purchase_list' restaurant_slug=restaurant.slug %}" class="badge bg-success-subtle text-success border border-success-subtle text-decoration-none font-monospace px-2 py-1">

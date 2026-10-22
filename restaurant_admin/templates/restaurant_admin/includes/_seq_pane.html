@@ -1,0 +1,62 @@
+{# One document-numbering tab. Needs: seq (DocumentSequenceSetting), dt (type key), label, example prefix. #}
+<div class="tab-pane fade" id="tab-{{ dt }}" role="tabpanel">
+  <div class="mb-4 p-3 bg-light rounded border">
+    <label for="seq_{{ dt }}_mode" class="form-label fw-bold text-dark small mb-1">
+      <span class="badge bg-secondary me-1">STEP 2</span> Generation Mode for {{ label }}
+    </label>
+    <select name="seq_{{ dt }}_mode" id="seq_{{ dt }}_mode" class="form-select fw-semibold border-primary" onchange="toggleSeqConfig('{{ dt }}')">
+      <option value="automatic" {% if seq.generation_mode == 'automatic' %}selected{% endif %}>Automatic (System Auto-generates & Locks Input Field)</option>
+      <option value="manual_override" {% if seq.generation_mode == 'manual_override' %}selected{% endif %}>Manual Override (System Auto-generates, Editable by User)</option>
+      <option value="manual" {% if seq.generation_mode == 'manual' %}selected{% endif %}>Manual (Blank Input Field, User Must Enter Number)</option>
+    </select>
+  </div>
+
+  <div id="seq_{{ dt }}_config" class="seq-config-block">
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <span class="badge bg-info text-dark font-monospace small">STEP 3</span>
+      <span class="fw-bold text-dark small">Sequence Parameters & Format Rules</span>
+    </div>
+    <div class="row g-3 mb-3">
+      <div class="col-md-3">
+        <label for="seq_{{ dt }}_prefix" class="form-label fw-medium small mb-1">Prefix</label>
+        <input type="text" name="seq_{{ dt }}_prefix" id="seq_{{ dt }}_prefix" class="form-control font-monospace"
+          value="{{ seq.prefix|default:'' }}" placeholder="e.g. {{ example }}" oninput="updateSeqPreview('{{ dt }}')">
+      </div>
+      <div class="col-md-3">
+        <label for="seq_{{ dt }}_padding" class="form-label fw-medium small mb-1">Number of Digits</label>
+        <input type="number" name="seq_{{ dt }}_padding" id="seq_{{ dt }}_padding" class="form-control"
+          value="{{ seq.padding_digits|default:3 }}" min="1" max="10" oninput="updateSeqPreview('{{ dt }}')">
+      </div>
+      <div class="col-md-3">
+        <label for="seq_{{ dt }}_suffix" class="form-label fw-medium small mb-1">Suffix</label>
+        <input type="text" name="seq_{{ dt }}_suffix" id="seq_{{ dt }}_suffix" class="form-control font-monospace"
+          value="{{ seq.suffix|default:'' }}" placeholder="e.g. /26-27" oninput="updateSeqPreview('{{ dt }}')">
+      </div>
+      <div class="col-md-3">
+        <label for="seq_{{ dt }}_counter" class="form-label fw-medium small mb-1">Next Counter</label>
+        <input type="number" name="seq_{{ dt }}_counter" id="seq_{{ dt }}_counter" class="form-control font-monospace fw-bold text-primary"
+          value="{{ seq.current_counter|default:1 }}" min="1" oninput="updateSeqPreview('{{ dt }}')">
+      </div>
+    </div>
+    <div class="row g-3 mb-3">
+      <div class="col-md-6">
+        <label for="seq_{{ dt }}_valid_from" class="form-label fw-medium small mb-1">Valid From Date</label>
+        <input type="date" name="seq_{{ dt }}_valid_from" id="seq_{{ dt }}_valid_from" class="form-control" value="{{ seq.valid_from|date:'Y-m-d'|default:'' }}">
+      </div>
+      <div class="col-md-6">
+        <label for="seq_{{ dt }}_valid_to" class="form-label fw-medium small mb-1">Valid To Date</label>
+        <input type="date" name="seq_{{ dt }}_valid_to" id="seq_{{ dt }}_valid_to" class="form-control" value="{{ seq.valid_to|date:'Y-m-d'|default:'' }}">
+      </div>
+    </div>
+    <div class="alert alert-primary py-2 px-3 d-flex align-items-center justify-content-between rounded-3 mb-0">
+      <span class="small fw-bold"><i class="bi bi-eye me-1"></i> Formatted Voucher Preview:</span>
+      <span class="badge bg-dark fs-6 font-monospace px-3 py-2" id="seq_{{ dt }}_preview">---</span>
+    </div>
+  </div>
+
+  <div id="seq_{{ dt }}_manual_notice" class="seq-manual-notice" style="display: none;">
+    <div class="alert alert-secondary py-3 mb-0">
+      <i class="bi bi-info-circle me-2 text-primary"></i><strong>Manual Mode Active:</strong> No sequence formatting required for {{ label|lower }}.
+    </div>
+  </div>
+</div>

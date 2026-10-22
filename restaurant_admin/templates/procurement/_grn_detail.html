@@ -1,0 +1,56 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <a class="ui-back" href="{{ base_url }}purchases/grn/"><i class="fa-solid fa-chevron-left"></i> Goods receipts</a>
+  <div class="ui-page-header">
+    <div><h1>{{ grn.number }} {% include 'procurement/_status.html' with s=grn.status %}</h1>
+      <p>{{ grn.supplier_name }} · received {{ grn.receipt_date|date:"d M Y" }}{% if grn.order %} · against <a href="{{ base_url }}purchases/orders/{{ grn.order.pk }}/">{{ grn.order.number }}</a>{% endif %}{% if grn.challan_no %} · challan {{ grn.challan_no }}{% endif %}{% if grn.vehicle_no %} · vehicle {{ grn.vehicle_no }}{% endif %}</p></div>
+    {% if grn.bill %}<div class="ui-actions"><a class="ui-btn ui-btn-gray" href="{{ base_url }}purchases/{{ grn.bill.pk }}/invoice/"><i class="fa-solid fa-file-invoice"></i><span>Bill {{ grn.bill.invoice_number }}</span></a></div>{% endif %}
+  </div>
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <section class="ui-card ui-list-card">
+        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Received</h2>{% if rejected %}<span class="ui-chip ui-chip-red">{{ rejected|floatformat:"-3" }} rejected</span>{% endif %}</div>
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Item</th><th class="num">Received</th><th class="num">Rejected</th><th class="num">Accepted</th><th class="num">PO rate</th><th>Batch / expiry</th></tr></thead>
+          <tbody>{% for l in lines %}<tr>
+            <td><strong>{{ l.inventory_item.name }}</strong>{% if l.rejection_reason %}<br><small class="ui-log-sub">Rejected: {{ l.rejection_reason }}</small>{% endif %}</td>
+            <td class="num">{{ l.received_qty|floatformat:"-3" }} {{ l.inventory_item.unit }}</td>
+            <td class="num">{% if l.rejected_qty %}{{ l.rejected_qty|floatformat:"-3" }}{% else %}—{% endif %}</td>
+            <td class="num"><strong>{{ l.accepted_qty|floatformat:"-3" }}</strong></td>
+            <td class="num">₹{{ l.rate|inr2 }}</td>
+            <td>{{ l.batch_no|default:"—" }}{% if l.expiry_date %}<br><small class="ui-log-sub">exp {{ l.expiry_date|date:"d M Y" }}</small>{% endif %}</td></tr>{% endfor %}</tbody>
+        </table></div>
+        {% if grn.note %}<p class="ui-log-sub" style="padding:0 16px 12px">{{ grn.note }}</p>{% endif %}
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      {% if grn.status == 'pending' %}
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">Book supplier bill</h2>
+        <p class="ui-log-sub">Stock is already in. This posts the payable and your input GST. Change a rate if the bill differs from the PO.</p>
+        <form method="post" action="{{ base_url }}purchases/grn/{{ grn.pk }}/bill/" class="ui-stack-form">{% csrf_token %}
+          <div class="ui-field"><label for="bNo">Supplier bill no.</label><input id="bNo" class="ui-input" name="invoice_number" maxlength="100" required></div>
+          <div class="ui-inline-fields">
+            <div class="ui-field"><label for="bDate">Bill date</label><input id="bDate" class="ui-input" type="date" name="bill_date" value="{{ grn.receipt_date|date:'Y-m-d' }}" required></div>
+            <div class="ui-field"><label for="bDue">Due date</label><input id="bDue" class="ui-input" type="date" name="due_date" value="{{ default_due|date:'Y-m-d' }}"></div>
+          </div>
+          {% for l in lines %}{% if l.accepted_qty > 0 %}<div class="ui-field"><label for="r{{ l.pk }}">{{ l.inventory_item.name }} · rate ₹ ({{ l.accepted_qty|floatformat:"-3" }} {{ l.inventory_item.unit }})</label><input id="r{{ l.pk }}" class="ui-input" type="number" min="0" step="0.01" name="rate_{{ l.pk }}" value="{{ l.rate|stringformat:'s' }}"></div>{% endif %}{% endfor %}
+          <div class="ui-inline-fields">
+            <div class="ui-field"><label for="bFr">Freight ₹</label><input id="bFr" class="ui-input" type="number" min="0" step="0.01" name="freight" value="0"></div>
+            <div class="ui-field"><label for="bRo">Round off ₹</label><input id="bRo" class="ui-input" type="number" min="-5" max="5" step="0.01" name="round_off" value="0"></div>
+          </div>
+          <label class="ui-pms-check"><input type="checkbox" name="reverse_charge" value="1" {% if grn.order.reverse_charge %}checked{% endif %}> Reverse charge (RCM)</label>
+          <label class="ui-pms-check"><input type="checkbox" name="itc_eligible" value="1" checked> Input tax credit eligible</label>
+          <label class="ui-pms-check"><input type="checkbox" name="paid_now" value="1" id="bPaid"> Paid in full now</label>
+          <div class="ui-inline-fields">
+            <div class="ui-field"><label for="bM">Payment mode</label><select id="bM" class="ui-input" name="payment_method">{% for k, l in methods %}<option value="{{ k }}" {% if k == 'credit' %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+            <div class="ui-field"><label for="bRef">Payment ref</label><input id="bRef" class="ui-input" name="payment_ref" maxlength="100" placeholder="UTR / cheque"></div>
+          </div>
+          <div class="ui-field"><label for="bN">Narration</label><input id="bN" class="ui-input" name="narration"></div>
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-file-invoice"></i><span>Book bill</span></button>
+        </form>
+      </section>
+      {% endif %}
+    </div>
+  </div>
+</div>

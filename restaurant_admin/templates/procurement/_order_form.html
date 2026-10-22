@@ -1,0 +1,137 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <a class="ui-back" href="{{ base_url }}purchases/orders/{% if order %}{{ order.pk }}/{% endif %}"><i class="fa-solid fa-chevron-left"></i> {% if order %}{{ order.number }}{% else %}Purchase orders{% endif %}</a>
+  <div class="ui-page-header">
+    <div><h1>{% if order %}Edit {{ order.number }}{% else %}New purchase order{% endif %}</h1><p>An order moves no stock and no money — goods come in on a Goods Receipt Note against it.</p></div>
+  </div>
+
+  <form method="post" id="poForm" class="ui-stack-form">{% csrf_token %}
+    <section class="ui-card ui-pad">
+      <h2 class="ui-card-title">Supplier &amp; terms</h2>
+      <div class="ui-form-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+        <div class="ui-field"><label for="poParty">Supplier</label>
+          <select id="poParty" class="ui-input" name="party">
+            <option value="">+ New supplier…</option>
+            {% for v in vendors %}<option value="{{ v.pk }}" data-gstin="{{ v.gstin|default:'' }}" data-state="{{ v.state|default:'' }}" {% if h.party == v.pk %}selected{% endif %}>{{ v.name }}{% if v.gstin %} · {{ v.gstin }}{% endif %}</option>{% endfor %}
+          </select></div>
+        <div class="ui-field js-new-supplier"><label for="poSup">New supplier name</label><input id="poSup" class="ui-input" name="supplier_name" maxlength="200" value="{{ h.supplier_name|default:'' }}"></div>
+        <div class="ui-field js-new-supplier"><label for="poGst">Supplier GSTIN</label><input id="poGst" class="ui-input" name="supplier_gstin" maxlength="15" value="{{ h.supplier_gstin|default:'' }}" placeholder="Optional" style="text-transform:uppercase"></div>
+        <div class="ui-field"><label for="poNo">PO number</label>
+          {% if order %}<input id="poNo" class="ui-input" value="{{ order.number }}" disabled>
+          {% else %}<input id="poNo" class="ui-input" name="number" value="{{ h.number|default:seq.next_number }}" {% if seq.readonly %}readonly{% endif %} {% if seq.required %}required{% endif %}>{% endif %}</div>
+        <div class="ui-field"><label for="poDate">Order date</label><input id="poDate" class="ui-input" type="date" name="order_date" value="{{ h.order_date|default:today|date:'Y-m-d' }}" required></div>
+        <div class="ui-field"><label for="poExp">Expected delivery</label><input id="poExp" class="ui-input" type="date" name="expected_date" value="{{ h.expected_date|date:'Y-m-d' }}"></div>
+        <div class="ui-field"><label for="poCredit">Credit period (days)</label><input id="poCredit" class="ui-input" type="number" min="0" max="365" name="credit_days" value="{{ h.credit_days|default:0 }}"></div>
+      </div>
+      <label class="ui-pms-check" style="margin-top:10px"><input type="checkbox" name="reverse_charge" value="1" {% if h.reverse_charge %}checked{% endif %}> Reverse charge (RCM) — supplier does not charge GST; we pay it</label>
+      <p class="ui-log-sub" id="poTaxHint" style="margin:6px 0 0"></p>
+    </section>
+
+    <section class="ui-card ui-list-card">
+      <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Items</h2><button type="button" class="ui-btn ui-btn-gray ui-btn-sm" id="poAdd"><i class="fa-solid fa-plus"></i><span>Add row</span></button></div>
+      <div class="table-responsive"><table class="table" id="poLines">
+        <thead><tr><th style="min-width:220px">Item</th><th class="num">Qty</th><th class="num">Rate ₹</th><th class="num">Disc %</th><th class="num">GST %</th><th class="num">Amount</th><th></th></tr></thead>
+        <tbody></tbody>
+        <tfoot>
+          <tr><td colspan="5" class="num">Taxable value</td><td class="num" id="poSub">₹0.00</td><td></td></tr>
+          <tr><td colspan="5" class="num" id="poTaxLabel">GST</td><td class="num" id="poTax">₹0.00</td><td></td></tr>
+          <tr><td colspan="5" class="num"><label for="poFreight">Freight / additional cost ₹</label></td><td class="num"><input id="poFreight" class="ui-input" type="number" min="0" step="0.01" name="freight" value="{{ h.freight|default:0 }}" style="max-width:120px;margin-left:auto"></td><td></td></tr>
+          <tr><td colspan="5" class="num"><strong>Order total</strong></td><td class="num"><strong id="poTotal">₹0.00</strong></td><td></td></tr>
+        </tfoot>
+      </table></div>
+    </section>
+
+    <section class="ui-card ui-pad">
+      <div class="ui-inline-fields">
+        <div class="ui-field"><label for="poTerms">Terms for the supplier</label><textarea id="poTerms" class="ui-input" name="terms" rows="3" placeholder="e.g. Deliver before 9 AM · Bill must quote PO number · Goods subject to quality check">{{ h.terms|default:'' }}</textarea></div>
+        <div class="ui-field"><label for="poNar">Internal note (narration)</label><textarea id="poNar" class="ui-input" name="narration" rows="3">{{ h.narration|default:'' }}</textarea></div>
+      </div>
+      <div class="ui-actions" style="gap:8px;justify-content:flex-end;margin-top:12px">
+        {% if not order or order.status == 'draft' %}<button class="ui-btn ui-btn-gray" type="submit" name="op" value="draft"><i class="fa-regular fa-floppy-disk"></i><span>Save draft</span></button>{% endif %}
+        <button class="ui-btn ui-btn-primary" type="submit" name="op" value="approve"><i class="fa-solid fa-check"></i><span>{% if order and order.status != 'draft' %}Save order{% else %}Save &amp; approve{% endif %}</span></button>
+      </div>
+    </section>
+  </form>
+</div>
+{{ items_data|json_script:"poItems" }}
+{{ lines_data|json_script:"poInit" }}
+<script>
+(function () {
+  const items = JSON.parse(document.getElementById('poItems').textContent);
+  const init = JSON.parse(document.getElementById('poInit').textContent);
+  const byId = Object.fromEntries(items.map(i => [String(i.id), i]));
+  const body = document.querySelector('#poLines tbody');
+  const party = document.getElementById('poParty');
+  const rc = document.querySelector('input[name="reverse_charge"]');
+  const ourState = '{{ current_branch.gstin|default:""|slice:":2" }}';
+  const money = n => '₹' + (Math.round(n * 100) / 100).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const options = '<option value="">Choose item…</option>' + items.map(i =>
+    `<option value="${i.id}">${i.name.replace(/</g, '&lt;')}${i.sku ? ' · ' + i.sku.replace(/</g, '&lt;') : ''} (${i.stock} ${i.unit.replace(/</g, '&lt;')})</option>`).join('');
+
+  function addRow(d) {
+    d = d || {};
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><select class="ui-input" name="item">${options}</select><small class="ui-log-sub js-meta"></small></td>
+      <td class="num"><input class="ui-input num" name="quantity" type="number" min="0" step="0.001" style="max-width:100px"></td>
+      <td class="num"><input class="ui-input num" name="rate" type="number" min="0" step="0.01" style="max-width:110px"></td>
+      <td class="num"><input class="ui-input num" name="discount_pct" type="number" min="0" max="100" step="0.01" value="0" style="max-width:80px"></td>
+      <td class="num"><input class="ui-input num" name="gst_rate" type="number" min="0" max="100" step="0.01" value="0" style="max-width:80px"></td>
+      <td class="num js-amt">₹0.00</td>
+      <td><button type="button" class="ui-btn ui-btn-gray ui-btn-sm js-del" aria-label="Remove row"><i class="fa-solid fa-xmark"></i></button></td>`;
+    body.appendChild(tr);
+    const sel = tr.querySelector('select');
+    sel.value = d.item ? String(d.item) : '';
+    const it = byId[sel.value];
+    tr.querySelector('[name=quantity]').value = d.quantity || '';
+    tr.querySelector('[name=rate]').value = d.rate || (it ? it.rate : '');
+    tr.querySelector('[name=discount_pct]').value = d.discount_pct || 0;
+    tr.querySelector('[name=gst_rate]').value = d.gst_rate || (it ? it.gst : 0);
+    meta(tr);
+    sel.addEventListener('change', () => {
+      const it = byId[sel.value];
+      if (it) {
+        tr.querySelector('[name=rate]').value = it.rate;
+        tr.querySelector('[name=gst_rate]').value = it.gst;
+        tr.querySelector('[name=quantity]').focus();
+      }
+      meta(tr); total();
+    });
+    tr.querySelector('.js-del').addEventListener('click', () => { tr.remove(); total(); });
+  }
+  function meta(tr) {
+    const it = byId[tr.querySelector('select').value];
+    tr.querySelector('.js-meta').textContent = it ? `${it.unit || 'unit'}${it.hsn ? ' · HSN ' + it.hsn : ''} · in stock ${it.stock}` : '';
+  }
+  function interstate() {
+    const opt = party.selectedOptions[0];
+    const g = (opt && opt.value ? opt.dataset.gstin : document.getElementById('poGst').value) || '';
+    return ourState.length === 2 && g.length >= 2 && g.slice(0, 2) !== ourState;
+  }
+  function total() {
+    let sub = 0, tax = 0;
+    body.querySelectorAll('tr').forEach(tr => {
+      const v = n => parseFloat(tr.querySelector(`[name=${n}]`).value) || 0;
+      const amt = v('quantity') * v('rate') * (100 - v('discount_pct')) / 100;
+      sub += amt; tax += amt * v('gst_rate') / 100;
+      tr.querySelector('.js-amt').textContent = money(amt);
+    });
+    const freight = parseFloat(document.getElementById('poFreight').value) || 0;
+    const inter = interstate();
+    document.getElementById('poSub').textContent = money(sub);
+    document.getElementById('poTax').textContent = money(tax);
+    document.getElementById('poTaxLabel').textContent = (inter ? 'IGST' : 'CGST + SGST') + (rc.checked ? ' (RCM — paid by us, not in total)' : '');
+    document.getElementById('poTotal').textContent = money(sub + freight + (rc.checked ? 0 : tax));
+    document.getElementById('poTaxHint').textContent = inter ? 'Supplier is in another state — IGST applies.' : '';
+  }
+  function toggleNew() {
+    document.querySelectorAll('.js-new-supplier').forEach(el => el.style.display = party.value ? 'none' : '');
+    document.getElementById('poSup').required = !party.value;
+    total();
+  }
+  document.getElementById('poAdd').addEventListener('click', () => { addRow(); total(); });
+  document.getElementById('poForm').addEventListener('input', total);
+  party.addEventListener('change', toggleNew);
+  (init.length ? init : [{}, {}, {}]).forEach(addRow);
+  toggleNew();
+})();
+</script>

@@ -1,0 +1,43 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <div class="ui-page-header">
+    <div><h1>Purchase returns</h1><p>Debit notes for goods sent back after the bill (TallyPrime "Rejection Out" / Debit Note).</p></div>
+    <div class="ui-actions"><a class="ui-btn ui-btn-gray" href="?{% if q %}q={{ q|urlencode }}&{% endif %}export=csv"><i class="fa-solid fa-file-csv"></i><span>Export</span></a></div>
+  </div>
+  {% include 'procurement/_nav.html' %}
+  <div class="ui-kpi-grid">
+    <div class="ui-kpi kpi-rose"><div class="ui-kpi-head"><div class="kpi-label">Returned this month</div><div class="kpi-icon"><i class="fa-solid fa-rotate-left"></i></div></div><div class="kpi-val">₹{{ kpi_month.s|default:0|inr }}</div><div class="kpi-sub">{{ kpi_month.n }} debit note{{ kpi_month.n|pluralize }}</div></div>
+  </div>
+  <div class="ui-g360-grid">
+    <div class="ui-g360-main">
+      <form class="ui-card ui-filters" method="get">
+        <div class="ui-field"><label for="rQ">Search</label><input id="rQ" class="ui-input" name="q" value="{{ q }}" placeholder="Debit note, bill or supplier"></div>
+        <div class="ui-filter-actions"><button class="ui-btn ui-btn-gray" type="submit">Apply</button></div>
+      </form>
+      <section class="ui-card ui-list-card">
+        <div class="table-responsive"><table class="table">
+          <thead><tr><th>Debit note</th><th>Date</th><th>Supplier</th><th>Against bill</th><th>Reason</th><th class="num">Amount</th></tr></thead>
+          <tbody>{% for r in page %}<tr>
+            <td><a href="{{ base_url }}purchases/returns/{{ r.pk }}/"><strong>{{ r.number }}</strong></a></td>
+            <td class="nowrap">{{ r.return_date|date:"d M Y" }}</td><td>{{ r.supplier_name }}</td>
+            <td>{% if r.bill %}<a href="{{ base_url }}purchases/{{ r.bill.pk }}/invoice/">{{ r.bill.invoice_number }}</a>{% else %}—{% endif %}</td>
+            <td>{{ r.get_reason_display }}</td><td class="num">₹{{ r.grand_total|inr2 }}</td></tr>
+          {% empty %}<tr><td colspan="6" class="ui-log-sub" style="padding:24px;text-align:center">No returns yet.</td></tr>{% endfor %}</tbody>
+        </table></div>
+        {% if page.has_other_pages %}<div class="ui-pager"><span class="ui-pager-info">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+          {% if page.has_previous %}<a class="ui-pager-btn" href="?q={{ q|urlencode }}&page={{ page.previous_page_number }}">Previous</a>{% endif %}
+          {% if page.has_next %}<a class="ui-pager-btn" href="?q={{ q|urlencode }}&page={{ page.next_page_number }}">Next</a>{% endif %}</div>{% endif %}
+      </section>
+    </div>
+    <div class="ui-g360-side">
+      <section class="ui-card ui-pad">
+        <h2 class="ui-card-title">New return</h2>
+        <p class="ui-log-sub">Pick the bill the goods came on.</p>
+        <form method="get" class="ui-stack-form" onsubmit="if(this.bill.value){location.href='{{ base_url }}purchases/'+this.bill.value+'/return/';}return false;">
+          <div class="ui-field"><label for="rB">Bill</label><select id="rB" class="ui-input" name="bill" required><option value="">Choose…</option>{% for b in recent_bills %}<option value="{{ b.pk }}">{{ b.invoice_number }} · {{ b.supplier_name }} · {{ b.purchase_date|date:"d M" }}</option>{% endfor %}</select></div>
+          <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-rotate-left"></i><span>Continue</span></button>
+        </form>
+      </section>
+    </div>
+  </div>
+</div>

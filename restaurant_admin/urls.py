@@ -12,6 +12,7 @@ from finance import views as finance_views
 from super_admin import views_roles
 from restaurant_admin import views_reservations
 from restaurant_admin import views_controls
+from restaurant_admin import views_procurement
 from restaurant_admin import floor_plan_views
 from restaurant_admin import views_events
 from restaurant_admin import views_staff
@@ -186,6 +187,21 @@ urlpatterns = [
     path('inventory/counts/<int:pk>/save/', views_controls.inventory_count_save, name='inventory_count_save'),
     path('reports/menu-engineering/', views_controls.report_menu_engineering, name='report_menu_engineering'),
     path('purchases/', views.purchase_list, name='purchase_list'),
+    # Purchase cycle (TallyPrime order processing): PO -> GRN -> bill -> debit note / payment
+    path('purchases/orders/', views_procurement.purchase_orders, name='purchase_orders'),
+    path('purchases/orders/new/', views_procurement.purchase_order_new, name='purchase_order_new'),
+    path('purchases/orders/<int:pk>/', views_procurement.purchase_order_detail, name='purchase_order_detail'),
+    path('purchases/orders/<int:pk>/edit/', views_procurement.purchase_order_edit, name='purchase_order_edit'),
+    path('purchases/orders/<int:pk>/action/', views_procurement.purchase_order_action, name='purchase_order_action'),
+    path('purchases/orders/<int:pk>/receive/', views_procurement.purchase_grn_new, name='purchase_grn_new'),
+    path('purchases/grn/', views_procurement.purchase_grns, name='purchase_grns'),
+    path('purchases/grn/<int:pk>/', views_procurement.purchase_grn_detail, name='purchase_grn_detail'),
+    path('purchases/grn/<int:pk>/bill/', views_procurement.purchase_grn_bill, name='purchase_grn_bill'),
+    path('purchases/<int:pk>/pay/', views_procurement.purchase_bill_pay, name='purchase_bill_pay'),
+    path('purchases/<int:pk>/return/', views_procurement.purchase_return_new, name='purchase_return_new'),
+    path('purchases/returns/', views_procurement.purchase_returns, name='purchase_returns'),
+    path('purchases/returns/<int:pk>/', views_procurement.purchase_return_detail, name='purchase_return_detail'),
+    path('purchases/reports/', views_procurement.purchase_reports, name='purchase_reports'),
     path('purchases/export/', views.purchase_records_export, name='purchase_records_export'),
     path('purchases/create/', views.purchase_create, name='purchase_create'),
     path('purchases/<int:pk>/', views.purchase_invoice, name='purchase_detail'),

@@ -1,0 +1,31 @@
+{% load restaurant_admin_extras %}
+<div class="ui-logs ui-pms">
+  <a class="ui-back" href="{{ base_url }}purchases/{{ bill.pk }}/invoice/"><i class="fa-solid fa-chevron-left"></i> Bill {{ bill.invoice_number }}</a>
+  <div class="ui-page-header">
+    <div><h1>Return goods to supplier</h1><p>{{ bill.supplier_name }} · bill {{ bill.invoice_number }} of {{ bill.purchase_date|date:"d M Y" }}. A debit note reduces stock and what you owe; GST is reversed at the billed rate.</p></div>
+  </div>
+  <form method="post" class="ui-stack-form">{% csrf_token %}
+    <section class="ui-card ui-pad">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
+        <div class="ui-field"><label for="dNo">Debit note no.</label><input id="dNo" class="ui-input" name="number" value="{{ seq.next_number }}" {% if seq.readonly %}readonly{% endif %} {% if seq.required %}required{% endif %}></div>
+        <div class="ui-field"><label for="dDate">Return date</label><input id="dDate" class="ui-input" type="date" name="return_date" value="{{ today|date:'Y-m-d' }}" required></div>
+        <div class="ui-field"><label for="dR">Reason</label><select id="dR" class="ui-input" name="reason">{% for k, l in reasons %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></div>
+      </div>
+    </section>
+    <section class="ui-card ui-list-card">
+      <div class="table-responsive"><table class="table">
+        <thead><tr><th>Item</th><th class="num">Billed</th><th class="num">Can return</th><th class="num">Rate</th><th class="num">GST</th><th class="num">Return qty</th></tr></thead>
+        <tbody>{% for it, left in items %}<tr>
+          <td><strong>{{ it.inventory_item.name }}</strong></td>
+          <td class="num">{{ it.quantity|floatformat:"-3" }} {{ it.inventory_item.unit }}</td>
+          <td class="num">{{ left|floatformat:"-3" }}</td>
+          <td class="num">₹{{ it.unit_cost|inr2 }}</td><td class="num">{{ it.gst_rate|floatformat:"-2" }}%</td>
+          <td class="num">{% if left > 0 %}<input class="ui-input num" type="number" min="0" max="{{ left|stringformat:'s' }}" step="0.001" name="qty_{{ it.pk }}" style="max-width:100px" aria-label="Return {{ it.inventory_item.name }}">{% else %}—{% endif %}</td></tr>{% endfor %}</tbody>
+      </table></div>
+    </section>
+    <section class="ui-card ui-pad">
+      <div class="ui-field"><label for="dN">Note</label><input id="dN" class="ui-input" name="note" placeholder="e.g. Picked up by supplier's driver"></div>
+      <div class="ui-actions" style="justify-content:flex-end;margin-top:12px"><button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-rotate-left"></i><span>Save debit note &amp; reduce stock</span></button></div>
+    </section>
+  </form>
+</div>

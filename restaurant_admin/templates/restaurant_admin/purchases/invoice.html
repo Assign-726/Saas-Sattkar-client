@@ -216,6 +216,9 @@
       <button type="button" onclick="window.print()" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold shadow-sm">
         <i class="fas fa-print me-1"></i> Print Voucher
       </button>
+      <a href="{% url 'restaurant_admin:purchase_return_new' restaurant_slug=restaurant.slug pk=po.pk %}" class="btn btn-outline-danger btn-sm rounded-pill px-3 fw-semibold">
+        <i class="fas fa-rotate-left me-1"></i> Return Goods
+      </a>
       <a href="{% url 'restaurant_admin:purchase_create' restaurant_slug=restaurant.slug %}" class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-semibold">
         <i class="fas fa-plus me-1"></i> New Purchase
       </a>
@@ -510,6 +513,22 @@
               <span class="font-monospace fw-bold text-primary">₹ {{ total_tax|floatformat:2 }}</span>
             </div>
 
+            {% if po.reverse_charge %}
+            <div class="d-flex justify-content-between align-items-center mb-1.5 small">
+              <span class="text-danger">GST under Reverse Charge (payable by us, not to supplier):</span>
+              <span class="font-monospace text-danger">− ₹ {{ total_tax|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            {% if po.freight_amount %}
+            <div class="d-flex justify-content-between align-items-center mb-1.5 small">
+              <span class="text-secondary">Freight / Additional Cost:</span>
+              <span class="font-monospace text-secondary">₹ {{ po.freight_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+            {% if not po.itc_eligible %}
+            <div class="small text-danger mb-1.5"><i class="fas fa-ban me-1"></i> Input tax credit not eligible on this bill.</div>
+            {% endif %}
+
             {% if round_off != 0 %}
             <div class="d-flex justify-content-between align-items-center mb-1.5 small">
               <span class="text-secondary">Round Off:</span>
@@ -530,6 +549,39 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Bill-wise settlement: due date, payments, debit notes (TallyPrime 'Agst Ref') -->
+      <div class="mt-4 pt-3 border-top no-print">
+        <div class="row g-3">
+          <div class="col-md-7">
+            <p class="mb-2 fw-semibold text-dark small"><i class="fas fa-scale-balanced text-primary me-1"></i> Settlement
+              {% if po.due_date %}<span class="text-muted fw-normal">· due {{ po.due_date|date:"d M Y" }}</span>{% endif %}
+              {% if receipts %}<span class="text-muted fw-normal">· goods via {% for g in receipts %}<a href="{% url 'restaurant_admin:purchase_grn_detail' restaurant_slug=restaurant.slug pk=g.pk %}">{{ g.number }}</a>{% if g.order %} (<a href="{% url 'restaurant_admin:purchase_order_detail' restaurant_slug=restaurant.slug pk=g.order.pk %}">{{ g.order.number }}</a>){% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}</span>{% endif %}
+            </p>
+            <table class="table table-sm small mb-0">
+              <tbody>
+                {% for p in payments %}<tr><td>{{ p.paid_on|date:"d M Y" }}</td><td>Payment · {{ p.get_method_display }}{% if p.reference %} · {{ p.reference }}{% endif %}</td><td class="text-end font-monospace">− ₹ {{ p.amount|floatformat:2 }}</td></tr>{% endfor %}
+                {% for d in debit_notes %}<tr><td>{{ d.return_date|date:"d M Y" }}</td><td>Debit note <a href="{% url 'restaurant_admin:purchase_return_detail' restaurant_slug=restaurant.slug pk=d.pk %}">{{ d.number }}</a></td><td class="text-end font-monospace">− ₹ {{ d.grand_total|floatformat:2 }}</td></tr>{% endfor %}
+                <tr class="fw-bold"><td colspan="2">Balance due</td><td class="text-end font-monospace">₹ {{ po.balance_due|floatformat:2 }}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          {% if po.balance_due > 0 %}
+          <div class="col-md-5">
+            <form method="post" action="{% url 'restaurant_admin:purchase_bill_pay' restaurant_slug=restaurant.slug pk=po.pk %}" class="p-3 bg-light rounded-3 border">{% csrf_token %}
+              <p class="mb-2 fw-semibold small">Record payment</p>
+              <div class="row g-2">
+                <div class="col-6"><label class="form-label extra-small mb-0" for="payAmt">Amount ₹</label><input id="payAmt" class="form-control form-control-sm" type="number" step="0.01" min="0.01" max="{{ po.balance_due|stringformat:'s' }}" name="amount" value="{{ po.balance_due|stringformat:'s' }}" required></div>
+                <div class="col-6"><label class="form-label extra-small mb-0" for="payOn">Paid on</label><input id="payOn" class="form-control form-control-sm" type="date" name="paid_on" value="{{ today|date:'Y-m-d' }}"></div>
+                <div class="col-6"><label class="form-label extra-small mb-0" for="payM">Mode</label><select id="payM" class="form-select form-select-sm" name="method">{% for k, l in payment_methods %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></div>
+                <div class="col-6"><label class="form-label extra-small mb-0" for="payRef">Reference</label><input id="payRef" class="form-control form-control-sm" name="reference" maxlength="100" placeholder="UTR / cheque"></div>
+              </div>
+              <button class="btn btn-primary btn-sm rounded-pill px-3 mt-2" type="submit"><i class="fas fa-check me-1"></i> Save payment</button>
+            </form>
+          </div>
+          {% endif %}
         </div>
       </div>
 

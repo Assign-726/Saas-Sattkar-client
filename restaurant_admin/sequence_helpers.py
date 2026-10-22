@@ -2,7 +2,8 @@ from django.db import transaction as db_transaction
 from django.db.models import F, Q
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-from core.models import DocumentSequenceSetting, Order, PurchaseOrder, AdvanceReceipt, DeliveryChallan
+from core.models import (DocumentSequenceSetting, Order, PurchaseOrder, AdvanceReceipt, DeliveryChallan, GoodsReceiptNote,
+                         ProcurementOrder, PurchaseReturn)
 
 
 def get_document_sequence_info(restaurant, document_type, branch=None):
@@ -103,6 +104,15 @@ def validate_unique_document_number(restaurant, document_type, number, branch=No
         qs = DeliveryChallan.objects.filter(restaurant=restaurant, challan_no__iexact=clean_number)
         if branch:
             qs = qs.filter(from_branch=branch)
+        if exclude_pk:
+            qs = qs.exclude(pk=exclude_pk)
+        duplicate = qs.exists()
+
+    elif document_type in ('purchase_order', 'grn', 'debit_note'):
+        model = {'purchase_order': ProcurementOrder, 'grn': GoodsReceiptNote, 'debit_note': PurchaseReturn}[document_type]
+        qs = model.objects.filter(restaurant=restaurant, number__iexact=clean_number)
+        if branch:
+            qs = qs.filter(branch=branch)
         if exclude_pk:
             qs = qs.exclude(pk=exclude_pk)
         duplicate = qs.exists()
