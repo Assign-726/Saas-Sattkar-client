@@ -148,8 +148,12 @@ def is_module_enabled(module_name: str, restaurant=None) -> bool:
     # Fallback to .env defaults when disconnected from Master Admin
     if not is_master_connected(target):
         name = module_name.upper()
-        if name in ('SHOW_WEBSITE_PAGES', 'ENABLE_WEBSITE_CMS', 'WEBSITE'):
+        if name in ('SHOW_WEBSITE_PAGES', 'WEBSITE'):
             return _DEFAULT_SHOW_WEBSITE_PAGES
+        if name in ('ENABLE_WEBSITE_CMS', 'WEBSITE_CMS'):
+            return _DEFAULT_SHOW_WEBSITE_PAGES
+        if name in ('IS_MENU_ONLY_WEBSITE', 'MENU_ONLY_WEBSITE'):
+            return False
         if name in ('ENABLE_ALCOHOL_VAT', 'SHOW_ALCOHOL_MODULE', 'ALCOHOL'):
             return _DEFAULT_ENABLE_ALCOHOL_VAT
         if name in ('ENABLE_CLUB_EVENTS_MODULE', 'SHOW_CLUB_EVENTS_MODULE', 'CLUB'):
@@ -164,10 +168,20 @@ def is_module_enabled(module_name: str, restaurant=None) -> bool:
 
     # Connected: use real-time synced database fields
     name = module_name.upper()
-    if name in ('SHOW_WEBSITE_PAGES', 'ENABLE_WEBSITE_CMS', 'WEBSITE'):
+    if name in ('SHOW_WEBSITE_PAGES', 'WEBSITE'):
         if target and hasattr(target, 'feature_website_pages') and target.feature_website_pages is not None:
             return bool(target.feature_website_pages)
         return _DEFAULT_SHOW_WEBSITE_PAGES
+
+    if name in ('ENABLE_WEBSITE_CMS', 'WEBSITE_CMS'):
+        if target and hasattr(target, 'feature_website_cms') and target.feature_website_cms is not None:
+            return bool(target.feature_website_cms and getattr(target, 'feature_website_pages', True))
+        return _DEFAULT_SHOW_WEBSITE_PAGES
+
+    if name in ('IS_MENU_ONLY_WEBSITE', 'MENU_ONLY_WEBSITE'):
+        if target and hasattr(target, 'is_menu_only_website'):
+            return bool(target.is_menu_only_website)
+        return False
 
     if name in ('ENABLE_ALCOHOL_VAT', 'SHOW_ALCOHOL_MODULE', 'ALCOHOL'):
         if target and hasattr(target, 'feature_alcohol_vat') and target.feature_alcohol_vat is not None:
@@ -201,8 +215,12 @@ def __getattr__(name: str):
     """
     PEP 562: Dynamically resolve module toggles against Master Admin state in DB.
     """
-    if name in ('SHOW_WEBSITE_PAGES', 'ENABLE_WEBSITE_CMS'):
+    if name in ('SHOW_WEBSITE_PAGES', 'ENABLE_WEBSITE'):
         return is_module_enabled('SHOW_WEBSITE_PAGES')
+    if name in ('ENABLE_WEBSITE_CMS', 'WEBSITE_CMS'):
+        return is_module_enabled('ENABLE_WEBSITE_CMS')
+    if name in ('IS_MENU_ONLY_WEBSITE', 'MENU_ONLY_WEBSITE'):
+        return is_module_enabled('IS_MENU_ONLY_WEBSITE')
     if name in ('ENABLE_ALCOHOL_VAT', 'SHOW_ALCOHOL_MODULE'):
         return is_module_enabled('ENABLE_ALCOHOL_VAT')
     if name in ('ENABLE_CLUB_EVENTS_MODULE', 'SHOW_CLUB_EVENTS_MODULE'):

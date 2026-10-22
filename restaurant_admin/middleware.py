@@ -74,7 +74,7 @@ class BranchContextMiddleware:
                 # RBAC & Module Isolation:
                 user_role = getattr(user, 'role', None) or profile.role
                 if not user.is_superuser:
-                    # 0. Branch-level Restaurant Module Restriction:
+                    # 0. Branch-level Restaurant Module & Feature Gating:
                     # If this branch does NOT have the restaurant/dining module enabled:
                     if active_branch and not getattr(active_branch, 'has_restaurant_module', True) and request.path.startswith('/dashboard/'):
                         from django.shortcuts import redirect
@@ -83,6 +83,31 @@ class BranchContextMiddleware:
                                 return redirect('hotel_admin:dashboard', restaurant_slug=slug)
                             elif getattr(active_branch, 'has_club_module', False):
                                 return redirect('restaurant_admin:club_events_list', restaurant_slug=slug)
+
+                    # Dynamic Branch-wise Feature Restrictions (e.g. only_pos, starter_dhaba, etc.)
+                    if active_branch and request.path.startswith('/dashboard/') and not request.path.endswith('/logout/') and not '/api/' in request.path:
+                        from django.shortcuts import redirect
+                        from django.contrib import messages
+
+                        # Stock & Inventory gating
+                        if tail.startswith(('inventory/', 'purchases/', 'parties/', 'challans/')) and not active_branch.is_feature_enabled('inventory'):
+                            messages.warning(request, f"Stock & Inventory module is not included in this branch's tier ({active_branch.get_outlet_type_display()}). Request an add-on or upgrade to unlock.")
+                            return redirect('restaurant_admin:transaction_desk_create', restaurant_slug=slug)
+
+                        # Dine-In Table Management gating
+                        if tail.startswith(('tables/', 'floors/')) and not active_branch.is_feature_enabled('dine_in'):
+                            messages.warning(request, f"Table & Dine-in management is not included in this branch's tier ({active_branch.get_outlet_type_display()}).")
+                            return redirect('restaurant_admin:transaction_desk_create', restaurant_slug=slug)
+
+                        # Kitchen Display KDS gating
+                        if tail.startswith('kitchen/') and not active_branch.is_feature_enabled('kitchen'):
+                            messages.warning(request, f"Kitchen Display (KDS) is not included in this branch's tier ({active_branch.get_outlet_type_display()}).")
+                            return redirect('restaurant_admin:transaction_desk_create', restaurant_slug=slug)
+
+                        # Staff & Operations gating
+                        if tail.startswith('staff/') and user_role not in ['HOTEL_ADMIN', 'CLUB_ADMIN'] and not active_branch.is_feature_enabled('staff'):
+                            messages.warning(request, f"Staff & Operations module is not included in this branch's tier ({active_branch.get_outlet_type_display()}).")
+                            return redirect('restaurant_admin:transaction_desk_create', restaurant_slug=slug)
 
                     # 1. Hotel Roles isolation (Front Desk & Housekeeping locked to PMS; Hotel Admin operates in Hotel PMS)
                     if user_role in ['HOTEL_ADMIN', 'FRONT_DESK', 'HOUSEKEEPING'] and request.path.startswith('/dashboard/'):

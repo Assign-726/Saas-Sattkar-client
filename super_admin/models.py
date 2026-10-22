@@ -90,6 +90,17 @@ class Restaurant(models.Model):
         verbose_name="Dedicated Hotel Website Mode",
         help_text="Controls ENABLE_HOTEL_WEBSITE mode across branches on public frontend"
     )
+    feature_website_cms = models.BooleanField(
+        default=True,
+        verbose_name="Website CMS Pages",
+        help_text="Controls ENABLE_WEBSITE_CMS (Full multipage website vs minimal digital menu)"
+    )
+    feature_website_type = models.CharField(
+        max_length=50,
+        default="full",
+        verbose_name="Website Mode",
+        help_text="'full' or 'minimal_ordering'"
+    )
     features_last_synced_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -236,6 +247,20 @@ class Restaurant(models.Model):
         if self.max_businesses and self.max_businesses > 0:
             return self.max_businesses
         return constants.MAX_ALLOWED_BUSINESSES
+
+    @property
+    def is_menu_only_website(self) -> bool:
+        if not self.feature_website_pages:
+            return False
+        return not bool(self.feature_website_cms) or self.feature_website_type == 'minimal_ordering'
+
+    @property
+    def has_full_website(self) -> bool:
+        return bool(self.feature_website_pages and self.feature_website_cms and self.feature_website_type != 'minimal_ordering')
+
+    @property
+    def website_mode(self) -> str:
+        return 'minimal_ordering' if self.is_menu_only_website else 'full'
 
     def save(self, *args, **kwargs):
         if self.trade_name and not self.name:
@@ -442,6 +467,12 @@ class GstRegistration(models.Model):
         return f"{self.gstin} ({self.get_reg_type_display()})"
 
 
+from restaurant_project import features
+
+BRANCH_TYPE_DEFAULTS = features.get_branch_type_defaults()
+
+
+
 class RestaurantBranch(models.Model):
     class GSTRegType(models.TextChoices):
         REGULAR_5 = 'R5', 'Regular (5% GST on bills)'
@@ -449,10 +480,20 @@ class RestaurantBranch(models.Model):
         COMPOSITION = 'C', 'Composition'
         UNREGISTERED = 'U', 'Unregistered'
 
-    class OutletType(models.TextChoices):
-        DINE_IN = 'dine_in', 'Dine-in'
-        TAKEAWAY_QSR = 'takeaway_qsr', 'Takeaway / QSR'
-        CLOUD_KITCHEN = 'cloud_kitchen', 'Cloud Kitchen'
+    class BranchType(models.TextChoices):
+        ONLY_POS = 'only_pos', 'POS Only (Billing & Quick Order)'
+        STARTER_DHABA = 'starter_dhaba', 'Starter / Dhaba (Orders & Tables)'
+        TAKEAWAY_QSR = 'takeaway_qsr', 'Takeaway / QSR (Counter & Takeaway)'
+        CLOUD_KITCHEN = 'cloud_kitchen', 'Cloud Kitchen (Delivery Only)'
+        RESTAURANT_STANDARD = 'restaurant_standard', 'Standard Restaurant (Full Dining)'
+        FINE_DINE_BAR = 'fine_dine_bar', 'Fine Dine & Bar (Dining, Bar VAT, CRM)'
+        HOTEL_RESORT = 'hotel_resort', 'Hotel & Resort (Hotel PMS & Dining)'
+        CLUB_LOUNGE = 'club_lounge', 'Club & Lounge (Events & Passes)'
+        CUSTOM = 'custom', 'Custom / Enterprise'
+        # Legacy fallback
+        DINE_IN = 'dine_in', 'Standard Restaurant (Dine-in)'
+
+    OutletType = BranchType
 
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='branches')
     gst_registration = models.ForeignKey(
@@ -464,10 +505,22 @@ class RestaurantBranch(models.Model):
     )
     name = models.CharField(max_length=200)
     outlet_type = models.CharField(
-        max_length=20,
-        choices=OutletType.choices,
-        default=OutletType.DINE_IN,
-        verbose_name="Outlet Type"
+        max_length=30,
+        choices=BranchType.choices,
+        default=BranchType.RESTAURANT_STANDARD,
+        verbose_name="Branch Type"
+    )
+    branch_addons = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Branch Add-ons",
+        help_text="Active add-on keys: ['inventory', 'staff', 'finance', 'website_cms', 'delivery', 'events', 'hotel', 'alcohol_vat']"
+    )
+    plan_entitlements = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Plan Entitlements from Master Admin",
+        help_text="Dynamic feature flags and module entitlements sent by Sattkar Master Admin"
     )
     slug = models.SlugField(max_length=220, unique=True, blank=True, null=True)
     phone = models.CharField(max_length=20, blank=True)
@@ -664,6 +717,92 @@ class RestaurantBranch(models.Model):
         if addr:
             return addr
         return self.restaurant.address if self.restaurant else ""
+
+    @property
+    def branch_type(self):
+        return self.outlet_type
+
+    @branch_type.setter
+    def branch_type(self, val):
+        self.outlet_type = val
+
+    def is_module_licensed(self, module_key: str) -> bool:
+        """
+        Checks if this branch has been granted licensing for the given module by Sattkar Master Admin.
+        If the restaurant is master-managed, this strictly checks the plan entitlements.
+        """
+        if not (self.restaurant and self.restaurant.master_sync_status == 'SYNCED' and self.restaurant.master_license_key):
+            return True  # Local / standalone mode
+
+        clean = str(module_key or '').strip().lower()
+        ent = self.plan_entitlements or {}
+        addons = self.branch_addons or []
+
+        if clean in ('club', 'events', 'club_events'):
+            if not getattr(self.restaurant, 'feature_club_events', True):
+                return False
+            return bool(ent.get('has_club') or ent.get('has_club_events') or ent.get('is_bar_club') or ent.get('has_event_management') or ent.get('has_club_lounge') or 'events' in addons)
+
+        if clean in ('hotel', 'hotel_pms', 'pms'):
+            if not getattr(self.restaurant, 'feature_hotel_pms', True):
+                return False
+            return bool(ent.get('has_hotel') or ent.get('has_hotel_management') or ent.get('is_hotel') or ent.get('has_hotel_resort') or 'hotel' in addons)
+
+        if clean in ('hotel_spa', 'spa', 'spas', 'wellness', 'spas_wellness'):
+            if not self.is_module_licensed('hotel'):
+                return False
+            return bool(ent.get('has_spas_wellness') or ent.get('has_spa') or ent.get('has_wellness') or 'hotel_spa' in addons or 'spa' in addons)
+
+        if clean in ('hotel_cabs', 'cabs', 'cab', 'transport', 'transportation'):
+            if not self.is_module_licensed('hotel'):
+                return False
+            return bool(ent.get('has_cabs') or ent.get('has_cab') or ent.get('has_transport') or 'hotel_cabs' in addons or 'cabs' in addons)
+
+        if clean in ('pos', 'restaurant', 'restaurant_pos'):
+            if not getattr(self.restaurant, 'feature_restaurant_pos', True):
+                return False
+            return bool(ent.get('has_restaurant', True) or ent.get('is_restaurant', True) or ent.get('has_only_pos') or ent.get('has_starter') or ent.get('has_complete_restaurant_without_alcohol') or ent.get('has_complete_restaurant_with_alcohol'))
+
+        if clean in ('alcohol', 'alcohol_vat', 'bar'):
+            if not getattr(self.restaurant, 'feature_alcohol_vat', True):
+                return False
+            return bool(ent.get('has_complete_restaurant_with_alcohol') or ent.get('is_alcohol') or ent.get('has_alcohol') or ent.get('has_fine_dine_bar') or 'alcohol_vat' in addons)
+
+        if clean in ('hotel_website',):
+            return bool(getattr(self.restaurant, 'feature_hotel_website', False)) and self.is_module_licensed('hotel')
+
+        return True
+
+    @property
+    def is_club_licensed(self) -> bool:
+        return self.is_module_licensed('club')
+
+    @property
+    def is_hotel_licensed(self) -> bool:
+        return self.is_module_licensed('hotel')
+
+    @property
+    def is_spa_licensed(self) -> bool:
+        return self.is_module_licensed('hotel_spa')
+
+    @property
+    def is_cabs_licensed(self) -> bool:
+        return self.is_module_licensed('hotel_cabs')
+
+    @property
+    def is_restaurant_licensed(self) -> bool:
+        return self.is_module_licensed('restaurant')
+
+    @property
+    def is_alcohol_licensed(self) -> bool:
+        return self.is_module_licensed('alcohol_vat')
+
+    def is_feature_enabled(self, feature_key: str) -> bool:
+        """
+        Determines whether a module/feature is active for this branch.
+        Delegates to centralized features.py single-source-of-truth.
+        """
+        return features.is_feature_enabled(self, feature_key)
 
     @property
     def is_vat_config_complete(self):

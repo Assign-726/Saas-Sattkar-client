@@ -27,6 +27,8 @@ def app_constants(request):
             restaurant = None
 
     show_website = constants.is_module_enabled('SHOW_WEBSITE_PAGES', restaurant)
+    enable_website_cms = constants.is_module_enabled('ENABLE_WEBSITE_CMS', restaurant)
+    is_menu_only_website = constants.is_module_enabled('IS_MENU_ONLY_WEBSITE', restaurant)
     enable_alcohol = constants.is_module_enabled('ENABLE_ALCOHOL_VAT', restaurant)
     enable_club = constants.is_module_enabled('ENABLE_CLUB_EVENTS_MODULE', restaurant)
     enable_hotel = constants.is_module_enabled('ENABLE_HOTEL_MODULE', restaurant)
@@ -44,7 +46,9 @@ def app_constants(request):
         'DEFAULT_CURRENCY': constants.DEFAULT_CURRENCY,
         'DEFAULT_STATE': constants.DEFAULT_STATE,
         'SHOW_WEBSITE_PAGES': show_website,
-        'ENABLE_WEBSITE_CMS': show_website,
+        'ENABLE_WEBSITE_CMS': enable_website_cms,
+        'IS_MENU_ONLY_WEBSITE': is_menu_only_website,
+        'WEBSITE_MODE': 'minimal_ordering' if is_menu_only_website else 'full',
         'ENABLE_ALCOHOL_VAT': enable_alcohol,
         'SHOW_ALCOHOL_MODULE': enable_alcohol,
         'ENABLE_CLUB_EVENTS_MODULE': enable_club,

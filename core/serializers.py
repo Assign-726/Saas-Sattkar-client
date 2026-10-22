@@ -17,7 +17,7 @@ class RestaurantBranchSerializer(serializers.ModelSerializer):
     class Meta:
         model = RestaurantBranch
         fields = [
-            'id', 'name', 'slug', 'phone', 'email', 'opening_hours',
+            'id', 'name', 'slug', 'outlet_type', 'phone', 'email', 'opening_hours',
             'address_line_1', 'address_line_2',
             'city', 'state', 'pincode', 'address', 'serves_alcohol',
             'service_charge_percentage', 'fssai_license_no', 'gstin',
@@ -25,14 +25,15 @@ class RestaurantBranchSerializer(serializers.ModelSerializer):
             'enable_customer_ordering', 'enable_online_payment', 'enable_pay_at_counter',
             'enforce_operating_hours', 'opening_time', 'closing_time', 'closed_message', 'weekly_schedule',
             'operating_status', 'has_club_module', 'has_hotel_module',
-            'has_restaurant_module', 'has_hotel_website'
+            'has_restaurant_module', 'has_hotel_website', 'branch_addons'
         ]
 
     def get_address(self, obj):
         addr_parts = [p for p in [obj.address_line_1, obj.address_line_2, obj.city, obj.state, obj.pincode] if p]
         if addr_parts:
             return ", ".join(addr_parts)
-        return obj.restaurant.address if obj.restaurant else ""
+        r = getattr(obj, 'restaurant', None) if getattr(obj, 'restaurant_id', None) else None
+        return r.address if r else ""
 
     def get_gstin(self, obj):
         if getattr(obj, 'gst_registration', None) and getattr(obj.gst_registration, 'gstin', None):
@@ -52,6 +53,14 @@ class RestaurantBranchSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
+        b_type = getattr(instance, 'outlet_type', 'restaurant_standard')
+        data['branch_type'] = b_type
+        if hasattr(instance, 'is_feature_enabled'):
+            data['has_website_cms'] = instance.is_feature_enabled('website_cms')
+            data['has_staff'] = instance.is_feature_enabled('staff')
+            data['has_inventory'] = instance.is_feature_enabled('inventory')
+            data['has_finance'] = instance.is_feature_enabled('finance')
+            data['has_dine_in'] = instance.is_feature_enabled('dine_in')
         rest = getattr(instance, 'restaurant', None)
         if rest and (not rest.is_active or not getattr(rest, 'feature_website_pages', True)):
             data['enable_customer_ordering'] = False
@@ -946,22 +955,83 @@ class RestaurantLandingSerializer(serializers.ModelSerializer):
                 q_params.get('branch_slug')
             )
         
-        # If branch_param is present, find matching branch config
-        if branch_param and instance.events_page_config and isinstance(instance.events_page_config, dict):
-            from django.db.models import Q
-            branches_dict = instance.events_page_config.get('branches', {})
-            b_cfg = None
-            if str(branch_param) in branches_dict:
-                b_cfg = branches_dict[str(branch_param)]
-            else:
+        target_branch = None
+        if instance.restaurant:
+            if branch_param:
+                from django.db.models import Q
                 try:
-                    matched_branch = instance.restaurant.branches.filter(
+                    target_branch = instance.restaurant.branches.filter(
                         Q(slug=branch_param) | Q(id=int(branch_param) if str(branch_param).isdigit() else None)
                     ).first()
-                    if matched_branch and str(matched_branch.id) in branches_dict:
-                        b_cfg = branches_dict[str(matched_branch.id)]
                 except Exception:
                     pass
+            if not target_branch:
+                target_branch = instance.restaurant.branches.first()
+
+        # If branch doesn't have website_cms (e.g. starter/dhaba branch), serve in minimal ordering mode
+        # Also check restaurant brand level: if restaurant is menu only or has no full website
+        r = instance.restaurant if hasattr(instance, 'restaurant') else None
+        is_menu_only = getattr(r, 'is_menu_only_website', False) if r else False
+        has_full_web = getattr(r, 'has_full_website', True) if r else True
+        if hasattr(r, 'feature_website_cms') and not r.feature_website_cms:
+            has_full_web = False
+            is_menu_only = True
+
+        if target_branch and hasattr(target_branch, 'is_feature_enabled'):
+            has_cms = target_branch.is_feature_enabled('website_cms') and has_full_web and not is_menu_only
+            has_events = target_branch.is_feature_enabled('events')
+            if not has_cms or is_menu_only:
+                data['website_mode'] = 'minimal_ordering'
+                data['is_menu_only_website'] = True
+                data['has_full_website'] = False
+                data['has_menu_website'] = True
+                data['enable_website_cms'] = False
+                data['show_about'] = False
+                data['show_why_us'] = False
+                data['show_specials'] = False
+                data['show_events'] = False
+                data['show_gallery'] = False
+                data['show_team'] = False
+                data['show_reviews'] = False
+                data['show_careers'] = False
+                data['gallery_images'] = []
+                data['team_members'] = []
+                data['events'] = []
+                data['why_choose_us'] = []
+            else:
+                data['website_mode'] = 'full'
+                data['is_menu_only_website'] = False
+                data['has_full_website'] = True
+                data['has_menu_website'] = False
+                data['enable_website_cms'] = True
+                if not has_events:
+                    data['show_events'] = False
+                    data['events'] = []
+        else:
+            is_full = has_full_web and not is_menu_only
+            data['website_mode'] = 'full' if is_full else 'minimal_ordering'
+            data['is_menu_only_website'] = not is_full
+            data['has_full_website'] = is_full
+            data['has_menu_website'] = not is_full
+            data['enable_website_cms'] = is_full
+            if not is_full:
+                data['show_about'] = False
+                data['show_why_us'] = False
+                data['show_specials'] = False
+                data['show_events'] = False
+                data['show_gallery'] = False
+                data['show_team'] = False
+                data['show_reviews'] = False
+                data['show_careers'] = False
+                data['gallery_images'] = []
+                data['team_members'] = []
+                data['events'] = []
+                data['why_choose_us'] = []
+
+        # If target_branch is resolved and events config exists, overlay branch-specific events hero
+        if target_branch and instance.events_page_config and isinstance(instance.events_page_config, dict):
+            branches_dict = instance.events_page_config.get('branches', {})
+            b_cfg = branches_dict.get(str(target_branch.id)) or (branches_dict.get(str(branch_param)) if branch_param else None)
 
             if b_cfg and isinstance(b_cfg, dict):
                 if b_cfg.get('hero_title'):

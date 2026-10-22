@@ -462,9 +462,13 @@ class OnboardRestaurantForm(forms.Form):
                 raise forms.ValidationError(f"Duplicate outlet name '{b_name}'. Each branch must have a unique name.")
             seen_branch_names.add(b_name.lower())
 
-            outlet_type = bdata.get("outlet_type", "dine_in")
-            if outlet_type not in ["dine_in", "takeaway_qsr", "cloud_kitchen"]:
-                outlet_type = "dine_in"
+            outlet_type = bdata.get("branch_type") or bdata.get("outlet_type", "restaurant_standard")
+            valid_types = [c[0] for c in RestaurantBranch.BranchType.choices]
+            if outlet_type not in valid_types:
+                outlet_type = "restaurant_standard" if outlet_type in ("dine_in", "") else "starter_dhaba"
+
+            branch_addons_raw = bdata.get("branch_addons", [])
+            branch_addons = branch_addons_raw if isinstance(branch_addons_raw, list) else []
 
             # Phone validation
             b_phone_raw = bdata.get("phone", "")
@@ -609,6 +613,7 @@ class OnboardRestaurantForm(forms.Form):
                 'has_hotel_module': bool(bdata.get("has_hotel_module", False)),
                 'has_restaurant_module': bool(bdata.get("has_restaurant_module", True)),
                 'has_hotel_website': bool(bdata.get("has_hotel_website", False)),
+                'branch_addons': branch_addons,
             })
 
         return cleaned_branches
@@ -704,8 +709,40 @@ class OnboardRestaurantForm(forms.Form):
                 branch = RestaurantBranch.objects.filter(id=int(branch_id), restaurant=restaurant).first()
 
             if branch:
+                is_master_managed = bool(
+                    restaurant.master_sync_status == 'SYNCED' and restaurant.master_license_key
+                )
                 branch.name = bdata.get("name", "")
-                branch.outlet_type = bdata.get("outlet_type", "dine_in")
+                # If managed by Sattkar Master Admin, preserve plan-enforced tier, add-ons, and modules
+                if not is_master_managed:
+                    branch.outlet_type = bdata.get("outlet_type", "restaurant_standard")
+                    branch.branch_addons = bdata.get("branch_addons", [])
+                    branch.serves_alcohol = bdata.get("serves_alcohol", False)
+                    branch.has_club_module = bool(bdata.get("has_club_module", False))
+                    branch.has_hotel_module = bool(bdata.get("has_hotel_module", False))
+                    branch.has_restaurant_module = bool(bdata.get("has_restaurant_module", True)) and getattr(restaurant, 'feature_restaurant_pos', True)
+                else:
+                    # Enforce branch-level plan licensing for master managed businesses
+                    if branch.is_module_licensed('club'):
+                        branch.has_club_module = bool(bdata.get("has_club_module", False))
+                    else:
+                        branch.has_club_module = False
+
+                    if branch.is_module_licensed('hotel'):
+                        branch.has_hotel_module = bool(bdata.get("has_hotel_module", False))
+                    else:
+                        branch.has_hotel_module = False
+
+                    if branch.is_module_licensed('alcohol_vat'):
+                        branch.serves_alcohol = bool(bdata.get("serves_alcohol", False))
+                    else:
+                        branch.serves_alcohol = False
+
+                    if branch.is_module_licensed('restaurant'):
+                        branch.has_restaurant_module = bool(bdata.get("has_restaurant_module", True))
+                    else:
+                        branch.has_restaurant_module = False
+
                 branch.phone = bdata.get("phone", "")
                 branch.use_company_address = bdata.get("use_company_address", True)
                 branch.address_line_1 = bdata.get("address_line_1", "")
@@ -714,7 +751,6 @@ class OnboardRestaurantForm(forms.Form):
                 branch.state = b_state
                 branch.pincode = bdata.get("pincode", "")
                 branch.fssai_license_no = bdata.get("fssai_license_no", "")
-                branch.serves_alcohol = bdata.get("serves_alcohol", False)
                 branch.vat_tin = bdata.get("vat_tin", "")
                 branch.excise_license_no = bdata.get("excise_license_no", "")
                 branch.vat_beer_rate = bdata.get("vat_beer_rate", 60.00)
@@ -725,9 +761,6 @@ class OnboardRestaurantForm(forms.Form):
                 branch.gst_registration_type = bdata.get("gst_registration_type", "R5")
                 branch.is_hotel_tariff_7500_plus = bdata.get("is_hotel_tariff_7500_plus", False)
                 branch.e_invoicing_enabled = bdata.get("e_invoicing_enabled", False)
-                branch.has_club_module = bool(bdata.get("has_club_module", False))
-                branch.has_hotel_module = bool(bdata.get("has_hotel_module", False))
-                branch.has_restaurant_module = bool(bdata.get("has_restaurant_module", True)) and getattr(restaurant, 'feature_restaurant_pos', True)
                 branch.has_hotel_website = bool(bdata.get("has_hotel_website", False)) and getattr(restaurant, 'feature_hotel_website', False)
                 branch.save()
             else:
@@ -735,7 +768,8 @@ class OnboardRestaurantForm(forms.Form):
                     restaurant=restaurant,
                     gst_registration=gst_reg_obj,
                     name=bdata.get("name", ""),
-                    outlet_type=bdata.get("outlet_type", "dine_in"),
+                    outlet_type=bdata.get("outlet_type", "restaurant_standard"),
+                    branch_addons=bdata.get("branch_addons", []),
                     phone=bdata.get("phone", ""),
                     use_company_address=bdata.get("use_company_address", True),
                     address_line_1=bdata.get("address_line_1", ""),

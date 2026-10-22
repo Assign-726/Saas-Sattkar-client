@@ -241,13 +241,44 @@ class RolePermissionMiddleware:
         match = getattr(request, 'resolver_match', None)
         if match is None or match.namespace not in RULES:
             return None
-        role = custom_role_of(request.user)
-        if role is None:
-            return None
         key = (match.namespace, match.url_name)
         if key in ALWAYS or (match.url_name or '').endswith('logout'):
             return None
         area = area_for(*key)
+
+        # 1. Branch-level feature entitlement check
+        if not getattr(request.user, 'is_superuser', False):
+            branch = None
+            if hasattr(request.user, 'restaurant_profile') and request.user.restaurant_profile:
+                branch = request.user.restaurant_profile.branch
+                if not branch and request.user.restaurant_profile.restaurant:
+                    bid = request.GET.get('branch_id') or request.session.get(f'active_branch_{request.user.restaurant_profile.restaurant.id}')
+                    if bid and str(bid).isdigit():
+                        branch = request.user.restaurant_profile.restaurant.branches.filter(id=int(bid)).first()
+                    if not branch:
+                        branch = request.user.restaurant_profile.restaurant.branches.first()
+
+            if branch and hasattr(branch, 'is_feature_enabled') and area:
+                if area in ('inventory', 'staff', 'finance', 'delivery', 'events'):
+                    if not branch.is_feature_enabled(area):
+                        label = AREA_LABEL.get(area, 'this screen')
+                        msg = f'The {label} module is not enabled for branch "{branch.name}". Add this feature as a branch add-on to access.'
+                        wants_json = (request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'json' in request.headers.get('Accept', '')
+                                      or 'application/json' in (request.content_type or '') or '/api/' in request.path or request.path.rstrip('/').endswith('_api'))
+                        if wants_json:
+                            return JsonResponse({'success': False, 'error': msg}, status=403)
+                        messages.warning(request, msg)
+                        slug = view_kwargs.get('restaurant_slug')
+                        if slug:
+                            try:
+                                return redirect(reverse('restaurant_admin:order_create_manual', kwargs={'restaurant_slug': slug}))
+                            except Exception:
+                                pass
+
+        # 2. Custom role permission check
+        role = custom_role_of(request.user)
+        if role is None:
+            return None
         have = role.level(area) if area else NONE
         need = VIEW if request.method in self.SAFE and not is_mutating(match.url_name) else MANAGE
         if RANK[have] >= RANK[need]:

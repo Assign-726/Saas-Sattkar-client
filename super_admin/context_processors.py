@@ -21,7 +21,30 @@ def activity_log_access(request):
     from super_admin.permissions import NONE, access_map, custom_role_of
     levels = access_map(user)
     access = {k: v != NONE for k, v in levels.items()}
-    access['guests_group'] = access['guests'] or access['feedback'] or access['campaigns']
+
+    # Resolve active branch to narrow access if not superuser
+    branch = None
+    if not getattr(user, 'is_superuser', False):
+        if hasattr(user, 'restaurant_profile') and user.restaurant_profile:
+            branch = user.restaurant_profile.branch
+            if not branch and user.restaurant_profile.restaurant:
+                branch_id = request.GET.get('branch_id') or request.session.get(f'active_branch_{user.restaurant_profile.restaurant.id}')
+                if branch_id and str(branch_id).isdigit():
+                    branch = user.restaurant_profile.restaurant.branches.filter(id=int(branch_id)).first()
+                if not branch:
+                    branch = user.restaurant_profile.restaurant.branches.first()
+
+        if branch and hasattr(branch, 'is_feature_enabled'):
+            for area_key in list(access.keys()):
+                if not branch.is_feature_enabled(area_key):
+                    access[area_key] = False
+
+    access['guests_group'] = access.get('guests', False) or access.get('feedback', False) or access.get('campaigns', False)
+    can_fin = _can_manage_integrations(user)
+    if not getattr(user, 'is_superuser', False) and branch and hasattr(branch, 'is_feature_enabled'):
+        if not branch.is_feature_enabled('finance'):
+            can_fin = False
+
     return {
         'access': access, 'access_level': levels, 'custom_role': custom_role_of(user),
         'can_manage_roles': _can_manage_roles(user),
@@ -29,7 +52,7 @@ def activity_log_access(request):
         'can_view_hotel_logs': can_view_logs(user, 'hotel'),
         'can_view_guests': _can_view_guests(user),
         'can_manage_integrations': _can_manage_integrations(user),
-        'can_manage_finance': _can_manage_integrations(user),
+        'can_manage_finance': can_fin,
         'can_run_campaigns': _can_manage_guests(user),
     }
 
