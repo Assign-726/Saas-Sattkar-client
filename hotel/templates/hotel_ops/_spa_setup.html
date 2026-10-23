@@ -1,31 +1,1508 @@
 {% load restaurant_admin_extras %}
-<div class="ui-logs ui-pms">
-  <a class="ui-back" href="{{ base_url }}spa/"><i class="fa-solid fa-chevron-left"></i> Spa schedule</a>
-  <div class="ui-page-header"><div><h1>Therapists &amp; treatment menu</h1><p>Prices are before GST. Hidden items stay on past bookings.</p></div></div>
-  <div class="ui-ops-2col">
-    <section class="ui-card ui-pad">
-      <h2 class="ui-card-title">Therapists</h2>
-      {% for t in therapists %}<form method="post" action="{{ base_url }}spa/setup/save/" class="ui-ops-inline">{% csrf_token %}<input type="hidden" name="kind" value="therapist"><input type="hidden" name="pk" value="{{ t.pk }}">
-        <input class="ui-input" name="name" value="{{ t.name }}" aria-label="Name" {% if not can_edit %}disabled{% endif %}><input class="ui-input" name="skills" value="{{ t.skills }}" placeholder="Skills" aria-label="Skills" {% if not can_edit %}disabled{% endif %}>
-        <select class="ui-input" name="is_active" aria-label="Status" {% if not can_edit %}disabled{% endif %}><option value="1" {% if t.is_active %}selected{% endif %}>Active</option><option value="0" {% if not t.is_active %}selected{% endif %}>Inactive</option></select>
-        {% if can_edit %}<button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">Save</button>{% endif %}</form>
-      {% empty %}<p class="ui-log-sub">No therapists yet.</p>{% endfor %}
-      {% if can_edit %}<form method="post" action="{{ base_url }}spa/setup/save/" class="ui-ops-inline" style="margin-top:10px">{% csrf_token %}<input type="hidden" name="kind" value="therapist">
-        <input class="ui-input" name="name" placeholder="New therapist" aria-label="New therapist" required><input class="ui-input" name="skills" placeholder="Skills" aria-label="Skills"><input type="hidden" name="is_active" value="1"><button class="ui-btn ui-btn-primary ui-btn-sm" type="submit">Add</button></form>{% endif %}
-    </section>
-    <section class="ui-card ui-pad">
-      <h2 class="ui-card-title">Treatments</h2>
-      {% for t in treatments %}<form method="post" action="{{ base_url }}spa/setup/save/" class="ui-ops-inline is-wide">{% csrf_token %}<input type="hidden" name="kind" value="treatment"><input type="hidden" name="pk" value="{{ t.pk }}">
-        <input class="ui-input" name="name" value="{{ t.name }}" aria-label="Name" {% if not can_edit %}disabled{% endif %}><input class="ui-input" name="category" value="{{ t.category }}" placeholder="Category" aria-label="Category" {% if not can_edit %}disabled{% endif %}>
-        <input class="ui-input" type="number" name="duration_minutes" value="{{ t.duration_minutes }}" min="15" max="240" step="15" aria-label="Minutes" title="Minutes" {% if not can_edit %}disabled{% endif %}><input class="ui-input" type="number" name="price" value="{{ t.price|floatformat:'0' }}" min="1" aria-label="Price" title="Price ₹" {% if not can_edit %}disabled{% endif %}>
-        <input class="ui-input" type="number" name="gst_percent" value="{{ t.gst_percent|floatformat:'0' }}" min="0" max="28" aria-label="GST %" title="GST %" {% if not can_edit %}disabled{% endif %}>
-        <select class="ui-input" name="is_active" aria-label="Status" {% if not can_edit %}disabled{% endif %}><option value="1" {% if t.is_active %}selected{% endif %}>On menu</option><option value="0" {% if not t.is_active %}selected{% endif %}>Hidden</option></select>
-        {% if can_edit %}<button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">Save</button>{% endif %}</form>
-      {% empty %}<p class="ui-log-sub">No treatments yet.</p>{% endfor %}
-      {% if can_edit %}<form method="post" action="{{ base_url }}spa/setup/save/" class="ui-ops-inline is-wide" style="margin-top:10px">{% csrf_token %}<input type="hidden" name="kind" value="treatment">
-        <input class="ui-input" name="name" placeholder="New treatment" aria-label="New treatment" required><input class="ui-input" name="category" placeholder="Category" aria-label="Category">
-        <input class="ui-input" type="number" name="duration_minutes" value="60" min="15" max="240" step="15" aria-label="Minutes"><input class="ui-input" type="number" name="price" placeholder="Price" min="1" aria-label="Price" required>
-        <input class="ui-input" type="number" name="gst_percent" value="18" min="0" max="28" aria-label="GST %"><input type="hidden" name="is_active" value="1"><button class="ui-btn ui-btn-primary ui-btn-sm" type="submit">Add</button></form>{% endif %}
-    </section>
+<div class="ui-logs ui-pms spa-setup-container">
+  <!-- Top Navigation & Header -->
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <a class="ui-back mb-0 d-inline-flex align-items-center gap-2" href="{{ base_url }}spa/">
+      <i class="fa-solid fa-chevron-left"></i> <span>Back to Spa Schedule</span>
+    </a>
+    <div class="d-flex flex-wrap gap-2">
+      {% if can_edit %}
+      <form method="post" action="{{ base_url }}spa/setup/reset-catalog/" class="d-inline" onsubmit="return confirm('Restore default catalog items? Your existing custom services and specialists will be kept.');">
+        {% csrf_token %}
+        <button type="submit" class="ui-btn ui-btn-gray ui-btn-sm text-secondary" title="Restore default catalog templates if deleted">
+          <i class="fa-solid fa-arrows-rotate me-1"></i> Restore Defaults
+        </button>
+      </form>
+      {% endif %}
+      <a class="ui-btn ui-btn-gray ui-btn-sm" href="/admin/hotel/spatherapist/" target="_blank"><i class="fa-solid fa-user-doctor me-1"></i> Django Admin Specialists</a>
+      <a class="ui-btn ui-btn-gray ui-btn-sm" href="/admin/hotel/spatreatment/" target="_blank"><i class="fa-solid fa-spa me-1"></i> Django Admin Treatments</a>
+      <a class="ui-btn ui-btn-gray ui-btn-sm" href="/admin/hotel/spapackage/" target="_blank"><i class="fa-solid fa-gift me-1"></i> Django Admin Packages</a>
+    </div>
+  </div>
+
+  <div class="ui-page-header mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 w-100">
+      <div>
+        <h1 class="h3 fw-bold mb-1 text-dark d-flex align-items-center gap-2">
+          <i class="fa-solid fa-spa text-primary"></i> Spa &amp; Wellness Catalog
+        </h1>
+        <p class="text-muted small mb-0">Configure wellness treatments, certified specialists, retreat packages, and high-resolution photo galleries. Device uploads are converted to WebP (max 2 MB per image, limit 5 images per service).</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        {% if can_edit %}
+        <button type="button" class="btn btn-primary btn-sm rounded-pill px-3 shadow-sm d-inline-flex align-items-center gap-1.5" data-bs-toggle="modal" data-bs-target="#modalAddTreatment">
+          <i class="fa-solid fa-plus"></i> Add Service
+        </button>
+        <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3 shadow-sm d-inline-flex align-items-center gap-1.5" data-bs-toggle="modal" data-bs-target="#modalAddTherapist">
+          <i class="fa-solid fa-user-plus"></i> Add Specialist
+        </button>
+        <button type="button" class="btn btn-outline-primary btn-sm rounded-pill px-3 shadow-sm d-inline-flex align-items-center gap-1.5" data-bs-toggle="modal" data-bs-target="#modalAddPackage">
+          <i class="fa-solid fa-gift"></i> Add Package
+        </button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Flash Messages & Feedback Alerts -->
+  {% if messages %}
+  <div class="mb-4">
+    {% for message in messages %}
+    <div class="alert alert-{% if 'error' in message.tags or 'danger' in message.tags %}danger{% elif 'success' in message.tags %}success{% elif 'warning' in message.tags %}warning{% else %}info{% endif %} alert-dismissible fade show rounded-4 shadow-sm border-0 d-flex align-items-center gap-2.5 p-3 px-3.5" role="alert">
+      <i class="fa-solid {% if 'error' in message.tags or 'danger' in message.tags %}fa-circle-exclamation text-danger fs-5{% elif 'success' in message.tags %}fa-circle-check text-success fs-5{% elif 'warning' in message.tags %}fa-triangle-exclamation text-warning fs-5{% else %}fa-circle-info text-info fs-5{% endif %}"></i>
+      <div class="flex-grow-1 fw-semibold text-dark" style="font-size: 0.9rem;">{{ message }}</div>
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- KPI Overview Bar -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-4 col-sm-6">
+      <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100 d-flex flex-row align-items-center gap-3">
+        <div class="rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; font-size: 1.4rem;">
+          <i class="fa-solid fa-spa"></i>
+        </div>
+        <div>
+          <div class="text-muted small fw-semibold text-uppercase">Treatments &amp; Rituals</div>
+          <div class="h4 fw-bold mb-0 text-dark">{{ treatments|length }} <span class="badge bg-success-subtle text-success small fw-normal ms-1">Catalog Active</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 col-sm-6">
+      <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100 d-flex flex-row align-items-center gap-3">
+        <div class="rounded-circle bg-info-subtle text-info d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; font-size: 1.4rem;">
+          <i class="fa-solid fa-user-doctor"></i>
+        </div>
+        <div>
+          <div class="text-muted small fw-semibold text-uppercase">Certified Specialists</div>
+          <div class="h4 fw-bold mb-0 text-dark">{{ therapists|length }} <span class="badge bg-primary-subtle text-primary small fw-normal ms-1">Available Today</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 col-sm-12">
+      <div class="card border-0 shadow-sm rounded-4 p-3 bg-white h-100 d-flex flex-row align-items-center gap-3">
+        <div class="rounded-circle bg-warning-subtle text-warning d-flex align-items-center justify-content-center" style="width: 50px; height: 50px; font-size: 1.4rem;">
+          <i class="fa-solid fa-gift"></i>
+        </div>
+        <div>
+          <div class="text-muted small fw-semibold text-uppercase">Signature Packages</div>
+          <div class="h4 fw-bold mb-0 text-dark">{{ packages|length }} <span class="badge bg-warning-subtle text-warning-emphasis small fw-normal ms-1">Retreats</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Navigation Tabs -->
+  <ul class="nav nav-pills mb-4 gap-2 bg-light p-1.5 rounded-4 border" id="spaSetupTabs" role="tablist" style="width: fit-content; max-width: 100%;">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link rounded-pill px-3 py-2 fw-semibold {% if active_tab == 'treatments' or not active_tab %}active{% endif %}" id="tab-btn-treatments" data-bs-toggle="pill" data-bs-target="#tab-treatments" type="button" role="tab">
+        <i class="fa-solid fa-spa me-1.5"></i> Services &amp; Treatments ({{ treatments|length }})
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link rounded-pill px-3 py-2 fw-semibold {% if active_tab == 'therapists' %}active{% endif %}" id="tab-btn-therapists" data-bs-toggle="pill" data-bs-target="#tab-therapists" type="button" role="tab">
+        <i class="fa-solid fa-user-doctor me-1.5"></i> Specialists &amp; Therapists ({{ therapists|length }})
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link rounded-pill px-3 py-2 fw-semibold {% if active_tab == 'packages' %}active{% endif %}" id="tab-btn-packages" data-bs-toggle="pill" data-bs-target="#tab-packages" type="button" role="tab">
+        <i class="fa-solid fa-gift me-1.5"></i> Signature Packages ({{ packages|length }})
+      </button>
+    </li>
+  </ul>
+
+  <!-- Tab Contents -->
+  <div class="tab-content" id="spaSetupTabsContent">
+    
+    <!-- ============================================================== -->
+    <!-- TAB 1: TREATMENTS & SERVICES                                   -->
+    <!-- ============================================================== -->
+    <div class="tab-pane fade {% if active_tab == 'treatments' or not active_tab %}show active{% endif %}" id="tab-treatments" role="tabpanel">
+      
+      <!-- Filter Bar -->
+      <div class="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-white">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+          <div class="d-flex flex-wrap gap-1.5" id="treatmentCategoryFilters">
+            <button type="button" class="btn btn-sm btn-dark rounded-pill px-3 filter-cat-btn active" data-filter="all">All Services ({{ treatments|length }})</button>
+            <button type="button" class="btn btn-sm btn-light border rounded-pill px-3 filter-cat-btn" data-filter="massages">Massages</button>
+            <button type="button" class="btn btn-sm btn-light border rounded-pill px-3 filter-cat-btn" data-filter="ayurveda">Ayurveda</button>
+            <button type="button" class="btn btn-sm btn-light border rounded-pill px-3 filter-cat-btn" data-filter="facials">Facials</button>
+            <button type="button" class="btn btn-sm btn-light border rounded-pill px-3 filter-cat-btn" data-filter="steam-hydro">Hydro &amp; Steam</button>
+            <button type="button" class="btn btn-sm btn-light border rounded-pill px-3 filter-cat-btn" data-filter="couples">Couples</button>
+          </div>
+          <div class="position-relative" style="min-width: 240px;">
+            <i class="fa-solid fa-magnifying-glass position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+            <input type="text" id="treatmentSearchInput" class="form-control form-control-sm rounded-pill ps-5" placeholder="Search treatments...">
+          </div>
+        </div>
+      </div>
+
+      <!-- Treatments Grid -->
+      <div class="row g-4" id="treatmentGrid">
+        {% for t in treatments %}
+        <div class="col-xl-4 col-md-6 treatment-card-wrapper" data-category="{{ t.category }}" data-name="{{ t.name|lower }}" data-tag="{{ t.tag|lower }}">
+          <div class="card border-0 shadow-sm rounded-4 h-100 overflow-hidden bg-white treatment-card transition-all">
+            <!-- Thumbnail & Image Badges -->
+            <div class="position-relative" style="height: 200px; background: #212529;">
+              {% if t.cover_image %}
+              <img src="{{ t.cover_image }}" alt="{{ t.name }}" class="w-100 h-100 object-fit-cover" style="opacity: 0.9;">
+              {% else %}
+              <div class="w-100 h-100 d-flex flex-column align-items-center justify-content-center text-white-50">
+                <i class="fa-solid fa-spa fa-3x mb-2 opacity-50"></i>
+                <span class="small">No cover photo</span>
+              </div>
+              {% endif %}
+
+              <!-- Top Left Badges -->
+              <div class="position-absolute top-0 start-0 m-3 d-flex flex-column gap-1.5 align-items-start">
+                <span class="badge bg-dark bg-opacity-75 text-white backdrop-blur border border-white-50 rounded-pill px-2.5 py-1 small">
+                  {{ t.category|title }}
+                </span>
+                {% if t.tag %}
+                <span class="badge bg-warning text-dark rounded-pill px-2.5 py-1 small fw-semibold shadow-sm">
+                  <i class="fa-solid fa-star me-1"></i> {{ t.tag }}
+                </span>
+                {% endif %}
+              </div>
+
+              <!-- Top Right Status & Photo Count -->
+              <div class="position-absolute top-0 end-0 m-3 d-flex flex-column gap-1.5 align-items-end">
+                {% if t.is_active %}
+                <span class="badge bg-success rounded-pill px-2.5 py-1 shadow-sm"><i class="fa-solid fa-circle-check me-1"></i> Active</span>
+                {% else %}
+                <span class="badge bg-secondary rounded-pill px-2.5 py-1 shadow-sm"><i class="fa-solid fa-eye-slash me-1"></i> Hidden</span>
+                {% endif %}
+                <span class="badge bg-black bg-opacity-75 text-white border border-white-50 rounded-pill px-2 py-1 small" title="Strict limit: Maximum 5 images per service">
+                  <i class="fa-solid fa-images me-1"></i>
+                  {% with gal_count=t.gallery_images|length %}
+                    {% if t.cover_image %}
+                      {{ gal_count|add:"1" }}/5 Photos
+                    {% else %}
+                      {{ gal_count }}/5 Photos
+                    {% endif %}
+                  {% endwith %}
+                </span>
+              </div>
+
+              <!-- Bottom Bar on Thumbnail -->
+              <div class="position-absolute bottom-0 start-0 end-0 p-2.5 px-3 bg-gradient-dark text-white d-flex justify-content-between align-items-center">
+                <span class="small"><i class="fa-regular fa-clock me-1 text-warning"></i> {{ t.duration_minutes }} Mins</span>
+                <span class="small"><i class="fa-solid fa-star text-warning me-1"></i> {{ t.rating|default:"4.95" }} ({{ t.reviews_count|default:"100" }})</span>
+              </div>
+            </div>
+
+            <!-- Card Body -->
+            <div class="card-body p-3 d-flex flex-column">
+              <div class="d-flex justify-content-between align-items-start gap-2 mb-1.5">
+                <h5 class="card-title fw-bold text-dark mb-0 line-clamp-1" title="{{ t.name }}">{{ t.name }}</h5>
+              </div>
+
+              <div class="text-muted small mb-2 d-flex align-items-center gap-1.5">
+                <i class="fa-solid fa-door-open text-primary opacity-75"></i> {{ t.suite_type|default:"VIP Private Suite" }}
+              </div>
+
+              <p class="text-muted small mb-3 flex-grow-1 line-clamp-2" style="font-size: 0.85rem;">
+                {{ t.short_description|default:t.full_description|default:"Indulgent restorative ritual curated for deep serenity, muscular tension release, and total cellular recovery." }}
+              </p>
+
+              <!-- Pricing Highlight Box -->
+              <div class="bg-light rounded-3 p-2.5 px-3 border mb-3 d-flex justify-content-between align-items-center">
+                <div>
+                  <div class="d-flex align-items-baseline gap-1.5">
+                    <span class="h5 fw-bold text-dark mb-0">₹{{ t.price|floatformat:"0" }}</span>
+                    {% if t.original_price and t.original_price > t.price %}
+                    <span class="text-muted text-decoration-line-through small">₹{{ t.original_price|floatformat:"0" }}</span>
+                    {% endif %}
+                  </div>
+                  <div class="text-muted" style="font-size: 0.72rem;">+{{ t.gst_percent|floatformat:"0" }}% GST included at billing</div>
+                </div>
+                <div class="text-end">
+                  <span class="badge bg-light text-secondary border rounded-pill px-2 py-1 small">
+                    <i class="fa-solid fa-list-check me-1"></i> {{ t.ritual_steps|length }} Steps
+                  </span>
+                </div>
+              </div>
+
+              <!-- Card Action Buttons -->
+              <div class="d-flex gap-2 pt-1 border-top">
+                {% if can_edit %}
+                <button type="button" class="btn btn-primary btn-sm rounded-pill flex-grow-1 fw-semibold d-inline-flex align-items-center justify-content-center gap-1.5 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalEditTreatment{{ t.pk }}">
+                  <i class="fa-solid fa-pen-to-square"></i> Edit &amp; Upload Photos
+                </button>
+                <form method="post" action="{{ base_url }}spa/setup/delete/" onsubmit="return confirm('Are you sure you want to delete treatment \'{{ t.name|escapejs }}\'? This action cannot be undone.');">
+                  {% csrf_token %}
+                  <input type="hidden" name="kind" value="treatment">
+                  <input type="hidden" name="pk" value="{{ t.pk }}">
+                  <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill px-2.5" title="Delete Treatment">
+                    <i class="fa-solid fa-trash-can"></i>
+                  </button>
+                </form>
+                {% else %}
+                <button type="button" class="btn btn-light btn-sm rounded-pill flex-grow-1 text-muted" disabled>View Only</button>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================== -->
+        <!-- MODAL: EDIT TREATMENT (COMPACT, TABBED & 100% ZOOM ACCESSIBLE) -->
+        <!-- ============================================================== -->
+        {% if can_edit %}
+        <div class="modal fade" id="modalEditTreatment{{ t.pk }}" tabindex="-1" aria-labelledby="modalEditTreatmentLabel{{ t.pk }}" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <form method="post" action="{{ base_url }}spa/setup/save/" enctype="multipart/form-data" class="modal-content border-0 shadow-lg rounded-4 overflow-hidden modal-custom-form">
+              {% csrf_token %}
+              <input type="hidden" name="kind" value="treatment">
+              <input type="hidden" name="pk" value="{{ t.pk }}">
+              <input type="hidden" name="has_gallery_field" value="1">
+
+              <div class="modal-header bg-light border-bottom p-3 px-4 flex-shrink-0">
+                <div>
+                  <h5 class="modal-title fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square text-primary"></i> Edit Treatment: {{ t.name }}
+                  </h5>
+                  <small class="text-muted">Modify ritual details, pricing, and device images (&lt; 2 MB each, max 5 images).</small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+
+              <!-- Internal Modal Tabs for effortless 100% zoom access -->
+              <div class="px-4 pt-2 bg-light border-bottom flex-shrink-0">
+                <ul class="nav nav-tabs border-bottom-0 gap-2" role="tablist">
+                  <li class="nav-item">
+                    <button class="nav-link active py-2 px-3 fw-semibold small" data-bs-toggle="tab" data-bs-target="#editTreatTabDetails{{ t.pk }}" type="button">
+                      <i class="fa-solid fa-sliders me-1 text-primary"></i> 1. Details &amp; Pricing
+                    </button>
+                  </li>
+                  <li class="nav-item">
+                    <button class="nav-link py-2 px-3 fw-semibold small" data-bs-toggle="tab" data-bs-target="#editTreatTabPhotos{{ t.pk }}" type="button">
+                      <i class="fa-solid fa-camera me-1 text-primary"></i> 2. Photos &amp; Media <span class="badge bg-primary-subtle text-primary ms-1">Max 5</span>
+                    </button>
+                  </li>
+                  <li class="nav-item">
+                    <button class="nav-link py-2 px-3 fw-semibold small" data-bs-toggle="tab" data-bs-target="#editTreatTabSteps{{ t.pk }}" type="button">
+                      <i class="fa-solid fa-list-check me-1 text-primary"></i> 3. Steps &amp; Benefits
+                    </button>
+                  </li>
+                </ul>
+              </div>
+
+              <div class="modal-body p-3 px-4 flex-grow-1 overflow-y-auto">
+                <div class="tab-content">
+                  
+                  <!-- TAB 1: DETAILS & PRICING -->
+                  <div class="tab-pane fade show active" id="editTreatTabDetails{{ t.pk }}" role="tabpanel">
+                    <div class="row g-3 mb-3">
+                      <div class="col-md-7">
+                        <label class="form-label small fw-bold">Treatment Name <span class="text-danger">*</span></label>
+                        <input type="text" name="name" class="form-control form-control-sm rounded-3" value="{{ t.name }}" required>
+                      </div>
+                      <div class="col-md-5">
+                        <label class="form-label small fw-bold">Category</label>
+                        <select name="category" class="form-select form-select-sm rounded-3">
+                          <option value="massages" {% if t.category == 'massages' %}selected{% endif %}>Massages &amp; Bodywork</option>
+                          <option value="ayurveda" {% if t.category == 'ayurveda' %}selected{% endif %}>Ancient Ayurveda</option>
+                          <option value="facials" {% if t.category == 'facials' %}selected{% endif %}>Aesthetic Facials</option>
+                          <option value="steam-hydro" {% if t.category == 'steam-hydro' %}selected{% endif %}>Steam &amp; Hydrotherapy</option>
+                          <option value="couples" {% if t.category == 'couples' %}selected{% endif %}>Couples Sanctuary</option>
+                        </select>
+                      </div>
+                      <div class="col-md-4">
+                        <label class="form-label small fw-bold">Tag / Badge</label>
+                        <input type="text" name="tag" class="form-control form-control-sm rounded-3" value="{{ t.tag }}" placeholder="e.g. Bestseller, Ancient Healing">
+                      </div>
+                      <div class="col-md-4">
+                        <label class="form-label small fw-bold">Suite Chamber</label>
+                        <input type="text" name="suite_type" class="form-control form-control-sm rounded-3" value="{{ t.suite_type }}" placeholder="e.g. VIP Private Suite">
+                      </div>
+                      <div class="col-md-4">
+                        <label class="form-label small fw-bold">Display Status</label>
+                        <select name="is_active" class="form-select form-select-sm rounded-3">
+                          <option value="1" {% if t.is_active %}selected{% endif %}>Active (Visible)</option>
+                          <option value="0" {% if not t.is_active %}selected{% endif %}>Hidden (Inactive)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                      <div class="col-md-3 col-6">
+                        <label class="form-label small fw-bold">Base Price (₹) <span class="text-danger">*</span></label>
+                        <div class="input-group input-group-sm">
+                          <span class="input-group-text bg-light">₹</span>
+                          <input type="number" name="price" class="form-control rounded-end-3" value="{{ t.price|floatformat:'0' }}" min="1" required>
+                        </div>
+                      </div>
+                      <div class="col-md-3 col-6">
+                        <label class="form-label small fw-bold">Original Price (₹)</label>
+                        <div class="input-group input-group-sm">
+                          <span class="input-group-text bg-light">₹</span>
+                          <input type="number" name="original_price" class="form-control rounded-end-3" value="{{ t.original_price|floatformat:'0' }}">
+                        </div>
+                      </div>
+                      <div class="col-md-3 col-6">
+                        <label class="form-label small fw-bold">Duration (Minutes)</label>
+                        <input type="number" name="duration_minutes" class="form-control form-control-sm rounded-3" value="{{ t.duration_minutes }}" min="15" max="240" step="15" required>
+                      </div>
+                      <div class="col-md-3 col-6">
+                        <label class="form-label small fw-bold">GST Rate (%)</label>
+                        <div class="input-group input-group-sm">
+                          <input type="number" name="gst_percent" class="form-control rounded-start-3" value="{{ t.gst_percent|floatformat:'0' }}" min="0" max="28">
+                          <span class="input-group-text bg-light">%</span>
+                        </div>
+                      </div>
+                      <div class="col-md-6">
+                        <label class="form-label small fw-bold">Guest Rating (1.00 – 5.00)</label>
+                        <input type="number" step="0.01" name="rating" class="form-control form-control-sm rounded-3" value="{{ t.rating }}" min="1" max="5">
+                      </div>
+                      <div class="col-md-6 d-flex align-items-center pt-3">
+                        <div class="form-check form-switch">
+                          <input class="form-check-input" type="checkbox" name="is_featured" value="1" id="featCheck{{ t.pk }}" {% if t.is_featured %}checked{% endif %}>
+                          <label class="form-check-label small fw-semibold" for="featCheck{{ t.pk }}">Mark as Featured Treatment</label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="row g-3">
+                      <div class="col-12">
+                        <label class="form-label small fw-bold">Short Summary Description</label>
+                        <textarea name="short_description" class="form-control form-control-sm rounded-3" rows="2" placeholder="Brief summary for cards...">{{ t.short_description }}</textarea>
+                      </div>
+                      <div class="col-12">
+                        <label class="form-label small fw-bold">Full Restorative Ritual Description</label>
+                        <textarea name="full_description" class="form-control form-control-sm rounded-3" rows="3" placeholder="In-depth wellness overview...">{{ t.full_description }}</textarea>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- TAB 2: PHOTOS & MEDIA (STRICT LIMIT 5 IMAGES, MAX 2MB) -->
+                  <div class="tab-pane fade" id="editTreatTabPhotos{{ t.pk }}" role="tabpanel">
+                    <!-- Primary Cover Image Section -->
+                    <div class="p-3 bg-light rounded-3 border mb-3">
+                      <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label small fw-bold mb-0">Primary Cover Photo</label>
+                        {% if t.cover_image %}
+                        <div class="form-check form-check-inline mb-0">
+                          <input class="form-check-input" type="checkbox" name="remove_cover_image" value="1" id="remCover{{ t.pk }}" onchange="updateGalleryCountBadge('{{ t.pk }}')">
+                          <label class="form-check-label small text-danger" for="remCover{{ t.pk }}">Remove Cover</label>
+                        </div>
+                        {% endif %}
+                      </div>
+                      <div class="d-flex gap-3 align-items-center flex-wrap">
+                        {% if t.cover_image %}
+                        <img src="{{ t.cover_image }}" alt="Cover" class="rounded-3 border object-fit-cover shadow-sm" style="width: 80px; height: 60px;" id="coverPreview_{{ t.pk }}">
+                        {% endif %}
+                        <div class="flex-grow-1" style="min-width: 200px;">
+                          <input type="file" name="cover_image_file" class="form-control form-control-sm rounded-3" accept="image/*" onchange="validateSingleImage(this)">
+                          <div class="form-text small text-muted">Select cover file from device (max 2 MB). Converted to WebP.</div>
+                        </div>
+                      </div>
+                      <div class="mt-2">
+                        <input type="text" name="cover_image" class="form-control form-control-sm rounded-3 font-monospace text-muted" value="{{ t.cover_image }}" placeholder="Or enter direct Cover Image URL (https://...)">
+                      </div>
+                    </div>
+
+                    <!-- Gallery Management (Cap at 5 total) -->
+                    <div class="p-3 bg-light rounded-3 border mb-2">
+                      <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label small fw-bold mb-0">Gallery Photos</label>
+                        <span class="small fw-semibold text-primary" id="galleryCounterDisplay_{{ t.pk }}">
+                          {% with gal_count=t.gallery_images|length %}
+                            {% if t.cover_image %}{{ gal_count|add:"1" }}{% else %}{{ gal_count }}{% endif %} of 5 images used
+                          {% endwith %}
+                        </span>
+                      </div>
+
+                      <!-- Existing Gallery Preview Grid -->
+                      <div class="row g-2 mb-3" id="galleryContainer_{{ t.pk }}">
+                        {% for g_url in t.gallery_images %}
+                        <div class="col-md-3 col-sm-4 col-6 gallery-item-box position-relative" id="galBox_{{ t.pk }}_{{ forloop.counter }}">
+                          <div class="ratio ratio-4x3 rounded-3 overflow-hidden border shadow-sm bg-dark">
+                            <img src="{{ g_url }}" alt="Gallery photo" class="w-100 h-100 object-fit-cover">
+                          </div>
+                          <input type="hidden" name="existing_gallery_images" value="{{ g_url }}" id="galInput_{{ t.pk }}_{{ forloop.counter }}">
+                          <button type="button" class="btn btn-danger btn-sm rounded-circle position-absolute top-0 end-0 m-1 p-0 d-flex align-items-center justify-content-center shadow" style="width: 24px; height: 24px; font-size: 0.7rem;" title="Delete this photo" onclick="markGalleryItemDeleted('{{ t.pk }}', '{{ forloop.counter }}')">
+                            <i class="fa-solid fa-xmark"></i>
+                          </button>
+                        </div>
+                        {% empty %}
+                        <div class="col-12 text-muted small py-2 text-center" id="emptyNotice_{{ t.pk }}">
+                          No additional gallery photos yet. Upload below!
+                        </div>
+                        {% endfor %}
+                      </div>
+
+                      <!-- Device Upload for Multiple Gallery Images -->
+                      <div>
+                        <label class="form-label small fw-bold mb-1">Upload Additional Device Photos:</label>
+                        <input type="file" name="gallery_image_files" class="form-control form-control-sm rounded-3" accept="image/*" multiple id="galFileInput_{{ t.pk }}" onchange="validateServiceGalleryUpload(this, '{{ t.pk }}')">
+                        <div class="form-text small text-muted">
+                          Max <strong>2 MB per image</strong>. Strictly capped at <strong>5 images total</strong> per service.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- TAB 3: STEPS & BENEFITS -->
+                  <div class="tab-pane fade" id="editTreatTabSteps{{ t.pk }}" role="tabpanel">
+                    <div class="row g-3">
+                      <div class="col-md-6">
+                        <label class="form-label small fw-bold">Ritual Steps (One step per line)</label>
+                        <textarea name="ritual_steps" class="form-control form-control-sm rounded-3" rows="5" placeholder="1. Welcome herbal foot soak&#10;2. Bespoke essential oil consultation&#10;3. Full body restorative massage...">{% for s in t.ritual_steps %}{{ s }}&#10;{% endfor %}</textarea>
+                      </div>
+                      <div class="col-md-6">
+                        <label class="form-label small fw-bold">Key Benefits (One benefit per line)</label>
+                        <textarea name="benefits" class="form-control form-control-sm rounded-3" rows="5" placeholder="• Releases chronic myofascial tension&#10;• Promotes restorative theta sleep&#10;• Enhances lymphatic drainage...">{% for b in t.benefits %}{{ b }}&#10;{% endfor %}</textarea>
+                      </div>
+                      <div class="col-12">
+                        <label class="form-label small fw-bold">Included Suite Amenities (One amenity per line)</label>
+                        <textarea name="included_amenities" class="form-control form-control-sm rounded-3" rows="3" placeholder="Herbal Steam Sauna Access&#10;Detox Infused Fruit Water&#10;Private En-Suite Shower...">{% for a in t.included_amenities %}{{ a }}&#10;{% endfor %}</textarea>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              <div class="modal-footer bg-light border-top p-3 px-4 d-flex justify-content-between flex-shrink-0">
+                <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4 fw-semibold shadow-sm">
+                  <i class="fa-solid fa-floppy-disk me-1"></i> Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+        {% endif %}
+
+        {% empty %}
+        <div class="col-12">
+          <div class="card border-0 shadow-sm rounded-4 p-5 text-center bg-white">
+            <i class="fa-solid fa-spa text-muted opacity-50 fa-3x mb-3"></i>
+            <h5 class="fw-bold text-dark">No Spa Treatments Registered</h5>
+            <p class="text-muted small mb-3">Create your first ritual or signature massage to allow guests to book online.</p>
+            {% if can_edit %}
+            <div>
+              <button type="button" class="btn btn-primary btn-sm rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#modalAddTreatment">
+                <i class="fa-solid fa-plus me-1"></i> Add First Treatment
+              </button>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- TAB 2: SPECIALISTS & THERAPISTS                                -->
+    <!-- ============================================================== -->
+    <div class="tab-pane fade {% if active_tab == 'therapists' %}show active{% endif %}" id="tab-therapists" role="tabpanel">
+      
+      <div class="row g-4">
+        {% for s in therapists %}
+        <div class="col-xl-3 col-lg-4 col-md-6">
+          <div class="card border-0 shadow-sm rounded-4 h-100 bg-white p-3 d-flex flex-column transition-all">
+            <!-- Header: Photo & Status -->
+            <div class="d-flex align-items-center gap-3 mb-3">
+              <div class="position-relative">
+                {% if s.photo %}
+                <img src="{{ s.photo }}" alt="{{ s.name }}" class="rounded-circle border border-2 border-primary-subtle shadow-sm object-fit-cover" style="width: 64px; height: 64px;">
+                {% else %}
+                <div class="rounded-circle bg-light border d-flex align-items-center justify-content-center text-muted" style="width: 64px; height: 64px; font-size: 1.5rem;">
+                  <i class="fa-solid fa-user-doctor"></i>
+                </div>
+                {% endif %}
+                {% if s.is_active %}
+                <span class="position-absolute bottom-0 end-0 p-1 bg-success border border-white rounded-circle" title="Active"></span>
+                {% else %}
+                <span class="position-absolute bottom-0 end-0 p-1 bg-secondary border border-white rounded-circle" title="Inactive"></span>
+                {% endif %}
+              </div>
+              <div class="overflow-hidden">
+                <h6 class="fw-bold text-dark mb-0 line-clamp-1" title="{{ s.name }}">{{ s.name }}</h6>
+                <div class="text-muted small line-clamp-1" style="font-size: 0.78rem;">{{ s.title }}</div>
+                <div class="d-flex align-items-center gap-1.5 mt-1">
+                  <span class="badge bg-warning-subtle text-warning-emphasis rounded-pill px-2 py-0.5" style="font-size: 0.7rem;">
+                    <i class="fa-solid fa-star"></i> {{ s.rating }}
+                  </span>
+                  <span class="badge bg-light text-secondary border rounded-pill px-2 py-0.5" style="font-size: 0.7rem;">
+                    {{ s.experience_years }}y Exp
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Availability & Languages -->
+            <div class="bg-light rounded-3 p-2.5 border mb-3 small">
+              <div class="d-flex justify-content-between mb-1">
+                <span class="text-muted">Availability:</span>
+                <span class="fw-semibold text-success">{{ s.availability }}</span>
+              </div>
+              <div class="d-flex justify-content-between">
+                <span class="text-muted">Languages:</span>
+                <span class="fw-semibold text-dark text-truncate ps-2" style="max-width: 140px;">{{ s.languages }}</span>
+              </div>
+            </div>
+
+            <!-- Assigned Service Categories -->
+            <div class="mb-2.5">
+              <div class="text-muted small fw-semibold text-uppercase mb-1" style="font-size: 0.68rem;">Assigned Categories</div>
+              <div class="d-flex flex-wrap gap-1">
+                {% if s.categories %}
+                  {% for c in s.categories %}
+                  <span class="badge border rounded-pill px-2 py-0.5 fw-semibold" style="font-size: 0.7rem; {% if c == 'massages' %}background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe !important;{% elif c == 'ayurveda' %}background: #ecfdf5; color: #047857; border-color: #a7f3d0 !important;{% elif c == 'facials' %}background: #fdf2f8; color: #be185d; border-color: #fbcfe8 !important;{% elif c == 'couples' %}background: #faf5ff; color: #7e22ce; border-color: #e9d5ff !important;{% else %}background: #f8fafc; color: #334155; border-color: #e2e8f0 !important;{% endif %}">
+                    <i class="fa-solid fa-tag me-1" style="font-size: 0.62rem;"></i>
+                    {% if c == 'massages' %}Massages
+                    {% elif c == 'ayurveda' %}Ayurveda
+                    {% elif c == 'facials' %}Facials
+                    {% elif c == 'steam-hydro' %}Hydro/Steam
+                    {% elif c == 'couples' %}Couples
+                    {% else %}{{ c|title }}{% endif %}
+                  </span>
+                  {% endfor %}
+                {% else %}
+                  <span class="badge bg-light text-muted border rounded-pill px-2 py-0.5" style="font-size: 0.7rem;">All Services</span>
+                {% endif %}
+              </div>
+            </div>
+
+            <!-- Skills & Specialties -->
+            <div class="mb-3 flex-grow-1">
+              <div class="text-muted small fw-semibold text-uppercase mb-1.5" style="font-size: 0.7rem;">Core Specialties</div>
+              <div class="d-flex flex-wrap gap-1">
+                {% if s.specialties %}
+                  {% for sp in s.specialties %}
+                  <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-2 py-0.5" style="font-size: 0.72rem;">{{ sp }}</span>
+                  {% endfor %}
+                {% else %}
+                  <span class="badge bg-light text-muted border rounded-pill px-2 py-0.5" style="font-size: 0.72rem;">{{ s.skills|default:"Wellness Healing" }}</span>
+                {% endif %}
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="d-flex gap-2 pt-2 border-top">
+              {% if can_edit %}
+              <button type="button" class="btn btn-primary btn-sm rounded-pill flex-grow-1 fw-semibold d-inline-flex align-items-center justify-content-center gap-1.5 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalEditTherapist{{ s.pk }}">
+                <i class="fa-solid fa-pen-to-square"></i> Edit Profile
+              </button>
+              <form method="post" action="{{ base_url }}spa/setup/delete/" onsubmit="return confirm('Delete specialist \'{{ s.name|escapejs }}\'?');">
+                {% csrf_token %}
+                <input type="hidden" name="kind" value="therapist">
+                <input type="hidden" name="pk" value="{{ s.pk }}">
+                <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill px-2.5" title="Delete Specialist">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </form>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================== -->
+        <!-- MODAL: EDIT SPECIALIST (100% ZOOM ACCESSIBLE)                  -->
+        <!-- ============================================================== -->
+        {% if can_edit %}
+        <div class="modal fade" id="modalEditTherapist{{ s.pk }}" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <form method="post" action="{{ base_url }}spa/setup/save/" enctype="multipart/form-data" class="modal-content border-0 shadow-lg rounded-4 overflow-hidden modal-custom-form">
+              {% csrf_token %}
+              <input type="hidden" name="kind" value="therapist">
+              <input type="hidden" name="pk" value="{{ s.pk }}">
+
+              <div class="modal-header bg-light border-bottom p-3 px-4 flex-shrink-0">
+                <h5 class="modal-title fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                  <i class="fa-solid fa-user-doctor text-primary"></i> Edit Specialist: {{ s.name }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+
+              <div class="modal-body p-3 px-4 flex-grow-1 overflow-y-auto">
+                <div class="row g-3 mb-3">
+                  <div class="col-md-7">
+                    <label class="form-label small fw-bold">Full Name <span class="text-danger">*</span></label>
+                    <input type="text" name="name" class="form-control form-control-sm rounded-3" value="{{ s.name }}" required>
+                  </div>
+                  <div class="col-md-5">
+                    <label class="form-label small fw-bold">Designation / Title</label>
+                    <input type="text" name="title" class="form-control form-control-sm rounded-3" value="{{ s.title }}">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small fw-bold">Experience (Years)</label>
+                    <input type="number" name="experience_years" class="form-control form-control-sm rounded-3" value="{{ s.experience_years }}" min="1" max="50">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small fw-bold">Rating (1.00 – 5.00)</label>
+                    <input type="number" step="0.01" name="rating" class="form-control form-control-sm rounded-3" value="{{ s.rating }}" min="1" max="5">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small fw-bold">Availability Status</label>
+                    <input type="text" name="availability" class="form-control form-control-sm rounded-3" value="{{ s.availability }}" placeholder="e.g. Available Today">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small fw-bold">Languages (comma-separated)</label>
+                    <input type="text" name="languages" class="form-control form-control-sm rounded-3" value="{{ s.languages }}">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small fw-bold">Status</label>
+                    <select name="is_active" class="form-select form-select-sm rounded-3">
+                      <option value="1" {% if s.is_active %}selected{% endif %}>Active</option>
+                      <option value="0" {% if not s.is_active %}selected{% endif %}>Inactive</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Qualified Service Categories Assignment -->
+                <div class="p-3 rounded-3 border mb-3" style="background: #f8fafc;">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label class="form-label small fw-bold mb-0 text-dark">
+                      <i class="fa-solid fa-layer-group text-primary me-1.5"></i> Qualified Service Categories <span class="text-danger">*</span>
+                    </label>
+                    <span class="text-muted small" style="font-size: 0.72rem;">Only qualified specialists are auto-assigned to these bookings</span>
+                  </div>
+                  <div class="row g-2">
+                    {% for cat_val, cat_label in spa_categories %}
+                    <div class="col-md-6 col-12">
+                      <label class="form-check p-2 bg-white rounded-3 border d-flex align-items-center gap-2 mb-0 shadow-xs cursor-pointer hover-shadow" for="editCat_{{ s.pk }}_{{ cat_val }}">
+                        <input class="form-check-input ms-0 me-2" type="checkbox" name="categories" value="{{ cat_val }}" id="editCat_{{ s.pk }}_{{ cat_val }}" {% if cat_val in s.categories %}checked{% endif %}>
+                        <span class="form-check-label small fw-semibold text-dark flex-grow-1">
+                          {{ cat_label }}
+                        </span>
+                      </label>
+                    </div>
+                    {% endfor %}
+                  </div>
+                  <div class="form-text small text-muted mt-2" style="font-size: 0.73rem;">
+                    <i class="fa-solid fa-circle-info me-1 text-info"></i> Checked categories determine which treatments this specialist can be assigned to during guest and staff booking.
+                  </div>
+                </div>
+
+                <!-- Photo Upload Section (Max 2MB) -->
+                <div class="p-3 bg-light rounded-3 border mb-3">
+                  <label class="form-label small fw-bold mb-2">Specialist Photo (Upload from Device or URL)</label>
+                  <div class="d-flex align-items-center gap-3 flex-wrap">
+                    {% if s.photo %}
+                    <img src="{{ s.photo }}" alt="{{ s.name }}" class="rounded-circle border shadow-sm object-fit-cover" style="width: 56px; height: 56px;">
+                    {% endif %}
+                    <div class="flex-grow-1" style="min-width: 200px;">
+                      <input type="file" name="photo_file" class="form-control form-control-sm rounded-3" accept="image/*" onchange="validateSingleImage(this)">
+                      <div class="form-text small text-muted">Max file size: 2 MB. Converted to WebP.</div>
+                    </div>
+                  </div>
+                  <div class="mt-2">
+                    <input type="text" name="photo" class="form-control form-control-sm rounded-3 font-monospace text-muted" value="{{ s.photo }}" placeholder="Or Photo URL (https://...)">
+                  </div>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label small fw-bold">Specialties (comma-separated)</label>
+                  <input type="text" name="specialties" class="form-control form-control-sm rounded-3" value="{{ s.specialties|join:', ' }}" placeholder="Ayurvedic Shirodhara, Dosha Balancing, Marma Therapy">
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label small fw-bold">Certifications &amp; Degrees (comma-separated)</label>
+                  <input type="text" name="certifications" class="form-control form-control-sm rounded-3" value="{{ s.certifications|join:', ' }}" placeholder="Doctor of Ayurvedic Medicine (BAMS), Panchakarma Specialist">
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label small fw-bold">Professional Bio</label>
+                  <textarea name="bio" class="form-control form-control-sm rounded-3" rows="3" placeholder="Brief background summary...">{{ s.bio }}</textarea>
+                </div>
+              </div>
+
+              <div class="modal-footer bg-light border-top p-3 px-4 d-flex justify-content-between flex-shrink-0">
+                <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4 fw-semibold shadow-sm">Save Specialist</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        {% endif %}
+
+        {% empty %}
+        <div class="col-12">
+          <div class="card border-0 shadow-sm rounded-4 p-5 text-center bg-white">
+            <i class="fa-solid fa-user-doctor text-muted opacity-50 fa-3x mb-3"></i>
+            <h5 class="fw-bold text-dark">No Wellness Specialists Registered</h5>
+            <p class="text-muted small mb-0">Add therapists and practitioners to build your spa roster.</p>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- TAB 3: SIGNATURE PACKAGES                                      -->
+    <!-- ============================================================== -->
+    <div class="tab-pane fade {% if active_tab == 'packages' %}show active{% endif %}" id="tab-packages" role="tabpanel">
+      
+      <div class="row g-4">
+        {% for p in packages %}
+        <div class="col-lg-4 col-md-6">
+          <div class="card border-0 shadow-sm rounded-4 h-100 bg-white overflow-hidden d-flex flex-column transition-all">
+            <!-- Banner Image -->
+            <div class="position-relative" style="height: 180px; background: #212529;">
+              {% if p.image %}
+              <img src="{{ p.image }}" alt="{{ p.title }}" class="w-100 h-100 object-fit-cover" style="opacity: 0.9;">
+              {% else %}
+              <div class="w-100 h-100 d-flex flex-column align-items-center justify-content-center text-white-50">
+                <i class="fa-solid fa-gift fa-3x mb-2 opacity-50"></i>
+                <span class="small">No banner photo</span>
+              </div>
+              {% endif %}
+              
+              <div class="position-absolute top-0 start-0 m-3">
+                <span class="badge bg-warning text-dark rounded-pill px-2.5 py-1 small fw-semibold shadow-sm">
+                  {{ p.tag|default:"Signature Ritual" }}
+                </span>
+              </div>
+
+              <div class="position-absolute top-0 end-0 m-3">
+                {% if p.is_active %}
+                <span class="badge bg-success rounded-pill px-2.5 py-1 shadow-sm"><i class="fa-solid fa-circle-check me-1"></i> Active</span>
+                {% else %}
+                <span class="badge bg-secondary rounded-pill px-2.5 py-1 shadow-sm">Hidden</span>
+                {% endif %}
+              </div>
+
+              <div class="position-absolute bottom-0 start-0 end-0 p-2.5 px-3 bg-gradient-dark text-white d-flex justify-content-between align-items-center">
+                <span class="small"><i class="fa-regular fa-clock me-1 text-warning"></i> {{ p.duration }}</span>
+                <span class="h6 fw-bold mb-0 text-white">₹{{ p.price|floatformat:"0" }}</span>
+              </div>
+            </div>
+
+            <!-- Body -->
+            <div class="card-body p-3 d-flex flex-column flex-grow-1">
+              <h5 class="fw-bold text-dark mb-1 line-clamp-1" title="{{ p.title }}">{{ p.title }}</h5>
+              <p class="text-muted small mb-3 line-clamp-2" style="font-size: 0.85rem;">{{ p.description }}</p>
+
+              <!-- Inclusions Checklist -->
+              <div class="bg-light rounded-3 p-2.5 border mb-3 flex-grow-1">
+                <div class="text-muted small fw-semibold text-uppercase mb-1.5" style="font-size: 0.7rem;">Inclusions:</div>
+                <ul class="list-unstyled mb-0 small" style="font-size: 0.8rem;">
+                  {% for inc in p.inclusions|slice:":3" %}
+                  <li class="d-flex align-items-center gap-1.5 mb-1 text-dark text-truncate">
+                    <i class="fa-solid fa-check text-success" style="font-size: 0.7rem;"></i> <span>{{ inc }}</span>
+                  </li>
+                  {% endfor %}
+                  {% if p.inclusions|length > 3 %}
+                  <li class="text-muted small ps-3">+ {{ p.inclusions|length|add:"-3" }} more inclusions</li>
+                  {% endif %}
+                </ul>
+              </div>
+
+              <!-- Actions -->
+              <div class="d-flex gap-2 pt-2 border-top">
+                {% if can_edit %}
+                <button type="button" class="btn btn-primary btn-sm rounded-pill flex-grow-1 fw-semibold d-inline-flex align-items-center justify-content-center gap-1.5 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalEditPackage{{ p.pk }}">
+                  <i class="fa-solid fa-pen-to-square"></i> Edit Package
+                </button>
+                <form method="post" action="{{ base_url }}spa/setup/delete/" onsubmit="return confirm('Delete package \'{{ p.title|escapejs }}\'?');">
+                  {% csrf_token %}
+                  <input type="hidden" name="kind" value="package">
+                  <input type="hidden" name="pk" value="{{ p.pk }}">
+                  <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill px-2.5" title="Delete Package">
+                    <i class="fa-solid fa-trash-can"></i>
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================== -->
+        <!-- MODAL: EDIT PACKAGE (100% ZOOM ACCESSIBLE)                     -->
+        <!-- ============================================================== -->
+        {% if can_edit %}
+        <div class="modal fade" id="modalEditPackage{{ p.pk }}" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <form method="post" action="{{ base_url }}spa/setup/save/" enctype="multipart/form-data" class="modal-content border-0 shadow-lg rounded-4 overflow-hidden modal-custom-form">
+              {% csrf_token %}
+              <input type="hidden" name="kind" value="package">
+              <input type="hidden" name="pk" value="{{ p.pk }}">
+
+              <div class="modal-header bg-light border-bottom p-3 px-4 flex-shrink-0">
+                <h5 class="modal-title fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                  <i class="fa-solid fa-gift text-primary"></i> Edit Package: {{ p.title }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+
+              <div class="modal-body p-3 px-4 flex-grow-1 overflow-y-auto">
+                <div class="row g-3 mb-3">
+                  <div class="col-md-8">
+                    <label class="form-label small fw-bold">Package Title <span class="text-danger">*</span></label>
+                    <input type="text" name="title" class="form-control form-control-sm rounded-3" value="{{ p.title }}" required>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small fw-bold">Tag / Ribbon</label>
+                    <input type="text" name="tag" class="form-control form-control-sm rounded-3" value="{{ p.tag }}">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small fw-bold">Duration Text</label>
+                    <input type="text" name="duration" class="form-control form-control-sm rounded-3" value="{{ p.duration }}" placeholder="e.g. 3.5 Hours">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small fw-bold">Price (₹) <span class="text-danger">*</span></label>
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text bg-light">₹</span>
+                      <input type="number" name="price" class="form-control rounded-end-3" value="{{ p.price|floatformat:'0' }}" required>
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small fw-bold">Original / Was Price (₹)</label>
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text bg-light">₹</span>
+                      <input type="number" name="original_price" class="form-control rounded-end-3" value="{{ p.original_price|floatformat:'0' }}">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Device Upload Banner (Max 2MB) -->
+                <div class="p-3 bg-light rounded-3 border mb-3">
+                  <label class="form-label small fw-bold mb-2">Package Banner Photo (Upload from Device or URL)</label>
+                  <div class="d-flex align-items-center gap-3 flex-wrap">
+                    {% if p.image %}
+                    <img src="{{ p.image }}" alt="Package" class="rounded-3 border shadow-sm object-fit-cover" style="width: 80px; height: 50px;">
+                    {% endif %}
+                    <div class="flex-grow-1" style="min-width: 200px;">
+                      <input type="file" name="image_file" class="form-control form-control-sm rounded-3" accept="image/*" onchange="validateSingleImage(this)">
+                      <div class="form-text small text-muted">Max file size: 2 MB. Converted to WebP.</div>
+                    </div>
+                  </div>
+                  <div class="mt-2">
+                    <input type="text" name="image" class="form-control form-control-sm rounded-3 font-monospace text-muted" value="{{ p.image }}" placeholder="Or Image URL (https://...)">
+                  </div>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label small fw-bold">Description</label>
+                  <textarea name="description" class="form-control form-control-sm rounded-3" rows="2">{{ p.description }}</textarea>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label small fw-bold">Inclusions (One per line)</label>
+                  <textarea name="inclusions" class="form-control form-control-sm rounded-3" rows="4">{% for inc in p.inclusions %}{{ inc }}&#10;{% endfor %}</textarea>
+                </div>
+
+                <div class="d-flex gap-4">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="popular" value="1" id="pkgPop{{ p.pk }}" {% if p.popular %}checked{% endif %}>
+                    <label class="form-check-label small fw-semibold" for="pkgPop{{ p.pk }}">Mark as Most Popular</label>
+                  </div>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="is_active" value="1" id="pkgAct{{ p.pk }}" {% if p.is_active %}checked{% endif %}>
+                    <label class="form-check-label small fw-semibold" for="pkgAct{{ p.pk }}">Active</label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="modal-footer bg-light border-top p-3 px-4 d-flex justify-content-between flex-shrink-0">
+                <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4 fw-semibold shadow-sm">Save Package</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        {% endif %}
+
+        {% empty %}
+        <div class="col-12">
+          <div class="card border-0 shadow-sm rounded-4 p-5 text-center bg-white">
+            <i class="fa-solid fa-gift text-muted opacity-50 fa-3x mb-3"></i>
+            <h5 class="fw-bold text-dark">No Signature Retreat Packages</h5>
+            <p class="text-muted small mb-0">Create half-day or bridal retreat packages.</p>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
   </div>
 </div>
+
+<!-- ============================================================== -->
+<!-- MODAL: ADD NEW TREATMENT (100% ZOOM ACCESSIBLE)                -->
+<!-- ============================================================== -->
+{% if can_edit %}
+<div class="modal fade" id="modalAddTreatment" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <form method="post" action="{{ base_url }}spa/setup/save/" enctype="multipart/form-data" class="modal-content border-0 shadow-lg rounded-4 overflow-hidden modal-custom-form">
+      {% csrf_token %}
+      <input type="hidden" name="kind" value="treatment">
+      <input type="hidden" name="is_active" value="1">
+      <input type="hidden" name="has_gallery_field" value="1">
+
+      <div class="modal-header bg-light border-bottom p-3 px-4 flex-shrink-0">
+        <div>
+          <h5 class="modal-title fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+            <i class="fa-solid fa-plus-circle text-primary"></i> Add New Treatment / Service
+          </h5>
+          <small class="text-muted">Create a ritual with pricing, durations, and device photos (&lt; 2 MB each, max 5).</small>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <!-- Internal Modal Tabs -->
+      <div class="px-4 pt-2 bg-light border-bottom flex-shrink-0">
+        <ul class="nav nav-tabs border-bottom-0 gap-2" role="tablist">
+          <li class="nav-item">
+            <button class="nav-link active py-2 px-3 fw-semibold small" data-bs-toggle="tab" data-bs-target="#addTreatTabDetails" type="button">
+              <i class="fa-solid fa-sliders me-1 text-primary"></i> 1. Details &amp; Pricing
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link py-2 px-3 fw-semibold small" data-bs-toggle="tab" data-bs-target="#addTreatTabPhotos" type="button">
+              <i class="fa-solid fa-camera me-1 text-primary"></i> 2. Photos &amp; Media <span class="badge bg-primary-subtle text-primary ms-1">Max 5</span>
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link py-2 px-3 fw-semibold small" data-bs-toggle="tab" data-bs-target="#addTreatTabSteps" type="button">
+              <i class="fa-solid fa-list-check me-1 text-primary"></i> 3. Steps &amp; Benefits
+            </button>
+          </li>
+        </ul>
+      </div>
+
+      <div class="modal-body p-3 px-4 flex-grow-1 overflow-y-auto">
+        <div class="tab-content">
+          
+          <!-- TAB 1: DETAILS & PRICING -->
+          <div class="tab-pane fade show active" id="addTreatTabDetails" role="tabpanel">
+            <div class="row g-3 mb-3">
+              <div class="col-md-7">
+                <label class="form-label small fw-bold">Treatment Name <span class="text-danger">*</span></label>
+                <input type="text" name="name" class="form-control form-control-sm rounded-3" placeholder="e.g. Royal Balinese Herbal Compress" required>
+              </div>
+              <div class="col-md-5">
+                <label class="form-label small fw-bold">Category</label>
+                <select name="category" class="form-select form-select-sm rounded-3">
+                  <option value="massages">Massages &amp; Bodywork</option>
+                  <option value="ayurveda">Ancient Ayurveda</option>
+                  <option value="facials">Aesthetic Facials</option>
+                  <option value="steam-hydro">Steam &amp; Hydrotherapy</option>
+                  <option value="couples">Couples Sanctuary</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small fw-bold">Tag / Ribbon</label>
+                <input type="text" name="tag" class="form-control form-control-sm rounded-3" placeholder="e.g. Bestseller, New Arrival">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small fw-bold">Suite Chamber</label>
+                <input type="text" name="suite_type" class="form-control form-control-sm rounded-3" value="VIP Private Suite">
+              </div>
+            </div>
+
+            <div class="row g-3 mb-3">
+              <div class="col-md-3 col-6">
+                <label class="form-label small fw-bold">Base Price (₹) <span class="text-danger">*</span></label>
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text bg-light">₹</span>
+                  <input type="number" name="price" class="form-control rounded-end-3" placeholder="3200" min="1" required>
+                </div>
+              </div>
+              <div class="col-md-3 col-6">
+                <label class="form-label small fw-bold">Original Price (₹)</label>
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text bg-light">₹</span>
+                  <input type="number" name="original_price" class="form-control rounded-end-3" placeholder="3800">
+                </div>
+              </div>
+              <div class="col-md-3 col-6">
+                <label class="form-label small fw-bold">Duration (Minutes)</label>
+                <input type="number" name="duration_minutes" class="form-control form-control-sm rounded-3" value="60" min="15" max="240" step="15" required>
+              </div>
+              <div class="col-md-3 col-6">
+                <label class="form-label small fw-bold">GST Rate (%)</label>
+                <div class="input-group input-group-sm">
+                  <input type="number" name="gst_percent" class="form-control rounded-start-3" value="18" min="0" max="28">
+                  <span class="input-group-text bg-light">%</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label small fw-bold">Short Summary</label>
+                <textarea name="short_description" class="form-control form-control-sm rounded-3" rows="2" placeholder="Brief summary for catalog cards..."></textarea>
+              </div>
+              <div class="col-12">
+                <label class="form-label small fw-bold">Full Description</label>
+                <textarea name="full_description" class="form-control form-control-sm rounded-3" rows="3" placeholder="Full therapeutic details and relaxation benefits..."></textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 2: PHOTOS & MEDIA (MAX 2MB, STRICT LIMIT 5 IMAGES) -->
+          <div class="tab-pane fade" id="addTreatTabPhotos" role="tabpanel">
+            <div class="p-3 bg-light rounded-3 border mb-3">
+              <label class="form-label small fw-bold mb-1">Primary Cover Photo (Device File, &lt; 2 MB):</label>
+              <input type="file" name="cover_image_file" class="form-control form-control-sm rounded-3 mb-2" accept="image/*" id="newCoverFile" onchange="validateSingleImage(this); updateNewServiceSlots();">
+              <input type="text" name="cover_image" class="form-control form-control-sm rounded-3 font-monospace text-muted" placeholder="Or paste Cover Image URL (https://...)">
+            </div>
+
+            <div class="p-3 bg-light rounded-3 border mb-2">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label small fw-bold mb-0">Gallery Photos (Select up to remaining slots):</label>
+                <span class="small fw-semibold text-primary" id="newServiceSlotsDisplay">Up to 5 images total</span>
+              </div>
+              <input type="file" name="gallery_image_files" class="form-control form-control-sm rounded-3 mb-2" accept="image/*" multiple id="newGalFiles" onchange="validateNewServiceGalleryUpload(this)">
+              <div class="form-text small text-muted">
+                Select photos from device (&lt; 2 MB per file). Strictly capped at <strong>5 images total</strong> per service.
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 3: STEPS & BENEFITS -->
+          <div class="tab-pane fade" id="addTreatTabSteps" role="tabpanel">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label small fw-bold">Ritual Steps (One per line)</label>
+                <textarea name="ritual_steps" class="form-control form-control-sm rounded-3" rows="5" placeholder="Welcome foot bath&#10;Aromatic oil massage&#10;Herbal tea closing"></textarea>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small fw-bold">Key Benefits (One per line)</label>
+                <textarea name="benefits" class="form-control form-control-sm rounded-3" rows="5" placeholder="Relieves deep stress&#10;Improves muscle tone&#10;Deep sleep support"></textarea>
+              </div>
+              <div class="col-12">
+                <label class="form-label small fw-bold">Included Suite Amenities (One per line)</label>
+                <textarea name="included_amenities" class="form-control form-control-sm rounded-3" rows="3" placeholder="Herbal Steam Sauna Access&#10;Detox Infused Fruit Water&#10;Private En-Suite Shower"></textarea>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="modal-footer bg-light border-top p-3 px-4 d-flex justify-content-between flex-shrink-0">
+        <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4 fw-semibold shadow-sm">Add Treatment</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<!-- MODAL: ADD SPECIALIST (100% ZOOM ACCESSIBLE)                   -->
+<!-- ============================================================== -->
+<div class="modal fade" id="modalAddTherapist" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <form method="post" action="{{ base_url }}spa/setup/save/" enctype="multipart/form-data" class="modal-content border-0 shadow-lg rounded-4 overflow-hidden modal-custom-form">
+      {% csrf_token %}
+      <input type="hidden" name="kind" value="therapist">
+      <input type="hidden" name="is_active" value="1">
+
+      <div class="modal-header bg-light border-bottom p-3 px-4 flex-shrink-0">
+        <h5 class="modal-title fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+          <i class="fa-solid fa-user-plus text-primary"></i> Register Wellness Specialist
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body p-3 px-4 flex-grow-1 overflow-y-auto">
+        <div class="row g-3 mb-3">
+          <div class="col-md-7">
+            <label class="form-label small fw-bold">Full Name <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control form-control-sm rounded-3" placeholder="e.g. Dr. Rajesh Sharma" required>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label small fw-bold">Title / Designation</label>
+            <input type="text" name="title" class="form-control form-control-sm rounded-3" value="Senior Wellness Practitioner">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-bold">Experience (Years)</label>
+            <input type="number" name="experience_years" class="form-control form-control-sm rounded-3" value="7" min="1" max="50">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-bold">Initial Rating</label>
+            <input type="number" step="0.01" name="rating" class="form-control form-control-sm rounded-3" value="4.95" min="1" max="5">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-bold">Availability</label>
+            <input type="text" name="availability" class="form-control form-control-sm rounded-3" value="Available Today">
+          </div>
+          <div class="col-12">
+            <label class="form-label small fw-bold">Languages (comma-separated)</label>
+            <input type="text" name="languages" class="form-control form-control-sm rounded-3" value="English, Hindi">
+          </div>
+        </div>
+
+        <!-- Qualified Service Categories Assignment -->
+        <div class="p-3 rounded-3 border mb-3" style="background: #f8fafc;">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <label class="form-label small fw-bold mb-0 text-dark">
+              <i class="fa-solid fa-layer-group text-primary me-1.5"></i> Qualified Service Categories <span class="text-danger">*</span>
+            </label>
+            <span class="text-muted small" style="font-size: 0.72rem;">Select all categories this specialist can perform</span>
+          </div>
+          <div class="row g-2">
+            {% for cat_val, cat_label in spa_categories %}
+            <div class="col-md-6 col-12">
+              <label class="form-check p-2 bg-white rounded-3 border d-flex align-items-center gap-2 mb-0 shadow-xs cursor-pointer hover-shadow" for="addCat_{{ cat_val }}">
+                <input class="form-check-input ms-0 me-2" type="checkbox" name="categories" value="{{ cat_val }}" id="addCat_{{ cat_val }}" {% if cat_val == 'massages' %}checked{% endif %}>
+                <span class="form-check-label small fw-semibold text-dark flex-grow-1">
+                  {{ cat_label }}
+                </span>
+              </label>
+            </div>
+            {% endfor %}
+          </div>
+          <div class="form-text small text-muted mt-2" style="font-size: 0.73rem;">
+            <i class="fa-solid fa-circle-info me-1 text-info"></i> Used to filter and automatically assign specialists to bookings based on treatment category.
+          </div>
+        </div>
+
+        <div class="p-3 bg-light rounded-3 border mb-3">
+          <label class="form-label small fw-bold mb-1">Photo (Upload from Device, max 2 MB):</label>
+          <input type="file" name="photo_file" class="form-control form-control-sm rounded-3 mb-2" accept="image/*" onchange="validateSingleImage(this)">
+          <input type="text" name="photo" class="form-control form-control-sm rounded-3 font-monospace text-muted" placeholder="Or Photo URL (https://...)">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label small fw-bold">Specialties (comma-separated)</label>
+          <input type="text" name="specialties" class="form-control form-control-sm rounded-3" placeholder="Shirodhara, Deep Tissue, Aromatherapy">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label small fw-bold">Professional Bio</label>
+          <textarea name="bio" class="form-control form-control-sm rounded-3" rows="3" placeholder="Brief background summary..."></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer bg-light border-top p-3 px-4 d-flex justify-content-between flex-shrink-0">
+        <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4 fw-semibold shadow-sm">Add Specialist</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<!-- MODAL: ADD SIGNATURE PACKAGE (100% ZOOM ACCESSIBLE)            -->
+<!-- ============================================================== -->
+<div class="modal fade" id="modalAddPackage" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <form method="post" action="{{ base_url }}spa/setup/save/" enctype="multipart/form-data" class="modal-content border-0 shadow-lg rounded-4 overflow-hidden modal-custom-form">
+      {% csrf_token %}
+      <input type="hidden" name="kind" value="package">
+      <input type="hidden" name="is_active" value="1">
+
+      <div class="modal-header bg-light border-bottom p-3 px-4 flex-shrink-0">
+        <h5 class="modal-title fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+          <i class="fa-solid fa-gift text-primary"></i> Create Signature Retreat Package
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body p-3 px-4 flex-grow-1 overflow-y-auto">
+        <div class="row g-3 mb-3">
+          <div class="col-md-8">
+            <label class="form-label small fw-bold">Package Title <span class="text-danger">*</span></label>
+            <input type="text" name="title" class="form-control form-control-sm rounded-3" placeholder="e.g. Royal Detox &amp; Rejuvenation Half-Day" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-bold">Tag</label>
+            <input type="text" name="tag" class="form-control form-control-sm rounded-3" value="Signature Retreat">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-bold">Duration</label>
+            <input type="text" name="duration" class="form-control form-control-sm rounded-3" value="3.5 Hours">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-bold">Price (₹) <span class="text-danger">*</span></label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light">₹</span>
+              <input type="number" name="price" class="form-control rounded-end-3" placeholder="8500" required>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label small fw-bold">Original Price (₹)</label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light">₹</span>
+              <input type="number" name="original_price" class="form-control rounded-end-3" placeholder="10500">
+            </div>
+          </div>
+        </div>
+
+        <div class="p-3 bg-light rounded-3 border mb-3">
+          <label class="form-label small fw-bold mb-1">Banner Image (Upload from Device, max 2 MB):</label>
+          <input type="file" name="image_file" class="form-control form-control-sm rounded-3 mb-2" accept="image/*" onchange="validateSingleImage(this)">
+          <input type="text" name="image" class="form-control form-control-sm rounded-3 font-monospace text-muted" placeholder="Or Image URL (https://...)">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label small fw-bold">Description</label>
+          <textarea name="description" class="form-control form-control-sm rounded-3" rows="2" placeholder="Overview of the package experience..."></textarea>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label small fw-bold">Inclusions (One per line)</label>
+          <textarea name="inclusions" class="form-control form-control-sm rounded-3" rows="4" placeholder="30 Mins Steam &amp; Jacuzzi Pre-Soak&#10;60 Mins Aromatherapy Massage&#10;45 Mins Gold Radiance Facial&#10;Complimentary Spa Elixir"></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer bg-light border-top p-3 px-4 d-flex justify-content-between flex-shrink-0">
+        <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4 fw-semibold shadow-sm">Add Package</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- Styling & Interactive Scripts -->
+<style>
+  .spa-setup-container {
+    padding: 0.5rem 0.25rem;
+  }
+  .line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .transition-all {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .treatment-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.05) !important;
+  }
+  .bg-gradient-dark {
+    background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.85) 100%);
+  }
+  .backdrop-blur {
+    backdrop-filter: blur(4px);
+  }
+  .object-fit-cover {
+    object-fit: cover;
+  }
+  .gallery-item-box.marked-deleted {
+    opacity: 0.25;
+    filter: grayscale(1);
+    pointer-events: none;
+  }
+  #spaSetupTabs .nav-link {
+    color: #4b5563;
+    transition: all 0.15s ease;
+  }
+  #spaSetupTabs .nav-link.active {
+    background-color: var(--brand, #0d6efd);
+    color: #ffffff;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Modal Dialog Viewport Constraints: Guaranteed 100% Zoom Accessibility */
+  .modal-dialog-scrollable {
+    max-height: calc(100vh - 2rem);
+  }
+  .modal-custom-form {
+    max-height: calc(100vh - 2rem);
+    display: flex;
+    flex-direction: column;
+  }
+  .modal-custom-form .modal-header,
+  .modal-custom-form .modal-footer {
+    flex-shrink: 0;
+  }
+  .modal-custom-form .modal-body {
+    flex: 1 1 auto;
+    overflow-y: auto !important;
+    max-height: calc(100vh - 13rem);
+  }
+  .modal-custom-form .nav-tabs .nav-link {
+    color: #4b5563;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    transition: all 0.15s ease;
+  }
+  .modal-custom-form .nav-tabs .nav-link.active {
+    color: var(--brand, #0d6efd);
+    background: transparent;
+    border-bottom: 2px solid var(--brand, #0d6efd);
+  }
+</style>
+
+<script>
+  // Filter Treatments by Category
+  document.querySelectorAll('.filter-cat-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.filter-cat-btn').forEach(b => b.classList.remove('active', 'btn-dark'));
+      document.querySelectorAll('.filter-cat-btn').forEach(b => b.classList.add('btn-light'));
+      this.classList.remove('btn-light');
+      this.classList.add('active', 'btn-dark');
+
+      const cat = this.getAttribute('data-filter');
+      const search = (document.getElementById('treatmentSearchInput').value || '').toLowerCase().trim();
+
+      filterTreatments(cat, search);
+    });
+  });
+
+  // Search Treatments Live
+  const searchInput = document.getElementById('treatmentSearchInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      const activeFilterBtn = document.querySelector('.filter-cat-btn.active');
+      const cat = activeFilterBtn ? activeFilterBtn.getAttribute('data-filter') : 'all';
+      filterTreatments(cat, this.value.toLowerCase().trim());
+    });
+  }
+
+  function filterTreatments(cat, search) {
+    document.querySelectorAll('.treatment-card-wrapper').forEach(card => {
+      const cardCat = card.getAttribute('data-category') || '';
+      const cardName = card.getAttribute('data-name') || '';
+      const cardTag = card.getAttribute('data-tag') || '';
+
+      const matchesCat = (cat === 'all' || cardCat === cat);
+      const matchesSearch = (!search || cardName.includes(search) || cardTag.includes(search));
+
+      if (matchesCat && matchesSearch) {
+        card.style.display = '';
+      } else {
+        card.style.display = 'none';
+      }
+    });
+  }
+
+  // File size validation helper: Strict < 2MB limit
+  const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
+
+  function validateSingleImage(input) {
+    if (input.files && input.files.length > 0) {
+      const file = input.files[0];
+      if (file.size > MAX_IMAGE_SIZE_BYTES) {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        alert(`Selected image '${file.name}' is too large (${sizeMB} MB).\nMaximum allowed image size is less than 2 MB.`);
+        input.value = '';
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // Gallery Deletion in Edit Modal
+  function markGalleryItemDeleted(pk, index) {
+    const box = document.getElementById('galBox_' + pk + '_' + index);
+    const input = document.getElementById('galInput_' + pk + '_' + index);
+    if (box && input) {
+      box.classList.add('marked-deleted');
+      const delInput = document.createElement('input');
+      delInput.type = 'hidden';
+      delInput.name = 'delete_gallery_images';
+      delInput.value = input.value;
+      box.parentElement.appendChild(delInput);
+      input.remove();
+
+      updateGalleryCountBadge(pk);
+    }
+  }
+
+  function updateGalleryCountBadge(pk) {
+    const remainingGallery = document.querySelectorAll('#galleryContainer_' + pk + ' .gallery-item-box:not(.marked-deleted)').length;
+    const coverCheck = document.getElementById('remCover' + pk);
+    const coverImg = document.getElementById('coverPreview_' + pk);
+    const hasCover = (coverImg && (!coverCheck || !coverCheck.checked));
+    const currentTotal = (hasCover ? 1 : 0) + remainingGallery;
+    const display = document.getElementById('galleryCounterDisplay_' + pk);
+    if (display) {
+      display.textContent = `${currentTotal} of 5 images used`;
+    }
+  }
+
+  // Validate Service Gallery Upload: STRICT LIMIT MAX 5 IMAGES PER SERVICE & < 2MB
+  function validateServiceGalleryUpload(input, pk) {
+    const MAX_ALLOWED = 5;
+    if (!input.files || input.files.length === 0) return true;
+
+    // 1. Enforce max 2MB per file
+    for (let i = 0; i < input.files.length; i++) {
+      const file = input.files[i];
+      if (file.size > MAX_IMAGE_SIZE_BYTES) {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        alert(`File '${file.name}' is too large (${sizeMB} MB).\nEach uploaded image must be less than 2 MB.`);
+        input.value = '';
+        return false;
+      }
+    }
+
+    // 2. Enforce strict max 5 images total per service
+    const activeGalleryCount = document.querySelectorAll('#galleryContainer_' + pk + ' .gallery-item-box:not(.marked-deleted)').length;
+    const coverCheck = document.getElementById('remCover' + pk);
+    const coverImg = document.getElementById('coverPreview_' + pk);
+    const hasCover = (coverImg && (!coverCheck || !coverCheck.checked));
+    const currentTotal = (hasCover ? 1 : 0) + activeGalleryCount;
+    const availableSlots = Math.max(0, MAX_ALLOWED - currentTotal);
+
+    if (input.files.length > availableSlots) {
+      alert(`Strict Limit: Maximum ${MAX_ALLOWED} images allowed per service!\nYou currently have ${currentTotal} image(s).\nYou can only upload up to ${availableSlots} more image(s).`);
+      input.value = '';
+      return false;
+    }
+
+    const display = document.getElementById('galleryCounterDisplay_' + pk);
+    if (display) {
+      const newTotal = currentTotal + input.files.length;
+      display.textContent = `${newTotal} of ${MAX_ALLOWED} images used`;
+    }
+    return true;
+  }
+
+  // Validate Add Treatment Gallery Slots
+  function updateNewServiceSlots() {
+    const coverFile = document.getElementById('newCoverFile');
+    const galFiles = document.getElementById('newGalFiles');
+    const hasCover = coverFile && coverFile.files && coverFile.files.length > 0;
+    const galCount = galFiles && galFiles.files ? galFiles.files.length : 0;
+    const total = (hasCover ? 1 : 0) + galCount;
+    const display = document.getElementById('newServiceSlotsDisplay');
+    if (display) {
+      display.textContent = `${total} of 5 slots selected`;
+    }
+  }
+
+  function validateNewServiceGalleryUpload(input) {
+    if (!input.files || input.files.length === 0) return true;
+
+    // 1. Enforce max 2MB per file
+    for (let i = 0; i < input.files.length; i++) {
+      const file = input.files[i];
+      if (file.size > MAX_IMAGE_SIZE_BYTES) {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        alert(`File '${file.name}' is too large (${sizeMB} MB).\nEach uploaded image must be less than 2 MB.`);
+        input.value = '';
+        updateNewServiceSlots();
+        return false;
+      }
+    }
+
+    // 2. Enforce max 5 total
+    const coverFile = document.getElementById('newCoverFile');
+    const hasCover = coverFile && coverFile.files && coverFile.files.length > 0;
+    const available = 5 - (hasCover ? 1 : 0);
+
+    if (input.files.length > available) {
+      alert(`Strict Limit: Maximum 5 images total allowed per service!\n${hasCover ? '1 cover image is selected. ' : ''}You can select up to ${available} gallery image(s).`);
+      input.value = '';
+      updateNewServiceSlots();
+      return false;
+    }
+    updateNewServiceSlots();
+    return true;
+  }
+</script>

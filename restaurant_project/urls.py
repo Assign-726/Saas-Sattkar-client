@@ -120,6 +120,15 @@ urlpatterns = [
     path('api/public/hotel/cabs/booking/<str:booking_id>/', views_hotel.PublicCabBookingDetailView.as_view(), name='api_public_hotel_cab_detail'),
     path('api/public/hotel/cabs/fleet/', views_hotel.PublicCabFleetView.as_view(), name='api_public_hotel_cabs_fleet'),
 
+    # Public Spa & Wellness endpoints
+    path('api/spa/catalog/', views_hotel.PublicSpaCatalogView.as_view(), name='api_spa_catalog'),
+    path('api/spa/bookings/', views_hotel.PublicSpaBookingCreateView.as_view(), name='api_spa_bookings'),
+    path('api/spa/bookings/<str:ref_id>/', views_hotel.PublicSpaBookingDetailView.as_view(), name='api_spa_booking_detail'),
+    path('api/public/hotel/spa/catalog/', views_hotel.PublicSpaCatalogView.as_view(), name='api_public_hotel_spa_catalog'),
+    path('api/public/hotel/<int:branch_id>/spa/catalog/', views_hotel.PublicSpaCatalogView.as_view(), name='api_public_hotel_spa_catalog_branch'),
+    path('api/public/hotel/spa/book/', views_hotel.PublicSpaBookingCreateView.as_view(), name='api_public_hotel_spa_book'),
+    path('api/public/hotel/spa/booking/<str:ref_id>/', views_hotel.PublicSpaBookingDetailView.as_view(), name='api_public_hotel_spa_detail'),
+
 
     # API Token Authentication
     path('api/token/', GuardedTokenObtainPairView.as_view(), name='token_obtain_pair'),

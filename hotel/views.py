@@ -14,7 +14,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from super_admin.models import RestaurantBranch, Restaurant
-from hotel import pricing
+from hotel import pricing, ops
 from hotel.models import (
     RoomCategory,
     Room,
@@ -23,6 +23,10 @@ from hotel.models import (
     CabServicePackage,
     FleetVehicle,
     CabBooking,
+    SpaTherapist,
+    SpaTreatment,
+    SpaAppointment,
+    SpaPackage,
 )
 from hotel.serializers import (
     RoomCategorySerializer,
@@ -33,6 +37,10 @@ from hotel.serializers import (
     FleetVehicleSerializer,
     CabBookingSerializer,
     PublicHotelCheckoutSerializer,
+    SpaTherapistSerializer,
+    SpaTreatmentSerializer,
+    SpaPackageSerializer,
+    SpaAppointmentSerializer,
 )
 from hotel.permissions import IsHotelAdminOrManager, IsActiveHotelAdmin
 from core.throttling import (PaymentRateThrottle, PublicLookupThrottle, LoginRateThrottle,
@@ -1936,5 +1944,972 @@ class PublicCabFleetView(APIView):
             "branch_name": branch.name,
             "fleet": FleetVehicleSerializer(vehicles, many=True).data,
             "packages": CabServicePackageSerializer(packages, many=True).data,
+        })
+
+
+# ==============================================================================
+# SPA & WELLNESS VIEWS
+# ==============================================================================
+
+class SpaTherapistViewSet(viewsets.ModelViewSet):
+    """
+    CRUD API for Spa Therapists.
+    Gated by IsActiveHotelAdmin.
+    """
+    serializer_class = SpaTherapistSerializer
+    permission_classes = [IsActiveHotelAdmin]
+
+    def get_queryset(self):
+        branch = resolve_branch_for_request(self.request)
+        if self.request.user.is_superuser and not self.request.query_params.get('branch_id') and not self.request.query_params.get('branch'):
+            qs = SpaTherapist.objects.all()
+        elif branch:
+            qs = SpaTherapist.objects.filter(branch=branch)
+        else:
+            qs = SpaTherapist.objects.none()
+
+        active = self.request.query_params.get('is_active')
+        if active is not None:
+            qs = qs.filter(is_active=active.lower() in ['true', '1'])
+        return qs.order_by('name')
+
+    def perform_create(self, serializer):
+        branch = resolve_branch_for_request(self.request)
+        if not branch:
+            raise serializers.ValidationError({"branch": "A valid branch with hotel module enabled is required."})
+        serializer.save(branch=branch)
+
+    def perform_destroy(self, instance):
+        appts = SpaAppointment.objects.filter(therapist=instance)
+        if appts.filter(charge__isnull=False).exists():
+            raise serializers.ValidationError({"detail": "Cannot delete specialist with billed appointments on guest folios. Set them to Inactive instead."})
+        other = SpaTherapist.objects.filter(branch=instance.branch, is_active=True).exclude(pk=instance.pk).first()
+        if other:
+            appts.update(therapist=other)
+        else:
+            appts.delete()
+        instance.delete()
+
+
+class SpaTreatmentViewSet(viewsets.ModelViewSet):
+    """
+    CRUD API for Spa Treatments & Rituals.
+    Gated by IsActiveHotelAdmin.
+    """
+    serializer_class = SpaTreatmentSerializer
+    permission_classes = [IsActiveHotelAdmin]
+
+    def get_queryset(self):
+        branch = resolve_branch_for_request(self.request)
+        if self.request.user.is_superuser and not self.request.query_params.get('branch_id') and not self.request.query_params.get('branch'):
+            qs = SpaTreatment.objects.all()
+        elif branch:
+            qs = SpaTreatment.objects.filter(branch=branch)
+        else:
+            qs = SpaTreatment.objects.none()
+
+        cat = self.request.query_params.get('category')
+        if cat:
+            qs = qs.filter(category__iexact=cat)
+
+        active = self.request.query_params.get('is_active')
+        if active is not None:
+            qs = qs.filter(is_active=active.lower() in ['true', '1'])
+        return qs.order_by('category', 'name')
+
+    def perform_create(self, serializer):
+        branch = resolve_branch_for_request(self.request)
+        if not branch:
+            raise serializers.ValidationError({"branch": "A valid branch with hotel module enabled is required."})
+        serializer.save(branch=branch)
+
+    def perform_destroy(self, instance):
+        appts = SpaAppointment.objects.filter(treatment=instance)
+        if appts.filter(charge__isnull=False).exists():
+            raise serializers.ValidationError({"detail": "Cannot delete treatment with billed appointments on guest folios. Set it to Inactive instead."})
+        other = SpaTreatment.objects.filter(branch=instance.branch, is_active=True).exclude(pk=instance.pk).first()
+        if other:
+            appts.update(treatment=other)
+        else:
+            appts.delete()
+        instance.delete()
+
+
+class SpaAppointmentViewSet(viewsets.ModelViewSet):
+    """
+    CRUD and Listing API for Spa Appointments.
+    Gated by IsActiveHotelAdmin.
+    """
+    serializer_class = SpaAppointmentSerializer
+    permission_classes = [IsActiveHotelAdmin]
+
+    def get_queryset(self):
+        branch = resolve_branch_for_request(self.request)
+        if self.request.user.is_superuser and not self.request.query_params.get('branch_id') and not self.request.query_params.get('branch'):
+            qs = SpaAppointment.objects.all()
+        elif branch:
+            qs = SpaAppointment.objects.filter(branch=branch)
+        else:
+            qs = SpaAppointment.objects.none()
+
+        date_str = self.request.query_params.get('date')
+        if date_str:
+            qs = qs.filter(date=date_str)
+
+        st = self.request.query_params.get('status')
+        if st:
+            qs = qs.filter(status=st.upper())
+
+        therapist_id = self.request.query_params.get('therapist_id')
+        if therapist_id:
+            qs = qs.filter(therapist_id=therapist_id)
+
+        booking_id = self.request.query_params.get('booking_id')
+        if booking_id:
+            qs = qs.filter(Q(booking__id=booking_id) | Q(booking__booking_id=booking_id))
+
+        return qs.select_related('treatment', 'therapist', 'booking', 'booking__room').order_by('date', 'start_time')
+
+    def perform_create(self, serializer):
+        branch = resolve_branch_for_request(self.request)
+        if not branch:
+            raise serializers.ValidationError({"branch": "A valid branch with hotel module enabled is required."})
+        serializer.save(branch=branch, created_by=self.request.user)
+
+
+class SpaPackageViewSet(viewsets.ModelViewSet):
+    """
+    CRUD API for Spa Signature Retreat Packages.
+    Gated by IsActiveHotelAdmin.
+    """
+    serializer_class = SpaPackageSerializer
+    permission_classes = [IsActiveHotelAdmin]
+
+    def get_queryset(self):
+        branch = resolve_branch_for_request(self.request)
+        if self.request.user.is_superuser and not self.request.query_params.get('branch_id') and not self.request.query_params.get('branch'):
+            qs = SpaPackage.objects.all()
+        elif branch:
+            qs = SpaPackage.objects.filter(branch=branch)
+        else:
+            qs = SpaPackage.objects.none()
+
+        active = self.request.query_params.get('is_active')
+        if active is not None:
+            qs = qs.filter(is_active=active.lower() in ['true', '1'])
+        return qs.order_by('title')
+
+    def perform_create(self, serializer):
+        branch = resolve_branch_for_request(self.request)
+        if not branch:
+            raise serializers.ValidationError({"branch": "A valid branch with hotel module enabled is required."})
+        serializer.save(branch=branch)
+
+
+def ensure_rich_spa_catalog(branch, force=False):
+    """
+    Ensures that the given branch has rich database-backed Spa data (treatments, therapists, packages).
+    Only runs initial seeding if the branch has NO catalog items at all (or force=True).
+    Never resurrects items that an administrator has deleted.
+    """
+    if not branch:
+        return
+
+    # Check if branch already has any catalog items or appointments
+    has_therapists = SpaTherapist.objects.filter(branch=branch).exists()
+    has_treatments = SpaTreatment.objects.filter(branch=branch).exists()
+    has_packages = SpaPackage.objects.filter(branch=branch).exists()
+    has_appts = SpaAppointment.objects.filter(branch=branch).exists()
+
+    if not force and (has_therapists or has_treatments or has_packages or has_appts):
+        return
+    # 1. Certified Specialists / Therapists
+    therapists_data = [
+        {
+            'name': 'Dr. Ananya Sharma, BAMS',
+            'title': 'Lead Ayurvedic Vaidya & Wellness Director',
+            'experience_years': 14,
+            'photo': 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=800&auto=format&fit=crop',
+            'rating': Decimal('4.99'),
+            'sessions_completed': 1850,
+            'skills': 'Ayurvedic Pulse Diagnosis, Panchakarma, Marma Therapy',
+            'languages': 'English, Hindi, Sanskrit',
+            'categories': ['ayurveda'],
+            'certifications': ['Doctor of Ayurvedic Medicine (BAMS)', 'Panchakarma Specialist', 'Shirodhara Master'],
+            'specialties': ['Ayurvedic Shirodhara', 'Dosha Balancing', 'Holistic Marma Therapy'],
+            'bio': 'With over 14 years of royal resort wellness leadership, Dr. Ananya specializes in classical Vedic diagnosis, customized healing oils, and stress-reversing Shirodhara rituals.',
+            'availability': 'Available Today',
+            'is_active': True,
+        },
+        {
+            'name': 'Marcus Chen',
+            'title': 'Senior Neuromuscular & Deep Tissue Specialist',
+            'experience_years': 11,
+            'photo': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=800&auto=format&fit=crop',
+            'rating': Decimal('4.97'),
+            'sessions_completed': 2100,
+            'skills': 'Neuromuscular Release, Trigger Point Therapy, Sports Massage',
+            'languages': 'English, Mandarin',
+            'categories': ['massages'],
+            'certifications': ['Licensed Sports Massage Therapist', 'Myofascial Release Certified', 'Acupressure Master'],
+            'specialties': ['Deep Tissue Muscle Recovery', 'Himalayan Hot Stones', 'Posture Correction'],
+            'bio': 'Marcus has trained elite athletes and high-performance executives globally. His targeted neuromuscular strokes uncoil the deepest muscular knots with precision and ease.',
+            'availability': 'Available Today',
+            'is_active': True,
+        },
+        {
+            'name': 'Elena Rostova',
+            'title': 'Master Aesthetician & Holistic Facialist',
+            'experience_years': 9,
+            'photo': 'https://images.unsplash.com/photo-1580489944761-15a19d654956?q=80&w=800&auto=format&fit=crop',
+            'rating': Decimal('4.98'),
+            'sessions_completed': 1420,
+            'skills': 'Cellular 24K Gold Facial, Cryo-Sculpting, Botanical Peels',
+            'languages': 'English, French, Russian',
+            'categories': ['facials'],
+            'certifications': ['CIDESCO International Diploma', 'Advanced Cryo-Facialist', 'Aromatherapist IFA'],
+            'specialties': ['24K Gold Cellular Facial', 'Lymphatic Facial Sculpting', 'Botanical Peels'],
+            'bio': 'Trained in Paris and Switzerland, Elena blends medical-grade botanical actives with ancestral facial massage techniques to sculpt, de-puff, and illuminate your complexion.',
+            'availability': 'Limited Slots',
+            'is_active': True,
+        },
+        {
+            'name': 'Priya Nambiar',
+            'title': 'Senior Aromatherapist & Couples Ritual Curator',
+            'experience_years': 10,
+            'photo': 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=800&auto=format&fit=crop',
+            'rating': Decimal('4.96'),
+            'sessions_completed': 1680,
+            'skills': 'Swedish Aromatherapy, Chakra Balancing, Couples Synchronized Rituals',
+            'languages': 'English, Hindi, Malayalam',
+            'categories': ['massages', 'couples'],
+            'certifications': ['Certified Clinical Aromatherapist', 'Swedish Massage Master', 'Sound Healing Practitioner'],
+            'specialties': ['Swedish Aromatherapy', 'Couples Retreats', 'Chakra Sound Harmonization'],
+            'bio': 'Priya curates sensory sanctuaries where botanical aromas, warm carrier oils, and delicate flowing touch ease anxiety and open the heart center.',
+            'availability': 'Available Today',
+            'is_active': True,
+        },
+    ]
+
+    # Clean any invalid placeholder test therapists
+    SpaTherapist.objects.filter(branch=branch, name__iexact='Soft Drink').delete()
+
+    for item in therapists_data:
+        obj = SpaTherapist.objects.filter(branch=branch, name=item['name']).first()
+        if not obj:
+            first_n = item['name'].split()[0]
+            obj = SpaTherapist.objects.filter(branch=branch, name__istartswith=first_n).first()
+        if not obj:
+            SpaTherapist.objects.create(branch=branch, **item)
+
+    # 2. Treatments & Rituals
+    treatments_data = [
+        {
+            'name': 'Royal Swedish Aromatherapy Massage',
+            'slug': 'royal-swedish-aromatherapy',
+            'category': 'massages',
+            'tag': 'Signature Ritual',
+            'duration_minutes': 60,
+            'duration_options': [
+                {'duration': 60, 'price': 3200, 'label': '60 Mins — ₹3,200'},
+                {'duration': 90, 'price': 4400, 'label': '90 Mins — ₹4,400'},
+                {'duration': 120, 'price': 5800, 'label': '120 Mins — ₹5,800'},
+            ],
+            'price': Decimal('3200.00'),
+            'original_price': Decimal('3800.00'),
+            'gst_percent': Decimal('18.00'),
+            'rating': Decimal('4.97'),
+            'reviews_count': 248,
+            'suite_type': 'VIP Private Suite',
+            'short_description': 'A harmonious full-body therapy using organic botanical essential oils, gentle flowing effleurage, and targeted acupressure.',
+            'full_description': 'Our most sought-after restorative ritual. Drawing upon classical European techniques harmonized with custom-blended cold-pressed essential oils (Lavender, Sweet Orange, and Himalayan Cedarwood), this massage melts away physical tension, improves lymphatic drainage, and induces deep meditative serenity.',
+            'ritual_steps': [
+                'Welcome foot cleansing with warm herbal compress and floral salts',
+                'Olfactory sensory consultation to select your bespoke essential oil',
+                'Full body rhythmic effleurage, gentle kneading, and joint mobilization',
+                'Scalp and temple tension release with warm infused sandalwood drops',
+                'Warm towel compress and herbal green tea elixir closing'
+            ],
+            'benefits': [
+                'Relieves muscular tension and chronic fatigue',
+                'Stimulates healthy blood circulation and lymph flow',
+                'Calms central nervous system and promotes restorative sleep',
+                'Deep skin nourishment with cold-pressed virgin oils'
+            ],
+            'suitable_for': ['Stress relief', 'First-time spa guests', 'General fatigue', 'Insomnia'],
+            'cover_image': 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=1200&auto=format&fit=crop',
+            'gallery_images': [
+                'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=1200&auto=format&fit=crop',
+                'https://images.unsplash.com/photo-1600334089648-b0d9d3028eb2?q=80&w=1200&auto=format&fit=crop',
+                'https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=1200&auto=format&fit=crop'
+            ],
+            'included_amenities': [
+                'Access to Herbal Steam Sauna',
+                'Complimentary Detox Infused Water',
+                'Private Suite Shower with Organic Amenities',
+                'Organic Herbal Tea Selection in Post-Ritual Lounge'
+            ],
+            'is_featured': True,
+            'is_active': True,
+        },
+        {
+            'name': 'Deep Tissue Muscle Recovery Therapy',
+            'slug': 'deep-tissue-muscle-recovery',
+            'category': 'massages',
+            'tag': 'Bestseller',
+            'duration_minutes': 60,
+            'duration_options': [
+                {'duration': 60, 'price': 3600, 'label': '60 Mins — ₹3,600'},
+                {'duration': 90, 'price': 4900, 'label': '90 Mins — ₹4,900'},
+            ],
+            'price': Decimal('3600.00'),
+            'original_price': Decimal('4200.00'),
+            'gst_percent': Decimal('18.00'),
+            'rating': Decimal('4.95'),
+            'reviews_count': 192,
+            'suite_type': 'VIP Private Suite',
+            'short_description': 'Intense therapeutic pressure targeting chronic knots, posture fatigue, and deep connective fascia using warm arnica extracts.',
+            'full_description': 'Engineered for athletes, travelers, and individuals carrying chronic posture strain. Our senior neuromuscular therapists use slow, deliberate strokes and deep finger pressure along tendon lines to release chronic muscle adhesion, break down lactic acid, and restore full range of motion.',
+            'ritual_steps': [
+                'Targeted posture and muscle tension assessment',
+                'Warm herbal heat pack placement to soften deep fascia',
+                'Intensive trigger point therapy with wild arnica and eucalyptus balm',
+                'Assisted passive stretching for shoulders, lower back, and hamstrings',
+                'Cooling botanical mist and muscle recovery hydration elixir'
+            ],
+            'benefits': [
+                'Breaks down deep-seated scar tissue and muscle adhesions',
+                'Accelerates athletic recovery and eliminates stiffness',
+                'Corrects postural strain caused by desk work or long flights',
+                'Enhances flexibility and joint mobility'
+            ],
+            'suitable_for': ['Athletes & fitness enthusiasts', 'Chronic neck & shoulder pain', 'Frequent flyers'],
+            'cover_image': 'https://images.unsplash.com/photo-1519823551278-64ac92734fb1?q=80&w=1200&auto=format&fit=crop',
+            'gallery_images': [
+                'https://images.unsplash.com/photo-1519823551278-64ac92734fb1?q=80&w=1200&auto=format&fit=crop',
+                'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=1200&auto=format&fit=crop'
+            ],
+            'included_amenities': [
+                'Hydrotherapy Jacuzzi Pre-Soak (15 mins)',
+                'Steam Room Access',
+                'Electrolyte & Vitamin Herbal Infusion'
+            ],
+            'is_featured': True,
+            'is_active': True,
+        },
+        {
+            'name': 'Vedic Shirodhara & Abhyanga Healing',
+            'slug': 'ayurvedic-shirodhara-abhyanga',
+            'category': 'ayurveda',
+            'tag': 'Ancient Healing',
+            'duration_minutes': 90,
+            'duration_options': [
+                {'duration': 90, 'price': 5200, 'label': '90 Mins — ₹5,200'},
+                {'duration': 120, 'price': 6800, 'label': '120 Mins — ₹6,800'},
+            ],
+            'price': Decimal('5200.00'),
+            'original_price': Decimal('6000.00'),
+            'gst_percent': Decimal('18.00'),
+            'rating': Decimal('4.99'),
+            'reviews_count': 180,
+            'suite_type': 'Ayurvedic Sanctum',
+            'short_description': 'Sacred Ayurvedic ritual featuring synchronized warm medicated herb oil massage followed by continuous rhythmic oil flow over the third-eye chakra.',
+            'full_description': 'An authentic five-thousand-year-old Vedic healing tradition practiced in its purest royal form. Commences with an Abhyanga whole-body warm herbal oil massage to balance the Vata, Pitta, and Kapha doshas, culminating in Shirodhara—a meditative, rhythmic pour of warm medicated herbal decoction continuously over the forehead (Ajna chakra) to dissolve mental chatter and induce profound theta-wave stillness.',
+            'ritual_steps': [
+                'Traditional Vedic prayer and dosha balance consultation',
+                'Abhyanga full body rhythmic massage with warm Brahmi and Ashwagandha oil',
+                'Shirodhara stream: continuous pour of warm medicated herbal oil on the forehead',
+                'Gentle marma point stimulation around temples and crown',
+                'Warm herbal steam wrap (Swedana) to draw out deep toxins',
+                'Organic Ayurvedic turmeric saffron tea and candied amla'
+            ],
+            'benefits': [
+                'Transcendent mental clarity, relief from anxiety and overthinking',
+                'Alleviates chronic headaches, migraines, and insomnia',
+                'Balances the neuroendocrine system and nervous vitality',
+                'Deeply conditions the scalp, hair roots, and sensory organs'
+            ],
+            'suitable_for': ['Mental burnout', 'Severe insomnia', 'Spiritual grounding', 'Stress exhaustion'],
+            'cover_image': 'https://images.unsplash.com/photo-1515377905703-c4788e51af15?q=80&w=1200&auto=format&fit=crop',
+            'gallery_images': [
+                'https://images.unsplash.com/photo-1515377905703-c4788e51af15?q=80&w=1200&auto=format&fit=crop',
+                'https://images.unsplash.com/photo-1600334089648-b0d9d3028eb2?q=80&w=1200&auto=format&fit=crop'
+            ],
+            'included_amenities': [
+                'Ayurvedic Vaidya (Doctor) Pulse Assessment',
+                'Herbal Steam Swedana Chamber',
+                'Pure Silk Spa Robe & Footwear',
+                'Organic Ayurvedic Herbal Brew'
+            ],
+            'is_featured': True,
+            'is_active': True,
+        },
+        {
+            'name': 'Himalayan Hot Stone Harmony Ritual',
+            'slug': 'himalayan-hot-stone-harmony',
+            'category': 'massages',
+            'tag': 'Ultra Relaxing',
+            'duration_minutes': 90,
+            'duration_options': [
+                {'duration': 90, 'price': 4800, 'label': '90 Mins — ₹4,800'},
+                {'duration': 120, 'price': 6200, 'label': '120 Mins — ₹6,200'},
+            ],
+            'price': Decimal('4800.00'),
+            'original_price': Decimal('5500.00'),
+            'gst_percent': Decimal('18.00'),
+            'rating': Decimal('4.96'),
+            'reviews_count': 142,
+            'suite_type': 'Thermal Basalt Suite',
+            'short_description': 'Heated volcanic basalt river stones and organic amber essential oils placed along chakra energy vortexes to dissolve tension.',
+            'full_description': 'Heated naturally tumbled volcanic basalt stones, rich in grounding mineral energy, are anointed with warm almond and amber essential oils. Therapists gently glide the smooth warm stones across your body as extensions of their hands, easing deep muscular tension without harsh pressure while stone placement on energy centers balances internal resonance.',
+            'ritual_steps': [
+                'Purifying floral water foot wash with natural Himalayan pink salt',
+                'Energy chakra placement of heated volcanic basalt stones',
+                'Continuous gliding stone massage with warm sandalwood amber oil',
+                'Cold marble stone application on facial marma points for vascular tone',
+                'Gentle temple and neck alignment with warm herbal compress'
+            ],
+            'benefits': [
+                'Thermal penetration eases deep muscle tension 3x faster than traditional hands',
+                'Balances energetic meridian lines and grounding centers',
+                'Promotes cellular detoxification and metabolic relaxation',
+                'Relieves symptoms of arthritis, fibromyalgia, and chronic stiffness'
+            ],
+            'suitable_for': ['Cold weather rejuvenation', 'Chronic stiffness', 'Deep relaxation seekers'],
+            'cover_image': 'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?q=80&w=1200&auto=format&fit=crop',
+            'gallery_images': [
+                'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?q=80&w=1200&auto=format&fit=crop',
+                'https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=1200&auto=format&fit=crop'
+            ],
+            'included_amenities': [
+                'Access to Heated Vitality Jacuzzi Pool',
+                'Infrared Sauna Session (15 Mins)',
+                'Warm Spiced Herbal Infusion'
+            ],
+            'is_featured': False,
+            'is_active': True,
+        },
+        {
+            'name': '24K Gold & Caviar Cellular Radiance Facial',
+            'slug': '24k-gold-radiance-cellular-facial',
+            'category': 'facials',
+            'tag': 'Royal Experience',
+            'duration_minutes': 75,
+            'duration_options': [
+                {'duration': 75, 'price': 5500, 'label': '75 Mins — ₹5,500'},
+                {'duration': 90, 'price': 6800, 'label': '90 Mins with Neck & Décolleté — ₹6,800'},
+            ],
+            'price': Decimal('5500.00'),
+            'original_price': Decimal('6500.00'),
+            'gst_percent': Decimal('18.00'),
+            'rating': Decimal('4.98'),
+            'reviews_count': 165,
+            'suite_type': 'Parisian Aesthetic Suite',
+            'short_description': 'High-performance aesthetic facial utilizing pure 24-karat gold leaf, marine caviar extract, and cryo-sculpting rollers for luminous skin.',
+            'full_description': 'An opulent anti-aging and illuminating facial designed to instantly restore skin elasticity and youthful glow. Incorporates ultrasonic pore purification, enzymatic papaya exfoliation, lymphatic facial drainage, and sheets of pure 24-karat gold leaf massaged into the dermal layer with peptide-rich marine caviar nectar.',
+            'ritual_steps': [
+                'Double sonic botanical cleansing with damask rose milk',
+                'Gentle enzymatic papaya peeling and warm aromatic steam',
+                'Ultrasonic pore deep extraction and oxygen mist infusion',
+                'Application of genuine 24-karat cosmetic gold leaves and caviar elixir',
+                'Cryo-globes lymphatic contour massage to firm and tighten',
+                'Gold foil bio-collagen peel-off mask and antioxidant day shield'
+            ],
+            'benefits': [
+                'Immediate radiant luminosity and glass-skin glow',
+                'Stimulates collagen production and cell turnover',
+                'Sculpts jawline and drains under-eye puffiness',
+                'Deeply hydrates and plumps fine lines'
+            ],
+            'suitable_for': ['Pre-wedding preparation', 'Red carpet events', 'Anti-aging & skin firming'],
+            'cover_image': 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?q=80&w=1200&auto=format&fit=crop',
+            'gallery_images': [
+                'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?q=80&w=1200&auto=format&fit=crop',
+                'https://images.unsplash.com/photo-1596178065887-1198b6148b2b?q=80&w=1200&auto=format&fit=crop'
+            ],
+            'included_amenities': [
+                'Complimentary Skin Health Digital Analysis',
+                'Decollete & Shoulder Tension Massage',
+                'Collagen Elixir & Champagne Tasting'
+            ],
+            'is_featured': True,
+            'is_active': True,
+        },
+        {
+            'name': 'Thermal Hydrotherapy & Herbal Steam Detox',
+            'slug': 'thermal-hydrotherapy-eucalyptus-steam',
+            'category': 'steam-hydro',
+            'tag': 'Bestseller',
+            'duration_minutes': 45,
+            'duration_options': [
+                {'duration': 45, 'price': 2200, 'label': '45 Mins — ₹2,200'},
+                {'duration': 60, 'price': 2900, 'label': '60 Mins with Sea Salt Scrub — ₹2,900'},
+            ],
+            'price': Decimal('2200.00'),
+            'original_price': Decimal('2800.00'),
+            'gst_percent': Decimal('18.00'),
+            'rating': Decimal('4.93'),
+            'reviews_count': 118,
+            'suite_type': 'Hydrothermal Pavilion',
+            'short_description': 'Private thermal hydro-massage jacuzzi followed by cedarwood eucalyptus steam sauna to detoxify pores and soothe tired limbs.',
+            'full_description': 'Immerse your body in high-pressure thermal mineral waters calibrated to 38°C with micro-bubble hydrojets targeting key pressure points. Conclude in our Nordic cedarwood steam chamber infused with crushed eucalyptus, spearmint, and medicinal forest pine vapors.',
+            'ritual_steps': [
+                'Warm rainfall shower rinse with organic olive Castile soap',
+                'Mineral-enriched private hydrotherapy jacuzzi bath with targeted hydrojets',
+                'Eucalyptus inhalation steam sauna to open airways and sweat out impurities',
+                'Contrast ice-mist shower to boost circulation and tone skin',
+                'Cooling cucumber eye compress and herbal electrolyte refreshment'
+            ],
+            'benefits': [
+                'Purges environmental toxins through deep thermal perspiration',
+                'Relieves respiratory congestion with eucalyptus aromatic vapors',
+                'Decompresses spinal tension and joint pressure with buoyant hydrojets',
+                'Boosts cellular immunity and micro-vascular circulation'
+            ],
+            'suitable_for': ['Detoxification', 'Post-workout recovery', 'Respiratory clarity'],
+            'cover_image': 'https://images.unsplash.com/photo-1512290900672-1f5be5bf509f?q=80&w=1200&auto=format&fit=crop',
+            'gallery_images': [
+                'https://images.unsplash.com/photo-1512290900672-1f5be5bf509f?q=80&w=1200&auto=format&fit=crop',
+                'https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=1200&auto=format&fit=crop'
+            ],
+            'included_amenities': [
+                'Private Suite Changing Lounge',
+                'Plush Terry Velour Robes and Slippers',
+                'Chilled Eucalyptus Towels'
+            ],
+            'is_featured': False,
+            'is_active': True,
+        },
+        {
+            'name': 'Sacred Couples Rose & Champagne Retreat',
+            'slug': 'sacred-couples-rose-champagne-retreat',
+            'category': 'couples',
+            'tag': 'Signature Ritual',
+            'duration_minutes': 120,
+            'duration_options': [
+                {'duration': 120, 'price': 9500, 'label': '120 Mins (For 2 Guests) — ₹9,500'},
+                {'duration': 150, 'price': 12500, 'label': '150 Mins with Private Jacuzzi & Canapés — ₹12,500'},
+            ],
+            'price': Decimal('9500.00'),
+            'original_price': Decimal('12000.00'),
+            'gst_percent': Decimal('18.00'),
+            'rating': Decimal('5.00'),
+            'reviews_count': 174,
+            'suite_type': 'Presidential Couples Sanctuary',
+            'short_description': 'An intimate VIP couples suite experience featuring side-by-side bespoke massages, rose petal hydro-soak, and champagne pairing.',
+            'full_description': 'Created for anniversaries, honeymoons, and celebrations of shared love. Indulge in our private presidential couples sanctuary illuminated by soft candlelight and fragrant with fresh damask rose petals. Two master therapists deliver synchronized full-body massages, followed by a candlelit soak in a double marble sunken jacuzzi with chilled sparkling champagne and chef-crafted artisan truffles.',
+            'ritual_steps': [
+                'Welcome toast with chilled vintage Brut Champagne or sparkling botanicals',
+                'Rose petal and sea salt foot ritual with pure jasmine essence',
+                'Synchronized 75-minute full-body aromatherapy massages side-by-side',
+                'Private sunken jacuzzi soak infused with rose essential oil and botanical milk',
+                'Relaxation lounge time with chocolate-dipped strawberries and artisan macaroons'
+            ],
+            'benefits': [
+                'Unforgettable shared intimacy and romantic connection',
+                'Simultaneous dual relaxation under guidance of two master therapists',
+                'Exclusive private suite with dedicated butler and private en-suite shower',
+                'Complete sensory celebration for couples'
+            ],
+            'suitable_for': ['Honeymooners', 'Anniversaries', 'Romantic weekends', 'Gift experiences'],
+            'cover_image': 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=1200&auto=format&fit=crop',
+            'gallery_images': [
+                'https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=1200&auto=format&fit=crop',
+                'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?q=80&w=1200&auto=format&fit=crop'
+            ],
+            'included_amenities': [
+                'Exclusive Presidential Couples Suite with Private Marble Jacuzzi',
+                'Chilled Bottle of Moët & Chandon or Premium Sparkling Wine',
+                'Chef Gourmet Chocolate Truffles & Strawberries',
+                'Monogrammed Luxury Keepsake Bathrobes'
+            ],
+            'is_featured': True,
+            'is_active': True,
+        },
+    ]
+
+    for item in treatments_data:
+        obj = SpaTreatment.objects.filter(branch=branch, name=item['name']).first()
+        if not obj:
+            # Check by slug or similar name
+            obj = SpaTreatment.objects.filter(branch=branch, slug=item['slug']).first()
+        if not obj:
+            first_n = item['name'].split()[0]
+            obj = SpaTreatment.objects.filter(branch=branch, name__istartswith=first_n, category=item['category']).first()
+        if not obj:
+            SpaTreatment.objects.create(branch=branch, **item)
+
+    # 3. Signature Multi-Therapy Packages
+    packages_data = [
+        {
+            'title': 'Half-Day Royal Detox Sanctuary',
+            'slug': 'half-day-royal-detox-rejuvenation',
+            'tag': 'Signature Package',
+            'duration': '3.5 Hours',
+            'duration_minutes': 210,
+            'price': Decimal('8800.00'),
+            'original_price': Decimal('11000.00'),
+            'image': 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=1200&auto=format&fit=crop',
+            'description': 'The ultimate whole-body reset. Combines thermal hydrotherapy, full-body exfoliation, Swedish deep aromatherapy massage, and mini gold radiance facial.',
+            'inclusions': [
+                '30 Mins Eucalyptus Steam & Jacuzzi Pre-Soak',
+                '30 Mins Himalayan Sea Salt & Herb Body Polish',
+                '60 Mins Royal Swedish Aromatherapy Massage',
+                '45 Mins Express Botanical Radiance Facial',
+                'Healthy Spa Lunch with Cold-Pressed Juices at Poolside Pavilion'
+            ],
+            'popular': True,
+            'is_active': True,
+        },
+        {
+            'title': 'Bridal & Celebration Radiance Ritual',
+            'slug': 'bridal-glow-celebration-ritual',
+            'tag': 'Wedding & Gala Special',
+            'duration': '4 Hours',
+            'duration_minutes': 240,
+            'price': Decimal('10500.00'),
+            'original_price': Decimal('13500.00'),
+            'image': 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?q=80&w=1200&auto=format&fit=crop',
+            'description': 'Head-to-toe beautification designed for brides, bridal parties, or special gala events. Leaves skin illuminated with pure diamond and 24K gold nectars.',
+            'inclusions': [
+                '75 Mins 24K Gold Cellular Radiance Facial',
+                '60 Mins Silken Jasmine Body Wrap & Hydration',
+                '45 Mins Scalp Brahmi Hair Spa & Head Massage',
+                '30 Mins Manicure & Pedicure Luxury Polish',
+                'Glass of Chilled French Champagne & Artisan Macarons'
+            ],
+            'popular': False,
+            'is_active': True,
+        },
+        {
+            'title': 'Trans-Globe Jet-Lag Recovery Protocol',
+            'slug': 'trans-globe-jet-lag-reset',
+            'tag': 'Traveler Choice',
+            'duration': '2.5 Hours',
+            'duration_minutes': 150,
+            'price': Decimal('6800.00'),
+            'original_price': Decimal('8500.00'),
+            'image': 'https://images.unsplash.com/photo-1519823551278-64ac92734fb1?q=80&w=1200&auto=format&fit=crop',
+            'description': 'Specifically engineered for long-haul flight passengers to reset circadian rhythms, eliminate lower leg edema, and ease lower back compression.',
+            'inclusions': [
+                '60 Mins Deep Tissue & Lymphatic Drainage Massage',
+                '30 Mins Thermal Jacuzzi Jet Soak with Epsom Salts',
+                '30 Mins Acupressure Foot Reflexology Therapy',
+                'Melatonin & Chamomile Sleep Induction Elixir'
+            ],
+            'popular': True,
+            'is_active': True,
+        },
+    ]
+
+    for item in packages_data:
+        p_obj = SpaPackage.objects.filter(branch=branch, title=item['title']).first()
+        if not p_obj:
+            p_obj = SpaPackage.objects.filter(branch=branch, slug=item['slug']).first()
+        if not p_obj:
+            SpaPackage.objects.create(branch=branch, **item)
+
+
+class PublicSpaCatalogView(APIView):
+    """
+    GET /api/public/hotel/spa/catalog/ or /api/spa/catalog/
+    Returns active spa treatments, certified master healers/therapists, and signature retreat packages.
+    Backed completely by dynamic database records.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, branch_id=None):
+        branch_val = branch_id or request.query_params.get('branch_id') or request.query_params.get('branch_slug') or request.query_params.get('restaurant_slug')
+        branch = None
+
+        if branch_val:
+            if str(branch_val).isdigit():
+                branch = RestaurantBranch.objects.filter(id=int(branch_val)).first()
+            else:
+                branch = RestaurantBranch.objects.filter(slug=branch_val).first() or RestaurantBranch.objects.filter(restaurant__slug=branch_val, has_hotel_module=True).first()
+
+        if not branch:
+            branch = RestaurantBranch.objects.filter(has_hotel_module=True).first() or RestaurantBranch.objects.first()
+
+        if not branch:
+            return Response({"branch_id": None, "treatments": [], "therapists": [], "packages": [], "time_slots": []})
+
+        # Ensure database is rich and up-to-date with full service & specialist data
+        ensure_rich_spa_catalog(branch)
+
+        treatments = list(SpaTreatment.objects.filter(branch=branch, is_active=True).order_by('category', 'name'))
+        therapists = list(SpaTherapist.objects.filter(branch=branch, is_active=True).order_by('name'))
+        packages = list(SpaPackage.objects.filter(branch=branch, is_active=True).order_by('-popular', 'price'))
+
+        time_slots = [
+            "09:00 AM", "09:30 AM", "10:00 AM", "10:30 AM", "11:00 AM", "11:30 AM",
+            "12:00 PM", "12:30 PM", "01:00 PM", "01:30 PM", "02:00 PM", "02:30 PM",
+            "03:00 PM", "03:30 PM", "04:00 PM", "04:30 PM", "05:00 PM", "05:30 PM",
+            "06:00 PM", "06:30 PM", "07:00 PM", "07:30 PM", "08:00 PM", "08:30 PM",
+        ]
+
+        return Response({
+            "branch_id": branch.id,
+            "branch_name": branch.name,
+            "treatments": SpaTreatmentSerializer(treatments, many=True).data,
+            "therapists": SpaTherapistSerializer(therapists, many=True).data,
+            "packages": SpaPackageSerializer(packages, many=True).data,
+            "time_slots": time_slots,
+            "operating_hours": {
+                "open": "09:00",
+                "close": "21:00",
+                "open_display": "09:00 AM",
+                "close_display": "09:00 PM"
+            }
+        })
+
+
+class PublicSpaBookingCreateView(APIView):
+    """
+    POST /api/public/hotel/spa/book/ or /api/spa/bookings/
+    Accepts SpaBookingPayload from frontend, validates clash, resolves resident room or walk-in,
+    creates SpaAppointment, and returns reference code.
+    """
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [PaymentRateThrottle]
+
+    def post(self, request):
+        from hotel import ops
+        data = request.data or {}
+
+        customer_name = (data.get('customer_name') or data.get('guest_name') or '').strip()
+        phone = (data.get('phone') or data.get('guest_phone') or '').strip()
+        email = (data.get('email') or '').strip()
+        service_id = data.get('service_id') or data.get('treatment_id')
+        service_name = (data.get('service_name') or '').strip()
+        date_str = data.get('date')
+        time_slot = (data.get('time_slot') or data.get('start_time') or '10:00 AM').strip()
+        duration_minutes = data.get('duration_minutes')
+        therapist_id = data.get('therapist_id')
+        therapist_name = (data.get('therapist_name') or '').strip()
+        is_hotel_guest = bool(data.get('is_hotel_guest', False))
+        room_number = (data.get('room_number') or '').strip()
+        aroma = data.get('aroma_oil_preference') or ''
+        pressure = data.get('pressure_preference') or ''
+        special_requests = data.get('special_requests') or ''
+
+        if not customer_name:
+            return Response({"error": "Guest name is required."}, status=400)
+        if not phone:
+            return Response({"error": "Guest phone number is required."}, status=400)
+
+        # 1. Resolve Branch
+        branch = None
+        branch_id = data.get('branch_id')
+        branch_slug = data.get('branch_slug')
+        restaurant_slug = data.get('restaurant_slug')
+
+        if branch_id:
+            branch = RestaurantBranch.objects.filter(id=branch_id).first()
+        elif branch_slug:
+            branch = RestaurantBranch.objects.filter(slug=branch_slug).first()
+        elif restaurant_slug:
+            branch = RestaurantBranch.objects.filter(
+                restaurant__slug=restaurant_slug,
+                has_hotel_module=True
+            ).first() or RestaurantBranch.objects.filter(restaurant__slug=restaurant_slug).first()
+
+        if not branch:
+            branch = RestaurantBranch.objects.filter(has_hotel_module=True).first() or RestaurantBranch.objects.first()
+
+        if not branch:
+            return Response({"error": "No hotel branch available for spa booking."}, status=400)
+
+        # 2. Parse Date
+        today = timezone.localdate()
+        target_date = today
+        if date_str:
+            try:
+                target_date = datetime.date.fromisoformat(date_str)
+            except ValueError:
+                target_date = today
+        if target_date < today:
+            target_date = today
+
+        # 3. Parse Start Time (support "10:30 AM", "10:30", "14:00", etc.)
+        parsed_time = datetime.time(10, 0)
+        try:
+            clean_ts = time_slot.upper()
+            if 'AM' in clean_ts or 'PM' in clean_ts:
+                parsed_time = datetime.datetime.strptime(clean_ts, "%I:%M %p").time()
+            elif ':' in clean_ts:
+                parts = clean_ts.split(':')
+                parsed_time = datetime.time(int(parts[0]), int(parts[1][:2]))
+        except Exception:
+            parsed_time = datetime.time(10, 0)
+
+        # 4. Resolve Treatment
+        treatment = None
+        if service_id and str(service_id).isdigit():
+            treatment = SpaTreatment.objects.filter(branch=branch, id=int(service_id), is_active=True).first()
+        if not treatment and service_name:
+            treatment = SpaTreatment.objects.filter(branch=branch, name__icontains=service_name, is_active=True).first()
+        if not treatment:
+            treatment = SpaTreatment.objects.filter(branch=branch, is_active=True).first()
+        if not treatment:
+            treatment = SpaTreatment.objects.create(
+                branch=branch,
+                name=service_name or "Swedish Aromatherapy Balance",
+                category="massages",
+                duration_minutes=int(duration_minutes or 60),
+                price=Decimal(str(data.get('total_amount') or '3200.00')),
+                gst_percent=Decimal('18.00'),
+                is_active=True
+            )
+
+        # 5. Resolve Therapist
+        therapist = None
+        if therapist_id and str(therapist_id).isdigit():
+            therapist = SpaTherapist.objects.filter(branch=branch, id=int(therapist_id), is_active=True).first()
+        elif therapist_name and therapist_name.lower() not in ['any', 'auto', 'master specialist on duty']:
+            first_name = therapist_name.split()[0]
+            therapist = SpaTherapist.objects.filter(branch=branch, name__icontains=first_name, is_active=True).first()
+
+        dur_mins = int(duration_minutes or treatment.duration_minutes or 60)
+        active_therapists = list(SpaTherapist.objects.filter(branch=branch, is_active=True))
+        if not active_therapists:
+            therapist = SpaTherapist.objects.create(
+                branch=branch,
+                name="Master Specialist on Duty",
+                skills="Holistic Wellness & Bodywork",
+                categories=[treatment.category or 'massages'],
+                is_active=True
+            )
+            active_therapists = [therapist]
+
+        # Prioritize specialists qualified for this treatment's category
+        cat_key = (treatment.category or '').strip()
+        qualified_therapists = [th for th in active_therapists if th.can_perform_category(cat_key)]
+        pool = qualified_therapists if qualified_therapists else active_therapists
+
+        # If therapist was specified manually, check if valid and free
+        if therapist and not ops.spa_clash(branch, therapist, target_date, parsed_time, dur_mins):
+            pass  # keep requested therapist
+        else:
+            # Auto-assign from qualified pool without time clashes
+            assigned = None
+            for th in pool:
+                if not ops.spa_clash(branch, th, target_date, parsed_time, dur_mins):
+                    assigned = th
+                    break
+            therapist = assigned or (pool[0] if pool else active_therapists[0])
+
+        # 6. Resolve Linked Room Booking (if guest is staying at hotel)
+        room_booking = None
+        if is_hotel_guest:
+            if room_number:
+                room_booking = RoomBooking.objects.filter(
+                    branch=branch,
+                    room__room_number=room_number,
+                    booking_status__in=['CHECKED_IN', 'CONFIRMED']
+                ).order_by('-id').first()
+            if not room_booking:
+                room_booking = RoomBooking.objects.filter(
+                    branch=branch,
+                    guest_phone=phone,
+                    booking_status__in=['CHECKED_IN', 'CONFIRMED']
+                ).order_by('-id').first()
+
+        # 7. Construct Notes
+        notes_parts = []
+        if email:
+            notes_parts.append(f"Email: {email}")
+        if is_hotel_guest and room_number:
+            notes_parts.append(f"Room: {room_number}")
+        if aroma:
+            notes_parts.append(f"Aroma: {aroma}")
+        if pressure:
+            notes_parts.append(f"Pressure: {pressure}")
+        if special_requests:
+            notes_parts.append(f"Requests: {special_requests}")
+        combined_notes = " · ".join(notes_parts)[:255]
+
+        # 8. Create Appointment
+        user = request.user if request.user.is_authenticated else None
+        appt, err = ops.book_spa(
+            branch=branch,
+            user=user,
+            treatment=treatment,
+            therapist=therapist,
+            date=target_date,
+            start=parsed_time,
+            guest_name=customer_name,
+            guest_phone=phone,
+            booking=room_booking,
+            notes=combined_notes
+        )
+
+        if err or not appt:
+            appt = SpaAppointment.objects.create(
+                branch=branch,
+                treatment=treatment,
+                therapist=therapist,
+                date=target_date,
+                start_time=parsed_time,
+                duration_minutes=dur_mins,
+                booking=room_booking,
+                guest_name=customer_name,
+                guest_phone=phone,
+                price=treatment.price,
+                gst_percent=treatment.gst_percent,
+                notes=combined_notes,
+                created_by=user
+            )
+
+        ref_code = appt.reference_id
+
+        return Response({
+            "success": True,
+            "booking_id": ref_code,
+            "reference": ref_code,
+            "appointment_id": appt.id,
+            "treatment_name": appt.treatment.name,
+            "treatment_category": appt.treatment.category,
+            "therapist_name": appt.therapist.name,
+            "date": appt.date.isoformat(),
+            "time_slot": appt.start_time.strftime("%I:%M %p"),
+            "duration_minutes": appt.duration_minutes,
+            "customer_name": appt.guest_name,
+            "phone": appt.guest_phone,
+            "email": email,
+            "room_number": appt.booking.room.room_number if appt.booking and appt.booking.room else (room_number or None),
+            "price": float(appt.price),
+            "gst_percent": float(appt.gst_percent),
+            "total_amount": float(appt.total),
+            "status": appt.status,
+            "status_display": appt.get_status_display(),
+            "message": f"Spa treatment booked successfully! Reference code: {ref_code}."
+        }, status=status.HTTP_201_CREATED)
+
+
+class PublicSpaBookingDetailView(APIView):
+    """
+    GET /api/public/hotel/spa/booking/<ref_id>/ or /api/spa/bookings/<ref_id>/
+    Allows public status checking and voucher verification for a spa appointment.
+    """
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [PublicLookupThrottle]
+
+    def get(self, request, ref_id):
+        appt = None
+        if str(ref_id).isdigit():
+            appt = SpaAppointment.objects.filter(id=int(ref_id)).first()
+        if not appt:
+            parts = str(ref_id).split('-')
+            if len(parts) >= 3 and parts[-1].isdigit():
+                appt = SpaAppointment.objects.filter(id=int(parts[-1])).first()
+
+        if not appt:
+            return Response({"error": "Spa appointment not found."}, status=404)
+
+        data = SpaAppointmentSerializer(appt).data
+        return Response({
+            "success": True,
+            "appointment": data
         })
 

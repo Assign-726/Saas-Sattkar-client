@@ -11,6 +11,10 @@ router.register(r'bookings', views.RoomBookingViewSet, basename='hotel-booking')
 router.register(r'cabs/packages', views.CabServicePackageViewSet, basename='hotel-cab-package')
 router.register(r'cabs/fleet', views.FleetVehicleViewSet, basename='hotel-cab-fleet')
 router.register(r'cabs/bookings', views.CabBookingViewSet, basename='hotel-cab-booking')
+router.register(r'spa/treatments', views.SpaTreatmentViewSet, basename='hotel-spa-treatment')
+router.register(r'spa/therapists', views.SpaTherapistViewSet, basename='hotel-spa-therapist')
+router.register(r'spa/packages', views.SpaPackageViewSet, basename='hotel-spa-package')
+router.register(r'spa/appointments', views.SpaAppointmentViewSet, basename='hotel-spa-appointment')
 
 urlpatterns = [
     # Specific booking & room front desk actions
@@ -46,7 +50,13 @@ urlpatterns = [
     path('public/cabs/booking/<str:booking_id>/', views.PublicCabBookingDetailView.as_view(), name='hotel-public-cabs-detail'),
     path('public/cabs/fleet/', views.PublicCabFleetView.as_view(), name='hotel-public-cabs-fleet'),
 
-    # Router endpoints (categories, rooms, bookings, cab packages, fleet, cab bookings)
+    # Public Spa & Wellness Endpoints
+    path('public/spa/catalog/', views.PublicSpaCatalogView.as_view(), name='hotel-public-spa-catalog'),
+    path('public/<int:branch_id>/spa/catalog/', views.PublicSpaCatalogView.as_view(), name='hotel-public-spa-catalog-branch'),
+    path('public/spa/book/', views.PublicSpaBookingCreateView.as_view(), name='hotel-public-spa-book'),
+    path('public/spa/booking/<str:ref_id>/', views.PublicSpaBookingDetailView.as_view(), name='hotel-public-spa-detail'),
+
+    # Router endpoints (categories, rooms, bookings, cab packages, fleet, cab bookings, spa)
     path('', include(router.urls)),
 ]
 

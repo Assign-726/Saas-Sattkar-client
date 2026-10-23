@@ -208,6 +208,8 @@ urlpatterns = [
     path('spa/<int:pk>/action/', views_ops.spa_action, name='spa_action'),
     path('spa/setup/', views_ops.spa_setup, name='spa_setup'),
     path('spa/setup/save/', views_ops.spa_setup_save, name='spa_setup_save'),
+    path('spa/setup/delete/', views_ops.spa_setup_delete, name='spa_setup_delete'),
+    path('spa/setup/reset-catalog/', views_ops.spa_setup_reset_catalog, name='spa_setup_reset_catalog'),
 
     # Banquets & events
     path('banquets/', views_ops.banquets, name='banquets'),

@@ -259,6 +259,10 @@ class Restaurant(models.Model):
         return bool(self.feature_website_pages and self.feature_website_cms and self.feature_website_type != 'minimal_ordering')
 
     @property
+    def has_menu_website(self) -> bool:
+        return bool(self.feature_website_pages and self.is_menu_only_website)
+
+    @property
     def website_mode(self) -> str:
         return 'minimal_ordering' if self.is_menu_only_website else 'full'
 
