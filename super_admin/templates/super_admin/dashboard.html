@@ -138,10 +138,14 @@
           title="Edit Business & Outlets">
           <i class="fa-solid fa-pen-to-square"></i> <span>Edit Business</span>
         </a>
-        {% if SHOW_WEBSITE_PAGES %}
+        {% if ENABLE_WEBSITE_CMS %}
         <a href="{% url 'super_admin:landing_edit' r.id %}" class="btn secondary small" title="Customize Website Pages">
           <i class="fa-solid fa-window-restore"></i> <span>Website CMS</span>
         </a>
+        {% elif SHOW_WEBSITE_PAGES %}
+        <span class="badge neutral" style="font-size: 0.78rem; display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px;" title="Digital Menu Website Active. Upgrade to Full Website to customize CMS sections.">
+          <i class="fa-solid fa-utensils" style="color: var(--primary);"></i> <span>Digital Menu Active</span>
+        </span>
         {% endif %}
         <a href="{% url 'super_admin:restaurant_delete' r.id %}" class="btn secondary small"
           style="color: var(--danger); border-color: rgba(var(--ui-red-rgb), 0.3);" title="Delete Business">
@@ -281,7 +285,9 @@
                 {% else %}
                 <button type="button" class="btn small"
                   style="background: var(--ui-surface-2); color: var(--ui-label-3); border: 1px solid var(--ui-separator-strong); font-size: 0.78rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; padding: 4px 8px;"
-                  onclick="openDashboardRequestAddonModal({{ b.id }}, 'pos', '{{ b.name|escapejs }}', 'Restaurant POS Module')"
+                  data-branch-id="{{ b.id }}"
+                  data-branch-name="{{ b.name|escape }}"
+                  onclick="openDashboardRequestAddonModal(this.dataset.branchId, 'pos', this.dataset.branchName, 'Restaurant POS Module')"
                   title="Restaurant POS is not included in the plan for this outlet. Click to request an add-on.">
                   <i class="fa-solid fa-lock" style="font-size: 0.72rem; color: #94a3b8;"></i>
                   <span>Disabled</span>
@@ -304,7 +310,9 @@
                 {% else %}
                 <button type="button" class="btn small"
                   style="background: var(--ui-surface-2); color: var(--ui-label-3); border: 1px solid var(--ui-separator-strong); font-size: 0.78rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; padding: 4px 8px;"
-                  onclick="openDashboardRequestAddonModal({{ b.id }}, 'hotel', '{{ b.name|escapejs }}', 'Hotel PMS Module')"
+                  data-branch-id="{{ b.id }}"
+                  data-branch-name="{{ b.name|escape }}"
+                  onclick="openDashboardRequestAddonModal(this.dataset.branchId, 'hotel', this.dataset.branchName, 'Hotel PMS Module')"
                   title="Hotel PMS is not included in the plan for this outlet. Click to request an add-on.">
                   <i class="fa-solid fa-lock" style="font-size: 0.72rem; color: #94a3b8;"></i>
                   <span>Disabled</span>
@@ -347,7 +355,9 @@
                 {% else %}
                 <button type="button" class="btn small"
                   style="background: var(--ui-surface-2); color: var(--ui-label-3); border: 1px solid var(--ui-separator-strong); font-size: 0.78rem; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; padding: 4px 8px;"
-                  onclick="openDashboardRequestAddonModal({{ b.id }}, 'events', '{{ b.name|escapejs }}', 'Club & Events Module')"
+                  data-branch-id="{{ b.id }}"
+                  data-branch-name="{{ b.name|escape }}"
+                  onclick="openDashboardRequestAddonModal(this.dataset.branchId, 'events', this.dataset.branchName, 'Club & Events Module')"
                   title="Club & Events is not included in the plan for this outlet. Click to request an add-on.">
                   <i class="fa-solid fa-lock" style="font-size: 0.72rem; color: #94a3b8;"></i>
                   <span>Disabled</span>
@@ -1170,6 +1180,11 @@
 
   // Dashboard Request Addon Modal Handler
   function openDashboardRequestAddonModal(branchId, moduleKey, branchName, moduleTitle) {
+    if (branchId && typeof branchId === 'object' && branchId.dataset) {
+      const el = branchId;
+      branchId = el.dataset.branchId;
+      branchName = el.dataset.branchName || branchName;
+    }
     openModuleConfirmModal({
       title: `Request ${moduleTitle}?`,
       outletName: branchName,

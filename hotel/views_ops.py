@@ -3,7 +3,9 @@ centre and the occupancy forecast. Business rules live in ``hotel.ops``."""
 import calendar
 import datetime
 from decimal import Decimal
+import uuid
 
+from django.core.files.storage import default_storage
 from django.db.models import Count, Prefetch, Q, Sum
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
@@ -16,9 +18,9 @@ from hotel import pricing
 from hotel.models import (BanquetEvent, BanquetMenu, BanquetPayment, BanquetVenue, CashierShift, ComplianceLicence, FixedAsset,
                           FolioPayment, GuestRequest, HotelSettings, LaundryOrder, LaundryRate, LostFoundItem, PaidOut, PromoCode,
                           RateOverride, Room, RoomBooking, RoomCategory, RoomPackage, SafetyCheck, SalesActivity, SalesLead,
-                          SecurityIncident, ServiceContract, SpaAppointment, SpaTherapist, SpaTreatment, StatutoryFiling,
+                          SecurityIncident, ServiceContract, SpaAppointment, SpaTherapist, SpaTreatment, SpaPackage, StatutoryFiling,
                           UtilityReading, Visitor)
-from hotel.views_admin import hotel_admin_required
+from hotel.views_admin import hotel_admin_required, optimize_image_to_webp
 from hotel.views_pms import _back, _base, _can, _date, _money, _render, _report
 from super_admin import permissions as P
 
@@ -311,6 +313,9 @@ def laundry_rate_save(request, restaurant_slug, ctx):
 @hotel_admin_required
 def spa(request, restaurant_slug, ctx):
     branch = _branch(ctx)
+    if branch:
+        from hotel.views import ensure_rich_spa_catalog
+        ensure_rich_spa_catalog(branch)
     today = timezone.localdate()
     day = _date(request.GET.get('date'), today)
     therapists = list(SpaTherapist.objects.filter(branch=branch, is_active=True))
@@ -334,15 +339,35 @@ def spa(request, restaurant_slug, ctx):
 def spa_add(request, restaurant_slug, ctx):
     branch = _branch(ctx)
     treatment = SpaTreatment.objects.filter(branch=branch, pk=request.POST.get('treatment') or 0, is_active=True).first()
-    therapist = SpaTherapist.objects.filter(branch=branch, pk=request.POST.get('therapist') or 0, is_active=True).first()
+    therapist_id = request.POST.get('therapist')
+    therapist = None
+    if therapist_id and therapist_id != 'auto':
+        therapist = SpaTherapist.objects.filter(branch=branch, pk=therapist_id, is_active=True).first()
+
     day, start = _date(request.POST.get('date')), _time(request.POST.get('start'))
-    if not (treatment and therapist and day and start):
-        _report(request, 'Choose the treatment, therapist, date and time.')
+    if not (treatment and day and start):
+        _report(request, 'Choose the treatment, date and time.')
     else:
-        appt, err = ops.book_spa(branch, request.user, treatment=treatment, therapist=therapist, date=day, start=start,
-                                 guest_name=request.POST.get('guest_name', ''), guest_phone=request.POST.get('guest_phone', ''),
-                                 booking=_active_booking(branch, request.POST.get('booking')), notes=request.POST.get('notes', ''))
-        _report(request, err, appt and f'Booked {treatment.name} with {therapist.name} at {start:%H:%M}.')
+        # If therapist was not selected or set to 'auto', resolve the best qualified therapist
+        if not therapist:
+            cat_key = (treatment.category or '').strip()
+            active_therapists = list(SpaTherapist.objects.filter(branch=branch, is_active=True))
+            qualified = [th for th in active_therapists if th.can_perform_category(cat_key)]
+            pool = qualified if qualified else active_therapists
+            for th in pool:
+                if not ops.spa_clash(branch, th, day, start, treatment.duration_minutes):
+                    therapist = th
+                    break
+            if not therapist and pool:
+                therapist = pool[0]
+
+        if not therapist:
+            _report(request, f'No specialist is assigned to the "{treatment.get_category_display() if hasattr(treatment, "get_category_display") else treatment.category}" category. Please configure specialists in Spa Setup.')
+        else:
+            appt, err = ops.book_spa(branch, request.user, treatment=treatment, therapist=therapist, date=day, start=start,
+                                     guest_name=request.POST.get('guest_name', ''), guest_phone=request.POST.get('guest_phone', ''),
+                                     booking=_active_booking(branch, request.POST.get('booking')), notes=request.POST.get('notes', ''))
+            _report(request, err, appt and f'Booked {treatment.name} with {therapist.name} at {start:%H:%M}.')
     return redirect(_url(ctx, 'spa') + f'?date={(day or timezone.localdate()).isoformat()}')
 
 
@@ -353,6 +378,12 @@ def spa_action(request, restaurant_slug, ctx, pk):
     op = request.POST.get('op')
     if op == 'complete':
         err, ok = ops.complete_spa(appt, request.user, request.POST.get('settled_by')), 'Treatment completed and settled.'
+    elif op == 'delete':
+        if appt.charge:
+            err, ok = 'Cannot delete appointment with posted folio charge. Void the charge first.', None
+        else:
+            appt.delete()
+            err, ok = None, 'Appointment deleted successfully.'
     else:
         status = {'start': 'IN_TREATMENT', 'cancel': 'CANCELLED', 'no_show': 'NO_SHOW'}.get(op)
         err, ok = (ops.spa_status(appt, status), 'Appointment updated.') if status else ('Unknown action.', None)
@@ -363,39 +394,341 @@ def spa_action(request, restaurant_slug, ctx, pk):
 @hotel_admin_required
 def spa_setup(request, restaurant_slug, ctx):
     branch = _branch(ctx)
+    if branch:
+        from hotel.views import ensure_rich_spa_catalog
+        ensure_rich_spa_catalog(branch)
+    active_tab = request.GET.get('tab', 'treatments')
+    spa_categories = [
+        ('massages', 'Massages & Bodywork'),
+        ('ayurveda', 'Ancient Ayurveda'),
+        ('facials', 'Aesthetic Facials'),
+        ('steam-hydro', 'Steam & Hydrotherapy'),
+        ('couples', 'Couples Sanctuary'),
+    ]
     return _render(request, ctx, 'hotel_ops/_spa_setup.html', 'spa', 'Spa set-up',
-                   therapists=SpaTherapist.objects.filter(branch=branch), treatments=SpaTreatment.objects.filter(branch=branch),
+                   therapists=SpaTherapist.objects.filter(branch=branch).order_by('name'),
+                   treatments=SpaTreatment.objects.filter(branch=branch).order_by('category', 'name'),
+                   packages=SpaPackage.objects.filter(branch=branch).order_by('title'),
+                   spa_categories=spa_categories,
+                   active_tab=active_tab,
                    can_edit=_can(request, 'guest_services'))
 
 
 @hotel_admin_required
 @require_POST
 def spa_setup_save(request, restaurant_slug, ctx):
+    from django.utils.text import slugify
     branch = _branch(ctx)
     kind = request.POST.get('kind')
     name = (request.POST.get('name') or '').strip()
     active = request.POST.get('is_active', '1') == '1'
+    tab = 'treatments'
+
     if kind == 'therapist':
+        tab = 'therapists'
         obj = SpaTherapist.objects.filter(branch=branch, pk=request.POST.get('pk') or 0).first() or SpaTherapist(branch=branch)
         if not name and not obj.pk:
             _report(request, 'Enter the therapist’s name.')
         else:
-            obj.name = name[:120] or obj.name
-            obj.skills, obj.is_active = (request.POST.get('skills') or '')[:150], active
+            obj.name = name[:150] or obj.name
+            obj.title = (request.POST.get('title') or obj.title or 'Certified Wellness Specialist')[:150]
+            obj.experience_years = _int(request.POST.get('experience_years'), obj.experience_years or 5)
+
+            # Photo upload from device or URL or removal (Max 2MB)
+            if 'photo_file' in request.FILES and request.FILES['photo_file']:
+                p_file = request.FILES['photo_file']
+                if p_file.size > 2 * 1024 * 1024:
+                    _report(request, f"Photo '{p_file.name}' exceeds the 2MB limit ({round(p_file.size / (1024*1024), 2)}MB). Max allowed size is 2MB.")
+                else:
+                    try:
+                        converted = optimize_image_to_webp(p_file)
+                        save_name = default_storage.save(f"hotel/spa/therapists/th_{uuid.uuid4().hex[:8]}.webp", converted)
+                        obj.photo = default_storage.url(save_name)
+                    except Exception as e:
+                        _report(request, f"Photo upload failed: {e}")
+            elif request.POST.get('remove_photo') in ('1', 'true', 'on'):
+                obj.photo = ''
+            elif request.POST.get('photo'):
+                obj.photo = request.POST.get('photo').strip()
+
+            rating_val = _money(request.POST.get('rating'))
+            if rating_val is not None and 1 <= rating_val <= 5:
+                obj.rating = rating_val
+            avail = request.POST.get('availability')
+            if avail:
+                obj.availability = avail.strip()
+            langs = request.POST.get('languages')
+            if langs is not None:
+                obj.languages = langs.strip()
+            obj.skills = (request.POST.get('skills') or '')[:255]
+            bio = request.POST.get('bio')
+            if bio is not None:
+                obj.bio = bio.strip()
+            cats = request.POST.getlist('categories')
+            if not cats and request.POST.get('categories'):
+                cats = [c.strip() for c in request.POST.get('categories').replace('\n', ',').split(',') if c.strip()]
+            obj.categories = cats
+            specs = request.POST.get('specialties')
+            if specs is not None:
+                obj.specialties = [s.strip() for s in specs.replace('\n', ',').split(',') if s.strip()]
+            certs = request.POST.get('certifications')
+            if certs is not None:
+                obj.certifications = [s.strip() for s in certs.replace('\n', ',').split(',') if s.strip()]
+            obj.is_active = active
             obj.save()
-            _report(request, None, 'Therapist saved.')
+            _report(request, None, f'Specialist "{obj.name}" saved successfully.')
+
     elif kind == 'treatment':
+        tab = 'treatments'
         obj = SpaTreatment.objects.filter(branch=branch, pk=request.POST.get('pk') or 0).first() or SpaTreatment(branch=branch)
         price, dur = _money(request.POST.get('price')), _int(request.POST.get('duration_minutes'), 60)
         gst = _money(request.POST.get('gst_percent') or '18')
         if not (name or obj.pk) or price is None or price <= 0 or not (15 <= dur <= 240) or gst is None or not (0 <= gst <= 28):
-            _report(request, 'Enter a name, a price above zero, a duration of 15–240 minutes and GST of 0–28%.')
+            _report(request, 'Enter a valid name, price above zero, duration of 15–240 minutes and GST of 0–28%.')
         else:
             obj.name = name[:150] or obj.name
-            obj.category, obj.price, obj.duration_minutes = (request.POST.get('category') or '')[:60], price, dur
-            obj.gst_percent, obj.is_active = gst, active
+            if not obj.slug and name:
+                obj.slug = slugify(name)[:150]
+            obj.category = (request.POST.get('category') or obj.category or 'massages')[:60]
+            obj.tag = (request.POST.get('tag') or obj.tag or '')[:100]
+            obj.price = price
+            orig_price = _money(request.POST.get('original_price'))
+            if orig_price is not None:
+                obj.original_price = orig_price
+            obj.duration_minutes = dur
+            obj.gst_percent = gst
+            rating_val = _money(request.POST.get('rating'))
+            if rating_val is not None and 1 <= rating_val <= 5:
+                obj.rating = rating_val
+            suite = request.POST.get('suite_type')
+            if suite:
+                obj.suite_type = suite.strip()[:100]
+
+            # Primary Cover Image: device upload (Max 2MB) or URL or removal
+            if 'cover_image_file' in request.FILES and request.FILES['cover_image_file']:
+                c_file = request.FILES['cover_image_file']
+                if c_file.size > 2 * 1024 * 1024:
+                    _report(request, f"Cover image '{c_file.name}' exceeds the 2MB limit ({round(c_file.size / (1024*1024), 2)}MB). Max allowed size is 2MB.")
+                else:
+                    try:
+                        converted = optimize_image_to_webp(c_file)
+                        save_name = default_storage.save(f"hotel/spa/treatments/cover_{uuid.uuid4().hex[:8]}.webp", converted)
+                        obj.cover_image = default_storage.url(save_name)
+                    except Exception as e:
+                        _report(request, f"Cover image upload failed: {e}")
+            elif request.POST.get('remove_cover_image') in ('1', 'true', 'on'):
+                obj.cover_image = ''
+            elif request.POST.get('cover_image'):
+                obj.cover_image = request.POST.get('cover_image').strip()
+
+            # Gallery Management with STRICT Limit of Max 5 Images per service
+            MAX_IMAGES_PER_SERVICE = 5
+            delete_gallery = set(request.POST.getlist('delete_gallery_images'))
+
+            # Start with retained gallery images
+            raw_kept = request.POST.getlist('existing_gallery_images')
+            if raw_kept or request.POST.get('has_gallery_field') == '1':
+                current_gallery = [img.strip() for img in raw_kept if img.strip() and img.strip() not in delete_gallery]
+            else:
+                current_gallery = [img for img in (obj.gallery_images or []) if img not in delete_gallery]
+
+            # External URLs if provided
+            extra_urls = request.POST.get('gallery_urls', '').strip()
+            if extra_urls:
+                for u in extra_urls.replace(',', '\n').splitlines():
+                    u_clean = u.strip()
+                    if u_clean and u_clean not in current_gallery:
+                        current_gallery.append(u_clean)
+
+            # Available slots for new device uploads:
+            # Service capacity is strictly MAX_IMAGES_PER_SERVICE (5) total
+            has_cover = 1 if bool(obj.cover_image) else 0
+            current_count = has_cover + len(current_gallery)
+            slots_available = max(0, MAX_IMAGES_PER_SERVICE - current_count)
+
+            # Process device gallery file uploads (Max 2MB per file)
+            uploaded_files = request.FILES.getlist('gallery_image_files')
+            if uploaded_files:
+                accepted_files = uploaded_files[:slots_available]
+                skipped_files = len(uploaded_files) - len(accepted_files)
+                for g_file in accepted_files:
+                    if g_file.size > 2 * 1024 * 1024:
+                        _report(request, f"Gallery file '{g_file.name}' exceeds the 2MB limit ({round(g_file.size / (1024*1024), 2)}MB). Skipped.")
+                        continue
+                    try:
+                        converted = optimize_image_to_webp(g_file)
+                        save_name = default_storage.save(f"hotel/spa/treatments/gal_{uuid.uuid4().hex[:8]}.webp", converted)
+                        current_gallery.append(default_storage.url(save_name))
+                    except Exception as e:
+                        _report(request, f"Gallery file '{g_file.name}' upload failed: {e}")
+                if skipped_files > 0:
+                    _report(request, f"Limit reached: strictly 5 images maximum per service. {skipped_files} additional image(s) were skipped.")
+
+            # Hard cap: ensure (has_cover + gallery) <= 5
+            max_gallery_allowed = MAX_IMAGES_PER_SERVICE - (1 if bool(obj.cover_image) else 0)
+            if len(current_gallery) > max_gallery_allowed:
+                current_gallery = current_gallery[:max_gallery_allowed]
+            obj.gallery_images = current_gallery
+
+            short_d = request.POST.get('short_description')
+            if short_d is not None:
+                obj.short_description = short_d.strip()
+            full_d = request.POST.get('full_description')
+            if full_d is not None:
+                obj.full_description = full_d.strip()
+            steps = request.POST.get('ritual_steps')
+            if steps is not None:
+                obj.ritual_steps = [s.strip() for s in steps.splitlines() if s.strip()]
+            bens = request.POST.get('benefits')
+            if bens is not None:
+                obj.benefits = [s.strip() for s in bens.splitlines() if s.strip()]
+            amenities = request.POST.get('included_amenities')
+            if amenities is not None:
+                obj.included_amenities = [s.strip() for s in amenities.splitlines() if s.strip()]
+            obj.is_featured = request.POST.get('is_featured') in ('1', 'true', 'on')
+            obj.is_active = active
             obj.save()
-            _report(request, None, 'Treatment saved.')
+            _report(request, None, f'Treatment "{obj.name}" saved successfully.')
+
+    elif kind == 'package':
+        tab = 'packages'
+        title = (request.POST.get('title') or name).strip()
+        obj = SpaPackage.objects.filter(branch=branch, pk=request.POST.get('pk') or 0).first() or SpaPackage(branch=branch)
+        price = _money(request.POST.get('price'))
+        dur = (request.POST.get('duration') or '150 Mins').strip()
+        dur_mins = _int(request.POST.get('duration_minutes'), 150)
+        if not (title or obj.pk) or price is None or price <= 0:
+            _report(request, 'Enter a valid package title and price above zero.')
+        else:
+            obj.title = title[:180] or obj.title
+            if not obj.slug and title:
+                obj.slug = slugify(title)[:180]
+            obj.tag = (request.POST.get('tag') or obj.tag or 'Signature Ritual')[:100]
+            obj.duration = dur
+            obj.duration_minutes = dur_mins
+            obj.price = price
+            orig_price = _money(request.POST.get('original_price'))
+            if orig_price is not None:
+                obj.original_price = orig_price
+
+            # Banner image upload (Max 2MB) or URL or removal
+            if 'image_file' in request.FILES and request.FILES['image_file']:
+                pkg_file = request.FILES['image_file']
+                if pkg_file.size > 2 * 1024 * 1024:
+                    _report(request, f"Package image '{pkg_file.name}' exceeds the 2MB limit ({round(pkg_file.size / (1024*1024), 2)}MB). Max allowed size is 2MB.")
+                else:
+                    try:
+                        converted = optimize_image_to_webp(pkg_file)
+                        save_name = default_storage.save(f"hotel/spa/packages/pkg_{uuid.uuid4().hex[:8]}.webp", converted)
+                        obj.image = default_storage.url(save_name)
+                    except Exception as e:
+                        _report(request, f"Package image upload failed: {e}")
+            elif request.POST.get('remove_image') in ('1', 'true', 'on'):
+                obj.image = ''
+            elif request.POST.get('image'):
+                obj.image = request.POST.get('image').strip()
+
+            desc = request.POST.get('description')
+            if desc is not None:
+                obj.description = desc.strip()
+            inclusions = request.POST.get('inclusions')
+            if inclusions is not None:
+                obj.inclusions = [s.strip() for s in inclusions.splitlines() if s.strip()]
+            obj.popular = request.POST.get('popular') in ('1', 'true', 'on')
+            obj.is_active = active
+            obj.save()
+            _report(request, None, f'Signature package "{obj.title}" saved successfully.')
+
+    return redirect(f"{_url(ctx, 'spa_setup')}?tab={tab}")
+
+
+@hotel_admin_required
+@require_POST
+def spa_setup_delete(request, restaurant_slug, ctx):
+    branch = _branch(ctx)
+    kind = request.POST.get('kind')
+    pk = _int(request.POST.get('pk'))
+    tab = 'treatments'
+
+    if kind == 'treatment':
+        tab = 'treatments'
+        item = SpaTreatment.objects.filter(pk=pk, branch=branch).first()
+        if not item:
+            _report(request, 'Treatment not found or already deleted.')
+            return redirect(f"{_url(ctx, 'spa_setup')}?tab={tab}")
+
+        name = item.name
+        appts = SpaAppointment.objects.filter(treatment=item)
+        if appts.filter(charge__isnull=False).exists():
+            _report(request, f'Cannot delete treatment "{name}" because associated appointments have billed charges on guest folios. Set it to Inactive instead.')
+            return redirect(f"{_url(ctx, 'spa_setup')}?tab={tab}")
+
+        other_treatment = SpaTreatment.objects.filter(branch=branch, is_active=True).exclude(pk=item.pk).first()
+        if appts.exists():
+            if other_treatment:
+                count = appts.count()
+                appts.update(treatment=other_treatment)
+                item.delete()
+                _report(request, None, f'Treatment "{name}" deleted successfully. {count} scheduled booking(s) reassigned to "{other_treatment.name}".')
+            else:
+                count = appts.count()
+                appts.delete()
+                item.delete()
+                _report(request, None, f'Treatment "{name}" and {count} test appointment(s) deleted successfully.')
+        else:
+            item.delete()
+            _report(request, None, f'Treatment "{name}" deleted successfully.')
+
+    elif kind == 'therapist':
+        tab = 'therapists'
+        item = SpaTherapist.objects.filter(pk=pk, branch=branch).first()
+        if not item:
+            _report(request, 'Specialist not found or already deleted.')
+            return redirect(f"{_url(ctx, 'spa_setup')}?tab={tab}")
+
+        name = item.name
+        appts = SpaAppointment.objects.filter(therapist=item)
+        if appts.filter(charge__isnull=False).exists():
+            _report(request, f'Cannot delete specialist "{name}" because their appointments have billed charges on guest folios. Set them to Inactive instead.')
+            return redirect(f"{_url(ctx, 'spa_setup')}?tab={tab}")
+
+        other_therapist = SpaTherapist.objects.filter(branch=branch, is_active=True).exclude(pk=item.pk).first()
+        if appts.exists():
+            if other_therapist:
+                count = appts.count()
+                appts.update(therapist=other_therapist)
+                item.delete()
+                _report(request, None, f'Specialist "{name}" deleted successfully. {count} scheduled appointment(s) reassigned to {other_therapist.name}.')
+            else:
+                count = appts.count()
+                appts.delete()
+                item.delete()
+                _report(request, None, f'Specialist "{name}" and {count} test appointment(s) deleted successfully.')
+        else:
+            item.delete()
+            _report(request, None, f'Specialist "{name}" deleted successfully.')
+
+    elif kind == 'package':
+        tab = 'packages'
+        item = SpaPackage.objects.filter(pk=pk, branch=branch).first()
+        if not item:
+            _report(request, 'Signature package not found or already deleted.')
+            return redirect(f"{_url(ctx, 'spa_setup')}?tab={tab}")
+
+        name = item.title
+        item.delete()
+        _report(request, None, f'Signature package "{name}" deleted successfully.')
+
+    return redirect(f"{_url(ctx, 'spa_setup')}?tab={tab}")
+
+
+@hotel_admin_required
+@require_POST
+def spa_setup_reset_catalog(request, restaurant_slug, ctx):
+    branch = _branch(ctx)
+    from hotel.views import ensure_rich_spa_catalog
+    ensure_rich_spa_catalog(branch, force=True)
+    _report(request, None, 'Demo spa catalog defaults successfully restored.')
     return redirect(_url(ctx, 'spa_setup'))
 
 

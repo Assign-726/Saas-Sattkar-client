@@ -1,9 +1,10 @@
 from rest_framework import serializers
 from decimal import Decimal
-from django.utils import timezone
 from django.db import transaction
-from hotel.models import RoomCategory, Room, RoomBooking, CabServicePackage, FleetVehicle, CabBooking, HotelSettings
-
+from hotel.models import (
+    RoomCategory, Room, RoomBooking, CabServicePackage, FleetVehicle, CabBooking, HotelSettings,
+    SpaTherapist, SpaTreatment, SpaAppointment, SpaPackage
+)
 
 
 class RoomCategorySerializer(serializers.ModelSerializer):
@@ -644,3 +645,189 @@ class PublicHotelCheckoutSerializer(serializers.Serializer):
                 'currency': 'INR',
             }
 
+
+# ==============================================================================
+# SPA & WELLNESS SERIALIZERS
+# ==============================================================================
+
+class SpaTherapistSerializer(serializers.ModelSerializer):
+    branch_name = serializers.ReadOnlyField(source='branch.name')
+    languages_list = serializers.ReadOnlyField()
+    languages = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SpaTherapist
+        fields = [
+            'id',
+            'branch',
+            'branch_name',
+            'name',
+            'title',
+            'experience_years',
+            'photo',
+            'rating',
+            'sessions_completed',
+            'skills',
+            'languages',
+            'languages_list',
+            'categories',
+            'category_names',
+            'certifications',
+            'specialties',
+            'bio',
+            'availability',
+            'is_active',
+        ]
+        read_only_fields = ['id']
+
+    category_names = serializers.SerializerMethodField()
+
+    def get_category_names(self, obj):
+        names = {
+            'massages': 'Massages & Bodywork',
+            'ayurveda': 'Ancient Ayurveda',
+            'facials': 'Aesthetic Facials',
+            'steam-hydro': 'Steam & Hydrotherapy',
+            'couples': 'Couples Sanctuary',
+        }
+        cats = obj.categories or []
+        return [names.get(c, c.replace('-', ' ').title()) for c in cats]
+
+    def get_languages(self, obj):
+        if not obj.languages:
+            return ["English", "Hindi"]
+        if isinstance(obj.languages, list):
+            return obj.languages
+        return [s.strip() for s in str(obj.languages).split(',') if s.strip()]
+
+
+class SpaTreatmentSerializer(serializers.ModelSerializer):
+    branch_name = serializers.ReadOnlyField(source='branch.name')
+    total_price = serializers.SerializerMethodField()
+    category_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SpaTreatment
+        fields = [
+            'id',
+            'branch',
+            'branch_name',
+            'name',
+            'slug',
+            'category',
+            'category_name',
+            'tag',
+            'duration_minutes',
+            'duration_options',
+            'price',
+            'original_price',
+            'gst_percent',
+            'total_price',
+            'rating',
+            'reviews_count',
+            'suite_type',
+            'short_description',
+            'full_description',
+            'ritual_steps',
+            'benefits',
+            'suitable_for',
+            'contraindications',
+            'included_amenities',
+            'cover_image',
+            'gallery_images',
+            'is_featured',
+            'is_active',
+        ]
+        read_only_fields = ['id']
+
+    def get_total_price(self, obj):
+        price = obj.price or Decimal('0.00')
+        gst = obj.gst_percent or Decimal('18.00')
+        return (price * (1 + gst / Decimal('100.00'))).quantize(Decimal('0.01'))
+
+    def get_category_name(self, obj):
+        names = {
+            'massages': 'Holistic Bodywork & Massages',
+            'ayurveda': 'Ancient Ayurvedic Healing',
+            'facials': 'Aesthetic Skin Radiance',
+            'steam-hydro': 'Hydrotherapy & Herbal Steam',
+            'couples': 'Couples & Romance Sanctuaries',
+        }
+        return names.get(obj.category, obj.category.title() if obj.category else 'Holistic Wellness')
+
+
+class SpaPackageSerializer(serializers.ModelSerializer):
+    branch_name = serializers.ReadOnlyField(source='branch.name')
+
+    class Meta:
+        model = SpaPackage
+        fields = [
+            'id',
+            'branch',
+            'branch_name',
+            'title',
+            'slug',
+            'tag',
+            'duration',
+            'duration_minutes',
+            'price',
+            'original_price',
+            'image',
+            'description',
+            'inclusions',
+            'popular',
+            'is_active',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+
+class SpaAppointmentSerializer(serializers.ModelSerializer):
+    branch_name = serializers.ReadOnlyField(source='branch.name')
+    reference_id = serializers.ReadOnlyField()
+    treatment_name = serializers.ReadOnlyField(source='treatment.name')
+    treatment_category = serializers.ReadOnlyField(source='treatment.category')
+    therapist_name = serializers.ReadOnlyField(source='therapist.name')
+    room_number = serializers.ReadOnlyField(source='booking.room.room_number')
+    room_booking_code = serializers.ReadOnlyField(source='booking.booking_id')
+    status_display = serializers.ReadOnlyField(source='get_status_display')
+    settled_by_display = serializers.ReadOnlyField(source='get_settled_by_display')
+    total_amount = serializers.ReadOnlyField(source='total')
+    end_time_formatted = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SpaAppointment
+        fields = [
+            'id',
+            'reference_id',
+            'branch',
+            'branch_name',
+            'treatment',
+            'treatment_name',
+            'treatment_category',
+            'therapist',
+            'therapist_name',
+            'date',
+            'start_time',
+            'end_time_formatted',
+            'duration_minutes',
+            'booking',
+            'room_booking_code',
+            'room_number',
+            'guest_name',
+            'guest_phone',
+            'price',
+            'gst_percent',
+            'total_amount',
+            'status',
+            'status_display',
+            'settled_by',
+            'settled_by_display',
+            'settled_at',
+            'notes',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'reference_id', 'created_at']
+
+    def get_end_time_formatted(self, obj):
+        return obj.end_time.strftime('%H:%M') if getattr(obj, 'end_time', None) else ''

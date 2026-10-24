@@ -8,6 +8,10 @@ from hotel.models import (
     CabServicePackage,
     FleetVehicle,
     CabBooking,
+    SpaTherapist,
+    SpaTreatment,
+    SpaPackage,
+    SpaAppointment,
 )
 
 
@@ -90,4 +94,40 @@ class CabBookingAdmin(admin.ModelAdmin):
     list_filter = ('branch', 'is_complimentary', 'payment_status', 'trip_status', 'pickup_datetime')
     search_fields = ('booking_id', 'room_booking__guest_name', 'room_booking__guest_phone', 'flight_or_train_number', 'pickup_location', 'drop_location')
     readonly_fields = ('booking_id', 'created_at', 'updated_at')
+
+
+# ==============================================================================
+# SPA & WELLNESS ADMIN
+# ==============================================================================
+
+@admin.register(SpaTherapist)
+class SpaTherapistAdmin(admin.ModelAdmin):
+    list_display = ('name', 'title', 'categories', 'branch', 'experience_years', 'rating', 'availability', 'is_active')
+    list_filter = ('branch', 'availability', 'is_active')
+    search_fields = ('name', 'title', 'skills', 'bio', 'languages')
+
+
+@admin.register(SpaTreatment)
+class SpaTreatmentAdmin(admin.ModelAdmin):
+    list_display = ('name', 'category', 'branch', 'price', 'duration_minutes', 'rating', 'is_featured', 'is_active')
+    list_filter = ('branch', 'category', 'is_featured', 'is_active')
+    search_fields = ('name', 'short_description', 'tag', 'slug')
+    prepopulated_fields = {'slug': ('name',)}
+
+
+@admin.register(SpaPackage)
+class SpaPackageAdmin(admin.ModelAdmin):
+    list_display = ('title', 'branch', 'duration', 'price', 'original_price', 'popular', 'is_active')
+    list_filter = ('branch', 'popular', 'is_active')
+    search_fields = ('title', 'description', 'tag', 'slug')
+    prepopulated_fields = {'slug': ('title',)}
+
+
+@admin.register(SpaAppointment)
+class SpaAppointmentAdmin(admin.ModelAdmin):
+    list_display = ('reference_id', 'guest_name', 'guest_phone', 'treatment', 'therapist', 'branch', 'date', 'start_time', 'duration_minutes', 'price', 'status')
+    list_filter = ('branch', 'status', 'date')
+    search_fields = ('guest_name', 'guest_phone', 'notes', 'treatment__name', 'therapist__name')
+    readonly_fields = ('reference_id', 'created_at')
+
 

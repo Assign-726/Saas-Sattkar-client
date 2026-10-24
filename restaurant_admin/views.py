@@ -1519,22 +1519,28 @@ def order_create_manual(request, restaurant_slug=None):
 
     categories_list = [{'id': c.id, 'name': c.name} for c in categories_qs]
 
-    # Calculate top selling item IDs scoped to active branch (with top items fallback)
+    # Overall Top Selling Item IDs (by quantity volume)
     from django.db.models import Sum
     top_selling_filter = {'order__restaurant': restaurant}
     if active_branch:
         top_selling_filter['order__branch'] = active_branch
     top_selling_qs = (
         OrderItem.objects.filter(**top_selling_filter)
+        .exclude(order__status=Order.OrderStatus.CANCELLED)
         .values('menu_item_id')
         .annotate(total_qty=Sum('quantity'))
-        .order_by('-total_qty')[:20]
+        .order_by('-total_qty')[:18]
     )
     top_selling_ids = [item['menu_item_id'] for item in top_selling_qs if item['menu_item_id']]
     if len(top_selling_ids) < 6:
-        for mi_obj in menu_items_qs[:12]:
+        for mi_obj in menu_items_qs[:18]:
             if mi_obj.id not in top_selling_ids:
                 top_selling_ids.append(mi_obj.id)
+
+    # Smart Menu Recommendations (Dynamic Dayparting & Recency Decay Engine)
+    from restaurant_admin.smart_menu import get_all_meal_slots_recommendations
+    smart_menu_data = get_all_meal_slots_recommendations(restaurant, active_branch)
+    current_slot_key = smart_menu_data.get('current_slot', 'lunch')
 
     # Active / In-kitchen / Draft orders (branch-scoped)
     active_orders_list = get_pos_active_orders(restaurant, active_branch)
@@ -1641,6 +1647,8 @@ def order_create_manual(request, restaurant_slug=None):
         'menu_items': menu_items_qs,
         'menu_items_json': json.dumps(menu_items_list),
         'top_selling_json': json.dumps(top_selling_ids),
+        'smart_slots_json': json.dumps(smart_menu_data),
+        'current_slot_json': json.dumps(current_slot_key),
         'categories_json': json.dumps(categories_list),
         'categories': categories_qs,
         'tables': tables_qs,
@@ -2372,15 +2380,28 @@ def order_edit_manual(request, pk, restaurant_slug=None):
 
     categories_list = [{'id': c.id, 'name': c.name} for c in categories_qs]
 
-    # Calculate top selling item IDs for this restaurant
+    # Overall Top Selling Item IDs (by quantity volume)
     from django.db.models import Sum
+    top_selling_filter = {'order__restaurant': restaurant}
+    if active_branch:
+        top_selling_filter['order__branch'] = active_branch
     top_selling_qs = (
-        OrderItem.objects.filter(order__restaurant=restaurant)
+        OrderItem.objects.filter(**top_selling_filter)
+        .exclude(order__status=Order.OrderStatus.CANCELLED)
         .values('menu_item_id')
         .annotate(total_qty=Sum('quantity'))
-        .order_by('-total_qty')[:12]
+        .order_by('-total_qty')[:18]
     )
     top_selling_ids = [item['menu_item_id'] for item in top_selling_qs if item['menu_item_id']]
+    if len(top_selling_ids) < 6:
+        for mi_obj in menu_items_qs[:18]:
+            if mi_obj.id not in top_selling_ids:
+                top_selling_ids.append(mi_obj.id)
+
+    # Smart Menu Recommendations (Dynamic Dayparting & Recency Decay Engine)
+    from restaurant_admin.smart_menu import get_all_meal_slots_recommendations
+    smart_menu_data = get_all_meal_slots_recommendations(restaurant, active_branch)
+    current_slot_key = smart_menu_data.get('current_slot', 'lunch')
     tables_qs = Table.objects.filter(restaurant=restaurant)
     if active_branch:
         tables_qs = tables_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
@@ -2413,6 +2434,8 @@ def order_edit_manual(request, pk, restaurant_slug=None):
         'menu_items': menu_items_qs,
         'menu_items_json': json.dumps(menu_items_list),
         'top_selling_json': json.dumps(top_selling_ids),
+        'smart_slots_json': json.dumps(smart_menu_data),
+        'current_slot_json': json.dumps(current_slot_key),
         'categories_json': json.dumps(categories_list),
         'categories': categories_qs,
         'tables': tables_qs,
@@ -5918,6 +5941,19 @@ def order_set_prep_time(request, pk, restaurant_slug=None):
 
     messages.success(request, f'Preparation time set to {minutes} minutes for order #{order.branch_order_number or order.id}.')
     return redirect('restaurant_admin:order_list', restaurant_slug=restaurant.slug)
+
+
+@login_required
+@user_passes_test(is_admin)
+def pos_smart_menu_api(request, restaurant_slug=None):
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
+    active_branch = get_active_branch(request, restaurant)
+    force = request.GET.get('refresh') in ['1', 'true', True]
+    from restaurant_admin.smart_menu import get_all_meal_slots_recommendations
+    data = get_all_meal_slots_recommendations(restaurant, active_branch, force_refresh=force)
+    return JsonResponse({'success': True, 'data': data})
 
 
 @login_required

@@ -137,6 +137,7 @@ urlpatterns = [
     path('orders/gst-company/', views.pos_gst_company_api, name='pos_gst_company_api'),
     path('orders/draft/finalize/', views.pos_finalize_order_api, name='pos_finalize_order_api'),
     path('orders/<int:pk>/settle/', views.order_settle_api, name='order_settle_api'),
+    path('orders/api/smart-menu/', views.pos_smart_menu_api, name='pos_smart_menu_api'),
     path('api/orders/omni-search/', views.order_omni_search_api, name='order_omni_search_api'),
     path('api/detect-location/', views.detect_location_ip_api, name='detect_location_ip_api'),
     path('orders/<int:pk>/credit-note/', views.order_credit_note_api, name='order_credit_note_api'),
