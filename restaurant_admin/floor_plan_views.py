@@ -59,7 +59,7 @@ def floor_plan_api(request, restaurant_slug=None):
     zones = Zone.objects.filter(restaurant=restaurant)
     if active_branch:
         zones = zones.filter(branch=active_branch)
-    zones = zones.prefetch_related('tables')
+    zones = zones.prefetch_related('tables', 'tables__master_table', 'tables__linked_tables')
     
     from core.models import Order
     data = []
@@ -70,19 +70,19 @@ def floor_plan_api(request, restaurant_slug=None):
             'tables': []
         }
         for table in zone.tables.filter(is_active=True).order_by('table_number'):
-            active_orders = table.orders.exclude(status='C').exclude(payment_status__in=['F', 'paid', 'P'])
+            active_orders_qs = table.orders.exclude(status__in=['C', 'COMPLETED', 'DRAFT']).exclude(payment_status='F')
             if active_branch:
-                active_orders = active_orders.filter(branch=active_branch)
+                active_orders_qs = active_orders_qs.filter(branch=active_branch)
 
-            latest_order = active_orders.order_by('-order_time').first()
-            if not latest_order:
-                # If table has a recent order still associated before final clear
-                recent_qs = table.orders.exclude(status='C').exclude(payment_status='F')
+            latest_order = active_orders_qs.order_by('-order_time').first()
+            if not latest_order and table.master_table_id and table.master_table:
+                m_orders = table.master_table.orders.exclude(status__in=['C', 'COMPLETED', 'DRAFT']).exclude(payment_status='F')
                 if active_branch:
-                    recent_qs = recent_qs.filter(branch=active_branch)
-                recent = recent_qs.order_by('-order_time').first()
-                if recent and table.current_status != 'BLANK':
-                    latest_order = recent
+                    m_orders = m_orders.filter(branch=active_branch)
+                m_latest = m_orders.order_by('-order_time').first()
+                if m_latest:
+                    latest_order = m_latest
+
             active_order_data = None
             if latest_order:
                 active_order_data = {
@@ -94,7 +94,11 @@ def floor_plan_api(request, restaurant_slug=None):
                     'status_display': 'Ready' if (latest_order.is_ready and latest_order.status not in ['S', 'COMPLETED', 'C']) else latest_order.get_status_display(),
                     'payment_status': latest_order.payment_status,
                     'payment_status_display': latest_order.get_payment_status_display(),
+                    'is_master_order': bool(table.master_table_id and latest_order.table_id != table.id),
                 }
+
+            is_master = bool(table.party_name and not table.master_table_id) or table.linked_tables.filter(is_active=True).exists()
+            is_linked = bool(table.master_table_id)
 
             zone_data['tables'].append({
                 'id': table.id,
@@ -110,6 +114,15 @@ def floor_plan_api(request, restaurant_slug=None):
                 'zone_name': zone.name,
                 'status': table.current_status,
                 'active_order': active_order_data,
+                'party_name': table.effective_party_name,
+                'party_host': table.effective_party_host,
+                'party_phone': table.effective_party_phone,
+                'party_notes': table.party_notes or (table.master_table.party_notes if table.master_table else ''),
+                'master_table_id': table.master_table_id,
+                'master_table_name': table.master_table.name if table.master_table else '',
+                'is_master': is_master,
+                'is_linked': is_linked,
+                'linked_table_names': list(table.linked_tables.filter(is_active=True).values_list('name', flat=True)),
             })
         data.append(zone_data)
         
@@ -127,13 +140,15 @@ def floor_plan_dashboard(request, restaurant_slug=None):
         zones = zones.filter(branch=active_branch)
     zones = zones.order_by('name')
 
-    tables_all_qs = Table.objects.filter(restaurant=restaurant)
+    tables_all_qs = Table.objects.filter(restaurant=restaurant).select_related('master_table', 'zone').prefetch_related('linked_tables')
     if active_branch:
         tables_all_qs = tables_all_qs.filter(branch=active_branch)
     tables_qs = tables_all_qs.order_by('zone', 'table_number')
 
     all_tables_data = []
     for t in tables_qs:
+        is_master = bool(t.party_name and not t.master_table_id) or t.linked_tables.filter(is_active=True).exists()
+        is_linked = bool(t.master_table_id)
         all_tables_data.append({
             'id': t.id,
             'name': t.name,
@@ -148,6 +163,15 @@ def floor_plan_dashboard(request, restaurant_slug=None):
             'zone_id': t.zone_id,
             'zone_name': t.zone.name if t.zone else '',
             'is_active': t.is_active,
+            'party_name': t.effective_party_name,
+            'party_host': t.effective_party_host,
+            'party_phone': t.effective_party_phone,
+            'party_notes': t.party_notes or (t.master_table.party_notes if t.master_table else ''),
+            'master_table_id': t.master_table_id,
+            'master_table_name': t.master_table.name if t.master_table else '',
+            'is_master': is_master,
+            'is_linked': is_linked,
+            'linked_table_names': list(t.linked_tables.filter(is_active=True).values_list('name', flat=True)),
         })
     all_tables_json = json.dumps(all_tables_data)
     zones_json = json.dumps([{'id': z.id, 'name': z.name} for z in zones])
@@ -508,3 +532,215 @@ def regenerate_table_qrs(request, restaurant_slug=None):
     base_url = Table.get_frontend_base_url()
     messages.success(request, f"Successfully regenerated QR codes for {count} table(s) using frontend URL: {base_url}")
     return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)
+
+
+@login_required
+def floor_plan_book_party_api(request, restaurant_slug=None):
+    """
+    POST JSON/form to book an entire zone or a group of tables for a party/event.
+    Parameters:
+    - scope: 'zone' or 'tables'
+    - zone_id: int (when scope == 'zone')
+    - table_ids: list of int
+    - lead_table_id: int (master table for the party, optional)
+    - party_name: str (e.g. 'Sharma Family Party')
+    - party_host: str (e.g. 'Mr. Sharma')
+    - party_phone: str (e.g. '9876543210')
+    - party_notes: str (optional)
+    """
+    from django.db import transaction
+    from restaurant_admin.views import resolve_restaurant, get_active_branch
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not hasattr(restaurant, 'branches'):
+        return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST required'}, status=405)
+
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+
+    scope = data.get('scope', 'tables')
+    zone_id = data.get('zone_id')
+    raw_table_ids = data.get('table_ids') or []
+    lead_table_id = data.get('lead_table_id')
+    party_name = (data.get('party_name') or '').strip()
+    party_host = (data.get('party_host') or '').strip()
+    party_phone = (data.get('party_phone') or '').strip()
+    party_notes = (data.get('party_notes') or '').strip()
+
+    if not party_name and not party_host:
+        return JsonResponse({'success': False, 'error': 'Please provide a Party Name or Host Name.'}, status=400)
+
+    active_branch = get_active_branch(request, restaurant)
+    tables_qs = Table.objects.filter(restaurant=restaurant, is_active=True)
+    if active_branch:
+        tables_qs = tables_qs.filter(branch=active_branch)
+
+    if scope == 'zone' and zone_id:
+        tables = list(tables_qs.filter(zone_id=zone_id).order_by('table_number'))
+    elif raw_table_ids:
+        clean_ids = [int(x) for x in raw_table_ids if str(x).isdigit()]
+        tables = list(tables_qs.filter(id__in=clean_ids).order_by('table_number'))
+    else:
+        return JsonResponse({'success': False, 'error': 'No tables selected for booking.'}, status=400)
+
+    if not tables:
+        return JsonResponse({'success': False, 'error': 'No tables found in selection.'}, status=404)
+
+    # Determine master table
+    master_table = None
+    if lead_table_id and str(lead_table_id).isdigit():
+        master_table = next((t for t in tables if t.id == int(lead_table_id)), None)
+    if not master_table:
+        master_table = tables[0]
+
+    with transaction.atomic():
+        # Setup master table
+        master_table.master_table = None
+        master_table.party_name = party_name or f"{party_host}'s Party"
+        master_table.party_host = party_host
+        master_table.party_phone = party_phone
+        master_table.party_notes = party_notes
+        master_table.save(update_fields=['master_table', 'party_name', 'party_host', 'party_phone', 'party_notes'])
+
+        # Link child tables
+        for t in tables:
+            if t.id != master_table.id:
+                t.master_table = master_table
+                t.party_name = master_table.party_name
+                t.party_host = party_host
+                t.party_phone = party_phone
+                t.party_notes = party_notes
+                t.save(update_fields=['master_table', 'party_name', 'party_host', 'party_phone', 'party_notes'])
+
+    return JsonResponse({
+        'success': True,
+        'message': f'Party "{master_table.party_name}" successfully booked across {len(tables)} table(s). Lead Table: {master_table.name}.',
+        'master_table_id': master_table.id,
+        'master_table_name': master_table.name,
+        'count': len(tables)
+    })
+
+
+@login_required
+def floor_plan_release_party_api(request, restaurant_slug=None):
+    """
+    POST: Release party booking from a table, a group, or an entire zone.
+    Parameters:
+    - table_id: int
+    - zone_id: int
+    - release_group: bool (default True)
+    """
+    from django.db import transaction
+    from restaurant_admin.views import resolve_restaurant, get_active_branch
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not hasattr(restaurant, 'branches'):
+        return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST required'}, status=405)
+
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+
+    table_id = data.get('table_id')
+    zone_id = data.get('zone_id')
+    release_group = data.get('release_group', True)
+
+    active_branch = get_active_branch(request, restaurant)
+    tables_qs = Table.objects.filter(restaurant=restaurant, is_active=True)
+    if active_branch:
+        tables_qs = tables_qs.filter(branch=active_branch)
+
+    tables_to_clear = []
+    if zone_id:
+        tables_to_clear = list(tables_qs.filter(zone_id=zone_id))
+    elif table_id and str(table_id).isdigit():
+        table = tables_qs.filter(id=int(table_id)).first()
+        if not table:
+            return JsonResponse({'success': False, 'error': 'Table not found.'}, status=404)
+        
+        if release_group:
+            master = table.master_table if table.master_table_id else table
+            tables_to_clear = [master] + list(master.linked_tables.all())
+        else:
+            tables_to_clear = [table]
+
+    if not tables_to_clear:
+        return JsonResponse({'success': False, 'error': 'No tables found to release.'}, status=400)
+
+    with transaction.atomic():
+        for t in tables_to_clear:
+            t.master_table = None
+            t.party_name = ''
+            t.party_host = ''
+            t.party_phone = ''
+            t.party_notes = ''
+            t.save(update_fields=['master_table', 'party_name', 'party_host', 'party_phone', 'party_notes'])
+
+    return JsonResponse({
+        'success': True,
+        'message': f'Party booking cleared from {len(tables_to_clear)} table(s).'
+    })
+
+
+@login_required
+def floor_plan_merge_tables_api(request, restaurant_slug=None):
+    """
+    POST: Merge specific tables into a master table.
+    - master_table_id: int
+    - child_table_ids: [int]
+    - party_name: str (optional)
+    """
+    from django.db import transaction
+    from restaurant_admin.views import resolve_restaurant, get_active_branch
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not hasattr(restaurant, 'branches'):
+        return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST required'}, status=405)
+
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        data = request.POST
+
+    master_table_id = data.get('master_table_id')
+    child_table_ids = data.get('child_table_ids') or []
+    party_name = (data.get('party_name') or '').strip()
+
+    if not master_table_id or not child_table_ids:
+        return JsonResponse({'success': False, 'error': 'Please select a master table and at least one table to merge.'}, status=400)
+
+    master = Table.objects.filter(pk=master_table_id, restaurant=restaurant).first()
+    if not master:
+        return JsonResponse({'success': False, 'error': 'Master table not found.'}, status=404)
+
+    with transaction.atomic():
+        if party_name:
+            master.party_name = party_name
+            master.save(update_fields=['party_name'])
+
+        count = 0
+        for cid in child_table_ids:
+            if str(cid).isdigit() and int(cid) != master.id:
+                child = Table.objects.filter(pk=int(cid), restaurant=restaurant).first()
+                if child:
+                    child.master_table = master
+                    child.party_name = master.effective_party_name or f"Merged with {master.name}"
+                    child.party_host = master.effective_party_host
+                    child.party_phone = master.effective_party_phone
+                    child.save(update_fields=['master_table', 'party_name', 'party_host', 'party_phone'])
+                    count += 1
+
+    return JsonResponse({
+        'success': True,
+        'message': f'Successfully merged {count} table(s) into Master Table {master.name}.'
+    })
+

@@ -289,12 +289,26 @@
             <div class="od-info-value">{{ order.phone }}</div>
         </div>
         {% endif %}
+        {% if order.display_email %}
+        <div class="od-info-card">
+            <div class="od-info-label"><i class="bi bi-envelope"></i> Email</div>
+            <div class="od-info-value" style="font-size: 0.92rem; word-break: break-all;">
+                <a href="mailto:{{ order.display_email }}" class="text-decoration-none text-dark">{{ order.display_email }}</a>
+            </div>
+        </div>
+        {% endif %}
         <div class="od-info-card">
             <div class="od-info-label"><i class="bi bi-grid-3x3-gap"></i> Dining Area</div>
             <div class="od-info-value">
                 {% if order.table %}Table {{ order.table.name }}{% if order.table.zone %} ({{ order.table.zone.name }}){% endif %}{% elif order.table_number %}Table #{{ order.table_number }}{% elif order.order_type == 'dine_in' %}Dine-In{% else %}Pickup / Takeaway{% endif %}
             </div>
         </div>
+        {% if order.display_address %}
+        <div class="od-info-card">
+            <div class="od-info-label"><i class="bi bi-geo-alt"></i> Delivery Address</div>
+            <div class="od-info-value" style="font-size: 0.90rem;">{{ order.display_address }}</div>
+        </div>
+        {% endif %}
         {% if order.advance_amount_paid > 0 %}
         <div class="od-info-card border-start border-4 border-success">
             <div class="od-info-label text-success"><i class="bi bi-bookmark-star"></i> Advance Deducted</div>
@@ -304,10 +318,33 @@
     </div>
 
     <!-- ── Kitchen instructions ── -->
-    {% if order.notes %}
-    <div class="od-kitchen">
-        <div class="od-kitchen-label"><i class="bi bi-file-text"></i> Kitchen Instructions</div>
-        <div class="od-kitchen-text">"{{ order.notes }}"</div>
+    {% if order.clean_kitchen_notes %}
+    <div class="od-kitchen" style="background: #fffdf5; border-left: 4px solid #f59e0b; border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+        <div class="od-kitchen-label" style="font-weight: 700; color: #b45309; display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <span><i class="bi bi-file-text me-1"></i> Kitchen Instructions</span>
+            {% if order.rounds_count > 1 %}
+            <span class="badge" style="background: #fef3c7; color: #92400e; font-size: 0.72rem; padding: 4px 8px; border-radius: 9999px; border: 1px solid #fde68a;">
+                <i class="bi bi-layers me-1"></i>{{ order.rounds_count }} Rounds
+            </span>
+            {% endif %}
+        </div>
+        
+        {% if order.rounds_breakdown and order.rounds_count > 1 %}
+            <div class="d-flex flex-column gap-2 mt-2">
+                {% for r in order.rounds_breakdown %}
+                    {% if r.note %}
+                    <div class="d-flex align-items-start gap-2" style="font-size: 0.88rem; color: #451a03; background: rgba(254, 243, 199, 0.45); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(251, 191, 36, 0.3);">
+                        <span class="badge" style="background: #f59e0b; color: #fff; font-size: 0.7rem; padding: 3px 7px; font-weight: 600; margin-top: 1px; border-radius: 4px;">Round {{ r.round }}</span>
+                        <div style="flex: 1; font-weight: 500;">{{ r.note }}</div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="od-kitchen-text" style="font-size: 0.92rem; color: #451a03; font-style: italic; font-weight: 500;">
+                "{{ order.clean_kitchen_notes }}"
+            </div>
+        {% endif %}
     </div>
     {% endif %}
 

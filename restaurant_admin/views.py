@@ -771,6 +771,12 @@ def order_create_manual(request, restaurant_slug=None):
                 clean_name = table_val_str.replace('Table', '').strip()
                 table_obj = Table.objects.filter(name__iexact=clean_name, restaurant=restaurant).first()
 
+        if table_obj and table_obj.effective_party_name:
+            if not customer_name or customer_name.lower() in ['guest', 'walk-in guest', '']:
+                customer_name = table_obj.effective_party_host or table_obj.effective_party_name
+            if not phone and table_obj.effective_party_phone:
+                phone = table_obj.effective_party_phone
+
         raw_order_type = str(data.get('order_type') or '').strip().lower()
         if raw_order_type in [Order.OrderType.TAKEAWAY, Order.OrderType.DELIVERY, 'takeaway', 'delivery']:
             order_type = raw_order_type
@@ -1084,6 +1090,11 @@ def order_create_manual(request, restaurant_slug=None):
                     order.notes = f"{order.notes}\n{void_entry}".strip() if order.notes else void_entry
                     order.save(update_fields=['notes'])
         else:
+            parent_order_obj = None
+            if table_obj and table_obj.master_table:
+                parent_order_obj = table_obj.master_table.orders.exclude(status__in=[Order.OrderStatus.COMPLETED, Order.OrderStatus.CANCELLED]).order_by('-order_time').first()
+            is_master = bool(table_obj and (table_obj.party_name and not table_obj.master_table_id))
+
             order = Order.objects.create(
                 customer_name=customer_name or 'Walk-in Guest',
                 phone=phone,
@@ -1112,6 +1123,8 @@ def order_create_manual(request, restaurant_slug=None):
                 total_amount=grand_total_val,
                 gstin_no=gstin_no or None,
                 excise_bill_no=excise_bill_no or None,
+                parent_order=parent_order_obj,
+                is_master_event_order=is_master,
             )
 
         # the buyer's GSTIN belongs on their Party (bills read order.party.gstin); gstin_no is OUR invoice number
