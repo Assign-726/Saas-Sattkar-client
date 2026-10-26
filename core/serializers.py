@@ -195,17 +195,28 @@ class OrderSerializer(serializers.ModelSerializer):
     customer_latitude = serializers.FloatField(write_only=True, required=False, allow_null=True)
     customer_longitude = serializers.FloatField(write_only=True, required=False, allow_null=True)
     parent_order_token = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
+    customer_name = serializers.CharField(required=False, allow_blank=True, default='Guest')
+    phone = serializers.CharField(required=True, allow_blank=False)
+    customer_email = serializers.EmailField(required=False, allow_blank=True, source='email')
+    email = serializers.EmailField(write_only=True, required=False, allow_blank=True)
+    delivery_address = serializers.CharField(required=False, allow_blank=True)
+    address = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    display_email = serializers.ReadOnlyField()
+    display_address = serializers.ReadOnlyField()
+    clean_kitchen_notes = serializers.ReadOnlyField()
+    rounds_count = serializers.ReadOnlyField()
 
     class Meta:
         model = Order
         fields = [
-            'id', 'order_number', 'branch_order_number', 'customer_name', 'phone', 'table_number', 'table_id', 'zone', 'floor', 'table_token', 'order_time',
-            'status', 'status_display', 'subtotal', 'tax_amount', 'round_off_amount', 'total_amount', 'discount_amount', 'bill_breakdown', 'notes', 'items',
+            'id', 'order_number', 'branch_order_number', 'customer_name', 'phone', 'email', 'customer_email', 'delivery_address', 'address', 'display_email', 'display_address',
+            'table_number', 'table_id', 'zone', 'floor', 'table_token', 'order_time',
+            'status', 'status_display', 'subtotal', 'tax_amount', 'round_off_amount', 'total_amount', 'discount_amount', 'bill_breakdown', 'notes', 'clean_kitchen_notes', 'rounds_count', 'items',
             'coupon_code', 'applied_coupon_code', 'payment_method', 'payment_method_display', 'payment_status', 'payment_status_display',
             'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature', 'restaurant_slug', 'branch_slug', 'branch_id', 'branch_name', 'branch_slug_display', 'order_restaurant_slug', 'security_token',
             'prep_minutes', 'prep_start', 'ready_at', 'remaining_seconds', 'progress_pct', 'waive_service_charge', 'customer_latitude', 'customer_longitude', 'parent_order_token'
         ]
-        read_only_fields = ['order_time', 'subtotal', 'tax_amount', 'round_off_amount', 'total_amount', 'discount_amount', 'security_token', 'order_number', 'branch_order_number', 'branch_name', 'branch_slug_display', 'order_restaurant_slug']
+        read_only_fields = ['order_time', 'subtotal', 'tax_amount', 'round_off_amount', 'total_amount', 'discount_amount', 'security_token', 'order_number', 'branch_order_number', 'branch_name', 'branch_slug_display', 'order_restaurant_slug', 'display_email', 'display_address', 'clean_kitchen_notes', 'rounds_count']
 
     @transaction.atomic
     def create(self, validated_data):
@@ -218,6 +229,44 @@ class OrderSerializer(serializers.ModelSerializer):
         restaurant_slug = validated_data.pop('restaurant_slug', None)
         branch_slug = validated_data.pop('branch_slug', None)
         branch_id = validated_data.pop('branch_id', None)
+
+        # Resolve customer name (optional, defaults to Guest) and phone (required)
+        c_name = (validated_data.get('customer_name') or '').strip()
+        validated_data['customer_name'] = c_name if c_name else 'Guest'
+
+        c_phone = (validated_data.get('phone') or '').strip()
+        if not c_phone:
+            raise serializers.ValidationError({"phone": "Phone number is required."})
+        validated_data['phone'] = c_phone
+
+        # Extract optional email and address cleanly
+        resolved_email = (validated_data.pop('email', None) or validated_data.get('email') or '').strip()
+        resolved_address = (validated_data.pop('address', None) or validated_data.get('delivery_address') or '').strip()
+
+        # Clean notes in case incoming request had mixed metadata
+        raw_notes = (validated_data.get('notes') or '').strip()
+        import re
+        if not resolved_email and raw_notes:
+            m_em = re.search(r'Email:\s*([^\s|\[\],;]+@[^\s|\[\],;]+)', raw_notes, re.IGNORECASE)
+            if m_em:
+                resolved_email = m_em.group(1).strip()
+        if not resolved_address and raw_notes:
+            m_ad = re.search(r'Address:\s*([^|\[\n]+)', raw_notes, re.IGNORECASE)
+            if m_ad:
+                resolved_address = m_ad.group(1).strip()
+
+        seg = raw_notes
+        seg = re.sub(r'Order Type:\s*[^|\n]+', '', seg, flags=re.IGNORECASE)
+        seg = re.sub(r'Email:\s*[^|\n]+', '', seg, flags=re.IGNORECASE)
+        seg = re.sub(r'Address:\s*[^|\n]+', '', seg, flags=re.IGNORECASE)
+        pipe_items = [p.strip() for p in seg.split('|') if p.strip()]
+        clean_input_notes = ' | '.join(pipe_items).strip(' |-\n\r\t')
+
+        validated_data['notes'] = clean_input_notes
+        if resolved_email:
+            validated_data['email'] = resolved_email
+        if resolved_address:
+            validated_data['delivery_address'] = resolved_address
 
         restaurant = None
         resolved_items = []
@@ -442,8 +491,11 @@ class OrderSerializer(serializers.ModelSerializer):
 
         if not active_order and table_obj and not is_staff_user:
             now = timezone.now()
+            target_tables = [table_obj]
+            if table_obj.master_table:
+                target_tables.append(table_obj.master_table)
             active_order = Order.objects.filter(
-                table=table_obj,
+                table__in=target_tables,
                 restaurant=restaurant,
                 status__in=[
                     Order.OrderStatus.PENDING,
@@ -499,18 +551,31 @@ class OrderSerializer(serializers.ModelSerializer):
                         except Exception:
                             pass
 
+                table_seat_prefix = f"[{table_obj.name}] " if (table_obj and active_order.table and table_obj.id != active_order.table_id) else ""
+                raw_item_note = str(item_data.get('notes') or '').strip()
+                final_item_note = f"{table_seat_prefix}{raw_item_note}".strip()
+
                 OrderItem.objects.create(
                     order=active_order,
                     menu_item=menu_item,
                     quantity=item_data['quantity'],
                     unit_price=resolved_unit_price,
-                    notes=item_data.get('notes', ''),
+                    notes=final_item_note,
                     kot_batch=new_batch_num,
                     is_kot_printed=False,
                     is_prepared=False
                 )
 
-            # Append customer notes if provided
+            # Update active order contact details if provided
+            update_fields = ['status', 'prep_start', 'ready_at', 'prep_minutes', 'notes']
+            if resolved_email and not active_order.email:
+                active_order.email = resolved_email
+                update_fields.append('email')
+            if resolved_address and not active_order.delivery_address:
+                active_order.delivery_address = resolved_address
+                update_fields.append('delivery_address')
+
+            # Append customer kitchen notes if provided
             new_notes = (validated_data.get('notes') or '').strip()
             if new_notes:
                 if active_order.notes:
@@ -525,7 +590,7 @@ class OrderSerializer(serializers.ModelSerializer):
             active_order.prep_start = None
             active_order.ready_at = None
             active_order.prep_minutes = active_order.calculate_estimated_prep_minutes()
-            active_order.save(update_fields=['status', 'prep_start', 'ready_at', 'prep_minutes', 'notes'])
+            active_order.save(update_fields=update_fields)
 
             order = active_order
         else:

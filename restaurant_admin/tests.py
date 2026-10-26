@@ -595,6 +595,89 @@ class TableBulkAddTests(TestCase):
         self.assertEqual(table.position_y, 240)
         self.assertEqual(table.rotation, 90)
 
+    def test_floor_plan_book_party_api_zone(self):
+        from django.urls import reverse
+        t1 = Table.objects.create(restaurant=self.restaurant, branch=self.branch, zone=self.zone, name='F-1', table_number=1)
+        t2 = Table.objects.create(restaurant=self.restaurant, branch=self.branch, zone=self.zone, name='F-2', table_number=2)
+        t3 = Table.objects.create(restaurant=self.restaurant, branch=self.branch, zone=self.zone, name='F-3', table_number=3)
+
+        url = reverse('restaurant_admin:floor_plan_book_party_api', kwargs={'restaurant_slug': self.restaurant.slug})
+        resp = self.client.post(
+            url,
+            data=json.dumps({
+                'scope': 'zone',
+                'zone_id': self.zone.id,
+                'lead_table_id': t1.id,
+                'party_name': 'Sharma Family Reception',
+                'party_host': 'Rakesh Sharma',
+                'party_phone': '9876543210',
+                'party_notes': 'Full floor reserved, 40 pax'
+            }),
+            content_type='application/json'
+        )
+        self.assertEqual(resp.status_code, 200)
+        res_data = resp.json()
+        self.assertTrue(res_data['success'])
+        self.assertEqual(res_data['count'], 3)
+
+        t1.refresh_from_db()
+        t2.refresh_from_db()
+        t3.refresh_from_db()
+
+        self.assertIsNone(t1.master_table)
+        self.assertEqual(t1.party_name, 'Sharma Family Reception')
+        self.assertEqual(t1.party_host, 'Rakesh Sharma')
+        self.assertEqual(t1.current_status, 'EVENT')
+
+        # Child tables link to t1
+        self.assertEqual(t2.master_table, t1)
+        self.assertEqual(t2.current_status, 'EVENT')
+        self.assertEqual(t3.master_table, t1)
+
+    def test_floor_plan_merge_and_release_party_api(self):
+        from django.urls import reverse
+        t1 = Table.objects.create(restaurant=self.restaurant, branch=self.branch, zone=self.zone, name='M-1', table_number=10)
+        t2 = Table.objects.create(restaurant=self.restaurant, branch=self.branch, zone=self.zone, name='M-2', table_number=11)
+
+        merge_url = reverse('restaurant_admin:floor_plan_merge_tables_api', kwargs={'restaurant_slug': self.restaurant.slug})
+        m_resp = self.client.post(
+            merge_url,
+            data=json.dumps({
+                'master_table_id': t1.id,
+                'child_table_ids': [t2.id],
+                'party_name': 'VIP Joint Table'
+            }),
+            content_type='application/json'
+        )
+        self.assertEqual(m_resp.status_code, 200)
+        self.assertTrue(m_resp.json()['success'])
+
+        t2.refresh_from_db()
+        self.assertEqual(t2.master_table, t1)
+
+        # Release table
+        release_url = reverse('restaurant_admin:floor_plan_release_party_api', kwargs={'restaurant_slug': self.restaurant.slug})
+        r_resp = self.client.post(
+            release_url,
+            data=json.dumps({
+                'table_id': t1.id,
+                'release_group': True
+            }),
+            content_type='application/json'
+        )
+        self.assertEqual(r_resp.status_code, 200)
+        self.assertTrue(r_resp.json()['success'])
+
+        t1.refresh_from_db()
+        t2.refresh_from_db()
+        self.assertIsNone(t1.master_table)
+        self.assertEqual(t1.party_name, '')
+        self.assertIsNone(t2.master_table)
+        self.assertEqual(t2.party_name, '')
+        self.assertEqual(t1.current_status, 'BLANK')
+        self.assertEqual(t2.current_status, 'BLANK')
+
+
 
 class StaffManagementTests(TestCase):
     def setUp(self):
@@ -908,5 +991,213 @@ class POSCounterAndShiftTests(TestCase):
         resp = self.client.get(url, {'counter': self.counter.id})
         self.assertEqual(resp.status_code, 200)
         self.assertIn(self.counter, resp.context['counters'])
+
+
+class OrderNotesAndContactTests(TestCase):
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name="Test Kitchen", slug="test-kitchen")
+        self.branch = RestaurantBranch.objects.create(restaurant=self.restaurant, name="Main", slug="main")
+
+    def test_legacy_notes_cleaning_and_contact_extraction(self):
+        legacy_blob = (
+            "Order Type: Dine-In | testing note to the kitchen is it working or not | Email: stammini1999@gmail.com "
+            "[Round 2]: Order Type: Dine-In | second round but after scanning qr again | Email: stammini1999@gmail.com "
+            "[Round 3]: Order Type: Dine-In | testing same table order with different browser | Email: helpassignment726@gmail.com"
+        )
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            customer_name="Harmandeep Kaur",
+            phone="9636972156",
+            notes=legacy_blob
+        )
+
+        self.assertEqual(order.display_email, "stammini1999@gmail.com")
+        self.assertEqual(order.rounds_count, 3)
+        expected_clean = (
+            "testing note to the kitchen is it working or not\n"
+            "[Round 2]: second round but after scanning qr again\n"
+            "[Round 3]: testing same table order with different browser"
+        )
+        self.assertEqual(order.clean_kitchen_notes, expected_clean)
+
+        breakdown = order.rounds_breakdown
+        self.assertEqual(len(breakdown), 3)
+        self.assertEqual(breakdown[0]['round'], 1)
+        self.assertEqual(breakdown[0]['note'], "testing note to the kitchen is it working or not")
+        self.assertEqual(breakdown[1]['round'], 2)
+        self.assertEqual(breakdown[1]['note'], "second round but after scanning qr again")
+        self.assertEqual(breakdown[2]['round'], 3)
+        self.assertEqual(breakdown[2]['note'], "testing same table order with different browser")
+
+    def test_pure_notes_without_metadata(self):
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            customer_name="John Doe",
+            email="john@example.com",
+            delivery_address="123 Food Street",
+            notes="Please make pizza extra crispy, less cheese"
+        )
+        self.assertEqual(order.display_email, "john@example.com")
+        self.assertEqual(order.display_address, "123 Food Street")
+        self.assertEqual(order.clean_kitchen_notes, "Please make pizza extra crispy, less cheese")
+        self.assertEqual(order.rounds_count, 1)
+
+    def test_metadata_only_without_notes_returns_empty_clean_notes(self):
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            customer_name="Jane",
+            notes="Order Type: Takeaway | Address: 456 Baker Ave | Email: jane@domain.com"
+        )
+        self.assertEqual(order.display_email, "jane@domain.com")
+        self.assertEqual(order.display_address, "456 Baker Ave")
+        self.assertEqual(order.clean_kitchen_notes, "")
+
+
+class TableColorCodingStatusTests(TestCase):
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name="Color Test Resto", slug="color-test-resto")
+        self.branch = RestaurantBranch.objects.create(restaurant=self.restaurant, name="Main", slug="main")
+        self.zone = Zone.objects.create(name="Ground Floor", restaurant=self.restaurant, branch=self.branch)
+        self.t1 = Table.objects.create(name="T-1", table_number=1, zone=self.zone, restaurant=self.restaurant, branch=self.branch)
+        self.t2 = Table.objects.create(name="T-2", table_number=2, zone=self.zone, restaurant=self.restaurant, branch=self.branch)
+
+    def test_table_initial_status_is_blank(self):
+        self.assertEqual(self.t1.current_status, 'BLANK')
+
+    def test_party_event_booking_status(self):
+        self.t1.party_name = "Birthday Gala"
+        self.t1.save()
+        self.assertEqual(self.t1.current_status, 'EVENT')
+
+    def test_running_kot_status_when_pending_or_preparing(self):
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            table=self.t1,
+            customer_name="Alice",
+            status=Order.OrderStatus.PENDING,
+            payment_status=Order.PaymentStatus.COUNTER
+        )
+        self.assertEqual(self.t1.current_status, 'RUNNING_KOT')
+
+        order.status = Order.OrderStatus.PREPARING
+        order.save()
+        self.assertEqual(self.t1.current_status, 'RUNNING_KOT')
+
+        order.payment_status = Order.PaymentStatus.PAID
+        order.save()
+        self.assertEqual(self.t1.current_status, 'RUNNING_KOT')
+
+    def test_running_status_when_food_ready(self):
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            table=self.t1,
+            customer_name="Bob",
+            status=Order.OrderStatus.READY,
+            payment_status=Order.PaymentStatus.COUNTER
+        )
+        self.assertEqual(self.t1.current_status, 'RUNNING')
+
+    def test_printed_status_when_food_served_and_unpaid(self):
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            table=self.t1,
+            customer_name="Charlie",
+            status=Order.OrderStatus.SERVED,
+            payment_status=Order.PaymentStatus.COUNTER
+        )
+        self.assertEqual(self.t1.current_status, 'PRINTED')
+
+    def test_paid_status_when_bill_settled(self):
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            table=self.t1,
+            customer_name="David",
+            status=Order.OrderStatus.SERVED,
+            payment_status=Order.PaymentStatus.PAID
+        )
+        self.assertEqual(self.t1.current_status, 'PAID')
+
+    def test_blank_status_when_order_completed(self):
+        order = Order.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            table=self.t1,
+            customer_name="Eve",
+            status=Order.OrderStatus.COMPLETED,
+            payment_status=Order.PaymentStatus.PAID
+        )
+        self.assertEqual(self.t1.current_status, 'BLANK')
+
+    def test_merged_child_table_inherits_status(self):
+        self.t2.master_table = self.t1
+        self.t2.save()
+
+        self.assertEqual(self.t2.current_status, 'EVENT')
+
+        Order.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            table=self.t1,
+            customer_name="Party Host",
+            status=Order.OrderStatus.PENDING
+        )
+        self.assertEqual(self.t1.current_status, 'RUNNING_KOT')
+        self.assertEqual(self.t2.current_status, 'RUNNING_KOT')
+
+
+class OrderApiOptionalNameTests(TestCase):
+    def setUp(self):
+        self.restaurant = Restaurant.objects.create(name="Resto API", slug="resto-api")
+        self.branch = RestaurantBranch.objects.create(restaurant=self.restaurant, name="Main", slug="main")
+        self.item = MenuItem.objects.create(
+            name="Paneer Tikka",
+            price=Decimal('250.00'),
+            availability=True,
+            restaurant=self.restaurant,
+            branch=self.branch
+        )
+
+    def test_create_order_without_name_defaults_to_guest(self):
+        from core.serializers import OrderSerializer
+        data = {
+            'restaurant_slug': self.restaurant.slug,
+            'branch_slug': self.branch.slug,
+            'phone': '9876543210',
+            'items': [
+                {'menu_item': self.item.id, 'quantity': 1}
+            ]
+        }
+        serializer = OrderSerializer(data=data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        order = serializer.save()
+        self.assertEqual(order.customer_name, 'Guest')
+        self.assertEqual(order.phone, '9876543210')
+        self.assertEqual(order.email, '')
+        self.assertEqual(order.notes, '')
+
+    def test_create_order_missing_phone_fails(self):
+        from core.serializers import OrderSerializer
+        data = {
+            'restaurant_slug': self.restaurant.slug,
+            'branch_slug': self.branch.slug,
+            'customer_name': 'Aman',
+            'phone': '',
+            'items': [
+                {'menu_item': self.item.id, 'quantity': 1}
+            ]
+        }
+        serializer = OrderSerializer(data=data)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('phone', serializer.errors)
+
+
+
 
 

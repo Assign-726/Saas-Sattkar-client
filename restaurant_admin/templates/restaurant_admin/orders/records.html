@@ -1146,7 +1146,15 @@
                         <td>
                             <div style="font-weight: 600; color: var(--ui-label); font-size: 0.8rem;">{{ o.customer_name|default:"Guest" }}</div>
                             {% if o.phone %}
-                                <div style="font-size: 0.74rem; color: var(--ui-label-2);">{{ o.phone }}</div>
+                                <div style="font-size: 0.74rem; color: var(--ui-label-2); display: flex; align-items: center; gap: 4px; margin-top: 1px;">
+                                    <i class="fas fa-phone-alt" style="font-size: 0.65rem; opacity: 0.7;"></i>
+                                    <span>{{ o.phone }}</span>
+                                </div>
+                            {% endif %}
+                            {% if o.display_email %}
+                                <div style="font-size: 0.72rem; color: var(--ui-label-2); max-width: 135px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px;" title="{{ o.display_email }}">
+                                    <i class="fas fa-envelope" style="font-size: 0.65rem; opacity: 0.7; margin-right: 3px;"></i>{{ o.display_email }}
+                                </div>
                             {% endif %}
                         </td>
                         <td>
@@ -1159,6 +1167,11 @@
                                 <span style="color: var(--ui-label-2); font-size: 0.75rem; font-weight: 600;">
                                     {% if o.order_type == 'takeaway' %}Takeaway{% elif o.order_type == 'delivery' %}Delivery{% else %}Counter / Takeaway{% endif %}
                                 </span>
+                                {% if o.display_address %}
+                                    <div style="font-size: 0.70rem; color: var(--ui-label-2); max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;" title="{{ o.display_address }}">
+                                        <i class="fas fa-map-marker-alt text-danger me-1" style="font-size: 0.65rem;"></i>{{ o.display_address }}
+                                    </div>
+                                {% endif %}
                             {% endif %}
                         </td>
                         <td>
@@ -1169,16 +1182,24 @@
                                     No items
                                 {% endfor %}
                             </div>
-                            {% if o.notes %}
-                            <div style="font-size: 0.7rem; color: var(--ui-orange-text); background: rgba(var(--ui-orange-rgb), 0.14); padding: 1px 5px; border-radius: 4px; display: inline-block; margin-top: 3px; border: 1px solid rgba(var(--ui-orange-rgb), 0.35);">
-                                <i class="fas fa-sticky-note me-1"></i> {{ o.notes }}
+                            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px;">
+                                {% if o.clean_kitchen_notes %}
+                                <div style="font-size: 0.7rem; color: #b45309; background: #fffbeb; padding: 2px 7px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid #fde68a; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: help;" title="{{ o.clean_kitchen_notes }}">
+                                    <i class="fas fa-utensils" style="font-size: 0.65rem; flex-shrink: 0;"></i>
+                                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ o.clean_kitchen_notes }}</span>
+                                </div>
+                                {% endif %}
+                                {% if o.rounds_count > 1 %}
+                                <span class="badge rounded-pill" style="font-size: 0.65rem; background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; font-weight: 600; padding: 3px 6px;" title="Order includes {{ o.rounds_count }} rounds of items">
+                                    <i class="fas fa-layer-group me-1"></i>{{ o.rounds_count }} Rds
+                                </span>
+                                {% endif %}
+                                {% if o.discount_reason %}
+                                <div style="font-size: 0.7rem; color: var(--ui-accent-text); background: rgba(var(--ui-accent-rgb), 0.14); padding: 1px 5px; border-radius: 4px; display: inline-block; border: 1px solid rgba(var(--ui-accent-rgb), 0.3);">
+                                    <i class="fas fa-tag me-1"></i> Disc: {{ o.discount_reason }}
+                                </div>
+                                {% endif %}
                             </div>
-                            {% endif %}
-                            {% if o.discount_reason %}
-                            <div style="font-size: 0.7rem; color: var(--ui-accent-text); background: rgba(var(--ui-accent-rgb), 0.14); padding: 1px 5px; border-radius: 4px; display: inline-block; margin-top: 3px; border: 1px solid rgba(var(--ui-accent-rgb), 0.3);">
-                                <i class="fas fa-tag me-1"></i> Disc: {{ o.discount_reason }}
-                            </div>
-                            {% endif %}
                         </td>
                         <td style="text-align: right; font-weight: 700; color: var(--ui-label); font-size: 0.84rem;">
                             ₹{{ o.total_amount|floatformat:2 }}
