@@ -656,6 +656,13 @@ class RestaurantBranch(models.Model):
         verbose_name="Dedicated Hotel Website Mode",
         help_text="When enabled, public frontend operates in Hotel Website mode (suppresses restaurant menus and chefs)"
     )
+
+    # Branch Onboarding & Configuration Status
+    is_setup_completed = models.BooleanField(
+        default=True,
+        verbose_name="Setup Completed",
+        help_text="False if branch was auto-provisioned as a remote draft and pending client review"
+    )
     
     # Branch Operating Hours & Online Ordering Restrictions (QR & Takeaway)
     enforce_operating_hours = models.BooleanField(
@@ -800,6 +807,10 @@ class RestaurantBranch(models.Model):
     @property
     def is_alcohol_licensed(self) -> bool:
         return self.is_module_licensed('alcohol_vat')
+
+    @property
+    def is_draft(self) -> bool:
+        return not self.is_setup_completed
 
     def is_feature_enabled(self, feature_key: str) -> bool:
         """

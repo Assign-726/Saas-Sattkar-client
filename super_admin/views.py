@@ -251,6 +251,8 @@ def restaurant_edit(request, pk):
             existing_branches.append({
                 'id': b.id,
                 'name': b.name,
+                'is_setup_completed': getattr(b, 'is_setup_completed', True),
+                'is_draft': getattr(b, 'is_draft', False),
                 'outlet_type': b_type,
                 'branch_type': b_type,
                 'branch_addons': getattr(b, 'branch_addons', []) or [],
