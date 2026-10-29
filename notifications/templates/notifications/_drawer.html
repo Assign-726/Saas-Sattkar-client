@@ -55,15 +55,18 @@
             (function () {
                 const slug = "{{ rslug }}";
                 const ntModule = "{{ nt_module|default:'restaurant' }}";
-                {% if nt_module == 'hotel' %}
-                const pollUrl = "{% url 'hotel_admin:notifications_poll' restaurant_slug=rslug %}";
-                const listUrl = "{% url 'hotel_admin:notifications_list' restaurant_slug=rslug %}";
-                const updateUrl = "{% url 'hotel_admin:notifications_update' restaurant_slug=rslug %}";
-                {% else %}
-                const pollUrl = "{% url 'restaurant_admin:order_notifications_poll' restaurant_slug=rslug %}";
-                const listUrl = "{% url 'restaurant_admin:notifications_list' restaurant_slug=rslug %}";
-                const updateUrl = "{% url 'restaurant_admin:notifications_update' restaurant_slug=rslug %}";
-                {% endif %}
+                const pollUrl = ntModule === 'hotel'
+                    ? "{% url 'hotel_admin:notifications_poll' restaurant_slug=rslug %}"
+                    : "{% url 'restaurant_admin:order_notifications_poll' restaurant_slug=rslug %}";
+                const streamUrl = ntModule === 'hotel'
+                    ? "{% url 'hotel_admin:notifications_stream' restaurant_slug=rslug %}"
+                    : "{% url 'restaurant_admin:order_notifications_stream' restaurant_slug=rslug %}";
+                const listUrl = ntModule === 'hotel'
+                    ? "{% url 'hotel_admin:notifications_list' restaurant_slug=rslug %}"
+                    : "{% url 'restaurant_admin:notifications_list' restaurant_slug=rslug %}";
+                const updateUrl = ntModule === 'hotel'
+                    ? "{% url 'hotel_admin:notifications_update' restaurant_slug=rslug %}"
+                    : "{% url 'restaurant_admin:notifications_update' restaurant_slug=rslug %}";
                 const csrf = "{{ csrf_token }}";
                 const drawer = document.getElementById('ntDrawer');
                 const backdrop = document.getElementById('ntBackdrop');
@@ -312,10 +315,19 @@
                     if (icon) { icon.classList.add('bell-ring-active'); setTimeout(function () { icon.classList.remove('bell-ring-active'); }, 900); }
                 }
 
-                // ---------- polling ----------
+                // ---------- polling & real-time SSE ----------
+                let sseConnected = false, sse = null, pollDebounce = null;
+                let lastPollAt = 0;
+
+                function schedulePoll(delay) {
+                    clearTimeout(pollDebounce);
+                    pollDebounce = setTimeout(poll, delay === undefined ? 50 : delay);
+                }
+
                 function poll() {
                     if (polling) return;
                     polling = true;
+                    lastPollAt = Date.now();
                     fetch(pollUrl + '?module=' + ntModule + '&since=' + lastId, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                         .then(function (r) { return r.ok ? r.json() : null; })
                         .then(function (d) {
@@ -342,14 +354,66 @@
                         .catch(function () { })
                         .finally(function () { polling = false; });
                 }
-                // A worker keeps polling at full speed while the tab is in the background
+
+                let sseHasConnectedOnce = false;
+                function initSSE() {
+                    if (!window.EventSource || !streamUrl) {
+                        sseConnected = false;
+                        return;
+                    }
+                    try {
+                        if (sse) sse.close();
+                        sse = new EventSource(streamUrl);
+                        sse.onopen = function () {
+                            sseConnected = true;
+                            // Catch up only on recovery/reconnection (initial load is handled by poll())
+                            if (sseHasConnectedOnce) {
+                                schedulePoll(0);
+                            }
+                            sseHasConnectedOnce = true;
+                        };
+                        sse.addEventListener('notification', function () { schedulePoll(50); });
+                        sse.addEventListener('new_order', function () { schedulePoll(50); });
+                        sse.addEventListener('order_updated', function () { schedulePoll(50); });
+                        sse.onmessage = function () { schedulePoll(50); };
+                        sse.onerror = function () {
+                            sseConnected = false;
+                        };
+                    } catch (_) {
+                        sseConnected = false;
+                    }
+                }
+
+                // Safety-net fallback:
+                // - Healthy SSE: ZERO polling when idle! Server stays 100% silent. Events are pushed instantly.
+                // - Offline / reconnecting SSE: fallback poll every 15s so orders are never missed if SSE drops
+                function safetyHeartbeat() {
+                    if (sseConnected) return; // 100% event-driven while SSE is connected
+                    const elapsed = Date.now() - lastPollAt;
+                    if (elapsed >= 15000) {
+                        poll();
+                    }
+                }
+
                 try {
-                    const w = new Worker(URL.createObjectURL(new Blob(['setInterval(function(){postMessage(1)},12000)'], { type: 'application/javascript' })));
-                    w.onmessage = poll;
-                } catch (_) { setInterval(poll, 12000); }
+                    const w = new Worker(URL.createObjectURL(new Blob(['setInterval(function(){postMessage(1)},6000)'], { type: 'application/javascript' })));
+                    w.onmessage = safetyHeartbeat;
+                } catch (_) {
+                    setInterval(safetyHeartbeat, 6000);
+                }
+
+                // Initial poll on page load & start SSE stream
                 poll();
-                document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(); });
-                window.addEventListener('focus', poll);
+                initSSE();
+
+                // Throttle focus/visibility checks: only check if at least 30s have passed since last poll
+                function onWindowActive() {
+                    if (!document.hidden && Date.now() - lastPollAt >= 30000) {
+                        poll();
+                    }
+                }
+                document.addEventListener('visibilitychange', onWindowActive);
+                window.addEventListener('focus', onWindowActive);
                 setInterval(function () { drawer.querySelectorAll('time[datetime]').forEach(function (t) { t.textContent = ago(t.getAttribute('datetime')); }); }, 60000);
             })();
         </script>

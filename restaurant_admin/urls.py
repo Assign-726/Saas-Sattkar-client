@@ -122,6 +122,7 @@ urlpatterns = [
     path('orders/<int:pk>/edit/', views.order_edit_manual, name='order_edit_manual'),
     path('orders/stream/', views.orders_stream, name='orders_stream'),
     path('api/notifications/poll/', notification_views.poll, name='order_notifications_poll'),
+    path('api/notifications/stream/', notification_views.stream, name='order_notifications_stream'),
     path('api/notifications/', notification_views.listing, name='notifications_list'),
     path('api/notifications/update/', notification_views.update, name='notifications_update'),
     path('orders/<int:pk>/', views.order_detail, name='order_detail'),

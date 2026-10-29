@@ -63,8 +63,8 @@ AREA_LABEL = {a[0]: a[1] for a in AREAS}
 # URL names that every signed-in admin may use, whatever their role
 ALWAYS = {
     ('restaurant_admin', 'switch_branch'), ('restaurant_admin', 'detect_location_ip_api'),
-    ('restaurant_admin', 'order_notifications_poll'), ('restaurant_admin', 'notifications_list'), ('restaurant_admin', 'notifications_update'),
-    ('hotel_admin', 'notifications_poll'), ('hotel_admin', 'notifications_list'), ('hotel_admin', 'notifications_update'),
+    ('restaurant_admin', 'order_notifications_poll'), ('restaurant_admin', 'order_notifications_stream'), ('restaurant_admin', 'notifications_list'), ('restaurant_admin', 'notifications_update'),
+    ('hotel_admin', 'notifications_poll'), ('hotel_admin', 'notifications_stream'), ('hotel_admin', 'notifications_list'), ('hotel_admin', 'notifications_update'),
     ('hotel_admin', 'action_centre'),  # read-only; shows only the areas the role can open
     ('restaurant_admin', 'two_factor_update'), ('hotel_admin', 'two_factor_update'),  # your own sign-in security
 }

@@ -173,3 +173,22 @@ class NotificationTests(TestCase):
         page = self.client.get(self.url('dashboard'))
         self.assertContains(page, 'id="ntDrawer"')
         self.assertContains(page, 'data-nt-open')
+
+    def test_notification_stream_endpoint(self):
+        self.client.force_login(self.user)
+        resp = self.client.get(self.url('order_notifications_stream'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'text/event-stream')
+
+    def test_notify_publishes_sse(self):
+        from core.sse import subscribe, unsubscribe
+        q, closed = subscribe(self.r.slug)
+        try:
+            with self.captureOnCommitCallbacks(execute=True):
+                S.notify(self.r, 'order_new', 'New Test Order')
+            data = q.get(timeout=2.0)
+            self.assertIn('"type": "notification"', data)
+            self.assertIn('"kind": "order_new"', data)
+        finally:
+            unsubscribe(self.r.slug, q, closed)
+

@@ -35,9 +35,25 @@ def notify(restaurant, kind, title, *, body='', branch=None, url='', source='', 
         return None
     try:
         with transaction.atomic():
-            return Notification.objects.create(
+            notif = Notification.objects.create(
                 restaurant=restaurant, branch=branch, kind=kind, title=title[:160], body=(body or '')[:300], url=url[:300],
                 source=source[:20], order=order, level=level, sound=sound, dedupe_key=dedupe_key[:120], data=data or {})
+        
+        slug = getattr(restaurant, 'slug', None)
+        if slug:
+            try:
+                from core.sse import publish
+                payload = {
+                    'type': 'notification',
+                    'id': notif.id,
+                    'kind': notif.kind,
+                    'branch_id': notif.branch_id,
+                    'order_id': notif.order_id,
+                }
+                transaction.on_commit(lambda: publish(slug, payload))
+            except Exception:
+                pass
+        return notif
     except IntegrityError:
         return Notification.objects.filter(restaurant=restaurant, dedupe_key=dedupe_key).first()
     except Exception:

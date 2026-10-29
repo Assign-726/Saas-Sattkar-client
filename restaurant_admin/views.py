@@ -5819,6 +5819,14 @@ def orders_stream(request, restaurant_slug=None):
                 if data is None:
                     continue
                 yield sse_event(data, event='new_order')
+                try:
+                    import json
+                    obj = json.loads(data)
+                    etype = obj.get('type')
+                    if etype and etype != 'new_order':
+                        yield sse_event(data, event=etype)
+                except Exception:
+                    pass
         finally:
             unsubscribe(slug, q, closed)
 
