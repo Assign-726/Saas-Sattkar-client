@@ -2,7 +2,7 @@
 from datetime import datetime
 
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.views.decorators.http import require_POST
 
 from notifications import service as S
@@ -67,6 +67,54 @@ def poll(request, restaurant_slug=None):
     if not since or new:
         data['sound_url'] = _sound_url(request, restaurant)
     return JsonResponse(data)
+
+
+@login_required
+def stream(request, restaurant_slug=None):
+    """Server-Sent Events stream for real-time notification alerts (orders, tickets, system alerts)."""
+    restaurant, branch = _scope(request, restaurant_slug)
+    if restaurant is None:
+        return HttpResponse('Forbidden', status=403)
+    slug = getattr(restaurant, 'slug', None)
+    if not slug:
+        return HttpResponse('Missing restaurant slug', status=400)
+
+    from core.sse import subscribe, unsubscribe, sse_comment, sse_event
+    q, closed = subscribe(slug)
+
+    def event_stream():
+        import json, time
+        last_ping = 0
+        try:
+            yield sse_comment(f"notification stream opened for {slug}")
+            while not closed.is_set():
+                now = time.time()
+                if now - last_ping > 15:
+                    last_ping = now
+                    yield sse_comment('keepalive')
+                from queue import Empty
+                try:
+                    data = q.get(timeout=1.0)
+                except Empty:
+                    data = None
+                if data is None:
+                    continue
+                # Broadcast as 'notification' event and also original type
+                yield sse_event(data, event='notification')
+                try:
+                    obj = json.loads(data)
+                    etype = obj.get('type')
+                    if etype and etype != 'notification':
+                        yield sse_event(data, event=etype)
+                except Exception:
+                    pass
+        finally:
+            unsubscribe(slug, q, closed)
+
+    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'
+    return response
 
 
 @login_required

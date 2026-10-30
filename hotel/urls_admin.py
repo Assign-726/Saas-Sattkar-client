@@ -96,6 +96,7 @@ urlpatterns = [
     path('bookings/<int:booking_id>/cancel/', views_admin.booking_cancel_action, name='booking_cancel'),
     # Notification drawer (channel bookings and alerts)
     path('api/notifications/poll/', notification_views.poll, name='notifications_poll'),
+    path('api/notifications/stream/', notification_views.stream, name='notifications_stream'),
     path('api/notifications/', notification_views.listing, name='notifications_list'),
     path('api/notifications/update/', notification_views.update, name='notifications_update'),
     # Booking folio, guest registration and stay changes
