@@ -14,9 +14,11 @@ Guest-facing pages and public APIs are not affected.
 """
 
 import logging
+import threading
 from datetime import timedelta
 
 from django.conf import settings
+from django.db import connections
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -31,6 +33,40 @@ LOCKED_PREFIXES = ('/super/', '/dashboard/', '/hotel-admin/', '/dj-admin/')
 ALLOWED_PREFIXES = ('/super/billing', '/static/', '/media/', '/dj-admin/logout/')
 
 BILLING_URL = '/super/billing/?overdue_lock=1'
+
+
+_sync_guard = threading.Lock()
+_sync_running = False
+
+
+def _sync_with_master(restaurant):
+    """
+    Refresh the subscription from Master Admin. In the background by default: the page being served is never held
+    up by it (an unreachable Master Admin costs seconds per attempt), and the lock check uses the last synced state,
+    so a renewal or a lock still shows within ~30 s. One sync at a time per process.
+    """
+    global _sync_running
+    if not getattr(settings, 'MASTER_SYNC_IN_BACKGROUND', True):
+        MasterBillingService.fetch_subscription_details(restaurant)
+        restaurant.refresh_from_db()
+        return
+    with _sync_guard:
+        if _sync_running:
+            return
+        _sync_running = True
+
+    def run():
+        global _sync_running
+        try:
+            MasterBillingService.fetch_subscription_details(restaurant)
+        except Exception as sync_err:
+            logger.debug(f"[SubscriptionLockMiddleware] Background sync failed: {sync_err}")
+        finally:
+            connections.close_all()  # this thread's own DB connection (it ends here)
+            with _sync_guard:
+                _sync_running = False
+
+    threading.Thread(target=run, name='master-billing-sync', daemon=True).start()
 
 
 def _offline_lock(restaurant, now) -> bool:
@@ -77,8 +113,7 @@ class SuperAdminSubscriptionLockMiddleware:
                 # or if the account is currently locked (to detect immediate renewals/activations)
                 if not last_synced or (now - last_synced).total_seconds() > 30 or (restaurant.subscription_is_locked and (now - last_synced).total_seconds() > 10):
                     try:
-                        MasterBillingService.fetch_subscription_details(restaurant)
-                        restaurant.refresh_from_db()
+                        _sync_with_master(restaurant)
                     except Exception as sync_err:
                         logger.debug(f"[SubscriptionLockMiddleware] Sync skipped: {sync_err}")
 
