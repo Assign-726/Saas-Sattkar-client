@@ -1,7 +1,6 @@
 """Hotel PMS screens: booking folio, housekeeping, maintenance, rate calendar, reports and night audit."""
 import csv
 import datetime
-import json
 import re
 from decimal import Decimal, InvalidOperation
 
@@ -101,7 +100,7 @@ def booking_detail(request, restaurant_slug, ctx, booking_id):
                    b=b, folio=folio, today=today, settings=settings, move_rooms=move_rooms,
                    charge_kinds=FolioCharge.Kind.choices, methods=FolioPayment.Method.choices,
                    id_types=RoomBooking.IdType.choices, sources=RoomBooking.Source.choices,
-                   gst_json=json.dumps(gst), history=history, tasks=b.hk_tasks.select_related('room', 'assigned_to')[:10],
+                   gst_json=gst, history=history, tasks=b.hk_tasks.select_related('room', 'assigned_to')[:10],
                    cabs=b.cab_bookings.all().order_by('pickup_datetime'), can_edit=_can(request, 'front_desk'),
                    kyc_missing=not b.kyc_complete, is_overdue=b.booking_status == 'CHECKED_IN' and b.check_out_date < today,
                    accounts=CompanyAccount.objects.filter(restaurant=b.branch.restaurant, is_active=True),

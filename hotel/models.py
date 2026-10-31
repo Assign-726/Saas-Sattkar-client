@@ -186,6 +186,11 @@ class RoomCategory(models.Model):
                 res.append({'url': v['url'].strip(), 'title': v.get('title') or f'Video Tour #{idx}'})
         return res
 
+    @property
+    def video_links_json(self):
+        import json
+        return json.dumps(self.video_links_list)
+
 
 class RoomCategoryImage(models.Model):
     """

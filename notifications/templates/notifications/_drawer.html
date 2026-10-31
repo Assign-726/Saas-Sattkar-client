@@ -355,30 +355,98 @@
                         .finally(function () { polling = false; });
                 }
 
+                // ONE stream for all open tabs. The browser allows only ~6 open connections to this server; a stream per
+                // tab used them up after a few tabs, and then every new page (e.g. New Purchase) waited seconds for a
+                // free one. The tab holding the lock keeps the stream and relays its events to the other tabs; when that
+                // tab closes, the lock passes to another tab, which opens the stream.
+                const ntChannel = window.BroadcastChannel ? new BroadcastChannel('sattkar-nt-' + ntModule + '-' + slug) : null;
+                let ntLeaderSeenAt = 0;
+                if (ntChannel) {
+                    ntChannel.onmessage = function (e) {
+                        const m = e.data || {};
+                        if (m.t === 'state') {
+                            ntLeaderSeenAt = m.connected ? Date.now() : 0;
+                            sseConnected = !!m.connected;
+                        } else if (m.t === 'event') {
+                            ntLeaderSeenAt = Date.now();
+                            sseConnected = true;
+                            schedulePoll(m.delay);
+                        }
+                    };
+                }
+                function ntRelay(msg) { if (ntChannel) { try { ntChannel.postMessage(msg); } catch (_) { } } }
+
                 let sseHasConnectedOnce = false;
+                function openStream() {
+                    if (sse) sse.close();
+                    sse = new EventSource(streamUrl);
+                    const onEvent = function () { schedulePoll(50); ntRelay({ t: 'event', delay: 50 }); };
+                    sse.onopen = function () {
+                        sseConnected = true;
+                        ntRelay({ t: 'state', connected: true });
+                        // Catch up only on recovery/reconnection (initial load is handled by poll())
+                        if (sseHasConnectedOnce) {
+                            schedulePoll(0);
+                            ntRelay({ t: 'event', delay: 0 });
+                        }
+                        sseHasConnectedOnce = true;
+                    };
+                    sse.addEventListener('notification', onEvent);
+                    sse.addEventListener('new_order', onEvent);
+                    sse.addEventListener('order_updated', onEvent);
+                    sse.onmessage = onEvent;
+                    sse.onerror = function () {
+                        sseConnected = false;
+                        ntRelay({ t: 'state', connected: false });
+                    };
+                }
+                function closeStream() {
+                    if (!sse) return;
+                    try { sse.close(); } catch (_) { }
+                    sse = null;
+                }
+
+                // Which tab holds the stream: a heartbeat in localStorage (Web Locks need HTTPS, and the admin also runs
+                // on plain http over the LAN). The holder refreshes it every 3s; a tab that finds it missing or stale
+                // (holder closed or crashed) takes over; a holder that finds another tab's id steps down.
+                const ntLeaderKey = 'sattkar-nt-leader-' + ntModule + '-' + slug;
+                const ntTabId = Math.random().toString(36).slice(2) + Date.now().toString(36);
+                function ntReadLeader() { try { return JSON.parse(localStorage.getItem(ntLeaderKey) || 'null'); } catch (_) { return null; } }
+                function ntElect() {
+                    const cur = ntReadLeader(), now = Date.now();
+                    if (cur && cur.id !== ntTabId && now - cur.ts < 8000) {
+                        if (sse) closeStream();          // another tab holds it — step down
+                        return;
+                    }
+                    try { localStorage.setItem(ntLeaderKey, JSON.stringify({ id: ntTabId, ts: now })); } catch (_) { }
+                    // Two tabs can claim together: the read-back a moment later decides, the other stays a follower
+                    setTimeout(function () {
+                        const won = ntReadLeader();
+                        if (won && won.id === ntTabId) {
+                            if (!sse) openStream();
+                            if (sseConnected) ntRelay({ t: 'state', connected: true });
+                        } else if (sse) closeStream();
+                    }, sse ? 0 : 150 + Math.random() * 250);
+                }
                 function initSSE() {
                     if (!window.EventSource || !streamUrl) {
                         sseConnected = false;
                         return;
                     }
                     try {
-                        if (sse) sse.close();
-                        sse = new EventSource(streamUrl);
-                        sse.onopen = function () {
-                            sseConnected = true;
-                            // Catch up only on recovery/reconnection (initial load is handled by poll())
-                            if (sseHasConnectedOnce) {
-                                schedulePoll(0);
-                            }
-                            sseHasConnectedOnce = true;
-                        };
-                        sse.addEventListener('notification', function () { schedulePoll(50); });
-                        sse.addEventListener('new_order', function () { schedulePoll(50); });
-                        sse.addEventListener('order_updated', function () { schedulePoll(50); });
-                        sse.onmessage = function () { schedulePoll(50); };
-                        sse.onerror = function () {
-                            sseConnected = false;
-                        };
+                        let storageOk = true;
+                        try { localStorage.setItem(ntLeaderKey + '-t', '1'); localStorage.removeItem(ntLeaderKey + '-t'); } catch (_) { storageOk = false; }
+                        if (!ntChannel || !storageOk) { openStream(); return; }
+                        ntElect();
+                        setInterval(ntElect, 3000);
+                        if (ntChannel) ntChannel.addEventListener('message', function (e) { if (e.data && e.data.t === 'gone') ntElect(); });
+                        window.addEventListener('pagehide', function () {
+                            if (!sse) return;
+                            closeStream();
+                            const cur = ntReadLeader();
+                            if (cur && cur.id === ntTabId) { try { localStorage.removeItem(ntLeaderKey); } catch (_) { } }
+                            ntRelay({ t: 'gone' });     // another tab takes the stream over at once
+                        });
                     } catch (_) {
                         sseConnected = false;
                     }
@@ -388,6 +456,8 @@
                 // - Healthy SSE: ZERO polling when idle! Server stays 100% silent. Events are pushed instantly.
                 // - Offline / reconnecting SSE: fallback poll every 15s so orders are never missed if SSE drops
                 function safetyHeartbeat() {
+                    // A tab without the stream trusts the holder only while it keeps reporting in
+                    if (!sse && sseConnected && Date.now() - ntLeaderSeenAt > 25000) sseConnected = false;
                     if (sseConnected) return; // 100% event-driven while SSE is connected
                     const elapsed = Date.now() - lastPollAt;
                     if (elapsed >= 15000) {

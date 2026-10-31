@@ -1,6 +1,5 @@
 """Expenses and the profit & loss report, in the Restaurant and Hotel admin shells."""
 import csv
-import json
 import os
 from decimal import Decimal, InvalidOperation
 
@@ -270,7 +269,7 @@ def _pnl(request, env, slug):
         'deltas': {'revenue': delta(report['revenue'], prev['revenue']), 'profit': delta(report['net_profit'], prev['net_profit']),
                    'costs': delta(report['commission'] + report['purchases'] + report['operating'], prev['commission'] + prev['purchases'] + prev['operating'])},
         'total_costs': report['commission'] + report['purchases'] + report['operating'],
-        'chart_json': json.dumps(chart), 'page_title': 'Profit & Loss', 'scope': scope, 'scopes': scopes,
+        'chart_json': chart, 'page_title': 'Profit & Loss', 'scope': scope, 'scopes': scopes,
         'scope_label': dict(scopes)[scope],
     }, 'pnl')
 

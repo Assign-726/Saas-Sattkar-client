@@ -1618,10 +1618,10 @@ def order_create_manual(request, restaurant_slug=None):
             attached_receipt.booking_ref = draft_order.order_number
             attached_receipt.save(update_fields=['order', 'reference_number', 'booking_ref'])
 
-    existing_order_json = json.dumps(serialize_pos_order(draft_order)) if draft_order else 'null'
+    existing_order_json = serialize_pos_order(draft_order) if draft_order else None
 
     if not attached_receipt and draft_order and draft_order.advance_amount_paid > 0:
-        attached_receipt_json = json.dumps({
+        attached_receipt_json = {
             'order_id': draft_order.id,
             'receipt_no': draft_order.advance_receipt.receipt_no if draft_order.advance_receipt else f"ORD-{draft_order.id:04d}",
             'booking_ref': draft_order.order_number or f"ORD-{draft_order.id:04d}",
@@ -1629,9 +1629,9 @@ def order_create_manual(request, restaurant_slug=None):
             'phone': draft_order.phone,
             'advance_amount': float(draft_order.advance_amount_paid),
             'payment_method': draft_order.payment_method,
-        })
+        }
     elif attached_receipt:
-        attached_receipt_json = json.dumps({
+        attached_receipt_json = {
             'order_id': attached_receipt.order.id if attached_receipt.order else (draft_order.id if draft_order else 0),
             'receipt_no': attached_receipt.receipt_no,
             'booking_ref': attached_receipt.order.order_number if attached_receipt.order else (draft_order.order_number if draft_order else attached_receipt.booking_ref),
@@ -1639,9 +1639,9 @@ def order_create_manual(request, restaurant_slug=None):
             'phone': attached_receipt.phone,
             'advance_amount': float(attached_receipt.advance_amount),
             'payment_method': attached_receipt.payment_method,
-        })
+        }
     else:
-        attached_receipt_json = 'null'
+        attached_receipt_json = None
 
     # Sequence info for invoice numbers
     gst_seq_info = get_document_sequence_info(restaurant, 'sales', branch=branch_obj)
@@ -1658,16 +1658,16 @@ def order_create_manual(request, restaurant_slug=None):
 
     return render(request, 'restaurant_admin/orders/manual_create.html', {
         'menu_items': menu_items_qs,
-        'menu_items_json': json.dumps(menu_items_list),
-        'top_selling_json': json.dumps(top_selling_ids),
-        'smart_slots_json': json.dumps(smart_menu_data),
-        'current_slot_json': json.dumps(current_slot_key),
-        'categories_json': json.dumps(categories_list),
+        'menu_items_json': menu_items_list,
+        'top_selling_json': top_selling_ids,
+        'smart_slots_json': smart_menu_data,
+        'current_slot_json': current_slot_key,
+        'categories_json': categories_list,
         'categories': categories_qs,
         'tables': tables_qs,
         'active_orders': active_orders_list,
-        'active_orders_json': json.dumps(active_orders_list),
-        'tax_settings_json': json.dumps({
+        'active_orders_json': active_orders_list,
+        'tax_settings_json': {
             'cgst_pct': cgst_pct,
             'sgst_pct': sgst_pct,
             'vat_beer_pct': vat_beer_pct,
@@ -1678,12 +1678,12 @@ def order_create_manual(request, restaurant_slug=None):
             'vat_surcharge_name': vat_surcharge_name,
             'service_charge_pct': service_charge_pct_val,
             'service_charge_taxable': getattr(settings_obj, 'service_charge_taxable', True),
-        }),
+        },
         'customer_parties': cust_parties_qs,
-        'customer_parties_json': json.dumps(cust_parties_list),
+        'customer_parties_json': cust_parties_list,
         'active_branch_gstin': active_branch_gstin_manual,
-        'active_branch_gstin_json': json.dumps(active_branch_gstin_manual),
-        'custom_charges_json': json.dumps(custom_charges_list),
+        'active_branch_gstin_json': active_branch_gstin_manual,
+        'custom_charges_json': custom_charges_list,
         'attached_receipt': attached_receipt,
         'attached_receipt_json': attached_receipt_json,
         'existing_order_json': existing_order_json,
@@ -1691,8 +1691,8 @@ def order_create_manual(request, restaurant_slug=None):
         'order': draft_order,
         'gst_seq_info': gst_seq_info,
         'excise_seq_info': excise_seq_info,
-        'gst_seq_info_json': json.dumps(gst_seq_info),
-        'excise_seq_info_json': json.dumps(excise_seq_info),
+        'gst_seq_info_json': gst_seq_info,
+        'excise_seq_info_json': excise_seq_info,
         'active_menu': 'order_create_manual',
         'restaurant': restaurant,
         'current_branch': branch_obj,
@@ -2445,14 +2445,14 @@ def order_edit_manual(request, pk, restaurant_slug=None):
     import json
     return render(request, 'restaurant_admin/orders/manual_create.html', {
         'menu_items': menu_items_qs,
-        'menu_items_json': json.dumps(menu_items_list),
-        'top_selling_json': json.dumps(top_selling_ids),
-        'smart_slots_json': json.dumps(smart_menu_data),
-        'current_slot_json': json.dumps(current_slot_key),
-        'categories_json': json.dumps(categories_list),
+        'menu_items_json': menu_items_list,
+        'top_selling_json': top_selling_ids,
+        'smart_slots_json': smart_menu_data,
+        'current_slot_json': current_slot_key,
+        'categories_json': categories_list,
         'categories': categories_qs,
         'tables': tables_qs,
-        'tax_settings_json': json.dumps({
+        'tax_settings_json': {
             'cgst_pct': cgst_pct,
             'sgst_pct': sgst_pct,
             'vat_beer_pct': vat_beer_pct,
@@ -2463,13 +2463,17 @@ def order_edit_manual(request, pk, restaurant_slug=None):
             'vat_surcharge_name': vat_surcharge_name,
             'service_charge_pct': float(settings_obj.service_charge_percentage or 0),
             'service_charge_taxable': getattr(settings_obj, 'service_charge_taxable', True),
-        }),
+        },
         'customer_parties': cust_parties_qs,
-        'customer_parties_json': json.dumps(cust_parties_list),
+        'customer_parties_json': cust_parties_list,
         'active_branch_gstin': active_branch_gstin_manual,
-        'active_branch_gstin_json': json.dumps(active_branch_gstin_manual),
-        'custom_charges_json': json.dumps(custom_charges_list),
-        'existing_order_json': json.dumps(serialize_pos_order(order)),
+        'active_branch_gstin_json': active_branch_gstin_manual,
+        'custom_charges_json': custom_charges_list,
+        'existing_order_json': serialize_pos_order(order),
+        'active_orders_json': [],
+        'attached_receipt_json': None,
+        'gst_seq_info_json': {'mode': 'automatic', 'next_number': '', 'readonly': True},
+        'excise_seq_info_json': {'mode': 'automatic', 'next_number': '', 'readonly': True},
         'is_edit_mode': True,
         'order': order,
         'active_menu': 'order_create_manual',
@@ -2969,282 +2973,90 @@ def party_ledger_detail(request, restaurant_slug, pk):
 @login_required
 @user_passes_test(is_admin)
 def purchase_create(request, restaurant_slug=None):
+    """The purchase voucher (Elite Zen keyboard screen): GET shows it, POST saves the voucher it sends."""
+    return _purchase_voucher(request, restaurant_slug)
+
+
+@login_required
+@user_passes_test(is_admin)
+def purchase_voucher_edit(request, pk, restaurant_slug=None):
+    """Reopen a purchase made on the voucher screen exactly as it was entered; saving it re-posts its stock."""
+    return _purchase_voucher(request, restaurant_slug, pk=pk)
+
+
+@login_required
+@user_passes_test(is_admin)
+def purchase_sidebar_panel(request, restaurant_slug=None):
+    """The admin sidebar alone, shown in the slide-out drawer of the full-screen purchase voucher, so the rest of the
+    admin is one click away without leaving the bill (its links open in the whole window)."""
     restaurant = resolve_restaurant(request, restaurant_slug)
     if isinstance(restaurant, HttpResponse):
         return restaurant
+    response = render(request, 'restaurant_admin/purchases/sidebar_panel.html', {
+        'restaurant': restaurant,
+        'active_menu': 'purchases',
+        'zen_sidebar_panel': True,
+    })
+    response['X-Frame-Options'] = 'SAMEORIGIN'
+    return response
 
+
+def _purchase_voucher(request, restaurant_slug=None, pk=None):
+    from restaurant_admin import purchase_zen
+
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
     active_branch = get_active_branch(request, restaurant)
 
+    po = None
+    if pk is not None:
+        po_qs = PurchaseOrder.objects.filter(restaurant=restaurant)
+        if active_branch:
+            po_qs = po_qs.filter(Q(branch=active_branch) | Q(branch__isnull=True))
+        po = get_object_or_404(po_qs, pk=pk)
+        if po.voucher_snapshot is None:
+            messages.info(request, 'This purchase was entered on the old screen; only its header can be edited.')
+            return redirect('restaurant_admin:purchase_list', restaurant_slug=restaurant.slug)
+
     if request.method == 'POST':
-        from django.db import transaction
-
-        is_json = request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'application/json' in request.content_type
-        if is_json:
-            try:
-                data = json.loads(request.body)
-            except Exception as e:
-                return JsonResponse({'success': False, 'error': f'Invalid JSON payload: {str(e)}'}, status=400)
-        else:
-            raw_items = request.POST.get('items', '[]')
-            try:
-                items_parsed = json.loads(raw_items)
-            except Exception:
-                items_parsed = []
-            data = {
-                'supplier_name': request.POST.get('supplier_name', '').strip(),
-                'supplier_gstin': request.POST.get('supplier_gstin', '').strip(),
-                'invoice_number': request.POST.get('invoice_number', '').strip(),
-                'purchase_date': request.POST.get('purchase_date', timezone.now().strftime('%Y-%m-%d')),
-                'payment_method': request.POST.get('payment_method', 'bank_transfer'),
-                'payment_status': request.POST.get('payment_status', 'paid'),
-                'tax_amount': request.POST.get('tax_amount', '0'),
-                'items': items_parsed
-            }
-
-        supplier_name = (data.get('supplier_name') or '').strip()
-        invoice_number = (data.get('invoice_number') or '').strip()
-        purchase_date_str = (data.get('purchase_date') or '').strip() or timezone.now().strftime('%Y-%m-%d')
-        items = data.get('items') or []
-
-        if not supplier_name:
-            err = 'Supplier Name is required.'
-            return JsonResponse({'success': False, 'error': err}, status=400) if is_json else (messages.error(request, err) or redirect(request.path))
-
-        active_branch = get_active_branch(request, restaurant)
-        user_entry_no = (data.get('entry_no') or '').strip()
-        supplier_invoice_no = (data.get('invoice_number') or '').strip()
         try:
-            po_number = get_and_increment_document_number(
-                restaurant=restaurant,
-                document_type='purchase',
-                branch=active_branch,
-                user_input_no=user_entry_no
-            )
-        except ValidationError as ve:
-            return JsonResponse({'success': False, 'error': str(ve)}, status=400) if is_json else (messages.error(request, str(ve)) or redirect(request.path))
-
-        final_invoice_number = supplier_invoice_no or po_number
-
-        if not items:
-            err = 'Please add at least one inventory item to the purchase list.'
-            return JsonResponse({'success': False, 'error': err}, status=400) if is_json else (messages.error(request, err) or redirect(request.path))
-
-        try:
-            with transaction.atomic():
-                sup_lookup = {'restaurant': restaurant, 'name__iexact': supplier_name}
-                if active_branch:
-                    sup_lookup['branch'] = active_branch
-                supplier, _ = Supplier.objects.get_or_create(
-                    **sup_lookup,
-                    defaults={
-                        'name': supplier_name,
-                        'gstin': (data.get('supplier_gstin') or '').strip()
-                    }
-                )
-                if data.get('supplier_gstin'):
-                    new_gstin = data['supplier_gstin'].strip()
-                    if supplier.gstin != new_gstin:
-                        supplier.gstin = new_gstin
-                        supplier.save(update_fields=['gstin'])
-
-                # Find or create Party
-                party_lookup = {'restaurant': restaurant, 'name__iexact': supplier_name}
-                if active_branch:
-                    party_lookup['branch'] = active_branch
-                party, _ = Party.objects.get_or_create(
-                    **party_lookup,
-                    defaults={
-                        'name': supplier_name,
-                        'party_type': Party.PartyType.VENDOR,
-                        'gstin': (data.get('supplier_gstin') or '').strip()
-                    }
-                )
-                if data.get('supplier_gstin') and party.gstin != data['supplier_gstin'].strip():
-                    party.gstin = data['supplier_gstin'].strip()
-                    party.save(update_fields=['gstin'])
-
-                subtotal = Decimal('0.00')
-                calc_total_tax = Decimal('0.00')
-                parsed_items = []
-                for item_data in items:
-                    item_id = item_data.get('item_id')
-                    # Scope inventory item lookup to branch if possible
-                    inv_filter = {'id': item_id, 'restaurant': restaurant}
-                    if active_branch:
-                        inv_filter['branch'] = active_branch
-                    try:
-                        inv_item = InventoryItem.objects.get(**inv_filter)
-                    except InventoryItem.DoesNotExist:
-                        inv_item = get_object_or_404(InventoryItem, id=item_id, restaurant=restaurant)
-                    qty = Decimal(str(item_data.get('quantity') or 1))
-                    cost = Decimal(str(item_data.get('unit_cost') if item_data.get('unit_cost') is not None else (inv_item.price_per_unit or 0)))
-                    
-                    user_gst = item_data.get('gst_rate')
-                    if user_gst is not None and str(user_gst) != '':
-                        gst_rate_val = Decimal(str(user_gst))
-                    else:
-                        eff_gst_rate = inv_item.get_effective_value('default_gst_rate')
-                        gst_rate_val = Decimal(str(eff_gst_rate if eff_gst_rate is not None else 0))
-                    eff_hsn_code = inv_item.get_effective_value('default_hsn_code') or ''
-
-                    line_total = (qty * cost).quantize(Decimal('0.01'))
-                    line_gst = (line_total * gst_rate_val / Decimal('100.00')).quantize(Decimal('0.01'))
-                    
-                    subtotal += line_total
-                    calc_total_tax += line_gst
-
-                    parsed_items.append({
-                        'inventory_item': inv_item,
-                        'quantity': qty,
-                        'unit_cost': cost,
-                        'gst_rate': gst_rate_val,
-                        'hsn_code': eff_hsn_code,
-                        'line_total': line_total
-                    })
-
-                user_tax = data.get('tax_amount')
-                tax_amount = Decimal(str(user_tax if user_tax is not None else calc_total_tax)).quantize(Decimal('0.01'))
-                grand_total = subtotal + tax_amount
-
-                po = PurchaseOrder.objects.create(
-                    restaurant=restaurant,
-                    branch=active_branch,
-                    party=party,
-                    supplier=supplier,
-                    supplier_name=supplier.name,
-                    supplier_gstin=supplier.gstin or '',
-                    po_number=po_number,
-                    invoice_number=final_invoice_number,
-                    purchase_date=purchase_date_str,
-                    subtotal=subtotal,
-                    tax_amount=tax_amount,
-                    grand_total=grand_total,
-                    payment_method=data.get('payment_method', 'bank_transfer'),
-                    payment_status=data.get('payment_status', 'paid'),
-                    created_by=request.user
-                )
-
-                for pi in parsed_items:
-                    PurchaseOrderItem.objects.create(
-                        purchase_order=po,
-                        inventory_item=pi['inventory_item'],
-                        quantity=pi['quantity'],
-                        unit_cost=pi['unit_cost'],
-                        gst_rate=pi['gst_rate'],
-                        hsn_code=pi['hsn_code'],
-                        line_total=pi['line_total']
-                    )
-
-                    inv_item = pi['inventory_item']
-                    delta_qty = int(pi['quantity'])
-                    inv_item.adjust(delta_qty)
-
-                    if pi['unit_cost'] > 0:
-                        inv_item.cost_price = pi['unit_cost']
-                        inv_item.price_per_unit = pi['unit_cost']
-                        inv_item.save(update_fields=['cost_price', 'price_per_unit'])
-
-                    InventoryTransaction.objects.create(
-                        inventory_item=inv_item,
-                        transaction_type=InventoryTransaction.TransactionType.INWARD_PURCHASE,
-                        delta=delta_qty,
-                        purchase_order=po,
-                        performed_by=request.user
-                    )
-
-                if is_json:
-                    return JsonResponse({
-                        'success': True,
-                        'message': f'Purchase order #{po.id} saved and inventory updated successfully!',
-                        'redirect_url': reverse('restaurant_admin:purchase_list', kwargs={'restaurant_slug': restaurant.slug})
-                    })
-
-                messages.success(request, f'Purchase Order #{po.id} saved and inventory stock updated!')
-                return redirect('restaurant_admin:purchase_list', restaurant_slug=restaurant.slug)
-
-        except Exception as e:
-            err = f'Error processing purchase entry: {str(e)}'
-            if is_json:
-                return JsonResponse({'success': False, 'error': err}, status=500)
-            messages.error(request, err)
-            return redirect(request.path)
-
-    # GET request
-    suppliers = Supplier.objects.filter(restaurant=restaurant)
-    if active_branch:
-        suppliers = suppliers.filter(Q(branch=active_branch) | Q(branch__isnull=True))
-    suppliers = suppliers.order_by('name')
-
-    vendor_parties = Party.objects.filter(restaurant=restaurant, party_type__in=['vendor', 'both'])
-    if active_branch:
-        vendor_parties = vendor_parties.filter(Q(branch=active_branch) | Q(branch__isnull=True))
-    vendor_parties = vendor_parties.order_by('name')
-
-    vendor_parties_list = [
-        {
-            'id': str(p.id),
-            'name': p.name,
-            'gstin': p.gstin or '',
-            'phone': p.phone or '',
-            'email': p.email or ''
-        }
-        for p in vendor_parties
-    ]
-    for supp in suppliers:
-        if not any(v['name'].lower() == supp.name.lower() for v in vendor_parties_list):
-            vendor_parties_list.append({
-                'id': f'supp_{supp.id}',
-                'name': supp.name,
-                'gstin': supp.gstin or '',
-                'phone': supp.phone or '',
-                'email': ''
-            })
-
-    inventory_items = InventoryItem.objects.filter(restaurant=restaurant, is_active=True)
-    if active_branch:
-        inventory_items = inventory_items.filter(branch=active_branch)
-    inventory_items = inventory_items.select_related('category', 'category__parent', 'restaurant').order_by('name')
-    
-    inventory_items_list = []
-    for item in inventory_items:
-        eff_gst = item.get_effective_value('default_gst_rate')
-        eff_hsn = item.get_effective_value('default_hsn_code')
-        eff_taxability = item.get_effective_value('taxability')
-        inventory_items_list.append({
-            'id': item.id,
-            'name': item.name,
-            'sku': item.sku or '',
-            'category': str(item.category) if item.category else '',
-            'unit': item.unit or 'unit',
-            'quantity': item.quantity,
-            'cost_price': float(item.unit_cost),
-            'hsn_sac_code': str(eff_hsn or ''),
-            'gst_rate': float(eff_gst if eff_gst is not None else 0),
-            'taxability_type': str(eff_taxability or 'taxable')
+            saved = purchase_zen.save_voucher(request, restaurant, active_branch, po=po)
+        except purchase_zen.VoucherError as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        next_no = get_document_sequence_info(restaurant, 'purchase', branch=active_branch)['next_number']
+        return JsonResponse({
+            'success': True,
+            'po_id': saved.pk,
+            'purchase_no': saved.po_number,
+            'next_purchase_no': next_no,
+            'redirect_url': reverse('restaurant_admin:purchase_list', kwargs={'restaurant_slug': restaurant.slug}),
         })
-    categories_qs = InventoryCategory.objects.filter(restaurant=restaurant)
-    if active_branch:
-        categories_qs = categories_qs.filter(branch=active_branch)
-    categories = list(categories_qs.values_list('name', flat=True))
-    today_date = timezone.now().strftime('%Y-%m-%d')
 
-    seq_info = get_document_sequence_info(restaurant, 'purchase', branch=active_branch)
-    entry_no = seq_info['next_number']
-
-    return render(request, 'restaurant_admin/purchases/create.html', {
+    return render(request, 'restaurant_admin/purchases/voucher_zen.html', {
         'restaurant': restaurant,
-        'suppliers': suppliers,
-        'vendor_parties': vendor_parties,
-        'vendor_parties_json': json.dumps(vendor_parties_list),
-        'inventory_items': inventory_items,
-        'inventory_items_json': json.dumps(inventory_items_list),
-        'categories': categories,
-        'category_objects': categories_qs,
-        'today_date': today_date,
-        'entry_no': entry_no,
-        'seq_info': seq_info,
+        'zen_boot': purchase_zen.build_boot(request, restaurant, active_branch, po=po),
+        'zen_editing': po is not None,
+        'zen_v': purchase_zen.asset_version(),
         'active_menu': 'purchases',
     })
+
+
+@login_required
+@user_passes_test(is_admin)
+@require_POST
+def purchase_zen_ledger_create(request, restaurant_slug=None):
+    """'Create' in a voucher list: a new supplier / charge / godown / cash-bank ledger by the name typed."""
+    from restaurant_admin import purchase_zen
+
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
+    try:
+        result = purchase_zen.create_ledger(request, restaurant, get_active_branch(request, restaurant))
+    except purchase_zen.VoucherError as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+    return JsonResponse({'success': True, **result})
 
 
 def _filter_purchase_queryset(request, restaurant):
@@ -8697,7 +8509,7 @@ def challan_create(request, restaurant_slug=None):
         gstin_str = f" (GSTIN: {party_gstin})" if party_gstin else ''
         prefill_notes = f"Inter-branch/godown transfer for buyer party '{party_name}'{gstin_str}."
 
-    customer_parties_json = json.dumps([
+    customer_parties_json = [
         {
             'id': p.id,
             'name': p.name,
@@ -8706,7 +8518,7 @@ def challan_create(request, restaurant_slug=None):
             'address': p.full_address or p.address or ''
         }
         for p in customer_parties
-    ])
+    ]
 
     return render(request, 'restaurant_admin/challans/create.html', {
         'auto_challan_no': auto_challan_no,
@@ -9028,7 +8840,7 @@ def transaction_desk_create(request, restaurant_slug=None):
             draft_order = attached_receipt.order
 
     if not attached_receipt and draft_order and draft_order.advance_amount_paid > 0:
-        attached_receipt_json = json.dumps({
+        attached_receipt_json = {
             'order_id': draft_order.id,
             'receipt_no': draft_order.advance_receipt.receipt_no if draft_order.advance_receipt else f"ORD-{draft_order.id:04d}",
             'booking_ref': draft_order.order_number or f"ORD-{draft_order.id:04d}",
@@ -9036,9 +8848,9 @@ def transaction_desk_create(request, restaurant_slug=None):
             'phone': draft_order.phone,
             'advance_amount': float(draft_order.advance_amount_paid),
             'payment_method': draft_order.payment_method,
-        })
+        }
     elif attached_receipt:
-        attached_receipt_json = json.dumps({
+        attached_receipt_json = {
             'order_id': attached_receipt.order.id if attached_receipt.order else 0,
             'receipt_no': attached_receipt.receipt_no,
             'booking_ref': attached_receipt.order.order_number if attached_receipt.order else attached_receipt.booking_ref,
@@ -9046,11 +8858,11 @@ def transaction_desk_create(request, restaurant_slug=None):
             'phone': attached_receipt.phone,
             'advance_amount': float(attached_receipt.advance_amount),
             'payment_method': attached_receipt.payment_method,
-        })
+        }
     else:
-        attached_receipt_json = 'null'
+        attached_receipt_json = None
 
-    existing_order_json = json.dumps(serialize_pos_order(draft_order)) if draft_order else 'null'
+    existing_order_json = serialize_pos_order(draft_order) if draft_order else None
 
     customer_parties = Party.objects.filter(restaurant=restaurant, party_type__in=['customer', 'both'])
     if branch_obj:
@@ -9105,7 +8917,7 @@ def transaction_desk_create(request, restaurant_slug=None):
         'rslug': restaurant.slug,
         'active_menu': 'transactions_create',
         'active_branch_gstin': active_branch_gstin,
-        'active_branch_gstin_json': json.dumps(active_branch_gstin),
+        'active_branch_gstin_json': active_branch_gstin,
 
         'seq_info_sales': seq_info_sales,
         'seq_info_purchase': seq_info_purchase,
@@ -9115,14 +8927,14 @@ def transaction_desk_create(request, restaurant_slug=None):
 
         # POS Full Context
         'menu_items': menu_items_qs,
-        'menu_items_json': json.dumps(menu_items_list),
-        'top_selling_json': json.dumps(top_selling_ids),
-        'categories_json': json.dumps(categories_list),
+        'menu_items_json': menu_items_list,
+        'top_selling_json': top_selling_ids,
+        'categories_json': categories_list,
         'categories': categories_qs,
         'tables': tables_qs,
         'active_orders': active_orders_qs,
-        'active_orders_json': json.dumps(active_orders_list),
-        'tax_settings_json': json.dumps({
+        'active_orders_json': active_orders_list,
+        'tax_settings_json': {
             'cgst_pct': cgst_pct,
             'sgst_pct': sgst_pct,
             'vat_beer_pct': vat_beer_pct,
@@ -9133,10 +8945,10 @@ def transaction_desk_create(request, restaurant_slug=None):
             'vat_surcharge_name': vat_surcharge_name,
             'service_charge_pct': float(branch_obj.service_charge_percentage if (branch_obj and branch_obj.service_charge_percentage is not None) else (settings_obj.service_charge_percentage or 0)),
             'service_charge_taxable': getattr(settings_obj, 'service_charge_taxable', True),
-        }),
-        'custom_charges_json': json.dumps(custom_charges_list),
+        },
+        'custom_charges_json': custom_charges_list,
         'customer_parties': customer_parties,
-        'customer_parties_json': json.dumps(parties_list),
+        'customer_parties_json': parties_list,
         'attached_receipt': attached_receipt,
         'attached_receipt_json': attached_receipt_json,
         'existing_order_json': existing_order_json,
@@ -9149,7 +8961,7 @@ def transaction_desk_create(request, restaurant_slug=None):
 
         # Purchase Context
         'inventory_items': inventory_items,
-        'inventory_items_json': json.dumps(inventory_items_list),
+        'inventory_items_json': inventory_items_list,
         'suppliers': suppliers,
         'next_purchase_no': next_purchase_no,
 

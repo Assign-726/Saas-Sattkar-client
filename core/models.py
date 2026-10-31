@@ -2176,7 +2176,7 @@ class InventoryItem(models.Model):
     sku = models.CharField(max_length=100, blank=True)
     category = models.ForeignKey('InventoryCategory', on_delete=models.SET_NULL, null=True, blank=True, related_name='items')
     unit = models.CharField(max_length=50, blank=True)
-    quantity = models.IntegerField(default=0)
+    quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0)
     reorder_level = models.IntegerField(default=5)
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, null=True, blank=True)
     price_per_unit = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
@@ -2191,6 +2191,22 @@ class InventoryItem(models.Model):
     hsn_sac_code = models.CharField(max_length=20, blank=True, null=True)
     gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, null=True, blank=True)
     hsn_description = models.TextField(blank=True, null=True)
+    # --- Purchase voucher (Elite Zen) masters ---
+    class PurchaseType(models.TextChoices):
+        STOCK = 'stock', _('Kitchen / bar stock')
+        CONSUMABLE = 'consumable', _('Consumable')
+        ASSET = 'asset', _('Asset')
+        SERVICE = 'service', _('Expense / service')
+
+    purchase_type = models.CharField(max_length=20, choices=PurchaseType.choices, default=PurchaseType.STOCK)
+    alias = models.CharField(max_length=255, blank=True, default='', help_text="Other names typed at entry, space separated (e.g. 'aloo alu')")
+    purchase_units = models.JSONField(default=list, blank=True, help_text="Alternate units: [{'u': 'katta', 'f': 50}] = 1 katta is 50 of the stock unit")
+    last_purchase_rate = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, help_text="Rate on the last purchase bill, per stock unit")
+    track_expiry = models.BooleanField(default=False)
+    shelf_life_days = models.PositiveIntegerField(null=True, blank=True)
+    track_batch = models.BooleanField(default=False)
+    mrp = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="MRP per piece (items sold as bought)")
+    pieces_per_unit = models.PositiveIntegerField(null=True, blank=True, help_text="Pieces in one stock unit (a crate of 24)")
     is_active = models.BooleanField(default=True)
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='inventory_items', null=True, blank=True)
     branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='inventory_items')
@@ -2205,8 +2221,9 @@ class InventoryItem(models.Model):
     def __str__(self):
         return self.name
 
-    def adjust(self, delta: int):
-        self.quantity = (self.quantity or 0) + int(delta)
+    def adjust(self, delta):
+        # Stock is kept to 3 decimals (2.5 kg, 0.25 ltr); whole-number callers work unchanged
+        self.quantity = (Decimal(str(self.quantity or 0)) + Decimal(str(delta or 0))).quantize(Decimal('0.001'))
         self.save(update_fields=['quantity'])
 
     @property
@@ -2311,6 +2328,12 @@ class Party(models.Model):
     address = models.TextField(blank=True, null=True)
     opening_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     balance_type = models.CharField(max_length=20, choices=BalanceType.choices, default=BalanceType.PAYABLE)
+    # --- Purchase voucher (Elite Zen) terms ---
+    alias = models.CharField(max_length=255, blank=True, default='', help_text="Other names typed at entry (Hindi / short names)")
+    credit_days = models.PositiveIntegerField(default=0, help_text="Usual udhaar period in days")
+    interest_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="% p.a. after the due date")
+    is_msme = models.BooleanField(default=False, help_text="MSME supplier: to be paid within 45 days")
+    default_payment = models.CharField(max_length=10, choices=[('credit', 'Credit / udhaar'), ('cash', 'Pays on the spot')], default='credit')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -2457,6 +2480,31 @@ class PurchaseOrder(models.Model):
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.BANK_TRANSFER)
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.PAID)
+    # --- Purchase voucher (Elite Zen) ---
+    bill_date = models.DateField(null=True, blank=True, help_text="Date printed on the supplier's bill")
+    tax_regime = models.CharField(max_length=10, default='intra', help_text="intra (CGST+SGST) / inter (IGST) / none")
+    is_tax_inclusive = models.BooleanField(default=False)
+    items_gross = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    discount_before_tax = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_charges = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    sgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    igst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cess_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    discount_after_tax = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    refundable_deposits = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    round_off = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    itc_claimed = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    amount_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    credit_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    credit_days = models.PositiveIntegerField(null=True, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    interest_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    late_fee = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    notes = models.TextField(blank=True, default='')
+    einvoice_data = models.JSONField(null=True, blank=True)
+    voucher_data = models.JSONField(null=True, blank=True, help_text="The full voucher as entered (Elite Zen screen)")
+    voucher_snapshot = models.JSONField(null=True, blank=True, help_text="Screen state, to reopen the voucher for editing")
     created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -2471,17 +2519,162 @@ class PurchaseOrder(models.Model):
 class PurchaseOrderItem(models.Model):
     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='items')
     inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, related_name='purchase_items')
-    quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    quantity = models.DecimalField(max_digits=12, decimal_places=3)
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2)
     gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, null=True, blank=True)
     hsn_code = models.CharField(max_length=50, null=True, blank=True)
     line_total = models.DecimalField(max_digits=12, decimal_places=2)
+    # --- Purchase voucher (Elite Zen) line detail ---
+    unit = models.CharField(max_length=30, blank=True, default='', help_text="Unit the quantity was typed in")
+    rate_unit = models.CharField(max_length=30, blank=True, default='', help_text="Unit the rate is per")
+    rate = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    quantity_in_stock_unit = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    free_quantity = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    free_unit = models.CharField(max_length=30, blank=True, default='')
+    free_in_stock_unit = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    stock_quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0, help_text="Billed + free, in the stock unit")
+    discount_percent = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    taxable_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cess_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    charges_share = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    charges_tax_share = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    landed_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="What the line really cost")
+    landed_rate = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, help_text="Landed cost per stock unit")
+    batch_number = models.CharField(max_length=50, blank=True, default='')
+    expiry_date = models.DateField(null=True, blank=True)
+    expiry_estimated = models.BooleanField(default=False)
+    mrp = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    godown = models.CharField(max_length=100, blank=True, default='')
+    line_remarks = models.CharField(max_length=255, blank=True, default='')
 
     class Meta:
         ordering = ['id']
 
     def __str__(self):
         return f"{self.quantity} x {self.inventory_item.name} for PO #{self.purchase_order_id}"
+
+
+class PurchaseOrderCharge(models.Model):
+    """A charge / discount / deposit line of a purchase voucher (freight, labour, trade discount, crate deposit)."""
+    purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='charges')
+    ledger = models.ForeignKey('PurchaseLedgerAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name='charge_lines')
+    name = models.CharField(max_length=100)
+    charge_type = models.CharField(max_length=20, default='charge', help_text="charge / discount / deposit")
+    stage = models.CharField(max_length=10, blank=True, default='', help_text="discount: before / after tax")
+    method = models.CharField(max_length=10, default='fixed', help_text="fixed / percent")
+    rate = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    base = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    gst_treatment = models.CharField(max_length=20, default='none', help_text="items / none / a rate")
+    gst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    applies_to = models.JSONField(null=True, blank=True, help_text="'all' or the lines it is for")
+    tax_split = models.JSONField(default=list, blank=True)
+    in_cost = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return f"{self.name} {self.amount} (PO #{self.purchase_order_id})"
+
+
+class PurchaseOrderPayment(models.Model):
+    """How a purchase voucher was settled: cash, a bank transfer / cheque, or a payment made before the bill."""
+    purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='payments')
+    mode = models.CharField(max_length=20, help_text="cash / upi / neft / rtgs / imps / cheque / linked")
+    ledger = models.ForeignKey('PurchaseLedgerAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name='payment_lines')
+    ledger_name = models.CharField(max_length=150, blank=True, default='')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reference_number = models.CharField(max_length=100, blank=True, default='')
+    payment_date = models.DateField(null=True, blank=True)
+    vendor_advance = models.ForeignKey('VendorAdvance', on_delete=models.SET_NULL, null=True, blank=True, related_name='links')
+
+    class Meta:
+        ordering = ['id']
+
+
+class PurchaseOrderAttachment(models.Model):
+    """A copy of the supplier's bill (photo / PDF), kept with the voucher."""
+    purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='purchases/bills/%Y/%m/')
+    file_name = models.CharField(max_length=255)
+    file_type = models.CharField(max_length=100, blank=True, default='')
+    file_size = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['id']
+
+
+class PurchaseLedgerAccount(models.Model):
+    """The small masters the purchase voucher picks from: cash counters, bank accounts, charges & discounts, godowns."""
+    class Kind(models.TextChoices):
+        CASH = 'cash', _('Cash in hand')
+        BANK = 'bank', _('Bank account')
+        CHARGE = 'charge', _('Charge / discount')
+        GODOWN = 'godown', _('Godown / store')
+
+    restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='purchase_ledgers')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='purchase_ledgers')
+    kind = models.CharField(max_length=10, choices=Kind.choices)
+    name = models.CharField(max_length=150)
+    alias = models.CharField(max_length=255, blank=True, default='')
+    # Charges only
+    charge_type = models.CharField(max_length=10, blank=True, default='', choices=[('charge', 'Charge (adds)'), ('discount', 'Discount (reduces)'), ('deposit', 'Refundable deposit')])
+    stage = models.CharField(max_length=10, blank=True, default='', choices=[('before', 'Before tax (on the invoice)'), ('after', 'After tax (payable only)')])
+    gst = models.CharField(max_length=10, blank=True, default='items', help_text="items = taxed with the goods (s.15(2)(c)); none; or its own rate e.g. 18")
+    default_rate = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text="Usual % (e.g. mandi commission 6)")
+    sort_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['kind', 'sort_order', 'id']
+
+    def __str__(self):
+        return f"{self.get_kind_display()}: {self.name}"
+
+
+class VendorAdvance(models.Model):
+    """Money given to a supplier before their bill was entered ('paid, awaiting bill'). A purchase links it (Alt+L)."""
+    class Mode(models.TextChoices):
+        CASH = 'cash', _('Cash')
+        UPI = 'upi', _('UPI')
+        BANK = 'bank', _('Bank transfer')
+        CHEQUE = 'cheque', _('Cheque')
+
+    restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='vendor_advances')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='vendor_advances')
+    party = models.ForeignKey(Party, on_delete=models.CASCADE, related_name='vendor_advances')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    mode = models.CharField(max_length=10, choices=Mode.choices, default=Mode.CASH)
+    paid_at = models.DateTimeField()
+    note = models.CharField(max_length=255, blank=True, default='')
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['paid_at']
+
+    def __str__(self):
+        return f"{self.party} {self.amount} ({self.paid_at:%d %b})"
+
+    def amount_left(self, exclude_po=None):
+        from django.db.models import Sum
+        qs = self.links.all()
+        if exclude_po is not None:
+            qs = qs.exclude(purchase_order=exclude_po)
+        used = qs.aggregate(s=Sum('amount'))['s'] or Decimal('0')
+        return (self.amount - used).quantize(Decimal('0.01'))
+
+
+class PurchaseVoucherSetting(models.Model):
+    """Per restaurant: does input GST come back (ITC)? 18% restaurants claim it; 5% restaurants cannot, so GST is cost."""
+    restaurant = models.OneToOneField('super_admin.Restaurant', on_delete=models.CASCADE, related_name='purchase_voucher_setting')
+    gst_credit = models.BooleanField(default=False, help_text="On: input GST is claimed (not part of item cost)")
+
+    def __str__(self):
+        return f"Purchase voucher settings — {self.restaurant}"
 
 
 class InventoryTransaction(models.Model):
@@ -2506,7 +2699,7 @@ class InventoryTransaction(models.Model):
 
     inventory_item = models.ForeignKey(InventoryItem, on_delete=models.CASCADE, related_name='transactions')
     transaction_type = models.CharField(max_length=1, choices=TransactionType.choices)
-    delta = models.IntegerField(help_text="Positive for restock/returns/purchase, negative for consumption")
+    delta = models.DecimalField(max_digits=14, decimal_places=3, help_text="Positive for restock/returns/purchase, negative for consumption")
     order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, related_name='inventory_transactions')
     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.SET_NULL, null=True, blank=True, related_name='inventory_transactions')
     reason = models.CharField(max_length=20, choices=WastageReason.choices, blank=True)

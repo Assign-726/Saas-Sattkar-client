@@ -3028,10 +3028,49 @@
     background: var(--brand);
   }
 
+  /* Both buttons are solid blue (shared theme), so both key badges are the see-through white one */
+  .acts .btn kbd,
   .acts .btn.s kbd {
     background: rgba(255, 255, 255, 0.2);
     color: var(--brand-on);
     border-color: transparent;
+  }
+
+  /* Send to kitchen / Settle & bill: an inner border and soft depth, so the two solid buttons read as buttons.
+     The shared theme (apple-ui.css) sets `.btn { box-shadow: none !important }`, hence the :root body prefix */
+  :root body .acts .btn {
+    border-color: rgba(0, 0, 0, 0.14) !important;
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.22),
+      inset 0 1px 0 rgba(255, 255, 255, 0.35),
+      inset 0 -2px 0 rgba(0, 0, 0, 0.16),
+      0 1px 2px rgba(15, 23, 42, 0.16),
+      0 2px 6px rgba(15, 23, 42, 0.08) !important;
+    transition: box-shadow 0.12s, transform 0.12s, filter 0.12s;
+  }
+
+  :root body .acts .btn:hover:not(:disabled) {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4),
+      inset 0 -2px 0 rgba(0, 0, 0, 0.18),
+      0 2px 4px rgba(15, 23, 42, 0.18),
+      0 4px 10px rgba(15, 23, 42, 0.1) !important;
+  }
+
+  :root body .acts .btn:active:not(:disabled) {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+      inset 0 2px 4px rgba(0, 0, 0, 0.22) !important;
+  }
+
+  :root body .acts .btn:disabled {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15) !important;
+  }
+
+  :root body .acts .btn:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
   }
 
   .flyer {
@@ -4506,42 +4545,18 @@
 </style>
 
 <!-- JSON Data Islands for POS -->
-<script id="menu-items-data" type="application/json">
-  {{ menu_items_json|safe }}
-</script>
-<script id="categories-data" type="application/json">
-  {{ categories_json|safe }}
-</script>
-<script id="top-selling-data" type="application/json">
-  {{ top_selling_json|safe }}
-</script>
-<script id="tax-settings-data" type="application/json">
-  {{ tax_settings_json|safe }}
-</script>
-<script id="existing-order-data" type="application/json">
-  {{ existing_order_json|safe }}
-</script>
-<script id="active-orders-data" type="application/json">
-  {{ active_orders_json|safe }}
-</script>
-<script id="custom-charges-data" type="application/json">
-  {{ custom_charges_json|safe }}
-</script>
-<script id="attached-receipt-data" type="application/json">
-  {{ attached_receipt_json|safe }}
-</script>
-<script id="customer-parties-data" type="application/json">
-  {{ customer_parties_json|safe }}
-</script>
-<script id="active-branch-gstin-data" type="application/json">
-  {{ active_branch_gstin_json|safe }}
-</script>
-<script id="gst-seq-info-data" type="application/json">
-  {{ gst_seq_info_json|default:'{"mode":"automatic","next_number":"","readonly":true}'|safe }}
-</script>
-<script id="excise-seq-info-data" type="application/json">
-  {{ excise_seq_info_json|default:'{"mode":"automatic","next_number":"","readonly":true}'|safe }}
-</script>
+{{ menu_items_json|json_script:"menu-items-data" }}
+{{ categories_json|json_script:"categories-data" }}
+{{ top_selling_json|json_script:"top-selling-data" }}
+{{ tax_settings_json|json_script:"tax-settings-data" }}
+{{ existing_order_json|json_script:"existing-order-data" }}
+{{ active_orders_json|json_script:"active-orders-data" }}
+{{ custom_charges_json|json_script:"custom-charges-data" }}
+{{ attached_receipt_json|json_script:"attached-receipt-data" }}
+{{ customer_parties_json|json_script:"customer-parties-data" }}
+{{ active_branch_gstin_json|json_script:"active-branch-gstin-data" }}
+{{ gst_seq_info_json|json_script:"gst-seq-info-data" }}
+{{ excise_seq_info_json|json_script:"excise-seq-info-data" }}
 <span id="serves-alcohol-data" style="display: none">
   {% if current_branch and current_branch.serves_alcohol %}
   true
@@ -6159,45 +6174,19 @@
 </div>
 
 <!-- Raw Data from Backend -->
-<script type="application/json" id="active-orders-data">
-  {% if active_orders_json %}{{ active_orders_json|safe }}{% else %}[]{% endif %}
-</script>
-<script type="application/json" id="menu-items-data">
-  {{ menu_items_json|safe }}
-</script>
-<script type="application/json" id="categories-data">
-  {% if categories_json %}{{ categories_json|safe }}{% else %}[]{% endif %}
-</script>
-<script type="application/json" id="top-selling-data">
-  {% if top_selling_json %}{{ top_selling_json|safe }}{% else %}[]{% endif %}
-</script>
-<script type="application/json" id="smart-slots-data">
-  {% if smart_slots_json %}{{ smart_slots_json|safe }}{% else %}null{% endif %}
-</script>
-<script type="application/json" id="current-slot-data">
-  {% if current_slot_json %}{{ current_slot_json|safe }}{% else %}"lunch"{% endif %}
-</script>
-<script type="application/json" id="tax-settings-data">
-  {{ tax_settings_json|safe }}
-</script>
-<script type="application/json" id="existing-order-data">
-  {% if existing_order_json %}{{ existing_order_json|safe }}{% else %}null{% endif %}
-</script>
-<script type="application/json" id="custom-charges-data">
-  {% if custom_charges_json %}{{ custom_charges_json|safe }}{% else %}[]{% endif %}
-</script>
-<script type="application/json" id="attached-receipt-data">
-  {% if attached_receipt_json %}{{ attached_receipt_json|safe }}{% else %}null{% endif %}
-</script>
-<script type="application/json" id="gst-seq-info-data">
-  {{ gst_seq_info_json|safe }}
-</script>
-<script type="application/json" id="excise-seq-info-data">
-  {{ excise_seq_info_json|safe }}
-</script>
-<script type="application/json" id="customer-parties-data">
-  {% if customer_parties_json %}{{ customer_parties_json|safe }}{% else %}[]{% endif %}
-</script>
+{{ active_orders_json|json_script:"active-orders-data" }}
+{{ menu_items_json|json_script:"menu-items-data" }}
+{{ categories_json|json_script:"categories-data" }}
+{{ top_selling_json|json_script:"top-selling-data" }}
+{{ smart_slots_json|json_script:"smart-slots-data" }}
+{{ current_slot_json|json_script:"current-slot-data" }}
+{{ tax_settings_json|json_script:"tax-settings-data" }}
+{{ existing_order_json|json_script:"existing-order-data" }}
+{{ custom_charges_json|json_script:"custom-charges-data" }}
+{{ attached_receipt_json|json_script:"attached-receipt-data" }}
+{{ gst_seq_info_json|json_script:"gst-seq-info-data" }}
+{{ excise_seq_info_json|json_script:"excise-seq-info-data" }}
+{{ customer_parties_json|json_script:"customer-parties-data" }}
 <script type="application/json" id="serves-alcohol-data">
   {% if current_branch and current_branch.serves_alcohol %}true{% else %}false{% endif %}
 </script>

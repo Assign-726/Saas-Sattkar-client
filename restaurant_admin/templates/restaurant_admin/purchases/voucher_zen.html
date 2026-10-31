@@ -1,0 +1,432 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if zen_editing %}Edit Purchase Bill{% else %}Purchase Bill{% endif %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="{% static 'restaurant_admin/purchase_zen/css/style.css' %}?v={{ zen_v }}">
+    <script src="{% static 'restaurant_admin/purchase_zen/js/theme.js' %}?v={{ zen_v }}"></script>
+</head>
+<body data-window="purchase">
+<div id="app">
+
+<!-- App bar, the same over every window. The Go box (Ctrl+K) only goes to windows; it works like every list in the
+     app: type, pick, Enter -->
+<div class="titlebar" id="appbar">
+    <!-- Back to the restaurant admin (the purchase register); the draft is kept, so the bill comes back as it was -->
+    <a href="{% url 'restaurant_admin:purchase_list' restaurant_slug=restaurant.slug %}" id="btn-back" class="btn-icon zen-back" tabindex="-1" title="Back to Purchases (draft is kept)" aria-label="Back to Purchases">
+        <span aria-hidden="true">←</span><span class="zen-back-text">Purchases</span>
+    </a>
+    <div class="go-wrap">
+        <span class="brand-mark" aria-hidden="true">◆</span>
+        <input type="text" id="go" class="go-input" autocomplete="off" spellcheck="false" enterkeyhint="go" aria-label="Go to another window">
+        <kbd class="go-kbd">Ctrl K</kbd>
+    </div>
+    <!-- Our side of the bill: our number and date fill themselves (configuration decides if the cursor stops here) -->
+    <div class="vch purchase-only">
+        <label for="inp-purno">No.</label>
+        <input type="text" id="inp-purno" class="nav-input vch-field" autocomplete="off">
+        <label for="inp-vdate">Date</label>
+        <input type="text" id="inp-vdate" class="nav-input vch-field date-input" placeholder="today" autocomplete="off">
+        <span class="date-hint" data-for="inp-vdate"></span>
+    </div>
+    <span class="bar-space"></span>
+    <span id="draft-state" class="draft-state purchase-only" aria-live="polite"></span>
+    <!-- Money paid before its bill came: a pill on the right that opens a drawer from the right — the side it is on
+         (Alt+L). Quiet until this bill's supplier has such a payment; then it says so, once -->
+    <button type="button" id="await-pill" class="await-pill purchase-only" tabindex="-1" aria-controls="await" aria-expanded="false" onclick="toggleAwait()" title="Paid, awaiting bill (Alt+L)" hidden>
+        <svg class="ap-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="ap-paper" d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8.5h6M9 12.5h4"/></svg>
+        <span id="await-count" class="ap-count">0</span>
+        <span id="await-text" class="ap-text">awaiting bill</span>
+        <kbd class="ap-kbd">Alt L</kbd>
+        <span class="ap-chev" aria-hidden="true">‹</span>
+    </button>
+    <button id="btn-full" class="btn-icon" tabindex="-1" title="Full screen (F11)" aria-label="Full screen">⛶</button>
+    <button id="btn-settings" class="btn-icon purchase-only" tabindex="-1" onclick="toggleSettings()" title="Settings (F12)" aria-label="Open settings">⚙</button>
+</div>
+
+<!-- The purchase bill: header and footer stay put, only the lines scroll -->
+<div id="screen">
+
+    <div class="workarea">
+        <div class="voucher">
+            <!-- The supplier's side, in the order the eye reads the paper: who, which bill, which day -->
+            <header class="vhead">
+                <div class="hrow">
+                    <label class="hl" for="inp-supplier">Supplier</label>
+                    <input type="text" id="inp-supplier" class="nav-input party-input" data-ledger="party" placeholder="name, Hindi name or GSTIN…" autocomplete="off">
+                    <label class="hl hl-in" for="inp-inv">Bill No.</label>
+                    <input type="text" id="inp-inv" class="nav-input hin" placeholder="as printed" autocomplete="off">
+                    <label class="hl hl-in" for="inp-date">Bill Date</label>
+                    <span class="dwrap">
+                        <input type="text" id="inp-date" class="nav-input hin date-input" placeholder="dd-mm-yyyy" autocomplete="off">
+                        <span class="date-hint" data-for="inp-date"></span>
+                    </span>
+                    <span class="hspacer"></span>
+                    <button id="btn-attach" class="attach-btn" type="button" tabindex="-1" title="Attach the bill photo / PDF (Alt+B) — or drop / paste it anywhere">
+                        <span class="clip">📎</span><span id="attach-label">Attach bill</span><kbd>Alt</kbd><kbd>B</kbd>
+                    </button>
+                    <input type="file" id="file-input" accept="image/*,application/pdf" multiple hidden>
+                </div>
+                <div class="hsub">
+                    <div id="party-sub" class="party-sub" aria-live="polite"></div>
+                    <div id="party-info" class="party-info"></div>
+                    <div id="einv-tag" class="einv-tag" hidden></div>
+                </div>
+            </header>
+
+            <div class="colhead grid-cols" aria-hidden="true">
+                <div>Item / Expense</div>
+                <div class="col-godown">Godown</div>
+                <div class="r">Quantity</div>
+                <div class="col-free r">Free</div>
+                <div class="r">Rate</div>
+                <div>per</div>
+                <div class="col-disc r">Disc %</div>
+                <div class="col-tax r">GST</div>
+                <div class="r">Amount</div>
+                <div class="col-tax r">Tax</div>
+            </div>
+
+            <!-- Lines: empty until the cursor comes down from the header -->
+            <main class="vbody">
+                <section id="items-sec" class="stage" inert>
+                    <div id="items-body"></div>
+                    <!-- Items total right under the items, before the charges — where the paper has it -->
+                    <div id="items-total" class="data-row subtotal-row" hidden>
+                        <div class="st-label">Items total <span id="st-count"></span></div>
+                        <div class="col-godown"></div>
+                        <div id="st-qty" class="st-num"></div>
+                        <div class="col-free"></div>
+                        <div></div><div></div>
+                        <div class="col-disc"></div><div class="col-tax"></div>
+                        <div id="st-amt" class="st-num st-amt"></div>
+                        <div id="st-tax" class="col-tax st-num"></div>
+                    </div>
+                    <!-- Charges & discount share the item columns: a rate means %, no rate means the amount as typed -->
+                    <section id="zen-charges" class="zen-section" inert>
+                        <div class="sec-label">Charges &amp; discount</div>
+                        <div id="charges-body"></div>
+                    </section>
+                </section>
+            </main>
+
+            <!-- Bottom right, like the paper: the bill's totals with GST head by head, as every GST bill prints them.
+                 Bottom left: the payment in one line, and the bill's note — the last stop before saving -->
+            <footer class="vfoot">
+                <div class="foot-left">
+                    <div class="foot-end">
+                        <div id="bill-diag" class="bill-diag" role="alert" hidden></div>
+                        <button type="button" id="foot-pay" class="foot-pay" tabindex="-1" onclick="openSettle()" hidden></button>
+                        <div class="foot-note">
+                            <label for="inp-remarks">Note</label>
+                            <input type="text" id="inp-remarks" class="nav-input" placeholder="optional · Enter saves the bill" enterkeyhint="done" autocomplete="off">
+                        </div>
+                    </div>
+                </div>
+                <div class="billbox" id="billbox">
+                    <div class="bb-row bb-tax" data-head="cgst" hidden><span class="bb-label">CGST</span><span class="bb-note"></span><span class="bb-val"><input type="text" inputmode="decimal" class="num bill-tax" data-fmt="money" data-head="cgst" aria-label="CGST as per supplier bill" autocomplete="off"></span></div>
+                    <div class="bb-row bb-tax" data-head="sgst" hidden><span class="bb-label">SGST</span><span class="bb-note"></span><span class="bb-val"><input type="text" inputmode="decimal" class="num bill-tax" data-fmt="money" data-head="sgst" aria-label="SGST as per supplier bill" autocomplete="off"></span></div>
+                    <div class="bb-row bb-tax" data-head="igst" hidden><span class="bb-label">IGST</span><span class="bb-note"></span><span class="bb-val"><input type="text" inputmode="decimal" class="num bill-tax" data-fmt="money" data-head="igst" aria-label="IGST as per supplier bill" autocomplete="off"></span></div>
+                    <div class="bb-row bb-tax" data-head="cess" hidden><span class="bb-label">Cess</span><span class="bb-note"></span><span class="bb-val"><input type="text" inputmode="decimal" class="num bill-tax" data-fmt="money" data-head="cess" aria-label="Cess as per supplier bill" autocomplete="off"></span></div>
+                    <div class="bb-row bb-tax" id="bb-round"><span class="bb-label">Round off</span><span class="bb-note"></span><span class="bb-val"><input type="text" inputmode="decimal" class="bill-tax bill-round" data-head="round" aria-label="Round off as per supplier bill" autocomplete="off"></span></div>
+                    <div class="bb-total">
+                        <span class="bb-grand-label">Total</span>
+                        <span id="lbl-grand" class="grand-total-val">₹ 0.00</span>
+                    </div>
+                </div>
+            </footer>
+        </div>
+
+        <!-- The bill copy beside the entry: only when a photo / PDF is attached, never takes the cursor -->
+        <aside id="viewer" class="viewer" hidden aria-label="Attached bill">
+            <div class="viewer-head">
+                <span class="viewer-title">Bill copy</span>
+                <div id="viewer-tabs" class="viewer-tabs"></div>
+                <span class="hspacer"></span>
+                <button id="btn-read" class="v-btn v-primary" type="button" tabindex="-1" title="Read the bill and fill the entry">Read &amp; fill</button>
+                <button id="btn-addpage" class="v-btn" type="button" tabindex="-1">+ Page</button>
+                <button id="btn-remove-file" class="v-btn" type="button" tabindex="-1">Remove</button>
+                <button id="btn-hide-viewer" class="btn-icon" type="button" tabindex="-1" title="Hide (Alt+B)" aria-label="Hide bill copy">✕</button>
+            </div>
+            <div id="viewer-stage" class="viewer-stage"></div>
+            <div class="viewer-foot">scroll = zoom · drag = move · double-click = fit · <kbd>Alt</kbd>+<kbd>B</kbd> hide</div>
+        </aside>
+    </div>
+
+    <!-- Touch (tablet / phone): the moves the Enter key and shortcuts make on a keyboard -->
+    <nav id="touchbar" class="touchbar" aria-label="Bill steps">
+        <button type="button" onclick="jumpToStep(2)">＋ Line</button>
+        <button type="button" onclick="jumpToStep(3)">Charges</button>
+        <button type="button" onclick="openSettle()">Payment</button>
+        <button type="button" class="tb-save" onclick="saveInvoice()">Save</button>
+    </nav>
+
+    <div class="hintbar">
+        <div id="ctx-hint" class="ctx-hint" aria-live="polite"></div>
+        <div class="hint-keys"><kbd>Ctrl</kbd>+<kbd>K</kbd> go to <kbd>F1</kbd> help <kbd>Ctrl</kbd>+<kbd>S</kbd> save <kbd>Alt</kbd>+<kbd>B</kbd> bill copy <kbd>Alt</kbd>+<kbd>N</kbd> new <kbd>F12</kbd> settings</div>
+    </div>
+</div>
+
+<!-- The other windows (sale, receipt…) are built separately; here only their place exists -->
+<div id="other-window" class="other-window" hidden><div id="ow-name" class="ow-name"></div></div>
+
+</div>
+
+<div id="suggest" role="listbox" hidden></div>
+<div id="drop-zone" class="drop-zone" hidden><div>Drop the bill photo or PDF</div></div>
+
+<!-- Payment: only how the bill is paid. Enter on the last box keeps it with the bill — saving is the bill's own step -->
+<div id="settle" class="settle-overlay" hidden inert>
+    <div class="settle-card" role="dialog" aria-modal="true" aria-labelledby="settle-title">
+        <div class="settle-head">
+            <div>
+                <h2 id="settle-title">Payment</h2>
+                <div id="settle-sub" class="settle-sub"></div>
+            </div>
+            <div class="settle-grand"><span class="total-label">Bill total</span><b id="settle-grand">₹ 0.00</b></div>
+        </div>
+
+        <div class="settle-sec">Paid now <span class="hint">blank Enter = nothing paid</span></div>
+        <div id="pay-body"></div>
+
+        <div id="credit-block" class="credit-block" hidden>
+            <!-- Due: days or the date — whichever the operator has; the other is worked out from the bill date -->
+            <div class="credit-line">
+                <span class="credit-tag">Udhaar</span>
+                <b id="lbl-credit">₹ 0.00</b>
+                <label class="due-label" for="inp-due">Due in</label>
+                <input type="text" id="inp-due" class="nav-input due-input due-days" inputmode="decimal" placeholder="15" autocomplete="off">
+                <span class="due-unit">days</span>
+                <label class="due-label due-or" for="inp-duedate">or on</label>
+                <input type="text" id="inp-duedate" class="nav-input due-input due-on" placeholder="dd-mm-yyyy" autocomplete="off">
+                <span id="due-date" class="due-date"></span>
+            </div>
+            <div id="terms-extra" class="terms" hidden>
+                <div class="pf"><span class="pf-label">Interest % a year</span><input type="text" id="inp-interest" class="nav-input num" data-fmt="pct" inputmode="decimal" placeholder="0" autocomplete="off"></div>
+                <div class="pf"><span class="pf-label">Late fee ₹</span><input type="text" id="inp-latefee" class="nav-input num" data-fmt="money" inputmode="decimal" placeholder="—" autocomplete="off"></div>
+                <div id="interest-note"></div>
+            </div>
+        </div>
+
+        <ul id="settle-warn"></ul>
+
+        <div class="settle-actions">
+            <span class="hint"><kbd>Esc</kbd> back · <kbd>Ctrl</kbd>+<kbd>S</kbd> saves the bill</span>
+            <!-- The payment's last stop: Enter walks here, Enter on it = done -->
+            <button id="btn-accept" type="button" class="accept nav-input" onclick="confirmPayment()">Done <kbd>Enter</kbd></button>
+        </div>
+    </div>
+</div>
+
+<!-- Save this bill? — once, at the end: what will be saved, so the last look checks the paper. Keyboard or mouse -->
+<div id="confirm" class="confirm-overlay" hidden>
+    <div class="confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-what">
+        <h2 id="confirm-title">Save this bill?</h2>
+        <div id="confirm-what" class="confirm-what"></div>
+        <div class="confirm-total"><span class="total-label">Total</span><b id="confirm-total"></b></div>
+        <div id="confirm-pay" class="confirm-pay"></div>
+        <div class="confirm-actions">
+            <button id="btn-confirm-no" type="button" class="btn-back" onclick="closeConfirm()">Back <kbd>Esc</kbd></button>
+            <button id="btn-confirm-yes" type="button" class="accept" onclick="confirmYes()">Save <kbd>Enter</kbd></button>
+        </div>
+    </div>
+</div>
+
+<!-- Paid, awaiting bill (Alt+L): money given before its bill came. A drawer from the right, over the bill (which stays in
+     sight): amount first, then who, when and the note. Enter links the highlighted one to this bill -->
+<div id="await-scrim" class="await-scrim" hidden onclick="toggleAwait(false)"></div>
+<aside id="await" class="await" hidden inert tabindex="-1" aria-labelledby="await-title">
+    <header class="aw-head">
+        <div>
+            <h2 id="await-title">Paid, awaiting bill</h2>
+            <p class="aw-sub">Money given before the bill came — link it when its bill is entered, so it is never paid twice</p>
+        </div>
+        <button type="button" class="btn-icon" tabindex="-1" onclick="toggleAwait(false)" aria-label="Close">✕</button>
+    </header>
+    <div class="aw-search">
+        <input type="text" id="aw-q" placeholder="supplier, amount or note…" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="aw-list" aria-label="Find a payment">
+    </div>
+    <div id="aw-list" class="aw-list" role="listbox" aria-label="Payments awaiting their bill"></div>
+    <footer class="aw-foot"><kbd>↑</kbd><kbd>↓</kbd> choose · <kbd>Enter</kbd> link to this bill · <kbd>Esc</kbd> close</footer>
+</aside>
+
+<!-- Save confirmation card (fades on its own or on any key) -->
+<div id="save-card" class="save-card" role="status" hidden>
+    <div class="save-card-inner">
+        <div class="save-tick"><svg viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="25"/><path d="M15 27.5l7.2 7.2L37.5 19"/></svg></div>
+        <div class="sc-no"></div>
+        <div class="sc-party"></div>
+        <div class="sc-total"></div>
+        <div class="sc-status"></div>
+        <div class="sc-next">Next bill is ready — just start typing the supplier</div>
+    </div>
+</div>
+
+<!-- Keyboard help (F1) -->
+<div id="help" class="help-overlay" role="dialog" aria-modal="true" aria-labelledby="help-title" hidden>
+    <div class="help-card">
+        <h2 id="help-title">Keyboard shortcuts</h2>
+        <p>Your hands never need to leave the keyboard. <kbd>F1</kbd> or <kbd>Esc</kbd> closes this.</p>
+        <div class="help-grid">
+            <div class="help-group">
+                <h3>Fastest way</h3>
+                <div class="help-row"><span>Whole line: item, qty + unit, rate</span><span><kbd>atta 10k 1450</kbd></span></div>
+                <div class="help-row"><span>Expense: name and amount</span><span><kbd>ca fee 15000</kbd></span></div>
+                <div class="help-row"><span>Type every line where the cursor is — a charge goes below the items, an item goes up</span><span><kbd>bhada 200</kbd></span></div>
+                <div class="help-row"><span>e-invoice QR: scan it on the Supplier box</span><span>scanner / paste</span></div>
+            </div>
+            <div class="help-group">
+                <h3>Move around</h3>
+                <div class="help-row"><span>Next field</span><span><kbd>Enter</kbd></span></div>
+                <div class="help-row"><span>Previous field — never deletes</span><span><kbd>⌫</kbd></span></div>
+                <div class="help-row"><span>Straight up / down the column, as far as it goes — never turns aside</span><span><kbd>↑</kbd><kbd>↓</kbd></span></div>
+                <div class="help-row"><span>Along the line (a box being edited: its caret first)</span><span><kbd>←</kbd><kbd>→</kbd></span></div>
+                <div class="help-row"><span>Edit inside a box · clear it</span><span><kbd>F2</kbd> · <kbd>Del</kbd></span></div>
+                <div class="help-row"><span>Supplier · items · charges · payment · note</span><span><kbd>Alt</kbd>+<kbd>1</kbd>…<kbd>5</kbd></span></div>
+            </div>
+            <div class="help-group">
+                <h3>Lists</h3>
+                <div class="help-row"><span>Type any part, the Hindi name, any spelling</span><span><kbd>majduri</kbd></span></div>
+                <div class="help-row"><span>Full list · move in it · pick</span><span><kbd>Space</kbd> or <kbd>Alt</kbd>+<kbd>↓</kbd> · <kbd>↑</kbd><kbd>↓</kbd> · <kbd>Enter</kbd></span></div>
+                <div class="help-row"><span>Create — always the first row</span><span><kbd>Alt</kbd>+<kbd>C</kbd></span></div>
+                <div class="help-row"><span>End of List — second row, or type "end"</span><span>blank <kbd>Enter</kbd></span></div>
+            </div>
+            <div class="help-group">
+                <h3>Quantity &amp; rate</h3>
+                <div class="help-row"><span>Unit with the number (first letter is enough)</span><span><kbd>15kg</kbd> <kbd>5b</kbd></span></div>
+                <div class="help-row"><span>Rate per another unit: the "per" box after the rate — its list shows what each unit makes</span><span><kbd>k</kbd> · <kbd>Space</kbd> · <kbd>29/kg</kbd></span></div>
+                <div class="help-row"><span>Bill shows only the amount</span><span><kbd>Del</kbd> rate, type amount</span></div>
+                <div class="help-row"><span>Free goods on the bill (10 + 1 free) — not charged</span><span><kbd>10+1</kbd> · <kbd>2b+6p</kbd></span></div>
+                <div class="help-row"><span>Expiry: the date as printed, month / year, or the shelf life from the bill date</span><span><kbd>15.11.26</kbd> <kbd>11/26</kbd> <kbd>6m</kbd></span></div>
+            </div>
+            <div class="help-group">
+                <h3>Charges, bill box, bill copy</h3>
+                <div class="help-row"><span>Rate typed = % of its lines · no rate = fixed amount</span><span><kbd>2</kbd> → 2 %</span></div>
+                <div class="help-row"><span>A charge for some lines only (labour on the atta): its "on" box</span><span><kbd>→</kbd> <kbd>1</kbd> · <kbd>1,3</kbd> · <kbd>atta</kbd></span></div>
+                <div class="help-row"><span>How a charge is taxed: shown under it while the cursor is on it</span><span>₹725 at 0% · ₹32 at 5%</span></div>
+                <div class="help-row"><span>GST or round off differs from the paper: type it as printed</span><span><kbd>Alt</kbd>+<kbd>T</kbd></span></div>
+                <div class="help-row"><span>Attach / show / hide the bill photo or PDF</span><span><kbd>Alt</kbd>+<kbd>B</kbd></span></div>
+                <div class="help-row"><span>Settings — move · on/off · close</span><span><kbd>F12</kbd> <kbd>↑</kbd><kbd>↓</kbd> <kbd>Space</kbd> <kbd>Esc</kbd></span></div>
+                <div class="help-row"><span>Go to another window (sale, receipt…) — this bill stays</span><span><kbd>Ctrl</kbd>+<kbd>K</kbd></span></div>
+                <div class="help-row"><span>Paid, awaiting bill — the drawer on the right: link one to this bill</span><span><kbd>Alt</kbd>+<kbd>L</kbd></span></div>
+            </div>
+            <div class="help-group">
+                <h3>Payment, note, save</h3>
+                <div class="help-row"><span>Payment opens after the charges — its last stop is Done</span><span><kbd>Alt</kbd>+<kbd>4</kbd></span></div>
+                <div class="help-row"><span>Udhaar due: the days, or the date — the other is worked out</span><span><kbd>15</kbd> · <kbd>15.11</kbd></span></div>
+                <div class="help-row"><span>Note, Enter → "Save this bill?" Enter · Ctrl+S saves straight away</span><span><kbd>Enter</kbd> <kbd>Enter</kbd> · <kbd>Ctrl</kbd>+<kbd>S</kbd></span></div>
+                <div class="help-row"><span>Delete line · undo · new bill</span><span><kbd>Ctrl</kbd>+<kbd>Del</kbd> · <kbd>Ctrl</kbd>+<kbd>Z</kbd> · <kbd>Alt</kbd>+<kbd>N</kbd>×2</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<!-- SETTINGS (F12): every row is reached with ↑ ↓ and switched with Space / Enter; the mouse works too -->
+<aside id="settings-panel" inert aria-label="Settings">
+    <div class="settings-head">
+        <h2>Settings</h2>
+        <button onclick="toggleSettings(false)" class="btn-icon" tabindex="-1" aria-label="Close settings">✕</button>
+    </div>
+    <div class="settings-keys"><kbd>↑</kbd><kbd>↓</kbd> move <kbd>Space</kbd> on / off <kbd>←</kbd><kbd>→</kbd> theme <kbd>Esc</kbd> close</div>
+
+    <div class="setting-group">Appearance</div>
+    <div class="setting-item">
+        <div><span>Theme</span><span class="setting-desc">Light reads best in a bright store room; Auto follows the system</span></div>
+        <div id="cfg-theme" class="seg set-ctl" role="radiogroup" aria-label="Theme" tabindex="0" data-value="auto">
+            <button type="button" role="radio" data-v="auto" tabindex="-1" onclick="setTheme('auto')">Auto</button>
+            <button type="button" role="radio" data-v="dark" tabindex="-1" onclick="setTheme('dark')">Dark</button>
+            <button type="button" role="radio" data-v="light" tabindex="-1" onclick="setTheme('light')">Light</button>
+        </div>
+    </div>
+
+    <div class="setting-group">Entry</div>
+    <label class="setting-item">
+        <div><span>Start at the Supplier</span><span class="setting-desc">Our Purchase No. and Date fill themselves and the cursor skips them — click either one to change it</span></div>
+        <span class="toggle-switch"><input type="checkbox" id="cfg-skipvch" class="set-ctl" onchange="applyConfig()" checked><span class="slider"></span></span>
+    </label>
+
+    <div class="setting-group">Udhaar</div>
+    <label class="setting-item">
+        <div><span>Interest &amp; late fee</span><span class="setting-desc">Ask for interest and a late fee on udhaar bills</span></div>
+        <span class="toggle-switch"><input type="checkbox" id="cfg-interest" class="set-ctl" onchange="applyConfig()"><span class="slider"></span></span>
+    </label>
+
+    <div class="setting-group">Columns</div>
+    <label class="setting-item">
+        <div><span>Godown / Location</span><span class="setting-desc">Which store each line goes to</span></div>
+        <span class="toggle-switch"><input type="checkbox" id="cfg-godown" class="set-ctl" onchange="applyConfig()"><span class="slider"></span></span>
+    </label>
+    <label class="setting-item">
+        <div><span>Line Discount</span><span class="setting-desc">Discount % on each line</span></div>
+        <span class="toggle-switch"><input type="checkbox" id="cfg-disc" class="set-ctl" onchange="applyConfig()"><span class="slider"></span></span>
+    </label>
+    <label class="setting-item">
+        <div><span>Line GST</span><span class="setting-desc">Show GST % and tax on each line, and allow changing the rate</span></div>
+        <span class="toggle-switch"><input type="checkbox" id="cfg-tax" class="set-ctl" onchange="applyConfig()"><span class="slider"></span></span>
+    </label>
+    <label class="setting-item">
+        <div><span>Line Remarks</span><span class="setting-desc">A note under each line</span></div>
+        <span class="toggle-switch"><input type="checkbox" id="cfg-remark" class="set-ctl" onchange="applyConfig()"><span class="slider"></span></span>
+    </label>
+
+    <div class="setting-group">Packed goods</div>
+    <label class="setting-item">
+        <div><span>Free / Scheme Qty</span><span class="setting-desc">A Free box after the qty, for bills that print free goods — or type 10+1 in the qty. Not charged; it lowers what each one costs</span></div>
+        <span class="toggle-switch"><input type="checkbox" id="cfg-free" class="set-ctl" onchange="applyConfig()"><span class="slider"></span></span>
+    </label>
+    <label class="setting-item">
+        <div><span>MRP</span><span class="setting-desc">On items sold as bought (water, cold drinks): the last MRP fills in, a price above it is flagged, a new MRP is pointed out</span></div>
+        <span class="toggle-switch"><input type="checkbox" id="cfg-mrp" class="set-ctl" onchange="applyConfig()"><span class="slider"></span></span>
+    </label>
+    <label class="setting-item">
+        <div><span>Batch &amp; Expiry</span><span class="setting-desc">On items that track them (dairy, sauces, frozen) — the expiry fills from the shelf life; type the date only when the bill or packet shows it</span></div>
+        <span class="toggle-switch"><input type="checkbox" id="cfg-exp" class="set-ctl" onchange="applyConfig()"><span class="slider"></span></span>
+    </label>
+
+    <div class="setting-group">Totals</div>
+    <label class="setting-item">
+        <div><span>Rates Include GST</span><span class="setting-desc">Rate / amount typed already has GST in it (MRP-style bills)</span></div>
+        <span class="toggle-switch"><input type="checkbox" id="cfg-incl" class="set-ctl" onchange="applyConfig()"><span class="slider"></span></span>
+    </label>
+    <label class="setting-item">
+        <div><span>Auto Round Off</span><span class="setting-desc">Round the total to the nearest ₹ — a bill rounded another way: Alt+T, type its round off</span></div>
+        <span class="toggle-switch"><input type="checkbox" id="cfg-round" class="set-ctl" onchange="applyConfig()" checked><span class="slider"></span></span>
+    </label>
+</aside>
+
+<!-- Admin menu drawer: the small arrow on the left edge slides the admin sidebar in over the bill (the bill stays as
+     it is; the draft is kept if a menu link is opened) -->
+<button type="button" id="zen-nav-handle" class="zen-nav-handle" tabindex="-1" title="Open admin menu (Alt+M)" aria-label="Open admin menu" aria-controls="zen-nav" aria-expanded="false">
+    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</button>
+<div id="zen-nav-backdrop" class="zen-nav-backdrop" hidden></div>
+<aside id="zen-nav" class="zen-nav" aria-label="Admin menu" aria-hidden="true" data-src="{% url 'restaurant_admin:purchase_sidebar_panel' restaurant_slug=restaurant.slug %}">
+    <iframe id="zen-nav-frame" title="Admin menu" tabindex="-1"></iframe>
+    <button type="button" id="zen-nav-close" class="zen-nav-close" tabindex="-1" title="Close menu (Esc)" aria-label="Close admin menu">
+        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+</aside>
+
+{{ zen_boot|json_script:"zen-boot" }}
+<script>
+// Editing a saved bill: its screen state is put in as this bill's draft, so it opens exactly as it was entered
+(function () {
+    try {
+        const boot = JSON.parse(document.getElementById('zen-boot').textContent);
+        const key = 'elite-erp-draft:' + boot.draftScope;
+        if (boot.editSnapshot && !localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(boot.editSnapshot));
+    } catch (err) { /* storage unavailable: the bill opens empty */ }
+})();
+</script>
+<script src="{% static 'restaurant_admin/purchase_zen/js/ledger.js' %}?v={{ zen_v }}"></script>
+<script src="{% static 'restaurant_admin/purchase_zen/js/app.js' %}?v={{ zen_v }}"></script>
+<script src="{% static 'restaurant_admin/purchase_zen/js/shell.js' %}?v={{ zen_v }}"></script>
+<script src="{% static 'restaurant_admin/purchase_zen/js/bridge.js' %}?v={{ zen_v }}"></script>
+</body>
+</html>

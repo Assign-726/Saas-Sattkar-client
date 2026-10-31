@@ -766,6 +766,31 @@
     {% block extra_head %}{% endblock %}
     <link rel="stylesheet" href="{% static 'css/theme-dark.css' %}?v=3.4">
     <link rel="stylesheet" href="{% static 'css/apple-ui.css' %}?v=2.1">
+    {% if zen_sidebar_panel %}
+    <!-- Sidebar-only mode: the slide-out menu of the full-screen purchase voucher. Only the sidebar shows, always
+         expanded; links and forms open in the whole window -->
+    <base target="_top">
+    <style>
+        html, body { overflow: hidden !important; }
+        html body .mobile-navbar, html body .main-content, html body .sidebar-backdrop,
+        html body #desktopSidebarCollapseBtn { display: none !important; }
+        html body .sidebar {
+            left: 0 !important; top: 0 !important; width: 100% !important;
+            height: 100vh !important; height: 100dvh !important;
+            transform: none !important; transition: none !important; box-shadow: none !important;
+        }
+    </style>
+    <script>
+        // Collapsed mode is remembered for the full admin; the drawer always shows the labels
+        (function () {
+            const expand = () => { document.documentElement.classList.remove('sidebar-collapsed'); if (document.body) document.body.classList.remove('sidebar-collapsed'); };
+            expand();
+            const mo = new MutationObserver(expand);
+            mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+            document.addEventListener('DOMContentLoaded', () => { expand(); mo.observe(document.body, { attributes: true, attributeFilter: ['class'] }); });
+        })();
+    </script>
+    {% endif %}
 </head>
 
 <body>
@@ -1905,7 +1930,9 @@
         </div>
 
         <!-- Notification centre: full-height drawer + live engine -->
-        {% if is_kitchen_user %}
+        {% if zen_sidebar_panel %}
+        {# the drawer menu needs no notifications of its own #}
+        {% elif is_kitchen_user %}
         {% include 'notifications/_drawer.html' with nt_module='kitchen' %}
         {% elif not is_club_user and not is_hotel_user %}
         {% include 'notifications/_drawer.html' with nt_module='restaurant' %}

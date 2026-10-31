@@ -82,7 +82,7 @@ class MasterBillingService:
     def get_config():
         # Prefer configured URL, fallback to localhost:3000
         master_url = getattr(settings, 'MASTER_DASHBOARD_URL', None) or os.environ.get('MASTER_DASHBOARD_URL', 'http://localhost:3000')
-        master_secret = getattr(settings, 'MASTER_API_SECRET', None) or os.environ.get('MASTER_API_SECRET', 'T9@fK!xR!!72m$Qv%Lp&6Za!Wc@3Ns')
+        master_secret = getattr(settings, 'MASTER_API_SECRET', None) or os.environ.get('MASTER_API_SECRET', '')
         return master_url.rstrip('/'), master_secret
 
     @classmethod
