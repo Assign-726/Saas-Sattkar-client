@@ -551,7 +551,13 @@
                     <i class="bi bi-receipt"></i> <span class="d-none d-xl-inline">Invoice</span>
                   </a>
 
-                  <!-- Edit PO -->
+                  <!-- Edit PO: a voucher-screen purchase reopens in full; an older one edits its header -->
+                  {% if po.voucher_data %}
+                  <a href="{% url 'restaurant_admin:purchase_voucher_edit' restaurant_slug=restaurant.slug pk=po.id %}"
+                     class="btn btn-sm btn-outline-primary fw-semibold px-2" title="Edit Purchase Voucher">
+                    <i class="bi bi-pencil"></i> <span class="d-none d-xl-inline">Edit</span>
+                  </a>
+                  {% else %}
                   <button type="button" class="btn btn-sm btn-outline-primary fw-semibold px-2"
                           data-id="{{ po.id }}"
                           data-invoice="{{ po.invoice_number|escapejs }}"
@@ -564,6 +570,7 @@
                           title="Edit Purchase Record">
                     <i class="bi bi-pencil"></i> <span class="d-none d-xl-inline">Edit</span>
                   </button>
+                  {% endif %}
                 </div>
               </td>
             </tr>

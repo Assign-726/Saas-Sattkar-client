@@ -45,6 +45,18 @@ class Table(models.Model):
     position_x = models.IntegerField(default=0, null=True, blank=True)
     position_y = models.IntegerField(default=0, null=True, blank=True)
     rotation = models.IntegerField(default=0, help_text="Rotation in degrees (0, 90, 180, 270)")
+    master_table = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='linked_tables',
+        help_text="Primary master table if this table is merged/linked for a party or event"
+    )
+    party_name = models.CharField(max_length=150, blank=True, default='', help_text="Event or party name e.g. Sharma Family Party")
+    party_host = models.CharField(max_length=150, blank=True, default='', help_text="Party host customer name")
+    party_phone = models.CharField(max_length=30, blank=True, default='', help_text="Party host contact number")
+    party_notes = models.TextField(blank=True, default='', help_text="Special instructions / notes for party")
 
     class Meta:
         unique_together = (
@@ -222,31 +234,79 @@ class Table(models.Model):
         """Prefetch for lists of tables: ``prefetch_related(Table.active_orders_prefetch())``
         lets ``current_status`` answer without a query per table."""
         from django.db.models import Prefetch
-        return Prefetch('orders', to_attr='_active_orders', queryset=Order.objects.exclude(status__in=['C', 'DRAFT'])
-                        .exclude(payment_status__in=['F', 'paid', 'P']).only('id', 'table_id', 'status', 'ready_at'))
+        from django.utils import timezone
+        cutoff = timezone.now() - timezone.timedelta(hours=18)
+        return Prefetch(
+            'orders',
+            to_attr='_active_orders',
+            queryset=Order.objects.exclude(status__in=[Order.OrderStatus.CANCELLED, Order.OrderStatus.COMPLETED, Order.OrderStatus.DRAFT])
+                                  .exclude(payment_status=Order.PaymentStatus.FAILED)
+                                  .filter(order_time__gte=cutoff)
+                                  .only('id', 'table_id', 'status', 'payment_status', 'ready_at', 'order_time')
+        )
+
+    @property
+    def effective_party_name(self):
+        return self.party_name or (self.master_table.party_name if self.master_table else '')
+
+    @property
+    def effective_party_host(self):
+        return self.party_host or (self.master_table.party_host if self.master_table else '')
+
+    @property
+    def effective_party_phone(self):
+        return self.party_phone or (self.master_table.party_phone if self.master_table else '')
 
     @property
     def current_status(self):
-        # Active orders that are NOT cancelled, NOT draft, NOT failed, and NOT fully paid
-        active_orders = getattr(self, '_active_orders', None)
-        if active_orders is None:
-            active_orders = list(self.orders.exclude(status__in=['C', 'DRAFT']).exclude(payment_status__in=['F', 'paid', 'P'])
-                                 .only('id', 'status', 'ready_at'))
-        if not active_orders:
-            return 'BLANK'
-
-        # Any SERVED order means billed / waiting for payment
-        if any(o.status == 'S' for o in active_orders):
-            return 'PRINTED'
-
+        # Determine live table status based on active dining orders
         from django.utils import timezone
         now = timezone.now()
-        # Still in the kitchen: pending and not yet ready
-        for o in active_orders:
-            is_ready = (o.status in ['READY', 'PR']) or (o.ready_at is not None and o.ready_at <= now)
-            if o.status == 'P' and not is_ready:
-                return 'RUNNING_KOT'
-        # Out of the kitchen, on the way to the table / running
+        cutoff = now - timezone.timedelta(hours=18)
+
+        active_orders = getattr(self, '_active_orders', None)
+        if active_orders is None:
+            active_orders = list(
+                self.orders.exclude(status__in=[Order.OrderStatus.CANCELLED, Order.OrderStatus.COMPLETED, Order.OrderStatus.DRAFT])
+                           .exclude(payment_status=Order.PaymentStatus.FAILED)
+                           .filter(order_time__gte=cutoff)
+                           .only('id', 'table_id', 'status', 'payment_status', 'ready_at', 'order_time')
+            )
+
+        # If this table is linked to a master table and has no active orders of its own, check master table
+        if not active_orders and self.master_table_id:
+            master = getattr(self, 'master_table', None)
+            if master:
+                master_orders = getattr(master, '_active_orders', None)
+                if master_orders is None:
+                    master_orders = list(
+                        master.orders.exclude(status__in=[Order.OrderStatus.CANCELLED, Order.OrderStatus.COMPLETED, Order.OrderStatus.DRAFT])
+                                     .exclude(payment_status=Order.PaymentStatus.FAILED)
+                                     .filter(order_time__gte=cutoff)
+                                     .only('id', 'table_id', 'status', 'payment_status', 'ready_at', 'order_time')
+                    )
+                if master_orders:
+                    active_orders = master_orders
+
+        # If no active orders
+        if not active_orders:
+            if self.party_name or self.master_table_id:
+                return 'EVENT'
+            return 'BLANK'
+
+        # 1. Any order cooking in kitchen (Pending or Preparing) -> Yellow (RUNNING_KOT)
+        if any(o.status in [Order.OrderStatus.PENDING, Order.OrderStatus.PREPARING, 'P', 'PR'] for o in active_orders):
+            return 'RUNNING_KOT'
+
+        # 2. Food served, awaiting bill settlement -> Green (PRINTED)
+        if any(o.status in [Order.OrderStatus.SERVED, 'S'] and o.payment_status not in [Order.PaymentStatus.PAID, 'paid', 'P'] for o in active_orders):
+            return 'PRINTED'
+
+        # 3. Bill paid / settled, table finishing up -> Orange (PAID)
+        if any(o.payment_status in [Order.PaymentStatus.PAID, 'paid', 'P'] for o in active_orders):
+            return 'PAID'
+
+        # 4. Out of kitchen / ready / active dining -> Blue (RUNNING)
         return 'RUNNING'
 
 class Category(models.Model):
@@ -395,8 +455,10 @@ class Order(models.Model):
         COUNTER = 'C', _('Pay at Counter')
         REFUNDED = 'refunded', _('Refunded')
 
-    customer_name = models.CharField(max_length=200)
+    customer_name = models.CharField(max_length=200, blank=True, default='Guest')
     phone = models.CharField(max_length=20, blank=True, default='')
+    email = models.EmailField(blank=True, default='', max_length=254, help_text="Optional customer email")
+    delivery_address = models.TextField(blank=True, default='', help_text="Optional delivery / street address")
     image = models.ImageField(upload_to='order_images', blank=True, null=True)
     table_number = models.PositiveIntegerField(null=True, blank=True, help_text="Deprecated: Use 'table' ForeignKey instead")
     table = models.ForeignKey(Table, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
@@ -454,6 +516,18 @@ class Order(models.Model):
     event_date = models.DateField(null=True, blank=True)
     event_time = models.TimeField(null=True, blank=True)
     guest_count = models.PositiveIntegerField(null=True, blank=True)
+    parent_order = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sub_orders',
+        help_text="Master bill/order when multiple tables or sub-orders are merged"
+    )
+    is_master_event_order = models.BooleanField(
+        default=False,
+        help_text="Whether this order is the master tab for a multi-table party/event"
+    )
     waive_service_charge = models.BooleanField(default=False, help_text="Whether service charge was removed from this bill upon customer request")
     is_prep_paused = models.BooleanField(default=False, help_text="Whether cooking is paused in KDS")
     paused_at = models.DateTimeField(null=True, blank=True)
@@ -488,6 +562,149 @@ class Order(models.Model):
             return f"Draft #{self.id}"
         num = self.branch_order_number if self.branch_order_number is not None else self.id
         return f"ORD-{num:04d}" if num else ""
+
+    @property
+    def customer_email(self):
+        return self.email
+
+    @customer_email.setter
+    def customer_email(self, val):
+        self.email = val or ''
+
+    @property
+    def display_email(self):
+        """Returns email if set, otherwise extracts email from notes if present in legacy format."""
+        if self.email and self.email.strip():
+            return self.email.strip()
+        if self.notes:
+            import re
+            m = re.search(r'Email:\s*([^\s|\[\],;]+@[^\s|\[\],;]+)', self.notes, re.IGNORECASE)
+            if m:
+                return m.group(1).strip()
+            m2 = re.search(r'Email:\s*([^\s|\[\],;]+)', self.notes, re.IGNORECASE)
+            if m2 and m2.group(1).strip():
+                return m2.group(1).strip()
+        return ''
+
+    @property
+    def display_address(self):
+        """Returns delivery_address if set, otherwise extracts address from notes if present in legacy format."""
+        if self.delivery_address and self.delivery_address.strip():
+            return self.delivery_address.strip()
+        if self.notes:
+            import re
+            m = re.search(r'Address:\s*([^|\[\n]+)', self.notes, re.IGNORECASE)
+            if m:
+                return m.group(1).strip()
+        return ''
+
+    @property
+    def clean_kitchen_notes(self):
+        """
+        Strips out 'Order Type: ...', 'Email: ...', 'Address: ...' from notes,
+        leaving only pure chef/kitchen instructions.
+        Handles both multi-round [Round X] notes and single-round notes.
+        """
+        if not self.notes:
+            return ''
+        import re
+
+        pattern = r'(\[Round\s+\d+\]:?)'
+        parts = re.split(pattern, self.notes)
+
+        cleaned_segments = []
+        current_round_tag = ''
+
+        for part in parts:
+            if not part:
+                continue
+            if re.match(pattern, part, re.IGNORECASE):
+                current_round_tag = part.strip()
+                continue
+
+            seg = part
+            seg = re.sub(r'Order Type:\s*[^|\n]+', '', seg, flags=re.IGNORECASE)
+            seg = re.sub(r'Email:\s*[^|\n]+', '', seg, flags=re.IGNORECASE)
+            seg = re.sub(r'Address:\s*[^|\n]+', '', seg, flags=re.IGNORECASE)
+            pipe_items = [p.strip() for p in seg.split('|') if p.strip()]
+            cleaned_seg = ' | '.join(pipe_items).strip(' |-\n\r\t')
+
+            if cleaned_seg:
+                if current_round_tag:
+                    cleaned_segments.append(f"{current_round_tag} {cleaned_seg}")
+                    current_round_tag = ''
+                else:
+                    cleaned_segments.append(cleaned_seg)
+            else:
+                current_round_tag = ''
+
+        return '\n'.join(cleaned_segments).strip()
+
+    @property
+    def rounds_count(self):
+        """
+        Returns number of order batches / rounds for this order.
+        """
+        max_batch = 1
+        try:
+            from django.db.models import Max
+            if hasattr(self, '_prefetched_objects_cache') and 'items' in self._prefetched_objects_cache:
+                batches = [it.kot_batch for it in self.items.all() if it.kot_batch is not None]
+                if batches:
+                    max_batch = max(max_batch, max(batches))
+            else:
+                agg = self.items.aggregate(max_b=Max('kot_batch'))
+                if agg and agg.get('max_b'):
+                    max_batch = max(max_batch, agg['max_b'])
+        except Exception:
+            pass
+        if self.notes:
+            import re
+            matches = re.findall(r'\[Round\s+(\d+)\]', self.notes, re.IGNORECASE)
+            for m in matches:
+                try:
+                    max_batch = max(max_batch, int(m))
+                except ValueError:
+                    pass
+        return max_batch
+
+    @property
+    def rounds_breakdown(self):
+        """
+        Returns a structured list of rounds and their kitchen notes:
+        [{'round': 1, 'note': '...'}, {'round': 2, 'note': '...'}]
+        """
+        if not self.notes:
+            return []
+        import re
+        pattern = r'(\[Round\s+\d+\]:?)'
+        parts = re.split(pattern, self.notes)
+
+        breakdown = []
+        current_round = 1
+
+        for part in parts:
+            if not part:
+                continue
+            m = re.match(r'\[Round\s+(\d+)\]:?', part, re.IGNORECASE)
+            if m:
+                try:
+                    current_round = int(m.group(1))
+                except ValueError:
+                    pass
+                continue
+
+            seg = part
+            seg = re.sub(r'Order Type:\s*[^|\n]+', '', seg, flags=re.IGNORECASE)
+            seg = re.sub(r'Email:\s*[^|\n]+', '', seg, flags=re.IGNORECASE)
+            seg = re.sub(r'Address:\s*[^|\n]+', '', seg, flags=re.IGNORECASE)
+            pipe_items = [p.strip() for p in seg.split('|') if p.strip()]
+            cleaned_seg = ' | '.join(pipe_items).strip(' |-\n\r\t')
+
+            if cleaned_seg:
+                breakdown.append({'round': current_round, 'note': cleaned_seg})
+
+        return breakdown
 
     def calculate_estimated_prep_minutes(self):
         """
@@ -1965,7 +2182,7 @@ class InventoryItem(models.Model):
     sku = models.CharField(max_length=100, blank=True)
     category = models.ForeignKey('InventoryCategory', on_delete=models.SET_NULL, null=True, blank=True, related_name='items')
     unit = models.CharField(max_length=50, blank=True)
-    quantity = models.IntegerField(default=0)
+    quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0)
     reorder_level = models.IntegerField(default=5)
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, null=True, blank=True)
     price_per_unit = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
@@ -1980,6 +2197,22 @@ class InventoryItem(models.Model):
     hsn_sac_code = models.CharField(max_length=20, blank=True, null=True)
     gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, null=True, blank=True)
     hsn_description = models.TextField(blank=True, null=True)
+    # --- Purchase voucher (Elite Zen) masters ---
+    class PurchaseType(models.TextChoices):
+        STOCK = 'stock', _('Kitchen / bar stock')
+        CONSUMABLE = 'consumable', _('Consumable')
+        ASSET = 'asset', _('Asset')
+        SERVICE = 'service', _('Expense / service')
+
+    purchase_type = models.CharField(max_length=20, choices=PurchaseType.choices, default=PurchaseType.STOCK)
+    alias = models.CharField(max_length=255, blank=True, default='', help_text="Other names typed at entry, space separated (e.g. 'aloo alu')")
+    purchase_units = models.JSONField(default=list, blank=True, help_text="Alternate units: [{'u': 'katta', 'f': 50}] = 1 katta is 50 of the stock unit")
+    last_purchase_rate = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, help_text="Rate on the last purchase bill, per stock unit")
+    track_expiry = models.BooleanField(default=False)
+    shelf_life_days = models.PositiveIntegerField(null=True, blank=True)
+    track_batch = models.BooleanField(default=False)
+    mrp = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="MRP per piece (items sold as bought)")
+    pieces_per_unit = models.PositiveIntegerField(null=True, blank=True, help_text="Pieces in one stock unit (a crate of 24)")
     is_active = models.BooleanField(default=True)
     restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='inventory_items', null=True, blank=True)
     branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='inventory_items')
@@ -1994,8 +2227,9 @@ class InventoryItem(models.Model):
     def __str__(self):
         return self.name
 
-    def adjust(self, delta: int):
-        self.quantity = (self.quantity or 0) + int(delta)
+    def adjust(self, delta):
+        # Stock is kept to 3 decimals (2.5 kg, 0.25 ltr); whole-number callers work unchanged
+        self.quantity = (Decimal(str(self.quantity or 0)) + Decimal(str(delta or 0))).quantize(Decimal('0.001'))
         self.save(update_fields=['quantity'])
 
     @property
@@ -2100,6 +2334,12 @@ class Party(models.Model):
     address = models.TextField(blank=True, null=True)
     opening_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     balance_type = models.CharField(max_length=20, choices=BalanceType.choices, default=BalanceType.PAYABLE)
+    # --- Purchase voucher (Elite Zen) terms ---
+    alias = models.CharField(max_length=255, blank=True, default='', help_text="Other names typed at entry (Hindi / short names)")
+    credit_days = models.PositiveIntegerField(default=0, help_text="Usual udhaar period in days")
+    interest_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text="% p.a. after the due date")
+    is_msme = models.BooleanField(default=False, help_text="MSME supplier: to be paid within 45 days")
+    default_payment = models.CharField(max_length=10, choices=[('credit', 'Credit / udhaar'), ('cash', 'Pays on the spot')], default='credit')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -2265,6 +2505,31 @@ class PurchaseOrder(models.Model):
     narration = models.TextField(blank=True, default='')
     source_order = models.ForeignKey('ProcurementOrder', on_delete=models.SET_NULL, null=True, blank=True, related_name='bills')
     stock_via_grn = models.BooleanField(default=False, help_text="Stock was already taken in by a Goods Receipt Note")
+    # --- Purchase voucher (Elite Zen) ---
+    bill_date = models.DateField(null=True, blank=True, help_text="Date printed on the supplier's bill")
+    tax_regime = models.CharField(max_length=10, default='intra', help_text="intra (CGST+SGST) / inter (IGST) / none")
+    is_tax_inclusive = models.BooleanField(default=False)
+    items_gross = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    discount_before_tax = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_charges = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    sgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    igst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cess_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    discount_after_tax = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    refundable_deposits = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    round_off = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    itc_claimed = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    amount_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    credit_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    credit_days = models.PositiveIntegerField(null=True, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    interest_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    late_fee = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    notes = models.TextField(blank=True, default='')
+    einvoice_data = models.JSONField(null=True, blank=True)
+    voucher_data = models.JSONField(null=True, blank=True, help_text="The full voucher as entered (Elite Zen screen)")
+    voucher_snapshot = models.JSONField(null=True, blank=True, help_text="Screen state, to reopen the voucher for editing")
     created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -2291,18 +2556,163 @@ class PurchaseOrder(models.Model):
 class PurchaseOrderItem(models.Model):
     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='items')
     inventory_item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT, related_name='purchase_items')
-    quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    quantity = models.DecimalField(max_digits=12, decimal_places=3)
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2)
     gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, null=True, blank=True)
     hsn_code = models.CharField(max_length=50, null=True, blank=True)
     line_total = models.DecimalField(max_digits=12, decimal_places=2)
     grn_line = models.ForeignKey('GoodsReceiptLine', on_delete=models.SET_NULL, null=True, blank=True, related_name='bill_lines')
+    # --- Purchase voucher (Elite Zen) line detail ---
+    unit = models.CharField(max_length=30, blank=True, default='', help_text="Unit the quantity was typed in")
+    rate_unit = models.CharField(max_length=30, blank=True, default='', help_text="Unit the rate is per")
+    rate = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    quantity_in_stock_unit = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    free_quantity = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    free_unit = models.CharField(max_length=30, blank=True, default='')
+    free_in_stock_unit = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    stock_quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0, help_text="Billed + free, in the stock unit")
+    discount_percent = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    taxable_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cess_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    charges_share = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    charges_tax_share = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    landed_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="What the line really cost")
+    landed_rate = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, help_text="Landed cost per stock unit")
+    batch_number = models.CharField(max_length=50, blank=True, default='')
+    expiry_date = models.DateField(null=True, blank=True)
+    expiry_estimated = models.BooleanField(default=False)
+    mrp = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    godown = models.CharField(max_length=100, blank=True, default='')
+    line_remarks = models.CharField(max_length=255, blank=True, default='')
 
     class Meta:
         ordering = ['id']
 
     def __str__(self):
         return f"{self.quantity} x {self.inventory_item.name} for PO #{self.purchase_order_id}"
+
+
+class PurchaseOrderCharge(models.Model):
+    """A charge / discount / deposit line of a purchase voucher (freight, labour, trade discount, crate deposit)."""
+    purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='charges')
+    ledger = models.ForeignKey('PurchaseLedgerAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name='charge_lines')
+    name = models.CharField(max_length=100)
+    charge_type = models.CharField(max_length=20, default='charge', help_text="charge / discount / deposit")
+    stage = models.CharField(max_length=10, blank=True, default='', help_text="discount: before / after tax")
+    method = models.CharField(max_length=10, default='fixed', help_text="fixed / percent")
+    rate = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    base = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    gst_treatment = models.CharField(max_length=20, default='none', help_text="items / none / a rate")
+    gst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    applies_to = models.JSONField(null=True, blank=True, help_text="'all' or the lines it is for")
+    tax_split = models.JSONField(default=list, blank=True)
+    in_cost = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return f"{self.name} {self.amount} (PO #{self.purchase_order_id})"
+
+
+class PurchaseOrderPayment(models.Model):
+    """How a purchase voucher was settled: cash, a bank transfer / cheque, or a payment made before the bill."""
+    purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='payments')
+    mode = models.CharField(max_length=20, help_text="cash / upi / neft / rtgs / imps / cheque / linked")
+    ledger = models.ForeignKey('PurchaseLedgerAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name='payment_lines')
+    ledger_name = models.CharField(max_length=150, blank=True, default='')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reference_number = models.CharField(max_length=100, blank=True, default='')
+    payment_date = models.DateField(null=True, blank=True)
+    vendor_advance = models.ForeignKey('VendorAdvance', on_delete=models.SET_NULL, null=True, blank=True, related_name='links')
+
+    class Meta:
+        ordering = ['id']
+
+
+class PurchaseOrderAttachment(models.Model):
+    """A copy of the supplier's bill (photo / PDF), kept with the voucher."""
+    purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='purchases/bills/%Y/%m/')
+    file_name = models.CharField(max_length=255)
+    file_type = models.CharField(max_length=100, blank=True, default='')
+    file_size = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['id']
+
+
+class PurchaseLedgerAccount(models.Model):
+    """The small masters the purchase voucher picks from: cash counters, bank accounts, charges & discounts, godowns."""
+    class Kind(models.TextChoices):
+        CASH = 'cash', _('Cash in hand')
+        BANK = 'bank', _('Bank account')
+        CHARGE = 'charge', _('Charge / discount')
+        GODOWN = 'godown', _('Godown / store')
+
+    restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='purchase_ledgers')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='purchase_ledgers')
+    kind = models.CharField(max_length=10, choices=Kind.choices)
+    name = models.CharField(max_length=150)
+    alias = models.CharField(max_length=255, blank=True, default='')
+    # Charges only
+    charge_type = models.CharField(max_length=10, blank=True, default='', choices=[('charge', 'Charge (adds)'), ('discount', 'Discount (reduces)'), ('deposit', 'Refundable deposit')])
+    stage = models.CharField(max_length=10, blank=True, default='', choices=[('before', 'Before tax (on the invoice)'), ('after', 'After tax (payable only)')])
+    gst = models.CharField(max_length=10, blank=True, default='items', help_text="items = taxed with the goods (s.15(2)(c)); none; or its own rate e.g. 18")
+    default_rate = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text="Usual % (e.g. mandi commission 6)")
+    sort_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['kind', 'sort_order', 'id']
+
+    def __str__(self):
+        return f"{self.get_kind_display()}: {self.name}"
+
+
+class VendorAdvance(models.Model):
+    """Money given to a supplier before their bill was entered ('paid, awaiting bill'). A purchase links it (Alt+L)."""
+    class Mode(models.TextChoices):
+        CASH = 'cash', _('Cash')
+        UPI = 'upi', _('UPI')
+        BANK = 'bank', _('Bank transfer')
+        CHEQUE = 'cheque', _('Cheque')
+
+    restaurant = models.ForeignKey('super_admin.Restaurant', on_delete=models.CASCADE, related_name='vendor_advances')
+    branch = models.ForeignKey('super_admin.RestaurantBranch', on_delete=models.CASCADE, null=True, blank=True, related_name='vendor_advances')
+    party = models.ForeignKey(Party, on_delete=models.CASCADE, related_name='vendor_advances')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    mode = models.CharField(max_length=10, choices=Mode.choices, default=Mode.CASH)
+    paid_at = models.DateTimeField()
+    note = models.CharField(max_length=255, blank=True, default='')
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['paid_at']
+
+    def __str__(self):
+        return f"{self.party} {self.amount} ({self.paid_at:%d %b})"
+
+    def amount_left(self, exclude_po=None):
+        from django.db.models import Sum
+        qs = self.links.all()
+        if exclude_po is not None:
+            qs = qs.exclude(purchase_order=exclude_po)
+        used = qs.aggregate(s=Sum('amount'))['s'] or Decimal('0')
+        return (self.amount - used).quantize(Decimal('0.01'))
+
+
+class PurchaseVoucherSetting(models.Model):
+    """Per restaurant: does input GST come back (ITC)? 18% restaurants claim it; 5% restaurants cannot, so GST is cost."""
+    restaurant = models.OneToOneField('super_admin.Restaurant', on_delete=models.CASCADE, related_name='purchase_voucher_setting')
+    gst_credit = models.BooleanField(default=False, help_text="On: input GST is claimed (not part of item cost)")
+
+    def __str__(self):
+        return f"Purchase voucher settings — {self.restaurant}"
 
 
 class InventoryTransaction(models.Model):
@@ -2328,7 +2738,7 @@ class InventoryTransaction(models.Model):
 
     inventory_item = models.ForeignKey(InventoryItem, on_delete=models.CASCADE, related_name='transactions')
     transaction_type = models.CharField(max_length=1, choices=TransactionType.choices)
-    delta = models.IntegerField(help_text="Positive for restock/returns/purchase, negative for consumption")
+    delta = models.DecimalField(max_digits=14, decimal_places=3, help_text="Positive for restock/returns/purchase, negative for consumption")
     order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, related_name='inventory_transactions')
     purchase_order = models.ForeignKey(PurchaseOrder, on_delete=models.SET_NULL, null=True, blank=True, related_name='inventory_transactions')
     goods_receipt = models.ForeignKey('GoodsReceiptNote', on_delete=models.SET_NULL, null=True, blank=True, related_name='inventory_transactions')

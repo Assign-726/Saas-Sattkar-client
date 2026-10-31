@@ -732,11 +732,6 @@
                     <i class="fa-solid fa-file-invoice"></i> View Latest Receipt
                 </button>
                 {% endif %}
-                <!-- Reset Plan (Testing) commented out for now
-                <button type="button" class="btn secondary" onclick="resetPlanForTesting()" style="font-size: 12px; padding: 8px 14px; opacity: 0.8;" title="Reset plan back to unassigned state to re-test onboarding flow">
-                    <i class="fa-solid fa-rotate-left"></i> Reset Plan (Testing)
-                </button>
-                -->
             </div>
         </div>
 
@@ -1666,36 +1661,6 @@
                 btn.disabled = false;
                 btn.innerHTML = oldHtml;
             }
-        });
-    }
-
-    function resetPlanForTesting() {
-        if (!confirm('Reset current subscription / trial back to unassigned state? (This is for testing purposes only)')) {
-            return;
-        }
-        fetch("{% url 'super_admin:api_request_plan_upgrade' %}", {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
-            body: JSON.stringify({
-                action: 'RESET_PLAN'
-            })
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.status === 'success') {
-                showToast('Plan reset successfully! Reloading...', 'success');
-                setTimeout(() => {
-                    window.location.reload();
-                }, 800);
-            } else {
-                showToast(data.message || 'Failed to reset plan', 'error');
-            }
-        })
-        .catch(err => {
-            showToast('Network error: ' + err.message, 'error');
         });
     }
 

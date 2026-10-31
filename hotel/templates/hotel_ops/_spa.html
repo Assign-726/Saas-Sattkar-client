@@ -23,7 +23,7 @@
     <div class="ui-g360-main">
       <section class="ui-card ui-list-card">
         <div class="ui-ops-sched"><table>
-          <thead><tr><th class="tm">Time</th>{% for t in therapists %}<th>{{ t.name }}<br><small class="ui-log-sub">{{ t.skills }}</small></th>{% endfor %}</tr></thead>
+          <thead><tr><th class="tm">Time</th>{% for t in therapists %}<th>{{ t.name }}<br><small class="ui-log-sub">{% if t.title %}{{ t.title }}{% else %}{{ t.skills }}{% endif %}</small></th>{% endfor %}</tr></thead>
           <tbody>{% for row in grid %}<tr><td class="tm">{{ row.label }}</td>
             {% for c in row.cells %}{% if c.appt %}<td rowspan="{{ c.span }}"><a class="ui-ops-appt is-{{ c.appt.status|lower }}" href="#appt{{ c.appt.pk }}"><strong>{{ c.appt.guest_name }}</strong>{{ c.appt.treatment.name }}<small>{{ c.appt.start_time|time:"H:i" }}–{{ c.appt.end_time|time:"H:i" }} · {{ c.appt.get_status_display }}</small></a></td>
             {% elif c.free %}<td class="free">{% if can_edit and day >= today %}<button type="button" class="ui-ops-slot" data-ther="{{ c.therapist.pk }}" data-time="{{ c.time }}" aria-label="Book {{ c.therapist.name }} at {{ c.time }}"></button>{% endif %}</td>{% endif %}{% endfor %}
@@ -62,13 +62,84 @@
         <form method="post" action="{{ base_url }}spa/add/" class="ui-stack-form">{% csrf_token %}
           <div class="ui-field"><label for="spB">In-house guest</label><select id="spB" class="ui-input" name="booking"><option value="">Walk-in / non-resident</option>{% for b in in_house %}<option value="{{ b.pk }}">Room {{ b.room.room_number }} · {{ b.guest_name }}</option>{% endfor %}</select></div>
           <div class="ui-inline-fields"><div class="ui-field"><label for="spN">Walk-in name</label><input id="spN" class="ui-input" name="guest_name" maxlength="150"></div><div class="ui-field"><label for="spP">Mobile</label><input id="spP" class="ui-input" name="guest_phone" maxlength="30"></div></div>
-          <div class="ui-field"><label for="spT">Treatment</label><select id="spT" class="ui-input" name="treatment" required>{% for t in treatments %}<option value="{{ t.pk }}">{{ t.name }} · {{ t.duration_minutes }} min · ₹{{ t.price|inr }}</option>{% endfor %}</select></div>
-          <div class="ui-field"><label for="spH">Therapist</label><select id="spH" class="ui-input" name="therapist" required>{% for t in therapists %}<option value="{{ t.pk }}">{{ t.name }}</option>{% endfor %}</select></div>
+          <div class="ui-field"><label for="spT">Treatment</label><select id="spT" class="ui-input" name="treatment" required>{% for t in treatments %}<option value="{{ t.pk }}" data-category="{{ t.category }}">{{ t.name }} · {{ t.duration_minutes }} min · ₹{{ t.price|inr }}</option>{% endfor %}</select></div>
+          <div class="ui-field">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <label for="spH" style="margin-bottom:0">Therapist</label>
+              <span class="ui-log-sub small" id="spTherapistCount" style="font-size:0.75rem;"></span>
+            </div>
+            <select id="spH" class="ui-input" name="therapist" required>
+              <option value="auto">✨ Auto-assign Qualified Specialist</option>
+              {% for t in therapists %}
+              <option value="{{ t.pk }}" data-categories="{{ t.categories|join:',' }}">{{ t.name }}{% if t.title %} · {{ t.title }}{% endif %}</option>
+              {% endfor %}
+            </select>
+            <div id="spTherapistHint" class="small mt-1" style="display:none; color:#b45309; font-size:0.78rem;">
+              <i class="fa-solid fa-triangle-exclamation me-1"></i> No specialist explicitly assigned to this category. Auto-assign will choose an available specialist.
+            </div>
+          </div>
           <div class="ui-inline-fields"><div class="ui-field"><label for="spD">Date</label><input id="spD" class="ui-input" type="date" name="date" value="{{ day|date:'Y-m-d' }}" min="{{ today|date:'Y-m-d' }}" required></div><div class="ui-field"><label for="spS">Start</label><input id="spS" class="ui-input" type="time" name="start" step="1800" value="10:00" required></div></div>
           <div class="ui-field"><label for="spX">Notes</label><input id="spX" class="ui-input" name="notes" maxlength="255" placeholder="Allergies, preferences"></div>
           <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-spa"></i><span>Book</span></button>
         </form>
-        <script>document.querySelectorAll('.ui-ops-slot').forEach(function(b){b.addEventListener('click',function(){document.getElementById('spH').value=b.dataset.ther;document.getElementById('spS').value=b.dataset.time;var f=document.getElementById('spBook');f.scrollIntoView({behavior:'smooth',block:'start'});document.getElementById('spB').focus();});});</script>
+        <script>
+          function filterTherapistsByCategory() {
+            var spT = document.getElementById('spT');
+            var spH = document.getElementById('spH');
+            var hint = document.getElementById('spTherapistHint');
+            var countBadge = document.getElementById('spTherapistCount');
+            if (!spT || !spH) return;
+            var optSelected = spT.options[spT.selectedIndex];
+            var cat = (optSelected ? (optSelected.dataset.category || '') : '').toLowerCase().trim();
+            var qualifiedCount = 0;
+            var currentTherVal = spH.value;
+            var isCurrentStillValid = (currentTherVal === 'auto');
+
+            Array.from(spH.options).forEach(function(opt) {
+              if (opt.value === 'auto') return;
+              var cats = (opt.dataset.categories || '').toLowerCase().split(',').map(function(s){return s.trim();}).filter(Boolean);
+              // Qualified if therapist has no restrictions or includes this category
+              var isQualified = (cats.length === 0 || cats.indexOf(cat) !== -1);
+              if (isQualified) {
+                opt.hidden = false;
+                opt.disabled = false;
+                qualifiedCount++;
+                if (opt.value === currentTherVal) isCurrentStillValid = true;
+              } else {
+                opt.hidden = true;
+                opt.disabled = true;
+              }
+            });
+
+            if (!isCurrentStillValid) {
+              spH.value = 'auto';
+            }
+
+            if (countBadge) {
+              countBadge.textContent = qualifiedCount + ' qualified';
+            }
+
+            if (hint) {
+              hint.style.display = (qualifiedCount === 0) ? 'block' : 'none';
+            }
+          }
+
+          var spT = document.getElementById('spT');
+          if (spT) {
+            spT.addEventListener('change', filterTherapistsByCategory);
+            filterTherapistsByCategory();
+          }
+
+          document.querySelectorAll('.ui-ops-slot').forEach(function(b){
+            b.addEventListener('click',function(){
+              document.getElementById('spH').value=b.dataset.ther;
+              document.getElementById('spS').value=b.dataset.time;
+              var f=document.getElementById('spBook');
+              f.scrollIntoView({behavior:'smooth',block:'start'});
+              document.getElementById('spB').focus();
+            });
+          });
+        </script>
       </section>{% endif %}
     </div>
   </div>

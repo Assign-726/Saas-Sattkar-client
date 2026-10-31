@@ -89,6 +89,7 @@
     .legend-badge.printed { background-color: #C6F8BB; border: 2px solid var(--ui-green); }
     .legend-badge.paid { background-color: #FCECD3; border: 2px solid #FB923C; }
     .legend-badge.kot { background-color: #FEF08A; border: 2px solid #EAB308; }
+    .legend-badge.event { background-color: #EDE9FE; border: 2px solid #8B5CF6; }
 
     /* Zone Filter Pills */
     .zone-filter-pill {
@@ -532,6 +533,34 @@
         color: #713F12;
         box-shadow: 0 4px 12px rgba(234, 179, 8, 0.12);
     }
+    .placed-table-card.EVENT {
+        background-color: #F5F3FF;
+        border: 2.5px solid #8B5CF6;
+        color: #4C1D95;
+        box-shadow: 0 4px 14px rgba(139, 92, 246, 0.22);
+    }
+    .party-table-badge {
+        font-size: 8.5px;
+        font-weight: 700;
+        background: #7C3AED;
+        color: #ffffff;
+        padding: 1px 6px;
+        border-radius: 10px;
+        margin-top: 1px;
+        max-width: 90px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        display: inline-block;
+        box-shadow: 0 1px 3px rgba(124, 58, 237, 0.35);
+    }
+    .party-role-text {
+        font-size: 8px;
+        font-weight: 700;
+        color: #6D28D9;
+        margin-top: 1px;
+        line-height: 1;
+    }
 
     .table-inner-name {
         font-size: 14px;
@@ -750,8 +779,14 @@
             </div>
         </div>
 
-        <!-- Action Drawer Buttons -->
-        <div class="floor-header-actions">
+        <!-- Action Buttons -->
+        <div class="floor-header-actions d-flex gap-2 align-items-center flex-wrap">
+            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#mergeTablesModal">
+                <i class="fas fa-object-group me-1"></i> Merge Tables
+            </button>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#bookPartyModal" style="background: linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%); border: none; box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);">
+                <i class="fas fa-glass-cheers me-1"></i> Book Floor / Party
+            </button>
             <button type="button" class="btn btn-outline-primary" data-bs-toggle="offcanvas" data-bs-target="#addZoneOffcanvas">
                 <i class="fas fa-plus me-1"></i> Add Zone
             </button>
@@ -778,6 +813,9 @@
             </div>
             <div class="legend-item">
                 <span class="legend-badge kot"></span> Running KOT Table
+            </div>
+            <div class="legend-item">
+                <span class="legend-badge event"></span> Event / Party Booked
             </div>
         </div>
     </div>
@@ -895,13 +933,14 @@
     </div>
 </div>
 
-<!-- Offcanvas Drawers -->
+<!-- Offcanvas Drawers & Modals -->
 {% include 'restaurant_admin/tables/add_table_offcanvas.html' %}
 {% include 'restaurant_admin/tables/edit_table_offcanvas.html' %}
 {% include 'restaurant_admin/tables/add_zone_offcanvas.html' %}
+{% include 'restaurant_admin/tables/party_modals.html' %}
 
-<script type="application/json" id="floorAppTablesData">{{ all_tables_json|default:'[]'|safe }}</script>
-<script type="application/json" id="floorAppZonesData">{{ zones_json|default:'[]'|safe }}</script>
+{{ all_tables_json|json_script:"floorAppTablesData" }}
+{{ zones_json|json_script:"floorAppZonesData" }}
 <script>
 window.APP_TABLES_DATA = JSON.parse(document.getElementById('floorAppTablesData')?.textContent || '[]');
 window.APP_ZONES_DATA = JSON.parse(document.getElementById('floorAppZonesData')?.textContent || '[]');
@@ -1087,7 +1126,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
             let orderBadge = '';
             if (hasOrder) {
-                orderBadge = `<div class="table-inner-badge">${t.active_order.order_number}</div>`;
+                const isMasterLabel = t.active_order.is_master_order ? ' (Master)' : '';
+                orderBadge = `<div class="table-inner-badge">${t.active_order.order_number}${isMasterLabel}</div>`;
+            }
+
+            let partyBadge = '';
+            if (t.party_name) {
+                const roleText = t.is_master ? '★ Lead Table' : (t.master_table_name ? `↳ Linked: ${t.master_table_name}` : 'Party');
+                partyBadge = `
+                    <div class="party-table-badge" title="${t.party_name} (${t.party_host || 'Guest'})">
+                        <i class="fas fa-glass-cheers me-1"></i>${t.party_name}
+                    </div>
+                    <div class="party-role-text">${roleText}</div>
+                `;
             }
 
             const printUrl = hasOrder ? `/dashboard/${restaurantSlug}/orders/${t.active_order.id}/kot/` : '#';
@@ -1099,10 +1150,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 </button>
                 <div class="table-inner-name">${t.name}</div>
                 <div class="table-inner-cap">${t.capacity}p</div>
+                ${partyBadge}
                 ${orderBadge}
                 <div class="table-actions-pill">
                     <button type="button" class="table-action-btn edit-placed-btn" title="Edit Table Details">
                         <i class="fas fa-pencil-alt"></i>
+                    </button>
+                    <button type="button" class="table-action-btn party-placed-btn" title="${t.party_name ? 'Event: ' + t.party_name : 'Book Event / Merge'}" style="${t.party_name ? 'color:#7C3AED !important;' : ''}">
+                        <i class="fas ${t.party_name ? 'fa-glass-cheers' : 'fa-users'}"></i>
                     </button>
                     ${!isRound ? `
                         <button type="button" class="table-action-btn rotate-placed-btn" title="Rotate Table 90°">
@@ -1154,6 +1209,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     window.openEditTableDrawer(t);
                 }
             });
+
+            // Party / Event Details or Booking Click Handler
+            const partyPlacedBtn = card.querySelector('.party-placed-btn');
+            if (partyPlacedBtn) {
+                partyPlacedBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (t.party_name) {
+                        openPartyInfoModal(t);
+                    } else {
+                        openBookPartyModalForTable(t);
+                    }
+                });
+            }
 
             // Unplace Corner Button Click Handler
             card.querySelector('.unplace-corner-btn').addEventListener('click', (e) => {
@@ -1480,19 +1548,450 @@ document.addEventListener('DOMContentLoaded', function() {
         renderCanvasAndSidebar();
     });
 
+    // ==========================================
+    // PARTY & EVENT MANAGEMENT WORKFLOWS
+    // ==========================================
+    let currentSelectedPartyTable = null;
+
+    // Scope toggle in Book Party Modal
+    const scopeZoneRadio = document.getElementById('scopeZone');
+    const scopeTablesRadio = document.getElementById('scopeTables');
+    const partyZoneWrapper = document.getElementById('partyZoneWrapper');
+    const partyTablesPickerWrapper = document.getElementById('partyTablesPickerWrapper');
+    const partyZoneSelect = document.getElementById('partyZoneSelect');
+    const partyLeadTableSelect = document.getElementById('partyLeadTableSelect');
+    const partyTablesCheckboxList = document.getElementById('partyTablesCheckboxList');
+
+    function updatePartyScopeUI() {
+        if (!scopeZoneRadio) return;
+        if (scopeZoneRadio.checked) {
+            if (partyZoneWrapper) partyZoneWrapper.style.display = 'block';
+            if (partyTablesPickerWrapper) partyTablesPickerWrapper.style.display = 'none';
+            populateLeadTablesForZone(partyZoneSelect ? partyZoneSelect.value : '');
+        } else {
+            if (partyZoneWrapper) partyZoneWrapper.style.display = 'none';
+            if (partyTablesPickerWrapper) partyTablesPickerWrapper.style.display = 'block';
+            populateCustomTableCheckboxes();
+        }
+    }
+
+    if (scopeZoneRadio && scopeTablesRadio) {
+        scopeZoneRadio.addEventListener('change', updatePartyScopeUI);
+        scopeTablesRadio.addEventListener('change', updatePartyScopeUI);
+    }
+
+    if (partyZoneSelect) {
+        partyZoneSelect.addEventListener('change', () => {
+            populateLeadTablesForZone(partyZoneSelect.value);
+        });
+    }
+
+    function populateLeadTablesForZone(zoneId) {
+        if (!partyLeadTableSelect) return;
+        partyLeadTableSelect.innerHTML = '<option value="">-- Auto (First Table) --</option>';
+        const zoneTables = allTables.filter(t => !zoneId || String(t.zone_id) === String(zoneId));
+        zoneTables.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = `${t.name} (${t.capacity}p)`;
+            partyLeadTableSelect.appendChild(opt);
+        });
+    }
+
+    function populateCustomTableCheckboxes() {
+        if (!partyTablesCheckboxList) return;
+        partyTablesCheckboxList.innerHTML = '';
+        allTables.forEach(t => {
+            const wrap = document.createElement('div');
+            wrap.className = 'form-check form-check-inline border rounded-2 px-2 py-1 bg-white mb-1';
+            wrap.innerHTML = `
+                <input class="form-check-input party-table-cb" type="checkbox" id="party_cb_${t.id}" value="${t.id}">
+                <label class="form-check-label small fw-semibold" for="party_cb_${t.id}">${t.name} (${t.capacity}p)</label>
+            `;
+            wrap.querySelector('input').addEventListener('change', updateLeadTableFromSelected);
+            partyTablesCheckboxList.appendChild(wrap);
+        });
+        updateLeadTableFromSelected();
+    }
+
+    function updateLeadTableFromSelected() {
+        if (!partyLeadTableSelect) return;
+        const checked = Array.from(document.querySelectorAll('.party-table-cb:checked')).map(cb => cb.value);
+        const prevVal = partyLeadTableSelect.value;
+        partyLeadTableSelect.innerHTML = '<option value="">-- Auto (First Table) --</option>';
+        allTables.filter(t => checked.includes(String(t.id))).forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = `${t.name} (${t.capacity}p)`;
+            if (String(t.id) === String(prevVal)) opt.selected = true;
+            partyLeadTableSelect.appendChild(opt);
+        });
+    }
+
+    // Select all button in custom tables
+    const partySelectAllBtn = document.getElementById('partySelectAllBtn');
+    if (partySelectAllBtn) {
+        partySelectAllBtn.addEventListener('click', () => {
+            const cbs = document.querySelectorAll('.party-table-cb');
+            const allChecked = Array.from(cbs).every(cb => cb.checked);
+            cbs.forEach(cb => cb.checked = !allChecked);
+            partySelectAllBtn.textContent = allChecked ? 'Select All' : 'Deselect All';
+            updateLeadTableFromSelected();
+        });
+    }
+
+    // Open Book Party Modal for a specific table
+    window.openBookPartyModalForTable = function(table) {
+        if (scopeTablesRadio) {
+            scopeTablesRadio.checked = true;
+            updatePartyScopeUI();
+            const cb = document.getElementById(`party_cb_${table.id}`);
+            if (cb) cb.checked = true;
+            updateLeadTableFromSelected();
+            if (partyLeadTableSelect) partyLeadTableSelect.value = table.id;
+        }
+        const modalEl = document.getElementById('bookPartyModal');
+        if (modalEl) {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
+    };
+
+    // Open Book Party Modal from header button
+    const bookPartyModalEl = document.getElementById('bookPartyModal');
+    if (bookPartyModalEl) {
+        bookPartyModalEl.addEventListener('show.bs.modal', () => {
+            if (currentZoneFilter && currentZoneFilter !== 'all' && partyZoneSelect) {
+                partyZoneSelect.value = currentZoneFilter;
+            }
+            updatePartyScopeUI();
+        });
+    }
+
+    // Submit Book Party API
+    const btnSubmitBookParty = document.getElementById('btnSubmitBookParty');
+    if (btnSubmitBookParty) {
+        btnSubmitBookParty.addEventListener('click', () => {
+            const isZone = scopeZoneRadio ? scopeZoneRadio.checked : true;
+            const zoneId = partyZoneSelect ? partyZoneSelect.value : '';
+            const selectedTableIds = Array.from(document.querySelectorAll('.party-table-cb:checked')).map(cb => parseInt(cb.value));
+            const leadTableId = partyLeadTableSelect ? partyLeadTableSelect.value : '';
+            const partyName = document.getElementById('partyEventName')?.value.trim();
+            const partyHost = document.getElementById('partyHostName')?.value.trim();
+            const partyPhone = document.getElementById('partyHostPhone')?.value.trim();
+            const partyNotes = document.getElementById('partyNotes')?.value.trim();
+
+            if (isZone && !zoneId) {
+                alert('Please select a Zone/Floor.');
+                return;
+            }
+            if (!isZone && selectedTableIds.length === 0) {
+                alert('Please select at least one table for the party.');
+                return;
+            }
+            if (!partyName && !partyHost) {
+                alert('Please enter a Party/Event Name or Host Customer Name.');
+                return;
+            }
+
+            btnSubmitBookParty.disabled = true;
+            btnSubmitBookParty.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Reserving...';
+
+            fetch("{% url 'restaurant_admin:floor_plan_book_party_api' restaurant_slug=restaurant_slug %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    scope: isZone ? 'zone' : 'tables',
+                    zone_id: zoneId,
+                    table_ids: selectedTableIds,
+                    lead_table_id: leadTableId,
+                    party_name: partyName,
+                    party_host: partyHost,
+                    party_phone: partyPhone,
+                    party_notes: partyNotes
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                btnSubmitBookParty.disabled = false;
+                btnSubmitBookParty.innerHTML = '<i class="fas fa-check-circle me-1"></i> Confirm &amp; Reserve Floor';
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('bookPartyModal'))?.hide();
+                    document.getElementById('bookPartyForm')?.reset();
+                    fetchFloorPlanData();
+                } else {
+                    alert('Error booking party: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(err => {
+                btnSubmitBookParty.disabled = false;
+                btnSubmitBookParty.innerHTML = '<i class="fas fa-check-circle me-1"></i> Confirm &amp; Reserve Floor';
+                console.error(err);
+                alert('Failed to connect to server.');
+            });
+        });
+    }
+
+    // ==========================================
+    // MERGE TABLES MODAL LOGIC
+    // ==========================================
+    const mergeTablesModalEl = document.getElementById('mergeTablesModal');
+    const mergeMasterSelect = document.getElementById('mergeMasterTableSelect');
+    const mergeChildContainer = document.getElementById('mergeChildTablesCheckboxList');
+
+    if (mergeTablesModalEl) {
+        mergeTablesModalEl.addEventListener('show.bs.modal', () => {
+            if (!mergeMasterSelect || !mergeChildContainer) return;
+            mergeMasterSelect.innerHTML = '<option value="">-- Choose Master Table --</option>';
+            allTables.filter(t => t.is_placed).forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.id;
+                opt.textContent = `${t.name} (${t.zone_name || 'No Zone'})`;
+                mergeMasterSelect.appendChild(opt);
+            });
+            renderMergeChildCheckboxes();
+        });
+    }
+
+    if (mergeMasterSelect) {
+        mergeMasterSelect.addEventListener('change', renderMergeChildCheckboxes);
+    }
+
+    function renderMergeChildCheckboxes() {
+        if (!mergeChildContainer) return;
+        const masterId = mergeMasterSelect ? mergeMasterSelect.value : '';
+        mergeChildContainer.innerHTML = '';
+        allTables.filter(t => t.is_placed && String(t.id) !== String(masterId)).forEach(t => {
+            const wrap = document.createElement('div');
+            wrap.className = 'form-check form-check-inline border rounded-2 px-2 py-1 bg-white mb-1';
+            wrap.innerHTML = `
+                <input class="form-check-input merge-child-cb" type="checkbox" id="merge_cb_${t.id}" value="${t.id}">
+                <label class="form-check-label small fw-semibold" for="merge_cb_${t.id}">${t.name}</label>
+            `;
+            mergeChildContainer.appendChild(wrap);
+        });
+    }
+
+    const btnSubmitMergeTables = document.getElementById('btnSubmitMergeTables');
+    if (btnSubmitMergeTables) {
+        btnSubmitMergeTables.addEventListener('click', () => {
+            const masterId = mergeMasterSelect ? mergeMasterSelect.value : '';
+            const childIds = Array.from(document.querySelectorAll('.merge-child-cb:checked')).map(cb => parseInt(cb.value));
+            const groupName = document.getElementById('mergeGroupName')?.value.trim();
+
+            if (!masterId) {
+                alert('Please select a Master Table.');
+                return;
+            }
+            if (childIds.length === 0) {
+                alert('Please select at least one table to merge with the master table.');
+                return;
+            }
+
+            btnSubmitMergeTables.disabled = true;
+            btnSubmitMergeTables.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Merging...';
+
+            fetch("{% url 'restaurant_admin:floor_plan_merge_tables_api' restaurant_slug=restaurant_slug %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    master_table_id: masterId,
+                    child_table_ids: childIds,
+                    party_name: groupName
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                btnSubmitMergeTables.disabled = false;
+                btnSubmitMergeTables.innerHTML = '<i class="fas fa-link me-1"></i> Merge Tables';
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('mergeTablesModal'))?.hide();
+                    fetchFloorPlanData();
+                } else {
+                    alert('Error merging tables: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(err => {
+                btnSubmitMergeTables.disabled = false;
+                btnSubmitMergeTables.innerHTML = '<i class="fas fa-link me-1"></i> Merge Tables';
+                console.error(err);
+                alert('Failed to connect to server.');
+            });
+        });
+    }
+
+    // ==========================================
+    // PARTY INFO MODAL (VIEW / RELEASE)
+    // ==========================================
+    window.openPartyInfoModal = function(t) {
+        currentSelectedPartyTable = t;
+        const nameEl = document.getElementById('infoPartyName');
+        if (nameEl) nameEl.textContent = t.party_name || 'Event Details';
+        const subEl = document.getElementById('infoPartySubtitle');
+        if (subEl) subEl.textContent = `Assigned to Table ${t.name}`;
+        const hostEl = document.getElementById('infoHostName');
+        if (hostEl) hostEl.textContent = t.party_host || 'Walk-in / Event Guest';
+        const phoneEl = document.getElementById('infoHostPhone');
+        if (phoneEl) phoneEl.textContent = t.party_phone || 'None';
+
+        const roleBadge = document.getElementById('infoTableRole');
+        if (roleBadge) {
+            roleBadge.textContent = t.is_master ? '★ Lead Master Table' : '↳ Linked Child Table';
+            roleBadge.className = t.is_master ? 'badge bg-success px-2 py-1' : 'badge bg-primary px-2 py-1';
+        }
+        const masterNameEl = document.getElementById('infoMasterName');
+        if (masterNameEl) {
+            masterNameEl.textContent = t.is_master ? `${t.name} (This Table)` : (t.master_table_name || 'N/A');
+        }
+
+        // Connected tables pills
+        const pillsWrap = document.getElementById('infoConnectedTablesPills');
+        if (pillsWrap) {
+            pillsWrap.innerHTML = '';
+            // Find all tables that share this party
+            const partyTables = allTables.filter(other => (other.party_name === t.party_name) || (other.master_table_id && other.master_table_id === t.id) || (t.master_table_id && other.id === t.master_table_id));
+            if (partyTables.length > 0) {
+                partyTables.forEach(pt => {
+                    const pill = document.createElement('span');
+                    pill.className = `badge ${pt.id === t.id ? 'bg-dark' : 'bg-secondary'} rounded-pill px-2 py-1`;
+                    pill.textContent = `${pt.name}${pt.is_master ? ' ★' : ''}`;
+                    pillsWrap.appendChild(pill);
+                });
+            } else {
+                pillsWrap.innerHTML = '<span class="text-muted small">No other tables linked</span>';
+            }
+        }
+
+        // Notes
+        const notesWrap = document.getElementById('infoNotesContainer');
+        const notesVal = document.getElementById('infoNotes');
+        if (t.party_notes) {
+            if (notesWrap) notesWrap.style.display = 'block';
+            if (notesVal) notesVal.textContent = t.party_notes;
+        } else {
+            if (notesWrap) notesWrap.style.display = 'none';
+        }
+
+        // Master Order info
+        const activeOrderCard = document.getElementById('infoActiveOrderCard');
+        if (t.active_order) {
+            if (activeOrderCard) activeOrderCard.style.display = 'block';
+            const numEl = document.getElementById('infoOrderNumber');
+            if (numEl) numEl.textContent = `#${t.active_order.order_number}`;
+            const totEl = document.getElementById('infoOrderTotal');
+            if (totEl) totEl.textContent = `₹${t.active_order.total_amount || '0.00'}`;
+            const viewLink = document.getElementById('infoViewOrderLink');
+            if (viewLink) {
+                viewLink.href = `/dashboard/${restaurantSlug}/orders/${t.active_order.id}/`;
+            }
+        } else {
+            if (activeOrderCard) activeOrderCard.style.display = 'none';
+        }
+
+        const modalEl = document.getElementById('partyInfoModal');
+        if (modalEl) {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
+    };
+
+    // Release Entire Party
+    const btnReleasePartyAll = document.getElementById('btnReleasePartyAll');
+    if (btnReleasePartyAll) {
+        btnReleasePartyAll.addEventListener('click', () => {
+            if (!currentSelectedPartyTable) return;
+            if (!confirm(`Are you sure you want to release the entire party booking "${currentSelectedPartyTable.party_name}"? All linked tables will be freed.`)) {
+                return;
+            }
+
+            btnReleasePartyAll.disabled = true;
+            fetch("{% url 'restaurant_admin:floor_plan_release_party_api' restaurant_slug=restaurant_slug %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    table_id: currentSelectedPartyTable.id,
+                    release_group: true
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                btnReleasePartyAll.disabled = false;
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('partyInfoModal'))?.hide();
+                    fetchFloorPlanData();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to release party.'));
+                }
+            })
+            .catch(err => {
+                btnReleasePartyAll.disabled = false;
+                console.error(err);
+                alert('Failed to connect to server.');
+            });
+        });
+    }
+
+    // Release Single Table Only
+    const btnReleaseSingleTable = document.getElementById('btnReleaseSingleTable');
+    if (btnReleaseSingleTable) {
+        btnReleaseSingleTable.addEventListener('click', () => {
+            if (!currentSelectedPartyTable) return;
+            if (!confirm(`Unlink table ${currentSelectedPartyTable.name} from this party?`)) {
+                return;
+            }
+
+            btnReleaseSingleTable.disabled = true;
+            fetch("{% url 'restaurant_admin:floor_plan_release_party_api' restaurant_slug=restaurant_slug %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    table_id: currentSelectedPartyTable.id,
+                    release_group: false
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                btnReleaseSingleTable.disabled = false;
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('partyInfoModal'))?.hide();
+                    fetchFloorPlanData();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to unlink table.'));
+                }
+            })
+            .catch(err => {
+                btnReleaseSingleTable.disabled = false;
+                console.error(err);
+                alert('Failed to connect to server.');
+            });
+        });
+    }
+
     // Initial Load
     fetchFloorPlanData();
 
     // Real-Time SSE Updates
     if (restaurantSlug && restaurantSlug !== 'default' && window.EventSource) {
-        // Same live stream the POS and KDS use; it sends named "new_order" events
         const evtSource = new EventSource("{% url 'restaurant_admin:orders_stream' restaurant_slug=rslug %}");
         let sseTimer = null;
         const refreshSoon = function () {
             clearTimeout(sseTimer);
-            sseTimer = setTimeout(fetchFloorPlanData, 400);
+            sseTimer = setTimeout(fetchFloorPlanData, 250);
         };
         evtSource.addEventListener('new_order', refreshSoon);
+        evtSource.addEventListener('table_status_update', refreshSoon);
+        evtSource.addEventListener('order_update', refreshSoon);
+        evtSource.addEventListener('status_update', refreshSoon);
         evtSource.onmessage = refreshSoon;
     }
 

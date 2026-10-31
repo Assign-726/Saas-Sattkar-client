@@ -82,7 +82,7 @@ class MasterBillingService:
     def get_config():
         # Prefer configured URL, fallback to localhost:3000
         master_url = getattr(settings, 'MASTER_DASHBOARD_URL', None) or os.environ.get('MASTER_DASHBOARD_URL', 'http://localhost:3000')
-        master_secret = getattr(settings, 'MASTER_API_SECRET', None) or os.environ.get('MASTER_API_SECRET', 'T9@fK!xR!!72m$Qv%Lp&6Za!Wc@3Ns')
+        master_secret = getattr(settings, 'MASTER_API_SECRET', None) or os.environ.get('MASTER_API_SECRET', '')
         return master_url.rstrip('/'), master_secret
 
     @classmethod
@@ -225,6 +225,11 @@ class MasterBillingService:
                     # Sync remote branch-level plan tags, tier types & add-ons from Master Admin
                     feature_flags = data.get('feature_flags') or {}
                     remote_branches = feature_flags.get('branches') or []
+                    if not remote_branches:
+                        client_payload = data.get('client', {})
+                        fallback_b = client_payload.get('branches') or []
+                        if fallback_b and isinstance(fallback_b, list):
+                            remote_branches = [{'name': b.get('name'), 'key': b.get('slug') or str(b.get('id', '')), 'flags': {}} for b in fallback_b if b.get('name')]
                     if restaurant and remote_branches and isinstance(remote_branches, list):
                         try:
                             from super_admin.models import RestaurantBranch
@@ -250,6 +255,31 @@ class MasterBillingService:
                                             break
                                 if not target_branch and idx < len(db_branches):
                                     target_branch = db_branches[idx]
+
+                                if not target_branch:
+                                    # Auto-provision missing branch as a remote draft outlet within permitted quota
+                                    max_b = restaurant.get_max_allowed_branches() if hasattr(restaurant, 'get_max_allowed_branches') else (getattr(restaurant, 'max_branches', 0) or 5)
+                                    if restaurant.branches.count() < max_b:
+                                        try:
+                                            target_branch = RestaurantBranch.objects.create(
+                                                restaurant=restaurant,
+                                                name=rem_name or f"Branch {idx + 1}",
+                                                slug=rem_key or None,
+                                                outlet_type='restaurant_standard',
+                                                plan_entitlements=flags,
+                                                use_company_address=True,
+                                                address_line_1=restaurant.address_line_1,
+                                                address_line_2=restaurant.address_line_2,
+                                                city=restaurant.city,
+                                                state=restaurant.state,
+                                                pincode=restaurant.pincode,
+                                                phone=restaurant.phone,
+                                                is_setup_completed=False,
+                                            )
+                                            db_branches.append(target_branch)
+                                            logger.info(f"[MasterBillingService] Auto-provisioned draft branch '{target_branch.name}' for '{restaurant.name}'")
+                                        except Exception as prov_err:
+                                            logger.warning(f"[MasterBillingService] Failed to auto-provision draft branch: {prov_err}")
 
                                 if target_branch:
                                     branch_updates = {}

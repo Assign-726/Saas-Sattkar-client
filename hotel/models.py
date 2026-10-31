@@ -186,6 +186,11 @@ class RoomCategory(models.Model):
                 res.append({'url': v['url'].strip(), 'title': v.get('title') or f'Video Tour #{idx}'})
         return res
 
+    @property
+    def video_links_json(self):
+        import json
+        return json.dumps(self.video_links_list)
+
 
 class RoomCategoryImage(models.Model):
     """
@@ -1519,31 +1524,93 @@ class LaundryLine(models.Model):
 
 class SpaTherapist(models.Model):
     branch = models.ForeignKey(BRANCH, on_delete=models.CASCADE, related_name='spa_therapists')
-    name = models.CharField(max_length=120)
-    skills = models.CharField(max_length=150, blank=True)
+    name = models.CharField(max_length=150)
+    title = models.CharField(max_length=150, blank=True, default='Certified Wellness Specialist')
+    experience_years = models.PositiveIntegerField(default=5)
+    photo = models.URLField(max_length=500, blank=True, default='')
+    rating = models.DecimalField(max_digits=3, decimal_places=2, default=Decimal('4.95'))
+    sessions_completed = models.PositiveIntegerField(default=100)
+    skills = models.CharField(max_length=255, blank=True, default='')
+    languages = models.CharField(max_length=255, blank=True, default='English, Hindi')
+    categories = models.JSONField(default=list, blank=True)
+    certifications = models.JSONField(default=list, blank=True)
+    specialties = models.JSONField(default=list, blank=True)
+    bio = models.TextField(blank=True, default='')
+    availability = models.CharField(max_length=50, default='Available Today')
     is_active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['name']
 
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.title})"
+
+    def can_perform_category(self, cat):
+        if not self.categories:
+            return True
+        return str(cat).lower().strip() in [str(c).lower().strip() for c in self.categories]
+
+    @property
+    def languages_list(self):
+        if not self.languages:
+            return ["English", "Hindi"]
+        return [s.strip() for s in self.languages.split(',') if s.strip()]
 
 
 class SpaTreatment(models.Model):
     branch = models.ForeignKey(BRANCH, on_delete=models.CASCADE, related_name='spa_treatments')
     name = models.CharField(max_length=150)
-    category = models.CharField(max_length=60, blank=True)
+    slug = models.SlugField(max_length=150, blank=True, default='')
+    category = models.CharField(max_length=60, blank=True, default='massages')
+    tag = models.CharField(max_length=100, blank=True, default='')
     duration_minutes = models.PositiveSmallIntegerField(default=60)
+    duration_options = models.JSONField(default=list, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
-    gst_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('18'))
+    original_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    gst_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('18.00'))
+    rating = models.DecimalField(max_digits=3, decimal_places=2, default=Decimal('4.95'))
+    reviews_count = models.PositiveIntegerField(default=100)
+    suite_type = models.CharField(max_length=100, blank=True, default='VIP Private Suite')
+    short_description = models.TextField(blank=True, default='')
+    full_description = models.TextField(blank=True, default='')
+    ritual_steps = models.JSONField(default=list, blank=True)
+    benefits = models.JSONField(default=list, blank=True)
+    suitable_for = models.JSONField(default=list, blank=True)
+    contraindications = models.JSONField(default=list, blank=True)
+    included_amenities = models.JSONField(default=list, blank=True)
+    cover_image = models.URLField(max_length=500, blank=True, default='')
+    gallery_images = models.JSONField(default=list, blank=True)
+    is_featured = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['category', 'name']
 
     def __str__(self):
-        return self.name
+        return f"{self.name} [{self.category}] - ₹{self.price}"
+
+
+class SpaPackage(models.Model):
+    branch = models.ForeignKey(BRANCH, on_delete=models.CASCADE, related_name='spa_packages')
+    title = models.CharField(max_length=180)
+    slug = models.SlugField(max_length=180, blank=True, default='')
+    tag = models.CharField(max_length=100, blank=True, default='Signature Ritual')
+    duration = models.CharField(max_length=60, default='150 Mins')
+    duration_minutes = models.PositiveSmallIntegerField(default=150)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    original_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    image = models.URLField(max_length=500, blank=True, default='')
+    description = models.TextField(blank=True, default='')
+    inclusions = models.JSONField(default=list, blank=True)
+    popular = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['title']
+
+    def __str__(self):
+        return f"{self.title} - ₹{self.price}"
 
 
 class SpaAppointment(models.Model):
@@ -1599,6 +1666,10 @@ class SpaAppointment(models.Model):
     @property
     def total(self):
         return (self.price * (1 + self.gst_percent / 100)).quantize(Decimal('0.01'))
+
+    @property
+    def reference_id(self):
+        return f"SPA-{self.date.strftime('%Y%m%d')}-{self.id:04d}"
 
 
 # ====================================================================== banquets & events

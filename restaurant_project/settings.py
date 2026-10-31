@@ -335,7 +335,11 @@ DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default=env('EMAIL_HOST_USER', de
 
 # Master Dashboard Integration
 MASTER_DASHBOARD_URL = env('MASTER_DASHBOARD_URL', default='http://localhost:3000')
-MASTER_API_SECRET = env('MASTER_API_SECRET', default='T9@fK!xR!!72m$Qv%Lp&6Za!Wc@3Ns')
+MASTER_API_SECRET = env('MASTER_API_SECRET', default='')
+# The periodic subscription sync with Master Admin runs in a background thread, so no admin page waits on it (an
+# unreachable Master Admin cost a page ~4 s every 30 s). Test runs keep it inline, so tests stay deterministic.
+import sys as _sys
+MASTER_SYNC_IN_BACKGROUND = env.bool('MASTER_SYNC_IN_BACKGROUND', default=True) and not (len(_sys.argv) > 1 and _sys.argv[1] == 'test')
 
 
 

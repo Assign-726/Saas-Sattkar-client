@@ -373,6 +373,14 @@ def pos_open_shift_api(request, restaurant_slug=None):
     request.session['active_pos_shift_id'] = shift.id
     logger.info(f"POS Shift #{shift.id} opened for user {user.username} on counter {counter.name}")
 
+    try:
+        from core.sse import publish
+        from restaurant_admin.smart_menu import invalidate_smart_menu_cache
+        invalidate_smart_menu_cache(restaurant, active_branch)
+        publish(restaurant.slug, {'type': 'pos_shift_change', 'action': 'opened', 'counter_id': counter.id})
+    except Exception as e:
+        logger.warning(f"Failed to publish shift open SSE: {e}")
+
     return JsonResponse({
         'success': True,
         'message': f"Register opened on {counter.name} with float ₹{shift.opening_amount:.2f}.",
@@ -468,6 +476,14 @@ def pos_close_shift_api(request, shift_id=None, restaurant_slug=None):
         del request.session['active_pos_shift_id']
 
     logger.info(f"POS Shift #{shift.id} closed. Expected: ₹{expected_cash}, Actual: ₹{closing_cash_actual}, Variance: ₹{discrepancy}")
+
+    try:
+        from core.sse import publish
+        from restaurant_admin.smart_menu import invalidate_smart_menu_cache
+        invalidate_smart_menu_cache(restaurant, active_branch)
+        publish(restaurant.slug, {'type': 'pos_shift_change', 'action': 'closed', 'counter_id': shift.counter_id})
+    except Exception as e:
+        logger.warning(f"Failed to publish shift close SSE: {e}")
 
     try:
         z_report_url = reverse('restaurant_admin:pos_shift_z_report', kwargs={'restaurant_slug': restaurant.slug, 'pk': shift.id})

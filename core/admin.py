@@ -405,3 +405,55 @@ class POSShiftAdmin(admin.ModelAdmin):
     list_filter = ('status', 'restaurant', 'branch', 'counter')
     search_fields = ('counter__name', 'cashier__username', 'cashier__first_name', 'cashier__last_name')
     readonly_fields = ('opened_at',)
+
+# --- Purchase voucher (Elite Zen) masters ---
+from .models import (PurchaseLedgerAccount, VendorAdvance, PurchaseVoucherSetting, PurchaseOrder,
+                     PurchaseOrderItem, PurchaseOrderCharge, PurchaseOrderPayment, PurchaseOrderAttachment)
+
+
+@admin.register(PurchaseLedgerAccount)
+class PurchaseLedgerAccountAdmin(admin.ModelAdmin):
+    list_display = ('name', 'kind', 'charge_type', 'stage', 'gst', 'default_rate', 'restaurant', 'branch', 'is_active')
+    list_filter = ('kind', 'is_active', 'restaurant')
+    search_fields = ('name', 'alias')
+
+
+@admin.register(VendorAdvance)
+class VendorAdvanceAdmin(admin.ModelAdmin):
+    list_display = ('party', 'amount', 'mode', 'paid_at', 'note', 'restaurant', 'branch')
+    list_filter = ('mode', 'restaurant')
+    search_fields = ('party__name', 'note')
+
+
+@admin.register(PurchaseVoucherSetting)
+class PurchaseVoucherSettingAdmin(admin.ModelAdmin):
+    list_display = ('restaurant', 'gst_credit')
+
+
+class PurchaseOrderItemInline(admin.TabularInline):
+    model = PurchaseOrderItem
+    extra = 0
+
+
+class PurchaseOrderChargeInline(admin.TabularInline):
+    model = PurchaseOrderCharge
+    extra = 0
+
+
+class PurchaseOrderPaymentInline(admin.TabularInline):
+    model = PurchaseOrderPayment
+    extra = 0
+
+
+class PurchaseOrderAttachmentInline(admin.TabularInline):
+    model = PurchaseOrderAttachment
+    extra = 0
+
+
+if not admin.site.is_registered(PurchaseOrder):
+    @admin.register(PurchaseOrder)
+    class PurchaseOrderAdmin(admin.ModelAdmin):
+        list_display = ('po_number', 'supplier_name', 'invoice_number', 'purchase_date', 'grand_total', 'payment_status', 'restaurant', 'branch')
+        list_filter = ('payment_status', 'tax_regime', 'restaurant')
+        search_fields = ('po_number', 'invoice_number', 'supplier_name')
+        inlines = [PurchaseOrderItemInline, PurchaseOrderChargeInline, PurchaseOrderPaymentInline, PurchaseOrderAttachmentInline]

@@ -762,6 +762,7 @@ class OnboardRestaurantForm(forms.Form):
                 branch.is_hotel_tariff_7500_plus = bdata.get("is_hotel_tariff_7500_plus", False)
                 branch.e_invoicing_enabled = bdata.get("e_invoicing_enabled", False)
                 branch.has_hotel_website = bool(bdata.get("has_hotel_website", False)) and getattr(restaurant, 'feature_hotel_website', False)
+                branch.is_setup_completed = True
                 branch.save()
             else:
                 branch = RestaurantBranch.objects.create(
@@ -792,6 +793,7 @@ class OnboardRestaurantForm(forms.Form):
                     has_hotel_module=bool(bdata.get("has_hotel_module", False)),
                     has_restaurant_module=bool(bdata.get("has_restaurant_module", True)) and getattr(restaurant, 'feature_restaurant_pos', True),
                     has_hotel_website=bool(bdata.get("has_hotel_website", False)) and getattr(restaurant, 'feature_hotel_website', False),
+                    is_setup_completed=True,
                 )
 
             kept_branch_ids.append(branch.id)

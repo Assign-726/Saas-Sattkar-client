@@ -55,15 +55,18 @@
             (function () {
                 const slug = "{{ rslug }}";
                 const ntModule = "{{ nt_module|default:'restaurant' }}";
-                {% if nt_module == 'hotel' %}
-                const pollUrl = "{% url 'hotel_admin:notifications_poll' restaurant_slug=rslug %}";
-                const listUrl = "{% url 'hotel_admin:notifications_list' restaurant_slug=rslug %}";
-                const updateUrl = "{% url 'hotel_admin:notifications_update' restaurant_slug=rslug %}";
-                {% else %}
-                const pollUrl = "{% url 'restaurant_admin:order_notifications_poll' restaurant_slug=rslug %}";
-                const listUrl = "{% url 'restaurant_admin:notifications_list' restaurant_slug=rslug %}";
-                const updateUrl = "{% url 'restaurant_admin:notifications_update' restaurant_slug=rslug %}";
-                {% endif %}
+                const pollUrl = ntModule === 'hotel'
+                    ? "{% url 'hotel_admin:notifications_poll' restaurant_slug=rslug %}"
+                    : "{% url 'restaurant_admin:order_notifications_poll' restaurant_slug=rslug %}";
+                const streamUrl = ntModule === 'hotel'
+                    ? "{% url 'hotel_admin:notifications_stream' restaurant_slug=rslug %}"
+                    : "{% url 'restaurant_admin:order_notifications_stream' restaurant_slug=rslug %}";
+                const listUrl = ntModule === 'hotel'
+                    ? "{% url 'hotel_admin:notifications_list' restaurant_slug=rslug %}"
+                    : "{% url 'restaurant_admin:notifications_list' restaurant_slug=rslug %}";
+                const updateUrl = ntModule === 'hotel'
+                    ? "{% url 'hotel_admin:notifications_update' restaurant_slug=rslug %}"
+                    : "{% url 'restaurant_admin:notifications_update' restaurant_slug=rslug %}";
                 const csrf = "{{ csrf_token }}";
                 const drawer = document.getElementById('ntDrawer');
                 const backdrop = document.getElementById('ntBackdrop');
@@ -312,10 +315,19 @@
                     if (icon) { icon.classList.add('bell-ring-active'); setTimeout(function () { icon.classList.remove('bell-ring-active'); }, 900); }
                 }
 
-                // ---------- polling ----------
+                // ---------- polling & real-time SSE ----------
+                let sseConnected = false, sse = null, pollDebounce = null;
+                let lastPollAt = 0;
+
+                function schedulePoll(delay) {
+                    clearTimeout(pollDebounce);
+                    pollDebounce = setTimeout(poll, delay === undefined ? 50 : delay);
+                }
+
                 function poll() {
                     if (polling) return;
                     polling = true;
+                    lastPollAt = Date.now();
                     fetch(pollUrl + '?module=' + ntModule + '&since=' + lastId, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                         .then(function (r) { return r.ok ? r.json() : null; })
                         .then(function (d) {
@@ -342,14 +354,136 @@
                         .catch(function () { })
                         .finally(function () { polling = false; });
                 }
-                // A worker keeps polling at full speed while the tab is in the background
+
+                // ONE stream for all open tabs. The browser allows only ~6 open connections to this server; a stream per
+                // tab used them up after a few tabs, and then every new page (e.g. New Purchase) waited seconds for a
+                // free one. The tab holding the lock keeps the stream and relays its events to the other tabs; when that
+                // tab closes, the lock passes to another tab, which opens the stream.
+                const ntChannel = window.BroadcastChannel ? new BroadcastChannel('sattkar-nt-' + ntModule + '-' + slug) : null;
+                let ntLeaderSeenAt = 0;
+                if (ntChannel) {
+                    ntChannel.onmessage = function (e) {
+                        const m = e.data || {};
+                        if (m.t === 'state') {
+                            ntLeaderSeenAt = m.connected ? Date.now() : 0;
+                            sseConnected = !!m.connected;
+                        } else if (m.t === 'event') {
+                            ntLeaderSeenAt = Date.now();
+                            sseConnected = true;
+                            schedulePoll(m.delay);
+                        }
+                    };
+                }
+                function ntRelay(msg) { if (ntChannel) { try { ntChannel.postMessage(msg); } catch (_) { } } }
+
+                let sseHasConnectedOnce = false;
+                function openStream() {
+                    if (sse) sse.close();
+                    sse = new EventSource(streamUrl);
+                    const onEvent = function () { schedulePoll(50); ntRelay({ t: 'event', delay: 50 }); };
+                    sse.onopen = function () {
+                        sseConnected = true;
+                        ntRelay({ t: 'state', connected: true });
+                        // Catch up only on recovery/reconnection (initial load is handled by poll())
+                        if (sseHasConnectedOnce) {
+                            schedulePoll(0);
+                            ntRelay({ t: 'event', delay: 0 });
+                        }
+                        sseHasConnectedOnce = true;
+                    };
+                    sse.addEventListener('notification', onEvent);
+                    sse.addEventListener('new_order', onEvent);
+                    sse.addEventListener('order_updated', onEvent);
+                    sse.onmessage = onEvent;
+                    sse.onerror = function () {
+                        sseConnected = false;
+                        ntRelay({ t: 'state', connected: false });
+                    };
+                }
+                function closeStream() {
+                    if (!sse) return;
+                    try { sse.close(); } catch (_) { }
+                    sse = null;
+                }
+
+                // Which tab holds the stream: a heartbeat in localStorage (Web Locks need HTTPS, and the admin also runs
+                // on plain http over the LAN). The holder refreshes it every 3s; a tab that finds it missing or stale
+                // (holder closed or crashed) takes over; a holder that finds another tab's id steps down.
+                const ntLeaderKey = 'sattkar-nt-leader-' + ntModule + '-' + slug;
+                const ntTabId = Math.random().toString(36).slice(2) + Date.now().toString(36);
+                function ntReadLeader() { try { return JSON.parse(localStorage.getItem(ntLeaderKey) || 'null'); } catch (_) { return null; } }
+                function ntElect() {
+                    const cur = ntReadLeader(), now = Date.now();
+                    if (cur && cur.id !== ntTabId && now - cur.ts < 8000) {
+                        if (sse) closeStream();          // another tab holds it — step down
+                        return;
+                    }
+                    try { localStorage.setItem(ntLeaderKey, JSON.stringify({ id: ntTabId, ts: now })); } catch (_) { }
+                    // Two tabs can claim together: the read-back a moment later decides, the other stays a follower
+                    setTimeout(function () {
+                        const won = ntReadLeader();
+                        if (won && won.id === ntTabId) {
+                            if (!sse) openStream();
+                            if (sseConnected) ntRelay({ t: 'state', connected: true });
+                        } else if (sse) closeStream();
+                    }, sse ? 0 : 150 + Math.random() * 250);
+                }
+                function initSSE() {
+                    if (!window.EventSource || !streamUrl) {
+                        sseConnected = false;
+                        return;
+                    }
+                    try {
+                        let storageOk = true;
+                        try { localStorage.setItem(ntLeaderKey + '-t', '1'); localStorage.removeItem(ntLeaderKey + '-t'); } catch (_) { storageOk = false; }
+                        if (!ntChannel || !storageOk) { openStream(); return; }
+                        ntElect();
+                        setInterval(ntElect, 3000);
+                        if (ntChannel) ntChannel.addEventListener('message', function (e) { if (e.data && e.data.t === 'gone') ntElect(); });
+                        window.addEventListener('pagehide', function () {
+                            if (!sse) return;
+                            closeStream();
+                            const cur = ntReadLeader();
+                            if (cur && cur.id === ntTabId) { try { localStorage.removeItem(ntLeaderKey); } catch (_) { } }
+                            ntRelay({ t: 'gone' });     // another tab takes the stream over at once
+                        });
+                    } catch (_) {
+                        sseConnected = false;
+                    }
+                }
+
+                // Safety-net fallback:
+                // - Healthy SSE: ZERO polling when idle! Server stays 100% silent. Events are pushed instantly.
+                // - Offline / reconnecting SSE: fallback poll every 15s so orders are never missed if SSE drops
+                function safetyHeartbeat() {
+                    // A tab without the stream trusts the holder only while it keeps reporting in
+                    if (!sse && sseConnected && Date.now() - ntLeaderSeenAt > 25000) sseConnected = false;
+                    if (sseConnected) return; // 100% event-driven while SSE is connected
+                    const elapsed = Date.now() - lastPollAt;
+                    if (elapsed >= 15000) {
+                        poll();
+                    }
+                }
+
                 try {
-                    const w = new Worker(URL.createObjectURL(new Blob(['setInterval(function(){postMessage(1)},12000)'], { type: 'application/javascript' })));
-                    w.onmessage = poll;
-                } catch (_) { setInterval(poll, 12000); }
+                    const w = new Worker(URL.createObjectURL(new Blob(['setInterval(function(){postMessage(1)},6000)'], { type: 'application/javascript' })));
+                    w.onmessage = safetyHeartbeat;
+                } catch (_) {
+                    setInterval(safetyHeartbeat, 6000);
+                }
+
+                // Initial poll on page load & start SSE stream
                 poll();
-                document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(); });
-                window.addEventListener('focus', poll);
+                initSSE();
+
+                // Throttle focus/visibility checks: only check if at least 30s have passed since last poll
+                function onWindowActive() {
+                    if (!document.hidden && Date.now() - lastPollAt >= 30000) {
+                        poll();
+                    }
+                }
+                document.addEventListener('visibilitychange', onWindowActive);
+                window.addEventListener('focus', onWindowActive);
                 setInterval(function () { drawer.querySelectorAll('time[datetime]').forEach(function (t) { t.textContent = ago(t.getAttribute('datetime')); }); }, 60000);
             })();
         </script>

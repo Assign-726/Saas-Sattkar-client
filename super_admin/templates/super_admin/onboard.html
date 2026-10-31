@@ -1770,7 +1770,7 @@
   } catch (err) {
     SERVER_FEATURES_CONFIG = null;
   }
-  const IS_MASTER_SYNCED = {% if is_master_synced %}true{% else %}false{% endif %};
+  const IS_MASTER_SYNCED = "{{ is_master_synced|yesno:'true,false' }}" === "true";
   const MASTER_PLAN_NAME = "{{ master_plan_name|default:'Sattkar Plan'|escapejs }}";
 
   const BRANCH_TYPE_CONFIG = (SERVER_FEATURES_CONFIG && SERVER_FEATURES_CONFIG.branch_tags) ? SERVER_FEATURES_CONFIG.branch_tags : {
@@ -2124,6 +2124,15 @@
             <span class="badge-tag state" style="background: rgba(var(--ui-orange-rgb), 0.14); color: var(--ui-orange-text); padding: 3px 8px; border-radius: 6px; font-weight: 600; font-size: 11px;">
               ${state || 'State'}
             </span>
+            ${b.is_setup_completed === false ? `
+              <span class="badge-tag" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 11px; border: 1px solid rgba(245, 158, 11, 0.35); display: inline-flex; align-items: center; gap: 4px;">
+                <i class="fa-solid fa-clock-rotate-left"></i> Draft · Setup Pending
+              </span>
+            ` : `
+              <span class="badge-tag" style="background: rgba(34, 197, 94, 0.12); color: #16a34a; padding: 3px 8px; border-radius: 6px; font-weight: 600; font-size: 11px; border: 1px solid rgba(34, 197, 94, 0.3); display: inline-flex; align-items: center; gap: 4px;">
+                <i class="fa-solid fa-circle-check"></i> Configured
+              </span>
+            `}
             <span class="badge-tag" style="background: ${escapeHtml(BRANCH_TYPE_CONFIG[outletType]?.badge_color || '#0369a1')}1a; color: ${escapeHtml(BRANCH_TYPE_CONFIG[outletType]?.badge_color || '#0369a1')}; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 11px; border: 1px solid ${escapeHtml(BRANCH_TYPE_CONFIG[outletType]?.badge_color || '#0369a1')}44; display: inline-flex; align-items: center; gap: 4px;">
               <i class="fa-solid ${escapeHtml(BRANCH_TYPE_CONFIG[outletType]?.icon || 'fa-store')}"></i> ${escapeHtml(BRANCH_TYPE_CONFIG[outletType]?.tag || BRANCH_TYPE_CONFIG[outletType]?.name || BRANCH_TYPE_CONFIG[outletType]?.label || 'Standard Restaurant')}
             </span>
@@ -2155,6 +2164,14 @@
         </div>
 
         <div class="branch-card-body">
+          ${b.is_setup_completed === false ? `
+            <div style="background: rgba(245, 158, 11, 0.08); border: 1px dashed rgba(245, 158, 11, 0.4); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; font-size: 12px; color: #b45309;">
+              <i class="fa-solid fa-wand-magic-sparkles" style="font-size: 14px; color: #f59e0b; flex-shrink: 0;"></i>
+              <div>
+                <strong>Auto-Provisioned by Sattkar Cloud:</strong> This outlet package is pre-configured with your subscription modules. Please enter the FSSAI license, contact phone, and any applicable state GST/Excise licenses below, then click <strong>Save Changes</strong> to activate.
+              </div>
+            </div>
+          ` : ''}
           <div class="form-grid">
             <!-- Branch Name -->
             <div class="form-group">

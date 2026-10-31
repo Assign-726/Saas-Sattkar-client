@@ -161,7 +161,7 @@ def onboard_restaurant(request):
 
             # ── Auto-sync to MasterPanel ─────────────────────────────────────
             master_url = getattr(settings, 'MASTER_DASHBOARD_URL', None) or os.environ.get('MASTER_DASHBOARD_URL', 'http://localhost:3000')
-            api_secret = getattr(settings, 'MASTER_API_SECRET', None) or os.environ.get('MASTER_API_SECRET', 'T9@fK!xR!!72m$Qv%Lp&6Za!Wc@3Ns')
+            api_secret = getattr(settings, 'MASTER_API_SECRET', None) or os.environ.get('MASTER_API_SECRET', '')
             if master_url:
                 try:
                     sync_result = restaurant.sync_to_master_dashboard(master_url, api_secret)
@@ -214,7 +214,7 @@ def restaurant_edit(request, pk):
 
             # ── Auto-sync to MasterPanel ─────────────────────────────────────
             master_url = getattr(settings, 'MASTER_DASHBOARD_URL', None) or os.environ.get('MASTER_DASHBOARD_URL', 'http://localhost:3000')
-            api_secret = getattr(settings, 'MASTER_API_SECRET', None) or os.environ.get('MASTER_API_SECRET', 'T9@fK!xR!!72m$Qv%Lp&6Za!Wc@3Ns')
+            api_secret = getattr(settings, 'MASTER_API_SECRET', None) or os.environ.get('MASTER_API_SECRET', '')
             if master_url:
                 try:
                     sync_result = restaurant.sync_to_master_dashboard(master_url, api_secret)
@@ -251,6 +251,8 @@ def restaurant_edit(request, pk):
             existing_branches.append({
                 'id': b.id,
                 'name': b.name,
+                'is_setup_completed': getattr(b, 'is_setup_completed', True),
+                'is_draft': getattr(b, 'is_draft', False),
                 'outlet_type': b_type,
                 'branch_type': b_type,
                 'branch_addons': getattr(b, 'branch_addons', []) or [],
@@ -1627,7 +1629,7 @@ def api_billing_sync(request):
     if restaurant:
         try:
             master_url = getattr(settings, 'MASTER_DASHBOARD_URL', None) or os.environ.get('MASTER_DASHBOARD_URL', 'http://localhost:3000')
-            api_secret = getattr(settings, 'MASTER_API_SECRET', None) or os.environ.get('MASTER_API_SECRET', 'T9@fK!xR!!72m$Qv%Lp&6Za!Wc@3Ns')
+            api_secret = getattr(settings, 'MASTER_API_SECRET', None) or os.environ.get('MASTER_API_SECRET', '')
             if master_url:
                 restaurant.sync_to_master_dashboard(master_url, api_secret)
         except Exception:
@@ -1656,7 +1658,10 @@ def api_request_plan_upgrade(request):
         body = request.POST.dict()
 
     action = body.get('action') or 'UPGRADE_OR_RENEWAL_REQUEST'
-    trial_days = int(body.get('trial_days', 14) or 14)
+    if action == 'RESET_PLAN':
+        return JsonResponse({'status': 'error', 'message': 'Plan reset is only available from Sattkar Master Admin.'}, status=403)
+    # Trial length is decided by Master Admin; whatever the browser sends is ignored there.
+    trial_days = 14
     plan_name = body.get('plan_name') or body.get('requested_plan_name', 'Professional Tier')
     billing_cycle = body.get('billing_cycle') or body.get('requested_billing_cycle', 'MONTHLY')
     notes = body.get('notes', '')
