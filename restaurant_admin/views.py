@@ -1618,10 +1618,10 @@ def order_create_manual(request, restaurant_slug=None):
             attached_receipt.booking_ref = draft_order.order_number
             attached_receipt.save(update_fields=['order', 'reference_number', 'booking_ref'])
 
-    existing_order_json = json.dumps(serialize_pos_order(draft_order)) if draft_order else 'null'
+    existing_order_json = serialize_pos_order(draft_order) if draft_order else None
 
     if not attached_receipt and draft_order and draft_order.advance_amount_paid > 0:
-        attached_receipt_json = json.dumps({
+        attached_receipt_json = {
             'order_id': draft_order.id,
             'receipt_no': draft_order.advance_receipt.receipt_no if draft_order.advance_receipt else f"ORD-{draft_order.id:04d}",
             'booking_ref': draft_order.order_number or f"ORD-{draft_order.id:04d}",
@@ -1629,9 +1629,9 @@ def order_create_manual(request, restaurant_slug=None):
             'phone': draft_order.phone,
             'advance_amount': float(draft_order.advance_amount_paid),
             'payment_method': draft_order.payment_method,
-        })
+        }
     elif attached_receipt:
-        attached_receipt_json = json.dumps({
+        attached_receipt_json = {
             'order_id': attached_receipt.order.id if attached_receipt.order else (draft_order.id if draft_order else 0),
             'receipt_no': attached_receipt.receipt_no,
             'booking_ref': attached_receipt.order.order_number if attached_receipt.order else (draft_order.order_number if draft_order else attached_receipt.booking_ref),
@@ -1639,9 +1639,9 @@ def order_create_manual(request, restaurant_slug=None):
             'phone': attached_receipt.phone,
             'advance_amount': float(attached_receipt.advance_amount),
             'payment_method': attached_receipt.payment_method,
-        })
+        }
     else:
-        attached_receipt_json = 'null'
+        attached_receipt_json = None
 
     # Sequence info for invoice numbers
     gst_seq_info = get_document_sequence_info(restaurant, 'sales', branch=branch_obj)
@@ -1658,16 +1658,16 @@ def order_create_manual(request, restaurant_slug=None):
 
     return render(request, 'restaurant_admin/orders/manual_create.html', {
         'menu_items': menu_items_qs,
-        'menu_items_json': json.dumps(menu_items_list),
-        'top_selling_json': json.dumps(top_selling_ids),
-        'smart_slots_json': json.dumps(smart_menu_data),
-        'current_slot_json': json.dumps(current_slot_key),
-        'categories_json': json.dumps(categories_list),
+        'menu_items_json': menu_items_list,
+        'top_selling_json': top_selling_ids,
+        'smart_slots_json': smart_menu_data,
+        'current_slot_json': current_slot_key,
+        'categories_json': categories_list,
         'categories': categories_qs,
         'tables': tables_qs,
         'active_orders': active_orders_list,
-        'active_orders_json': json.dumps(active_orders_list),
-        'tax_settings_json': json.dumps({
+        'active_orders_json': active_orders_list,
+        'tax_settings_json': {
             'cgst_pct': cgst_pct,
             'sgst_pct': sgst_pct,
             'vat_beer_pct': vat_beer_pct,
@@ -1678,12 +1678,12 @@ def order_create_manual(request, restaurant_slug=None):
             'vat_surcharge_name': vat_surcharge_name,
             'service_charge_pct': service_charge_pct_val,
             'service_charge_taxable': getattr(settings_obj, 'service_charge_taxable', True),
-        }),
+        },
         'customer_parties': cust_parties_qs,
-        'customer_parties_json': json.dumps(cust_parties_list),
+        'customer_parties_json': cust_parties_list,
         'active_branch_gstin': active_branch_gstin_manual,
-        'active_branch_gstin_json': json.dumps(active_branch_gstin_manual),
-        'custom_charges_json': json.dumps(custom_charges_list),
+        'active_branch_gstin_json': active_branch_gstin_manual,
+        'custom_charges_json': custom_charges_list,
         'attached_receipt': attached_receipt,
         'attached_receipt_json': attached_receipt_json,
         'existing_order_json': existing_order_json,
@@ -1691,8 +1691,8 @@ def order_create_manual(request, restaurant_slug=None):
         'order': draft_order,
         'gst_seq_info': gst_seq_info,
         'excise_seq_info': excise_seq_info,
-        'gst_seq_info_json': json.dumps(gst_seq_info),
-        'excise_seq_info_json': json.dumps(excise_seq_info),
+        'gst_seq_info_json': gst_seq_info,
+        'excise_seq_info_json': excise_seq_info,
         'active_menu': 'order_create_manual',
         'restaurant': restaurant,
         'current_branch': branch_obj,
@@ -2445,14 +2445,14 @@ def order_edit_manual(request, pk, restaurant_slug=None):
     import json
     return render(request, 'restaurant_admin/orders/manual_create.html', {
         'menu_items': menu_items_qs,
-        'menu_items_json': json.dumps(menu_items_list),
-        'top_selling_json': json.dumps(top_selling_ids),
-        'smart_slots_json': json.dumps(smart_menu_data),
-        'current_slot_json': json.dumps(current_slot_key),
-        'categories_json': json.dumps(categories_list),
+        'menu_items_json': menu_items_list,
+        'top_selling_json': top_selling_ids,
+        'smart_slots_json': smart_menu_data,
+        'current_slot_json': current_slot_key,
+        'categories_json': categories_list,
         'categories': categories_qs,
         'tables': tables_qs,
-        'tax_settings_json': json.dumps({
+        'tax_settings_json': {
             'cgst_pct': cgst_pct,
             'sgst_pct': sgst_pct,
             'vat_beer_pct': vat_beer_pct,
@@ -2463,13 +2463,17 @@ def order_edit_manual(request, pk, restaurant_slug=None):
             'vat_surcharge_name': vat_surcharge_name,
             'service_charge_pct': float(settings_obj.service_charge_percentage or 0),
             'service_charge_taxable': getattr(settings_obj, 'service_charge_taxable', True),
-        }),
+        },
         'customer_parties': cust_parties_qs,
-        'customer_parties_json': json.dumps(cust_parties_list),
+        'customer_parties_json': cust_parties_list,
         'active_branch_gstin': active_branch_gstin_manual,
-        'active_branch_gstin_json': json.dumps(active_branch_gstin_manual),
-        'custom_charges_json': json.dumps(custom_charges_list),
-        'existing_order_json': json.dumps(serialize_pos_order(order)),
+        'active_branch_gstin_json': active_branch_gstin_manual,
+        'custom_charges_json': custom_charges_list,
+        'existing_order_json': serialize_pos_order(order),
+        'active_orders_json': [],
+        'attached_receipt_json': None,
+        'gst_seq_info_json': {'mode': 'automatic', 'next_number': '', 'readonly': True},
+        'excise_seq_info_json': {'mode': 'automatic', 'next_number': '', 'readonly': True},
         'is_edit_mode': True,
         'order': order,
         'active_menu': 'order_create_manual',
@@ -3235,9 +3239,9 @@ def purchase_create(request, restaurant_slug=None):
         'restaurant': restaurant,
         'suppliers': suppliers,
         'vendor_parties': vendor_parties,
-        'vendor_parties_json': json.dumps(vendor_parties_list),
+        'vendor_parties_json': vendor_parties_list,
         'inventory_items': inventory_items,
-        'inventory_items_json': json.dumps(inventory_items_list),
+        'inventory_items_json': inventory_items_list,
         'categories': categories,
         'category_objects': categories_qs,
         'today_date': today_date,
@@ -8697,7 +8701,7 @@ def challan_create(request, restaurant_slug=None):
         gstin_str = f" (GSTIN: {party_gstin})" if party_gstin else ''
         prefill_notes = f"Inter-branch/godown transfer for buyer party '{party_name}'{gstin_str}."
 
-    customer_parties_json = json.dumps([
+    customer_parties_json = [
         {
             'id': p.id,
             'name': p.name,
@@ -8706,7 +8710,7 @@ def challan_create(request, restaurant_slug=None):
             'address': p.full_address or p.address or ''
         }
         for p in customer_parties
-    ])
+    ]
 
     return render(request, 'restaurant_admin/challans/create.html', {
         'auto_challan_no': auto_challan_no,
@@ -9028,7 +9032,7 @@ def transaction_desk_create(request, restaurant_slug=None):
             draft_order = attached_receipt.order
 
     if not attached_receipt and draft_order and draft_order.advance_amount_paid > 0:
-        attached_receipt_json = json.dumps({
+        attached_receipt_json = {
             'order_id': draft_order.id,
             'receipt_no': draft_order.advance_receipt.receipt_no if draft_order.advance_receipt else f"ORD-{draft_order.id:04d}",
             'booking_ref': draft_order.order_number or f"ORD-{draft_order.id:04d}",
@@ -9036,9 +9040,9 @@ def transaction_desk_create(request, restaurant_slug=None):
             'phone': draft_order.phone,
             'advance_amount': float(draft_order.advance_amount_paid),
             'payment_method': draft_order.payment_method,
-        })
+        }
     elif attached_receipt:
-        attached_receipt_json = json.dumps({
+        attached_receipt_json = {
             'order_id': attached_receipt.order.id if attached_receipt.order else 0,
             'receipt_no': attached_receipt.receipt_no,
             'booking_ref': attached_receipt.order.order_number if attached_receipt.order else attached_receipt.booking_ref,
@@ -9046,11 +9050,11 @@ def transaction_desk_create(request, restaurant_slug=None):
             'phone': attached_receipt.phone,
             'advance_amount': float(attached_receipt.advance_amount),
             'payment_method': attached_receipt.payment_method,
-        })
+        }
     else:
-        attached_receipt_json = 'null'
+        attached_receipt_json = None
 
-    existing_order_json = json.dumps(serialize_pos_order(draft_order)) if draft_order else 'null'
+    existing_order_json = serialize_pos_order(draft_order) if draft_order else None
 
     customer_parties = Party.objects.filter(restaurant=restaurant, party_type__in=['customer', 'both'])
     if branch_obj:
@@ -9105,7 +9109,7 @@ def transaction_desk_create(request, restaurant_slug=None):
         'rslug': restaurant.slug,
         'active_menu': 'transactions_create',
         'active_branch_gstin': active_branch_gstin,
-        'active_branch_gstin_json': json.dumps(active_branch_gstin),
+        'active_branch_gstin_json': active_branch_gstin,
 
         'seq_info_sales': seq_info_sales,
         'seq_info_purchase': seq_info_purchase,
@@ -9115,14 +9119,14 @@ def transaction_desk_create(request, restaurant_slug=None):
 
         # POS Full Context
         'menu_items': menu_items_qs,
-        'menu_items_json': json.dumps(menu_items_list),
-        'top_selling_json': json.dumps(top_selling_ids),
-        'categories_json': json.dumps(categories_list),
+        'menu_items_json': menu_items_list,
+        'top_selling_json': top_selling_ids,
+        'categories_json': categories_list,
         'categories': categories_qs,
         'tables': tables_qs,
         'active_orders': active_orders_qs,
-        'active_orders_json': json.dumps(active_orders_list),
-        'tax_settings_json': json.dumps({
+        'active_orders_json': active_orders_list,
+        'tax_settings_json': {
             'cgst_pct': cgst_pct,
             'sgst_pct': sgst_pct,
             'vat_beer_pct': vat_beer_pct,
@@ -9133,10 +9137,10 @@ def transaction_desk_create(request, restaurant_slug=None):
             'vat_surcharge_name': vat_surcharge_name,
             'service_charge_pct': float(branch_obj.service_charge_percentage if (branch_obj and branch_obj.service_charge_percentage is not None) else (settings_obj.service_charge_percentage or 0)),
             'service_charge_taxable': getattr(settings_obj, 'service_charge_taxable', True),
-        }),
-        'custom_charges_json': json.dumps(custom_charges_list),
+        },
+        'custom_charges_json': custom_charges_list,
         'customer_parties': customer_parties,
-        'customer_parties_json': json.dumps(parties_list),
+        'customer_parties_json': parties_list,
         'attached_receipt': attached_receipt,
         'attached_receipt_json': attached_receipt_json,
         'existing_order_json': existing_order_json,
@@ -9149,7 +9153,7 @@ def transaction_desk_create(request, restaurant_slug=None):
 
         # Purchase Context
         'inventory_items': inventory_items,
-        'inventory_items_json': json.dumps(inventory_items_list),
+        'inventory_items_json': inventory_items_list,
         'suppliers': suppliers,
         'next_purchase_no': next_purchase_no,
 

@@ -173,8 +173,8 @@ def floor_plan_dashboard(request, restaurant_slug=None):
             'is_linked': is_linked,
             'linked_table_names': list(t.linked_tables.filter(is_active=True).values_list('name', flat=True)),
         })
-    all_tables_json = json.dumps(all_tables_data)
-    zones_json = json.dumps([{'id': z.id, 'name': z.name} for z in zones])
+    all_tables_json = all_tables_data
+    zones_json = [{'id': z.id, 'name': z.name} for z in zones]
 
     single_form = TableForm(restaurant=restaurant, branch=active_branch)
     bulk_form = BulkTableForm(restaurant=restaurant, branch=active_branch)
@@ -353,8 +353,8 @@ def table_list(request, restaurant_slug=None):
             'zone_name': t.zone.name if t.zone else '',
             'is_active': t.is_active,
         })
-    all_tables_json = json.dumps(all_tables_data)
-    zones_json = json.dumps([{'id': z.id, 'name': z.name} for z in zones])
+    all_tables_json = all_tables_data
+    zones_json = [{'id': z.id, 'name': z.name} for z in zones]
     
     try:
         per_page = int(request.GET.get('per_page', 20))

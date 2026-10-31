@@ -1,28 +1,56 @@
 """
 super_admin.middleware
 ======================
-Middleware to enforce Subscription Overdue & Grace Period Lockout on Super Admin.
+Middleware to enforce Subscription Overdue & Grace Period Lockout on every admin panel.
 
 If a restaurant's subscription grace period has expired, or the account has been
-manually suspended by Master Admin, this middleware redirects all Super Admin traffic
-to the Billing & Subscription page (/super/billing/) so the administrator can settle
-the renewal or request plan changes.
+manually suspended by Master Admin, signed-in users are kept out of the admin panels:
+
+- Super Admin (superusers) is redirected to /super/billing/ so the owner can pay.
+- Restaurant Admin, Hotel Admin and Django admin (branch managers, staff) get a
+  "service paused" page asking them to contact the owner — they cannot pay themselves.
+
+Guest-facing pages and public APIs are not affected.
 """
 
 import logging
-from django.shortcuts import redirect
+from datetime import timedelta
+
+from django.conf import settings
 from django.http import JsonResponse
+from django.shortcuts import redirect, render
 from django.utils import timezone
 from super_admin.models import Restaurant
 from super_admin.services import MasterBillingService
 
 logger = logging.getLogger(__name__)
 
+# Admin panels covered by the lock.
+LOCKED_PREFIXES = ('/super/', '/dashboard/', '/hotel-admin/', '/dj-admin/')
+# Always reachable so the owner can pay and anyone can sign out.
+ALLOWED_PREFIXES = ('/super/billing', '/static/', '/media/', '/dj-admin/logout/')
+
+BILLING_URL = '/super/billing/?overdue_lock=1'
+
+
+def _offline_lock(restaurant, now) -> bool:
+    """
+    Master Admin unreachable: fall back to the last synced renewal date so blocking
+    the Master Admin URL cannot lift an overdue lock.
+    """
+    if restaurant.master_sync_status in ('CONNECTED', 'SYNCED'):
+        return False
+    due = restaurant.subscription_next_billing_date
+    if not due or restaurant.subscription_is_trial:
+        return False
+    grace_days = getattr(settings, 'SUBSCRIPTION_OFFLINE_GRACE_DAYS', 3)
+    return now > due + timedelta(days=grace_days)
+
 
 class SuperAdminSubscriptionLockMiddleware:
     """
-    Guards the Super Admin portal against unpaid, overdue subscriptions whose
-    grace period has expired.
+    Guards the admin panels against unpaid, overdue subscriptions whose grace
+    period has expired.
     """
 
     def __init__(self, get_response):
@@ -30,53 +58,57 @@ class SuperAdminSubscriptionLockMiddleware:
 
     def __call__(self, request):
         path = request.path or ''
+        user = getattr(request, 'user', None)
 
-        # Only inspect requests targeting the Super Admin panel
-        if path.startswith('/super/'):
-            # Always permit the Billing portal, receipts, and synchronization endpoints
-            is_billing_allowed = (
-                path.startswith('/super/billing/') or
-                path == '/super/billing/' or
-                path.startswith('/super/billing') or
-                path.startswith('/static/') or
-                path.startswith('/media/')
-            )
+        if (
+            path.startswith(LOCKED_PREFIXES)
+            and not path.startswith(ALLOWED_PREFIXES)
+            and user and user.is_authenticated
+        ):
+            try:
+                restaurant = Restaurant.objects.first()
+            except Exception:
+                restaurant = None
 
-            user = getattr(request, 'user', None)
-            if user and user.is_authenticated and user.is_superuser:
-                try:
-                    restaurant = Restaurant.objects.first()
-                except Exception:
-                    restaurant = None
+            if restaurant:
+                now = timezone.now()
+                last_synced = restaurant.features_last_synced_at
+                # Fast sync from Master Admin if never synced or synced > 30 seconds ago
+                # or if the account is currently locked (to detect immediate renewals/activations)
+                if not last_synced or (now - last_synced).total_seconds() > 30 or (restaurant.subscription_is_locked and (now - last_synced).total_seconds() > 10):
+                    try:
+                        MasterBillingService.fetch_subscription_details(restaurant)
+                        restaurant.refresh_from_db()
+                    except Exception as sync_err:
+                        logger.debug(f"[SubscriptionLockMiddleware] Sync skipped: {sync_err}")
 
-                if restaurant:
-                    now = timezone.now()
-                    last_synced = restaurant.features_last_synced_at
-                    # Fast sync from Master Admin if never synced or synced > 30 seconds ago
-                    # or if the account is currently locked (to detect immediate renewals/activations)
-                    if not last_synced or (now - last_synced).total_seconds() > 30 or (restaurant.subscription_is_locked and (now - last_synced).total_seconds() > 10):
-                        try:
-                            MasterBillingService.fetch_subscription_details(restaurant)
-                            restaurant.refresh_from_db()
-                        except Exception as sync_err:
-                            logger.debug(f"[SubscriptionLockMiddleware] Sync skipped: {sync_err}")
+                if restaurant.subscription_is_locked or _offline_lock(restaurant, now):
+                    return self._locked_response(request, user, restaurant)
 
-                    # If subscription is locked (grace period expired OR manually suspended)
-                    if restaurant.subscription_is_locked:
-                        if not is_billing_allowed:
-                            # If AJAX/JSON, return structured redirect response
-                            is_ajax = (
-                                request.headers.get('x-requested-with') == 'XMLHttpRequest' or
-                                'application/json' in request.headers.get('accept', '')
-                            )
-                            if is_ajax:
-                                return JsonResponse({
-                                    'status': 'locked',
-                                    'redirect': '/super/billing/?overdue_lock=1',
-                                    'message': 'Your subscription is overdue and grace period has expired. Please renew plan to restore access.'
-                                }, status=403)
+        return self.get_response(request)
 
-                            return redirect('/super/billing/?overdue_lock=1')
+    @staticmethod
+    def _locked_response(request, user, restaurant):
+        is_owner = user.is_superuser
+        message = (
+            'Your subscription is overdue and grace period has expired. Please renew plan to restore access.'
+            if is_owner else
+            'Access is paused because the subscription is overdue. Please ask the account owner to renew.'
+        )
+        is_ajax = (
+            request.headers.get('x-requested-with') == 'XMLHttpRequest' or
+            'application/json' in request.headers.get('accept', '')
+        )
+        if is_ajax:
+            return JsonResponse({
+                'status': 'locked',
+                'redirect': BILLING_URL if is_owner else None,
+                'message': message,
+            }, status=403)
 
-        response = self.get_response(request)
-        return response
+        if is_owner:
+            return redirect(BILLING_URL)
+        return render(request, 'super_admin/subscription_locked.html', {
+            'restaurant': restaurant,
+            'message': message,
+        }, status=403)
