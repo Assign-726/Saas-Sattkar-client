@@ -2492,13 +2492,8 @@ class PurchaseOrder(models.Model):
     grand_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.BANK_TRANSFER)
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.PAID)
-    due_date = models.DateField(null=True, blank=True, help_text="Bill-wise due date (bill date + supplier credit days)")
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Settled through bill-wise payments")
     freight_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Additional cost: freight, loading, packing")
-    round_off = models.DecimalField(max_digits=8, decimal_places=2, default=0)
-    cgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    sgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    igst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     is_interstate = models.BooleanField(default=False)
     reverse_charge = models.BooleanField(default=False, help_text="Tax payable by us under RCM")
     itc_eligible = models.BooleanField(default=True, help_text="Input tax credit can be claimed")
@@ -3650,7 +3645,7 @@ class PurchaseReturnLine(models.Model):
 
 class PurchasePayment(models.Model):
     """Bill-wise payment to a supplier (Tally's 'Agst Ref' settlement)."""
-    bill = models.ForeignKey('PurchaseOrder', on_delete=models.CASCADE, related_name='payments')
+    bill = models.ForeignKey('PurchaseOrder', on_delete=models.CASCADE, related_name='bill_payments')
     paid_on = models.DateField()
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     method = models.CharField(max_length=20, choices=PurchaseOrder.PaymentMethod.choices, default=PurchaseOrder.PaymentMethod.BANK_TRANSFER)

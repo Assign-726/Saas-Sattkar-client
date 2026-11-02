@@ -3967,7 +3967,7 @@ def purchase_invoice(request, pk, restaurant_slug=None):
         'total_sgst': total_sgst,
         'total_igst': total_igst,
         'round_off': round_off,
-        'payments': po.payments.all(),
+        'payments': po.bill_payments.all(),
         'debit_notes': po.returns.all(),
         'receipts': po.receipts.select_related('order'),
         'payment_methods': [c for c in PurchaseOrder.PaymentMethod.choices if c[0] != 'credit'],

@@ -219,7 +219,7 @@ class ReportTests(ProcurementBase):
         rows = P.reorder_suggestions(self.r, self.b)
         self.assertEqual([(x['item'].name, x['suggest']) for x in rows], [('Rice', D('30'))])
         page = self.client.get(self.url('purchase_order_new') + '?reorder=1')
-        self.assertContains(page, '"quantity": "30"')
+        self.assertContains(page, '"quantity": "30.000"')
         self.make_po()  # 100 rice now on order
         self.assertEqual(P.reorder_suggestions(self.r, self.b), [])
 

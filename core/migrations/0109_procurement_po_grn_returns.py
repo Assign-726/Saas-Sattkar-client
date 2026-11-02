@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0103_gateway_payment'),
+        ('core', '0108_purchase_zen_voucher'),
         ('super_admin', '0036_customrole_restaurantuser_custom_role_and_more'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
@@ -16,23 +16,8 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddField(
             model_name='purchaseorder',
-            name='cgst_amount',
-            field=models.DecimalField(decimal_places=2, default=0, max_digits=12),
-        ),
-        migrations.AddField(
-            model_name='purchaseorder',
-            name='due_date',
-            field=models.DateField(blank=True, help_text='Bill-wise due date (bill date + supplier credit days)', null=True),
-        ),
-        migrations.AddField(
-            model_name='purchaseorder',
             name='freight_amount',
             field=models.DecimalField(decimal_places=2, default=0, help_text='Additional cost: freight, loading, packing', max_digits=12),
-        ),
-        migrations.AddField(
-            model_name='purchaseorder',
-            name='igst_amount',
-            field=models.DecimalField(decimal_places=2, default=0, max_digits=12),
         ),
         migrations.AddField(
             model_name='purchaseorder',
@@ -58,16 +43,6 @@ class Migration(migrations.Migration):
             model_name='purchaseorder',
             name='reverse_charge',
             field=models.BooleanField(default=False, help_text='Tax payable by us under RCM'),
-        ),
-        migrations.AddField(
-            model_name='purchaseorder',
-            name='round_off',
-            field=models.DecimalField(decimal_places=2, default=0, max_digits=8),
-        ),
-        migrations.AddField(
-            model_name='purchaseorder',
-            name='sgst_amount',
-            field=models.DecimalField(decimal_places=2, default=0, max_digits=12),
         ),
         migrations.AddField(
             model_name='purchaseorder',
@@ -221,7 +196,7 @@ class Migration(migrations.Migration):
                 ('method', models.CharField(choices=[('bank_transfer', 'Bank Transfer'), ('upi', 'UPI'), ('cash', 'Cash'), ('credit', 'Credit / On Account')], default='bank_transfer', max_length=20)),
                 ('reference', models.CharField(blank=True, default='', help_text='UTR / cheque / UPI ref', max_length=100)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('bill', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='payments', to='core.purchaseorder')),
+                ('bill', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='bill_payments', to='core.purchaseorder')),
                 ('created_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to=settings.AUTH_USER_MODEL)),
             ],
             options={
