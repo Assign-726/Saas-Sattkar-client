@@ -166,26 +166,46 @@ class MasterBillingService:
                             from django.utils import timezone
                             from super_admin.models import Restaurant
                             mod_updates = {}
-                            if 'SHOW_WEBSITE_PAGES' in modules:
-                                has_website = bool(modules['SHOW_WEBSITE_PAGES'])
-                                mod_updates['feature_website_pages'] = has_website
-                                restaurant.feature_website_pages = has_website
-                                mod_updates['is_active'] = has_website
-                                restaurant.is_active = has_website
-                            if 'ENABLE_WEBSITE_CMS' in modules:
-                                has_cms = bool(modules['ENABLE_WEBSITE_CMS'])
-                                mod_updates['feature_website_cms'] = has_cms
-                                restaurant.feature_website_cms = has_cms
-                            if 'WEBSITE_MODE' in modules:
-                                w_mode = str(modules['WEBSITE_MODE']).lower()
-                                mod_updates['feature_website_type'] = w_mode
-                                restaurant.feature_website_type = w_mode
-                            if 'feature_website_cms' in client_payload:
-                                mod_updates['feature_website_cms'] = bool(client_payload['feature_website_cms'])
-                                restaurant.feature_website_cms = mod_updates['feature_website_cms']
-                            if 'website_mode' in client_payload:
-                                mod_updates['feature_website_type'] = str(client_payload['website_mode']).lower()
-                                restaurant.feature_website_type = mod_updates['feature_website_type']
+                            # Website Module Sync (checks SHOW_WEBSITE_PAGES, has_website, has_full_website, has_menu_website)
+                            w_flags = {**modules, **client_payload, **(data.get('feature_flags') or {})}
+                            if 'has_full_website' in w_flags or 'has_menu_website' in w_flags or 'has_website' in w_flags:
+                                is_web_active = bool(w_flags.get('has_website', True))
+                                mod_updates['feature_website_pages'] = is_web_active
+                                restaurant.feature_website_pages = is_web_active
+                                mod_updates['is_active'] = is_web_active
+                                restaurant.is_active = is_web_active
+
+                                if w_flags.get('has_full_website'):
+                                    mod_updates['feature_website_cms'] = True
+                                    restaurant.feature_website_cms = True
+                                    mod_updates['feature_website_type'] = 'full'
+                                    restaurant.feature_website_type = 'full'
+                                elif w_flags.get('has_menu_website'):
+                                    mod_updates['feature_website_cms'] = False
+                                    restaurant.feature_website_cms = False
+                                    mod_updates['feature_website_type'] = 'minimal_ordering'
+                                    restaurant.feature_website_type = 'minimal_ordering'
+                            else:
+                                if 'SHOW_WEBSITE_PAGES' in modules:
+                                    has_website = bool(modules['SHOW_WEBSITE_PAGES'])
+                                    mod_updates['feature_website_pages'] = has_website
+                                    restaurant.feature_website_pages = has_website
+                                    mod_updates['is_active'] = has_website
+                                    restaurant.is_active = has_website
+                                if 'ENABLE_WEBSITE_CMS' in modules:
+                                    has_cms = bool(modules['ENABLE_WEBSITE_CMS'])
+                                    mod_updates['feature_website_cms'] = has_cms
+                                    restaurant.feature_website_cms = has_cms
+                                if 'WEBSITE_MODE' in modules:
+                                    w_mode = str(modules['WEBSITE_MODE']).lower()
+                                    mod_updates['feature_website_type'] = w_mode
+                                    restaurant.feature_website_type = w_mode
+                                if 'feature_website_cms' in client_payload:
+                                    mod_updates['feature_website_cms'] = bool(client_payload['feature_website_cms'])
+                                    restaurant.feature_website_cms = mod_updates['feature_website_cms']
+                                if 'website_mode' in client_payload:
+                                    mod_updates['feature_website_type'] = str(client_payload['website_mode']).lower()
+                                    restaurant.feature_website_type = mod_updates['feature_website_type']
                             if 'ENABLE_ALCOHOL_VAT' in modules:
                                 mod_updates['feature_alcohol_vat'] = bool(modules['ENABLE_ALCOHOL_VAT'])
                                 restaurant.feature_alcohol_vat = mod_updates['feature_alcohol_vat']
@@ -294,18 +314,18 @@ class MasterBillingService:
                                         new_type = 'only_pos'
                                     elif flags.get('has_starter'):
                                         new_type = 'starter_dhaba'
+                                    elif flags.get('has_complete_restaurant_without_alcohol'):
+                                        new_type = 'restaurant_standard'
+                                    elif flags.get('has_complete_restaurant_with_alcohol') or flags.get('has_fine_dine_bar') or flags.get('has_fine_dine'):
+                                        new_type = 'fine_dine_bar'
                                     elif flags.get('has_takeaway_qsr') or flags.get('has_qsr'):
                                         new_type = 'takeaway_qsr'
                                     elif flags.get('has_cloud_kitchen'):
                                         new_type = 'cloud_kitchen'
-                                    elif flags.get('has_complete_restaurant_with_alcohol') or flags.get('has_fine_dine_bar') or flags.get('has_fine_dine'):
-                                        new_type = 'fine_dine_bar'
                                     elif flags.get('has_hotel_resort'):
                                         new_type = 'hotel_resort'
                                     elif flags.get('has_club_lounge'):
                                         new_type = 'club_lounge'
-                                    elif flags.get('has_complete_restaurant_without_alcohol'):
-                                        new_type = 'restaurant_standard'
                                     elif flags.get('has_restaurant') or flags.get('is_restaurant'):
                                         new_type = 'restaurant_standard'
 
@@ -346,40 +366,65 @@ class MasterBillingService:
                                         branch_updates['has_restaurant_module'] = has_rest
                                         target_branch.has_restaurant_module = has_rest
 
-                                    has_htl = bool(
-                                        flags.get('has_hotel') or
-                                        flags.get('is_hotel') or
-                                        flags.get('has_hotel_management') or
-                                        flags.get('has_hotel_management_room_pms') or
-                                        flags.get('has_hotel_resort')
-                                    ) and getattr(restaurant, 'feature_hotel_pms', True)
+                                    # Hotel PMS: checks has_hotel, has_hotel_management, has_hotel_resort
+                                    if 'has_hotel' in flags:
+                                        has_htl = bool(flags.get('has_hotel') or flags.get('has_hotel_management'))
+                                    else:
+                                        has_htl = bool(
+                                            flags.get('has_hotel_management') or
+                                            flags.get('has_hotel_management_room_pms') or
+                                            flags.get('has_hotel_resort')
+                                        )
+                                    has_htl = has_htl and getattr(restaurant, 'feature_hotel_pms', True)
                                     if target_branch.has_hotel_module != has_htl:
                                         branch_updates['has_hotel_module'] = has_htl
                                         target_branch.has_hotel_module = has_htl
 
-                                    has_clb = bool(
-                                        flags.get('has_club') or
-                                        flags.get('is_bar_club') or
-                                        flags.get('has_club_events') or
-                                        flags.get('has_event_management') or
-                                        flags.get('has_club_event_ticketing_passes') or
-                                        flags.get('has_club_lounge')
-                                    ) and getattr(restaurant, 'feature_club_events', True)
+                                    # Club & Events: has_club is authoritative boolean from Master Admin
+                                    if 'has_club' in flags:
+                                        has_clb = bool(flags.get('has_club'))
+                                    else:
+                                        has_clb = bool(
+                                            flags.get('has_club_events') or
+                                            flags.get('has_event_management') or
+                                            flags.get('has_club_event_ticketing_passes') or
+                                            flags.get('has_club_lounge')
+                                        )
+                                    has_clb = has_clb and getattr(restaurant, 'feature_club_events', True)
                                     if target_branch.has_club_module != has_clb:
                                         branch_updates['has_club_module'] = has_clb
                                         target_branch.has_club_module = has_clb
 
                                     # 4. Resolve Branch Add-ons list
                                     # Major standalone modules only; base tier features are bundled in the tier
-                                    active_addons = set()
+                                    active_addons = set(target_branch.branch_addons or [])
                                     if has_htl:
                                         active_addons.add('hotel')
                                         if flags.get('has_spas_wellness') or flags.get('has_spa') or flags.get('has_wellness'):
                                             active_addons.add('hotel_spa')
                                         if flags.get('has_cabs') or flags.get('has_cab') or flags.get('has_transport'):
                                             active_addons.add('hotel_cabs')
+                                    else:
+                                        active_addons.difference_update(['hotel', 'hotel_spa', 'hotel_cabs'])
+
                                     if has_clb:
                                         active_addons.add('events')
+                                    else:
+                                        active_addons.discard('events')
+
+                                    # Explicit add-on flags (e.g. for POS Only or Starter branches)
+                                    if flags.get('has_delivery') or flags.get('has_zomato_swiggy'):
+                                        active_addons.add('delivery')
+                                    if flags.get('has_finance') or flags.get('has_pnl'):
+                                        active_addons.add('finance')
+                                    if flags.get('has_guests') or flags.get('has_loyalty'):
+                                        active_addons.add('guests')
+                                    if flags.get('has_integrations'):
+                                        active_addons.add('integrations')
+                                    if flags.get('has_inventory') or flags.get('has_stock'):
+                                        active_addons.add('inventory')
+                                    if flags.get('has_staff') or flags.get('has_payroll'):
+                                        active_addons.add('staff')
 
                                     new_addons_list = sorted(list(active_addons))
                                     if target_branch.branch_addons != new_addons_list:

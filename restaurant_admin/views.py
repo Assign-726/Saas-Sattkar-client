@@ -867,6 +867,9 @@ def order_create_manual(request, restaurant_slug=None):
                 advance_amount_input = arc.advance_amount
 
         # Determine payments, paid_amount, due_amount & payment_status
+        # A 'paid' flag only settles the bill on a settle action; KOT / draft saves never mark it paid.
+        wants_settle = action in ['settle_order', 'print_close'] or (
+            data.get('payment_status') == 'paid' and action not in ['fire_kot', 'save_kot', 'save_draft', 'draft'])
         payments_input = data.get('payments')
         valid_payments = []
         clean_tenders = []
@@ -902,14 +905,14 @@ def order_create_manual(request, restaurant_slug=None):
             paid_amount_val = safe_decimal(data.get('paid_amount'))
             if paid_amount_val > 0:
                 valid_payments = [{'method': payment_method, 'amount': float(paid_amount_val)}]
-        elif (action in ['settle_order', 'print_close'] or data.get('payment_status') == 'paid') and grand_total_val > Decimal('0.00'):
+        elif wants_settle and grand_total_val > Decimal('0.00'):
             paid_amount_val = max(Decimal('0.00'), grand_total_val - advance_amount_input)
             valid_payments = [{'method': payment_method, 'amount': float(paid_amount_val)}]
         else:
             paid_amount_val = Decimal('0.00')
             valid_payments = []
 
-        if (action in ['settle_order', 'print_close'] or data.get('payment_status') == 'paid') and payment_method != 'credit' and grand_total_val > Decimal('0.00'):
+        if wants_settle and payment_method != 'credit' and grand_total_val > Decimal('0.00'):
             if paid_amount_val <= Decimal('0.00'):
                 paid_amount_val = max(Decimal('0.00'), grand_total_val - advance_amount_input)
                 valid_payments = [{'method': payment_method, 'amount': float(paid_amount_val)}]
@@ -1293,7 +1296,7 @@ def order_create_manual(request, restaurant_slug=None):
                                                     order.pk, grand_total_val, server_total)
             order.update_total()
         bill_total = Decimal(str(order.total_amount or 0))
-        settling = action in ['settle_order', 'print_close'] or data.get('payment_status') == 'paid'
+        settling = wants_settle
         if settling and payment_method != 'credit' and bill_total > 0 and paid_amount_val <= 0:
             paid_amount_val = max(Decimal('0.00'), bill_total - advance_amount_input)
             valid_payments = [{'method': payment_method, 'amount': float(paid_amount_val)}]
@@ -2933,7 +2936,7 @@ def party_ledger_detail(request, restaurant_slug, pk):
             'type_code': 'PURCHASE',
             'amount': dn.grand_total,
             'payment_status': 'adjusted',
-            'url': reverse('restaurant_admin:purchase_return_detail', kwargs={'restaurant_slug': restaurant.slug, 'pk': dn.pk})
+            'url': reverse('restaurant_admin:purchase_invoice', kwargs={'restaurant_slug': restaurant.slug, 'pk': dn.bill_id}) if dn.bill_id else ''
         })
 
     for ord_obj in sales:
@@ -3021,7 +3024,8 @@ def purchase_sidebar_panel(request, restaurant_slug=None):
         return restaurant
     response = render(request, 'restaurant_admin/purchases/sidebar_panel.html', {
         'restaurant': restaurant,
-        'active_menu': 'purchases',
+        # Full-screen pages share this drawer; ?menu= says which item to highlight (POS create order, purchases, ...)
+        'active_menu': request.GET.get('menu') if (request.GET.get('menu') or '').replace('_', '').isalnum() else 'purchases',
         'zen_sidebar_panel': True,
     })
     response['X-Frame-Options'] = 'SAMEORIGIN'

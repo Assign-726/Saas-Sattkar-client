@@ -4567,10 +4567,290 @@
   {% endif %}
 </span>
 
+<!-- Full-window POS, like the purchase voucher: the admin sidebar and top bar step aside, a dark title bar
+     carries the order tools, and the small arrow on the left edge (or Alt+M) slides the admin menu in. -->
+<style>
+  body.pos-zen { --zen-chrome: #3b4a63; --zen-ink: #f8fafc; --zen-muted: #c3cddb; --zen-accent: #059669; }
+  [data-theme="dark"] body.pos-zen, body.pos-zen.dark-mode { --zen-chrome: #0a0c11; --zen-ink: #e8ebf1; --zen-muted: #7d8798; --zen-accent: #10b981; }
+  body.pos-zen .sidebar, body.pos-zen .sidebar-backdrop, body.pos-zen .mobile-navbar,
+  body.pos-zen .global-admin-topbar, body.pos-zen #desktopSidebarCollapseBtn, body.pos-zen .ui-rail-toggle { display: none !important; }
+  body.pos-zen .main-content, html.sidebar-collapsed body.pos-zen .main-content {
+    margin-left: 0 !important; width: 100% !important; padding: 0 !important;
+  }
+  body.pos-zen .shell { border-radius: 0 !important; border-left: 0 !important; border-right: 0 !important; }
+
+  body.pos-zen .pos-top-bar {
+    background: var(--zen-chrome) !important; color: var(--zen-ink); border: 0 !important; border-radius: 0 !important;
+    box-shadow: none !important; margin: 0 !important; min-height: 44px; padding: 4px 10px 4px 12px !important; gap: 18px;
+  }
+  body.pos-zen .pos-top-left { gap: 14px; }
+  .pos-zen-back {
+    display: none; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,.12); color: var(--zen-muted); text-decoration: none; font-size: .8rem; font-weight: 600; white-space: nowrap;
+  }
+  .pos-zen-back:hover { border-color: rgba(255,255,255,.28); color: var(--zen-ink); }
+  body.pos-zen .pos-zen-back { display: inline-flex; }
+  body.pos-zen .pos-top-order-btn {
+    background: rgba(255,255,255,.05) !important; border: 1px solid rgba(255,255,255,.12) !important; color: var(--zen-ink) !important;
+    height: 34px; border-radius: 8px !important; box-shadow: none !important;
+  }
+  body.pos-zen .pos-top-order-btn:hover { border-color: rgba(255,255,255,.28) !important; }
+  body.pos-zen .pos-top-order-btn::before { content: "◆"; color: var(--zen-accent); font-size: .8rem; margin-right: 2px; }
+  body.pos-zen .pos-top-order-title { color: var(--zen-ink) !important; }
+  body.pos-zen .pos-top-order-sub { color: var(--zen-muted) !important; }
+  body.pos-zen .pos-top-new-btn {
+    background: transparent !important; color: var(--zen-ink) !important; border: 1px solid rgba(255,255,255,.12) !important; box-shadow: none !important;
+  }
+  body.pos-zen .pos-top-new-btn:hover { border-color: var(--zen-accent) !important; }
+  body.pos-zen .pos-top-new-btn kbd { background: transparent !important; color: var(--zen-muted) !important; border-color: rgba(255,255,255,.2) !important; }
+  body.pos-zen .pos-top-tool-btn:not(#btnPosCloseRegister) {
+    background: transparent !important; border-color: transparent !important; color: var(--zen-muted) !important; box-shadow: none !important;
+  }
+  body.pos-zen .pos-top-tool-btn:not(#btnPosCloseRegister):hover { color: var(--zen-ink) !important; background: rgba(255,255,255,.08) !important; }
+  body.pos-zen .pos-top-order-badge { background: transparent !important; color: var(--zen-muted) !important; border-color: rgba(255,255,255,.2) !important; }
+  body.pos-zen .pos-shift-info-badge { background: rgba(255,255,255,.06) !important; color: var(--zen-ink) !important; border-color: rgba(255,255,255,.14) !important; }
+  body.pos-zen .pos-shift-info-badge i { color: var(--zen-muted) !important; }
+
+  /* Admin menu drawer (same as the purchase voucher) */
+  .zen-nav-handle {
+    position: fixed; left: 0; top: 50%; z-index: 1040; transform: translateY(-50%); display: none; align-items: center; justify-content: center;
+    width: 16px; height: 56px; padding: 0; border: 1px solid var(--ui-separator-strong, #cbd5e1); border-left: none; border-radius: 0 8px 8px 0;
+    background: var(--ui-surface, #fff); color: var(--ui-label-2, #64748b); box-shadow: 0 2px 8px rgba(15,23,42,.08); cursor: pointer; opacity: .75;
+    transition: width .15s ease, opacity .15s ease, color .15s ease;
+  }
+  body.pos-zen .zen-nav-handle { display: flex; }
+  .zen-nav-handle:hover, .zen-nav-handle:focus-visible { width: 22px; opacity: 1; color: var(--zen-accent); outline: none; }
+  .zen-nav-backdrop { position: fixed; inset: 0; z-index: 1045; background: rgba(15,23,42,.35); }
+  .zen-nav-backdrop[hidden] { display: none; }
+  .zen-nav {
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 1050; width: 260px; max-width: 85vw; background: var(--ui-surface, #fff);
+    box-shadow: 0 12px 40px rgba(15,23,42,.25); transform: translateX(-100%); visibility: hidden;
+    transition: transform .22s cubic-bezier(.4,0,.2,1), visibility 0s linear .22s;
+  }
+  .zen-nav.open { transform: none; visibility: visible; transition: transform .22s cubic-bezier(.4,0,.2,1), visibility 0s; }
+  .zen-nav iframe { display: block; width: 100%; height: 100%; border: 0; background: var(--ui-surface, #fff); }
+  .zen-nav-close {
+    position: absolute; top: 50%; right: -16px; transform: translateY(-50%); display: flex; align-items: center; justify-content: center;
+    width: 16px; height: 56px; padding: 0; border: 1px solid var(--ui-separator-strong, #cbd5e1); border-left: none; border-radius: 0 8px 8px 0;
+    background: var(--ui-surface, #fff); color: var(--ui-label-2, #64748b); cursor: pointer;
+  }
+  .zen-nav-close:hover { color: var(--zen-accent); }
+  body.zen-nav-open .zen-nav-handle { visibility: hidden; }
+  @media print { .zen-nav-handle, .zen-nav, .zen-nav-backdrop { display: none !important; } }
+</style>
+<script>document.body.classList.add('pos-zen');</script>
+
+<button type="button" id="zen-nav-handle" class="zen-nav-handle" tabindex="-1" title="Open admin menu (Alt+M)" aria-label="Open admin menu" aria-controls="zen-nav" aria-expanded="false">
+  <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</button>
+<div id="zen-nav-backdrop" class="zen-nav-backdrop" hidden></div>
+<aside id="zen-nav" class="zen-nav" aria-label="Admin menu" aria-hidden="true" data-src="{% url 'restaurant_admin:purchase_sidebar_panel' restaurant_slug=restaurant.slug %}?menu=order_create_manual">
+  <iframe id="zen-nav-frame" title="Admin menu" tabindex="-1"></iframe>
+  <button type="button" id="zen-nav-close" class="zen-nav-close" tabindex="-1" title="Close menu (Esc)" aria-label="Close admin menu">
+    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+</aside>
+<script>
+(function () {
+  const nav = document.getElementById('zen-nav'), frame = document.getElementById('zen-nav-frame');
+  const handle = document.getElementById('zen-nav-handle'), backdrop = document.getElementById('zen-nav-backdrop');
+  let returnFocus = null;
+  const load = () => { if (!frame.getAttribute('src')) frame.setAttribute('src', nav.dataset.src); };
+  const isOpen = () => nav.classList.contains('open');
+  function openNav() {
+    load(); returnFocus = document.activeElement;
+    nav.classList.add('open'); nav.setAttribute('aria-hidden', 'false'); handle.setAttribute('aria-expanded', 'true');
+    backdrop.hidden = false; document.body.classList.add('zen-nav-open'); frame.focus();
+  }
+  function closeNav() {
+    if (!isOpen()) return;
+    nav.classList.remove('open'); nav.setAttribute('aria-hidden', 'true'); handle.setAttribute('aria-expanded', 'false');
+    backdrop.hidden = true; document.body.classList.remove('zen-nav-open');
+    if (returnFocus && returnFocus.isConnected && returnFocus !== document.body) returnFocus.focus();
+  }
+  handle.addEventListener('mousedown', e => e.preventDefault());
+  handle.addEventListener('click', openNav);
+  document.getElementById('zen-nav-close').addEventListener('click', closeNav);
+  backdrop.addEventListener('click', closeNav);
+  // Captured before the POS keys: Esc closes the menu, Alt+M toggles it
+  window.addEventListener('keydown', e => {
+    if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'm') { e.preventDefault(); e.stopPropagation(); isOpen() ? closeNav() : openNav(); return; }
+    if (e.key === 'Escape' && isOpen()) { e.preventDefault(); e.stopPropagation(); closeNav(); }
+  }, true);
+  frame.addEventListener('load', () => {
+    let doc; try { doc = frame.contentDocument; } catch (_) { return; }
+    if (doc) doc.addEventListener('keydown', e => { if (e.key === 'Escape' || (e.altKey && e.key.toLowerCase() === 'm')) { e.preventDefault(); closeNav(); } });
+  });
+  const idle = window.requestIdleCallback || (fn => setTimeout(fn, 1500));
+  window.addEventListener('load', () => idle(load, { timeout: 4000 }));
+})();
+</script>
+
+<!-- POS settings drawer (gear, top right): slides in from the right like the purchase voucher's settings -->
+<style>
+  .pos-settings-btn { width: 34px; justify-content: center; font-size: 1rem; }
+  .pss-backdrop { position: fixed; inset: 0; z-index: 1055; background: rgba(15,23,42,.25); }
+  .pss-backdrop[hidden] { display: none; }
+  .pss {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 1060; width: 400px; max-width: 92vw; overflow-y: auto;
+    background: var(--ui-surface, #fff); color: var(--ui-label, #0f172a); box-shadow: -12px 0 40px rgba(15,23,42,.18);
+    padding: 22px 26px; transform: translateX(100%); visibility: hidden;
+    transition: transform .22s cubic-bezier(.4,0,.2,1), visibility 0s linear .22s;
+  }
+  .pss.open { transform: none; visibility: visible; transition: transform .22s cubic-bezier(.4,0,.2,1), visibility 0s; }
+  .pss-head { display: flex; align-items: center; justify-content: space-between; }
+  .pss-head h2 { font-size: 1.2rem; font-weight: 700; margin: 0; }
+  .pss-close { border: 0; background: none; font-size: 1.4rem; line-height: 1; color: var(--ui-label-2, #64748b); cursor: pointer; padding: 4px 6px; border-radius: 6px; }
+  .pss-close:hover { background: var(--ui-surface-2, #f1f5f9); }
+  .pss-keys { margin: 6px 0 18px; font-size: .78rem; color: var(--ui-label-2, #64748b); }
+  .pss-keys kbd { font-size: .7rem; padding: 0 5px; border: 1px solid var(--ui-separator-strong, #cbd5e1); border-radius: 4px; background: var(--ui-surface-2, #f8fafc); color: inherit; }
+  .pss-sec { font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ui-label-2, #64748b); margin: 18px 0 10px; }
+  .pss-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 8px; margin: 0 -8px; border-radius: 8px; outline: none; }
+  .pss-row:focus-visible, .pss-row.kb { background: var(--ui-surface-2, #f1f5f9); }
+  .pss-row-t { font-weight: 600; font-size: .95rem; }
+  .pss-row-d { font-size: .8rem; color: var(--ui-label-2, #64748b); margin-top: 2px; }
+  .pss-seg { display: inline-flex; border: 1px solid var(--ui-separator-strong, #cbd5e1); border-radius: 9px; padding: 2px; flex-shrink: 0; }
+  .pss-seg button { border: 0; background: none; padding: 5px 12px; border-radius: 7px; font-size: .85rem; font-weight: 600; color: var(--ui-label-2, #64748b); cursor: pointer; }
+  .pss-seg button.on { background: var(--ui-surface, #fff); color: #059669; box-shadow: 0 0 0 1px #059669 inset; }
+  .pss-sw { position: relative; width: 44px; height: 24px; flex-shrink: 0; border-radius: 12px; border: 0; background: var(--ui-separator-strong, #cbd5e1); cursor: pointer; transition: background .15s; }
+  .pss-sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .pss-sw[aria-checked="true"] { background: #059669; }
+  .pss-sw[aria-checked="true"]::after { transform: translateX(20px); }
+  .pss-more { display: inline-flex; align-items: center; gap: 6px; margin-top: 22px; font-size: .88rem; font-weight: 600; color: var(--ui-accent-text, #2563eb); text-decoration: none; }
+</style>
+<div id="posSettingsBackdrop" class="pss-backdrop" hidden></div>
+<aside id="posSettingsDrawer" class="pss" aria-label="Settings" aria-hidden="true">
+  <div class="pss-head">
+    <h2>Settings</h2>
+    <button type="button" class="pss-close" id="posSettingsClose" title="Close (Esc)" aria-label="Close settings">&times;</button>
+  </div>
+  <div class="pss-keys"><kbd>&uarr;</kbd> <kbd>&darr;</kbd> move &nbsp; <kbd>Space</kbd> on / off &nbsp; <kbd>&larr;</kbd> <kbd>&rarr;</kbd> theme &nbsp; <kbd>Esc</kbd> close</div>
+
+  <div class="pss-sec">Appearance</div>
+  <div class="pss-row" tabindex="0" data-kind="theme">
+    <div><div class="pss-row-t">Theme</div><div class="pss-row-d">Light reads best at a bright counter; Auto follows the device</div></div>
+    <div class="pss-seg" role="radiogroup" aria-label="Theme">
+      <button type="button" tabindex="-1" data-theme-pick="system">Auto</button>
+      <button type="button" tabindex="-1" data-theme-pick="dark">Dark</button>
+      <button type="button" tabindex="-1" data-theme-pick="light">Light</button>
+    </div>
+  </div>
+
+  <div class="pss-sec">Sound</div>
+  <div class="pss-row" tabindex="0" data-kind="switch" data-switch="alerts">
+    <div><div class="pss-row-t">New order alerts</div><div class="pss-row-d">A chime when a new online or QR order arrives</div></div>
+    <button type="button" class="pss-sw" role="switch" tabindex="-1" aria-checked="false" aria-label="New order alerts"></button>
+  </div>
+  <div class="pss-row" tabindex="0" data-kind="switch" data-switch="sfx">
+    <div><div class="pss-row-t">Key-press ticks</div><div class="pss-row-d">A short tick confirms each entry, so the screen does not have to be watched</div></div>
+    <button type="button" class="pss-sw" role="switch" tabindex="-1" aria-checked="true" aria-label="Key-press ticks"></button>
+  </div>
+
+  <a class="pss-more" href="{% url 'restaurant_admin:settings' restaurant_slug=restaurant.slug %}" target="_blank" rel="noopener">
+    All restaurant settings <span aria-hidden="true">&rarr;</span>
+  </a>
+</aside>
+<script>
+(function () {
+  const drawer = document.getElementById("posSettingsDrawer"), backdrop = document.getElementById("posSettingsBackdrop");
+  const isOpen = () => drawer.classList.contains("open");
+  let returnFocus = null;
+
+  // Theme: the admin's theme manager directly (same saved setting everywhere). Clicking the hidden sidebar
+  // switcher instead froze the page.
+  function currentTheme() {
+    try { if (window.ThemeManager) return window.ThemeManager.getStoredPreference(); } catch (e) { }
+    try { return localStorage.getItem("app-theme-preference") || "system"; } catch (e) { return "system"; }
+  }
+  function setTheme(v) {
+    if (window.ThemeManager) window.ThemeManager.applyTheme(v, true);
+    paint();
+  }
+
+  // New order alerts: the admin's sound toggle (same setting as the "Sound ON" button elsewhere)
+  const alertsOn = () => { try { return localStorage.getItem("order_notif_sound_enabled") !== "0"; } catch (e) { return true; } };
+  function toggleAlerts() {
+    const b = document.getElementById("globalSoundToggleBtn");
+    if (b) b.click(); else try { localStorage.setItem("order_notif_sound_enabled", alertsOn() ? "0" : "1"); } catch (e) { }
+    paint();
+  }
+  const sfxOn = () => { try { return localStorage.getItem("pos_sfx_enabled") !== "0"; } catch (e) { return true; } };
+  function toggleSfx() {
+    try { localStorage.setItem("pos_sfx_enabled", sfxOn() ? "0" : "1"); } catch (e) { }
+    paint();
+    if (sfxOn() && window.SFX && window.SFX.add) window.SFX.add();
+  }
+
+  function paint() {
+    const t = currentTheme();
+    drawer.querySelectorAll("[data-theme-pick]").forEach(b => { b.classList.toggle("on", b.dataset.themePick === t); b.setAttribute("aria-checked", b.dataset.themePick === t); });
+    drawer.querySelector('[data-switch="alerts"] .pss-sw').setAttribute("aria-checked", alertsOn());
+    drawer.querySelector('[data-switch="sfx"] .pss-sw').setAttribute("aria-checked", sfxOn());
+  }
+
+  function open() {
+    returnFocus = document.activeElement;
+    paint();
+    drawer.classList.add("open"); drawer.setAttribute("aria-hidden", "false"); backdrop.hidden = false;
+    const gearOpen = document.getElementById("posSettingsBtn"); if (gearOpen) gearOpen.setAttribute("aria-expanded", "true");
+    const first = drawer.querySelector(".pss-row"); if (first) first.focus();
+  }
+  function close() {
+    if (!isOpen()) return;
+    drawer.classList.remove("open"); drawer.setAttribute("aria-hidden", "true"); backdrop.hidden = true;
+    const gearClose = document.getElementById("posSettingsBtn"); if (gearClose) gearClose.setAttribute("aria-expanded", "false");
+    const back = returnFocus && returnFocus.isConnected && returnFocus !== document.body ? returnFocus : document.getElementById("fItem");
+    if (back) back.focus();
+  }
+  window.posToggleSettings = () => (isOpen() ? close() : open());
+
+  // Delegated: this script runs before the top bar (and its gear) is on the page
+  document.addEventListener("click", e => {
+    if (e.target.closest && e.target.closest("#posSettingsBtn")) { e.preventDefault(); window.posToggleSettings(); }
+  });
+  document.getElementById("posSettingsClose").addEventListener("click", close);
+  backdrop.addEventListener("click", close);
+  drawer.querySelectorAll("[data-theme-pick]").forEach(b => b.addEventListener("click", () => setTheme(b.dataset.themePick)));
+  drawer.querySelector('[data-switch="alerts"] .pss-sw').addEventListener("click", toggleAlerts);
+  drawer.querySelector('[data-switch="sfx"] .pss-sw').addEventListener("click", toggleSfx);
+
+  // Keyboard, captured before the POS keys while the drawer is open
+  window.addEventListener("keydown", e => {
+    if (!isOpen()) return;
+    const stop = () => { e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); };
+    const rows = [...drawer.querySelectorAll(".pss-row")];
+    const row = document.activeElement && document.activeElement.closest ? document.activeElement.closest(".pss-row") : null;
+    if (e.key === "Escape") { stop(); close(); return; }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      stop();
+      const i = rows.indexOf(row), n = e.key === "ArrowDown" ? i + 1 : i - 1;
+      rows[(n + rows.length) % rows.length].focus();
+      return;
+    }
+    if (!row) return;
+    if (row.dataset.kind === "theme" && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      stop();
+      const order = ["system", "dark", "light"], i = order.indexOf(currentTheme());
+      setTheme(order[(i + (e.key === "ArrowRight" ? 1 : order.length - 1)) % order.length]);
+      return;
+    }
+    if (row.dataset.kind === "switch" && (e.key === " " || e.key === "Enter")) {
+      stop();
+      row.dataset.switch === "alerts" ? toggleAlerts() : toggleSfx();
+      return;
+    }
+    if (e.key !== "Tab") stop(); // the POS shortcuts stay quiet while the drawer is open
+  }, true);
+})();
+</script>
+
 <div class="pos-container">
   <!-- ── TOP POS BAR (ACTIVE ORDER SWITCHER & TOOLS) ────────────────── -->
   <div class="pos-top-bar" id="posTopBar">
     <div class="pos-top-left">
+      <a href="{% url 'restaurant_admin:order_records' restaurant_slug=restaurant.slug %}" class="pos-zen-back" title="Back to Orders" aria-label="Back to Orders">
+        <span aria-hidden="true">←</span><span>Orders</span>
+      </a>
       <!-- Active Order Dropdown Trigger -->
       <div class="dropdown" id="topOrderDropdownWrap">
         <button class="pos-top-order-btn dropdown-toggle" type="button" id="topOrderDropdownBtn"
@@ -4649,11 +4929,11 @@
       <button type="button" class="pos-top-tool-btn" onclick="window.undo && window.undo()" title="Undo (Ctrl+Z)">
         Undo
       </button>
-      <a href="{% url 'restaurant_admin:settings' restaurant_slug=restaurant.slug %}" class="pos-top-tool-btn"
-        target="_blank" title="Settings">
-        <i class="bi bi-gear me-1"></i> Settings
-      </a>
       <span class="pos-top-order-badge" id="topOrderBadge">DRAFT</span>
+      <button type="button" class="pos-top-tool-btn pos-settings-btn" id="posSettingsBtn" title="Settings" aria-label="Settings"
+        aria-controls="posSettingsDrawer" aria-expanded="false">
+        <i class="bi bi-gear"></i>
+      </button>
     </div>
   </div>
 
@@ -7201,7 +7481,7 @@
       tableId: "",
       orderType: "dine_in",
       paymentMethod: "cash",
-      paymentStatus: "paid",
+      paymentStatus: "unpaid",
       billingMode: "split",
       exciseBillNo: "",
       gstinNo: "",
@@ -8260,6 +8540,7 @@
       } catch (e) { }
     }
     function tone(freq, ms, vol, type) {
+      try { if (localStorage.getItem("pos_sfx_enabled") === "0") return; } catch (e) { }
       const ac = ensureAC();
       if (!ac) return;
       if (ac.state === "running") {
@@ -14405,6 +14686,8 @@
 
     const selectedExtraIndices = new Set();
     let currentQty = 1;
+    let noteText = ""; // kept across re-renders (changing size / qty no longer wipes a half-typed note)
+    const MOD = window.IS_MAC || /Mac/i.test(navigator.platform) ? "⌥" : "Alt+";
 
     const oldVeil = document.getElementById("posVariantModalVeil");
     if (oldVeil) oldVeil.remove();
@@ -14433,6 +14716,7 @@
 
     function renderModalContents() {
       const { unitPrice, totalPrice } = calcTotals();
+      const focusedId = document.activeElement && card.contains(document.activeElement) ? document.activeElement.id : "";
 
       let sizesHtml = "";
       if (sizes.length > 0) {
@@ -14440,7 +14724,7 @@
           <div class="pos-vm-section" style="margin-bottom:18px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
               <span style="font-size:11px; font-weight:700; text-transform:none; letter-spacing: 0; color:var(--ui-label-2);">Select Size / Portion <span style="color:var(--ui-red-text);">*</span></span>
-              <span style="font-size:10.5px; font-weight:700; color:var(--ui-accent-text); background:rgba(var(--ui-accent-rgb), 0.1); padding:1px 6px; border-radius:4px;">1 Required</span>
+              <span style="font-size:10.5px; font-weight:700; color:var(--ui-accent-text); background:rgba(var(--ui-accent-rgb), 0.1); padding:1px 6px; border-radius:4px;">1 Required · 1–${Math.min(sizes.length, 9)} or ← →</span>
             </div>
             <div class="pos-vm-sizes-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px;">
               ${sizes
@@ -14469,17 +14753,17 @@
           <div class="pos-vm-section" style="margin-bottom:18px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
               <span style="font-size:11px; font-weight:700; text-transform:none; letter-spacing: 0; color:var(--ui-label-2);">Add-ons & Extras</span>
-              <span style="font-size:10.5px; font-weight:600; color:var(--ui-label-2); background:var(--ui-surface-2); padding:1px 6px; border-radius:4px;">Optional</span>
+              <span style="font-size:10.5px; font-weight:600; color:var(--ui-label-2); background:var(--ui-surface-2); padding:1px 6px; border-radius:4px;">Optional · Shift+number</span>
             </div>
             <div class="pos-vm-extras-grid" style="display:flex; flex-direction:column; gap:8px;">
               ${extras
-            .map((ex) => {
+            .map((ex, exIdx) => {
               const isChecked = selectedExtraIndices.has(ex.index);
               return `
                   <label class="pos-vm-extra-row ${isChecked ? "selected" : ""}" data-index="${ex.index}" style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border:1.5px solid ${isChecked ? "#3B82F6" : "#E2E8F0"}; background:${isChecked ? "#EFF6FF" : "#FFFFFF"}; border-radius:10px; cursor:pointer; transition:all .15s ease;">
                     <div style="display:flex; align-items:center; gap:10px;">
                       <input type="checkbox" class="pos-vm-extra-cb" data-index="${ex.index}" ${isChecked ? "checked" : ""} style="width:16px; height:16px; accent-color:#3B82F6; cursor:pointer;">
-                      <span style="font-size:13px; font-weight:600; color:var(--ui-label);">${escapeHtml(ex.name)}</span>
+                      <span style="font-size:13px; font-weight:600; color:var(--ui-label);">${escapeHtml(ex.name)}</span>${exIdx < 9 ? `<kbd style="font-size:9.5px; font-weight:700; color:var(--ui-label-2); background:var(--ui-surface-2); border:1px solid var(--ui-separator-strong); border-radius:4px; padding:0 4px; font-family: var(--ui-font-mono); margin-left:6px;">⇧${exIdx + 1}</kbd>` : ""}
                     </div>
                     <span style="font-size:12.5px; font-weight:700; color:${isChecked ? "#2563EB" : "#475569"}; font-family: var(--ui-font-mono);">+₹${ex.price.toFixed(2)}</span>
                   </label>
@@ -14512,7 +14796,7 @@
           <!-- Cooking Note & Quick Chips -->
           <div style="margin-top:6px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-              <span style="font-size:10px; font-weight:700; text-transform:none; letter-spacing: 0; color:var(--ui-label-2);">Special Cooking Instruction</span>
+              <span style="font-size:10px; font-weight:700; text-transform:none; letter-spacing: 0; color:var(--ui-label-2);">Special Cooking Instruction <kbd style="font-size:9.5px; font-weight:700; color:var(--ui-label-2); background:var(--ui-surface-2); border:1px solid var(--ui-separator-strong); border-radius:4px; padding:0 4px; font-family: var(--ui-font-mono); margin-left:6px;">N</kbd></span>
             </div>
             <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
               ${[
@@ -14522,24 +14806,24 @@
           "Pack Separately",
         ]
           .map(
-            (chip) => `
-                <button type="button" class="pos-vm-chip" data-text="${escapeHtml(chip)}" style="border:1px solid var(--ui-separator-strong); background:var(--ui-surface); border-radius:6px; padding:3px 9px; font-size:11px; font-weight:600; color:var(--ui-label); cursor:pointer; transition:.1s;">+ ${escapeHtml(chip)}</button>
+            (chip, cIdx) => `
+                <button type="button" class="pos-vm-chip" data-text="${escapeHtml(chip)}" tabindex="-1" style="border:1px solid var(--ui-separator-strong); background:var(--ui-surface); border-radius:6px; padding:3px 9px; font-size:11px; font-weight:600; color:var(--ui-label); cursor:pointer; transition:.1s;">+ ${escapeHtml(chip)}<kbd style="font-size:9.5px; font-weight:700; color:var(--ui-label-2); background:var(--ui-surface-2); border:1px solid var(--ui-separator-strong); border-radius:4px; padding:0 4px; font-family: var(--ui-font-mono); margin-left:6px;">${MOD}${cIdx + 1}</kbd></button>
               `,
           )
           .join("")}
             </div>
-            <input type="text" id="posVmNoteInput" placeholder="e.g. Extra hot, cut into 6 slices" onkeydown="if(event.key==='Enter'){event.preventDefault(); event.stopPropagation(); document.getElementById('posVmAddBtn')?.click();}" style="width:100%; border:1.5px solid var(--ui-separator-strong); border-radius:8px; padding:8px 12px; font-size:13px; color:var(--ui-label); outline:none; transition:.15s;">
+            <input type="text" id="posVmNoteInput" autocomplete="off" value="${escapeHtml(noteText)}" placeholder="e.g. Extra hot, cut into 6 slices · Enter adds" style="width:100%; border:1.5px solid var(--ui-separator-strong); border-radius:8px; padding:8px 12px; font-size:13px; color:var(--ui-label); outline:none; transition:.15s;">
           </div>
         </div>
 
         <div class="pos-vm-footer" style="padding:14px 24px; border-top:1px solid var(--ui-separator); background:var(--ui-surface-2); display:flex; align-items:center; justify-content:space-between; gap:16px;">
           <!-- Quantity Stepper -->
           <div style="display:flex; align-items:center; gap:8px;">
-            <span style="font-size:11px; font-weight:700; text-transform:none; color:var(--ui-label-2);">QTY</span>
+            <span style="font-size:11px; font-weight:700; text-transform:none; color:var(--ui-label-2);">QTY <kbd style="font-size:9.5px; font-weight:700; color:var(--ui-label-2); background:var(--ui-surface-2); border:1px solid var(--ui-separator-strong); border-radius:4px; padding:0 4px; font-family: var(--ui-font-mono); margin-left:6px;">Q</kbd><kbd style="font-size:9.5px; font-weight:700; color:var(--ui-label-2); background:var(--ui-surface-2); border:1px solid var(--ui-separator-strong); border-radius:4px; padding:0 4px; font-family: var(--ui-font-mono); margin-left:6px;">+ −</kbd></span>
             <div style="display:inline-flex; align-items:center; border:1.5px solid var(--ui-separator-strong); border-radius:8px; background:var(--ui-surface); overflow:hidden;">
-              <button type="button" id="posVmQtyDec" style="border:none; background:var(--ui-surface); width:32px; height:32px; font-weight:700; font-size:15px; cursor:pointer; color:var(--ui-label); transition:.1s;">&minus;</button>
-              <span id="posVmQtyVal" style="width:34px; text-align:center; font-weight:700; font-size:14px; font-family: var(--ui-font-mono); color:var(--ui-label);">${currentQty}</span>
-              <button type="button" id="posVmQtyInc" style="border:none; background:var(--ui-surface); width:32px; height:32px; font-weight:700; font-size:15px; cursor:pointer; color:var(--ui-label); transition:.1s;">+</button>
+              <button type="button" id="posVmQtyDec" tabindex="-1" style="border:none; background:var(--ui-surface); width:32px; height:32px; font-weight:700; font-size:15px; cursor:pointer; color:var(--ui-label); transition:.1s;">&minus;</button>
+              <input id="posVmQtyVal" type="text" inputmode="numeric" autocomplete="off" value="${currentQty}" style="width:44px; height:32px; border:none; outline:none; text-align:center; font-weight:700; font-size:14px; font-family: var(--ui-font-mono); color:var(--ui-label); background:transparent;">
+              <button type="button" id="posVmQtyInc" tabindex="-1" style="border:none; background:var(--ui-surface); width:32px; height:32px; font-weight:700; font-size:15px; cursor:pointer; color:var(--ui-label); transition:.1s;">+</button>
             </div>
           </div>
 
@@ -14558,6 +14842,10 @@
       `;
 
       attachModalEvents();
+      if (focusedId) {
+        const f = card.querySelector("#" + focusedId);
+        if (f) { f.focus(); if (f.id === "posVmNoteInput") f.setSelectionRange(f.value.length, f.value.length); }
+      }
     }
 
     function attachModalEvents() {
@@ -14611,6 +14899,7 @@
             } else {
               inp.value = txt;
             }
+            noteText = inp.value;
           }
         };
       });
@@ -14634,6 +14923,21 @@
 
       const addBtn = card.querySelector("#posVmAddBtn");
       if (addBtn) addBtn.onclick = commitSelection;
+
+      const noteEl = card.querySelector("#posVmNoteInput");
+      if (noteEl) noteEl.oninput = function () { noteText = this.value; };
+      const qtyEl = card.querySelector("#posVmQtyVal");
+      if (qtyEl) {
+        qtyEl.onfocus = function () { this.select(); };
+        qtyEl.oninput = function () {
+          this.value = this.value.replace(/[^0-9]/g, "").slice(0, 4);
+          const n = parseInt(this.value, 10);
+          currentQty = n > 0 ? n : 1;
+          const t = card.querySelector("#posVmTotalText");
+          if (t) t.textContent = "₹" + calcTotals().totalPrice.toFixed(2);
+        };
+        qtyEl.onblur = function () { if (!(parseInt(this.value, 10) > 0)) this.value = currentQty; };
+      }
     }
 
     function closeModal() {
@@ -14661,7 +14965,7 @@
     function commitSelection() {
       const { unitPrice } = calcTotals();
       const noteInput = document.getElementById("posVmNoteInput");
-      const userInstruction = noteInput ? noteInput.value.trim() : "";
+      const userInstruction = (noteInput ? noteInput.value : noteText).trim();
 
       const variantName = activeSize ? activeSize.name : "";
       const chosenExtras = extras.filter((ex) =>
@@ -14702,6 +15006,45 @@
     const modalOpenedAt = Date.now();
 
     function handleKeyDown(e) {
+      const stop = () => { e.preventDefault(); e.stopPropagation(); if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation(); };
+      const ae = document.activeElement;
+      const inNote = !!ae && ae.id === "posVmNoteInput", inQty = !!ae && ae.id === "posVmQtyVal";
+      const digit = /^Digit([1-9])$/.exec(e.code || "");
+      // Esc inside the note / qty box steps out of the box first; the next Esc closes
+      if (e.key === "Escape" && (inNote || inQty)) { stop(); ae.blur(); return; }
+      // Alt (Option on Mac) + 1-4: quick cooking notes, also while typing the note
+      if (e.altKey && !e.ctrlKey && !e.metaKey && digit) {
+        const chip = card.querySelectorAll(".pos-vm-chip")[parseInt(digit[1], 10) - 1];
+        if (chip) { stop(); chip.click(); return; }
+      }
+      if (inQty) {
+        if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+          stop();
+          currentQty = Math.max(1, currentQty + (e.key === "ArrowUp" ? 1 : -1));
+          renderModalContents();
+          return;
+        }
+        if (e.key === "Tab") { stop(); const n = card.querySelector("#posVmNoteInput"); if (n) n.focus(); return; }
+        if (e.key !== "Enter") { e.stopPropagation(); return; } // typing the number
+      }
+      if (inNote) {
+        if (e.key === "Tab") { stop(); const q = card.querySelector("#posVmQtyVal"); if (q) q.focus(); return; }
+        if (e.key !== "Enter") { e.stopPropagation(); return; } // typing the note
+      }
+      if (!inNote && !inQty && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const k = (e.key || "").toLowerCase();
+        if (k === "n" || k === "/" || e.key === "Tab") { stop(); const n = card.querySelector("#posVmNoteInput"); if (n) n.focus(); return; }
+        if (k === "q") { stop(); const q = card.querySelector("#posVmQtyVal"); if (q) q.focus(); return; }
+        if (e.shiftKey && digit) { // Shift + 1-9 toggles an add-on
+          const ex = extras[parseInt(digit[1], 10) - 1];
+          if (ex) {
+            stop();
+            selectedExtraIndices.has(ex.index) ? selectedExtraIndices.delete(ex.index) : selectedExtraIndices.add(ex.index);
+            renderModalContents();
+            return;
+          }
+        }
+      }
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
@@ -15329,7 +15672,7 @@
     ">
     <!-- Header -->
     <div style="
-        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        background: var(--ui-accent);
         color: #ffffff;
         padding: 20px 24px;
       ">
@@ -15364,7 +15707,7 @@
             <p style="
                 margin: 2px 0 0;
                 font-size: 11.5px;
-                color: var(--ui-label-3);
+                color: #ffffff;
               ">
               Enter PIN and select Counter to start billing session
             </p>

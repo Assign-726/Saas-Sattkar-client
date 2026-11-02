@@ -35,12 +35,13 @@ def activity_log_access(request):
                     branch = user.restaurant_profile.restaurant.branches.first()
 
         if branch and hasattr(branch, 'is_feature_enabled'):
+            CORE_SYSTEM_AREAS = {'dashboard', 'settings', 'logs'}
             for area_key in list(access.keys()):
-                if not branch.is_feature_enabled(area_key):
+                if area_key not in CORE_SYSTEM_AREAS and not branch.is_feature_enabled(area_key):
                     access[area_key] = False
 
     access['guests_group'] = access.get('guests', False) or access.get('feedback', False) or access.get('campaigns', False)
-    can_fin = _can_manage_integrations(user)
+    can_fin = _can_manage_finance(user)
     if not getattr(user, 'is_superuser', False) and branch and hasattr(branch, 'is_feature_enabled'):
         if not branch.is_feature_enabled('finance'):
             can_fin = False
@@ -55,6 +56,16 @@ def activity_log_access(request):
         'can_manage_finance': can_fin,
         'can_run_campaigns': _can_manage_guests(user),
     }
+
+
+def _can_manage_finance(user):
+    from finance.views import can_manage
+    return can_manage(user)
+
+
+def _can_manage_finance(user):
+    from finance.views import can_manage
+    return can_manage(user)
 
 
 def _can_manage_guests(user):

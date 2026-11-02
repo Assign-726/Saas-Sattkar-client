@@ -485,12 +485,14 @@ class RestaurantBranch(models.Model):
         UNREGISTERED = 'U', 'Unregistered'
 
     class BranchType(models.TextChoices):
+        # Sattkar Master Admin 4 Primary Package Tiers
         ONLY_POS = 'only_pos', 'POS Only (Billing & Quick Order)'
-        STARTER_DHABA = 'starter_dhaba', 'Starter / Dhaba (Orders & Tables)'
+        STARTER_DHABA = 'starter_dhaba', 'Starter Package (Dhaba & Cafe)'
+        RESTAURANT_STANDARD = 'restaurant_standard', 'Complete Restaurant without Alcohol'
+        FINE_DINE_BAR = 'fine_dine_bar', 'Complete Restaurant with Bar / Fine Dine'
+        # Specialized & Legacy types
         TAKEAWAY_QSR = 'takeaway_qsr', 'Takeaway / QSR (Counter & Takeaway)'
         CLOUD_KITCHEN = 'cloud_kitchen', 'Cloud Kitchen (Delivery Only)'
-        RESTAURANT_STANDARD = 'restaurant_standard', 'Standard Restaurant (Full Dining)'
-        FINE_DINE_BAR = 'fine_dine_bar', 'Fine Dine & Bar (Dining, Bar VAT, CRM)'
         HOTEL_RESORT = 'hotel_resort', 'Hotel & Resort (Hotel PMS & Dining)'
         CLUB_LOUNGE = 'club_lounge', 'Club & Lounge (Events & Passes)'
         CUSTOM = 'custom', 'Custom / Enterprise'
@@ -752,12 +754,16 @@ class RestaurantBranch(models.Model):
         if clean in ('club', 'events', 'club_events'):
             if not getattr(self.restaurant, 'feature_club_events', True):
                 return False
-            return bool(ent.get('has_club') or ent.get('has_club_events') or ent.get('is_bar_club') or ent.get('has_event_management') or ent.get('has_club_lounge') or 'events' in addons)
+            if 'has_club' in ent:
+                return bool(ent.get('has_club') or 'events' in addons)
+            return bool(ent.get('has_club_events') or ent.get('has_event_management') or ent.get('has_club_lounge') or 'events' in addons)
 
         if clean in ('hotel', 'hotel_pms', 'pms'):
             if not getattr(self.restaurant, 'feature_hotel_pms', True):
                 return False
-            return bool(ent.get('has_hotel') or ent.get('has_hotel_management') or ent.get('is_hotel') or ent.get('has_hotel_resort') or 'hotel' in addons)
+            if 'has_hotel' in ent:
+                return bool(ent.get('has_hotel') or ent.get('has_hotel_management') or 'hotel' in addons)
+            return bool(ent.get('has_hotel_management') or ent.get('has_hotel_resort') or 'hotel' in addons)
 
         if clean in ('hotel_spa', 'spa', 'spas', 'wellness', 'spas_wellness'):
             if not self.is_module_licensed('hotel'):
@@ -781,6 +787,15 @@ class RestaurantBranch(models.Model):
 
         if clean in ('hotel_website',):
             return bool(getattr(self.restaurant, 'feature_hotel_website', False)) and self.is_module_licensed('hotel')
+
+        if clean in ('delivery', 'finance', 'guests', 'integrations', 'inventory', 'staff'):
+            # These are included in Complete Restaurant tiers or can be enabled via dynamic add-on flags
+            if ent.get('has_complete_restaurant_without_alcohol') or ent.get('has_complete_restaurant_with_alcohol'):
+                return True
+            if self.outlet_type in ('restaurant_standard', 'fine_dine_bar', 'hotel_resort'):
+                return True
+            if ent.get(f'has_{clean}') or clean in addons:
+                return True
 
         return True
 

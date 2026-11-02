@@ -2048,7 +2048,10 @@
     if (b.is_club_licensed !== undefined) return Boolean(b.is_club_licensed);
     const ent = b.plan_entitlements || {};
     const addons = b.branch_addons || [];
-    return Boolean(ent.has_club || ent.has_club_events || ent.is_bar_club || ent.has_event_management || ent.has_club_lounge || addons.includes('events'));
+    if ('has_club' in ent) {
+      return Boolean(ent.has_club || addons.includes('events'));
+    }
+    return Boolean(ent.has_club_events || ent.has_event_management || ent.has_club_lounge || addons.includes('events'));
   }
 
   function isBranchHotelLicensed(b) {
@@ -2056,7 +2059,10 @@
     if (b.is_hotel_licensed !== undefined) return Boolean(b.is_hotel_licensed);
     const ent = b.plan_entitlements || {};
     const addons = b.branch_addons || [];
-    return Boolean(ent.has_hotel || ent.has_hotel_management || ent.is_hotel || ent.has_hotel_resort || addons.includes('hotel'));
+    if ('has_hotel' in ent) {
+      return Boolean(ent.has_hotel || ent.has_hotel_management || addons.includes('hotel'));
+    }
+    return Boolean(ent.has_hotel_management || ent.has_hotel_resort || addons.includes('hotel'));
   }
 
   function isBranchSpaLicensed(b) {
@@ -3247,8 +3253,8 @@
       name: 'Complete Restaurant without Alcohol',
       price: '₹999/mo',
       badge: 'Standard Restaurant',
-      description: 'Full restaurant operations suite: POS billing, Dine-in tables, Kitchen Display (KDS), raw stock inventory, supplier purchase orders, staff management, cashflow P&L statements, and branded website CMS.',
-      features: ['POS Billing', 'Floor Tables', 'Kitchen KDS', 'Stock & Purchases Inventory', 'Staff & Payroll', 'Finance Cashflow P&L', 'Full Branded Website CMS', 'Sales Analytics'],
+      description: 'Full restaurant operations suite: POS billing, Dine-in tables, Kitchen Display (KDS), raw stock inventory, supplier purchase orders, staff management, cashflow P&L statements, Zomato & Swiggy online delivery, guest loyalty CRM, and branded website CMS.',
+      features: ['POS Billing', 'Floor Tables', 'Kitchen KDS', 'Stock & Purchases Inventory', 'Staff & Payroll', 'Finance Cashflow P&L', 'Zomato & Swiggy Delivery', 'Guests & Loyalty CRM', 'Full Branded Website CMS', 'Sales Analytics'],
       rate: 999,
     },
     'tier_fine_dine_bar': {
@@ -3256,7 +3262,7 @@
       price: '₹1,499/mo',
       badge: 'Fine Dine & Bar',
       description: 'All Complete Restaurant capabilities PLUS State VAT tax calculations, liquor stock tracking, excise license compliance, and beverage billing.',
-      features: ['Complete Restaurant Suite', 'State VAT & Excise Compliance', 'Liquor & Bar Inventory', 'Separate State VAT Invoicing'],
+      features: ['Complete Restaurant Suite', 'Zomato & Swiggy Delivery', 'Guests & Loyalty CRM', 'State VAT & Excise Compliance', 'Liquor & Bar Inventory', 'Separate State VAT Invoicing'],
       rate: 1499,
     },
   };

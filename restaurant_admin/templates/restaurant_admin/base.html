@@ -26,7 +26,7 @@
     <!-- Alpine.js for lightweight reactive data grids -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
     <script>
-        (function() {
+        (function () {
             const stored = localStorage.getItem('app-theme-preference') || 'system';
             const isDark = stored === 'system' ? window.matchMedia('(prefers-color-scheme: dark)').matches : stored === 'dark';
             const eff = isDark ? 'dark' : 'light';
@@ -772,19 +772,39 @@
          expanded; links and forms open in the whole window -->
     <base target="_top">
     <style>
-        html, body { overflow: hidden !important; }
-        html body .mobile-navbar, html body .main-content, html body .sidebar-backdrop,
-        html body #desktopSidebarCollapseBtn { display: none !important; }
+        html,
+        body {
+            overflow: hidden !important;
+        }
+
+        html body .mobile-navbar,
+        html body .main-content,
+        html body .sidebar-backdrop,
+        html body #desktopSidebarCollapseBtn {
+            display: none !important;
+        }
+
         html body .sidebar {
-            left: 0 !important; top: 0 !important; width: 100% !important;
-            height: 100vh !important; height: 100dvh !important;
-            transform: none !important; transition: none !important; box-shadow: none !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            height: 100vh !important;
+            height: 100dvh !important;
+            transform: none !important;
+            transition: none !important;
+            box-shadow: none !important;
         }
     </style>
     <script>
         // Collapsed mode is remembered for the full admin; the drawer always shows the labels
         (function () {
-            const expand = () => { document.documentElement.classList.remove('sidebar-collapsed'); if (document.body) document.body.classList.remove('sidebar-collapsed'); };
+            // Only touch the class when it is there: classList.remove() rewrites the attribute even when the class is
+            // absent, which re-fires this observer forever (froze the page on any theme change).
+            const expand = () => {
+                const h = document.documentElement, b = document.body;
+                if (h.classList.contains('sidebar-collapsed')) h.classList.remove('sidebar-collapsed');
+                if (b && b.classList.contains('sidebar-collapsed')) b.classList.remove('sidebar-collapsed');
+            };
             expand();
             const mo = new MutationObserver(expand);
             mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
@@ -794,7 +814,7 @@
     {% endif %}
 </head>
 
-<body{% with ','|add:active_menu|add:',' as am %}{% if am in ',inventory,inventory_categories,purchases,purchase_orders,purchase_grns,purchase_returns,purchase_reports,challans,inventory_logs,inventory_wastage,inventory_counts,parties,' %} data-smart-select="8"{% endif %}{% endwith %}>
+<body{% with ','|add:active_menu|add:',' as am %}{% if am in ',inventory,inventory_categories,purchases,challans,inventory_logs,inventory_wastage,inventory_counts,parties,' %} data-smart-select="8" {% endif %}{% endwith %}>
     {% with rslug=restaurant.slug|default:request.user.restaurant_profile.restaurant.slug %}
     {% if user.is_authenticated and user.is_staff %}
     <!-- Mobile Navigation Topbar -->
@@ -812,13 +832,16 @@
             {% endif %}
             <!-- Mobile Theme Switcher -->
             <div class="theme-segmented-control" style="width: auto; margin: 0; padding: 2px;">
-                <button type="button" class="theme-seg-btn" data-theme-val="light" title="Light Mode" style="width: 28px; height: 28px; flex: none;">
+                <button type="button" class="theme-seg-btn" data-theme-val="light" title="Light Mode"
+                    style="width: 28px; height: 28px; flex: none;">
                     <i class="fas fa-sun" style="font-size: 12px;"></i>
                 </button>
-                <button type="button" class="theme-seg-btn" data-theme-val="dark" title="Dark Mode" style="width: 28px; height: 28px; flex: none;">
+                <button type="button" class="theme-seg-btn" data-theme-val="dark" title="Dark Mode"
+                    style="width: 28px; height: 28px; flex: none;">
                     <i class="fas fa-moon" style="font-size: 12px;"></i>
                 </button>
-                <button type="button" class="theme-seg-btn" data-theme-val="system" title="System Theme" style="width: 28px; height: 28px; flex: none;">
+                <button type="button" class="theme-seg-btn" data-theme-val="system" title="System Theme"
+                    style="width: 28px; height: 28px; flex: none;">
                     <i class="fas fa-desktop" style="font-size: 12px;"></i>
                 </button>
             </div>
@@ -827,11 +850,13 @@
             <button type="button" class="btn btn-sm btn-light border position-relative p-1 px-2" data-nt-open
                 title="Notifications" aria-label="Notifications" style="border-radius: 8px;">
                 <i class="bi bi-bell-fill text-primary fs-6"></i>
-                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none global-notif-badge"
+                <span
+                    class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none global-notif-badge"
                     style="font-size: 0.65rem;">0</span>
             </button>
             {% elif is_club_user %}
-            <a href="{% url 'restaurant_admin:club_gate_scanner' restaurant_slug=rslug %}" class="btn btn-sm btn-dark py-1 px-2" title="Gate Scanner">
+            <a href="{% url 'restaurant_admin:club_gate_scanner' restaurant_slug=rslug %}"
+                class="btn btn-sm btn-dark py-1 px-2" title="Gate Scanner">
                 <i class="fas fa-qrcode text-warning"></i>
             </a>
             {% endif %}
@@ -851,8 +876,7 @@
                     <span style="font-size: 0.95rem; font-weight: 700;">{{ current_branch.name|default:current_restaurant.name|default:"Club & Events" }}</span>
                 </a>
                 {% elif is_hotel_user %}
-                <a href="{% url 'hotel_admin:dashboard' restaurant_slug=rslug %}"
-                    class="sidebar-brand text-truncate"
+                <a href="{% url 'hotel_admin:dashboard' restaurant_slug=rslug %}" class="sidebar-brand text-truncate"
                     title="{{ current_branch.name|default:current_restaurant.name|default:'Hotel PMS' }}">
                     <i class="fa-solid fa-hotel text-primary"></i>
                     <span style="font-size: 0.95rem; font-weight: 700;">{{ current_branch.name|default:current_restaurant.name|default:"Hotel PMS" }}</span>
@@ -928,10 +952,21 @@
                 {% endif %}
                 {% endif %}
 
+                {% if access.pos %}
+                <div class="sidebar-single-nav">
+                    <a class="nav-link {% if active_menu == 'transactions_create' %}active{% endif %}"
+                        href="{% url 'restaurant_admin:transaction_desk_create' restaurant_slug=rslug %}"
+                        title="Unified Transaction Desk">
+                        <i class="bi bi-ui-checks-grid"></i>
+                        <span>Transaction Desk</span>
+                    </a>
+                </div>
+                {% endif %}
+
                 {% if show_pos_group %}
                 <!-- Group 2: Point of Sale -->
                 <div class="sidebar-group">
-                    <div class="sidebar-group-header {% if active_menu == 'order_records' or active_menu == 'order_list' or active_menu == 'receipts' or active_menu == 'order_create_manual' or active_menu == 'transactions_create' or active_menu == 'credit_note' or active_menu == 'pos_shifts' or active_menu == 'pos_counters' %}open active-group{% endif %}"
+                    <div class="sidebar-group-header {% if active_menu == 'order_records' or active_menu == 'order_list' or active_menu == 'receipts' or active_menu == 'order_create_manual' or active_menu == 'credit_note' or active_menu == 'pos_shifts' or active_menu == 'pos_counters' or active_menu == 'challans' %}open active-group{% endif %}"
                         data-group-target="#group-pos">
                         <div class="group-title">
                             <i class="fas fa-cash-register"></i>
@@ -939,26 +974,16 @@
                         </div>
                         <i class="fas fa-chevron-down group-chevron"></i>
                     </div>
-                    <div class="sidebar-group-content {% if active_menu == 'order_records' or active_menu == 'order_list' or active_menu == 'receipts' or active_menu == 'order_create_manual' or active_menu == 'transactions_create' or active_menu == 'credit_note' or active_menu == 'pos_shifts' or active_menu == 'pos_counters' %}show{% endif %}"
+                    <div class="sidebar-group-content {% if active_menu == 'order_records' or active_menu == 'order_list' or active_menu == 'receipts' or active_menu == 'order_create_manual' or active_menu == 'credit_note' or active_menu == 'pos_shifts' or active_menu == 'pos_counters' or active_menu == 'challans' %}show{% endif %}"
                         id="group-pos">
                         <ul class="nav flex-column">
                             {% if access.pos %}
                             <li class="nav-item">
-                                <a class="nav-link {% if active_menu == 'transactions_create' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:transaction_desk_create' restaurant_slug=rslug %}"
-                                    title="Unified Transaction Desk">
-                                    <i class="bi bi-ui-checks-grid me-1"></i>
-                                    <span>Transaction Desk</span>
-                                </a>
-                            </li>
-                            {% endif %}
-                            {% if access.pos %}
-                            <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'order_create_manual' %}active{% endif %}"
                                     href="{% url 'restaurant_admin:order_create_manual' restaurant_slug=rslug %}"
-                                    title="New Local Order">
+                                    title="Create Order">
                                     <i class="bi bi-plus-lg"></i>
-                                    <span>New Local Order</span>
+                                    <span>Create Order</span>
                                 </a>
                             </li>
                             {% endif %}
@@ -1015,6 +1040,16 @@
                                 </a>
                             </li>
                             {% endif %}
+                            {% endif %}
+                            {% if access.inventory %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if active_menu == 'challans' %}active{% endif %}"
+                                    href="{% url 'restaurant_admin:challan_list' restaurant_slug=rslug %}"
+                                    title="Delivery Challans">
+                                    <i class="bi bi-truck"></i>
+                                    <span>Delivery Challans</span>
+                                </a>
+                            </li>
                             {% endif %}
                         </ul>
                     </div>
@@ -1182,7 +1217,8 @@
                         <ul class="nav flex-column">
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'delivery_zomato' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:delivery_dashboard' restaurant_slug=rslug platform='zomato' %}" title="Zomato orders, menu & payouts">
+                                    href="{% url 'restaurant_admin:delivery_dashboard' restaurant_slug=rslug platform='zomato' %}"
+                                    title="Zomato orders, menu & payouts">
                                     <i class="sb-brand" style="--b:#E23744">Z</i>
                                     <span>Zomato</span>
                                     {% if delivery_pending.zomato %}<span class="sb-count" style="--b:#E23744">{{ delivery_pending.zomato }}</span>{% endif %}
@@ -1190,7 +1226,8 @@
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'delivery_swiggy' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:delivery_dashboard' restaurant_slug=rslug platform='swiggy' %}" title="Swiggy orders, menu & payouts">
+                                    href="{% url 'restaurant_admin:delivery_dashboard' restaurant_slug=rslug platform='swiggy' %}"
+                                    title="Swiggy orders, menu & payouts">
                                     <i class="sb-brand" style="--b:#FC8019">S</i>
                                     <span>Swiggy</span>
                                     {% if delivery_pending.swiggy %}<span class="sb-count" style="--b:#FC8019">{{ delivery_pending.swiggy }}</span>{% endif %}
@@ -1277,7 +1314,7 @@
                 {% if show_stock_group %}
                 <!-- Group 5: Stock & Supply Chain -->
                 <div class="sidebar-group">
-                    <div class="sidebar-group-header {% if active_menu == 'inventory' or active_menu == 'inventory_categories' or active_menu == 'purchases' or active_menu == 'purchase_orders' or active_menu == 'purchase_grns' or active_menu == 'purchase_returns' or active_menu == 'purchase_reports' or active_menu == 'challans' or active_menu == 'inventory_logs' or active_menu == 'inventory_wastage' or active_menu == 'inventory_counts' %}open active-group{% endif %}"
+                    <div class="sidebar-group-header {% if active_menu == 'inventory' or active_menu == 'inventory_categories' or active_menu == 'purchases' or active_menu == 'inventory_logs' or active_menu == 'inventory_wastage' or active_menu == 'inventory_counts' %}open active-group{% endif %}"
                         data-group-target="#group-stock">
                         <div class="group-title">
                             <i class="fas fa-boxes"></i>
@@ -1285,7 +1322,7 @@
                         </div>
                         <i class="fas fa-chevron-down group-chevron"></i>
                     </div>
-                    <div class="sidebar-group-content {% if active_menu == 'inventory' or active_menu == 'inventory_categories' or active_menu == 'purchases' or active_menu == 'purchase_orders' or active_menu == 'purchase_grns' or active_menu == 'purchase_returns' or active_menu == 'purchase_reports' or active_menu == 'challans' or active_menu == 'inventory_logs' or active_menu == 'inventory_wastage' or active_menu == 'inventory_counts' %}show{% endif %}"
+                    <div class="sidebar-group-content {% if active_menu == 'inventory' or active_menu == 'inventory_categories' or active_menu == 'purchases' or active_menu == 'inventory_logs' or active_menu == 'inventory_wastage' or active_menu == 'inventory_counts' %}show{% endif %}"
                         id="group-stock">
                         <ul class="nav flex-column">
                             {% if access.inventory %}
@@ -1310,19 +1347,11 @@
                             {% endif %}
                             {% if access.inventory %}
                             <li class="nav-item">
-                                <a class="nav-link {% if active_menu == 'purchase_orders' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:purchase_orders' restaurant_slug=rslug %}"
-                                    title="Purchase Orders">
-                                    <i class="bi bi-cart-plus"></i>
-                                    <span>Purchase Orders</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link {% if active_menu == 'purchase_grns' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:purchase_grns' restaurant_slug=rslug %}"
-                                    title="Goods Receipt Notes">
-                                    <i class="bi bi-box-seam"></i>
-                                    <span>Goods Receipts (GRN)</span>
+                                <a class="nav-link"
+                                    href="{% url 'restaurant_admin:purchase_create' restaurant_slug=rslug %}"
+                                    title="Create a new goods inward purchase">
+                                    <i class="bi bi-plus-lg"></i>
+                                    <span>Create Purchase</span>
                                 </a>
                             </li>
                             {% endif %}
@@ -1333,34 +1362,6 @@
                                     title="Goods Inward">
                                     <i class="bi bi-box-arrow-in-down"></i>
                                     <span>Purchase Register</span>
-                                </a>
-                            </li>
-                            {% endif %}
-                            {% if access.inventory %}
-                            <li class="nav-item">
-                                <a class="nav-link {% if active_menu == 'purchase_returns' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:purchase_returns' restaurant_slug=rslug %}"
-                                    title="Purchase Returns / Debit Notes">
-                                    <i class="bi bi-arrow-return-left"></i>
-                                    <span>Purchase Returns</span>
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link {% if active_menu == 'purchase_reports' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:purchase_reports' restaurant_slug=rslug %}"
-                                    title="Purchase Reports">
-                                    <i class="bi bi-bar-chart-line"></i>
-                                    <span>Purchase Reports</span>
-                                </a>
-                            </li>
-                            {% endif %}
-                            {% if access.inventory %}
-                            <li class="nav-item">
-                                <a class="nav-link {% if active_menu == 'challans' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:challan_list' restaurant_slug=rslug %}"
-                                    title="Delivery Challans">
-                                    <i class="bi bi-truck"></i>
-                                    <span>Delivery Challans</span>
                                 </a>
                             </li>
                             {% endif %}
@@ -1428,7 +1429,8 @@
                             {% if access.finance %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'expenses' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:expenses' restaurant_slug=rslug %}" title="Rent, utilities & other costs">
+                                    href="{% url 'restaurant_admin:expenses' restaurant_slug=rslug %}"
+                                    title="Rent, utilities & other costs">
                                     <i class="fas fa-wallet"></i>
                                     <span>Expenses</span>
                                 </a>
@@ -1437,7 +1439,8 @@
                             {% if access.finance %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'pnl' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:profit_loss' restaurant_slug=rslug %}" title="Profit & loss by branch">
+                                    href="{% url 'restaurant_admin:profit_loss' restaurant_slug=rslug %}"
+                                    title="Profit & loss by branch">
                                     <i class="fas fa-chart-column"></i>
                                     <span>Profit &amp; Loss</span>
                                 </a>
@@ -1465,7 +1468,8 @@
                             {% if access.guests %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'guests' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:guest_list' restaurant_slug=rslug %}" title="Guest profiles, loyalty & notes">
+                                    href="{% url 'restaurant_admin:guest_list' restaurant_slug=rslug %}"
+                                    title="Guest profiles, loyalty & notes">
                                     <i class="fas fa-address-book"></i>
                                     <span>Guests</span>
                                 </a>
@@ -1474,7 +1478,8 @@
                             {% if access.guests %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'gift_cards' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:gift_card_list' restaurant_slug=rslug %}" title="Gift cards & vouchers">
+                                    href="{% url 'restaurant_admin:gift_card_list' restaurant_slug=rslug %}"
+                                    title="Gift cards & vouchers">
                                     <i class="fas fa-gift"></i>
                                     <span>Gift Cards</span>
                                 </a>
@@ -1483,7 +1488,8 @@
                             {% if access.feedback %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'feedback' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:feedback_list' restaurant_slug=rslug %}" title="Ratings, complaints & follow-up">
+                                    href="{% url 'restaurant_admin:feedback_list' restaurant_slug=rslug %}"
+                                    title="Ratings, complaints & follow-up">
                                     <i class="fas fa-comment-dots"></i>
                                     <span>Feedback</span>
                                 </a>
@@ -1493,7 +1499,8 @@
                             {% if access.campaigns %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'campaigns' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:campaign_list' restaurant_slug=rslug %}" title="WhatsApp, SMS & email campaigns">
+                                    href="{% url 'restaurant_admin:campaign_list' restaurant_slug=rslug %}"
+                                    title="WhatsApp, SMS & email campaigns">
                                     <i class="fas fa-bullhorn"></i>
                                     <span>Campaigns</span>
                                 </a>
@@ -1573,7 +1580,8 @@
                             {% if access.staff %}
                             <li class="nav-item">
                                 <a class="nav-link {% if active_menu == 'roles' %}active{% endif %}"
-                                    href="{% url 'restaurant_admin:roles' restaurant_slug=rslug %}" title="Custom roles: no access, view or manage per area">
+                                    href="{% url 'restaurant_admin:roles' restaurant_slug=rslug %}"
+                                    title="Custom roles: no access, view or manage per area">
                                     <i class="fas fa-user-shield"></i>
                                     <span>Roles &amp; Permissions</span>
                                 </a>
@@ -1653,31 +1661,31 @@
             </div>
         </div>
         <script>
-    /* Keep the sidebar where it was across page loads; otherwise bring the active link into view. */
-    (function () {
-        var box = document.querySelector('.sidebar .sidebar-menu'); if (!box) return;
-        var KEY = 'ra_sidebar_scroll', saved = null;
-        // Reopen remembered groups first: restoring the scroll on a collapsed (shorter) menu would
-        // clamp it, and the list would then jump when the groups open after DOMContentLoaded.
-        try {
-            (JSON.parse(localStorage.getItem('sidebar_open_groups') || '[]') || []).forEach(function (target) {
-                var h = box.querySelector('.sidebar-group-header[data-group-target="' + target + '"]');
-                var c = h && box.querySelector(target);
-                if (c) { h.classList.add('open', 'active-group'); c.classList.add('show'); }
-            });
-        } catch (e) {}
-        try { saved = sessionStorage.getItem(KEY); } catch (e) {}
-        if (saved !== null) { box.scrollTop = parseInt(saved, 10) || 0; }
-        var active = box.querySelector('a.active');
-        if (active) {
-            var b = box.getBoundingClientRect(), a = active.getBoundingClientRect();
-            if (a.top < b.top || a.bottom > b.bottom) { box.scrollTop += a.top - b.top - (b.height - a.height) / 2; }
-        }
-        function save() { try { sessionStorage.setItem(KEY, String(box.scrollTop)); } catch (e) {} }
-        box.addEventListener('click', function (e) { if (e.target.closest('a')) save(); });
-        window.addEventListener('pagehide', save);
-    })();
-    </script>
+            /* Keep the sidebar where it was across page loads; otherwise bring the active link into view. */
+            (function () {
+                var box = document.querySelector('.sidebar .sidebar-menu'); if (!box) return;
+                var KEY = 'ra_sidebar_scroll', saved = null;
+                // Reopen remembered groups first: restoring the scroll on a collapsed (shorter) menu would
+                // clamp it, and the list would then jump when the groups open after DOMContentLoaded.
+                try {
+                    (JSON.parse(localStorage.getItem('sidebar_open_groups') || '[]') || []).forEach(function (target) {
+                        var h = box.querySelector('.sidebar-group-header[data-group-target="' + target + '"]');
+                        var c = h && box.querySelector(target);
+                        if (c) { h.classList.add('open', 'active-group'); c.classList.add('show'); }
+                    });
+                } catch (e) { }
+                try { saved = sessionStorage.getItem(KEY); } catch (e) { }
+                if (saved !== null) { box.scrollTop = parseInt(saved, 10) || 0; }
+                var active = box.querySelector('a.active');
+                if (active) {
+                    var b = box.getBoundingClientRect(), a = active.getBoundingClientRect();
+                    if (a.top < b.top || a.bottom > b.bottom) { box.scrollTop += a.top - b.top - (b.height - a.height) / 2; }
+                }
+                function save() { try { sessionStorage.setItem(KEY, String(box.scrollTop)); } catch (e) { } }
+                box.addEventListener('click', function (e) { if (e.target.closest('a')) save(); });
+                window.addEventListener('pagehide', save);
+            })();
+        </script>
 
         {% endif %}
 
@@ -1692,21 +1700,29 @@
                     </span>
                     {% if user.role == 'GENERAL_MANAGER' or user.is_superuser %}
                     {% if ENABLE_HOTEL_MODULE and current_branch.has_hotel_module %}
-                    <a href="{% url 'hotel_admin:dashboard' restaurant_slug=rslug %}" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 shadow-xs fw-semibold text-decoration-none" style="font-size: 0.78rem;">
+                    <a href="{% url 'hotel_admin:dashboard' restaurant_slug=rslug %}"
+                        class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 shadow-xs fw-semibold text-decoration-none"
+                        style="font-size: 0.78rem;">
                         <i class="fa-solid fa-hotel me-1"></i>Switch to Hotel PMS
                     </a>
                     {% endif %}
                     {% endif %}
                     {% if is_club_user %}
-                    <span class="badge bg-warning-subtle text-dark border border-warning-subtle px-2.5 py-1.5 rounded-pill shadow-xs" style="font-size: 0.78rem;">
+                    <span
+                        class="badge bg-warning-subtle text-dark border border-warning-subtle px-2.5 py-1.5 rounded-pill shadow-xs"
+                        style="font-size: 0.78rem;">
                         <i class="fas fa-ticket-alt text-warning me-1.5"></i><strong>Club & Events Portal</strong>
                     </span>
                     {% elif is_hotel_user %}
-                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1.5 rounded-pill shadow-xs" style="font-size: 0.78rem;">
+                    <span
+                        class="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1.5 rounded-pill shadow-xs"
+                        style="font-size: 0.78rem;">
                         <i class="fa-solid fa-hotel me-1.5"></i><strong>Hotel PMS Portal</strong>
                     </span>
                     {% elif is_kitchen_user %}
-                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1.5 rounded-pill shadow-xs" style="font-size: 0.78rem;">
+                    <span
+                        class="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1.5 rounded-pill shadow-xs"
+                        style="font-size: 0.78rem;">
                         <i class="bi bi-display me-1.5"></i><strong>Kitchen (KDS) Station</strong>
                     </span>
                     {% else %}
@@ -1747,7 +1763,9 @@
                         <span class="fw-semibold">Hotel PMS</span>
                     </a>
                     {% elif is_kitchen_user %}
-                    <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-1.5 rounded-pill shadow-xs" style="font-size: 0.78rem;">
+                    <span
+                        class="badge bg-success-subtle text-success border border-success-subtle px-3 py-1.5 rounded-pill shadow-xs"
+                        style="font-size: 0.78rem;">
                         <i class="bi bi-broadcast me-1"></i>KDS Active
                     </span>
                     <button type="button"
@@ -1755,7 +1773,8 @@
                         data-nt-open title="New kitchen tickets" style="font-size: 0.8rem;">
                         <i class="bi bi-bell-fill text-primary"></i>
                         <span class="fw-semibold text-dark">Tickets</span>
-                        <span class="badge rounded-pill bg-danger d-none global-notif-badge" style="font-size: 0.65rem;">0</span>
+                        <span class="badge rounded-pill bg-danger d-none global-notif-badge"
+                            style="font-size: 0.65rem;">0</span>
                     </button>
                     {% else %}
                     {% if access.kitchen %}
@@ -1784,7 +1803,8 @@
                         id="globalNotifDropdownBtn" data-nt-open title="Notifications" style="font-size: 0.8rem;">
                         <i class="bi bi-bell-fill text-primary" id="globalBellIcon"></i>
                         <span class="fw-semibold text-dark">Notifications</span>
-                        <span class="badge rounded-pill bg-danger d-none global-notif-badge" style="font-size: 0.68rem;">0</span>
+                        <span class="badge rounded-pill bg-danger d-none global-notif-badge"
+                            style="font-size: 0.68rem;">0</span>
                     </button>
                     {% endif %}
                     {% endif %}
@@ -1892,7 +1912,7 @@
                     groupHeaders.forEach(function (h) {
                         if (h.classList.contains('open')) ids.push(h.getAttribute('data-group-target'));
                     });
-                    try { localStorage.setItem(OPEN_KEY, JSON.stringify(ids)); } catch (err) {}
+                    try { localStorage.setItem(OPEN_KEY, JSON.stringify(ids)); } catch (err) { }
                 }
                 function setGroupOpen(header, open) {
                     var content = document.querySelector(header.getAttribute('data-group-target'));
@@ -1985,6 +2005,6 @@
 
         {% block extra_js %}{% endblock %}
         {% endwith %}
-</body>
+        </body>
 
 </html>

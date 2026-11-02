@@ -216,9 +216,6 @@
       <button type="button" onclick="window.print()" class="btn btn-primary btn-sm rounded-pill px-3 fw-semibold shadow-sm">
         <i class="fas fa-print me-1"></i> Print Voucher
       </button>
-      <a href="{% url 'restaurant_admin:purchase_return_new' restaurant_slug=restaurant.slug pk=po.pk %}" class="btn btn-outline-danger btn-sm rounded-pill px-3 fw-semibold">
-        <i class="fas fa-rotate-left me-1"></i> Return Goods
-      </a>
       <a href="{% url 'restaurant_admin:purchase_create' restaurant_slug=restaurant.slug %}" class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-semibold">
         <i class="fas fa-plus me-1"></i> New Purchase
       </a>
@@ -558,12 +555,12 @@
           <div class="col-md-7">
             <p class="mb-2 fw-semibold text-dark small"><i class="fas fa-scale-balanced text-primary me-1"></i> Settlement
               {% if po.due_date %}<span class="text-muted fw-normal">· due {{ po.due_date|date:"d M Y" }}</span>{% endif %}
-              {% if receipts %}<span class="text-muted fw-normal">· goods via {% for g in receipts %}<a href="{% url 'restaurant_admin:purchase_grn_detail' restaurant_slug=restaurant.slug pk=g.pk %}">{{ g.number }}</a>{% if g.order %} (<a href="{% url 'restaurant_admin:purchase_order_detail' restaurant_slug=restaurant.slug pk=g.order.pk %}">{{ g.order.number }}</a>){% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}</span>{% endif %}
+              {% if receipts %}<span class="text-muted fw-normal">· goods via {% for g in receipts %}{{ g.number }}{% if g.order %} ({{ g.order.number }}){% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}</span>{% endif %}
             </p>
             <table class="table table-sm small mb-0">
               <tbody>
                 {% for p in payments %}<tr><td>{{ p.paid_on|date:"d M Y" }}</td><td>Payment · {{ p.get_method_display }}{% if p.reference %} · {{ p.reference }}{% endif %}</td><td class="text-end font-monospace">− ₹ {{ p.amount|floatformat:2 }}</td></tr>{% endfor %}
-                {% for d in debit_notes %}<tr><td>{{ d.return_date|date:"d M Y" }}</td><td>Debit note <a href="{% url 'restaurant_admin:purchase_return_detail' restaurant_slug=restaurant.slug pk=d.pk %}">{{ d.number }}</a></td><td class="text-end font-monospace">− ₹ {{ d.grand_total|floatformat:2 }}</td></tr>{% endfor %}
+                {% for d in debit_notes %}<tr><td>{{ d.return_date|date:"d M Y" }}</td><td>Debit note {{ d.number }}</td><td class="text-end font-monospace">− ₹ {{ d.grand_total|floatformat:2 }}</td></tr>{% endfor %}
                 <tr class="fw-bold"><td colspan="2">Balance due</td><td class="text-end font-monospace">₹ {{ po.balance_due|floatformat:2 }}</td></tr>
               </tbody>
             </table>
