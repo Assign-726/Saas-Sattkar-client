@@ -13,7 +13,8 @@ from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Case, DecimalField, F, OuterRef, Q, Subquery, Sum, Value, When
+from django.db.models.functions import Coalesce
 from django.middleware.csrf import get_token
 from django.urls import reverse
 from django.utils import timezone
@@ -188,16 +189,20 @@ def vendor_parties(restaurant, branch):
 def party_balances(restaurant, parties, exclude_po=None):
     """What we owe each supplier now: opening balance + udhaar of purchase bills − advances still unlinked."""
     ids = [p.id for p in parties]
-    owed = {}
     pos = PurchaseOrder.objects.filter(restaurant=restaurant, party_id__in=ids)
     if exclude_po is not None:
         pos = pos.exclude(pk=exclude_po.pk)
-    for po in pos.only('party_id', 'voucher_data', 'credit_amount', 'grand_total', 'payment_status'):
-        if po.voucher_data is not None:
-            amt = po.credit_amount
-        else:  # bills entered before the voucher screen: unpaid = all of it
-            amt = Decimal('0') if po.payment_status in ('paid', 'P') else po.grand_total
-        owed[po.party_id] = owed.get(po.party_id, Decimal('0')) + (amt or 0)
+    # Summed in the database: loading every bill (with its voucher JSON) to add two columns made the screen slow to
+    # open once a restaurant had a few hundred bills. Voucher-screen bills owe their udhaar; bills entered before the
+    # voucher screen owe all of it unless marked paid
+    owed_expr = Case(
+        When(voucher_data__isnull=False, then=Coalesce(F('credit_amount'), Value(Decimal('0')))),
+        When(payment_status__in=('paid', 'P'), then=Value(Decimal('0'))),
+        default=Coalesce(F('grand_total'), Value(Decimal('0'))),
+        output_field=DecimalField(max_digits=14, decimal_places=2),
+    )
+    owed = {row['party_id']: row['owed'] or Decimal('0')
+            for row in pos.order_by().values('party_id').annotate(owed=Sum(owed_expr))}
     out = {}
     for p in parties:
         opening = Decimal(str(p.opening_balance or 0))
@@ -225,12 +230,12 @@ def build_boot(request, restaurant, branch, po=None):
     }
 
     # Suppliers
-    parties = list(vendor_parties(restaurant, branch))
+    # Each supplier's latest bill no. comes with the supplier (one query, instead of walking every bill ever entered)
+    latest_bill = (PurchaseOrder.objects.filter(restaurant=restaurant, party_id=OuterRef('pk'))
+                   .exclude(pk=po.pk if po else None).order_by('-created_at', '-pk').values('invoice_number')[:1])
+    parties = list(vendor_parties(restaurant, branch).annotate(last_bill_no=Subquery(latest_bill)))
     balances = party_balances(restaurant, parties, exclude_po=po)
-    last_bill = {}
-    for row in (PurchaseOrder.objects.filter(restaurant=restaurant, party__in=parties).exclude(pk=po.pk if po else None)
-                .order_by('created_at').values('party_id', 'invoice_number')):
-        last_bill[row['party_id']] = row['invoice_number']
+    last_bill = {p.id: p.last_bill_no for p in parties}
     party_list = []
     for p in parties:
         e = {
@@ -300,10 +305,15 @@ def build_boot(request, restaurant, branch, po=None):
         by_kind[acc.kind].append(ledger_entry(acc))
 
     # Payments made before their bill, with what is still left of each (this bill's own links count as left)
+    # (what is used of each is summed in the same query, not one query per advance)
     now = timezone.localtime()
     unlinked = []
-    for adv in scoped(VendorAdvance.objects.filter(restaurant=restaurant, party__in=parties), branch).select_related('party'):
-        left = adv.amount_left(exclude_po=po)
+    link_filter = ~Q(links__purchase_order=po) if po is not None else Q()
+    advances = (scoped(VendorAdvance.objects.filter(restaurant=restaurant, party__in=parties), branch)
+                .annotate(used=Coalesce(Sum('links__amount', filter=link_filter), Value(Decimal('0')),
+                                        output_field=DecimalField(max_digits=14, decimal_places=2))))
+    for adv in advances:
+        left = (adv.amount - adv.used).quantize(CENT)
         if left <= Decimal('0.004'):
             continue
         paid = timezone.localtime(adv.paid_at)
@@ -314,17 +324,26 @@ def build_boot(request, restaurant, branch, po=None):
         })
 
     # Saved bills, as the screen reads them: duplicate bill no., last bill of a supplier, last MRP of an item
+    # Only the columns the screen reads: the full rows carried two JSON blobs each (the voucher and the screen
+    # snapshot), so 2000 of them were megabytes pulled from the database on every open. MRPs come from the lines
     saved = []
-    recent = (PurchaseOrder.objects.filter(restaurant=restaurant).exclude(pk=po.pk if po else None)
-              .select_related('party').order_by('-created_at')[:2000])
-    for r in reversed(list(recent)):
-        vd = r.voucher_data or {}
+    recent = list(PurchaseOrder.objects.filter(restaurant=restaurant).exclude(pk=po.pk if po else None)
+                  .order_by('-created_at', '-pk')
+                  .only('id', 'po_number', 'party_id', 'supplier_name', 'invoice_number', 'bill_date', 'purchase_date',
+                        'grand_total', 'created_at')[:2000])
+    mrps = {}
+    voucher_ids = list(PurchaseOrder.objects.filter(pk__in=[r.pk for r in recent], voucher_data__isnull=False)
+                       .values_list('pk', flat=True))
+    for row in (PurchaseOrderItem.objects.filter(purchase_order_id__in=voucher_ids, mrp__isnull=False, mrp__gt=0)
+                .order_by('id').values('purchase_order_id', 'inventory_item_id', 'mrp')):
+        mrps.setdefault(row['purchase_order_id'], []).append({'itemId': f'I{row["inventory_item_id"]}', 'mrp': float(row['mrp'])})
+    for r in reversed(recent):
         saved.append({
             'purchaseNo': r.po_number or '', 'partyId': f'P{r.party_id}' if r.party_id else None,
             'supplier': r.supplier_name, 'billNo': r.invoice_number or '',
             'billDate': (r.bill_date or r.purchase_date).isoformat(), 'purchaseDate': r.purchase_date.isoformat(),
             'totals': {'grandTotal': float(r.grand_total or 0)},
-            'items': [{'itemId': l.get('itemId'), 'mrp': l.get('mrp')} for l in vd.get('items', []) if l.get('mrp')],
+            'items': mrps.get(r.pk, []),
             'payments': [], 'credit': None,
         })
 
@@ -513,9 +532,14 @@ def save_voucher(request, restaurant, branch, po=None):
         items_qs = InventoryItem.objects.filter(restaurant=restaurant)
         if branch:
             items_qs = items_qs.filter(branch=branch)
+        # All the bill's items and godowns in one query each (not one lookup per line)
+        line_item_ids = {int(mi.group(1)) for mi in (re.fullmatch(r'I(\d+)', str(l.get('itemId') or '')) for l in lines) if mi}
+        items_by_id = items_qs.in_bulk(line_item_ids)
+        godowns = {f'{LEDGER_PREFIX["godown"]}{a.pk}': a.name
+                   for a in PurchaseLedgerAccount.objects.filter(restaurant=restaurant, kind='godown').only('id', 'name')}
         for l in lines:
             mi = re.fullmatch(r'I(\d+)', str(l.get('itemId') or ''))
-            item = items_qs.filter(pk=int(mi.group(1))).first() if mi else None
+            item = items_by_id.get(int(mi.group(1))) if mi else None
             if not item:
                 raise VoucherError(f'{l.get("name") or "A line"}: select the item from the item ledger')
             is_service = item.purchase_type == InventoryItem.PurchaseType.SERVICE
@@ -542,7 +566,7 @@ def save_voucher(request, restaurant, branch, po=None):
                 batch_number=(l.get('batch') or '')[:50], expiry_date=parse_iso(l.get('expiry')),
                 expiry_estimated=bool(l.get('expiryEstimated')),
                 mrp=dec(l.get('mrp')) if l.get('mrp') else None,
-                godown=_godown_name(restaurant, l.get('godown')), line_remarks=(l.get('remark') or '')[:255],
+                godown=godowns.get(str(l.get('godown') or ''), ''), line_remarks=(l.get('remark') or '')[:255],
             )
             update = []
             if is_service:
@@ -550,7 +574,9 @@ def save_voucher(request, restaurant, branch, po=None):
                 update.append('last_purchase_rate')
             else:
                 if stock_qty > 0:
-                    item.adjust(stock_qty)
+                    # Same arithmetic as InventoryItem.adjust(), saved together with the rates below (one write)
+                    item.quantity = (Decimal(str(item.quantity or 0)) + stock_qty).quantize(MILLI)
+                    update.append('quantity')
                     InventoryTransaction.objects.create(
                         inventory_item=item, transaction_type=InventoryTransaction.TransactionType.INWARD_PURCHASE,
                         delta=stock_qty, purchase_order=po, unit_cost=landed_rate, performed_by=request.user,
@@ -607,11 +633,6 @@ def save_voucher(request, restaurant, branch, po=None):
             PurchaseOrderAttachment.objects.create(purchase_order=po, file=f, file_name=f.name[:255],
                                                    file_type=(f.content_type or '')[:100], file_size=f.size)
     return po
-
-
-def _godown_name(restaurant, voucher_id):
-    acc = ledger_from_id(restaurant, voucher_id, ('godown',))
-    return acc.name if acc else ''
 
 
 # --- "Create" from a list ------------------------------------------------------------------------------------

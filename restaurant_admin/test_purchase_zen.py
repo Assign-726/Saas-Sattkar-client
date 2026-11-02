@@ -162,6 +162,48 @@ class PurchaseZenTests(TestCase):
         self.atta.refresh_from_db()
         self.assertEqual(self.atta.quantity, 0)
 
+    def test_boot_reads_saved_bills_and_does_not_slow_down_with_more_bills(self):
+        from django.db import connection
+        from django.test import RequestFactory
+        from django.test.utils import CaptureQueriesContext
+        from restaurant_admin import purchase_zen
+
+        boot = self.boot(self.client.get(self.url('purchase_create')))
+        inv = self.voucher(boot)
+        inv['items'][1]['mrp'] = 520
+        resp = self.client.post(self.url('purchase_create'), {'voucher': json.dumps(inv), 'snapshot': '{}'})
+        self.assertEqual(resp.status_code, 200, resp.content)
+        # An old-screen bill: all of it is owed while unpaid
+        PurchaseOrder.objects.create(restaurant=self.r, branch=self.b, party=self.party, supplier_name=self.party.name,
+                                     invoice_number='OLD-1', purchase_date=timezone.localdate(), grand_total=D('300'),
+                                     payment_status='unpaid')
+
+        def open_screen():
+            request = RequestFactory().get(self.url('purchase_create'))
+            request.user = self.user
+            with CaptureQueriesContext(connection) as ctx:
+                result = purchase_zen.build_boot(request, self.r, self.b)
+            return result, len(ctx.captured_queries)
+
+        boot, queries = open_screen()
+        party = boot['ledger']['party'][0]
+        self.assertEqual(party['lastBillNo'], 'OLD-1')
+        self.assertEqual(party['balance'], float(D(str(inv['credit']['amount'])) + D('300')))
+        self.assertEqual(boot['unlinked'], [])                        # the advance is fully used by the bill
+        saved = next(s for s in boot['saved'] if s['billNo'] == 'SRD-2232')
+        self.assertEqual(saved['items'], [{'itemId': f'I{self.butter.id}', 'mrp': 520.0}])
+
+        # Many more bills and advances: the screen still opens in the same number of queries
+        for n in range(30):
+            PurchaseOrder.objects.create(restaurant=self.r, branch=self.b, party=self.party, supplier_name=self.party.name,
+                                         invoice_number=f'B-{n}', purchase_date=timezone.localdate(), grand_total=D('10'),
+                                         voucher_data={'items': [{'itemId': f'I{self.atta.id}', 'mrp': 5}]}, voucher_snapshot={})
+            VendorAdvance.objects.create(restaurant=self.r, branch=self.b, party=self.party, amount=D('10'),
+                                         mode='cash', paid_at=timezone.now())
+        boot, more_queries = open_screen()
+        self.assertEqual(more_queries, queries)
+        self.assertEqual(len(boot['unlinked']), 30)
+
     def test_create_ledger_from_list(self):
         resp = self.client.post(self.url('purchase_zen_ledger_create'), json.dumps({'kind': 'party', 'name': 'Gupta Kirana'}),
                                 content_type='application/json')
