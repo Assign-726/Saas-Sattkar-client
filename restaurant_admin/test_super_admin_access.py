@@ -6,7 +6,7 @@ from core.models import Category, SubCategory
 from super_admin.models import Restaurant, RestaurantBranch, RestaurantUser
 
 PAGES = ['', 'orders/', 'orders/create/', 'kitchen/', 'kitchen/api/orders/', 'analytics/', 'categories/add/',
-         'subcategories/', 'receipts/', 'inventory/logs/', 'floor-plan/', 'tables/', 'purchases/create/', 'qr-generator/']
+         'subcategories/', 'receipts/', 'inventory/logs/', 'floor-plan/', 'tables/', 'purchases/create/']
 
 
 class SuperAdminAccessTests(TestCase):
@@ -40,7 +40,7 @@ class SuperAdminAccessTests(TestCase):
         self.client.force_login(owner)
         self.assertEqual(self.client.get('/dashboard/spice-main/orders/', follow=True).status_code, 200)
         self.assertNotContains(self.client.get('/dashboard/spice-main/'), 'Back to all businesses')
-        for page in ('orders/', 'floor-plan/', 'kitchen/', 'qr-generator/'):
+        for page in ('orders/', 'floor-plan/', 'kitchen/'):
             self.assertEqual(self.client.get(f'/dashboard/other-main/{page}').status_code, 403, page)
         self.assertEqual(self.client.get('/super/').status_code, 302)
 
@@ -49,7 +49,6 @@ class SuperAdminAccessTests(TestCase):
         SubCategory.objects.create(category=cat, name='Mocktails')
         url = f'/dashboard/spice-main/ajax/get-subcategories/?category_id={cat.pk}'
         self.assertEqual(self.client.get(url).status_code, 302)
-        self.assertEqual(self.client.get('/dashboard/spice-main/qr-generator/').status_code, 302)
         self.client.force_login(self.root)
         self.assertEqual(self.client.get(url).json(), [])
         self.assertEqual(self.client.get(f'/dashboard/other-main/ajax/get-subcategories/?category_id={cat.pk}').json()[0]['name'], 'Mocktails')

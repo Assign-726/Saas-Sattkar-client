@@ -75,7 +75,7 @@ _RESTAURANT_RULES = [
     ('kitchen', r'^(kitchen_kds.*|order_mark_ready)$'),
     ('pos', r'^(order_.*|orders_stream|pos_.*|receipt_.*|credit_note_.*|transaction_desk_create|custom_charge_.*|guest_pos_lookup)$'),
     ('dine_in', r'^(floor_plan_.*|table_.*|zone_.*|regenerate_table_qrs|reservation_.*)$'),
-    ('menu', r'^(menu_.*|category_.*|subcategory_.*|get_subcategories|coupon_.*|qr_code_generator|generate_qr_code|generate_menu_item_qr_code)$'),
+    ('menu', r'^(menu_.*|category_.*|subcategory_.*|get_subcategories|coupon_.*)$'),
     ('events', r'^club_.*$'),
     ('inventory', r'^(inventory_.*|purchase_.*|challan_.*|party_.*)$'),
     ('delivery', r'^delivery_.*$'),
