@@ -1,3 +1,6 @@
+from core.request_cache import branch_by_id, first_branch
+
+
 def restaurant_context(request):
     """
     Context processor to provide `current_restaurant`, `current_branch`,
@@ -23,11 +26,11 @@ def restaurant_context(request):
     if not active_branch and restaurant:
         branch_id = request.GET.get('branch_id') or request.session.get(f'active_branch_{restaurant.id}')
         if branch_id and str(branch_id).isdigit():
-            active_branch = restaurant.branches.filter(id=int(branch_id)).first()
+            active_branch = branch_by_id(restaurant, branch_id)
             if active_branch:
                 request.session[f'active_branch_{restaurant.id}'] = active_branch.id
         if not active_branch:
-            active_branch = restaurant.branches.first()
+            active_branch = first_branch(restaurant)
             if active_branch:
                 request.session[f'active_branch_{restaurant.id}'] = active_branch.id
 

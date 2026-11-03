@@ -41,6 +41,11 @@ MAX_ALLOWED_BUSINESSES = _get_env_int('MAX_ALLOWED_BUSINESSES', 1)
 # Maximum allowed branch outlets per business (default: 2; set 0 for unlimited)
 MAX_ALLOWED_BRANCHES = _get_env_int('MAX_ALLOWED_BRANCHES', 2)
 
+def _first_restaurant():
+    from core.request_cache import first_restaurant
+    return first_restaurant()
+
+
 def is_master_connected(restaurant=None) -> bool:
     """
     Returns True only if this Super Admin instance is actively connected and
@@ -63,7 +68,7 @@ def get_effective_max_branches(restaurant=None) -> int:
     if restaurant is None:
         try:
             from super_admin.models import Restaurant
-            restaurant = Restaurant.objects.first()
+            restaurant = _first_restaurant()
         except Exception:
             restaurant = None
 
@@ -83,7 +88,7 @@ def get_effective_max_businesses(restaurant=None) -> int:
     if restaurant is None:
         try:
             from super_admin.models import Restaurant
-            restaurant = Restaurant.objects.first()
+            restaurant = _first_restaurant()
         except Exception:
             restaurant = None
 
@@ -141,7 +146,7 @@ def is_module_enabled(module_name: str, restaurant=None) -> bool:
     if target is None:
         try:
             from super_admin.models import Restaurant
-            target = Restaurant.objects.first()
+            target = _first_restaurant()
         except Exception:
             target = None
 

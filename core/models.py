@@ -1552,7 +1552,8 @@ class RestaurantSettings(models.Model):
         sgst_default = Decimal('2.50')
 
         if restaurant:
-            branch = restaurant.branches.first()
+            from core.request_cache import first_branch
+            branch = first_branch(restaurant)
             if branch:
                 if branch.gst_registration_type == 'R18' or branch.is_hotel_tariff_7500_plus:
                     cgst_default = Decimal('9.00')

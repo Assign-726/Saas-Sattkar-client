@@ -15,6 +15,7 @@ Guest-facing pages and public APIs are not affected.
 
 import logging
 import threading
+import time
 from datetime import timedelta
 
 from django.conf import settings
@@ -24,6 +25,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 from super_admin.models import Restaurant
 from super_admin.services import MasterBillingService
+from core.request_cache import first_restaurant
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,8 @@ BILLING_URL = '/super/billing/?overdue_lock=1'
 
 _sync_guard = threading.Lock()
 _sync_running = False
+_sync_last_started = float('-inf')
+SYNC_RETRY_SECONDS = 10   # at most one background attempt per process this often (lock check re-syncs after 10 s)
 
 
 def _sync_with_master(restaurant):
@@ -45,15 +49,18 @@ def _sync_with_master(restaurant):
     up by it (an unreachable Master Admin costs seconds per attempt), and the lock check uses the last synced state,
     so a renewal or a lock still shows within ~30 s. One sync at a time per process.
     """
-    global _sync_running
+    global _sync_running, _sync_last_started
     if not getattr(settings, 'MASTER_SYNC_IN_BACKGROUND', True):
         MasterBillingService.fetch_subscription_details(restaurant)
         restaurant.refresh_from_db()
         return
     with _sync_guard:
-        if _sync_running:
+        # A failed sync leaves features_last_synced_at stale, so without this every admin request
+        # would start another attempt while Master Admin is down.
+        if _sync_running or time.monotonic() - _sync_last_started < SYNC_RETRY_SECONDS:
             return
         _sync_running = True
+        _sync_last_started = time.monotonic()
 
     def run():
         global _sync_running
@@ -102,7 +109,7 @@ class SuperAdminSubscriptionLockMiddleware:
             and user and user.is_authenticated
         ):
             try:
-                restaurant = Restaurant.objects.first()
+                restaurant = first_restaurant()
             except Exception:
                 restaurant = None
 

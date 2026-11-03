@@ -42,3 +42,20 @@ class RequestCacheMiddleware:
     def __call__(self, request):
         with scope():
             return self.get_response(request)
+
+
+# Lookups that the middlewares, context processors and views each repeated on every admin page.
+def first_restaurant():
+    def load():
+        from super_admin.models import Restaurant
+        return Restaurant.objects.first()
+    return memo(('first_restaurant',), load)
+
+
+def first_branch(restaurant):
+    return memo(('first_branch', restaurant.pk), lambda: restaurant.branches.first())
+
+
+def branch_by_id(restaurant, branch_id):
+    branch_id = int(branch_id)
+    return memo(('branch', restaurant.pk, branch_id), lambda: restaurant.branches.filter(id=branch_id).first())

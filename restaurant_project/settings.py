@@ -145,6 +145,20 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# Static files: WhiteNoise answers /static/ before the request reaches sessions, auth and the admin
+# middlewares (Django's staticfiles view in urls.py searched every app folder per file and sent no
+# cache header). Only when the package is installed (it is in requirements.txt). nginx serving
+# /static/ itself, as in PRODUCTION_DEPLOY.md, is faster still and makes this a fallback.
+try:
+    import whitenoise  # noqa: F401
+    MIDDLEWARE.insert(MIDDLEWARE.index('django.middleware.security.SecurityMiddleware') + 1,
+                      'whitenoise.middleware.WhiteNoiseMiddleware')
+    WHITENOISE_USE_FINDERS = True   # serve from the app folders too, so it works without collectstatic
+    # File names carry no content hash, so keep the browser cache short enough that a deploy shows up
+    WHITENOISE_MAX_AGE = env.int('WHITENOISE_MAX_AGE', default=3600)
+except ImportError:
+    pass
+
 # REST Framework settings
 # Activity log retention: once the oldest log is older than TRIGGER days,
 # everything older than KEEP days is deleted (3 months → keep the latest month).
@@ -182,6 +196,11 @@ else:
     CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache', 'LOCATION': 'hospitality'}}
 
 CATALOG_CACHE_SECONDS = env.int('CATALOG_CACHE_SECONDS', default=60)
+
+# Live (SSE) streams for the admin bell, POS, KDS and floor plan. 'auto' streams only on a threaded
+# server (runserver, gunicorn --worker-class gthread) and makes the pages poll under gunicorn's
+# one-request-per-worker "sync" default, where open streams would pin every worker. 'on' / 'off' force it.
+SSE_STREAMS = env('SSE_STREAMS', default='auto')
 API_SLOW_REQUEST_MS = env.int('API_SLOW_REQUEST_MS', default=800)
 
 LOGGING = {

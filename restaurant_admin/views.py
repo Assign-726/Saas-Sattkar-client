@@ -29,7 +29,8 @@ from django.http import HttpResponse
 from django.conf import settings
 from django.urls import reverse
 from django.utils import timezone
-from core.sse import subscribe, unsubscribe, sse_event, sse_comment
+from core.sse import stream_response
+from core.request_cache import branch_by_id, first_branch
 from django.http import HttpResponse
 from django.views.decorators.http import require_http_methods
 from django.http import StreamingHttpResponse
@@ -119,10 +120,10 @@ def get_active_branch(request, restaurant):
     session = getattr(request, 'session', {}) or {}
     branch_id = request.GET.get('branch_id') or session.get(f'active_branch_{restaurant.id}') or session.get('active_branch_id')
     if branch_id and str(branch_id).isdigit():
-        branch = restaurant.branches.filter(id=int(branch_id)).first()
+        branch = branch_by_id(restaurant, branch_id)
         if branch:
             return branch
-    return restaurant.branches.first()
+    return first_branch(restaurant)
 
 def get_branch_gstin_str(branch=None, restaurant=None):
     """Returns normalized GSTIN string for a given branch or restaurant."""
@@ -5009,23 +5010,21 @@ def order_records(request, restaurant_slug=None):
     base_orders_qs = _filter_order_queryset(request, restaurant, ignore_order_type=True, ignore_status=False)
     base_status_qs = _filter_order_queryset(request, restaurant, ignore_order_type=False, ignore_status=True)
 
-    # Compute live counts for each Order Type tab
-    order_type_counts = {
-        'all': base_orders_qs.count(),
-        'dine_in': base_orders_qs.filter(order_type='dine_in').count(),
-        'takeaway': base_orders_qs.filter(order_type='takeaway').count(),
-        'delivery': base_orders_qs.filter(order_type='delivery').count(),
-    }
-
-    # Compute live counts for each Order Status tab
-    status_counts = {
-        'all': base_status_qs.count(),
-        'preparing': base_status_qs.filter(status__in=[Order.OrderStatus.PENDING, 'PR']).count(),
-        'ready': base_status_qs.filter(status='READY').count(),
-        'served': base_status_qs.filter(status='S').count(),
-        'completed': base_status_qs.filter(status='COMPLETED').count(),
-        'cancelled': base_status_qs.filter(status='C').count(),
-    }
+    # Live counts for each Order Type tab and each Order Status tab (one query each, not one per tab)
+    order_type_counts = base_orders_qs.order_by().aggregate(
+        all=Count('id'),
+        dine_in=Count('id', filter=Q(order_type='dine_in')),
+        takeaway=Count('id', filter=Q(order_type='takeaway')),
+        delivery=Count('id', filter=Q(order_type='delivery')),
+    )
+    status_counts = base_status_qs.order_by().aggregate(
+        all=Count('id'),
+        preparing=Count('id', filter=Q(status__in=[Order.OrderStatus.PENDING, 'PR'])),
+        ready=Count('id', filter=Q(status='READY')),
+        served=Count('id', filter=Q(status='S')),
+        completed=Count('id', filter=Q(status='COMPLETED')),
+        cancelled=Count('id', filter=Q(status='C')),
+    )
 
     order_type_filter = request.GET.get('order_type', '').strip()
     status_filter = request.GET.get('status', '').strip()
@@ -5035,9 +5034,10 @@ def order_records(request, restaurant_slug=None):
     # Compute Summary Stats (strictly excluding cancelled and refunded orders from revenue)
     total_orders = orders_qs.count()
     active_orders_qs = orders_qs.exclude(status=Order.OrderStatus.CANCELLED).exclude(payment_status=Order.PaymentStatus.REFUNDED)
-    active_orders_count = active_orders_qs.count()
-    total_revenue = active_orders_qs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    paid_revenue = active_orders_qs.aggregate(total=Sum('paid_amount'))['total'] or Decimal('0.00')
+    active_stats = active_orders_qs.order_by().aggregate(n=Count('id'), total=Sum('total_amount'), paid=Sum('paid_amount'))
+    active_orders_count = active_stats['n']
+    total_revenue = active_stats['total'] or Decimal('0.00')
+    paid_revenue = active_stats['paid'] or Decimal('0.00')
     avg_order_value = (total_revenue / Decimal(active_orders_count)) if active_orders_count > 0 else Decimal('0.00')
 
     # Paginate
@@ -5647,44 +5647,7 @@ def orders_stream(request, restaurant_slug=None):
     if not slug:
         return HttpResponseBadRequest('Missing restaurant slug')
 
-    q, closed = subscribe(slug)
-
-    def event_stream():
-        import time
-        last_ping = 0
-        try:
-            # Initial comment to open stream
-            yield sse_comment(f"stream opened for {slug}")
-            while not closed.is_set():
-                # Periodic keepalive every 15s
-                now = time.time()
-                if now - last_ping > 15:
-                    last_ping = now
-                    yield sse_comment('keepalive')
-                # Try to get next payload without blocking long
-                from queue import Empty
-                try:
-                    data = q.get(timeout=1.0)
-                except Empty:
-                    data = None
-                if data is None:
-                    continue
-                yield sse_event(data, event='new_order')
-                try:
-                    import json
-                    obj = json.loads(data)
-                    etype = obj.get('type')
-                    if etype and etype != 'new_order':
-                        yield sse_event(data, event=etype)
-                except Exception:
-                    pass
-        finally:
-            unsubscribe(slug, q, closed)
-
-    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
-    response['Cache-Control'] = 'no-cache'
-    response['X-Accel-Buffering'] = 'no'  # helpful for some proxies
-    return response
+    return stream_response(request, slug, 'new_order')
 
 # Order Detail View
 @login_required

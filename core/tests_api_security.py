@@ -7,7 +7,7 @@ from unittest import mock
 
 from django.contrib.auth.models import User
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -314,6 +314,7 @@ class TenantSlugGuardTests(TestCase):
         self.client.force_login(admin)
         self.assertEqual(self.client.get('/dashboard/beta-co/menu/').status_code, 200)
 
+    @override_settings(SSE_STREAMS='on')
     def test_live_order_stream_accepts_branch_slugs(self):
         """POS/KDS/floor plan links use the branch slug; the live stream must accept it."""
         self.client.force_login(self.owner)
