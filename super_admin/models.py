@@ -1226,6 +1226,7 @@ if not hasattr(User, 'branch'):
 class UserSecuritySetting(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='security_setting')
     is_2fa_enabled = models.BooleanField(default=True, help_text="Require 6-digit OTP verification code on login")
+    must_change_password = models.BooleanField(default=False, help_text="Force the user to set a new password on next login")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

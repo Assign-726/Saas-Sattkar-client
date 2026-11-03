@@ -3,7 +3,7 @@ from datetime import date, time
 from decimal import Decimal
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from core.models import InventoryItem, MenuItem, Order
@@ -174,11 +174,22 @@ class NotificationTests(TestCase):
         self.assertContains(page, 'id="ntDrawer"')
         self.assertContains(page, 'data-nt-open')
 
+    @override_settings(SSE_STREAMS='on')
     def test_notification_stream_endpoint(self):
         self.client.force_login(self.user)
         resp = self.client.get(self.url('order_notifications_stream'))
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp['Content-Type'], 'text/event-stream')
+
+    @override_settings(SSE_STREAMS='auto')
+    def test_stream_declines_on_single_threaded_server(self):
+        # gunicorn's sync worker (like the test client) runs one request per process: an open stream
+        # would pin the worker, so the endpoint answers 204 and the page polls instead.
+        self.client.force_login(self.user)
+        resp = self.client.get(self.url('order_notifications_stream'))
+        self.assertEqual(resp.status_code, 204)
+        resp = self.client.get(self.url('order_notifications_stream'), **{'wsgi.multithread': True})
+        self.assertEqual(resp.status_code, 200)
 
     def test_notify_publishes_sse(self):
         from core.sse import subscribe, unsubscribe

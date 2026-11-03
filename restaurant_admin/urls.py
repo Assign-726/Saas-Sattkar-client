@@ -235,9 +235,6 @@ urlpatterns = [
     path('ajax/get-subcategories/', views.get_subcategories, name='get_subcategories'),
     
     # QR Code Generation
-    path('qr-generator/', views.qr_code_generator, name='qr_code_generator'),
-    path('qr-code/', views.generate_qr_code, name='generate_qr_code'),
-    path('menu/<int:menu_id>/qr-code/', views.generate_qr_code, name='generate_menu_item_qr_code'),
 
     # Coupon Management
     path('coupons/', views.coupon_list, name='coupon_list'),

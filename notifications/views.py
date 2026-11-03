@@ -79,42 +79,8 @@ def stream(request, restaurant_slug=None):
     if not slug:
         return HttpResponse('Missing restaurant slug', status=400)
 
-    from core.sse import subscribe, unsubscribe, sse_comment, sse_event
-    q, closed = subscribe(slug)
-
-    def event_stream():
-        import json, time
-        last_ping = 0
-        try:
-            yield sse_comment(f"notification stream opened for {slug}")
-            while not closed.is_set():
-                now = time.time()
-                if now - last_ping > 15:
-                    last_ping = now
-                    yield sse_comment('keepalive')
-                from queue import Empty
-                try:
-                    data = q.get(timeout=1.0)
-                except Empty:
-                    data = None
-                if data is None:
-                    continue
-                # Broadcast as 'notification' event and also original type
-                yield sse_event(data, event='notification')
-                try:
-                    obj = json.loads(data)
-                    etype = obj.get('type')
-                    if etype and etype != 'notification':
-                        yield sse_event(data, event=etype)
-                except Exception:
-                    pass
-        finally:
-            unsubscribe(slug, q, closed)
-
-    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
-    response['Cache-Control'] = 'no-cache'
-    response['X-Accel-Buffering'] = 'no'
-    return response
+    from core.sse import stream_response
+    return stream_response(request, slug, 'notification')
 
 
 @login_required

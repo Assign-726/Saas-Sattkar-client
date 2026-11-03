@@ -84,7 +84,8 @@ def dashboard(request):
                     if telemetry.get('connection_status') == 'CONNECTED':
                         messages.success(request, "Live modules and subscription refreshed from Sattkar.")
                     else:
-                        messages.warning(request, "Sattkar is currently not connected.")
+                        reason = telemetry.get('message') or telemetry.get('connection_status') or 'unknown'
+                        messages.warning(request, f"Sattkar is currently not connected ({reason}).")
                     return redirect('super_admin:dashboard')
         except Exception as sync_err:
             logger.warning(f"[Dashboard] Subscription sync skipped: {sync_err}")

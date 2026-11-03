@@ -17,6 +17,7 @@ the context processor and other views all agree on the same branch.
 
 
 import re
+from core.request_cache import branch_by_id, first_branch
 
 _KITCHEN_ORDER_PAGES = re.compile(r'^orders/\d+/(kot|mark-ready)/$')
 
@@ -56,10 +57,10 @@ class BranchContextMiddleware:
 
                     branch = None
                     if branch_id:
-                        branch = restaurant.branches.filter(id=branch_id).first()
+                        branch = branch_by_id(restaurant, branch_id) if str(branch_id).isdigit() else None
 
                     if not branch:
-                        branch = restaurant.branches.first()
+                        branch = first_branch(restaurant)
                         if branch:
                             request.session[session_key] = branch.id
 

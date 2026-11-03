@@ -453,14 +453,15 @@
                 }
 
                 // Safety-net fallback:
-                // - Healthy SSE: ZERO polling when idle! Server stays 100% silent. Events are pushed instantly.
-                // - Offline / reconnecting SSE: fallback poll every 15s so orders are never missed if SSE drops
+                // - Healthy SSE: events are pushed instantly, plus a light catch-up poll every 30s.
+                // - Offline / reconnecting / disabled SSE (server answers 204): poll every 15s so orders are never missed
                 function safetyHeartbeat() {
                     // A tab without the stream trusts the holder only while it keeps reporting in
                     if (!sse && sseConnected && Date.now() - ntLeaderSeenAt > 25000) sseConnected = false;
-                    if (sseConnected) return; // 100% event-driven while SSE is connected
+                    // Still poll now and then while connected: with several server processes an event raised in
+                    // another process never reaches this stream.
                     const elapsed = Date.now() - lastPollAt;
-                    if (elapsed >= 15000) {
+                    if (elapsed >= (sseConnected ? 30000 : 15000)) {
                         poll();
                     }
                 }

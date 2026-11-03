@@ -29,7 +29,8 @@ from django.http import HttpResponse
 from django.conf import settings
 from django.urls import reverse
 from django.utils import timezone
-from core.sse import subscribe, unsubscribe, sse_event, sse_comment
+from core.sse import stream_response
+from core.request_cache import branch_by_id, first_branch
 from django.http import HttpResponse
 from django.views.decorators.http import require_http_methods
 from django.http import StreamingHttpResponse
@@ -119,10 +120,10 @@ def get_active_branch(request, restaurant):
     session = getattr(request, 'session', {}) or {}
     branch_id = request.GET.get('branch_id') or session.get(f'active_branch_{restaurant.id}') or session.get('active_branch_id')
     if branch_id and str(branch_id).isdigit():
-        branch = restaurant.branches.filter(id=int(branch_id)).first()
+        branch = branch_by_id(restaurant, branch_id)
         if branch:
             return branch
-    return restaurant.branches.first()
+    return first_branch(restaurant)
 
 def get_branch_gstin_str(branch=None, restaurant=None):
     """Returns normalized GSTIN string for a given branch or restaurant."""
@@ -5009,23 +5010,21 @@ def order_records(request, restaurant_slug=None):
     base_orders_qs = _filter_order_queryset(request, restaurant, ignore_order_type=True, ignore_status=False)
     base_status_qs = _filter_order_queryset(request, restaurant, ignore_order_type=False, ignore_status=True)
 
-    # Compute live counts for each Order Type tab
-    order_type_counts = {
-        'all': base_orders_qs.count(),
-        'dine_in': base_orders_qs.filter(order_type='dine_in').count(),
-        'takeaway': base_orders_qs.filter(order_type='takeaway').count(),
-        'delivery': base_orders_qs.filter(order_type='delivery').count(),
-    }
-
-    # Compute live counts for each Order Status tab
-    status_counts = {
-        'all': base_status_qs.count(),
-        'preparing': base_status_qs.filter(status__in=[Order.OrderStatus.PENDING, 'PR']).count(),
-        'ready': base_status_qs.filter(status='READY').count(),
-        'served': base_status_qs.filter(status='S').count(),
-        'completed': base_status_qs.filter(status='COMPLETED').count(),
-        'cancelled': base_status_qs.filter(status='C').count(),
-    }
+    # Live counts for each Order Type tab and each Order Status tab (one query each, not one per tab)
+    order_type_counts = base_orders_qs.order_by().aggregate(
+        all=Count('id'),
+        dine_in=Count('id', filter=Q(order_type='dine_in')),
+        takeaway=Count('id', filter=Q(order_type='takeaway')),
+        delivery=Count('id', filter=Q(order_type='delivery')),
+    )
+    status_counts = base_status_qs.order_by().aggregate(
+        all=Count('id'),
+        preparing=Count('id', filter=Q(status__in=[Order.OrderStatus.PENDING, 'PR'])),
+        ready=Count('id', filter=Q(status='READY')),
+        served=Count('id', filter=Q(status='S')),
+        completed=Count('id', filter=Q(status='COMPLETED')),
+        cancelled=Count('id', filter=Q(status='C')),
+    )
 
     order_type_filter = request.GET.get('order_type', '').strip()
     status_filter = request.GET.get('status', '').strip()
@@ -5035,9 +5034,10 @@ def order_records(request, restaurant_slug=None):
     # Compute Summary Stats (strictly excluding cancelled and refunded orders from revenue)
     total_orders = orders_qs.count()
     active_orders_qs = orders_qs.exclude(status=Order.OrderStatus.CANCELLED).exclude(payment_status=Order.PaymentStatus.REFUNDED)
-    active_orders_count = active_orders_qs.count()
-    total_revenue = active_orders_qs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    paid_revenue = active_orders_qs.aggregate(total=Sum('paid_amount'))['total'] or Decimal('0.00')
+    active_stats = active_orders_qs.order_by().aggregate(n=Count('id'), total=Sum('total_amount'), paid=Sum('paid_amount'))
+    active_orders_count = active_stats['n']
+    total_revenue = active_stats['total'] or Decimal('0.00')
+    paid_revenue = active_stats['paid'] or Decimal('0.00')
     avg_order_value = (total_revenue / Decimal(active_orders_count)) if active_orders_count > 0 else Decimal('0.00')
 
     # Paginate
@@ -5647,44 +5647,7 @@ def orders_stream(request, restaurant_slug=None):
     if not slug:
         return HttpResponseBadRequest('Missing restaurant slug')
 
-    q, closed = subscribe(slug)
-
-    def event_stream():
-        import time
-        last_ping = 0
-        try:
-            # Initial comment to open stream
-            yield sse_comment(f"stream opened for {slug}")
-            while not closed.is_set():
-                # Periodic keepalive every 15s
-                now = time.time()
-                if now - last_ping > 15:
-                    last_ping = now
-                    yield sse_comment('keepalive')
-                # Try to get next payload without blocking long
-                from queue import Empty
-                try:
-                    data = q.get(timeout=1.0)
-                except Empty:
-                    data = None
-                if data is None:
-                    continue
-                yield sse_event(data, event='new_order')
-                try:
-                    import json
-                    obj = json.loads(data)
-                    etype = obj.get('type')
-                    if etype and etype != 'new_order':
-                        yield sse_event(data, event=etype)
-                except Exception:
-                    pass
-        finally:
-            unsubscribe(slug, q, closed)
-
-    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
-    response['Cache-Control'] = 'no-cache'
-    response['X-Accel-Buffering'] = 'no'  # helpful for some proxies
-    return response
+    return stream_response(request, slug, 'new_order')
 
 # Order Detail View
 @login_required
@@ -6995,111 +6958,6 @@ def get_subcategories(request, restaurant_slug=None):
     return JsonResponse(list(subcategories), safe=False)
 
 
-@login_required
-@user_passes_test(is_admin)
-def qr_code_generator(request, restaurant_slug=None):
-    """View for the QR code generator page"""
-    restaurant = resolve_restaurant(request, restaurant_slug)
-    if isinstance(restaurant, HttpResponse):
-        return restaurant
-    return render(request, 'restaurant_admin/qr_code_generator.html', {
-        'categories': Category.objects.filter(restaurant=restaurant),
-        'menu_items': MenuItem.objects.filter(restaurant=restaurant),
-        'active_menu': 'qr_generator',
-    })
-
-
-def generate_qr_code(request, menu_id=None, restaurant_slug=None):
-    """
-    Generate and return a QR code PNG that points to the frontend menu.
-    Supports optional query params:
-    - item: specific menu item id
-    - category: category id (future use by frontend)
-    - table: table/room identifier to prefill checkout
-    The function also supports a path param menu_id (legacy) to set item.
-    """
-    # Compute base URL to the frontend root from .env / settings
-    from core.models import Table
-    base_url = Table.get_frontend_base_url()
-    
-    # Resolve restaurant to inject slug into customer URL
-    restaurant = resolve_restaurant(request, restaurant_slug)
-    if not isinstance(restaurant, Restaurant):
-        return restaurant
-
-    # Gather params
-    item_param = request.GET.get('item')
-    category_param = request.GET.get('category')
-    table_param = request.GET.get('table')
-    branch_param = request.GET.get('branch') or request.GET.get('branch_slug')
-    zone_param = request.GET.get('zone') or request.GET.get('floor')
-
-    # Backward-compat: allow path menu_id to behave like item
-    if menu_id and not item_param:
-        item_param = str(menu_id)
-
-    # Build target URL (support direct-to-cart or direct-to-menu) with restaurant slug
-    dest = request.GET.get('dest')
-    if dest == 'cart':
-        path = f"/{restaurant.slug}/cart/"
-    elif dest == 'menu' or table_param:
-        path = f"/{restaurant.slug}/menu"
-    else:
-        path = f"/{restaurant.slug}/"
-
-    url = f"{base_url}{path}"
-    params = {}
-    if item_param:
-        params['item'] = item_param
-    if category_param:
-        params['category'] = category_param
-    if table_param:
-        params['table'] = table_param
-    if branch_param:
-        params['branch'] = branch_param
-    if zone_param:
-        params['zone'] = zone_param
-
-    if params:
-        from urllib.parse import urlencode
-        query = urlencode(params)
-        url = f"{url}?{query}"
-
-    # Generate QR code
-    qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=10,
-        border=4,
-    )
-    qr.add_data(url)
-    qr.make(fit=True)
-
-    img = qr.make_image(fill_color="black", back_color="white")
-    buffer = BytesIO()
-    # pyrefly: ignore [unexpected-keyword]
-    img.save(buffer, format='PNG')
-    buffer.seek(0)
-
-    # Filename
-    if item_param:
-        filename = f"menu_item_{item_param}_qr.png"
-    elif category_param:
-        filename = f"category_{category_param}_qr.png"
-    elif table_param:
-        filename = f"table_{table_param}_qr.png"
-    else:
-        filename = "menu_qr.png"
-
-    response = HttpResponse(buffer, content_type='image/png')
-    if 'download' in request.GET:
-        response['Content-Disposition'] = f'attachment; filename={filename}'
-    else:
-        response['Content-Disposition'] = f'inline; filename={filename}'
-    return response
-
-
-# Settings (Taxes and Service Charge)
 @login_required
 @user_passes_test(is_admin)
 def settings_view(request, restaurant_slug=None):

@@ -21,8 +21,8 @@ def app_constants(request):
     restaurant = getattr(request, 'restaurant', None)
     if not restaurant:
         try:
-            from super_admin.models import Restaurant
-            restaurant = Restaurant.objects.first()
+            from core.request_cache import first_restaurant
+            restaurant = first_restaurant()
         except Exception:
             restaurant = None
 
