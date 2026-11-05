@@ -881,6 +881,12 @@
                     <i class="fa-solid fa-hotel text-primary"></i>
                     <span style="font-size: 0.95rem; font-weight: 700;">{{ current_branch.name|default:current_restaurant.name|default:"Hotel PMS" }}</span>
                 </a>
+                {% elif is_waiter_user %}
+                <a href="{% url 'restaurant_admin:waiter_tables' restaurant_slug=rslug %}" class="sidebar-brand text-truncate"
+                    title="{{ current_branch.name|default:current_restaurant.name|default:'Tables' }}">
+                    <i class="fas fa-user-tie text-primary"></i>
+                    <span style="font-size: 0.95rem; font-weight: 700;">{{ current_branch.name|default:current_restaurant.name|default:"Tables" }}</span>
+                </a>
                 {% elif is_kitchen_user %}
                 <a href="{% url 'restaurant_admin:kitchen_kds' restaurant_slug=rslug %}"
                     class="sidebar-brand text-truncate"
@@ -952,7 +958,7 @@
                 {% endif %}
                 {% endif %}
 
-                {% if access.pos %}
+                {% if access.pos and not show_waiter_tables %}
                 <div class="sidebar-single-nav">
                     <a class="nav-link {% if active_menu == 'transactions_create' %}active{% endif %}"
                         href="{% url 'restaurant_admin:transaction_desk_create' restaurant_slug=rslug %}"
@@ -1068,6 +1074,17 @@
                     </a>
                 </div>
                 {% endif %}
+                {% endif %}
+
+                {% if show_waiter_tables %}
+                <!-- Waiter / Captain station -->
+                <div class="sidebar-single-nav">
+                    <a class="nav-link {% if active_menu == 'waiter_tables' %}active{% endif %}"
+                        href="{% url 'restaurant_admin:waiter_tables' restaurant_slug=rslug %}" title="My tables">
+                        <i class="fas fa-chair text-primary"></i>
+                        <span>Tables</span>
+                    </a>
+                </div>
                 {% endif %}
 
                 {% if show_dinein_group %}

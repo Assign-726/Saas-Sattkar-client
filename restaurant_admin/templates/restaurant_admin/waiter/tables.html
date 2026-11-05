@@ -1,0 +1,243 @@
+{% extends 'restaurant_admin/base.html' %}
+{% block title %}Tables · {{ restaurant.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .wt { --muted: color-mix(in srgb, var(--ui-label) 58%, transparent); max-width: 1280px; margin: 0 auto; padding: 4px 0 96px; }
+  .wt-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .wt-head h1 { font-size: 22px; font-weight: 700; margin: 0; color: var(--ui-label); }
+  .wt-head p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .wt-seg { display: inline-flex; background: var(--ui-fill, rgba(120,120,128,.12)); border-radius: 10px; padding: 3px; }
+  .wt-seg button { border: 0; background: transparent; padding: 7px 14px; border-radius: 8px; font-weight: 600; font-size: 13px; color: var(--ui-label); }
+  .wt-seg button.on { background: var(--ui-surface); box-shadow: var(--ui-shadow-card, 0 1px 2px rgba(0,0,0,.12)); }
+
+  .wt-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .wt-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; padding: 5px 10px;
+             border-radius: 999px; background: var(--ui-surface); border: 1px solid var(--ui-separator); color: var(--ui-label); }
+  .wt-chip i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+  .wt-zones { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; scrollbar-width: none; }
+  .wt-zones button { flex: 0 0 auto; border: 1px solid var(--ui-separator); background: var(--ui-surface); color: var(--ui-label);
+                     padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+  .wt-zones button.on { background: var(--ui-accent); border-color: var(--ui-accent); color: var(--ui-on-accent, #fff); }
+
+  .wt-zone-title { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 18px 0 8px; }
+  .wt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  @media (max-width: 480px) { .wt-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
+
+  .wt-card { position: relative; text-align: left; border: 1px solid var(--ui-separator); border-left: 5px solid var(--st);
+             background: var(--ui-surface); border-radius: 14px; padding: 12px 12px 10px; min-height: 118px; cursor: pointer;
+             display: flex; flex-direction: column; gap: 4px; color: var(--ui-label); transition: transform .12s, box-shadow .12s; }
+  .wt-card:hover { box-shadow: var(--ui-shadow-raised, 0 4px 14px rgba(0,0,0,.08)); }
+  .wt-card:active { transform: scale(.98); }
+  .wt-card.mine { box-shadow: 0 0 0 2px rgba(var(--ui-accent-rgb), .45); }
+  .wt-card .n { font-size: 18px; font-weight: 800; line-height: 1.1; }
+  .wt-card .cap { font-size: 12px; color: var(--muted); }
+  .wt-card .st { font-size: 12px; font-weight: 700; color: var(--st); display: flex; align-items: center; gap: 5px; }
+  .wt-card .meta { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; gap: 6px; margin-top: auto; }
+  .wt-card .amt { font-weight: 700; color: var(--ui-label); }
+  .wt-card .who { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wt-card .tag { position: absolute; top: 10px; right: 10px; font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+                  background: rgba(var(--ui-accent-rgb), .12); color: var(--ui-accent); }
+  .wt-card .bill-btn { margin-top: 6px; border: 1px solid var(--ui-separator); background: transparent; color: var(--ui-label);
+                       border-radius: 8px; font-size: 12px; font-weight: 600; padding: 5px 8px; }
+  .wt-card .bill-btn:disabled { opacity: .55; }
+
+  .s-free { --st: var(--ui-green); }
+  .s-ordering { --st: var(--ui-indigo); }
+  .s-kitchen { --st: var(--ui-orange); }
+  .s-ready { --st: var(--ui-teal); }
+  .s-served { --st: var(--ui-purple); }
+  .s-bill { --st: var(--ui-red); }
+  .s-ready.wt-card { animation: wtPulse 1.6s ease-in-out infinite; }
+  @keyframes wtPulse { 50% { box-shadow: 0 0 0 4px rgba(var(--ui-teal-rgb), .25); } }
+  @media (prefers-reduced-motion: reduce) { .s-ready.wt-card { animation: none; } }
+
+  .wt-empty { text-align: center; color: var(--muted); padding: 48px 16px; }
+
+  /* covers sheet */
+  .wt-veil { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none; align-items: flex-end; justify-content: center; z-index: 2000; }
+  .wt-veil.on { display: flex; }
+  .wt-sheet { background: var(--ui-surface); color: var(--ui-label); width: 100%; max-width: 440px; border-radius: 18px 18px 0 0; padding: 18px 16px 22px; }
+  @media (min-width: 600px) { .wt-veil { align-items: center; } .wt-sheet { border-radius: 18px; } }
+  .wt-sheet h3 { font-size: 17px; font-weight: 700; margin: 0 0 2px; }
+  .wt-sheet p { font-size: 13px; color: color-mix(in srgb, var(--ui-label) 58%, transparent); margin: 0 0 14px; }
+  .wt-covers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .wt-covers button { border: 1px solid var(--ui-separator); background: var(--ui-bg); color: var(--ui-label); border-radius: 12px;
+                      padding: 14px 0; font-size: 18px; font-weight: 700; }
+  .wt-covers button:hover, .wt-covers button:focus-visible { border-color: var(--ui-accent); color: var(--ui-accent); }
+  .wt-sheet .cancel { width: 100%; margin-top: 12px; border: 0; background: transparent; color: var(--ui-red); font-weight: 600; padding: 10px; }
+
+  .wt-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ui-label); color: var(--ui-surface);
+              padding: 10px 16px; border-radius: 10px; font-size: 13.5px; font-weight: 600; z-index: 2100; display: none; max-width: calc(100% - 32px); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="wt" id="wt">
+  <div class="wt-head">
+    <div>
+      <h1>Tables</h1>
+      <p>Tap a table to take its order. The cashier settles the bill.</p>
+    </div>
+    <div class="wt-seg" role="tablist" aria-label="Which tables">
+      <button type="button" class="on" data-scope="all">All tables</button>
+      <button type="button" data-scope="mine">My tables <span id="wtMineCount"></span></button>
+    </div>
+  </div>
+
+  <div class="wt-legend" id="wtLegend"></div>
+  <div class="wt-zones" id="wtZones"></div>
+  <div id="wtBoard"><div class="wt-empty">Loading tables…</div></div>
+</div>
+
+<div class="wt-veil" id="wtVeil" aria-hidden="true">
+  <div class="wt-sheet" role="dialog" aria-modal="true" aria-labelledby="wtSheetTitle">
+    <h3 id="wtSheetTitle">Table</h3>
+    <p id="wtSheetSub">How many guests?</p>
+    <div class="wt-covers" id="wtCovers"></div>
+    <button type="button" class="cancel" id="wtCancel">Cancel</button>
+  </div>
+</div>
+<div class="wt-toast" id="wtToast" role="status"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const SLUG = "{{ restaurant_slug|escapejs }}";
+  const API = "{% url 'restaurant_admin:waiter_tables_api' restaurant_slug=restaurant_slug %}";
+  const OPEN = (id) => `/dashboard/${SLUG}/waiter/tables/${id}/open/`;
+  const BILL = (id) => `/dashboard/${SLUG}/waiter/orders/${id}/request-bill/`;
+  const STATES = {
+    free: ["Free", "fa-circle-check"],
+    ordering: ["Taking order", "fa-pen"],
+    kitchen: ["In kitchen", "fa-fire-burner"],
+    ready: ["Ready to serve", "fa-bell-concierge"],
+    served: ["Served", "fa-utensils"],
+    bill: ["Bill requested", "fa-file-invoice-dollar"],
+  };
+  let data = { zones: [] };
+  let scope = "all";
+  let zone = "";
+  try { scope = localStorage.getItem("wtScope") || "all"; zone = localStorage.getItem("wtZone") || ""; } catch (e) {}
+
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const money = (v) => "₹" + Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+  const mins = (m) => (m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`);
+  const csrf = () => (document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/) || [])[1] || "{{ csrf_token }}";
+
+  function toast(msg) {
+    const t = document.getElementById("wtToast");
+    t.textContent = msg; t.style.display = "block";
+    clearTimeout(toast._t); toast._t = setTimeout(() => (t.style.display = "none"), 2600);
+  }
+
+  function card(t) {
+    const [label, icon] = STATES[t.state] || STATES.free;
+    const occupied = t.state !== "free";
+    const canBill = occupied && ["kitchen", "ready", "served"].includes(t.state);
+    return `
+      <div class="wt-card s-${t.state}${t.mine ? " mine" : ""}" role="button" tabindex="0" data-id="${t.id}" data-state="${t.state}"
+           data-name="${esc(t.name)}" data-cap="${t.capacity}" aria-label="${esc(t.name)}, ${label}">
+        ${t.mine ? '<span class="tag">Mine</span>' : ""}
+        <div class="n">${esc(t.name)}</div>
+        <div class="cap">${t.capacity} seats${t.linked_to ? ` · with ${esc(t.linked_to)}` : ""}${t.party_name ? ` · ${esc(t.party_name)}` : ""}</div>
+        <div class="st"><i class="fas ${icon}"></i>${label}</div>
+        ${occupied ? `
+          <div class="meta"><span class="amt">${money(t.total)}</span><span>${t.items} item${t.items === 1 ? "" : "s"} · ${mins(t.minutes)}</span></div>
+          ${t.waiter ? `<div class="who"><i class="fas fa-user-tie me-1"></i>${esc(t.waiter)}</div>` : ""}
+          ${canBill ? `<button type="button" class="bill-btn" data-bill="${t.order_id}">
+              <i class="fas fa-receipt me-1"></i>Ask for bill</button>` : ""}
+        ` : ""}
+      </div>`;
+  }
+
+  function render() {
+    const counts = data.counts || {};
+    document.getElementById("wtLegend").innerHTML = Object.entries(STATES)
+      .map(([k, [label]]) => `<span class="wt-chip s-${k}"><i style="background:var(--st)"></i>${label} ${counts[k] || 0}</span>`).join("");
+    document.getElementById("wtMineCount").textContent = data.mine ? `(${data.mine})` : "";
+
+    const zonesEl = document.getElementById("wtZones");
+    const names = data.zones.map((z) => z.name);
+    if (zone && !names.includes(zone)) zone = "";
+    zonesEl.style.display = names.length > 1 ? "" : "none";
+    zonesEl.innerHTML = [`<button type="button" data-zone="" class="${zone ? "" : "on"}">All areas</button>`]
+      .concat(names.map((n) => `<button type="button" data-zone="${esc(n)}" class="${zone === n ? "on" : ""}">${esc(n)}</button>`)).join("");
+
+    document.querySelectorAll(".wt-seg button").forEach((b) => b.classList.toggle("on", b.dataset.scope === scope));
+
+    const board = document.getElementById("wtBoard");
+    const html = data.zones
+      .filter((z) => !zone || z.name === zone)
+      .map((z) => {
+        const rows = z.tables.filter((t) => scope === "all" || t.mine);
+        if (!rows.length) return "";
+        return `<div class="wt-zone-title">${esc(z.name)}</div><div class="wt-grid">${rows.map(card).join("")}</div>`;
+      }).join("");
+    board.innerHTML = html || `<div class="wt-empty">${scope === "mine" ? "You're not serving any tables yet. Tap a free table to start." : "No tables set up for this outlet yet."}</div>`;
+  }
+
+  async function load() {
+    try {
+      const r = await fetch(API, { headers: { "X-Requested-With": "XMLHttpRequest" }, credentials: "same-origin" });
+      const j = await r.json();
+      if (j.success) { data = j; render(); }
+    } catch (e) { /* keep the last board; the next poll retries */ }
+  }
+
+  // covers sheet for a free table
+  const veil = document.getElementById("wtVeil");
+  let pendingTable = null;
+  function openSheet(id, name, cap) {
+    pendingTable = id;
+    document.getElementById("wtSheetTitle").textContent = name;
+    document.getElementById("wtSheetSub").textContent = `How many guests? (${cap} seats)`;
+    const max = Math.max(8, Math.min(16, Number(cap) || 4));
+    document.getElementById("wtCovers").innerHTML = Array.from({ length: max }, (_, i) => `<button type="button" data-covers="${i + 1}">${i + 1}</button>`).join("");
+    veil.classList.add("on"); veil.setAttribute("aria-hidden", "false");
+    const first = veil.querySelector(`[data-covers="${Math.min(2, max)}"]`); first && first.focus();
+  }
+  function closeSheet() { veil.classList.remove("on"); veil.setAttribute("aria-hidden", "true"); pendingTable = null; }
+  veil.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-covers]");
+    if (b && pendingTable) { window.location.href = `${OPEN(pendingTable)}?covers=${b.dataset.covers}`; return; }
+    if (e.target === veil || e.target.id === "wtCancel") closeSheet();
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && veil.classList.contains("on")) closeSheet(); });
+
+  async function askBill(orderId, btn) {
+    btn.disabled = true;
+    try {
+      const r = await fetch(BILL(orderId), { method: "POST", credentials: "same-origin",
+        headers: { "X-CSRFToken": csrf(), "X-Requested-With": "XMLHttpRequest" } });
+      const j = await r.json();
+      toast(j.success ? (j.already ? "Already asked — the cashier has it." : "Cashier asked for the bill.") : (j.error || "Couldn't ask for the bill."));
+      load();
+    } catch (e) { toast("Network problem — try again."); btn.disabled = false; }
+  }
+
+  document.getElementById("wt").addEventListener("click", (e) => {
+    const bill = e.target.closest("[data-bill]");
+    if (bill) { e.stopPropagation(); askBill(bill.dataset.bill, bill); return; }
+    const seg = e.target.closest("[data-scope]");
+    if (seg) { scope = seg.dataset.scope; try { localStorage.setItem("wtScope", scope); } catch (x) {} render(); return; }
+    const z = e.target.closest("[data-zone]");
+    if (z) { zone = z.dataset.zone; try { localStorage.setItem("wtZone", zone); } catch (x) {} render(); return; }
+    const c = e.target.closest(".wt-card");
+    if (!c) return;
+    if (c.dataset.state === "free") openSheet(c.dataset.id, c.dataset.name, c.dataset.cap);
+    else window.location.href = OPEN(c.dataset.id);
+  });
+  document.getElementById("wt").addEventListener("keydown", (e) => {
+    const c = e.target.closest(".wt-card");
+    if (c && (e.key === "Enter" || e.key === " ") && !e.target.closest("[data-bill]")) { e.preventDefault(); c.click(); }
+  });
+
+  load();
+  setInterval(() => { if (!document.hidden) load(); }, 8000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+})();
+</script>
+{% endblock %}

@@ -14,6 +14,7 @@ from restaurant_admin import views_reservations
 from restaurant_admin import views_controls
 from restaurant_admin import views_procurement
 from restaurant_admin import floor_plan_views
+from restaurant_admin import views_waiter
 from restaurant_admin import views_events
 from restaurant_admin import views_staff
 from restaurant_admin import views_hrms
@@ -89,6 +90,11 @@ urlpatterns = [
     
     # Floor Plan & Table Management
     path('floor-plan/', floor_plan_views.floor_plan_dashboard, name='floor_plan_dashboard'),
+    # Waiter / Captain: live table board -> POS (send to kitchen only) -> ask the cashier for the bill
+    path('waiter/tables/', views_waiter.waiter_tables, name='waiter_tables'),
+    path('waiter/api/tables/', views_waiter.waiter_tables_api, name='waiter_tables_api'),
+    path('waiter/tables/<int:pk>/open/', views_waiter.waiter_open_table, name='waiter_open_table'),
+    path('waiter/orders/<int:pk>/request-bill/', views_waiter.waiter_request_bill, name='waiter_request_bill'),
     path('api/floor-plan/', floor_plan_views.floor_plan_api, name='floor_plan_api'),
     path('api/floor-plan/save-position/', floor_plan_views.floor_plan_save_position_api, name='floor_plan_save_position_api'),
     path('api/floor-plan/book-party/', floor_plan_views.floor_plan_book_party_api, name='floor_plan_book_party_api'),

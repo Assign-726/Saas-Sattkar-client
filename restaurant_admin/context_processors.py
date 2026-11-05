@@ -87,6 +87,14 @@ def restaurant_context(request):
     show_settings = can_settings and not is_club_user and not is_hotel_user
     show_delivery = (is_dining_mgmt or is_cashier_user) and branch_has_restaurant and not is_club_user and not is_kitchen_user and not is_hotel_user and branch_feat('delivery')
 
+    # Waiter / Captain: a single "Tables" entry (plus Menu / Analytics when granted) — no POS desk, floor editor or delivery
+    if is_waiter_user:
+        show_pos_group = False
+        show_dinein_group = False
+        show_delivery = False
+        show_menu_group = show_menu_group and bool(getattr(profile, 'can_manage_menu', False))
+    show_waiter_tables = is_waiter_user and branch_has_restaurant and branch_feat('dine_in')
+
     # Club module visibility
     enable_club_globally = getattr(constants, 'ENABLE_CLUB_EVENTS_MODULE', True)
     branch_has_club = getattr(active_branch, 'has_club_module', False) if active_branch else False
@@ -138,6 +146,7 @@ def restaurant_context(request):
         'show_dining_dashboard': show_dining_dashboard,
         'show_dining_analytics': show_dining_analytics,
         'show_pos_group': show_pos_group,
+        'show_waiter_tables': show_waiter_tables,
         'show_dinein_group': show_dinein_group,
         'show_menu_group': show_menu_group,
         'show_stock_group': show_stock_group,

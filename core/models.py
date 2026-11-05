@@ -535,6 +535,10 @@ class Order(models.Model):
     counter = models.ForeignKey('POSCounter', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
     shift = models.ForeignKey('POSShift', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
     cashier = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='pos_orders')
+    waiter = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='served_orders',
+                               help_text="Waiter / captain serving this dine-in table")
+    bill_requested_at = models.DateTimeField(null=True, blank=True,
+                                             help_text="When the waiter asked the cashier to print / settle the bill")
 
     class Meta:
         ordering = ['-order_time']

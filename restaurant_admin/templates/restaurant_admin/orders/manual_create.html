@@ -5105,9 +5105,17 @@
           <button class="btn" id="btn-fire-kot" disabled{% if pos_quick_bill %} style="display:none" aria-hidden="true"{% endif %}>
             <span>Send to kitchen</span><kbd>F9</kbd>
           </button>
+          {% if is_waiter %}
+          {# Waiter / Captain: the cashier settles — ask for the bill instead #}
+          <button class="btn" id="btn-waiter-bill" type="button" disabled title="Ask the cashier to print and settle this table's bill">
+            <span>Ask for bill</span>
+          </button>
+          <button class="btn s" id="btn-open-settle-modal" disabled style="display:none" aria-hidden="true" tabindex="-1"></button>
+          {% else %}
           <button class="btn s" id="btn-open-settle-modal" disabled{% if pos_quick_bill %} title="Settle and print the order token + bill (F10 or F9)"{% endif %}>
             <span>{% if pos_quick_bill %}Quick bill{% else %}Settle &amp; bill{% endif %}</span><kbd>F10</kbd>
           </button>
+          {% endif %}
         </div>
       </div>
       <button class="mbar" id="mbar" onclick="toggleSheet()">
@@ -11379,6 +11387,10 @@
     }
 
     function openSettlementModal() {
+      if (window.POS_WAITER_MODE) {
+        (window.toast || alert)("Only the cashier can settle. Use Ask for bill.", true);
+        return;
+      }
       if (!state.cart || state.cart.length === 0) {
         alert(
           "Cannot settle an order with no items. Please add items to the cart.",
@@ -11815,12 +11827,16 @@
         );
         return;
       }
+      if (window.POS_WAITER_MODE && ["settle_order", "print_close"].includes(action)) {
+        (window.toast || alert)("Only the cashier can settle. Use Ask for bill.", true);
+        return;
+      }
       if (window._isSubmitting) return;
       window._isSubmitting = true;
 
       // Open the print tab now, while we still have the user's click / key press.
       const wantsDoc =
-        action === "fire_kot" ||
+        (action === "fire_kot" && !window.POS_WAITER_MODE) ||
         (["settle_order", "print_close"].includes(action) &&
           extraData.print_bill !== false);
       let preWins = [];
@@ -12015,7 +12031,7 @@
                 );
                 if (opt) opt.dataset.status = "RUNNING_KOT";
               }
-              window.posShowDoc(data.kot_url, preWins[0]);
+              if (!window.POS_WAITER_MODE) window.posShowDoc(data.kot_url, preWins[0]);
 
               const unsentCount =
                 state.cart.filter((l) => !l.sent).length || state.cart.length;
@@ -12035,6 +12051,9 @@
               toast(
                 `${unsentCount} line${unsentCount > 1 ? "s" : ""} sent to the kitchen.`,
               );
+              if (window.POS_WAITER_MODE && window.POS_WAITER_TABLES_URL) {
+                setTimeout(() => { window.location.href = window.POS_WAITER_TABLES_URL; }, 1100);
+              }
 
               setTimeout(() => {
                 state.cart.forEach((l) => {
@@ -17078,4 +17097,117 @@
     });
   })();
 </script>
+{% if is_waiter %}
+{{ preset_table_id|json_script:"pos-preset-table" }}
+{{ preset_covers|json_script:"pos-preset-covers" }}
+<style>
+  /* Waiter / Captain mode: dine-in only, no settle, discounts only when granted */
+  #ciType, #fulfillment-selector, #posSettleVeil { display: none !important; }
+  {% if not waiter_can_discount %}.disclink { display: none !important; }{% endif %}
+  .pos-waiter-back { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; padding: 5px 11px; border-radius: 9px;
+    border: 1px solid var(--line, var(--ui-separator)); background: var(--surface, var(--ui-surface)); color: inherit;
+    font-weight: 600; font-size: 13px; text-decoration: none; white-space: nowrap; }
+</style>
+<script>
+  window.POS_WAITER_MODE = true;
+  window.POS_WAITER_CAN_DISCOUNT = {{ waiter_can_discount|yesno:"true,false" }};
+  window.POS_WAITER_TABLES_URL = "{% url 'restaurant_admin:waiter_tables' restaurant_slug=restaurant.slug %}";
+  (function () {
+    const say = (m) => (window.toast ? window.toast(m, true) : alert(m));
+    const typing = (el) => el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+
+    // Keys a waiter has no use for: settle, order type, and discounts unless granted
+    document.addEventListener("keydown", function (e) {
+      const k = e.key;
+      let sc = k && /^F\d+$/.test(k) ? k : "";
+      if (!sc && e.altKey && /^Digit\d$/.test(e.code || "")) {
+        const n = e.code.slice(5);
+        sc = n === "0" ? "F10" : "F" + n;
+      }
+      let blocked = "";
+      if (sc === "F10") blocked = "Only the cashier can settle. Use Ask for bill.";
+      else if (sc === "F2") blocked = "Waiters take dine-in orders only.";
+      else if (!window.POS_WAITER_CAN_DISCOUNT && (sc === "F5" || ((k === "d" || k === "D") && !e.ctrlKey && !e.metaKey && !typing(e.target))))
+        blocked = "You don't have permission to apply discounts.";
+      if (blocked) { e.preventDefault(); e.stopImmediatePropagation(); say(blocked); }
+    }, true);
+
+    function lockDiscounts() {
+      if (window.POS_WAITER_CAN_DISCOUNT) return;
+      ["openOrderDiscountModal", "openItemDiscountModal"].forEach(function (fn) {
+        window[fn] = function () { say("You don't have permission to apply discounts."); };
+      });
+    }
+
+    function presetTable() {
+      let tableId = "", covers = "";
+      try {
+        tableId = JSON.parse(document.getElementById("pos-preset-table").textContent || '""');
+        covers = JSON.parse(document.getElementById("pos-preset-covers").textContent || '""');
+      } catch (e) {}
+      const st = window.posState || window.state;
+      if (!tableId || !st || st.activeOrderId) return;
+      const sel = document.getElementById("table-id");
+      if (sel) { sel.value = String(tableId); sel.dispatchEvent(new Event("change", { bubbles: true })); }
+      st.tableId = String(tableId);
+      st.orderType = "dine_in";
+      if (covers) {
+        const cov = document.getElementById("vCov");
+        if (cov) cov.value = covers;
+        st.guestCount = parseInt(covers, 10);
+      }
+      if (window.posCtxRefresh) window.posCtxRefresh();
+    }
+
+    function billButton() {
+      const btn = document.getElementById("btn-waiter-bill");
+      if (!btn) return;
+      const refresh = function () {
+        const st = window.posState || window.state || {};
+        const sent = (st.cart || []).some(function (l) { return l.sent; });
+        btn.disabled = !(st.activeOrderId && sent);
+      };
+      setInterval(refresh, 800);
+      refresh();
+      btn.addEventListener("click", async function () {
+        const st = window.posState || window.state || {};
+        if ((st.cart || []).some(function (l) { return !l.sent; })) {
+          say("Send the new items to the kitchen first.");
+          return;
+        }
+        btn.disabled = true;
+        try {
+          const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+          const csrf = (m && m[1]) || "{{ csrf_token }}";
+          const r = await fetch("/dashboard/{{ restaurant.slug|escapejs }}/waiter/orders/" + st.activeOrderId + "/request-bill/", {
+            method: "POST", credentials: "same-origin", headers: { "X-CSRFToken": csrf, "X-Requested-With": "XMLHttpRequest" } });
+          const j = await r.json();
+          if (j.success) {
+            if (window.toast) window.toast(j.already ? "Already asked — the cashier has it." : "Cashier asked for the bill.");
+            setTimeout(function () { window.location.href = window.POS_WAITER_TABLES_URL; }, 900);
+          } else { say(j.error || "Couldn't ask for the bill."); btn.disabled = false; }
+        } catch (e) { say("Network problem — try again."); btn.disabled = false; }
+      });
+    }
+
+    function backLink() {
+      const head = document.querySelector("#orderPane .oh h2");
+      if (!head || document.querySelector(".pos-waiter-back")) return;
+      const a = document.createElement("a");
+      a.href = window.POS_WAITER_TABLES_URL;
+      a.className = "pos-waiter-back";
+      a.innerHTML = '<i class="fas fa-arrow-left"></i> Tables';
+      head.insertAdjacentElement("afterend", a);
+    }
+
+    window.addEventListener("load", function () {
+      lockDiscounts();
+      backLink();
+      billButton();
+      setTimeout(presetTable, 250); // after the POS has restored its own state
+    });
+  })();
+</script>
+{% endif %}
+
 {% endblock %}

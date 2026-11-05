@@ -20,7 +20,7 @@ SOURCE_LABELS = {'pos': 'POS', 'qr': 'Table QR', 'online': 'Online', 'website': 
                  'kitchen': 'Kitchen', 'guest': 'Guest', 'inventory': 'Stock', 'magicpin': 'magicpin', 'ondc': 'ONDC'}
 KIND_STYLE = {
     'order_new': ('fa-receipt', 'blue'), 'order_addon': ('fa-plus', 'indigo'), 'order_ready': ('fa-bell-concierge', 'green'),
-    'kot_new': ('fa-fire-burner', 'orange'),
+    'kot_new': ('fa-fire-burner', 'orange'), 'bill_request': ('fa-file-invoice-dollar', 'teal'),
     'delivery_new': ('fa-motorcycle', 'brand'), 'delivery_cancelled': ('fa-ban', 'red'), 'delivery_attention': ('fa-triangle-exclamation', 'orange'),
     'reservation': ('fa-calendar-check', 'teal'), 'room_booking': ('fa-bed', 'indigo'), 'room_alert': ('fa-triangle-exclamation', 'red'), 'feedback': ('fa-comment-dots', 'purple'), 'low_stock': ('fa-boxes-stacked', 'orange'),
     'system': ('fa-circle-info', 'gray'),
@@ -114,6 +114,15 @@ def _kds_url(order):
         return ''
 
 
+def notify_bill_request(order, waiter_name=''):
+    """A waiter asks the counter to print and settle a table's bill."""
+    d = order_data(order)
+    who = f' by {waiter_name}' if waiter_name else ''
+    return notify(order.restaurant, 'bill_request', f'Bill requested · {d["table_name"]}',
+                  body=f'Order {d["order_number"]} · ₹{order.total_amount} — requested{who}',
+                  branch=order.branch, url=_order_url(order), source='waiter', order=order, level='warning', data=d)
+
+
 def notify_ready(order):
     d = order_data(order)
     where = d['table_name'] if order.order_type == 'dine_in' else d['order_type']
@@ -138,6 +147,8 @@ MODULE_KINDS = {
     'restaurant': [k for k in Notification.CATEGORY if k not in ('room_booking', 'room_alert')],
     # Kitchen / KDS logins: only what the line needs to cook
     'kitchen': ['kot_new', 'order_new', 'order_addon', 'delivery_new', 'delivery_cancelled'],
+    # Waiter / captain logins: food to carry out and guests ordering from the table QR
+    'waiter': ['order_ready', 'order_new', 'order_addon'],
 }
 
 

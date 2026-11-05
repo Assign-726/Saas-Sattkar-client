@@ -95,6 +95,9 @@ def floor_plan_api(request, restaurant_slug=None):
                     'payment_status': latest_order.payment_status,
                     'payment_status_display': latest_order.get_payment_status_display(),
                     'is_master_order': bool(table.master_table_id and latest_order.table_id != table.id),
+                    'waiter_name': ((latest_order.waiter.get_full_name() or latest_order.waiter.username).strip()
+                                    if latest_order.waiter_id and latest_order.waiter else ''),
+                    'bill_requested': bool(latest_order.bill_requested_at),
                 }
 
             is_master = bool(table.party_name and not table.master_table_id) or table.linked_tables.filter(is_active=True).exists()
