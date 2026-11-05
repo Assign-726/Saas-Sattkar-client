@@ -79,8 +79,8 @@ DEFAULT_BRANCH_TAGS: Dict[str, Dict[str, Any]] = {
         'badge_color': '#6366f1',
         'icon': 'fa-cash-register',
         'description': 'Designed for small sweets shops, bakeries, or takeaway counters providing only POS checkout and order management.',
-        'base_features': ['pos', 'menu', 'website_minimal'],
-        'recommended_addons': ['dine_in', 'kitchen', 'inventory', 'staff', 'delivery', 'finance', 'guests', 'integrations', 'online_payments'],
+        'base_features': ['pos', 'menu', 'delivery', 'website_minimal'],
+        'recommended_addons': ['dine_in', 'kitchen', 'inventory', 'staff', 'finance', 'guests', 'integrations', 'online_payments'],
     },
     'starter_dhaba': {
         'name': 'Starter Package (Dhaba & Cafe)',
@@ -697,7 +697,7 @@ def get_branch_effective_features(branch) -> Set[str]:
         features.add('finance')
     if flags.get('has_guests') or flags.get('has_loyalty') or flags.get('has_crm'):
         features.add('guests')
-    if flags.get('has_integrations'):
+    if flags.get('has_integrations') or flags.get('has_integration'):
         features.add('integrations')
     if flags.get('has_inventory') or flags.get('has_stock'):
         features.add('inventory')

@@ -1,0 +1,116 @@
+  <!-- 1. FOOD KITCHEN TICKET -->
+  {% if has_food %}
+  <div class="thermal-kot">
+    <div class="pCenter pTitle">🍔 KITCHEN ORDER TICKET (KOT)</div>
+    <div class="pCenter" style="font-size: 11.5px; font-weight: 600;">{{ restaurant.name }}</div>
+
+    <div class="pTableBox">
+      {% if order.table %}TABLE: {{ order.table.name|upper }}{% elif table_obj %}TABLE: {{ table_obj.name|upper }}{% elif order.table_number %}TABLE #{{ order.table_number }}{% else %}TAKEAWAY{% endif %}
+    </div>
+
+    {% if is_addon_kot %}
+    <div style="text-align: center; background: #000000; color: #ffffff; font-weight: 800; font-size: 11px; padding: 3px 6px; margin: 4px 0; letter-spacing: 0.5px; border-radius: 2px;">
+      ⚡ RUNNING KOT (ROUND {{ current_batch }}) ⚡
+    </div>
+    {% endif %}
+
+    <div class="pRule"></div>
+
+    <div class="pMetaRow">
+      <span>KOT #: <strong>KOT-{{ order.branch_order_number|default:order.id|stringformat:"04d" }}{% if current_batch and current_batch > 1 %}-R{{ current_batch }}{% endif %}</strong></span>
+      <span>Order: <strong>{{ order.order_number }}</strong></span>
+    </div>
+    <div class="pMetaRow">
+      <span>Type: <strong>{{ order.get_order_type_display|default:"Dine-In" }}</strong></span>
+      <span>Time: <strong>{{ order.order_time|date:"h:i A" }}</strong></span>
+    </div>
+    <div class="pMetaRow">
+      <span>Date: <strong>{{ order.order_time|date:"d/m/Y" }}</strong></span>
+    </div>
+
+    <div class="pRuleHeavy"></div>
+
+    <table class="pItemsTable">
+      <thead>
+        <tr>
+          <th class="pQtyCol">QTY</th>
+          <th>ITEM DESCRIPTION</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in food_items %}
+        <tr>
+          <td class="pQtyCol">{{ it.quantity }}</td>
+          <td>
+            <div class="pItemName">{{ it.menu_item.name|default:'Item' }}</div>
+            {% if it.notes %}<div class="pItemNote">↳ {{ it.notes }}</div>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="pRuleHeavy"></div>
+    <div class="pCountRow">TOTAL ITEMS: {{ total_food_qty }}</div>
+    <div class="pCenter" style="font-size: 10px; margin-top: 4px; opacity: 0.8;">--- Kitchen Copy ---</div>
+  </div>
+  {% endif %}
+
+  <!-- 2. BAR TICKET (IF ALCOHOL ITEMS PRESENT) -->
+  {% if has_bar %}
+  <div class="thermal-kot">
+    <div class="pCenter pTitle" style="color: #b45309;">🍺 BAR ORDER TICKET (BOT)</div>
+    <div class="pCenter" style="font-size: 11.5px; font-weight: 600;">{{ restaurant.name }}</div>
+
+    <div class="pTableBox" style="border-color: #b45309;">
+      {% if order.table %}TABLE: {{ order.table.name|upper }}{% elif table_obj %}TABLE: {{ table_obj.name|upper }}{% elif order.table_number %}TABLE #{{ order.table_number }}{% else %}TAKEAWAY{% endif %}
+    </div>
+
+    {% if is_addon_kot %}
+    <div style="text-align: center; background: #b45309; color: #ffffff; font-weight: 800; font-size: 11px; padding: 3px 6px; margin: 4px 0; letter-spacing: 0.5px; border-radius: 2px;">
+      ⚡ RUNNING BOT (ROUND {{ current_batch }}) ⚡
+    </div>
+    {% endif %}
+
+    <div class="pRule"></div>
+
+    <div class="pMetaRow">
+      <span>BOT #: <strong>BOT-{{ order.branch_order_number|default:order.id|stringformat:"04d" }}{% if current_batch and current_batch > 1 %}-R{{ current_batch }}{% endif %}</strong></span>
+      <span>Order: <strong>{{ order.order_number }}</strong></span>
+    </div>
+    <div class="pMetaRow">
+      <span>Type: <strong>{{ order.get_order_type_display|default:"Dine-In" }}</strong></span>
+      <span>Time: <strong>{{ order.order_time|date:"h:i A" }}</strong></span>
+    </div>
+    <div class="pMetaRow">
+      <span>Date: <strong>{{ order.order_time|date:"d/m/Y" }}</strong></span>
+    </div>
+
+    <div class="pRuleHeavy"></div>
+
+    <table class="pItemsTable">
+      <thead>
+        <tr>
+          <th class="pQtyCol">QTY</th>
+          <th>DRINK / LIQUOR ITEM</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in bar_items %}
+        <tr>
+          <td class="pQtyCol">{{ it.quantity }}</td>
+          <td>
+            <div class="pItemName">{{ it.menu_item.name|default:'Item' }}</div>
+            {% if it.notes %}<div class="pItemNote">↳ {{ it.notes }}</div>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="pRuleHeavy"></div>
+    <div class="pCountRow">TOTAL DRINKS: {{ total_bar_qty }}</div>
+    <div class="pCenter" style="font-size: 10px; margin-top: 4px; opacity: 0.8;">--- Bar Dispensary Copy ---</div>
+  </div>
+  {% endif %}
+

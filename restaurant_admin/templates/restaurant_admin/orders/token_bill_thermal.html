@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Token + Bill {{ order.order_number }} - {{ restaurant.name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+
+  {# Same slips as the KOT and bill pages. The bill's styles load last; the few rules they share are put back for the token below. #}
+  {% include 'restaurant_admin/orders/_kot_thermal_css.html' %}
+  {% include 'restaurant_admin/orders/_invoice_thermal_css.html' %}
+  <style>
+    .thermal-kot .pTitle { font-size: 16px; font-weight: 800; letter-spacing: 1px; }
+    .thermal-kot .pRuleHeavy { border-top: 2.5px solid #000000; margin: 8px 0; }
+    .thermal-kot .pItemNote { font-size: 11px; padding-left: 0; padding-top: 2px; opacity: 1; }
+
+    /* Tear line between the token and the bill */
+    .tear-line {
+      max-width: 80mm;
+      margin: 14px auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font: 600 10px 'IBM Plex Mono', monospace;
+      color: #000;
+    }
+    .tear-line::before,
+    .tear-line::after {
+      content: "";
+      flex: 1;
+      border-top: 1.5px dashed #000;
+    }
+
+    @media print {
+      /* The token ends at the tear line, not on its own page */
+      .thermal-kot,
+      .thermal-kot:last-child {
+        margin: 0 !important;
+        page-break-after: auto !important;
+        break-after: auto !important;
+      }
+      /* A page break after the tear line: printers with a cutter cut the token and the bill into two slips */
+      .tear-line {
+        width: 78mm !important;
+        max-width: 78mm !important;
+        margin: 3mm 0 !important;
+        page-break-after: always !important;
+        break-after: page !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Action Bar -->
+  <div class="top-action-bar">
+    <button onclick="window.print()" class="btn-action primary">
+      <i class="bi bi-printer-fill"></i> Print Token + Bill
+    </button>
+    <button onclick="window.close()" class="btn-action" title="Close (Esc)">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  {% include 'restaurant_admin/orders/_kot_thermal_slips.html' %}
+
+  <div class="tear-line"><span>✂ tear here</span></div>
+
+  {% include 'restaurant_admin/orders/_invoice_thermal_receipt.html' %}
+
+  <script>
+    // Auto trigger print when opened from the POS Quick bill (?autoprint=1)
+    window.addEventListener('load', function () {
+      if (new URLSearchParams(window.location.search).get('autoprint') === '1') {
+        setTimeout(function () { window.print(); }, 250);
+      }
+    });
+    // Esc closes the preview tab so the cashier never needs the mouse.
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !e.defaultPrevented) {
+        e.preventDefault();
+        window.close();
+      }
+    });
+  </script>
+</body>
+</html>

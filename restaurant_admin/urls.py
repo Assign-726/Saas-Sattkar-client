@@ -130,6 +130,7 @@ urlpatterns = [
     path('orders/<int:pk>/update-status/', views.order_update_status, name='order_update_status'),
     path('orders/<int:pk>/invoice/', views.order_invoice, name='order_invoice'),
     path('orders/<int:pk>/kot/', views.order_kot, name='order_kot'),
+    path('orders/<int:pk>/token-bill/', views.order_token_bill, name='order_token_bill'),
     path('orders/<int:pk>/prep-time/', views.order_set_prep_time, name='order_set_prep_time'),
     path('orders/<int:pk>/mark-ready/', views.order_mark_ready, name='order_mark_ready'),
     # Kitchen Display System (KDS)
@@ -199,6 +200,8 @@ urlpatterns = [
     path('purchases/<int:pk>/voucher/', views.purchase_voucher_edit, name='purchase_voucher_edit'),
     path('purchases/api/ledger-create/', views.purchase_zen_ledger_create, name='purchase_zen_ledger_create'),
     path('purchases/sidebar-panel/', views.purchase_sidebar_panel, name='purchase_sidebar_panel'),
+    # Same drawer outside purchases/, so branches without the inventory module (or staff without it) still get Alt+M
+    path('sidebar-panel/', views.purchase_sidebar_panel, name='sidebar_panel'),
     path('purchases/<int:pk>/', views.purchase_invoice, name='purchase_detail'),
     path('purchases/<int:pk>/invoice/', views.purchase_invoice, name='purchase_invoice'),
     path('purchases/<int:pk>/edit/', views.purchase_edit, name='purchase_edit'),

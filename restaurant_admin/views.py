@@ -1194,6 +1194,10 @@ def order_create_manual(request, restaurant_slug=None):
 
         created_items = []
         prev_round = max([b for lines in previous_lines.values() for b, _, _ in lines], default=0)
+        # A draft (auto-saved while the cashier types) has never gone to the kitchen, so its
+        # lines do not count as an earlier round: the first real send / settle is round 1.
+        if prev_status == Order.OrderStatus.DRAFT:
+            prev_round = 0
         new_round = prev_round + 1 if prev_round else 1
         if isinstance(items_data, list):
             for item in items_data:
@@ -1424,6 +1428,7 @@ def order_create_manual(request, restaurant_slug=None):
                 'liquor_invoice_url': liquor_invoice_url,
                 'combined_invoice_url': combined_invoice_url,
                 'kot_url': kot_url,
+                'token_bill_url': reverse('restaurant_admin:order_token_bill', kwargs={'restaurant_slug': restaurant.slug, 'pk': order.id}),
                 'redirect_url': target_url,
                 'active_orders': active_orders_resp,
                 'tender_warnings': [f"{'Points' if f['method'] == 'points' else ('Room ' + str(f.get('room', '')) + ' charge') if f['method'] == 'room' else 'Gift card ' + f.get('code', '')} not applied: {f['error']}" for f in tender_failures],
@@ -1697,6 +1702,8 @@ def order_create_manual(request, restaurant_slug=None):
         'excise_seq_info': excise_seq_info,
         'gst_seq_info_json': gst_seq_info,
         'excise_seq_info_json': excise_seq_info,
+        # Token counters: one Quick bill button (settle + print token and bill together) instead of Send to kitchen
+        'pos_quick_bill': bool(getattr(active_branch, 'pos_quick_bill', False)),
         'active_menu': 'order_create_manual',
         'restaurant': restaurant,
         'current_branch': branch_obj,
@@ -6098,6 +6105,20 @@ def order_invoice(request, pk, restaurant_slug=None):
     if bill_type not in ['food', 'liquor']:
         bill_type = 'food'  # Combined bill disabled for separate billing compliance
 
+    context = _order_invoice_context(restaurant, order, bill_type)
+
+    settings_obj = RestaurantSettings.get_settings(restaurant)
+    template_choice = (request.GET.get('template') or getattr(settings_obj, 'bill_template', 'thermal') or 'thermal').lower()
+    if template_choice == 'standard':
+        template_name = 'restaurant_admin/orders/invoice.html'
+    else:
+        template_name = 'restaurant_admin/orders/invoice_thermal.html'
+
+    return render(request, template_name, context)
+
+
+def _order_invoice_context(restaurant, order, bill_type='food'):
+    """Everything the bill templates need, shared by the bill page and the token + bill print."""
     # Totals using order bill breakdown engine
     breakdown = order.calculate_bill_breakdown(bill_type=bill_type)
 
@@ -6159,15 +6180,7 @@ def order_invoice(request, pk, restaurant_slug=None):
         'round_off_amount': breakdown['round_off_amount'],
         'total': breakdown['final_total'],
     }
-
-    settings_obj = RestaurantSettings.get_settings(restaurant)
-    template_choice = (request.GET.get('template') or getattr(settings_obj, 'bill_template', 'thermal') or 'thermal').lower()
-    if template_choice == 'standard':
-        template_name = 'restaurant_admin/orders/invoice.html'
-    else:
-        template_name = 'restaurant_admin/orders/invoice_thermal.html'
-
-    return render(request, template_name, context)
+    return context
 
 @login_required
 def order_kot(request, pk, restaurant_slug=None):
@@ -6184,6 +6197,21 @@ def order_kot(request, pk, restaurant_slug=None):
         pk=pk,
     )
 
+    context = _order_kot_context(request, restaurant, order)
+
+    settings_obj = RestaurantSettings.get_settings(restaurant)
+    template_choice = (request.GET.get('template') or getattr(settings_obj, 'kot_template', 'thermal') or 'thermal').lower()
+    if template_choice == 'standard':
+        template_name = 'restaurant_admin/orders/kot.html'
+    else:
+        template_name = 'restaurant_admin/orders/kot_thermal.html'
+
+    return render(request, template_name, context)
+
+
+def _order_kot_context(request, restaurant, order):
+    """Everything the KOT templates need (honours ?items= / ?batch= / ?unprinted= and marks the lines printed),
+    shared by the KOT page and the token + bill print."""
     subtotal = sum((item.subtotal for item in order.items.all()), Decimal('0.00'))
     settings_obj = RestaurantSettings.get_settings(restaurant)
     cgst_percentage = Decimal(str(settings_obj.cgst_percentage))
@@ -6253,14 +6281,26 @@ def order_kot(request, pk, restaurant_slug=None):
         'discount_amount': discount_amount,
         'total': total,
     }
+    return context
 
-    template_choice = (request.GET.get('template') or getattr(settings_obj, 'kot_template', 'thermal') or 'thermal').lower()
-    if template_choice == 'standard':
-        template_name = 'restaurant_admin/orders/kot.html'
-    else:
-        template_name = 'restaurant_admin/orders/kot_thermal.html'
 
-    return render(request, template_name, context)
+@login_required
+@user_passes_test(is_admin)
+def order_token_bill(request, pk, restaurant_slug=None):
+    """Quick bill print for token counters: the order token (KOT) and the bill on one page, one after the other,
+    with a tear line and a page break between them so a cutter splits them into two slips."""
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
+
+    order = get_object_or_404(
+        Order.objects.prefetch_related('items', 'items__menu_item').filter(restaurant=restaurant),
+        pk=pk,
+    )
+    # KOT first, bill second: both define subtotal / total / tax amounts and the bill's figures are the real ones
+    context = _order_kot_context(request, restaurant, order)
+    context.update(_order_invoice_context(restaurant, order, 'food'))
+    return render(request, 'restaurant_admin/orders/token_bill_thermal.html', context)
 
 @login_required
 @user_passes_test(is_admin)
@@ -7030,6 +7070,8 @@ def settings_view(request, restaurant_slug=None):
                 branch.enable_customer_ordering = form.cleaned_data.get('enable_customer_ordering', True)
                 branch.enable_online_payment = form.cleaned_data.get('enable_online_payment', False)
                 branch.enable_pay_at_counter = form.cleaned_data.get('enable_pay_at_counter', True)
+                # Food-court / token counters: one Quick bill button that prints token + bill (Settings > Printing)
+                branch.pos_quick_bill = request.POST.get('pos_quick_bill') == 'on'
                 if branch_form:
                     sc = branch_form.cleaned_data.get('service_charge_percentage')
                     if sc is not None:

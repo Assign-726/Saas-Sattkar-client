@@ -570,6 +570,10 @@ class RestaurantBranch(models.Model):
     enable_customer_ordering = models.BooleanField(default=True, help_text="Allow customers to place orders directly from the digital menu for this branch")
     enable_online_payment = models.BooleanField(default=False, help_text="Enable online payment for this branch")
     enable_pay_at_counter = models.BooleanField(default=True, help_text="Enable pay at counter for this branch")
+    pos_quick_bill = models.BooleanField(
+        default=False,
+        help_text="POS shows one Quick bill button instead of Send to kitchen: settling prints the order token (KOT) and the bill together"
+    )
     
     # Storefront contact, timing & coordinates per branch
     email = models.EmailField(blank=True, default="")

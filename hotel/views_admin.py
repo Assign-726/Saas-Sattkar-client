@@ -128,7 +128,8 @@ def get_hotel_context(request, restaurant_slug):
                 if active_branch:
                     request.session[f'active_branch_{restaurant.id}'] = active_branch.id
 
-    available_branches = restaurant.branches.all()
+    # Only branches that actually run the hotel module belong in the hotel admin's branch switcher
+    available_branches = restaurant.branches.filter(has_hotel_module=True)
     user_role = getattr(user, 'role', None)
     if not user_role and profile:
         user_role = profile.role

@@ -2979,6 +2979,10 @@
     color: var(--canvas);
   }
 
+  .acts.acts-quick {
+    grid-template-columns: 1fr !important;
+  }
+
   .acts {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -3835,16 +3839,46 @@
       cursor: not-allowed;
     }
 
+    /* Mobile context strip: chips hold two lines (label + value), so the
+       desktop 38px fixed height clipped them and let them spill over the
+       top bar. Let the strip size to its chips and spread them evenly. */
     .ctx {
-      gap: 4px;
-      padding: 0 6px;
+      gap: 6px;
+      padding: 8px 10px;
+      height: auto;
+      flex: 0 0 auto;
+      align-items: stretch;
     }
 
     .ci {
       background: var(--raised);
-      border-radius: 8px;
-      margin: 5px 2px;
-      padding: 0 18px 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      margin: 0;
+      height: 46px;
+      flex: 1 1 0;
+      min-width: 64px;
+      justify-content: flex-start;
+      text-align: left;
+      line-height: 1.25;
+      padding: 0 20px 0 10px;
+    }
+
+    .ci .cl,
+    .covMain .cl {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--ink3);
+    }
+
+    .ci .cv {
+      font-size: 13px;
+      font-weight: 600;
+      display: inline-block;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .ci::after {
@@ -3867,9 +3901,22 @@
 
     .covWrap {
       background: var(--raised);
-      border-radius: 8px;
-      margin: 5px 2px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      margin: 0;
       padding: 0;
+      height: 46px;
+      flex: 0 0 auto;
+    }
+
+    .covWrap .covStep {
+      min-width: 30px;
+      padding: 0 6px;
+    }
+
+    .covWrap .covInput:not(:focus) {
+      font-size: 14px;
+      background: none !important;
     }
 
     .covWrap .ci {
@@ -3904,10 +3951,6 @@
     }
 
     .newtab {
-      padding: 0 10px;
-    }
-
-    .ci {
       padding: 0 10px;
     }
 
@@ -4545,6 +4588,7 @@
 </style>
 
 <!-- JSON Data Islands for POS -->
+<script>window.POS_QUICK_BILL = {{ pos_quick_bill|yesno:"true,false" }};</script>
 {{ menu_items_json|json_script:"menu-items-data" }}
 {{ categories_json|json_script:"categories-data" }}
 {{ top_selling_json|json_script:"top-selling-data" }}
@@ -4644,7 +4688,7 @@
   <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
 </button>
 <div id="zen-nav-backdrop" class="zen-nav-backdrop" hidden></div>
-<aside id="zen-nav" class="zen-nav" aria-label="Admin menu" aria-hidden="true" data-src="{% url 'restaurant_admin:purchase_sidebar_panel' restaurant_slug=restaurant.slug %}?menu=order_create_manual">
+<aside id="zen-nav" class="zen-nav" aria-label="Admin menu" aria-hidden="true" data-src="{% url 'restaurant_admin:sidebar_panel' restaurant_slug=restaurant.slug %}?menu=order_create_manual">
   <iframe id="zen-nav-frame" title="Admin menu" tabindex="-1"></iframe>
   <button type="button" id="zen-nav-close" class="zen-nav-close" tabindex="-1" title="Close menu (Esc)" aria-label="Close admin menu">
     <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -5056,12 +5100,13 @@
         <div class="cbar" id="cbar" hidden></div>
         <div class="cart" id="cart"></div>
         <div class="tot" id="tot"></div>
-        <div class="acts">
-          <button class="btn" id="btn-fire-kot" disabled>
+        <div class="acts{% if pos_quick_bill %} acts-quick{% endif %}">
+          {# Quick bill branches (Settings > Printing) have no kitchen step: one button settles and prints token + bill #}
+          <button class="btn" id="btn-fire-kot" disabled{% if pos_quick_bill %} style="display:none" aria-hidden="true"{% endif %}>
             <span>Send to kitchen</span><kbd>F9</kbd>
           </button>
-          <button class="btn s" id="btn-open-settle-modal" disabled>
-            <span>Settle &amp; bill</span><kbd>F10</kbd>
+          <button class="btn s" id="btn-open-settle-modal" disabled{% if pos_quick_bill %} title="Settle and print the order token + bill (F10 or F9)"{% endif %}>
+            <span>{% if pos_quick_bill %}Quick bill{% else %}Settle &amp; bill{% endif %}</span><kbd>F10</kbd>
           </button>
         </div>
       </div>
@@ -9775,8 +9820,9 @@
         totHtml += `<div class="tr"><span>Round off</span><b>${roundOffAmount > 0 ? "+" : ""}${roundOffAmount.toFixed(2)}</b></div>`;
       }
 
-      if (state.gstinNo) {
-        totHtml += `<div class="tr"><span>Billed to</span><b style="font-size:10px">${escapeHtml(state.gstinNo)}</b></div>`;
+      // The buyer's GSTIN (state.gstinNo is OUR bill number, never the customer's GSTIN)
+      if (state.customerGstin) {
+        totHtml += `<div class="tr"><span>Billed to</span><b style="font-size:10px">${escapeHtml(state.customerGstin)}</b></div>`;
       }
 
       totHtml += `</div>`; // Close .totList
@@ -12005,6 +12051,9 @@
                   window.posShowDoc(data.liquor_invoice_url, preWins[1]);
                 } else if (mode === "liquor" && data.liquor_invoice_url) {
                   window.posShowDoc(data.liquor_invoice_url, preWins[0]);
+                } else if (window.POS_QUICK_BILL && data.token_bill_url) {
+                  // Quick bill: the order token and the bill print together, with a tear line between them
+                  window.posShowDoc(data.token_bill_url, preWins[0]);
                 } else {
                   window.posShowDoc(data.food_invoice_url, preWins[0]);
                 }
@@ -13227,7 +13276,7 @@
           phInput.value = currentMatchedParty.phone;
         if (currentMatchedParty.name) nmInput.value = currentMatchedParty.name;
         if (currentMatchedParty.gstin && window.state)
-          window.state.gstinNo = currentMatchedParty.gstin;
+          window.state.customerGstin = currentMatchedParty.gstin;
         matchText.innerHTML = `<strong>✓ Applied Party:</strong> ${escapeHtml(currentMatchedParty.name)} (${escapeHtml(currentMatchedParty.phone || "")})`;
       }
     });
@@ -13280,7 +13329,7 @@
           nmInput.value = item.dataset.name || "";
           if (item.dataset.phone) phInput.value = item.dataset.phone;
           if (item.dataset.gstin && window.state)
-            window.state.gstinNo = item.dataset.gstin;
+            window.state.customerGstin = item.dataset.gstin;
           nameDropdown.style.display = "none";
           checkPhoneMatch(phInput.value);
         });
@@ -13318,7 +13367,7 @@
           }
         }
         if (currentMatchedParty.gstin && window.state) {
-          window.state.gstinNo = currentMatchedParty.gstin;
+          window.state.customerGstin = currentMatchedParty.gstin;
         }
       } else {
         const foundByName = partiesList.find(
@@ -13334,7 +13383,7 @@
             phoneVal = foundByName.phone;
           }
           if (foundByName.gstin && window.state)
-            window.state.gstinNo = foundByName.gstin;
+            window.state.customerGstin = foundByName.gstin;
         }
       }
 
@@ -14489,7 +14538,8 @@
         break;
       }
       case "F9": {
-        const btn = document.getElementById("btn-fire-kot");
+        // Quick bill branches have no Send to kitchen: F9 settles like F10 so either key works
+        const btn = document.getElementById(window.POS_QUICK_BILL ? "btn-open-settle-modal" : "btn-fire-kot");
         if (btn && !btn.disabled) btn.click();
         break;
       }

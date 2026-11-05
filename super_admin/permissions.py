@@ -67,6 +67,7 @@ ALWAYS = {
     ('hotel_admin', 'notifications_poll'), ('hotel_admin', 'notifications_stream'), ('hotel_admin', 'notifications_list'), ('hotel_admin', 'notifications_update'),
     ('hotel_admin', 'action_centre'),  # read-only; shows only the areas the role can open
     ('restaurant_admin', 'two_factor_update'), ('hotel_admin', 'two_factor_update'),  # your own sign-in security
+    ('restaurant_admin', 'sidebar_panel'),  # Alt+M drawer on full-screen pages; the sidebar only lists what the role can open
 }
 
 _RESTAURANT_RULES = [
