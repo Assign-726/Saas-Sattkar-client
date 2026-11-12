@@ -1021,6 +1021,36 @@
             .topbar-search { display: none; }
         }
 
+        /* Keep wide children from stretching the page past the phone viewport.
+           `clip` (not hidden) so the sticky topbar keeps working. */
+        .pms-main { min-width: 0; max-width: 100%; overflow-x: clip; }
+        .pms-content { min-width: 0; }
+        .pms-topbar > .d-flex:first-child { min-width: 0; flex: 0 1 auto; }
+        .pms-topbar > .d-flex:last-child { flex-shrink: 0; }
+        .pms-topbar .topbar-branch,
+        .pms-topbar > .d-flex:first-child > .d-flex { min-width: 0; max-width: 100%; }
+        .pms-topbar .topbar-branch span,
+        .pms-topbar > .d-flex:first-child > .d-flex span {
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+        }
+        .pms-topbar .dropdown { min-width: 0; }
+
+        /* Modals that wrap header/body/footer in a <form>: keep Bootstrap's scroll layout working,
+           so the body scrolls and the header (close button) and footer (submit) always stay on screen. */
+        .modal-dialog-scrollable .modal-content > form {
+            display: flex; flex-direction: column;
+            min-height: 0; max-height: 100%; overflow: hidden;
+        }
+        .modal-dialog-scrollable .modal-content > form > .modal-body { overflow-y: auto; overscroll-behavior: contain; }
+        .modal-content > form > .modal-header,
+        .modal-content > form > .modal-footer { flex-shrink: 0; }
+        @media (max-width: 575.98px) {
+            /* Phones: use the whole screen instead of a cramped centered box */
+            .modal-dialog.modal-lg { margin: 0; max-width: none; height: 100%; }
+            .modal-dialog.modal-lg.modal-dialog-scrollable { max-height: 100%; height: 100%; }
+            .modal-dialog.modal-lg .modal-content { height: 100%; border-radius: 0; }
+        }
+
         @media (max-width: 767px) {
             .pms-content { padding: 1rem; }
             .page-header { flex-direction: column; align-items: flex-start; }
@@ -1531,7 +1561,7 @@
 
 <!-- Logout Confirmation Modal -->
 <div class="modal fade" id="logoutConfirmModal" tabindex="-1" aria-labelledby="logoutConfirmModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered" style="max-width: 400px;">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" style="max-width: 400px;">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 1.25rem; overflow: hidden; background: var(--ui-surface);">
             <div class="modal-body text-center p-4">
                 <div style="width: 64px; height: 64px; background-color: rgba(var(--ui-red-rgb), 0.1); color: var(--ui-red-text); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.25rem; font-size: 1.75rem;">

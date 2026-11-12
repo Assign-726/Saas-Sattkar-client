@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from decimal import Decimal
 from django.db import transaction
+from django.core.exceptions import ValidationError as DjangoValidationError
 from hotel.models import (
     RoomCategory, Room, RoomBooking, CabServicePackage, FleetVehicle, CabBooking, HotelSettings,
     SpaTherapist, SpaTreatment, SpaAppointment, SpaPackage
@@ -524,11 +525,17 @@ class PublicHotelCheckoutSerializer(serializers.Serializer):
 
         with transaction.atomic():
             # 1. Lock room inventory using select_for_update()
-            candidate_rooms = Room.objects.select_for_update().filter(
+            # Must force immediate evaluation via list() so PostgreSQL acquires row-level write locks immediately.
+            candidate_rooms = list(Room.objects.select_for_update().filter(
                 category=category,
                 branch=branch,
                 is_active=True
-            ).order_by('room_number')
+            ).order_by('room_number'))
+
+            if not candidate_rooms:
+                raise serializers.ValidationError({
+                    "room": "No active rooms found in this category."
+                })
 
             from hotel import pricing
             h_settings = getattr(branch, 'hotel_settings', None) or HotelSettings.get_settings(branch)
@@ -536,7 +543,15 @@ class PublicHotelCheckoutSerializer(serializers.Serializer):
             if q['restriction']:
                 raise serializers.ValidationError({"room": q['restriction']})
 
-            target_room = pricing.free_rooms(candidate_rooms, branch, check_in_date, check_out_date).first()
+            # Check free rooms among the locked candidate rooms
+            candidate_room_ids = [r.id for r in candidate_rooms]
+            target_room = pricing.free_rooms(
+                Room.objects.filter(id__in=candidate_room_ids),
+                branch,
+                check_in_date,
+                check_out_date
+            ).first()
+
             if not target_room:
                 raise serializers.ValidationError({
                     "room": "No available rooms in this category for the selected dates. Please choose different dates or category."
@@ -546,7 +561,8 @@ class PublicHotelCheckoutSerializer(serializers.Serializer):
             room_total_charges, room_tax_amount, room_grand_total = q['net'], q['tax'], q['total']
 
             # 2. Create the RoomBooking record (PENDING)
-            room_booking = RoomBooking.objects.create(
+            try:
+                room_booking = RoomBooking.objects.create(
                 room=target_room,
                 branch=branch,
                 guest_name=guest_name,
@@ -564,7 +580,10 @@ class PublicHotelCheckoutSerializer(serializers.Serializer):
                 special_requests=special_requests,
                 upi_transaction_ref=upi_ref,
                 source=RoomBooking.Source.WEBSITE,
-            )
+                )
+            except DjangoValidationError as err:
+                msg = err.message if hasattr(err, 'message') else (err.messages[0] if hasattr(err, 'messages') and err.messages else str(err))
+                raise serializers.ValidationError({"room": msg})
 
             # 3. Validate and create linked CabBooking records
             created_cabs = []

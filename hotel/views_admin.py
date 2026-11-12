@@ -15,6 +15,7 @@ from django.contrib import messages
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import Q, Sum, Count
+from django.utils.text import slugify
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.contrib.auth.models import User, Group
@@ -412,7 +413,28 @@ def rooms_view(request, restaurant_slug, ctx):
     categories = RoomCategory.objects.filter(branch=branch, is_active=True) if branch else []
 
     # Grouped for Kanban board
-    all_rooms = Room.objects.filter(branch=branch, is_active=True).select_related('category') if branch else []
+    all_rooms = list(Room.objects.filter(branch=branch, is_active=True).select_related('category').order_by('room_number')) if branch else []
+
+    # Attach the in-house stay and today's arrival so cards can show who is in / due
+    today = timezone.localdate()
+    if all_rooms:
+        in_house = {}
+        arrivals = {}
+        stays = RoomBooking.objects.filter(branch=branch, room__in=all_rooms).filter(
+            Q(booking_status=RoomBooking.BookingStatus.CHECKED_IN) |
+            Q(booking_status=RoomBooking.BookingStatus.RESERVED, check_in_date=today)
+        ).order_by('check_in_date')
+        for b in stays:
+            if b.booking_status == RoomBooking.BookingStatus.CHECKED_IN:
+                in_house.setdefault(b.room_id, b)
+            else:
+                arrivals.setdefault(b.room_id, b)
+        for r in all_rooms:
+            r.current_stay = in_house.get(r.id)
+            r.arrival_today = arrivals.get(r.id)
+            r.departs_today = bool(r.current_stay and r.current_stay.check_out_date <= today)
+
+    floors = sorted({r.floor for r in all_rooms if r.floor})
     kanban = {
         'AVAILABLE': [r for r in all_rooms if r.status == Room.RoomStatus.AVAILABLE],
         'OCCUPIED': [r for r in all_rooms if r.status == Room.RoomStatus.OCCUPIED],
@@ -426,6 +448,10 @@ def rooms_view(request, restaurant_slug, ctx):
         'rooms': rooms,
         'categories': categories,
         'kanban': kanban,
+        'all_rooms': all_rooms,
+        'floors': floors,
+        'total_rooms': len(all_rooms),
+        'today': today,
         'status_filter': status_filter,
         'category_filter': category_filter,
     }
@@ -443,12 +469,15 @@ def categories_view(request, restaurant_slug, ctx):
         return redirect('hotel_admin:rooms' if ctx['is_housekeeping'] else 'hotel_admin:dashboard', restaurant_slug=restaurant_slug)
 
     branch = ctx['current_branch']
-    categories = RoomCategory.objects.filter(branch=branch).prefetch_related('rooms', 'images').order_by('name') if branch else []
+    from django.db.models import Prefetch
+    active_rooms = Prefetch('rooms', queryset=Room.objects.filter(is_active=True).order_by('room_number'), to_attr='active_rooms')
+    categories = RoomCategory.objects.filter(branch=branch).prefetch_related(active_rooms, 'images').order_by('name') if branch else []
 
     context = {
         **ctx,
         'active_menu': 'categories',
         'categories': categories,
+        'floors': sorted({r.floor for c in categories for r in c.active_rooms if r.floor}),
     }
     return render(request, 'hotel_admin/categories.html', context)
 
@@ -479,11 +508,14 @@ def bookings_view(request, restaurant_slug, ctx):
 
     rooms = Room.objects.filter(branch=branch, is_active=True).select_related('category') if branch else []
     categories = RoomCategory.objects.filter(branch=branch, is_active=True) if branch else []
+    from hotel.paging import paginate
+    page_obj = paginate(request, bookings)
 
     context = {
         **ctx,
         'active_menu': 'bookings',
-        'bookings': bookings,
+        'bookings': page_obj.object_list,
+        'page_obj': page_obj,
         'rooms': rooms,
         'categories': categories,
         'search_query': q,
@@ -508,7 +540,8 @@ def booking_check_in_action(request, restaurant_slug, ctx, booking_id):
     error = folio.check_in(booking, request.user)
     if error:
         messages.error(request, error)
-        return redirect('hotel_admin:booking_detail', restaurant_slug=restaurant_slug, booking_id=booking.pk)
+        url = reverse('hotel_admin:booking_detail', kwargs={'restaurant_slug': restaurant_slug, 'booking_id': booking.pk})
+        return redirect(url + ('?tab=guest' if 'registration' in error else ''))
     messages.success(request, f"Guest {booking.guest_name} successfully checked into Room {booking.room.room_number}.")
     next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('hotel_admin:dashboard', kwargs={'restaurant_slug': restaurant_slug})
     return redirect(next_url)
@@ -526,7 +559,8 @@ def booking_check_out_action(request, restaurant_slug, ctx, booking_id):
     error = folio.check_out(booking, request.user, allow_balance=request.POST.get('allow_balance') == '1')
     if error:
         messages.error(request, error)
-        return redirect('hotel_admin:booking_detail', restaurant_slug=restaurant_slug, booking_id=booking.pk)
+        url = reverse('hotel_admin:booking_detail', kwargs={'restaurant_slug': restaurant_slug, 'booking_id': booking.pk})
+        return redirect(url + ('?tab=guest' if 'registration' in error else ''))
     messages.success(request, f"Guest {booking.guest_name} checked out (invoice {booking.invoice_number}). Room {booking.room.room_number} sent to housekeeping.")
     next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('hotel_admin:dashboard', kwargs={'restaurant_slug': restaurant_slug})
     return redirect(next_url)
@@ -629,7 +663,135 @@ def room_create_edit_action(request, restaurant_slug, ctx):
             )
             messages.success(request, f"Room {room.room_number} created successfully.")
 
-    return redirect(reverse('hotel_admin:rooms', kwargs={'restaurant_slug': restaurant_slug}))
+    return redirect(_safe_next(request) or reverse('hotel_admin:rooms', kwargs={'restaurant_slug': restaurant_slug}))
+
+
+def _ensure_entire_property_unit(request, category):
+    """An entire-property category is booked through exactly one unit; create it if missing."""
+    units = category.rooms.filter(is_active=True)
+    count = units.count()
+    if count == 0:
+        base = (category.slug or slugify(category.name) or 'villa').upper()[:40]
+        number, n = base, 2
+        while Room.objects.filter(branch=category.branch, room_number__iexact=number).exists():
+            number, n = f"{base[:46]}-{n}", n + 1
+        Room.objects.create(branch=category.branch, category=category, room_number=number,
+                            floor='', status=Room.RoomStatus.AVAILABLE,
+                            notes='Entire property unit')
+        messages.info(request, f"Created bookable unit '{number}' for {category.name}. Rename it from the category's Rooms list if you like.")
+    elif count > 1:
+        messages.warning(request, f"{category.name} is booked as an entire property but has {count} units. "
+                                  f"Remove the extras from its Rooms list so it can't be double-booked.")
+
+
+def _event_fields(data, room):
+    """Optional event details, kept only for entire-property bookings."""
+    if not room.category.is_entire_property:
+        return {}
+    event_type = (data.get('event_type') or '').upper()
+    headcount = (data.get('expected_headcount') or '').strip()
+    return {
+        'event_type': event_type if event_type in RoomBooking.EventType.values else '',
+        'expected_headcount': min(int(headcount), 100000) if headcount.isdigit() and int(headcount) > 0 else None,
+        'event_notes': (data.get('event_notes') or '').strip()[:2000],
+    }
+
+
+def _safe_next(request):
+    """Same-host `next` target posted by a form, or None."""
+    from django.utils.http import url_has_allowed_host_and_scheme
+    nxt = request.POST.get('next', '')
+    if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}):
+        return nxt
+    return None
+
+
+def _expand_room_numbers(spec, limit=100):
+    """'101-105, 110, 2A' -> ['101', ..., '105', '110', '2A']. Ranges need plain integers."""
+    numbers = []
+    for part in spec.replace('\n', ',').split(','):
+        part = part.strip()
+        if not part:
+            continue
+        if '-' in part:
+            lo, _, hi = part.partition('-')
+            lo, hi = lo.strip(), hi.strip()
+            if not (lo.isdigit() and hi.isdigit()) or int(hi) < int(lo):
+                raise ValueError(f"'{part}' is not a valid range (use e.g. 101-110).")
+            width = len(lo) if lo.startswith('0') else 0
+            numbers.extend(str(n).zfill(width) for n in range(int(lo), int(hi) + 1))
+        else:
+            numbers.append(part[:50])
+        if len(numbers) > limit:
+            raise ValueError(f"You can add at most {limit} rooms at a time.")
+    return list(dict.fromkeys(numbers))  # de-duplicate, keep order
+
+
+@hotel_admin_required
+def category_rooms_add_action(request, restaurant_slug, ctx, category_id):
+    """Bulk-add physical rooms to a category from the Categories page."""
+    back = _safe_next(request) or reverse('hotel_admin:categories', kwargs={'restaurant_slug': restaurant_slug})
+    if request.method != 'POST':
+        return redirect(back)
+    if not ctx['can_manage_physical_rooms']:
+        messages.error(request, "Permission denied: Only Hotel Administrators can add physical rooms.")
+        return redirect(back)
+
+    branch = ctx['current_branch']
+    category = get_object_or_404(RoomCategory, id=category_id, branch=branch)
+    try:
+        numbers = _expand_room_numbers(request.POST.get('room_numbers', ''))
+    except ValueError as e:
+        messages.error(request, str(e))
+        return redirect(back)
+    if not numbers:
+        messages.error(request, "Enter at least one room number.")
+        return redirect(back)
+
+    if category.is_entire_property and (len(numbers) > 1 or category.rooms.filter(is_active=True).exists()):
+        messages.error(request, f"{category.name} is booked as an entire property, so it can only have one unit.")
+        return redirect(back)
+
+    floor = request.POST.get('floor', '').strip()[:50]
+    existing = {n.lower() for n in Room.objects.filter(branch=branch).values_list('room_number', flat=True)}
+    to_create = [n for n in numbers if n.lower() not in existing]
+    skipped = [n for n in numbers if n.lower() in existing]
+
+    Room.objects.bulk_create([
+        Room(branch=branch, category=category, room_number=n, floor=floor, status=Room.RoomStatus.AVAILABLE)
+        for n in to_create
+    ])
+    if to_create:
+        messages.success(request, f"Added {len(to_create)} room{'s' if len(to_create) != 1 else ''} to {category.name}: {', '.join(to_create[:12])}{'…' if len(to_create) > 12 else ''}.")
+    if skipped:
+        messages.warning(request, f"Skipped existing room number{'s' if len(skipped) != 1 else ''}: {', '.join(skipped[:12])}{'…' if len(skipped) > 12 else ''}.")
+    return redirect(back)
+
+
+@hotel_admin_required
+def room_remove_action(request, restaurant_slug, ctx, room_id):
+    """Retire a room from inventory (soft delete) unless it has a live or upcoming stay."""
+    back = _safe_next(request) or reverse('hotel_admin:categories', kwargs={'restaurant_slug': restaurant_slug})
+    if request.method != 'POST':
+        return redirect(back)
+    if not ctx['can_manage_physical_rooms']:
+        messages.error(request, "Permission denied: Only Hotel Administrators can remove rooms.")
+        return redirect(back)
+
+    room = get_object_or_404(Room, id=room_id, branch=ctx['current_branch'])
+    live = RoomBooking.objects.filter(
+        room=room,
+        booking_status__in=[RoomBooking.BookingStatus.RESERVED, RoomBooking.BookingStatus.CHECKED_IN],
+        check_out_date__gte=timezone.localdate(),
+    ).exists()
+    if live:
+        messages.error(request, f"Room {room.room_number} has a current or upcoming booking. Move or cancel it before removing the room.")
+        return redirect(back)
+
+    room.is_active = False
+    room.save(update_fields=['is_active', 'updated_at'])
+    messages.success(request, f"Room {room.room_number} removed from inventory.")
+    return redirect(back)
 
 
 @hotel_admin_required
@@ -674,6 +836,11 @@ def category_create_edit_action(request, restaurant_slug, ctx):
         if transfer_type not in ['NONE', 'PICKUP_ONLY', 'DROP_ONLY', 'BOTH']:
             transfer_type = 'NONE'
 
+        # Entire-property units (villas / party venues)
+        is_entire_property = request.POST.get('is_entire_property') in ['true', 'on', '1', True]
+        bedrooms_raw = request.POST.get('bedrooms_count', '').strip()
+        bedrooms_count = int(bedrooms_raw) if bedrooms_raw.isdigit() else None
+
         # Image URLs
         cover_image_url = request.POST.get('cover_image_url', '').strip()
 
@@ -706,6 +873,8 @@ def category_create_edit_action(request, restaurant_slug, ctx):
             category.banner_badge_text = banner_badge_text
             category.includes_free_transfer = includes_free_transfer
             category.transfer_type = transfer_type
+            category.is_entire_property = is_entire_property
+            category.bedrooms_count = bedrooms_count
         else:
             category = RoomCategory(
                 branch=branch,
@@ -725,6 +894,8 @@ def category_create_edit_action(request, restaurant_slug, ctx):
                 banner_badge_text=banner_badge_text,
                 includes_free_transfer=includes_free_transfer,
                 transfer_type=transfer_type,
+                is_entire_property=is_entire_property,
+                bedrooms_count=bedrooms_count,
             )
             category.save()
 
@@ -853,6 +1024,9 @@ def category_create_edit_action(request, restaurant_slug, ctx):
             current_media_count += 1
 
         category.save()
+
+        if category.is_entire_property:
+            _ensure_entire_property_unit(request, category)
 
         if cat_id:
             messages.success(request, f"Category '{category.name}' updated successfully with optimized media assets.")
@@ -987,8 +1161,6 @@ def booking_create_action(request, restaurant_slug, ctx):
             messages.error(request, "Room, guest name, and check-in/out dates are required.")
             return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
 
-        room = get_object_or_404(Room, id=room_id, branch=branch)
-
         try:
             check_in_date = datetime.date.fromisoformat(check_in_str)
             check_out_date = datetime.date.fromisoformat(check_out_str)
@@ -1000,16 +1172,6 @@ def booking_create_action(request, restaurant_slug, ctx):
             messages.error(request, "Check-out date must be strictly after check-in date.")
             return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
 
-        # Overlap, out-of-order and rate restrictions (hotel/pricing.py)
-        from hotel import pricing, folio
-        conflict = pricing.room_conflict(room, check_in_date, check_out_date)
-        if conflict:
-            messages.error(request, conflict + " Please choose another room or date.")
-            return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
-        quote = pricing.quote(room.category, check_in_date, check_out_date, HotelSettings.get_settings(branch))
-        if quote['restriction'] and request.POST.get('override_restriction') != '1':
-            messages.error(request, quote['restriction'] + " Tick “Override rate restrictions” to book it anyway.")
-            return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
         advance = None
         try:
             advance = Decimal(str(request.POST.get('advance_amount') or '0').replace(',', ''))
@@ -1019,28 +1181,47 @@ def booking_create_action(request, restaurant_slug, ctx):
             messages.error(request, "Enter the advance amount received for a partially paid booking.")
             return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
 
-        booking = RoomBooking.objects.create(
-            room=room,
-            branch=branch,
-            guest_name=guest_name,
-            guest_email=guest_email,
-            guest_phone=guest_phone,
-            check_in_date=check_in_date,
-            check_out_date=check_out_date,
-            num_guests=num_guests,
-            adults=num_guests,
-            source=source,
-            total_room_charges=quote['net'],
-            taxes=quote['tax'],
-            grand_total=quote['total'],
-            booking_status=RoomBooking.BookingStatus.RESERVED,
-            payment_status=RoomBooking.PaymentStatus.PAID if payment_status == RoomBooking.PaymentStatus.PAID else RoomBooking.PaymentStatus.PENDING,
-            payment_method=request.POST.get('payment_method') or 'PAY_AT_DESK',
-            special_requests=special_requests
-        )
-        if payment_status == RoomBooking.PaymentStatus.PARTIALLY_PAID and advance:
-            method = request.POST.get('payment_method') if request.POST.get('payment_method') in FolioPayment.Method.values else 'CASH'
-            folio.record_payment(booking, request.user, advance, method, note='Advance at booking')
+        from django.db import transaction
+        with transaction.atomic():
+            room = Room.objects.select_for_update().filter(id=room_id, branch=branch).first()
+            if not room:
+                messages.error(request, "Selected room is not active or does not exist.")
+                return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
+
+            # Overlap, out-of-order and rate restrictions (hotel/pricing.py)
+            from hotel import pricing, folio
+            conflict = pricing.room_conflict(room, check_in_date, check_out_date)
+            if conflict:
+                messages.error(request, conflict + " Please choose another room or date.")
+                return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
+            quote = pricing.quote(room.category, check_in_date, check_out_date, HotelSettings.get_settings(branch))
+            if quote['restriction'] and request.POST.get('override_restriction') != '1':
+                messages.error(request, quote['restriction'] + " Tick “Override rate restrictions” to book it anyway.")
+                return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
+
+            booking = RoomBooking.objects.create(
+                room=room,
+                branch=branch,
+                guest_name=guest_name,
+                guest_email=guest_email,
+                guest_phone=guest_phone,
+                check_in_date=check_in_date,
+                check_out_date=check_out_date,
+                num_guests=num_guests,
+                adults=num_guests,
+                source=source,
+                total_room_charges=quote['net'],
+                taxes=quote['tax'],
+                grand_total=quote['total'],
+                booking_status=RoomBooking.BookingStatus.RESERVED,
+                payment_status=RoomBooking.PaymentStatus.PAID if payment_status == RoomBooking.PaymentStatus.PAID else RoomBooking.PaymentStatus.PENDING,
+                payment_method=request.POST.get('payment_method') or 'PAY_AT_DESK',
+                special_requests=special_requests,
+                **_event_fields(request.POST, room),
+            )
+            if payment_status == RoomBooking.PaymentStatus.PARTIALLY_PAID and advance:
+                method = request.POST.get('payment_method') if request.POST.get('payment_method') in FolioPayment.Method.values else 'CASH'
+                folio.record_payment(booking, request.user, advance, method, note='Advance at booking')
 
         # Dispatch hotel reservation voucher email
         try:

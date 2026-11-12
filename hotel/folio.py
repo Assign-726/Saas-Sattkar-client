@@ -232,13 +232,25 @@ def _clean_task(room, booking, user, kind=HousekeepingTask.Kind.CHECKOUT_CLEAN):
                                     task_date=today, created_by=user)
 
 
+def kyc_blockers(booking, s):
+    """What the hotel's ID rules still need for this booking (empty when the rules are off or met)."""
+    if not (s and s.require_id_at_check_in):
+        return []
+    return booking.kyc_missing_items(require_document=s.require_id_document)
+
+
+def _join(items):
+    return items[0] if len(items) == 1 else ', '.join(items[:-1]) + ' and ' + items[-1]
+
+
 def check_in(booking, user):
     if booking.booking_status != RoomBooking.BookingStatus.RESERVED:
         return f'Only reserved bookings can be checked in (this one is {booking.get_booking_status_display().lower()}).'
     s = settings_for(booking)
-    if s and s.require_id_at_check_in and not booking.kyc_complete:
-        return ('Record the guest’s ID first' + (' — passport and visa are needed for foreign nationals.'
-                                                 if booking.is_foreign_national else '.'))
+    missing = kyc_blockers(booking, s)
+    if missing:
+        return f'Guest registration is incomplete: add the {_join(missing)} before checking in.'
+
     today = timezone.localdate()
     if booking.check_in_date > today:
         return f'This booking arrives on {booking.check_in_date:%d %b}. Change the dates to check the guest in early.'
@@ -257,8 +269,11 @@ def check_in(booking, user):
 def check_out(booking, user, allow_balance=False):
     if booking.booking_status != RoomBooking.BookingStatus.CHECKED_IN:
         return 'Only guests who are checked in can be checked out.'
-    folio = sync_payment_status(booking)
     s = settings_for(booking)
+    missing = kyc_blockers(booking, s)
+    if missing:
+        return f'Guest registration is incomplete: add the {_join(missing)} before checking out.'
+    folio = sync_payment_status(booking)
     if folio.balance > 0 and not allow_balance and (s is None or s.block_checkout_with_balance):
         return f'₹{folio.balance:,.2f} is still due. Collect it, or confirm checking out with a balance (bill to company / city ledger).'
     booking.booking_status = RoomBooking.BookingStatus.CHECKED_OUT
@@ -328,31 +343,34 @@ def change_dates(booking, user, new_check_in, new_check_out):
         return 'Departure must be after arrival.'
     if booking.booking_status == RoomBooking.BookingStatus.CHECKED_IN and new_check_out < timezone.localdate():
         return 'Departure can’t be in the past.'
-    clash = pricing.room_conflict(booking.room, new_check_in, new_check_out, exclude_booking=booking)
-    if clash:
-        return clash
-    s = settings_for(booking)
-    old = set(pricing.nights_between(booking.check_in_date, booking.check_out_date))
-    new = set(pricing.nights_between(new_check_in, new_check_out))
-    cat = booking.room.category
-    old_count = len(old) or 1
-    avg_net = _d(booking.total_room_charges) / old_count
-    avg_tax = _d(booking.taxes) / old_count
-    add_net = add_tax = ZERO
-    for night in sorted(new - old):
-        q = pricing.quote(cat, night, night + datetime.timedelta(days=1), s)
-        add_net += q['net']
-        add_tax += q['tax']
-    removed = len(old - new)
-    add_net -= avg_net * removed
-    add_tax -= avg_tax * removed
-    booking.total_room_charges = max(ZERO, (_d(booking.total_room_charges) + add_net).quantize(CENT))
-    booking.taxes = max(ZERO, (_d(booking.taxes) + add_tax).quantize(CENT))
-    booking.grand_total = booking.total_room_charges + booking.taxes
-    booking.check_in_date, booking.check_out_date = new_check_in, new_check_out
-    booking.save(update_fields=['check_in_date', 'check_out_date', 'total_room_charges', 'taxes', 'grand_total', 'updated_at'])
-    sync_payment_status(booking)
-    return None
+    from django.db import transaction
+    with transaction.atomic():
+        locked_room = Room.objects.select_for_update().filter(pk=booking.room_id).first() or booking.room
+        clash = pricing.room_conflict(locked_room, new_check_in, new_check_out, exclude_booking=booking)
+        if clash:
+            return clash
+        s = settings_for(booking)
+        old = set(pricing.nights_between(booking.check_in_date, booking.check_out_date))
+        new = set(pricing.nights_between(new_check_in, new_check_out))
+        cat = booking.room.category
+        old_count = len(old) or 1
+        avg_net = _d(booking.total_room_charges) / old_count
+        avg_tax = _d(booking.taxes) / old_count
+        add_net = add_tax = ZERO
+        for night in sorted(new - old):
+            q = pricing.quote(cat, night, night + datetime.timedelta(days=1), s)
+            add_net += q['net']
+            add_tax += q['tax']
+        removed = len(old - new)
+        add_net -= avg_net * removed
+        add_tax -= avg_tax * removed
+        booking.total_room_charges = max(ZERO, (_d(booking.total_room_charges) + add_net).quantize(CENT))
+        booking.taxes = max(ZERO, (_d(booking.taxes) + add_tax).quantize(CENT))
+        booking.grand_total = booking.total_room_charges + booking.taxes
+        booking.check_in_date, booking.check_out_date = new_check_in, new_check_out
+        booking.save(update_fields=['check_in_date', 'check_out_date', 'total_room_charges', 'taxes', 'grand_total', 'updated_at'])
+        sync_payment_status(booking)
+        return None
 
 
 def move_room(booking, user, new_room, reprice=False):
@@ -363,29 +381,32 @@ def move_room(booking, user, new_room, reprice=False):
     if new_room.branch_id != booking.branch_id or not new_room.is_active:
         return 'Choose an active room in this hotel.'
     start = max(booking.check_in_date, timezone.localdate()) if booking.booking_status == RoomBooking.BookingStatus.CHECKED_IN else booking.check_in_date
-    clash = pricing.room_conflict(new_room, start, booking.check_out_date, exclude_booking=booking)
-    if clash:
-        return clash
-    old_room = booking.room
-    in_house = booking.booking_status == RoomBooking.BookingStatus.CHECKED_IN
-    if in_house and RoomBooking.objects.filter(room=new_room, booking_status=RoomBooking.BookingStatus.CHECKED_IN).exists():
-        return f'Room {new_room.room_number} is occupied.'
-    booking.room = new_room
-    fields = ['room', 'updated_at']
-    if reprice and not in_house:
-        q = pricing.quote(new_room.category, booking.check_in_date, booking.check_out_date, settings_for(booking))
-        booking.total_room_charges, booking.taxes, booking.grand_total = q['net'], q['tax'], q['total']
-        fields += ['total_room_charges', 'taxes', 'grand_total']
-    note = f'Moved from room {old_room.room_number} to {new_room.room_number} on {timezone.localdate():%d %b}.'
-    booking.internal_notes = (booking.internal_notes + '\n' if booking.internal_notes else '') + note
-    fields.append('internal_notes')
-    booking.save(update_fields=fields)
-    if in_house:
-        Room.objects.filter(pk=new_room.pk).update(status=Room.RoomStatus.OCCUPIED, updated_at=timezone.now())
-        Room.objects.filter(pk=old_room.pk).update(status=Room.RoomStatus.CLEANING, updated_at=timezone.now())
-        _clean_task(old_room, booking, user)
-    sync_payment_status(booking)
-    return None
+    from django.db import transaction
+    with transaction.atomic():
+        locked_new_room = Room.objects.select_for_update().filter(pk=new_room.pk).first() or new_room
+        clash = pricing.room_conflict(locked_new_room, start, booking.check_out_date, exclude_booking=booking)
+        if clash:
+            return clash
+        old_room = booking.room
+        in_house = booking.booking_status == RoomBooking.BookingStatus.CHECKED_IN
+        if in_house and RoomBooking.objects.filter(room=locked_new_room, booking_status=RoomBooking.BookingStatus.CHECKED_IN).exists():
+            return f'Room {locked_new_room.room_number} is occupied.'
+        booking.room = locked_new_room
+        fields = ['room', 'updated_at']
+        if reprice and not in_house:
+            q = pricing.quote(locked_new_room.category, booking.check_in_date, booking.check_out_date, settings_for(booking))
+            booking.total_room_charges, booking.taxes, booking.grand_total = q['net'], q['tax'], q['total']
+            fields += ['total_room_charges', 'taxes', 'grand_total']
+        note = f'Moved from room {old_room.room_number} to {locked_new_room.room_number} on {timezone.localdate():%d %b}.'
+        booking.internal_notes = (booking.internal_notes + '\n' if booking.internal_notes else '') + note
+        fields.append('internal_notes')
+        booking.save(update_fields=fields)
+        if in_house:
+            Room.objects.filter(pk=locked_new_room.pk).update(status=Room.RoomStatus.OCCUPIED, updated_at=timezone.now())
+            Room.objects.filter(pk=old_room.pk).update(status=Room.RoomStatus.CLEANING, updated_at=timezone.now())
+            _clean_task(old_room, booking, user)
+        sync_payment_status(booking)
+        return None
 
 
 METHOD_FROM_BOOKING = {'ONLINE_RAZORPAY': 'ONLINE', 'RAZORPAY': 'ONLINE', 'STRIPE': 'ONLINE', 'UPI': 'UPI',

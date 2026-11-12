@@ -565,25 +565,33 @@ def club_booking_toggle_checkin(request, restaurant_slug, booking_id):
     booking = _booking(request, booking_id)
     flags = _staff_flags(request)
 
-    def done(ok, msg, level=messages.SUCCESS, status=200):
+    def done(ok, msg, level=messages.SUCCESS, status=200, current_booking=None):
+        target = current_booking or booking
         if _wants_json(request):
-            return JsonResponse({'success': ok, 'message': msg, 'checked_in': booking.checked_in,
-                                 'checked_in_at': timezone.localtime(booking.checked_in_at).strftime('%I:%M %p') if booking.checked_in_at else None},
+            return JsonResponse({'success': ok, 'message': msg, 'checked_in': target.checked_in,
+                                 'checked_in_at': timezone.localtime(target.checked_in_at).strftime('%I:%M %p') if target.checked_in_at else None},
                                 status=status)
         messages.add_message(request, level, msg)
-        return _back(request, 'club_guestlist_event', event_id=booking.event_id)
+        return _back(request, 'club_guestlist_event', event_id=target.event_id)
 
-    if booking.payment_status != SUCCESS:
-        return done(False, f'{booking.booking_reference} is {booking.get_payment_status_display().lower()} — it can’t be checked in.', messages.ERROR, 400)
-    if booking.checked_in:
-        if not flags['can_undo_checkin']:
-            return done(False, 'Your login can’t undo a check-in.', messages.ERROR, 403)
-        booking.checked_in, booking.checked_in_at, booking.checked_in_by = False, None, None
-        booking.save(update_fields=['checked_in', 'checked_in_at', 'checked_in_by'])
-        return done(True, f'Check-in undone for {booking.guest_name}.', messages.INFO)
-    booking.mark_checked_in(staff_user=request.user)
-    extra = f' (+{booking.quantity - 1})' if booking.quantity > 1 else ''
-    return done(True, f'{booking.guest_name}{extra} checked in.')
+    with transaction.atomic():
+        locked_booking = EventBooking.objects.select_for_update().get(pk=booking.pk)
+        if locked_booking.payment_status != SUCCESS:
+            return done(False, f'{locked_booking.booking_reference} is {locked_booking.get_payment_status_display().lower()} — it can’t be checked in.', messages.ERROR, 400, locked_booking)
+        if locked_booking.checked_in:
+            if not flags['can_undo_checkin']:
+                return done(False, 'Your login can’t undo a check-in.', messages.ERROR, 403, locked_booking)
+            locked_booking.checked_in, locked_booking.checked_in_at, locked_booking.checked_in_by = False, None, None
+            locked_booking.save(update_fields=['checked_in', 'checked_in_at', 'checked_in_by'])
+            return done(True, f'Check-in undone for {locked_booking.guest_name}.', messages.INFO, current_booking=locked_booking)
+
+        locked_booking.checked_in = True
+        locked_booking.checked_in_at = timezone.now()
+        if request.user and request.user.is_authenticated:
+            locked_booking.checked_in_by = request.user
+        locked_booking.save(update_fields=['checked_in', 'checked_in_at', 'checked_in_by'])
+        extra = f' (+{locked_booking.quantity - 1})' if locked_booking.quantity > 1 else ''
+        return done(True, f'{locked_booking.guest_name}{extra} checked in.', current_booking=locked_booking)
 
 
 @login_required
@@ -597,25 +605,31 @@ def club_booking_cancel(request, restaurant_slug, booking_id):
     booking = _booking(request, booking_id)
     if not _staff_flags(request)['can_cancel_pass']:
         messages.error(request, 'Your login can’t cancel passes.')
-    elif booking.payment_status != SUCCESS:
-        messages.error(request, f'{booking.booking_reference} is already {booking.get_payment_status_display().lower()}.')
-    elif booking.checked_in:
-        messages.error(request, f'{booking.guest_name} is already checked in — undo the check-in first.')
     else:
         reason = request.POST.get('reason', '').strip()
         with transaction.atomic():
-            tier = TicketType.objects.select_for_update().get(pk=booking.ticket_type_id)
-            tier.quantity_sold = max(0, tier.quantity_sold - booking.quantity)
+            locked_booking = EventBooking.objects.select_for_update().get(pk=booking.pk)
+            if locked_booking.payment_status != SUCCESS:
+                messages.error(request, f'{locked_booking.booking_reference} is already {locked_booking.get_payment_status_display().lower()}.')
+                return _back(request, 'club_guestlist_event', event_id=booking.event_id)
+            if locked_booking.checked_in:
+                messages.error(request, f'{locked_booking.guest_name} is already checked in — undo the check-in first.')
+                return _back(request, 'club_guestlist_event', event_id=booking.event_id)
+
+            tier = TicketType.objects.select_for_update().get(pk=locked_booking.ticket_type_id)
+            tier.quantity_sold = max(0, tier.quantity_sold - locked_booking.quantity)
             tier.save(update_fields=['quantity_sold'])
-            booking.payment_status = EventBooking.PaymentStatus.CANCELLED
-            booking.assigned_table, booking.assigned_at = None, None
+            locked_booking.payment_status = EventBooking.PaymentStatus.CANCELLED
+            locked_booking.assigned_table, locked_booking.assigned_at = None, None
             stamp = f'Cancelled {timezone.localtime().strftime("%d %b %I:%M %p")} by {request.user.get_full_name() or request.user.username}'
-            booking.notes = '\n'.join(x for x in [booking.notes, stamp + (f': {reason}' if reason else '')] if x)
-            booking.save(update_fields=['payment_status', 'assigned_table', 'assigned_at', 'notes'])
-        msg = f'Pass {booking.booking_reference} cancelled — {booking.quantity} ticket(s) back on sale.'
-        if booking.payment_method == EventBooking.PaymentMethod.ONLINE and booking.total_amount > 0:
-            msg += f' Refund ₹{booking.total_amount:.0f} to the guest from your payment gateway.'
+            locked_booking.notes = '\n'.join(x for x in [locked_booking.notes, stamp + (f': {reason}' if reason else '')] if x)
+            locked_booking.save(update_fields=['payment_status', 'assigned_table', 'assigned_at', 'notes'])
+
+        msg = f'Pass {locked_booking.booking_reference} cancelled — {locked_booking.quantity} ticket(s) back on sale.'
+        if locked_booking.payment_method == EventBooking.PaymentMethod.ONLINE and locked_booking.total_amount > 0:
+            msg += f' Refund ₹{locked_booking.total_amount:.0f} to the guest from your payment gateway.'
         messages.success(request, msg)
+    return _back(request, 'club_guestlist_event', event_id=booking.event_id)
     return _back(request, 'club_guestlist_event', event_id=booking.event_id)
 
 

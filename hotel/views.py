@@ -2,6 +2,7 @@ import datetime
 import logging
 from decimal import Decimal
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Q, Count
 from django.utils import timezone
 
@@ -229,12 +230,32 @@ class RoomBookingViewSet(viewsets.ModelViewSet):
         return qs.order_by('-created_at')
 
     def perform_create(self, serializer):
-        room = serializer.validated_data.get('room')
-        branch = room.branch if room else resolve_branch_for_request(self.request)
-        _check_branch(self.request, branch)
-        if branch is None:
-            raise serializers.ValidationError({"branch": "A valid hotel branch is required."})
-        serializer.save(branch=branch)
+        with transaction.atomic():
+            room = serializer.validated_data.get('room')
+            if room:
+                Room.objects.select_for_update().filter(id=room.id).first()
+                check_in = serializer.validated_data.get('check_in_date')
+                check_out = serializer.validated_data.get('check_out_date')
+                if check_in and check_out:
+                    overlap_qs = RoomBooking.objects.filter(
+                        room=room,
+                        booking_status__in=[
+                            RoomBooking.BookingStatus.RESERVED,
+                            RoomBooking.BookingStatus.CHECKED_IN,
+                        ],
+                        check_in_date__lt=check_out,
+                        check_out_date__gt=check_in,
+                    )
+                    if overlap_qs.exists():
+                        conflict = overlap_qs.first()
+                        raise serializers.ValidationError({
+                            "room": f"Room {room.room_number} is already booked from {conflict.check_in_date} to {conflict.check_out_date}."
+                        })
+            branch = room.branch if room else resolve_branch_for_request(self.request)
+            _check_branch(self.request, branch)
+            if branch is None:
+                raise serializers.ValidationError({"branch": "A valid hotel branch is required."})
+            serializer.save(branch=branch)
 
     def perform_update(self, serializer):
         room = serializer.validated_data.get('room')
@@ -802,73 +823,69 @@ class PublicBookingCreateView(APIView):
         if check_out_date <= check_in_date:
             return Response({"error": "Check-out date must be strictly after check-in date."}, status=400)
 
-        # Allocate room
-        target_room = None
-        target_cat = None
+        with transaction.atomic():
+            # Allocate room with database locking
+            target_room = None
+            target_cat = None
 
-        if category_id:
-            target_cat = RoomCategory.objects.filter(id=category_id, is_active=True).first()
+            if category_id:
+                target_cat = RoomCategory.objects.filter(id=category_id, is_active=True).first()
 
-        if target_cat:
-            cat_rooms = target_cat.rooms.filter(is_active=True)
-            booked_room_ids = RoomBooking.objects.filter(
-                room__in=cat_rooms,
-                booking_status__in=[RoomBooking.BookingStatus.RESERVED, RoomBooking.BookingStatus.CHECKED_IN],
-                check_in_date__lt=check_out_date,
-                check_out_date__gt=check_in_date,
-            ).values_list('room_id', flat=True)
+            if target_cat:
+                candidate_rooms = list(target_cat.rooms.select_for_update().filter(is_active=True).order_by('room_number'))
+                from hotel import pricing
+                target_room = pricing.free_rooms(
+                    Room.objects.filter(id__in=[r.id for r in candidate_rooms]),
+                    target_cat.branch,
+                    check_in_date,
+                    check_out_date
+                ).first()
 
-            target_room = cat_rooms.exclude(id__in=booked_room_ids).first()
+            # If not resolved via category, try directly as physical room ID
+            if not target_room and room_id:
+                candidate_room = Room.objects.select_for_update().filter(id=room_id, is_active=True).first()
+                if candidate_room:
+                    from hotel import pricing
+                    if not pricing.room_conflict(candidate_room, check_in_date, check_out_date):
+                        target_room = candidate_room
 
-        # If not resolved via category, try directly as physical room ID
-        if not target_room and room_id:
-            candidate_room = Room.objects.filter(id=room_id, is_active=True).first()
-            if candidate_room:
-                is_booked = RoomBooking.objects.filter(
-                    room=candidate_room,
-                    booking_status__in=[RoomBooking.BookingStatus.RESERVED, RoomBooking.BookingStatus.CHECKED_IN],
-                    check_in_date__lt=check_out_date,
-                    check_out_date__gt=check_in_date,
-                ).exists()
-                if not is_booked:
-                    target_room = candidate_room
+            # If still not found, check if ANY active category has available rooms
+            if not target_room:
+                all_cats = RoomCategory.objects.filter(is_active=True).prefetch_related('rooms')
+                for fallback_cat in all_cats:
+                    candidate_rooms = list(fallback_cat.rooms.select_for_update().filter(is_active=True).order_by('room_number'))
+                    from hotel import pricing
+                    avail = pricing.free_rooms(
+                        Room.objects.filter(id__in=[r.id for r in candidate_rooms]),
+                        fallback_cat.branch,
+                        check_in_date,
+                        check_out_date
+                    ).first()
+                    if avail:
+                        target_room = avail
+                        break
 
-        # If still not found, check if ANY active category has available rooms
-        if not target_room:
-            all_cats = RoomCategory.objects.filter(is_active=True).prefetch_related('rooms')
-            for fallback_cat in all_cats:
-                cat_rooms = fallback_cat.rooms.filter(is_active=True)
-                booked_ids = RoomBooking.objects.filter(
-                    room__in=cat_rooms,
-                    booking_status__in=[RoomBooking.BookingStatus.RESERVED, RoomBooking.BookingStatus.CHECKED_IN],
-                    check_in_date__lt=check_out_date,
-                    check_out_date__gt=check_in_date,
-                ).values_list('room_id', flat=True)
-                avail = cat_rooms.exclude(id__in=booked_ids).first()
-                if avail:
-                    target_room = avail
-                    break
+            if not target_room:
+                return Response(
+                    {"error": "No available rooms in the selected category for these dates. Please choose another date or category."},
+                    status=409
+                )
 
-        if not target_room:
-            return Response(
-                {"error": "No available rooms in the selected category for these dates. Please choose another date or category."},
-                status=409
+            # Create booking
+            booking = RoomBooking.objects.create(
+                room=target_room,
+                branch=target_room.branch,
+                guest_name=guest_name,
+                guest_email=guest_email,
+                guest_phone=guest_phone,
+                check_in_date=check_in_date,
+                check_out_date=check_out_date,
+                num_guests=num_guests,
+                booking_status=RoomBooking.BookingStatus.RESERVED,
+                payment_status=RoomBooking.PaymentStatus.PENDING,
+                special_requests=special_requests,
+                source=RoomBooking.Source.WEBSITE,
             )
-
-        # Create booking
-        booking = RoomBooking.objects.create(
-            room=target_room,
-            branch=target_room.branch,
-            guest_name=guest_name,
-            guest_email=guest_email,
-            guest_phone=guest_phone,
-            check_in_date=check_in_date,
-            check_out_date=check_out_date,
-            num_guests=num_guests,
-            booking_status=RoomBooking.BookingStatus.RESERVED,
-            payment_status=RoomBooking.PaymentStatus.PENDING,
-            special_requests=special_requests,
-        )
 
         # Dispatch hotel reservation voucher email
         try:

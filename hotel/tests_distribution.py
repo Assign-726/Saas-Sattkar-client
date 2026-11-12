@@ -13,7 +13,7 @@ from django.utils import timezone
 from hotel import folio as F
 from hotel import groups as G
 from hotel import ledger as L
-from hotel.models import (BookingGroup, CompanyAccount, FolioPayment, MaintenanceIssue, RateOverride, Room, RoomBooking,
+from hotel.models import (HotelSettings, BookingGroup, CompanyAccount, FolioPayment, MaintenanceIssue, RateOverride, Room, RoomBooking,
                           RoomCategory)
 from integrations import dispatch
 from integrations.models import ApiKey, ChannelRoomMapping, Connection, ExternalBookingLink, WebhookDelivery, WebhookEndpoint
@@ -33,6 +33,8 @@ class Base(TestCase):
         self.ste = RoomCategory.objects.create(branch=self.b, name='Suite', base_price_per_night=D('9000'))
         self.rooms = [Room.objects.create(branch=self.b, category=self.dlx, room_number=str(101 + i)) for i in range(3)]
         self.suite = Room.objects.create(branch=self.b, category=self.ste, room_number='301')
+        # These tests are about stays, not guest registration: switch the (default-on) ID rule off
+        HotelSettings.objects.filter(pk=HotelSettings.get_settings(self.b).pk).update(require_id_at_check_in=False)
         self.user = User.objects.create_user('fo2', password='x', is_staff=True)
         RestaurantUser.objects.create(user=self.user, restaurant=self.r, branch=self.b, role=RestaurantUser.Role.HOTEL_ADMIN)
         self.client.force_login(self.user)

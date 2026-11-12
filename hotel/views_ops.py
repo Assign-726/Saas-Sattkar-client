@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from hotel.paging import paginate
 from hotel import ops
 from hotel import pricing
 from hotel.models import (BanquetEvent, BanquetMenu, BanquetPayment, BanquetVenue, CashierShift, ComplianceLicence, FixedAsset,
@@ -102,9 +103,11 @@ def requests_view(request, restaurant_slug, ctx):
         qs = qs.filter(kind='COMPLAINT')
     elif tab == 'resolved':
         qs = qs.filter(status='RESOLVED')
-    rows = list(qs[:300])
+    rows = list(qs) if tab == 'open' else qs
     if tab == 'open':
         rows.sort(key=lambda r: (not r.is_breached, r.priority != 'HIGH', r.created_at))
+    page_obj = paginate(request, rows)
+    rows = page_obj.object_list
     open_all = list(GuestRequest.objects.filter(branch=branch).exclude(status='RESOLVED'))
     month = timezone.now() - datetime.timedelta(days=30)
     done = GuestRequest.objects.filter(branch=branch, status='RESOLVED', resolved_at__gte=month).exclude(kind='COMPLIMENT')
@@ -119,7 +122,7 @@ def requests_view(request, restaurant_slug, ctx):
                .annotate(n=Count('id')).order_by('-n'))
     labels = dict(GuestRequest.Department.choices)
     return _render(request, ctx, 'hotel_ops/_requests.html', 'requests', 'Guest requests',
-                   rows=rows, tab=tab, kpis=kpis, in_house=_in_house(branch), kinds=GuestRequest.Kind.choices,
+                   rows=rows, page_obj=page_obj, tab=tab, kpis=kpis, in_house=_in_house(branch), kinds=GuestRequest.Kind.choices,
                    departments=GuestRequest.Department.choices, sla=GuestRequest.SLA_MINUTES,
                    by_dept=[{'label': labels.get(d['department'], d['department']), 'n': d['n']} for d in by_dept],
                    rooms=Room.objects.filter(branch=branch, is_active=True).order_by('room_number'),
@@ -173,7 +176,8 @@ def lostfound(request, restaurant_slug, ctx):
             'returned': LostFoundItem.objects.filter(branch=branch, status='RETURNED', returned_on__gte=today - datetime.timedelta(days=30)).count()}
     recent = RoomBooking.objects.filter(branch=branch, check_out_date__gte=today - datetime.timedelta(days=14),
                                         check_in_date__lte=today).select_related('room').order_by('room__room_number')
-    return _render(request, ctx, 'hotel_ops/_lostfound.html', 'lostfound', 'Lost & found', rows=qs[:300], tab=tab, q=q, kpis=kpis,
+    page_obj = paginate(request, qs)
+    return _render(request, ctx, 'hotel_ops/_lostfound.html', 'lostfound', 'Lost & found', rows=page_obj.object_list, page_obj=page_obj, tab=tab, q=q, kpis=kpis,
                    today=today, recent=recent, can_edit=_can(request, 'guest_services'))
 
 
@@ -231,7 +235,8 @@ def laundry(request, restaurant_slug, ctx):
     show = request.GET.get('show', 'active')
     if show == 'active':
         orders = orders.exclude(status__in=['DELIVERED', 'CANCELLED'])
-    orders = list(orders[:200])
+    page_obj = paginate(request, orders)
+    orders = list(page_obj.object_list)
     today = timezone.localdate()
     delivered_today = LaundryOrder.objects.filter(branch=branch, status='DELIVERED', delivered_at__date=today).prefetch_related('lines')
     kpis = {'active': LaundryOrder.objects.filter(branch=branch).exclude(status__in=['DELIVERED', 'CANCELLED']).count(),
@@ -239,7 +244,7 @@ def laundry(request, restaurant_slug, ctx):
             'express': LaundryOrder.objects.filter(branch=branch, is_express=True).exclude(status__in=['DELIVERED', 'CANCELLED']).count(),
             'revenue': sum((o.amount for o in delivered_today), D0)}
     return _render(request, ctx, 'hotel_ops/_laundry.html', 'laundry', 'Laundry & valet', tab=tab, show=show, rates=rates,
-                   active_rates=[r for r in rates if r.is_active], orders=orders, kpis=kpis, in_house=_in_house(branch),
+                   active_rates=[r for r in rates if r.is_active], orders=orders, page_obj=page_obj, kpis=kpis, in_house=_in_house(branch),
                    statuses=dict(LaundryOrder.Status.choices), can_edit=_can(request, 'guest_services'))
 
 
@@ -803,7 +808,8 @@ def banquets(request, restaurant_slug, ctx):
                          'events': [e for e in month_events if e.date == d]} for d in week])
     prev_m = (month - datetime.timedelta(days=1)).replace(day=1)
     next_m = (month + datetime.timedelta(days=32)).replace(day=1)
-    return _render(request, ctx, 'hotel_ops/_banquets.html', 'banquets', 'Banquets & events', tab=tab, events=list(events[:200]),
+    page_obj = paginate(request, events)
+    return _render(request, ctx, 'hotel_ops/_banquets.html', 'banquets', 'Banquets & events', tab=tab, events=list(page_obj.object_list), page_obj=page_obj,
                    venues=venues, menus=BanquetMenu.objects.filter(branch=branch, is_active=True), kpis=kpis, today=today,
                    status=status, when=when, statuses=BanquetEvent.Status.choices, sessions=BanquetEvent.Session.choices,
                    types=BanquetEvent.TYPES, layouts=BanquetEvent.LAYOUTS, cal=cal, month=month, prev_m=prev_m, next_m=next_m,
@@ -1210,13 +1216,14 @@ def security(request, restaurant_slug, ctx):
     today = timezone.localdate()
     tab = request.GET.get('tab', 'visitors')
     visitors = Visitor.objects.filter(branch=branch, time_in__date__gte=today - datetime.timedelta(days=7))
-    incidents = SecurityIncident.objects.filter(branch=branch)[:100]
+    page_obj = paginate(request, SecurityIncident.objects.filter(branch=branch))
+    incidents = page_obj.object_list
     kpis = {'inside': Visitor.objects.filter(branch=branch, time_out__isnull=True, time_in__date=today).count(),
             'today': Visitor.objects.filter(branch=branch, time_in__date=today).count(),
             'guests': RoomBooking.objects.filter(branch=branch, booking_status='CHECKED_IN').aggregate(n=Sum('num_guests'))['n'] or 0,
             'open': SecurityIncident.objects.filter(branch=branch, is_closed=False).count()}
     return _render(request, ctx, 'hotel_ops/_security.html', 'security', 'Security & visitors', tab=tab, visitors=visitors,
-                   incidents=incidents, kpis=kpis, kinds=SecurityIncident.KINDS, severities=SecurityIncident.SEVERITY,
+                   incidents=incidents, page_obj=page_obj, kpis=kpis, kinds=SecurityIncident.KINDS, severities=SecurityIncident.SEVERITY,
                    rooms=_in_house(branch).filter(booking_status='CHECKED_IN'), can_edit=_can(request, 'back_office'))
 
 

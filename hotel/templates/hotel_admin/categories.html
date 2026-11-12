@@ -243,6 +243,11 @@
                             <i class="fa-solid fa-crown me-1 text-danger"></i>{{ c.banner_badge_text|default:"Banner Feature" }}
                         </span>
                         {% endif %}
+                        {% if c.is_entire_property %}
+                        <span class="badge bg-dark text-white fw-bold shadow-sm" style="font-size: 0.7rem;" title="Booked as one unit">
+                            <i class="fa-solid fa-house-chimney me-1"></i>Entire property{% if c.bedrooms_count %} &middot; {{ c.bedrooms_count }} BR{% endif %}
+                        </span>
+                        {% endif %}
                         {% if c.includes_free_transfer %}
                         <span class="badge bg-success text-white fw-bold shadow-sm" style="font-size: 0.7rem;" title="Free Airport Transfer">
                             <i class="fa-solid fa-taxi me-1"></i>Free Transfer
@@ -310,10 +315,10 @@
                         <span class="text-muted d-block" style="font-size: 0.68rem;">Adults / Kids</span>
                         <strong class="text-dark font-mono">{{ c.max_adults }} / {{ c.max_children }}</strong>
                     </div>
-                    <div class="flex-fill">
-                        <span class="text-muted d-block" style="font-size: 0.68rem;">Inventory</span>
-                        <strong class="text-primary font-mono">{{ c.rooms.count }} units</strong>
-                    </div>
+                    <button type="button" class="flex-fill cat-inv-btn" data-bs-toggle="modal" data-bs-target="#catRooms{{ c.id }}" title="View and manage rooms in {{ c.name }}">
+                        <span class="text-muted d-block" style="font-size: 0.68rem;">Rooms</span>
+                        <strong class="text-primary font-mono">{{ c.active_rooms|length }} unit{{ c.active_rooms|length|pluralize }} <i class="fa-solid fa-chevron-right" style="font-size:0.6rem;"></i></strong>
+                    </button>
                 </div>
 
                 <!-- Amenities badges -->
@@ -377,6 +382,8 @@
                     data-show-banner="{% if c.show_on_banner %}1{% else %}0{% endif %}"
                     data-banner-badge="{{ c.banner_badge_text|default:''|escape }}"
                     data-free-transfer="{% if c.includes_free_transfer %}1{% else %}0{% endif %}"
+                    data-entire="{% if c.is_entire_property %}1{% else %}0{% endif %}"
+                    data-bedrooms="{{ c.bedrooms_count|default:'' }}"
                     data-transfer-type="{{ c.transfer_type }}"
                     data-cover-url="{{ c.cover_image_url|default:''|escape }}"
                     data-cover-img="{% if c.cover_image %}{{ c.cover_image.url }}{% endif %}"
@@ -413,9 +420,106 @@
     {% endfor %}
 </div>
 
+<!-- Modals: rooms inside each category -->
+{% for c in categories %}
+<div class="modal fade" id="catRooms{{ c.id }}" tabindex="-1" aria-labelledby="catRoomsTitle{{ c.id }}" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div style="min-width:0;">
+                    <div class="modal-title" id="catRoomsTitle{{ c.id }}">{{ c.name }}</div>
+                    <div class="text-muted" style="font-size:0.75rem;">{{ c.active_rooms|length }} room{{ c.active_rooms|length|pluralize }} &middot; ₹{{ c.base_price_per_night|floatformat:0 }}/night</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                {% if c.is_entire_property %}
+                <div class="cat-add-rooms text-muted" style="font-size:0.8rem;"><i class="fa-solid fa-house-chimney me-1"></i>Entire property: guests book this single unit. You can rename it below.</div>
+                {% endif %}
+                {% if can_manage_physical_rooms and not c.is_entire_property or can_manage_physical_rooms and not c.active_rooms %}
+                <form method="POST" action="{% url 'hotel_admin:category_rooms_add' restaurant_slug=rslug category_id=c.id %}" class="cat-add-rooms">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <label class="form-label mb-1" for="rn{{ c.id }}">Add rooms</label>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <input type="text" id="rn{{ c.id }}" name="room_numbers" class="form-control" style="flex:2 1 180px;" placeholder="e.g. 101-105, 110, 2A" required autocomplete="off">
+                        <input type="text" name="floor" class="form-control" style="flex:1 1 110px;" placeholder="Floor / wing" list="catFloors">
+                        <button type="submit" class="btn-pms-primary" style="flex:0 0 auto;"><i class="fa-solid fa-plus"></i>Add</button>
+                    </div>
+                    <div class="form-text">Use a range like <code>101-110</code> or separate numbers with commas. Existing numbers are skipped.</div>
+                </form>
+                {% endif %}
+
+                <ul class="cat-room-list">
+                    {% for r in c.active_rooms %}
+                    <li class="cat-room">
+                        <span class="cat-room-dot cat-room-{{ r.status|lower }}" title="{{ r.get_status_display }}"></span>
+                        <div class="cat-room-main">
+                            <strong class="font-mono">{{ r.room_number }}</strong>
+                            <small>{{ r.floor|default:"No floor set" }} &middot; {{ r.get_status_display }}</small>
+                        </div>
+                        {% if can_manage_physical_rooms %}
+                        <button type="button" class="cat-room-btn" title="Edit room {{ r.room_number }}"
+                                data-bs-toggle="collapse" data-bs-target="#roomEdit{{ r.id }}" aria-expanded="false"><i class="fa-solid fa-pen"></i></button>
+                        <form method="POST" action="{% url 'hotel_admin:room_remove' restaurant_slug=rslug room_id=r.id %}"
+                              data-confirm="Remove room {{ r.room_number }} from inventory?" onsubmit="return confirm(this.dataset.confirm);">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit" class="cat-room-btn cat-room-btn-danger" title="Remove room {{ r.room_number }}"><i class="fa-solid fa-trash-can"></i></button>
+                        </form>
+                        <form method="POST" action="{% url 'hotel_admin:room_create_edit' restaurant_slug=rslug %}" class="collapse cat-room-edit" id="roomEdit{{ r.id }}">
+                            {% csrf_token %}
+                            <input type="hidden" name="room_id" value="{{ r.id }}">
+                            <input type="hidden" name="status" value="{{ r.status }}">
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <div class="d-flex gap-2 flex-wrap">
+                                <input type="text" name="room_number" class="form-control form-control-sm" style="flex:1 1 90px;" value="{{ r.room_number }}" required aria-label="Room number">
+                                <input type="text" name="floor" class="form-control form-control-sm" style="flex:1 1 110px;" value="{{ r.floor }}" list="catFloors" aria-label="Floor">
+                                <select name="category_id" class="form-select form-select-sm" style="flex:2 1 160px;" aria-label="Category">
+                                    {% for oc in categories %}<option value="{{ oc.id }}"{% if oc.id == c.id %} selected{% endif %}>{{ oc.name }}</option>{% endfor %}
+                                </select>
+                            </div>
+                            <input type="text" name="notes" class="form-control form-control-sm mt-2" value="{{ r.notes }}" placeholder="Notes (optional)" aria-label="Notes">
+                            <button type="submit" class="btn-pms-primary btn-sm mt-2"><i class="fa-solid fa-check"></i>Save</button>
+                        </form>
+                        {% endif %}
+                    </li>
+                    {% empty %}
+                    <li class="cat-room-empty"><i class="fa-solid fa-bed"></i>No rooms in this category yet.{% if can_manage_physical_rooms %} Add some above.{% endif %}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+<datalist id="catFloors">{% for f in floors %}<option value="{{ f }}">{% endfor %}</datalist>
+<style>
+    .ep-toggle { padding: .65rem .75rem; border: 1px dashed var(--card-border); border-radius: 10px; background: var(--ui-surface-2); }
+    .cat-inv-btn { background: none; border: 0; padding: 0; border-radius: 6px; cursor: pointer; }
+    .cat-inv-btn:hover strong { text-decoration: underline; }
+    .cat-add-rooms { padding-bottom: 1rem; margin-bottom: .75rem; border-bottom: 1px solid var(--card-border); }
+    .cat-room-list { list-style: none; margin: 0; padding: 0; }
+    .cat-room { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; padding: .55rem 0; border-bottom: 1px solid var(--ui-separator); }
+    .cat-room:last-child { border-bottom: 0; }
+    .cat-room-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: var(--text-subtle); }
+    .cat-room-available { background: var(--ui-green); }
+    .cat-room-occupied { background: var(--ui-accent); }
+    .cat-room-cleaning { background: var(--ui-orange); }
+    .cat-room-maintenance { background: var(--ui-red); }
+    .cat-room-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .cat-room-main small { color: var(--text-muted); font-size: .72rem; }
+    .cat-room-btn { width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--card-border); background: transparent; color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; }
+    .cat-room-btn:hover { color: var(--text-main); background: var(--ui-surface-2); }
+    .cat-room-btn-danger:hover { color: var(--ui-red-text); border-color: rgba(var(--ui-red-rgb), .4); }
+    .cat-room-edit { flex-basis: 100%; padding: .6rem; background: var(--ui-surface-2); border-radius: 8px; }
+    .cat-room-empty { text-align: center; color: var(--text-muted); padding: 1.5rem 0; font-size: .82rem; }
+    .cat-room-empty i { display: block; font-size: 1.4rem; opacity: .3; margin-bottom: .4rem; }
+</style>
+
 <!-- Modal: Add / Edit Category -->
 <div class="modal fade" id="addCategoryModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content border-0 shadow-lg overflow-hidden">
             <form method="POST" action="{% url 'hotel_admin:category_create_edit' restaurant_slug=rslug %}" enctype="multipart/form-data" id="catForm">
                 {% csrf_token %}
@@ -427,7 +531,7 @@
                     <h5 class="modal-title fw-bold text-white mb-0 fs-6" id="catModalTitle">
                         <i class="fa-solid fa-tags text-primary me-2"></i>Add Room Category
                     </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
 
                 <!-- Navigation: Clean 3 Tabs -->
@@ -460,6 +564,19 @@
                         <div class="tab-pane fade show active" id="tab-specs" role="tabpanel">
                             <div class="card border-0 shadow-sm rounded-3 p-3 bg-white">
                                 <div class="row g-2.5">
+                                    <div class="col-12">
+                                        <div class="ep-toggle">
+                                            <div class="form-check form-switch m-0">
+                                                <input class="form-check-input" type="checkbox" role="switch" name="is_entire_property" id="catFormEntire" onchange="syncEntireProperty()">
+                                                <label class="form-check-label fw-semibold small" for="catFormEntire">Booked as entire property</label>
+                                            </div>
+                                            <div class="text-muted" style="font-size:0.72rem;">For villas, farmhouses and party venues. Guests book the whole place as one unit, and the price and guest limits apply to the whole property.</div>
+                                            <div id="epBedroomsWrap" class="mt-2" style="display:none;max-width:200px;">
+                                                <label class="form-label small fw-semibold mb-1" for="catFormBedrooms">Bedrooms inside</label>
+                                                <input type="number" name="bedrooms_count" id="catFormBedrooms" class="form-control form-control-sm" min="0" max="50" placeholder="e.g. 4">
+                                            </div>
+                                        </div>
+                                    </div>
                                     <div class="col-md-7">
                                         <label class="form-label small fw-semibold mb-1">Category Name *</label>
                                         <input type="text" name="name" id="catFormName" class="form-control form-control-sm" placeholder="e.g. Executive Deluxe Suite" required>
@@ -470,15 +587,15 @@
                                     </div>
                                     <div class="col-md-4">
                                         <label class="form-label small fw-semibold mb-1">Max Total Occupancy</label>
-                                        <input type="number" name="max_occupancy" id="catFormOcc" class="form-control form-control-sm" value="2" min="1" max="20">
+                                        <input type="number" name="max_occupancy" id="catFormOcc" class="form-control form-control-sm" value="2" min="1" max="20" data-room-max="20" data-ep-max="300">
                                     </div>
                                     <div class="col-md-4">
                                         <label class="form-label small fw-semibold mb-1">Max Adults</label>
-                                        <input type="number" name="max_adults" id="catFormAdults" class="form-control form-control-sm" value="2" min="1" max="15">
+                                        <input type="number" name="max_adults" id="catFormAdults" class="form-control form-control-sm" value="2" min="1" max="15" data-room-max="15" data-ep-max="300">
                                     </div>
                                     <div class="col-md-4">
                                         <label class="form-label small fw-semibold mb-1">Max Children</label>
-                                        <input type="number" name="max_children" id="catFormChildren" class="form-control form-control-sm" value="1" min="0" max="10">
+                                        <input type="number" name="max_children" id="catFormChildren" class="form-control form-control-sm" value="1" min="0" max="10" data-room-max="10" data-ep-max="150">
                                     </div>
                                     <div class="col-md-4">
                                         <label class="form-label small fw-semibold mb-1">Room Size (Sq Ft)</label>
@@ -827,6 +944,16 @@ function switchMediaMode(mode) {
     document.getElementById('btnModeVideos').className = 'media-subnav-btn' + (mode === 'videos' ? ' active' : '');
 }
 
+// Entire-property toggle: show bedrooms, relax guest limits
+function syncEntireProperty() {
+    const on = document.getElementById('catFormEntire').checked;
+    document.getElementById('epBedroomsWrap').style.display = on ? 'block' : 'none';
+    ['catFormOcc', 'catFormAdults', 'catFormChildren'].forEach(function (id) {
+        const el = document.getElementById(id);
+        el.max = on ? el.dataset.epMax : el.dataset.roomMax;
+    });
+}
+
 // Open New Category Modal
 function openNewCategoryModal() {
     document.getElementById('catForm').reset();
@@ -834,6 +961,7 @@ function openNewCategoryModal() {
     document.getElementById('catFormRemoveCover').value = '0';
     document.getElementById('catModalTitle').innerHTML = '<i class="fa-solid fa-tags text-primary me-2"></i>Add Room Category';
     document.getElementById('coverPreviewWrap').style.display = 'none';
+    syncEntireProperty();
     
     currentImagesState = [];
     currentVideosState = [];
@@ -864,6 +992,9 @@ function handleEditCategory(btn) {
     document.getElementById('catFormBannerBadge').value = d.bannerBadge || '';
     const hasFreeTransfer = (d.freeTransfer === '1');
     document.getElementById('catFormFreeTransfer').checked = hasFreeTransfer;
+    document.getElementById('catFormEntire').checked = (d.entire === '1');
+    document.getElementById('catFormBedrooms').value = d.bedrooms || '';
+    syncEntireProperty();
     document.getElementById('catFormTransferType').value = d.transferType || 'NONE';
     document.getElementById('transferTypeBlock').style.display = hasFreeTransfer ? 'block' : 'none';
     document.getElementById('catFormCoverUrl').value = d.coverUrl || '';

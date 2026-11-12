@@ -33,6 +33,10 @@ class HotelModuleTests(TestCase):
             has_club_module=False,
         )
 
+        # These tests are about stays, not guest registration: switch the (default-on) ID rule off
+        from hotel.models import HotelSettings
+        HotelSettings.objects.filter(pk=HotelSettings.get_settings(self.branch).pk).update(require_id_at_check_in=False)
+
         # Create Category
         self.category = RoomCategory.objects.create(
             branch=self.branch,

@@ -16248,6 +16248,7 @@
     window.posExpectedCashVal = 0;
 
     window.posCheckShiftStatus = async function () {
+      {% if is_waiter %}return; // waiters never open a cash shift{% endif %}
       try {
         const resp = await fetch(
           "{% url 'restaurant_admin:pos_active_shift_api' restaurant_slug=rslug %}",
@@ -16324,6 +16325,7 @@
     };
 
     window.posShowShiftInterceptor = function () {
+      {% if is_waiter %}return; // waiters take orders only; no till or shift{% endif %}
       const modal = document.getElementById("posShiftInterceptorModal");
       if (!modal) return;
       const sel = document.getElementById("posShiftCounterSelect");

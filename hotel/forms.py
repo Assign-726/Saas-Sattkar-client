@@ -34,6 +34,10 @@ class HotelSettingsForm(forms.ModelForm):
             # Invoicing
             'invoice_prefix',
             'invoice_footer_notes',
+            # Front desk rules
+            'require_id_at_check_in',
+            'require_id_document',
+            'block_checkout_with_balance',
             'currency_symbol',
             # Custom SMTP & Mailing
             'email_is_active',
@@ -71,6 +75,9 @@ class HotelSettingsForm(forms.ModelForm):
             'stripe_secret_key': forms.PasswordInput(render_value=True, attrs={'class': 'form-control font-mono', 'placeholder': 'sk_test_... or sk_live_...'}),
             'upi_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g. sharmahotel@okhdfcbank'}),
 
+            'require_id_at_check_in': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
+            'require_id_document': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
+            'block_checkout_with_balance': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
             'invoice_prefix': forms.TextInput(attrs={'class': 'form-control font-mono', 'placeholder': 'e.g. INV-HTL'}),
             'invoice_footer_notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Footer note printed on guest receipts...'}),
             'currency_symbol': forms.TextInput(attrs={'class': 'form-control', 'style': 'max-width: 100px;'}),

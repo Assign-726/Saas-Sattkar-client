@@ -41,8 +41,8 @@ def create_group(branch, user, *, name, check_in, check_out, rooms_wanted, conta
     with transaction.atomic():
         picks = []
         for cat, n in wanted:
-            rooms = Room.objects.select_for_update().filter(branch=branch, category=cat, is_active=True).order_by('room_number')
-            free = list(pricing.free_rooms(rooms, branch, check_in, check_out)[:n])
+            rooms = list(Room.objects.select_for_update().filter(branch=branch, category=cat, is_active=True).order_by('room_number'))
+            free = list(pricing.free_rooms(Room.objects.filter(id__in=[r.id for r in rooms]), branch, check_in, check_out)[:n])
             if len(free) < n:
                 return None, f'Only {len(free)} {cat.name} room{"s are" if len(free) != 1 else " is"} free for those dates; you asked for {n}.'
             net, tax, total, restriction = _price(cat, check_in, check_out, settings, negotiated_rate)
