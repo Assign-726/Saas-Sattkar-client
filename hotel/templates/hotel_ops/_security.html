@@ -20,7 +20,7 @@
           <td style="font-size:13px">{{ i.action_taken|default:"—"|linebreaksbr }}</td>
           <td><span class="ui-chip ui-chip-{% if i.is_closed %}green{% else %}orange{% endif %}">{% if i.is_closed %}Closed{% else %}Open{% endif %}</span></td>
           {% if can_edit %}<td>{% if not i.is_closed %}<details class="ui-pms-void"><summary class="ui-btn ui-btn-gray ui-btn-sm">Close</summary><form method="post" action="{{ base_url }}security/incidents/{{ i.pk }}/close/" class="ui-stack-form ui-ops-pop">{% csrf_token %}<textarea class="ui-input" name="action_taken" rows="2" placeholder="Final action taken" {% if not i.action_taken %}required{% endif %}></textarea><button class="ui-btn ui-btn-primary ui-btn-sm" type="submit">Close incident</button></form></details>{% endif %}</td>{% endif %}
-        </tr>{% empty %}<tr><td colspan="6" class="ui-log-sub" style="padding:24px;text-align:center">No incidents recorded.</td></tr>{% endfor %}</tbody></table></div></section>
+        </tr>{% empty %}<tr><td colspan="6" class="ui-log-sub" style="padding:24px;text-align:center">No incidents recorded.</td></tr>{% endfor %}</tbody></table></div>{% include "hotel_admin/_pager.html" with page=page_obj noun="incidents" %}</section>
       {% else %}
       <section class="ui-card ui-list-card"><div class="table-responsive"><table class="table">
         <thead><tr><th>Visitor</th><th>Meeting</th><th>ID</th><th>In</th><th>Out</th>{% if can_edit %}<th></th>{% endif %}</tr></thead>

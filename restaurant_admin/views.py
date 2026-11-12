@@ -35,6 +35,9 @@ from django.http import HttpResponse
 from django.views.decorators.http import require_http_methods
 from django.http import StreamingHttpResponse
 
+from restaurant_admin.waiter import settle_role_required  # noqa: E402
+
+
 def is_admin(user):
     return user.is_authenticated and user.is_staff
 
@@ -609,7 +612,7 @@ def get_pos_active_orders(restaurant, active_branch=None):
     if active_branch:
         orders_qs = orders_qs.filter(branch=active_branch)
 
-    orders_qs = orders_qs.select_related('table').prefetch_related('items', 'items__menu_item', 'items__menu_item__category').order_by('-order_time')[:50]
+    orders_qs = orders_qs.select_related('table', 'waiter').prefetch_related('items', 'items__menu_item', 'items__menu_item__category').order_by('-order_time')[:50]
 
     results = []
     for ord_obj in orders_qs:
@@ -644,9 +647,16 @@ def get_pos_active_orders(restaurant, active_branch=None):
             title = "Delivery (Draft)" if is_draft else f"Delivery #{num}"
 
         items_count = ord_obj.items.count()
+        waiter_name = ''
+        if ord_obj.waiter_id and ord_obj.waiter:
+            waiter_name = (ord_obj.waiter.get_full_name() or ord_obj.waiter.username).strip()
+        if ord_obj.bill_requested_at:
+            title += " · Bill requested"
 
         results.append({
             'id': ord_obj.id,
+            'waiter_name': waiter_name,
+            'bill_requested': bool(ord_obj.bill_requested_at),
             'order_number': ord_obj.order_number or f"ORD-{ord_obj.id:04d}",
             'branch_order_number': num,
             'title': title,
@@ -809,6 +819,25 @@ def order_create_manual(request, restaurant_slug=None):
                 })
 
         valid_items_count = len([i for i in (items_data or []) if int(i.get('quantity') or 0) > 0]) if isinstance(items_data, list) else 0
+
+        # Waiter / Captain: dine-in orders to the kitchen only — no settling, payment, invoices or voids
+        from restaurant_admin.waiter import is_waiter, sanitize_waiter_post, waiter_order_error
+        acting_as_waiter = is_waiter(request.user)
+        if acting_as_waiter:
+            waiter_existing = Order.objects.filter(pk=order_id, restaurant=restaurant).first() if order_id else None
+            waiter_err = waiter_order_error(request.user, waiter_existing, action, table_obj, order_type,
+                                            items_data, data.get('discount_amount'))
+            if waiter_err:
+                if is_json:
+                    return JsonResponse({'success': False, 'error': waiter_err}, status=403)
+                messages.error(request, waiter_err)
+                return redirect(request.path)
+            data = sanitize_waiter_post(data, waiter_existing)
+            payment_method = data.get('payment_method') or Order.PaymentMethod.CASH
+            payment_status = Order.PaymentStatus.UNPAID
+            if not table_obj and waiter_existing:
+                table_obj = waiter_existing.table
+            order_type = Order.OrderType.DINE_IN
 
         # Guard: Cannot fire KOT or Settle an order with no items
         if action in ['settle_order', 'print_close', 'fire_kot', 'save_kot'] and valid_items_count == 0:
@@ -1029,7 +1058,10 @@ def order_create_manual(request, restaurant_slug=None):
         if order_id:
             order = get_object_or_404(Order, pk=order_id, restaurant=restaurant)
             prev_status = order.status
-            if not order.shift and active_shift:
+            if acting_as_waiter:
+                if not order.waiter_id:
+                    order.waiter = request.user
+            elif not order.shift and active_shift:
                 order.shift = active_shift
                 order.counter = active_shift.counter
                 order.cashier = request.user
@@ -1067,6 +1099,8 @@ def order_create_manual(request, restaurant_slug=None):
             order.discount_reason = discount_reason_val
             order.round_off_amount = round_off_amount_val
             order.total_amount = grand_total_val
+            if action in ['fire_kot', 'save_kot'] and order.bill_requested_at:
+                order.bill_requested_at = None  # more food ordered: the earlier bill request is stale
             if gstin_no:
                 order.gstin_no = gstin_no
             elif not data.get('items') or not order.check_item_types()[0]:
@@ -1104,9 +1138,10 @@ def order_create_manual(request, restaurant_slug=None):
                 phone=phone,
                 notes=notes,
                 order_type=order_type,
-                counter=active_shift.counter if active_shift else None,
-                shift=active_shift,
-                cashier=request.user,
+                counter=active_shift.counter if (active_shift and not acting_as_waiter) else None,
+                shift=None if acting_as_waiter else active_shift,
+                cashier=None if acting_as_waiter else request.user,
+                waiter=request.user if acting_as_waiter else None,
                 table=None if order_type in [Order.OrderType.TAKEAWAY, Order.OrderType.DELIVERY, 'takeaway', 'delivery'] else table_obj,
                 table_number=None if order_type in [Order.OrderType.TAKEAWAY, Order.OrderType.DELIVERY, 'takeaway', 'delivery'] else (table_obj.table_number if table_obj else None),
                 payment_method=payment_method,
@@ -1194,6 +1229,10 @@ def order_create_manual(request, restaurant_slug=None):
 
         created_items = []
         prev_round = max([b for lines in previous_lines.values() for b, _, _ in lines], default=0)
+        # A draft (auto-saved while the cashier types) has never gone to the kitchen, so its
+        # lines do not count as an earlier round: the first real send / settle is round 1.
+        if prev_status == Order.OrderStatus.DRAFT:
+            prev_round = 0
         new_round = prev_round + 1 if prev_round else 1
         if isinstance(items_data, list):
             for item in items_data:
@@ -1424,6 +1463,7 @@ def order_create_manual(request, restaurant_slug=None):
                 'liquor_invoice_url': liquor_invoice_url,
                 'combined_invoice_url': combined_invoice_url,
                 'kot_url': kot_url,
+                'token_bill_url': reverse('restaurant_admin:order_token_bill', kwargs={'restaurant_slug': restaurant.slug, 'pk': order.id}),
                 'redirect_url': target_url,
                 'active_orders': active_orders_resp,
                 'tender_warnings': [f"{'Points' if f['method'] == 'points' else ('Room ' + str(f.get('room', '')) + ' charge') if f['method'] == 'room' else 'Gift card ' + f.get('code', '')} not applied: {f['error']}" for f in tender_failures],
@@ -1584,6 +1624,10 @@ def order_create_manual(request, restaurant_slug=None):
     order_id_param = request.GET.get('order_id')
     new_param = request.GET.get('new')
     receipt_no_param = request.GET.get('receipt_no')
+    from restaurant_admin.waiter import is_waiter
+    pos_is_waiter = is_waiter(request.user)
+    if pos_is_waiter:
+        receipt_no_param = None  # advances are taken at the counter
 
     if order_id_param:
         draft_order = Order.objects.filter(pk=order_id_param, restaurant=restaurant).first()
@@ -1594,6 +1638,8 @@ def order_create_manual(request, restaurant_slug=None):
         draft_qs = Order.objects.filter(restaurant=restaurant, status=Order.OrderStatus.DRAFT)
         if active_branch:
             draft_qs = draft_qs.filter(branch=active_branch)
+        # a waiter resumes only their own draft; the counter never picks up a waiter's half-taken table
+        draft_qs = draft_qs.filter(waiter=request.user) if pos_is_waiter else draft_qs.filter(waiter__isnull=True)
         draft_order = draft_qs.order_by('-order_time').first()
 
     if not attached_receipt and receipt_no_param:
@@ -1697,7 +1743,14 @@ def order_create_manual(request, restaurant_slug=None):
         'excise_seq_info': excise_seq_info,
         'gst_seq_info_json': gst_seq_info,
         'excise_seq_info_json': excise_seq_info,
-        'active_menu': 'order_create_manual',
+        # Token counters: one Quick bill button (settle + print token and bill together) instead of Send to kitchen
+        'pos_quick_bill': bool(getattr(active_branch, 'pos_quick_bill', False)) and not pos_is_waiter,
+        # Waiter / Captain mode: dine-in to the kitchen only, back to the tables screen after each send
+        'is_waiter': pos_is_waiter,
+        'waiter_can_discount': bool(getattr(getattr(request.user, 'restaurant_profile', None), 'can_apply_discounts', False)),
+        'preset_table_id': request.GET.get('table_id', '') if (not draft_order and str(request.GET.get('table_id', '')).isdigit()) else '',
+        'preset_covers': request.GET.get('covers', '') if str(request.GET.get('covers', '')).isdigit() else '',
+        'active_menu': 'waiter_tables' if pos_is_waiter else 'order_create_manual',
         'restaurant': restaurant,
         'current_branch': branch_obj,
         'branch_obj': branch_obj,
@@ -1713,6 +1766,8 @@ def pos_draft_order_api(request, restaurant_slug=None):
         return JsonResponse({'success': False, 'error': 'No restaurant profile'}, status=403)
 
     active_branch = get_active_branch(request, restaurant)
+    from restaurant_admin.waiter import is_waiter
+    acting_as_waiter = is_waiter(request.user)
 
     if request.method == 'GET':
         order_id = request.GET.get('order_id')
@@ -1722,6 +1777,7 @@ def pos_draft_order_api(request, restaurant_slug=None):
             draft_qs = Order.objects.filter(restaurant=restaurant, status=Order.OrderStatus.DRAFT)
             if active_branch:
                 draft_qs = draft_qs.filter(branch=active_branch)
+            draft_qs = draft_qs.filter(waiter=request.user) if acting_as_waiter else draft_qs.filter(waiter__isnull=True)
             order = draft_qs.order_by('-order_time').first()
 
         return JsonResponse({
@@ -1751,11 +1807,22 @@ def pos_draft_order_api(request, restaurant_slug=None):
             if table_obj:
                 order_type = 'dine_in'
 
-        active_shift = get_user_active_shift(request.user, restaurant, active_branch)
+        active_shift = None if acting_as_waiter else get_user_active_shift(request.user, restaurant, active_branch)
+        if acting_as_waiter:
+            existing = Order.objects.filter(pk=order_id, restaurant=restaurant).first() if order_id else None
+            if existing and existing.status in (Order.OrderStatus.COMPLETED, Order.OrderStatus.CANCELLED):
+                return JsonResponse({'success': False, 'error': 'This bill is already closed.'}, status=403)
+            if not table_obj and not (existing and existing.table_id):
+                return JsonResponse({'success': False, 'error': 'Pick a table first.'}, status=403)
+            if existing and not table_obj:
+                table_obj = existing.table
+            order_type = 'dine_in'
 
         if order_id:
             order = Order.objects.filter(pk=order_id, restaurant=restaurant).first()
             if order:
+                if acting_as_waiter and not order.waiter_id:
+                    order.waiter = request.user
                 if not order.shift and active_shift:
                     order.shift = active_shift
                     order.counter = active_shift.counter
@@ -1775,7 +1842,8 @@ def pos_draft_order_api(request, restaurant_slug=None):
                 branch=active_branch,
                 counter=active_shift.counter if active_shift else None,
                 shift=active_shift,
-                cashier=request.user,
+                cashier=None if acting_as_waiter else request.user,
+                waiter=request.user if acting_as_waiter else None,
                 status=Order.OrderStatus.DRAFT,
                 payment_status=Order.PaymentStatus.UNPAID,
                 customer_name=customer_name,
@@ -1804,6 +1872,7 @@ def _party_json(p):
 
 @login_required
 @user_passes_test(is_admin)
+@settle_role_required
 def pos_gst_company_api(request, restaurant_slug=None):
     """Settle → "Company (has GSTIN)": save the billed company as a customer Party (same record as
     Parties → Add New Party). A GSTIN already on file updates that party instead of duplicating it."""
@@ -1932,6 +2001,22 @@ def pos_sync_draft_items_api(request, restaurant_slug=None):
             'message': 'No items to sync for new order.'
         })
 
+    from restaurant_admin.waiter import is_waiter
+    acting_as_waiter = is_waiter(request.user)
+    if acting_as_waiter:
+        existing = Order.objects.filter(pk=order_id, restaurant=restaurant).first() if order_id else None
+        if existing and existing.status != Order.OrderStatus.DRAFT:
+            # Sent orders change only through Send to kitchen, where voids are checked — autosave is a no-op
+            return JsonResponse({'success': True, 'skipped': True, 'order_id': existing.id,
+                                 'order_number': existing.order_number or f"ORD-{existing.id:04d}"})
+        if not table_obj and not (existing and existing.table_id):
+            return JsonResponse({'success': False, 'error': 'Pick a table first.'}, status=403)
+        order_type = 'dine_in'
+        profile = getattr(request.user, 'restaurant_profile', None)
+        has_item_disc = any(safe_dec(it.get('discount_amount')) > 0 for it in valid_items)
+        if not getattr(profile, 'can_apply_discounts', False) and (discount_amount_val > 0 or has_item_disc):
+            return JsonResponse({'success': False, 'error': 'You do not have permission to apply discounts.'}, status=403)
+
     from django.db import transaction
     with transaction.atomic():
         if order_id:
@@ -1950,7 +2035,8 @@ def pos_sync_draft_items_api(request, restaurant_slug=None):
                     order_type=order_type,
                     table=table_obj,
                     table_number=table_obj.table_number if table_obj else None,
-                    guest_count=int(guest_count) if guest_count else 2
+                    guest_count=int(guest_count) if guest_count else 2,
+                    waiter=request.user if acting_as_waiter else None,
                 )
             else:
                 if not valid_items and order.status == Order.OrderStatus.DRAFT:
@@ -1985,7 +2071,8 @@ def pos_sync_draft_items_api(request, restaurant_slug=None):
                 order_type=order_type,
                 table=table_obj,
                 table_number=table_obj.table_number if table_obj else None,
-                guest_count=int(guest_count) if guest_count else 2
+                guest_count=int(guest_count) if guest_count else 2,
+                waiter=request.user if acting_as_waiter else None,
             )
 
         # 1. Sync items first using bulk_create to avoid intermediate individual item save triggers
@@ -5793,6 +5880,7 @@ def pos_smart_menu_api(request, restaurant_slug=None):
 
 @login_required
 @user_passes_test(is_admin)
+@settle_role_required
 def order_settle_api(request, pk, restaurant_slug=None):
     if request.method not in ['POST', 'PATCH']:
         return JsonResponse({'success': False, 'error': 'POST or PATCH method required'}, status=405)
@@ -6098,6 +6186,20 @@ def order_invoice(request, pk, restaurant_slug=None):
     if bill_type not in ['food', 'liquor']:
         bill_type = 'food'  # Combined bill disabled for separate billing compliance
 
+    context = _order_invoice_context(restaurant, order, bill_type)
+
+    settings_obj = RestaurantSettings.get_settings(restaurant)
+    template_choice = (request.GET.get('template') or getattr(settings_obj, 'bill_template', 'thermal') or 'thermal').lower()
+    if template_choice == 'standard':
+        template_name = 'restaurant_admin/orders/invoice.html'
+    else:
+        template_name = 'restaurant_admin/orders/invoice_thermal.html'
+
+    return render(request, template_name, context)
+
+
+def _order_invoice_context(restaurant, order, bill_type='food'):
+    """Everything the bill templates need, shared by the bill page and the token + bill print."""
     # Totals using order bill breakdown engine
     breakdown = order.calculate_bill_breakdown(bill_type=bill_type)
 
@@ -6159,15 +6261,7 @@ def order_invoice(request, pk, restaurant_slug=None):
         'round_off_amount': breakdown['round_off_amount'],
         'total': breakdown['final_total'],
     }
-
-    settings_obj = RestaurantSettings.get_settings(restaurant)
-    template_choice = (request.GET.get('template') or getattr(settings_obj, 'bill_template', 'thermal') or 'thermal').lower()
-    if template_choice == 'standard':
-        template_name = 'restaurant_admin/orders/invoice.html'
-    else:
-        template_name = 'restaurant_admin/orders/invoice_thermal.html'
-
-    return render(request, template_name, context)
+    return context
 
 @login_required
 def order_kot(request, pk, restaurant_slug=None):
@@ -6184,6 +6278,21 @@ def order_kot(request, pk, restaurant_slug=None):
         pk=pk,
     )
 
+    context = _order_kot_context(request, restaurant, order)
+
+    settings_obj = RestaurantSettings.get_settings(restaurant)
+    template_choice = (request.GET.get('template') or getattr(settings_obj, 'kot_template', 'thermal') or 'thermal').lower()
+    if template_choice == 'standard':
+        template_name = 'restaurant_admin/orders/kot.html'
+    else:
+        template_name = 'restaurant_admin/orders/kot_thermal.html'
+
+    return render(request, template_name, context)
+
+
+def _order_kot_context(request, restaurant, order):
+    """Everything the KOT templates need (honours ?items= / ?batch= / ?unprinted= and marks the lines printed),
+    shared by the KOT page and the token + bill print."""
     subtotal = sum((item.subtotal for item in order.items.all()), Decimal('0.00'))
     settings_obj = RestaurantSettings.get_settings(restaurant)
     cgst_percentage = Decimal(str(settings_obj.cgst_percentage))
@@ -6253,14 +6362,26 @@ def order_kot(request, pk, restaurant_slug=None):
         'discount_amount': discount_amount,
         'total': total,
     }
+    return context
 
-    template_choice = (request.GET.get('template') or getattr(settings_obj, 'kot_template', 'thermal') or 'thermal').lower()
-    if template_choice == 'standard':
-        template_name = 'restaurant_admin/orders/kot.html'
-    else:
-        template_name = 'restaurant_admin/orders/kot_thermal.html'
 
-    return render(request, template_name, context)
+@login_required
+@user_passes_test(is_admin)
+def order_token_bill(request, pk, restaurant_slug=None):
+    """Quick bill print for token counters: the order token (KOT) and the bill on one page, one after the other,
+    with a tear line and a page break between them so a cutter splits them into two slips."""
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if isinstance(restaurant, HttpResponse):
+        return restaurant
+
+    order = get_object_or_404(
+        Order.objects.prefetch_related('items', 'items__menu_item').filter(restaurant=restaurant),
+        pk=pk,
+    )
+    # KOT first, bill second: both define subtotal / total / tax amounts and the bill's figures are the real ones
+    context = _order_kot_context(request, restaurant, order)
+    context.update(_order_invoice_context(restaurant, order, 'food'))
+    return render(request, 'restaurant_admin/orders/token_bill_thermal.html', context)
 
 @login_required
 @user_passes_test(is_admin)
@@ -6273,7 +6394,11 @@ def order_update_status(request, pk, restaurant_slug=None):
         
         if request.method == 'POST':
             new_status = request.POST.get('status')
-            
+            from restaurant_admin.waiter import is_waiter
+            if is_waiter(request.user) and new_status != Order.OrderStatus.SERVED:
+                messages.error(request, "Waiters can only mark an order as served. Ask the cashier for anything else.")
+                return redirect('restaurant_admin:waiter_tables', restaurant_slug=restaurant.slug)
+
             # Get the valid statuses from the Order model's choices
             status_choices = dict(Order.OrderStatus.choices)
             
@@ -6477,6 +6602,7 @@ def order_omni_search_api(request, restaurant_slug=None):
 
 @login_required
 @user_passes_test(is_admin)
+@settle_role_required
 def credit_note_desk(request, restaurant_slug=None):
     restaurant = resolve_restaurant(request, restaurant_slug)
     if not isinstance(restaurant, Restaurant):
@@ -6508,6 +6634,7 @@ def credit_note_desk(request, restaurant_slug=None):
 
 @login_required
 @user_passes_test(is_admin)
+@settle_role_required
 def order_credit_note_api(request, pk, restaurant_slug=None):
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'POST method required'}, status=405)
@@ -7030,6 +7157,8 @@ def settings_view(request, restaurant_slug=None):
                 branch.enable_customer_ordering = form.cleaned_data.get('enable_customer_ordering', True)
                 branch.enable_online_payment = form.cleaned_data.get('enable_online_payment', False)
                 branch.enable_pay_at_counter = form.cleaned_data.get('enable_pay_at_counter', True)
+                # Food-court / token counters: one Quick bill button that prints token + bill (Settings > Printing)
+                branch.pos_quick_bill = request.POST.get('pos_quick_bill') == 'on'
                 if branch_form:
                     sc = branch_form.cleaned_data.get('service_charge_percentage')
                     if sc is not None:

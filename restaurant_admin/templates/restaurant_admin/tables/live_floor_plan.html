@@ -1128,6 +1128,13 @@ document.addEventListener('DOMContentLoaded', function() {
             if (hasOrder) {
                 const isMasterLabel = t.active_order.is_master_order ? ' (Master)' : '';
                 orderBadge = `<div class="table-inner-badge">${t.active_order.order_number}${isMasterLabel}</div>`;
+                const esc = (v) => String(v || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+                if (t.active_order.bill_requested) {
+                    orderBadge += `<div class="table-inner-badge" style="background:#B22A20;color:#fff;" title="The waiter asked for the bill"><i class="fas fa-receipt me-1"></i>Bill</div>`;
+                }
+                if (t.active_order.waiter_name) {
+                    orderBadge += `<div class="table-inner-cap" title="Served by ${esc(t.active_order.waiter_name)}"><i class="fas fa-user-tie me-1"></i>${esc(t.active_order.waiter_name)}</div>`;
+                }
             }
 
             let partyBadge = '';

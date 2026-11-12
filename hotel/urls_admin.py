@@ -79,6 +79,8 @@ urlpatterns = [
     path('rooms/', views_admin.rooms_view, name='rooms'),
     path('rooms/create-edit/', views_admin.room_create_edit_action, name='room_create_edit'),
     path('rooms/<int:room_id>/status/', views_admin.room_status_update_action, name='room_status_update'),
+    path('rooms/<int:room_id>/remove/', views_admin.room_remove_action, name='room_remove'),
+    path('categories/<int:category_id>/rooms/add/', views_admin.category_rooms_add_action, name='category_rooms_add'),
 
     # Room Categories & Tariffs
     path('categories/', views_admin.categories_view, name='categories'),

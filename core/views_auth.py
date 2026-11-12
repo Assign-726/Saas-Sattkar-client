@@ -102,9 +102,9 @@ def resolve_user_redirect(request, user, next_url=None):
     if user_role == 'CASHIER':
         return reverse_lazy('restaurant_admin:transaction_desk_create', kwargs={'restaurant_slug': restaurant_slug})
 
-    # 7. Waiter / Captain: Route directly to Dining Floor Plan
+    # 7. Waiter / Captain: Route directly to the live table board (tap a table -> take the order)
     if user_role == 'WAITER':
-        return reverse_lazy('restaurant_admin:floor_plan_dashboard', kwargs={'restaurant_slug': restaurant_slug})
+        return reverse_lazy('restaurant_admin:waiter_tables', kwargs={'restaurant_slug': restaurant_slug})
 
     # 8. General Manager: Full access across modules (can navigate to either Hotel PMS or Restaurant POS)
     if user_role == 'GENERAL_MANAGER':
@@ -173,7 +173,7 @@ class CustomLoginView(BaseLoginView):
                 elif user_role == 'CASHIER':
                     return redirect('restaurant_admin:transaction_desk_create', restaurant_slug=slug)
                 elif user_role == 'WAITER':
-                    return redirect('restaurant_admin:floor_plan_dashboard', restaurant_slug=slug)
+                    return redirect('restaurant_admin:waiter_tables', restaurant_slug=slug)
                 return redirect('restaurant_admin:dashboard', restaurant_slug=slug)
             if request.user.is_superuser or request.user.is_staff:
                 return redirect('super_admin:dashboard')

@@ -100,6 +100,18 @@ class RoomCategory(models.Model):
         verbose_name="Complimentary Transfer Type"
     )
 
+    # Entire-property units (villas, farmhouses, party venues): booked whole, never room by room
+    is_entire_property = models.BooleanField(
+        default=False,
+        verbose_name="Booked as Entire Property",
+        help_text="One bookable unit for the whole villa / venue; price and guest limits apply to the whole property"
+    )
+    bedrooms_count = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        verbose_name="Bedrooms (info only)",
+        help_text="Number of bedrooms inside the property, shown to guests"
+    )
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -340,6 +352,18 @@ class RoomBooking(models.Model):
     )
     special_requests = models.TextField(blank=True)
 
+    # Event details (used for entire-property bookings such as villa parties)
+    class EventType(models.TextChoices):
+        PARTY = 'PARTY', 'Party / celebration'
+        WEDDING = 'WEDDING', 'Wedding / function'
+        CORPORATE = 'CORPORATE', 'Corporate offsite'
+        FAMILY = 'FAMILY', 'Family stay'
+        OTHER = 'OTHER', 'Other'
+
+    event_type = models.CharField(max_length=20, choices=EventType.choices, blank=True, default='')
+    expected_headcount = models.PositiveIntegerField(null=True, blank=True, help_text="Expected attendees incl. day visitors")
+    event_notes = models.TextField(blank=True, default='', help_text="Setup, decor, music, catering notes")
+
     # Front office
     source = models.CharField(max_length=20, choices=Source.choices, default=Source.DIRECT)
     adults = models.PositiveSmallIntegerField(default=1)
@@ -397,6 +421,31 @@ class RoomBooking(models.Model):
             self.taxes = q['tax']
             self.grand_total = q['total']
 
+        # Defense-in-depth: Validate that no overlapping active booking exists on the same room
+        checking_conflict = True
+        if kwargs.get('update_fields'):
+            fields = set(kwargs['update_fields'])
+            if not fields.intersection({'room', 'room_id', 'check_in_date', 'check_out_date', 'booking_status'}):
+                checking_conflict = False
+
+        if checking_conflict and self.room_id and self.check_in_date and self.check_out_date \
+                and self.booking_status in (self.BookingStatus.RESERVED, self.BookingStatus.CHECKED_IN):
+            clash = RoomBooking.objects.filter(
+                room_id=self.room_id,
+                booking_status__in=[self.BookingStatus.RESERVED, self.BookingStatus.CHECKED_IN],
+                check_in_date__lt=self.check_out_date,
+                check_out_date__gt=self.check_in_date
+            )
+            if self.pk:
+                clash = clash.exclude(pk=self.pk)
+            if clash.exists():
+                from django.core.exceptions import ValidationError
+                first_clash = clash.first()
+                raise ValidationError(
+                    f"Room {self.room.room_number if self.room else self.room_id} is already booked from "
+                    f"{first_clash.check_in_date} to {first_clash.check_out_date}."
+                )
+
         super().save(*args, **kwargs)
 
     @property
@@ -408,6 +457,25 @@ class RoomBooking(models.Model):
     @property
     def is_foreign_national(self):
         return bool(self.nationality) and self.nationality.strip().lower() not in ('indian', 'india', 'in')
+
+    def kyc_missing_items(self, require_document=False):
+        """Human-readable list of what is still needed for guest registration (empty = complete)."""
+        missing = []
+        if self.is_foreign_national:
+            if self.id_type != self.IdType.PASSPORT or not self.id_number:
+                missing.append('passport number')
+            if not self.visa_number:
+                missing.append('visa number')
+            if not self.visa_valid_till:
+                missing.append('visa expiry date')
+        else:
+            if not self.id_type:
+                missing.append('ID type')
+            if not self.id_number:
+                missing.append('ID number')
+        if require_document and not self.id_document:
+            missing.append('ID scan')
+        return missing
 
     @property
     def kyc_complete(self):
@@ -519,8 +587,12 @@ class HotelSettings(models.Model):
     invoice_prefix = models.CharField(max_length=20, default="INV-HTL", verbose_name="Invoice Number Prefix")
     invoice_next_number = models.PositiveIntegerField(default=1, verbose_name="Next Invoice Number")
     require_id_at_check_in = models.BooleanField(
-        default=False, verbose_name="Require guest ID before check-in",
-        help_text="Block check-in until the ID type and number (and passport + visa for foreign nationals) are recorded"
+        default=True, verbose_name="Require guest ID before check-in",
+        help_text="Block check-in (and check-out) until the ID type and number (and passport + visa for foreign nationals) are recorded"
+    )
+    require_id_document = models.BooleanField(
+        default=True, verbose_name="Require an ID scan upload",
+        help_text="Also require a photo / PDF of the ID before the guest can be checked in"
     )
     block_checkout_with_balance = models.BooleanField(
         default=True, verbose_name="Ask before checking out a guest with a balance due"

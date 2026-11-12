@@ -146,6 +146,16 @@ class OrderViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'create', 'validate_coupon', 'verify_payment', 'cancel_unpaid', 'initiate_razorpay', 'toggle_service_charge', 'settle', 'receipt']:
             return [AllowAny()]
+        if self.action in ('update', 'partial_update', 'destroy'):
+            from restaurant_admin.waiter import can_settle
+            from rest_framework.permissions import BasePermission
+
+            class NotWaiter(BasePermission):
+                message = 'Waiters cannot edit or delete orders here; use the POS.'
+
+                def has_permission(self, request, view):
+                    return can_settle(request.user)
+            return [tenancy.IsBusinessStaff(), NotWaiter()]
         return [tenancy.IsBusinessStaff()]
 
     def get_throttles(self):
@@ -443,7 +453,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         order.razorpay_signature = signature
         order.save(update_fields=['payment_status', 'payment_method', 'razorpay_payment_id', 'razorpay_signature'])
         try:
-            from .sse import publish
+            from core.sse import publish
             if order.restaurant and order.restaurant.slug:
                 publish(order.restaurant.slug, {'type': 'new_order', 'order_id': order.id})
         except Exception:
@@ -459,6 +469,10 @@ class OrderViewSet(viewsets.ModelViewSet):
         if not self._staff_for(order):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Only the restaurant's staff can settle an order.")
+        from restaurant_admin.waiter import can_settle
+        if not can_settle(request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Only a cashier or admin can settle an order.")
 
         data = request.data if isinstance(request.data, dict) else {}
         payment_method = data.get('payment_method') or 'cash'

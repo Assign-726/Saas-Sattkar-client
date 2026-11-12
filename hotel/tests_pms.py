@@ -22,6 +22,9 @@ class PMSTestBase(TestCase):
         self.r = Restaurant.objects.create(name='Lake View', slug='lake-view')
         self.b = RestaurantBranch.objects.create(restaurant=self.r, name='Lake', slug='lake', has_hotel_module=True)
         self.settings = HotelSettings.get_settings(self.b)
+        # These tests are about stays, not guest registration: switch the (default-on) ID rule off
+        self.settings.require_id_at_check_in = False
+        self.settings.save()
         self.cat = RoomCategory.objects.create(branch=self.b, name='Deluxe', base_price_per_night=D('4000'))
         self.suite = RoomCategory.objects.create(branch=self.b, name='Suite', base_price_per_night=D('9000'))
         self.r101 = Room.objects.create(branch=self.b, category=self.cat, room_number='101')
@@ -139,11 +142,15 @@ class FolioTests(PMSTestBase):
 
 class StayTests(PMSTestBase):
     def test_check_in_requires_id_when_configured(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
         self.settings.require_id_at_check_in = True
         self.settings.save()
         b = self.book()
-        self.assertIn('ID', F.check_in(b, self.user))
-        b.id_type, b.id_number = 'AADHAAR', '1234'
+        self.assertIn('ID type, ID number and ID scan', F.check_in(b, self.user))
+        b.id_type, b.id_number = 'AADHAAR', '234567890123'
+        b.save()
+        self.assertIn('ID scan', F.check_in(b, self.user))
+        b.id_document = SimpleUploadedFile('id.png', b'\x89PNG', content_type='image/png')
         b.save()
         self.assertIsNone(F.check_in(b, self.user))
         self.r101.refresh_from_db()
@@ -214,7 +221,7 @@ class ScreensTests(PMSTestBase):
         b = self.book()
         page = self.client.get(self.url('booking_detail', booking_id=b.pk))
         self.assertContains(page, 'Post charge')
-        self.assertContains(page, 'Guest ID not recorded')
+        self.assertContains(page, 'Guest registration incomplete')
         self.client.post(self.url('booking_charge_add', booking_id=b.pk), {'kind': 'ROOM_SERVICE', 'description': 'Tea', 'unit_price': '100', 'quantity': '2', 'tax_percent': '5'})
         self.client.post(self.url('booking_payment_add', booking_id=b.pk), {'kind': 'PAYMENT', 'amount': '1000', 'method': 'UPI', 'reference': 'UTR1'})
         resp = self.client.post(self.url('booking_guest_update', booking_id=b.pk), {'guest_name': 'Asha Rao', 'company_gstin': 'BAD'})
@@ -222,8 +229,8 @@ class ScreensTests(PMSTestBase):
         self.assertEqual(FolioPayment.objects.get(booking=b).reference, 'UTR1')
         b.refresh_from_db()
         self.assertEqual(b.company_gstin, '')
-        self.client.post(self.url('booking_guest_update', booking_id=b.pk), {'guest_name': 'Asha Rao', 'company_gstin': '27aapfu0939f1zv',
-                                                                            'id_type': 'PASSPORT', 'id_number': 'P1', 'nationality': 'Indian', 'adults': '2'})
+        self.client.post(self.url('booking_guest_update', booking_id=b.pk), {'guest_name': 'Asha Rao', 'company_gstin': '27aapfu0939f1zv', 'guest_phone': '98765 43210',
+                                                                            'id_type': 'PASSPORT', 'id_number': 'P1234567', 'nationality': 'Indian', 'adults': '2'})
         b.refresh_from_db()
         self.assertEqual((b.company_gstin, b.id_type, b.adults), ('27AAPFU0939F1ZV', 'PASSPORT', 2))
         inv = self.client.get(self.url('booking_invoice', booking_id=b.pk))

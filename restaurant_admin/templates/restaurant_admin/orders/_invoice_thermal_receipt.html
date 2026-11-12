@@ -1,0 +1,223 @@
+  <!-- Thermal 80mm Receipt Body -->
+  <div class="thermal-receipt">
+
+    <!-- Restaurant Header -->
+    <div class="pCenter pTitle">{{ restaurant.name|upper }}</div>
+    <div class="pCenter pAddress">
+      {% if branch.address_line_1 %}{{ branch.address_line_1 }}{% if branch.address_line_2 %}, {{ branch.address_line_2 }}{% endif %}<br>{% endif %}
+      {% if branch.city %}{{ branch.city }}{% endif %}{% if branch.state %}, {{ branch.state }}{% endif %}{% if branch.pincode %} - {{ branch.pincode }}{% endif %}
+      {% if branch.phone %}<br>Phone: {{ branch.phone }}{% elif restaurant.phone %}<br>Phone: {{ restaurant.phone }}{% endif %}
+    </div>
+
+    {% if branch.gstin or branch.fssai_license_no %}
+    <div class="pCenter pGstFssai">
+      {% if branch.gstin %}GSTIN: {{ branch.gstin }}{% endif %}
+      {% if branch.gstin and branch.fssai_license_no %} · {% endif %}
+      {% if branch.fssai_license_no %}FSSAI: {{ branch.fssai_license_no }}{% endif %}
+    </div>
+    {% endif %}
+
+    <div class="pRule"></div>
+    <div class="pCenter pBig">TAX INVOICE</div>
+
+    <!-- Invoice & Order Metadata -->
+    <div class="pRow">
+      <span>{% if order.gstin_no %}{{ order.gstin_no }}{% else %}INV-{{ order.branch_order_number|default:order.id|stringformat:"06d" }}{% endif %}</span>
+      <span>{{ order.order_time|date:"d/m/Y h:i:s a" }}</span>
+    </div>
+    <div class="pRow">
+      <span>ORD-{{ order.branch_order_number|default:order.id|stringformat:"04d" }}</span>
+      <span>
+        {% if order.order_type == 'dine_in' %}
+          Dine-in (Table {{ order.table.name|default:order.table_id|default:"-" }})
+        {% elif order.order_type == 'takeaway' %}
+          Takeaway
+        {% elif order.order_type == 'delivery' %}
+          Delivery
+        {% else %}
+          Counter
+        {% endif %}
+      </span>
+    </div>
+    {% if order.customer_name and order.customer_name != 'Guest' and order.customer_name != 'Walk-in' %}
+    <div class="pRow">
+      <span>Guest: {{ order.customer_name }}</span>
+      <span>{% if order.phone %}{{ order.phone }}{% endif %}</span>
+    </div>
+    {% endif %}
+
+    <div class="pRule"></div>
+
+    <!-- Line Items -->
+    {% for it in order_items %}
+    <div class="pRow">
+      <span>{{ it.quantity }} × {{ it.menu_item.name|default:'Item' }}{% if it.discount_amount and it.discount_amount > 0 %} <small class="pDiscount">(-₹{{ it.discount_amount|floatformat:2 }})</small>{% endif %}</span>
+      <span>{{ it.subtotal|floatformat:2 }}</span>
+    </div>
+    {% if it.notes %}
+    <div class="pItemNote">↳ {{ it.notes }}</div>
+    {% endif %}
+    {% endfor %}
+
+    <div class="pRule"></div>
+
+    <!-- Bill Discount -->
+    {% if discount_amount and discount_amount > 0 %}
+    <div class="pRow pDiscount">
+      <span>Bill discount</span>
+      <span>-{{ discount_amount|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+
+    <!-- 1. Taxable Additions -->
+    {% if service_percentage and service_percentage > 0 and bill_type != 'liquor' and service_amount > 0 %}
+    <div class="pRow">
+      <span>Service charge {{ service_percentage|floatformat:0 }}%</span>
+      <span>{{ service_amount|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+
+    {% if custom_charges_list %}
+    {% for cc in custom_charges_list %}
+    {% if cc.is_taxable %}
+    <div class="pRow">
+      <span>{{ cc.name }} ({% if cc.type == 'flat' %}₹{{ cc.value|floatformat:2 }}{% else %}{{ cc.value }}%{% endif %})</span>
+      <span>{{ cc.amount|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+
+    <!-- 2. Taxable Value & GST -->
+    {% if food_subtotal > 0 and liquor_subtotal > 0 %}
+    <div class="pRow bold" style="border-top: 1px dashed #000; margin-top: 4px; padding-top: 3px;">
+      <span>Taxable (Food GST)</span>
+      <span>{{ gst_base|floatformat:2 }}</span>
+    </div>
+    {% if cgst_amount and cgst_amount > 0 and bill_type != 'liquor' %}
+    <div class="pRow">
+      <span>CGST @ {{ cgst_percentage|floatformat:1 }}%</span>
+      <span>{{ cgst_amount|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+    {% if sgst_amount and sgst_amount > 0 and bill_type != 'liquor' %}
+    <div class="pRow">
+      <span>SGST @ {{ sgst_percentage|floatformat:1 }}%</span>
+      <span>{{ sgst_amount|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+    <div class="pRow bold" style="border-top: 1px dashed #000; margin-top: 4px; padding-top: 3px;">
+      <span>Taxable (Liquor VAT)</span>
+      <span>{{ liquor_subtotal|floatformat:2 }}</span>
+    </div>
+    {% elif liquor_subtotal > 0 %}
+    <div class="pRow bold" style="border-top: 1px dashed #000; margin-top: 4px; padding-top: 3px;">
+      <span>Taxable value (Liquor)</span>
+      <span>{{ liquor_subtotal|floatformat:2 }}</span>
+    </div>
+    {% else %}
+    <div class="pRow bold" style="border-top: 1px dashed #000; margin-top: 4px; padding-top: 3px;">
+      <span>Taxable value</span>
+      <span>{{ gst_base|floatformat:2 }}</span>
+    </div>
+    {% if cgst_amount and cgst_amount > 0 and bill_type != 'liquor' %}
+    <div class="pRow">
+      <span>CGST @ {{ cgst_percentage|floatformat:1 }}%</span>
+      <span>{{ cgst_amount|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+    {% if sgst_amount and sgst_amount > 0 and bill_type != 'liquor' %}
+    <div class="pRow">
+      <span>SGST @ {{ sgst_percentage|floatformat:1 }}%</span>
+      <span>{{ sgst_amount|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {% if beer_vat and beer_vat > 0 and bill_type != 'food' %}
+    <div class="pRow">
+      <span>Beer State VAT @ {{ vat_beer_percentage|floatformat:1 }}%</span>
+      <span>{{ beer_vat|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+    {% if imfl_vat and imfl_vat > 0 and bill_type != 'food' %}
+    <div class="pRow">
+      <span>IMFL State VAT @ {{ vat_imfl_percentage|floatformat:1 }}%</span>
+      <span>{{ imfl_vat|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+    {% if wine_vat and wine_vat > 0 and bill_type != 'food' %}
+    <div class="pRow">
+      <span>Wine State VAT @ {{ vat_wine_percentage|floatformat:1 }}%</span>
+      <span>{{ wine_vat|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+    {% if gen_vat and gen_vat > 0 and bill_type != 'food' %}
+    <div class="pRow">
+      <span>State VAT @ {{ vat_percentage|floatformat:1 }}%</span>
+      <span>{{ gen_vat|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+    {% if vat_surcharge and vat_surcharge > 0 and bill_type != 'food' %}
+    <div class="pRow">
+      <span>{{ vat_surcharge_name|default:'VAT Surcharge' }} @ {{ vat_surcharge_percentage|floatformat:1 }}%</span>
+      <span>{{ vat_surcharge|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+
+    <!-- 4. Non-Taxable Additions (Placed below taxes) -->
+    {% if custom_charges_list %}
+    {% for cc in custom_charges_list %}
+    {% if not cc.is_taxable %}
+    <div class="pRow">
+      <span>{{ cc.name }} ({% if cc.type == 'flat' %}₹{{ cc.value|floatformat:2 }}{% else %}{{ cc.value }}%{% endif %})</span>
+      <span>{{ cc.amount|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+
+    <!-- 5. Round Off -->
+    {% if round_off_amount and round_off_amount != 0 %}
+    <div class="pRow">
+      <span>Round off</span>
+      <span>{% if round_off_amount > 0 %}+{% endif %}{{ round_off_amount|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+
+    <div class="pRuleHeavy"></div>
+
+    <!-- Final Grand Total -->
+    <div class="pRow pTotalRow">
+      <span>TOTAL</span>
+      <span>₹{{ total|floatformat:2 }}</span>
+    </div>
+
+    <!-- Payment & Advance Deductions -->
+    {% if order.advance_amount_paid > 0 %}
+    <div class="pRow" style="font-size: 10.5px; opacity: 0.9;">
+      <span>Advance Paid ({% if order.advance_receipt %}{{ order.advance_receipt.receipt_no }}{% else %}DEP{% endif %})</span>
+      <span>-₹{{ order.advance_amount_paid|floatformat:2 }}</span>
+    </div>
+    <div class="pRow bold" style="font-size: 11px;">
+      <span>Net Paid / Due</span>
+      <span>₹{{ order.net_payable|default:total|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+
+    <div class="pRow" style="margin-top: 2px;">
+      <span>Paid via: {{ order.get_payment_method_display|default:order.payment_method|default:'Cash'|title }}</span>
+      <span>[{{ order.get_payment_status_display|default:order.payment_status|default:'Paid'|upper }}]</span>
+    </div>
+
+    {% if order.party and order.party.gstin and order.party.gst_registration_type != 'unregistered' and order.party.gstin|length == 15 %}
+    <div class="pRow" style="font-size: 10px; margin-top: 2px;">
+      <span>Billed to GSTIN</span>
+      <span>{{ order.party.gstin }}</span>
+    </div>
+    {% endif %}
+
+    <div class="pRule"></div>
+    <div class="pCenter" style="margin-top: 6px; font-weight: 600;">Thank you, visit again!</div>
+  </div>
+

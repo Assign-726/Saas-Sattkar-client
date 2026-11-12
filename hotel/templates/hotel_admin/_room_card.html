@@ -1,0 +1,83 @@
+{# One room on the housekeeping board. Expects `r` (Room with current_stay / arrival_today attached). #}
+<article class="rm-card rm-{{ r.status|lower }}"
+         data-room="{{ r.room_number|lower }}"
+         data-guest="{% if r.current_stay %}{{ r.current_stay.guest_name|lower }}{% elif r.arrival_today %}{{ r.arrival_today.guest_name|lower }}{% endif %}"
+         data-floor="{{ r.floor }}"
+         data-category="{{ r.category_id }}">
+    <div class="rm-card-top">
+        <div class="rm-id">
+            <span class="rm-number">{% if r.category.is_entire_property %}<i class="fa-solid fa-house-chimney" title="Entire property" style="font-size:0.8em;margin-right:0.3rem;opacity:0.7;"></i>{% endif %}{{ r.room_number }}</span>
+            <span class="rm-cat" title="{{ r.category.name }}">{% if r.category.is_entire_property %}Entire property{% if r.category.bedrooms_count %} &middot; {{ r.category.bedrooms_count }} BR{% endif %} &middot; {% endif %}{{ r.category.name }}</span>
+        </div>
+        <div class="dropdown">
+            <button class="rm-more" type="button" data-bs-toggle="dropdown" aria-label="More actions for room {{ r.room_number }}">
+                <i class="fa-solid fa-ellipsis-vertical"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><div class="dropdown-header">Room {{ r.room_number }} &middot; set status</div></li>
+                {% if r.status != 'AVAILABLE' %}
+                <li><form method="POST" action="{% url 'hotel_admin:room_status_update' restaurant_slug=rslug room_id=r.id %}">{% csrf_token %}
+                    <input type="hidden" name="status" value="AVAILABLE">
+                    <button type="submit" class="dropdown-item"><i class="fa-solid fa-check" style="color:var(--ui-green-text);"></i>Available &amp; clean</button>
+                </form></li>
+                {% endif %}
+                {% if r.status != 'CLEANING' %}
+                <li><form method="POST" action="{% url 'hotel_admin:room_status_update' restaurant_slug=rslug room_id=r.id %}">{% csrf_token %}
+                    <input type="hidden" name="status" value="CLEANING">
+                    <button type="submit" class="dropdown-item"><i class="fa-solid fa-broom" style="color:var(--ui-orange-text);"></i>Needs cleaning</button>
+                </form></li>
+                {% endif %}
+                {% if r.status != 'MAINTENANCE' %}
+                <li><form method="POST" action="{% url 'hotel_admin:room_status_update' restaurant_slug=rslug room_id=r.id %}">{% csrf_token %}
+                    <input type="hidden" name="status" value="MAINTENANCE">
+                    <button type="submit" class="dropdown-item"><i class="fa-solid fa-screwdriver-wrench" style="color:var(--ui-red-text);"></i>Out of order / maintenance</button>
+                </form></li>
+                {% endif %}
+                {% if r.current_stay and show_front_desk_ops %}
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="{% url 'hotel_admin:booking_detail' restaurant_slug=rslug booking_id=r.current_stay.id %}"><i class="fa-solid fa-folder-open" style="color:var(--ui-accent-text);"></i>Open guest folio</a></li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="rm-meta">
+        {% if r.floor %}<span><i class="fa-solid fa-layer-group"></i>{{ r.floor }}</span>{% endif %}
+        {% if r.status == 'AVAILABLE' %}<span class="rm-price">₹{{ r.category.base_price_per_night|floatformat:0 }}<small>/night</small></span>{% endif %}
+    </div>
+
+    {% if r.current_stay %}
+    <div class="rm-guest">
+        <span class="rm-avatar">{{ r.current_stay.guest_name|slice:":1"|upper }}</span>
+        <div class="rm-guest-text">
+            <strong>{{ r.current_stay.guest_name }}</strong>
+            <small>{% if r.departs_today %}<span class="rm-flag rm-flag-warn">Departs today</span>{% else %}Out {{ r.current_stay.check_out_date|date:"d M" }}{% endif %} &middot; {{ r.current_stay.num_guests }} guest{{ r.current_stay.num_guests|pluralize }}{% if r.current_stay.event_type %} &middot; {{ r.current_stay.get_event_type_display }}{% endif %}</small>
+        </div>
+    </div>
+    {% elif r.status == 'OCCUPIED' %}
+    <div class="rm-note rm-note-muted">Marked occupied &middot; no checked-in folio</div>
+    {% endif %}
+
+    {% if r.arrival_today and not r.current_stay %}
+    <div class="rm-note rm-note-info"><i class="fa-solid fa-plane-arrival"></i>Arriving today: {{ r.arrival_today.guest_name }}</div>
+    {% endif %}
+
+    {% if r.status == 'MAINTENANCE' and r.notes %}
+    <div class="rm-note rm-note-danger"><i class="fa-solid fa-triangle-exclamation"></i>{{ r.notes }}</div>
+    {% endif %}
+
+    {# One clear primary action per state #}
+    {% if r.status == 'CLEANING' %}
+    <form method="POST" action="{% url 'hotel_admin:room_status_update' restaurant_slug=rslug room_id=r.id %}">{% csrf_token %}
+        <input type="hidden" name="status" value="AVAILABLE">
+        <button type="submit" class="rm-primary rm-primary-green"><i class="fa-solid fa-check"></i>Mark clean &amp; ready</button>
+    </form>
+    {% elif r.status == 'MAINTENANCE' %}
+    <form method="POST" action="{% url 'hotel_admin:room_status_update' restaurant_slug=rslug room_id=r.id %}">{% csrf_token %}
+        <input type="hidden" name="status" value="AVAILABLE">
+        <button type="submit" class="rm-primary rm-primary-green"><i class="fa-solid fa-screwdriver-wrench"></i>Mark repaired</button>
+    </form>
+    {% elif r.status == 'OCCUPIED' and r.current_stay and show_front_desk_ops %}
+    <a class="rm-primary rm-primary-blue" href="{% url 'hotel_admin:booking_detail' restaurant_slug=rslug booking_id=r.current_stay.id %}"><i class="fa-solid fa-folder-open"></i>Open folio</a>
+    {% endif %}
+</article>

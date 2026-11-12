@@ -118,6 +118,28 @@ class TicketType(models.Model):
         ordering = ['display_order', 'base_price', 'id']
         verbose_name = 'Ticket Type'
         verbose_name_plural = 'Ticket Types'
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(quantity_sold__lte=models.F('total_allocated')),
+                name='ticket_type_quantity_sold_lte_total_allocated'
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.quantity_sold > self.total_allocated:
+            from django.core.exceptions import ValidationError
+            raise ValidationError(
+                f"Cannot sell {self.quantity_sold} tickets; only {self.total_allocated} allocated for tier '{self.name}'."
+            )
+
+    def save(self, *args, **kwargs):
+        if self.quantity_sold > self.total_allocated:
+            from django.core.exceptions import ValidationError
+            raise ValidationError(
+                f"Cannot sell {self.quantity_sold} tickets; only {self.total_allocated} allocated for tier '{self.name}'."
+            )
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.event.title} - {self.name} (₹{self.base_price})"

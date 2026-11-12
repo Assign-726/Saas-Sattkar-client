@@ -1,0 +1,25 @@
+{% load restaurant_admin_extras %}
+{# Pager for hotel admin lists. Include with: {% include "hotel_admin/_pager.html" with page=page_obj noun="bookings" %} #}
+{% if page.paginator.count %}
+<nav class="ui-pager hp-pager" aria-label="Pagination">
+  <span class="hp-count">Showing <strong>{{ page.start_index }}–{{ page.end_index }}</strong> of <strong>{{ page.paginator.count }}</strong> {{ noun|default:"items" }}</span>
+  <span class="hp-nav">
+    {% if page.has_previous %}<a class="ui-pager-btn" href="?{% query_transform request page=page.previous_page_number %}" rel="prev"><i class="fa-solid fa-chevron-left"></i><span>Previous</span></a>{% else %}<span class="ui-pager-btn is-disabled"><i class="fa-solid fa-chevron-left"></i><span>Previous</span></span>{% endif %}
+    <span class="ui-pager-info">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+    {% if page.has_next %}<a class="ui-pager-btn" href="?{% query_transform request page=page.next_page_number %}" rel="next"><span>Next</span><i class="fa-solid fa-chevron-right"></i></a>{% else %}<span class="ui-pager-btn is-disabled"><span>Next</span><i class="fa-solid fa-chevron-right"></i></span>{% endif %}
+  </span>
+  <label class="hp-size">Per page
+    <select class="ui-input form-select form-select-sm" onchange="location.href=this.value" aria-label="Rows per page">
+      {% for n in page.per_page_choices %}<option value="?{% query_transform request per_page=n page=1 %}"{% if n == page.paginator.per_page %} selected{% endif %}>{{ n }}</option>{% endfor %}
+    </select>
+  </label>
+</nav>
+<style>
+  .hp-pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 12px 16px; }
+  .hp-count { font-size: 12.5px; color: var(--ui-label-2, var(--text-muted)); }
+  .hp-nav { display: inline-flex; align-items: center; gap: 8px; }
+  .hp-size { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ui-label-2, var(--text-muted)); margin: 0; }
+  .hp-size select { width: auto; min-width: 70px; height: 32px; padding-top: 2px; padding-bottom: 2px; }
+  @media (max-width: 575.98px) { .hp-pager { justify-content: center; } .hp-count { width: 100%; text-align: center; } }
+</style>
+{% endif %}

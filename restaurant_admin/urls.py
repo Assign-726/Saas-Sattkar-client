@@ -14,6 +14,7 @@ from restaurant_admin import views_reservations
 from restaurant_admin import views_controls
 from restaurant_admin import views_procurement
 from restaurant_admin import floor_plan_views
+from restaurant_admin import views_waiter
 from restaurant_admin import views_events
 from restaurant_admin import views_staff
 from restaurant_admin import views_hrms
@@ -89,6 +90,11 @@ urlpatterns = [
     
     # Floor Plan & Table Management
     path('floor-plan/', floor_plan_views.floor_plan_dashboard, name='floor_plan_dashboard'),
+    # Waiter / Captain: live table board -> POS (send to kitchen only) -> ask the cashier for the bill
+    path('waiter/tables/', views_waiter.waiter_tables, name='waiter_tables'),
+    path('waiter/api/tables/', views_waiter.waiter_tables_api, name='waiter_tables_api'),
+    path('waiter/tables/<int:pk>/open/', views_waiter.waiter_open_table, name='waiter_open_table'),
+    path('waiter/orders/<int:pk>/request-bill/', views_waiter.waiter_request_bill, name='waiter_request_bill'),
     path('api/floor-plan/', floor_plan_views.floor_plan_api, name='floor_plan_api'),
     path('api/floor-plan/save-position/', floor_plan_views.floor_plan_save_position_api, name='floor_plan_save_position_api'),
     path('api/floor-plan/book-party/', floor_plan_views.floor_plan_book_party_api, name='floor_plan_book_party_api'),
@@ -130,6 +136,7 @@ urlpatterns = [
     path('orders/<int:pk>/update-status/', views.order_update_status, name='order_update_status'),
     path('orders/<int:pk>/invoice/', views.order_invoice, name='order_invoice'),
     path('orders/<int:pk>/kot/', views.order_kot, name='order_kot'),
+    path('orders/<int:pk>/token-bill/', views.order_token_bill, name='order_token_bill'),
     path('orders/<int:pk>/prep-time/', views.order_set_prep_time, name='order_set_prep_time'),
     path('orders/<int:pk>/mark-ready/', views.order_mark_ready, name='order_mark_ready'),
     # Kitchen Display System (KDS)
@@ -199,6 +206,8 @@ urlpatterns = [
     path('purchases/<int:pk>/voucher/', views.purchase_voucher_edit, name='purchase_voucher_edit'),
     path('purchases/api/ledger-create/', views.purchase_zen_ledger_create, name='purchase_zen_ledger_create'),
     path('purchases/sidebar-panel/', views.purchase_sidebar_panel, name='purchase_sidebar_panel'),
+    # Same drawer outside purchases/, so branches without the inventory module (or staff without it) still get Alt+M
+    path('sidebar-panel/', views.purchase_sidebar_panel, name='sidebar_panel'),
     path('purchases/<int:pk>/', views.purchase_invoice, name='purchase_detail'),
     path('purchases/<int:pk>/invoice/', views.purchase_invoice, name='purchase_invoice'),
     path('purchases/<int:pk>/edit/', views.purchase_edit, name='purchase_edit'),

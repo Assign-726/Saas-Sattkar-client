@@ -14,6 +14,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from hotel import folio as F
+from hotel.paging import paginate
 from hotel import pricing, reports
 from hotel import groups as G
 from hotel import ledger as L
@@ -27,6 +28,15 @@ GSTIN_RE = re.compile(r'^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$')
 DEFAULT_GST = {'RESTAURANT': 5, 'ROOM_SERVICE': 5, 'MINIBAR': 18, 'LAUNDRY': 18, 'SPA': 18, 'TRANSPORT': 5,
                'DAMAGE': 18, 'MISC': 18, 'DISCOUNT': 0}
 MAX_UPLOAD = 5 * 1024 * 1024
+PHONE_RE = re.compile(r'^(?:\+?91)?[6-9]\d{9}$|^\+[1-9]\d{6,14}$')
+EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+ID_RULES = {
+    'AADHAAR': (re.compile(r'^[2-9]\d{11}$'), "Aadhaar numbers have 12 digits and don't start with 0 or 1."),
+    'PAN': (re.compile(r'^[A-Z]{5}\d{4}[A-Z]$'), 'PAN looks like ABCDE1234F.'),
+    'PASSPORT': (re.compile(r'^[A-Z0-9]{6,9}$'), 'Passport numbers are 6-9 letters and digits.'),
+    'VOTER_ID': (re.compile(r'^[A-Z]{3}\d{7}$'), 'Voter ID (EPIC) looks like ABC1234567.'),
+    'DRIVING_LICENCE': (re.compile(r'^[A-Z]{2}[0-9A-Z-]{8,16}$'), 'Driving licence numbers start with the 2-letter state code, e.g. MH1420110012345.'),
+}
 
 
 def _base(slug):
@@ -83,7 +93,10 @@ def _detail_url(ctx, booking):
 
 @hotel_admin_required
 def booking_detail(request, restaurant_slug, ctx, booking_id):
-    b = _booking(ctx, booking_id)
+    return _booking_page(request, ctx, _booking(ctx, booking_id))
+
+
+def _booking_page(request, ctx, b, guest_errors=None, tab=None):
     folio = F.Folio(b)
     today = timezone.localdate()
     settings = HotelSettings.get_settings(b.branch)
@@ -100,13 +113,17 @@ def booking_detail(request, restaurant_slug, ctx, booking_id):
                    b=b, folio=folio, today=today, settings=settings, move_rooms=move_rooms,
                    charge_kinds=FolioCharge.Kind.choices, methods=FolioPayment.Method.choices,
                    id_types=RoomBooking.IdType.choices, sources=RoomBooking.Source.choices,
+                   event_types=RoomBooking.EventType.choices,
                    gst_json=gst, history=history, tasks=b.hk_tasks.select_related('room', 'assigned_to')[:10],
                    cabs=b.cab_bookings.all().order_by('pickup_datetime'), can_edit=_can(request, 'front_desk'),
                    kyc_missing=not b.kyc_complete, is_overdue=b.booking_status == 'CHECKED_IN' and b.check_out_date < today,
                    accounts=CompanyAccount.objects.filter(restaurant=b.branch.restaurant, is_active=True),
                    can_ledger=P.level(request.user, 'finance') != P.NONE,
                    packages=RoomPackage.objects.filter(branch=b.branch, is_active=True),
-                   has_promos=PromoCode.objects.filter(branch=b.branch, is_active=True).exists())
+                   has_promos=PromoCode.objects.filter(branch=b.branch, is_active=True).exists(),
+                   kyc_items=b.kyc_missing_items(require_document=settings.require_id_document),
+                   kyc_enforced=settings.require_id_at_check_in,
+                   guest_errors=guest_errors or {}, active_tab=tab or request.GET.get('tab', ''))
 
 
 @hotel_admin_required
@@ -158,53 +175,117 @@ def booking_payment_void_action(request, restaurant_slug, ctx, booking_id, payme
 @hotel_admin_required
 @require_POST
 def booking_guest_update(request, restaurant_slug, ctx, booking_id):
+    """Validate the whole guest / registration form; on any error re-render it with the typed values."""
     b = _booking(ctx, booking_id)
     p = request.POST
-    name = (p.get('guest_name') or '').strip()
-    if not name:
-        messages.error(request, 'Guest name is required.')
-        return redirect(_detail_url(ctx, b) + '#guest')
-    gstin = (p.get('company_gstin') or '').strip().upper()
-    if gstin and not GSTIN_RE.match(gstin):
-        messages.error(request, f'“{gstin}” is not a valid GSTIN (15 characters, e.g. 27AAPFU0939F1ZV).')
-        return redirect(_detail_url(ctx, b) + '#guest')
+    errors = {}
+
+    def text(name, limit=None):
+        v = (p.get(name) or '').strip()
+        return v[:limit] if limit else v
+
+    b.guest_name = text('guest_name', 150)
+    if len(b.guest_name) < 2:
+        errors['guest_name'] = "Enter the guest's full name."
+
+    b.guest_phone = re.sub(r'[\s-]', '', text('guest_phone', 30))
+    if not b.guest_phone:
+        errors['guest_phone'] = 'A contact number is required.'
+    elif not PHONE_RE.match(b.guest_phone):
+        errors['guest_phone'] = 'Enter a valid phone number (10-digit Indian mobile, or + and country code).'
+
+    b.guest_email = text('guest_email', 254)
+    if b.guest_email and not EMAIL_RE.match(b.guest_email):
+        errors['guest_email'] = 'Enter a valid email address.'
+
+    for f in ('nationality', 'purpose_of_visit', 'arriving_from', 'going_to', 'visa_number', 'company_name'):
+        setattr(b, f, text(f, RoomBooking._meta.get_field(f).max_length))
+    b.id_type = p.get('id_type') if p.get('id_type') in RoomBooking.IdType.values else ''
+    b.id_number = re.sub(r'\s', '', text('id_number', 60)).upper()
+    if b.id_number and not b.id_type:
+        errors['id_type'] = 'Choose the ID type.'
+    if b.id_type and not b.id_number:
+        errors['id_number'] = 'Enter the ID number.'
+    elif b.id_type and b.id_number:
+        rule = ID_RULES.get(b.id_type)
+        if rule and not rule[0].match(b.id_number):
+            errors['id_number'] = rule[1]
+
+    today = timezone.localdate()
+    b.date_of_birth = _date(p.get('date_of_birth'))
+    if p.get('date_of_birth') and not b.date_of_birth:
+        errors['date_of_birth'] = 'Enter a valid date.'
+    elif b.date_of_birth and not (today.replace(year=today.year - 120) <= b.date_of_birth <= today):
+        errors['date_of_birth'] = 'Date of birth must be in the past.'
+
+    b.visa_valid_till = _date(p.get('visa_valid_till'))
+    if b.is_foreign_national:
+        if b.id_type and b.id_type != RoomBooking.IdType.PASSPORT:
+            errors['id_type'] = 'Foreign nationals must register with a passport (Form C).'
+        if b.visa_valid_till and b.visa_valid_till < b.check_in_date:
+            errors['visa_valid_till'] = 'The visa expires before the arrival date.'
+
     doc = request.FILES.get('id_document')
     if doc:
         if doc.size > MAX_UPLOAD:
-            messages.error(request, 'The ID scan must be 5 MB or smaller.')
-            return redirect(_detail_url(ctx, b) + '#guest')
-        if not (doc.content_type or '').startswith(('image/', 'application/pdf')):
-            messages.error(request, 'Upload the ID as an image or PDF.')
-            return redirect(_detail_url(ctx, b) + '#guest')
-        b.id_document = doc
-    b.guest_name = name[:150]
-    b.guest_phone = (p.get('guest_phone') or '').strip()[:30]
-    b.guest_email = (p.get('guest_email') or '').strip()[:254]
-    for f in ('nationality', 'id_number', 'purpose_of_visit', 'arriving_from', 'going_to', 'visa_number', 'company_name'):
-        setattr(b, f, (p.get(f) or '').strip()[:RoomBooking._meta.get_field(f).max_length])
-    b.id_type = p.get('id_type') if p.get('id_type') in RoomBooking.IdType.values else ''
-    b.source = p.get('source') if p.get('source') in RoomBooking.Source.values else b.source
+            errors['id_document'] = 'The ID scan must be 5 MB or smaller.'
+        elif not (doc.content_type or '').startswith(('image/', 'application/pdf')):
+            errors['id_document'] = 'Upload the ID as an image or PDF.'
+
+    gstin = text('company_gstin').upper()
+    if gstin and not GSTIN_RE.match(gstin):
+        errors['company_gstin'] = 'Not a valid GSTIN (15 characters, e.g. 27AAPFU0939F1ZV).'
     b.company_gstin = gstin
+    b.source = p.get('source') if p.get('source') in RoomBooking.Source.values else b.source
     account = CompanyAccount.objects.filter(restaurant=ctx['restaurant'], pk=p.get('company_account') or 0).first()
     b.company_account = account
     if account and not b.company_name:
         b.company_name = account.name
     if account and not b.company_gstin:
         b.company_gstin = account.gstin
-    b.guest_address = (p.get('guest_address') or '').strip()
-    b.special_requests = (p.get('special_requests') or '').strip()
-    b.internal_notes = (p.get('internal_notes') or '').strip()
-    b.date_of_birth = _date(p.get('date_of_birth'))
-    b.visa_valid_till = _date(p.get('visa_valid_till'))
+    b.guest_address = text('guest_address')
+    b.special_requests = text('special_requests')
+    b.internal_notes = text('internal_notes')
+
+    category = b.room.category
+    entire = category.is_entire_property
+    if entire:
+        ev = (p.get('event_type') or '').upper()
+        b.event_type = ev if ev in RoomBooking.EventType.values else ''
+        hc = text('expected_headcount')
+        b.expected_headcount = min(int(hc), 100000) if hc.isdigit() and int(hc) > 0 else None
+        b.event_notes = text('event_notes', 2000)
+
+    cap = max(20, category.max_occupancy) if entire else 20
     try:
-        b.adults = max(1, min(20, int(p.get('adults') or 1)))
-        b.children = max(0, min(20, int(p.get('children') or 0)))
+        b.adults = int(p.get('adults') or 1)
+        b.children = int(p.get('children') or 0)
     except ValueError:
-        pass
+        errors['adults'] = 'Enter whole numbers for guests.'
+    else:
+        if not 1 <= b.adults <= cap:
+            errors['adults'] = f'Adults must be between 1 and {cap}.'
+        elif not 0 <= b.children <= cap:
+            errors['children'] = f'Children must be between 0 and {cap}.'
+        elif b.adults + b.children > category.max_occupancy:
+            errors['adults'] = (f'{category.name} takes at most {category.max_occupancy} guests. '
+                                'Move the guest to a bigger room or split the booking.')
+
+    if errors:
+        messages.error(request, 'Guest details not saved. Fix the highlighted fields below.')
+        b.id_document = RoomBooking.objects.only('id_document').get(pk=b.pk).id_document  # keep the stored scan
+        return _booking_page(request, ctx, b, guest_errors=errors, tab='guest')
+
+    if doc:
+        b.id_document = doc
     b.num_guests = b.adults + b.children
     b.save()
-    messages.success(request, 'Guest details saved.')
-    return redirect(_detail_url(ctx, b) + '#guest')
+    missing = b.kyc_missing_items(require_document=HotelSettings.get_settings(b.branch).require_id_document)
+    if missing:
+        messages.warning(request, f'Guest details saved. Still needed for registration: {", ".join(missing)}.')
+    else:
+        messages.success(request, 'Guest details saved. Registration is complete.')
+    return redirect(_detail_url(ctx, b) + '?tab=guest')
 
 
 @hotel_admin_required
@@ -817,10 +898,10 @@ def _group_url(ctx, pk=None):
 @hotel_admin_required
 def booking_groups(request, restaurant_slug, ctx):
     branch = ctx['current_branch']
-    groups = BookingGroup.objects.filter(branch=branch).select_related('company_account')[:100]
-    rows = [(g, G.summary(g)) for g in groups]
+    page_obj = paginate(request, BookingGroup.objects.filter(branch=branch).select_related('company_account'))
+    rows = [(g, G.summary(g)) for g in page_obj.object_list]
     cats = RoomCategory.objects.filter(branch=branch, is_active=True).order_by('base_price_per_night')
-    return _render(request, ctx, 'hotel_pms/_groups.html', 'groups', 'Group bookings', rows=rows, categories=cats,
+    return _render(request, ctx, 'hotel_pms/_groups.html', 'groups', 'Group bookings', rows=rows, page_obj=page_obj, categories=cats,
                    accounts=CompanyAccount.objects.filter(restaurant=ctx['restaurant'], is_active=True), sources=RoomBooking.Source.choices,
                    today=timezone.localdate(), tomorrow=timezone.localdate() + datetime.timedelta(days=1), can_edit=_can(request, 'front_desk'))
 

@@ -25,6 +25,8 @@ def _module(request):
     profile = getattr(request.user, 'restaurant_profile', None)
     if profile is not None and profile.role == 'KITCHEN' and not request.user.is_superuser:
         return 'kitchen'  # decided by role, never by a query parameter
+    if profile is not None and profile.role == 'WAITER' and not request.user.is_superuser:
+        return 'waiter'
     match = getattr(request, 'resolver_match', None)
     if (match and match.namespace == 'hotel_admin') or 'hotel' in (request.GET.get('module'), request.POST.get('module')):
         return 'hotel'

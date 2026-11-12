@@ -1,12 +1,67 @@
 {% load restaurant_admin_extras %}
-{# Booking folio — hotel admin #}
+{# Booking folio — hotel admin. Left: who / status / next action. Right: tabs for stay, guest & ID, money, activity. #}
+<style>
+  .bk-side { position: sticky; top: calc(var(--topbar-h, 60px) + 12px); display: flex; flex-direction: column; gap: 16px; }
+  .bk-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin: 0; font-size: 13px; }
+  .bk-facts dt { font-size: 11.5px; font-weight: 500; color: var(--ui-label-2); margin: 0; }
+  .bk-facts dd { margin: 2px 0 0; color: var(--ui-label); font-weight: 600; word-break: break-word; }
+  .bk-facts small { font-weight: 400; color: var(--ui-label-2); }
+  .bk-check { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+  .bk-check li { display: flex; align-items: center; gap: 8px; }
+  .bk-check .ok { color: var(--ui-green-text); }
+  .bk-check .no { color: var(--ui-orange-text); }
+  .bk-check a { margin-left: auto; font-size: 12px; font-weight: 600; }
+  .bk-sub { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ui-label-2); margin: 0 0 10px; }
+  .bk-pane[hidden] { display: none !important; }
+  .bk-tabs .ui-tab-count.is-warn { background: rgba(var(--ui-orange-rgb, 255,149,0), .16); color: var(--ui-orange-text); }
+  .bk-fieldset { border: 0; border-top: 1px solid var(--ui-separator); padding: 16px 0 4px; margin: 0; }
+  .bk-fieldset:first-of-type { border-top: 0; padding-top: 0; }
+  .bk-fieldset legend { float: none; font-size: 13px; font-weight: 700; color: var(--ui-label); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .bk-fieldset legend .ui-chip { font-size: 11px; }
+  .bk-err { color: var(--ui-red-text); font-size: 12px; margin-top: 4px; display: block; }
+  .ui-field.has-error .ui-input { border-color: var(--ui-red) !important; box-shadow: 0 0 0 3px rgba(var(--ui-red-rgb), .12) !important; }
+  .bk-req::after { content: " *"; color: var(--ui-red-text); }
+  /* Expandable action panels (post charge / record payment) */
+  .bk-action { border-top: 1px solid var(--ui-separator); padding: 14px 16px; }
+  .bk-action > summary {
+    list-style: none; cursor: pointer; user-select: none;
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 38px; padding: 0 14px; border-radius: 10px;
+    font-size: 13.5px; font-weight: 600;
+    background: rgba(var(--ui-accent-rgb), .1); color: var(--ui-accent-text);
+    border: 1px solid rgba(var(--ui-accent-rgb), .25);
+    transition: background .15s, border-color .15s;
+  }
+  .bk-action > summary::-webkit-details-marker { display: none; }
+  .bk-action > summary:hover { background: rgba(var(--ui-accent-rgb), .16); }
+  .bk-action > summary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(var(--ui-accent-rgb), .3); }
+  .bk-action > summary .bk-chev { font-size: 11px; transition: transform .2s; }
+  .bk-action[open] > summary { background: var(--ui-fill-2, var(--ui-surface-2)); color: var(--ui-label); border-color: var(--ui-separator); margin-bottom: 14px; }
+  .bk-action[open] > summary .bk-chev { transform: rotate(180deg); }
+  .bk-action .ui-pms-addform { padding: 14px; margin: 0; border-radius: 12px; background: var(--ui-fill-2, var(--ui-surface-2)); }
+  .bk-action-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .bk-action-hint { font-size: 12px; color: var(--ui-label-2); }
+  /* Cancel: deliberately low-key, opens a small confirm form */
+  .bk-danger > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--ui-red-text); padding: 6px 4px; border-radius: 8px; }
+  .bk-danger > summary::-webkit-details-marker { display: none; }
+  .bk-danger > summary:hover { text-decoration: underline; }
+  .bk-danger[open] { background: rgba(var(--ui-red-rgb), .06); border: 1px solid rgba(var(--ui-red-rgb), .25); border-radius: 14px; padding: 6px 12px 14px; }
+  .bk-danger form { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+  /* Secondary stay actions (no-show) on one tidy row */
+  .bk-secondary { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding-top: 12px; margin-top: 4px; border-top: 1px dashed var(--ui-separator); }
+  .bk-secondary .ui-pms-check { margin: 0; font-size: 13px; }
+  .bk-savebar { position: sticky; bottom: 0; background: var(--ui-surface, var(--card-bg)); padding: 12px 0 2px; border-top: 1px solid var(--ui-separator); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  @media (max-width: 991.98px) { .bk-side { position: static; } }
+  @media (max-width: 575.98px) { .bk-facts { grid-template-columns: 1fr 1fr; } .bk-savebar .ui-btn { width: 100%; justify-content: center; } }
+</style>
+
 <div class="ui-logs ui-pms">
   <a class="ui-back" href="{{ base_url }}bookings/"><i class="fa-solid fa-chevron-left"></i> Bookings</a>
 
   <div class="ui-page-header">
     <div>
       <h1>{{ b.guest_name }}</h1>
-      <p>{{ b.booking_id }} · Room {{ b.room.room_number }} · {{ b.room.category.name }} · {{ b.check_in_date|date:"D d M" }} → {{ b.check_out_date|date:"D d M Y" }} · {{ b.nights_count }} night{{ b.nights_count|pluralize }}</p>
+      <p>{{ b.booking_id }} · {% if b.room.category.is_entire_property %}<i class="fa-solid fa-house-chimney"></i> Entire {{ b.room.category.name }}{% else %}Room {{ b.room.room_number }} · {{ b.room.category.name }}{% endif %} · {{ b.check_in_date|date:"D d M" }} → {{ b.check_out_date|date:"D d M Y" }} · {{ b.nights_count }} night{{ b.nights_count|pluralize }}</p>
     </div>
     <div class="ui-actions">
       <a class="ui-btn ui-btn-gray" href="{{ base_url }}bookings/{{ b.pk }}/registration-card/" target="_blank" rel="noopener"><i class="fa-solid fa-id-card"></i><span>Registration card</span></a>
@@ -15,20 +70,22 @@
   </div>
 
   {% if b.booking_status == 'CHECKED_IN' or b.booking_status == 'RESERVED' %}
+  {% if is_overdue or kyc_items %}
   <div class="ui-alerts">
     {% if is_overdue %}<div class="ui-alert ui-alert-critical"><i class="fa-solid fa-clock ui-alert-icon"></i><div class="ui-alert-body"><strong>Departure was due {{ b.check_out_date|date:"d M" }}.</strong> Check the guest out or extend the stay.</div></div>{% endif %}
-    {% if kyc_missing %}<div class="ui-alert ui-alert-warning"><i class="fa-solid fa-id-card ui-alert-icon"></i><div class="ui-alert-body"><strong>Guest ID not recorded.</strong> {% if b.is_foreign_national %}Foreign nationals need passport and visa details for Form C.{% else %}Indian law requires photo ID for every hotel guest.{% endif %} <a href="#guest">Add it below</a>.</div></div>{% endif %}
-    {% if b.booking_status == 'RESERVED' and b.check_in_date < today %}<div class="ui-alert ui-alert-warning"><i class="fa-solid fa-user-clock ui-alert-icon"></i><div class="ui-alert-body"><strong>The guest was due on {{ b.check_in_date|date:"d M" }}.</strong> Check them in, move the dates or mark a no-show.</div></div>{% endif %}
+    {% if kyc_items %}<div class="ui-alert ui-alert-warning"><i class="fa-solid fa-id-card ui-alert-icon"></i><div class="ui-alert-body"><strong>Guest registration incomplete.</strong> Missing: {{ kyc_items|join:", " }}.{% if kyc_enforced %} Check-in and check-out are blocked until it's added.{% endif %} <a href="?tab=guest" data-tab-link="guest">Complete registration</a></div></div>{% endif %}
   </div>
+  {% endif %}
   {% endif %}
 
   <div class="ui-g360-grid">
-    <div class="ui-g360-side">
+    <!-- ============ SUMMARY (left) ============ -->
+    <div class="ui-g360-side bk-side">
       <section class="ui-card ui-pad ui-pms-hero">
         <div class="ui-pms-status">
           <span class="ui-chip ui-chip-{% if b.booking_status == 'CHECKED_IN' %}green{% elif b.booking_status == 'RESERVED' %}blue{% elif b.booking_status == 'CHECKED_OUT' %}gray{% else %}red{% endif %}">{{ b.get_booking_status_display }}</span>
           <span class="ui-chip ui-chip-{% if b.payment_status == 'PAID' %}green{% elif b.payment_status == 'PARTIALLY_PAID' %}orange{% elif b.payment_status == 'REFUNDED' %}purple{% else %}gray{% endif %}">{{ b.get_payment_status_display }}</span>
-          {% if not kyc_missing %}<span class="ui-chip ui-chip-teal"><i class="fa-solid fa-id-card"></i> ID on file</span>{% endif %}
+          {% if not kyc_items %}<span class="ui-chip ui-chip-teal"><i class="fa-solid fa-id-card"></i> ID on file</span>{% endif %}
         </div>
         <div class="ui-pms-balance {% if folio.balance > 0 %}is-due{% elif folio.balance < 0 %}is-credit{% endif %}">
           <small>{% if folio.balance > 0 %}Balance due{% elif folio.balance < 0 %}Credit to refund{% else %}Settled{% endif %}</small>
@@ -36,232 +93,369 @@
           <span>Total ₹{{ folio.total|inr2 }} · Paid ₹{{ folio.paid|inr2 }}</span>
         </div>
 
-        {% if can_edit %}
-        <div class="ui-pms-stay-actions">
+        {% if b.booking_status == 'RESERVED' or b.booking_status == 'CHECKED_IN' %}
+        <p class="bk-sub" style="margin-top:14px">{% if b.booking_status == 'RESERVED' %}Ready to check in?{% else %}Ready to check out?{% endif %}</p>
+        <ul class="bk-check">
+          <li>{% if kyc_items %}<i class="fa-solid fa-circle-exclamation no"></i>Guest ID{% if kyc_enforced %} (required){% endif %}<a href="?tab=guest" data-tab-link="guest">Add</a>{% else %}<i class="fa-solid fa-circle-check ok"></i>Guest ID recorded{% endif %}</li>
           {% if b.booking_status == 'RESERVED' %}
+          <li>{% if b.check_in_date > today %}<i class="fa-solid fa-calendar no"></i>Arrives {{ b.check_in_date|date:"d M" }}{% else %}<i class="fa-solid fa-circle-check ok"></i>Arrival date reached{% endif %}</li>
+          {% endif %}
+          <li>{% if folio.balance > 0 %}<i class="fa-solid fa-indian-rupee-sign no"></i>₹{{ folio.balance|inr2 }} to collect{% if b.booking_status == 'CHECKED_IN' %}<a href="?tab=folio" data-tab-link="folio">Collect</a>{% endif %}{% else %}<i class="fa-solid fa-circle-check ok"></i>Folio settled{% endif %}</li>
+        </ul>
+        {% endif %}
+
+        {% if can_edit %}
+        <div class="ui-pms-stay-actions" style="margin-top:14px">
+          {% if b.booking_status == 'RESERVED' %}
+            {% if kyc_enforced and kyc_items %}
+            <a class="ui-btn ui-btn-primary" href="?tab=guest" data-tab-link="guest"><i class="fa-solid fa-id-card"></i><span>Complete registration to check in</span></a>
+            {% else %}
             <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/check-in/">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}">
               <button class="ui-btn ui-btn-primary" type="submit" {% if b.check_in_date > today %}disabled title="Arrives {{ b.check_in_date|date:'d M' }}"{% endif %}><i class="fa-solid fa-key"></i><span>Check in</span></button></form>
+            {% endif %}
             {% if b.check_in_date <= today %}
-            <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/no-show/" onsubmit="return confirm('Mark {{ b.guest_name|escapejs }} as a no-show? The room is released.');">{% csrf_token %}
+            <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/no-show/" class="bk-secondary" data-confirm="Mark {{ b.guest_name }} as a no-show? The room is released." onsubmit="return confirm(this.dataset.confirm);">{% csrf_token %}
               <label class="ui-pms-check"><input type="checkbox" name="charge" value="1"> Charge first night</label>
-              <button class="ui-btn ui-btn-gray" type="submit"><i class="fa-solid fa-user-slash"></i><span>No-show</span></button></form>
+              <button class="ui-btn ui-btn-gray ui-btn-sm" type="submit"><i class="fa-solid fa-user-slash"></i><span>Mark no-show</span></button></form>
             {% endif %}
           {% elif b.booking_status == 'CHECKED_IN' %}
+            {% if kyc_enforced and kyc_items %}
+            <a class="ui-btn ui-btn-primary" href="?tab=guest" data-tab-link="guest"><i class="fa-solid fa-id-card"></i><span>Complete registration to check out</span></a>
+            {% else %}
             <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/check-out/" class="ui-stack-form">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}">
               {% if folio.balance > 0 %}<label class="ui-pms-check"><input type="checkbox" name="allow_balance" value="1"> Check out with ₹{{ folio.balance|inr2 }} due (bill to company)</label>{% endif %}
               <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-arrow-right-from-bracket"></i><span>Check out &amp; issue invoice</span></button></form>
-          {% endif %}
-          {% if b.booking_status == 'RESERVED' or b.booking_status == 'CHECKED_IN' %}
-            <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/cancel/" class="ui-inline-fields" onsubmit="return confirm('Cancel this booking?');">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}">
-              <input class="ui-input" name="reason" placeholder="Cancellation reason">
-              <button class="ui-btn ui-btn-tinted-red" type="submit"><i class="fa-solid fa-ban"></i><span>Cancel</span></button></form>
+            {% endif %}
           {% endif %}
         </div>
         {% endif %}
 
-        <dl class="ui-dl">
+        <dl class="bk-facts" style="margin-top:16px">
           <div><dt>Arrive</dt><dd>{{ b.check_in_date|date:"D d M Y" }}{% if b.check_in_time %}<br><small>in at {{ b.check_in_time|date:"h:i A" }}</small>{% endif %}</dd></div>
           <div><dt>Depart</dt><dd>{{ b.check_out_date|date:"D d M Y" }}{% if b.check_out_time %}<br><small>out at {{ b.check_out_time|date:"h:i A" }}</small>{% endif %}</dd></div>
           <div><dt>Guests</dt><dd>{{ b.adults }} adult{{ b.adults|pluralize }}{% if b.children %}, {{ b.children }} child{{ b.children|pluralize:"ren" }}{% endif %}</dd></div>
-          <div><dt>Source</dt><dd>{{ b.get_source_display }}{% if b.external_link %}<br><small>{{ b.external_link.source }} · {{ b.external_link.external_id }}</small>{% endif %}</dd></div>
-          {% if b.group %}<div class="ui-dl-wide"><dt>Group</dt><dd><a href="{{ base_url }}bookings/groups/{{ b.group.pk }}/">{{ b.group.name }}</a> · {{ b.group.code }}</dd></div>{% endif %}
           <div><dt>Phone</dt><dd>{% if b.guest_phone %}<a href="tel:{{ b.guest_phone }}">{{ b.guest_phone }}</a>{% else %}—{% endif %}</dd></div>
-          <div><dt>Booked</dt><dd>{{ b.created_at|date:"d M Y" }}</dd></div>
-          {% if b.company_name %}<div class="ui-dl-wide"><dt>Bill to</dt><dd>{{ b.company_name }}{% if b.company_gstin %} · GSTIN {{ b.company_gstin }}{% endif %}</dd></div>{% endif %}
-          {% if b.special_requests %}<div class="ui-dl-wide"><dt>Requests</dt><dd>{{ b.special_requests|linebreaksbr }}</dd></div>{% endif %}
-          {% if b.cancellation_reason %}<div class="ui-dl-wide"><dt>Cancelled</dt><dd>{{ b.cancellation_reason }}</dd></div>{% endif %}
-          {% if b.internal_notes %}<div class="ui-dl-wide"><dt>Staff notes</dt><dd>{{ b.internal_notes|linebreaksbr }}</dd></div>{% endif %}
         </dl>
       </section>
 
-      {% if can_edit and packages or can_edit and has_promos %}{% if b.booking_status == 'RESERVED' or b.booking_status == 'CHECKED_IN' %}
-      <section class="ui-card ui-pad">
-        <h2 class="ui-card-title">Package or promo code</h2>
-        {% if packages %}<form method="post" action="{{ base_url }}bookings/{{ b.pk }}/offers/add/" class="ui-ops-inline">{% csrf_token %}
-          <select class="ui-input" name="package" aria-label="Package" required><option value="">Add a package…</option>{% for p in packages %}<option value="{{ p.pk }}">{{ p.name }} · +₹{{ p.price_per_night|floatformat:'0' }}/night</option>{% endfor %}</select>
-          <button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">Add</button></form>{% endif %}
-        {% if has_promos %}<form method="post" action="{{ base_url }}bookings/{{ b.pk }}/offers/add/" class="ui-ops-inline" style="margin-top:8px">{% csrf_token %}
-          <input class="ui-input" name="promo" placeholder="Promo code" aria-label="Promo code" required style="text-transform:uppercase">
-          <button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">Apply</button></form>{% endif %}
-        <p class="ui-log-sub" style="margin:8px 0 0">Packages post per night to the folio; a promo code takes its % off the room charges.</p>
-      </section>
-      {% endif %}{% endif %}
-
       {% if can_edit and b.booking_status == 'RESERVED' or can_edit and b.booking_status == 'CHECKED_IN' %}
-      <section class="ui-card ui-pad">
-        <h2 class="ui-card-title">Change stay</h2>
-        <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/dates/" class="ui-stack-form">{% csrf_token %}
-          <div class="ui-inline-fields">
-            <div class="ui-field"><label for="bdIn">Arrive</label><input id="bdIn" class="ui-input" type="date" name="check_in_date" value="{{ b.check_in_date|date:'Y-m-d' }}" {% if b.booking_status == 'CHECKED_IN' %}readonly{% endif %}></div>
-            <div class="ui-field"><label for="bdOut">Depart</label><input id="bdOut" class="ui-input" type="date" name="check_out_date" value="{{ b.check_out_date|date:'Y-m-d' }}" required></div>
-          </div>
-          <button class="ui-btn ui-btn-gray" type="submit"><i class="fa-solid fa-calendar-plus"></i><span>{% if b.booking_status == 'CHECKED_IN' %}Extend / shorten stay{% else %}Change dates{% endif %}</span></button>
-          <p class="ui-log-sub">Added nights use today’s rates; removed nights are credited at the stay’s average rate.</p>
+      <details class="bk-danger">
+        <summary><i class="fa-solid fa-ban"></i>Cancel this booking…</summary>
+        <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/cancel/" onsubmit="return confirm('Cancel this booking? This cannot be undone.');">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}">
+          <div class="ui-field"><label for="cxReason">Reason for cancelling</label><input id="cxReason" class="ui-input" name="reason" placeholder="e.g. Guest changed plans" required></div>
+          <button class="ui-btn ui-btn-tinted-red" type="submit"><i class="fa-solid fa-ban"></i><span>Confirm cancellation</span></button>
         </form>
-        <hr class="ui-pms-rule">
-        <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/move/" class="ui-stack-form">{% csrf_token %}
-          <div class="ui-field"><label for="bdRoom">Move to room</label>
-            <select id="bdRoom" class="ui-input" name="room_id" required>
-              <option value="">{% if move_rooms %}Free rooms for the rest of the stay…{% else %}No other room is free for these dates{% endif %}</option>
-              {% for r in move_rooms %}<option value="{{ r.pk }}">{{ r.room_number }} · {{ r.category.name }}{% if r.category_id != b.room.category_id %} (₹{{ r.category.base_price_per_night|inr }}){% endif %}{% if r.status != 'AVAILABLE' %} · {{ r.get_status_display|lower }}{% endif %}</option>{% endfor %}
-            </select></div>
-          {% if b.booking_status == 'RESERVED' %}<label class="ui-pms-check"><input type="checkbox" name="reprice" value="1"> Re-price at the new room type’s rates</label>{% endif %}
-          <button class="ui-btn ui-btn-gray" type="submit" {% if not move_rooms %}disabled{% endif %}><i class="fa-solid fa-right-left"></i><span>Move guest</span></button>
-        </form>
-      </section>
-      {% endif %}
-
-      {% if history %}
-      <section class="ui-card ui-pad">
-        <h2 class="ui-card-title">Previous stays</h2>
-        <ul class="ui-dash-mini">
-          {% for h in history %}<li><a href="{{ base_url }}bookings/{{ h.pk }}/">{{ h.check_in_date|date:"d M Y" }} · Room {{ h.room.room_number }}</a><strong>{{ h.get_booking_status_display }}</strong></li>{% endfor %}
-        </ul>
-      </section>
+      </details>
       {% endif %}
     </div>
 
+    <!-- ============ DETAIL TABS (right) ============ -->
     <div class="ui-g360-main">
-      <section class="ui-card ui-list-card" id="folio">
-        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Folio</h2><span class="ui-list-count">{{ folio.lines|length }} line{{ folio.lines|length|pluralize }}</span></div>
-        <div class="table-responsive">
-          <table class="table ui-pms-folio">
-            <thead><tr><th>Date</th><th>Item</th><th class="num c-qty">Qty</th><th class="num c-net">Amount</th><th class="num c-tax">GST</th><th class="num">Total</th><th></th></tr></thead>
-            <tbody>
-              {% for l in folio.lines %}
-              <tr>
-                <td class="nowrap">{{ l.date|date:"d M" }}</td>
-                <td><strong>{{ l.kind }}</strong><br><small class="ui-log-sub">{{ l.description }}</small></td>
-                <td class="num c-qty">{{ l.quantity|floatformat:"-2" }}</td>
-                <td class="num c-net {% if l.net < 0 %}ui-text-green{% endif %}">{% if l.net < 0 %}−₹{{ l.net|inr2|cut:"-" }}{% else %}₹{{ l.net|inr2 }}{% endif %}</td>
-                <td class="num c-tax">₹{{ l.tax|inr2 }}{% if l.tax_percent %}<br><small class="ui-log-sub">{{ l.tax_percent|floatformat:"-2" }}%</small>{% endif %}</td>
-                <td class="num"><strong>{% if l.total < 0 %}−₹{{ l.total|inr2|cut:"-" }}{% else %}₹{{ l.total|inr2 }}{% endif %}</strong></td>
-                <td class="num">
-                  {% if l.charge and can_edit %}
+      <nav class="ui-tabs bk-tabs" role="tablist" aria-label="Booking sections">
+        <a href="?tab=stay" data-tab="stay" role="tab"><i class="fa-solid fa-bed"></i>Stay</a>
+        <a href="?tab=guest" data-tab="guest" role="tab"><i class="fa-solid fa-id-card"></i>Guest &amp; ID{% if kyc_items %}<span class="ui-tab-count is-warn">{{ kyc_items|length }}</span>{% endif %}</a>
+        <a href="?tab=folio" data-tab="folio" role="tab"><i class="fa-solid fa-receipt"></i>Folio &amp; payments{% if folio.balance > 0 %}<span class="ui-tab-count">₹{{ folio.balance|inr }}</span>{% endif %}</a>
+        <a href="?tab=activity" data-tab="activity" role="tab"><i class="fa-solid fa-clock-rotate-left"></i>Activity</a>
+      </nav>
+
+      <!-- ---------- STAY ---------- -->
+      <div class="bk-pane" data-pane="stay" role="tabpanel">
+        <section class="ui-card ui-pad">
+          <h2 class="ui-card-title">Stay details</h2>
+          <dl class="ui-dl">
+            <div><dt>Room</dt><dd>{% if b.room.category.is_entire_property %}Entire {{ b.room.category.name }}{% if b.room.category.bedrooms_count %} · {{ b.room.category.bedrooms_count }} bedrooms{% endif %}{% else %}{{ b.room.room_number }} · {{ b.room.category.name }}{% endif %}</dd></div>
+            <div><dt>Nights</dt><dd>{{ b.nights_count }}</dd></div>
+            <div><dt>Source</dt><dd>{{ b.get_source_display }}{% if b.external_link %}<br><small>{{ b.external_link.source }} · {{ b.external_link.external_id }}</small>{% endif %}</dd></div>
+            <div><dt>Booked</dt><dd>{{ b.created_at|date:"d M Y" }}</dd></div>
+            {% if b.group %}<div class="ui-dl-wide"><dt>Group</dt><dd><a href="{{ base_url }}bookings/groups/{{ b.group.pk }}/">{{ b.group.name }}</a> · {{ b.group.code }}</dd></div>{% endif %}
+            {% if b.company_name %}<div class="ui-dl-wide"><dt>Bill to</dt><dd>{{ b.company_name }}{% if b.company_gstin %} · GSTIN {{ b.company_gstin }}{% endif %}</dd></div>{% endif %}
+            {% if b.event_type or b.expected_headcount %}<div class="ui-dl-wide"><dt>Event</dt><dd>{{ b.get_event_type_display|default:"Event" }}{% if b.expected_headcount %} · {{ b.expected_headcount }} expected{% endif %}</dd></div>{% endif %}
+            {% if b.event_notes %}<div class="ui-dl-wide"><dt>Setup notes</dt><dd>{{ b.event_notes|linebreaksbr }}</dd></div>{% endif %}
+            {% if b.special_requests %}<div class="ui-dl-wide"><dt>Requests</dt><dd>{{ b.special_requests|linebreaksbr }}</dd></div>{% endif %}
+            {% if b.cancellation_reason %}<div class="ui-dl-wide"><dt>Cancelled</dt><dd>{{ b.cancellation_reason }}</dd></div>{% endif %}
+            {% if b.internal_notes %}<div class="ui-dl-wide"><dt>Staff notes</dt><dd>{{ b.internal_notes|linebreaksbr }}</dd></div>{% endif %}
+          </dl>
+        </section>
+
+        {% if can_edit and b.booking_status == 'RESERVED' or can_edit and b.booking_status == 'CHECKED_IN' %}
+        <section class="ui-card ui-pad" style="margin-top:16px">
+          <h2 class="ui-card-title">Change dates</h2>
+          <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/dates/" class="ui-stack-form">{% csrf_token %}
+            <div class="ui-inline-fields">
+              <div class="ui-field"><label for="bdIn">Arrive</label><input id="bdIn" class="ui-input" type="date" name="check_in_date" value="{{ b.check_in_date|date:'Y-m-d' }}" {% if b.booking_status == 'CHECKED_IN' %}readonly{% endif %}></div>
+              <div class="ui-field"><label for="bdOut">Depart</label><input id="bdOut" class="ui-input" type="date" name="check_out_date" value="{{ b.check_out_date|date:'Y-m-d' }}" required></div>
+            </div>
+            <button class="ui-btn ui-btn-gray" type="submit"><i class="fa-solid fa-calendar-plus"></i><span>{% if b.booking_status == 'CHECKED_IN' %}Extend / shorten stay{% else %}Change dates{% endif %}</span></button>
+            <p class="ui-log-sub">Added nights use today's rates; removed nights are credited at the stay's average rate.</p>
+          </form>
+        </section>
+
+        <section class="ui-card ui-pad" style="margin-top:16px">
+          <h2 class="ui-card-title">Move to another room</h2>
+          <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/move/" class="ui-stack-form">{% csrf_token %}
+            <div class="ui-field"><label for="bdRoom">Room</label>
+              <select id="bdRoom" class="ui-input" name="room_id" required>
+                <option value="">{% if move_rooms %}Free rooms for the rest of the stay…{% else %}No other room is free for these dates{% endif %}</option>
+                {% for r in move_rooms %}<option value="{{ r.pk }}">{{ r.room_number }} · {{ r.category.name }}{% if r.category_id != b.room.category_id %} (₹{{ r.category.base_price_per_night|inr }}){% endif %}{% if r.status != 'AVAILABLE' %} · {{ r.get_status_display|lower }}{% endif %}</option>{% endfor %}
+              </select></div>
+            {% if b.booking_status == 'RESERVED' %}<label class="ui-pms-check"><input type="checkbox" name="reprice" value="1"> Re-price at the new room type's rates</label>{% endif %}
+            <button class="ui-btn ui-btn-gray" type="submit" {% if not move_rooms %}disabled{% endif %}><i class="fa-solid fa-right-left"></i><span>Move guest</span></button>
+          </form>
+        </section>
+
+        {% if packages or has_promos %}
+        <section class="ui-card ui-pad" style="margin-top:16px">
+          <h2 class="ui-card-title">Package or promo code</h2>
+          {% if packages %}<form method="post" action="{{ base_url }}bookings/{{ b.pk }}/offers/add/" class="ui-ops-inline">{% csrf_token %}
+            <select class="ui-input" name="package" aria-label="Package" required><option value="">Add a package…</option>{% for p in packages %}<option value="{{ p.pk }}">{{ p.name }} · +₹{{ p.price_per_night|floatformat:'0' }}/night</option>{% endfor %}</select>
+            <button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">Add</button></form>{% endif %}
+          {% if has_promos %}<form method="post" action="{{ base_url }}bookings/{{ b.pk }}/offers/add/" class="ui-ops-inline" style="margin-top:8px">{% csrf_token %}
+            <input class="ui-input" name="promo" placeholder="Promo code" aria-label="Promo code" required style="text-transform:uppercase">
+            <button class="ui-btn ui-btn-gray ui-btn-sm" type="submit">Apply</button></form>{% endif %}
+          <p class="ui-log-sub" style="margin:8px 0 0">Packages post per night to the folio; a promo code takes its % off the room charges.</p>
+        </section>
+        {% endif %}
+        {% endif %}
+      </div>
+
+      <!-- ---------- GUEST & ID ---------- -->
+      <div class="bk-pane" data-pane="guest" role="tabpanel" id="guest">
+        <section class="ui-card ui-pad">
+          <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/guest/" enctype="multipart/form-data" novalidate>{% csrf_token %}
+            <fieldset {% if not can_edit %}disabled{% endif %} style="border:0;padding:0;margin:0;min-width:0">
+
+              <fieldset class="bk-fieldset">
+                <legend><i class="fa-solid fa-user"></i>Contact</legend>
+                <div class="ui-form-grid">
+                  <div class="ui-field{% if guest_errors.guest_name %} has-error{% endif %}"><label for="gName" class="bk-req">Full name</label><input id="gName" class="ui-input" name="guest_name" value="{{ b.guest_name }}" required maxlength="150" autocomplete="name">{% if guest_errors.guest_name %}<small class="bk-err">{{ guest_errors.guest_name }}</small>{% endif %}</div>
+                  <div class="ui-field{% if guest_errors.guest_phone %} has-error{% endif %}"><label for="gPhone" class="bk-req">Phone</label><input id="gPhone" class="ui-input" type="tel" name="guest_phone" value="{{ b.guest_phone }}" required maxlength="30" placeholder="98765 43210 or +44…" inputmode="tel">{% if guest_errors.guest_phone %}<small class="bk-err">{{ guest_errors.guest_phone }}</small>{% endif %}</div>
+                  <div class="ui-field{% if guest_errors.guest_email %} has-error{% endif %}"><label for="gEmail">Email</label><input id="gEmail" class="ui-input" type="email" name="guest_email" value="{{ b.guest_email }}" autocomplete="email">{% if guest_errors.guest_email %}<small class="bk-err">{{ guest_errors.guest_email }}</small>{% endif %}</div>
+                  <div class="ui-field"><label for="gSource">Booking source</label><select id="gSource" class="ui-input" name="source">{% for k, l in sources %}<option value="{{ k }}" {% if b.source == k %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+                  <div class="ui-field{% if guest_errors.adults %} has-error{% endif %}"><label for="gAdults">Adults</label><input id="gAdults" class="ui-input" type="number" min="1" max="{{ b.room.category.max_occupancy }}" name="adults" value="{{ b.adults }}">{% if guest_errors.adults %}<small class="bk-err">{{ guest_errors.adults }}</small>{% endif %}</div>
+                  <div class="ui-field{% if guest_errors.children %} has-error{% endif %}"><label for="gKids">Children</label><input id="gKids" class="ui-input" type="number" min="0" max="{{ b.room.category.max_occupancy }}" name="children" value="{{ b.children }}">{% if guest_errors.children %}<small class="bk-err">{{ guest_errors.children }}</small>{% else %}<small class="ui-log-sub">Up to {{ b.room.category.max_occupancy }} guests in total</small>{% endif %}</div>
+                  <div class="ui-field is-wide"><label for="gAddr">Home address</label><textarea id="gAddr" class="ui-input" name="guest_address" rows="2">{{ b.guest_address }}</textarea></div>
+                </div>
+              </fieldset>
+
+              <fieldset class="bk-fieldset">
+                <legend><i class="fa-solid fa-id-card"></i>Identity (guest registration)
+                  {% if kyc_items %}<span class="ui-chip ui-chip-orange">Missing: {{ kyc_items|join:", " }}</span>{% else %}<span class="ui-chip ui-chip-green">Complete</span>{% endif %}
+                </legend>
+                <div class="ui-form-grid">
+                  <div class="ui-field"><label for="gNat">Nationality</label><input id="gNat" class="ui-input" name="nationality" value="{{ b.nationality }}" list="natList" maxlength="60" placeholder="Indian"><datalist id="natList"><option value="Indian"><option value="American"><option value="British"><option value="German"><option value="French"><option value="Australian"><option value="Canadian"><option value="Nepalese"><option value="Bangladeshi"><option value="Sri Lankan"><option value="Emirati"></datalist></div>
+                  <div class="ui-field{% if guest_errors.date_of_birth %} has-error{% endif %}"><label for="gDob">Date of birth</label><input id="gDob" class="ui-input" type="date" name="date_of_birth" value="{{ b.date_of_birth|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}">{% if guest_errors.date_of_birth %}<small class="bk-err">{{ guest_errors.date_of_birth }}</small>{% endif %}</div>
+                  <div class="ui-field{% if guest_errors.id_type %} has-error{% endif %}"><label for="gIdType"{% if kyc_enforced %} class="bk-req"{% endif %}>ID type</label><select id="gIdType" class="ui-input" name="id_type"><option value="">Choose…</option>{% for k, l in id_types %}<option value="{{ k }}" {% if b.id_type == k %}selected{% endif %}>{{ l }}</option>{% endfor %}</select>{% if guest_errors.id_type %}<small class="bk-err">{{ guest_errors.id_type }}</small>{% endif %}</div>
+                  <div class="ui-field{% if guest_errors.id_number %} has-error{% endif %}"><label for="gIdNo"{% if kyc_enforced %} class="bk-req"{% endif %}>ID number</label><input id="gIdNo" class="ui-input" name="id_number" value="{{ b.id_number }}" maxlength="60" autocomplete="off" style="text-transform:uppercase">{% if guest_errors.id_number %}<small class="bk-err">{{ guest_errors.id_number }}</small>{% else %}<small class="ui-log-sub" id="gIdHint"></small>{% endif %}</div>
+                  <div class="ui-field is-wide{% if guest_errors.id_document %} has-error{% endif %}"><label for="gDoc"{% if kyc_enforced and settings.require_id_document %} class="bk-req"{% endif %}>ID scan (photo or PDF, up to 5 MB)</label><input id="gDoc" class="ui-input" type="file" name="id_document" accept="image/*,application/pdf" capture="environment">{% if guest_errors.id_document %}<small class="bk-err">{{ guest_errors.id_document }}</small>{% elif b.id_document %}<small><i class="fa-solid fa-paperclip"></i> <a href="{{ b.id_document.url }}" target="_blank" rel="noopener">View current scan</a> · upload a new file to replace it</small>{% endif %}</div>
+                  <div class="ui-field ui-pms-foreign"><label for="gVisa" class="bk-req">Visa number</label><input id="gVisa" class="ui-input" name="visa_number" value="{{ b.visa_number }}" maxlength="60"></div>
+                  <div class="ui-field ui-pms-foreign{% if guest_errors.visa_valid_till %} has-error{% endif %}"><label for="gVisaTill" class="bk-req">Visa valid till</label><input id="gVisaTill" class="ui-input" type="date" name="visa_valid_till" value="{{ b.visa_valid_till|date:'Y-m-d' }}">{% if guest_errors.visa_valid_till %}<small class="bk-err">{{ guest_errors.visa_valid_till }}</small>{% endif %}</div>
+                </div>
+              </fieldset>
+
+              <fieldset class="bk-fieldset">
+                <legend><i class="fa-solid fa-route"></i>Travel</legend>
+                <div class="ui-form-grid">
+                  <div class="ui-field"><label for="gPurpose">Purpose of visit</label><input id="gPurpose" class="ui-input" name="purpose_of_visit" value="{{ b.purpose_of_visit }}" list="purposeList" maxlength="100"><datalist id="purposeList"><option value="Leisure"><option value="Business"><option value="Wedding / event"><option value="Medical"><option value="Transit"></datalist></div>
+                  <div class="ui-field"><label for="gFrom">Arriving from</label><input id="gFrom" class="ui-input" name="arriving_from" value="{{ b.arriving_from }}" maxlength="120"></div>
+                  <div class="ui-field"><label for="gTo">Going to</label><input id="gTo" class="ui-input" name="going_to" value="{{ b.going_to }}" maxlength="120"></div>
+                </div>
+              </fieldset>
+
+              <fieldset class="bk-fieldset">
+                <legend><i class="fa-solid fa-building"></i>Billing to a company <small class="ui-log-sub" style="font-weight:400">optional</small></legend>
+                <div class="ui-form-grid">
+                  <div class="ui-field"><label for="gAcct">Company account</label><select id="gAcct" class="ui-input" name="company_account"><option value="">None</option>{% for a in accounts %}<option value="{{ a.pk }}" {% if b.company_account_id == a.pk %}selected{% endif %}>{{ a.name }}</option>{% endfor %}</select></div>
+                  <div class="ui-field"><label for="gCo">Company name on invoice</label><input id="gCo" class="ui-input" name="company_name" value="{{ b.company_name }}" maxlength="150"></div>
+                  <div class="ui-field{% if guest_errors.company_gstin %} has-error{% endif %}"><label for="gGst">Company GSTIN</label><input id="gGst" class="ui-input" name="company_gstin" value="{{ b.company_gstin }}" maxlength="15" style="text-transform:uppercase" placeholder="27AAPFU0939F1ZV">{% if guest_errors.company_gstin %}<small class="bk-err">{{ guest_errors.company_gstin }}</small>{% endif %}</div>
+                </div>
+              </fieldset>
+
+              {% if b.room.category.is_entire_property %}
+              <fieldset class="bk-fieldset">
+                <legend><i class="fa-solid fa-champagne-glasses"></i>Event</legend>
+                <div class="ui-form-grid">
+                  <div class="ui-field"><label for="gEvType">Occasion</label><select id="gEvType" class="ui-input" name="event_type"><option value="">Not an event / stay only</option>{% for v, l in event_types %}<option value="{{ v }}"{% if b.event_type == v %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+                  <div class="ui-field"><label for="gEvCount">Expected headcount</label><input id="gEvCount" class="ui-input" type="number" min="1" name="expected_headcount" value="{{ b.expected_headcount|default:'' }}"></div>
+                  <div class="ui-field is-wide"><label for="gEvNotes">Event setup notes</label><textarea id="gEvNotes" class="ui-input" name="event_notes" rows="2">{{ b.event_notes }}</textarea></div>
+                </div>
+              </fieldset>
+              {% endif %}
+
+              <fieldset class="bk-fieldset">
+                <legend><i class="fa-solid fa-note-sticky"></i>Notes</legend>
+                <div class="ui-form-grid">
+                  <div class="ui-field is-wide"><label for="gReq">Guest requests</label><textarea id="gReq" class="ui-input" name="special_requests" rows="2">{{ b.special_requests }}</textarea></div>
+                  <div class="ui-field is-wide"><label for="gNotes">Staff notes (never shown to the guest)</label><textarea id="gNotes" class="ui-input" name="internal_notes" rows="2">{{ b.internal_notes }}</textarea></div>
+                </div>
+              </fieldset>
+            </fieldset>
+            {% if can_edit %}
+            <div class="bk-savebar">
+              <button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-floppy-disk"></i><span>Save guest details</span></button>
+              <small class="ui-log-sub"><span style="color:var(--ui-red-text)">*</span> required{% if kyc_enforced %} before check-in{% endif %}</small>
+            </div>
+            {% endif %}
+          </form>
+        </section>
+      </div>
+
+      <!-- ---------- FOLIO & PAYMENTS ---------- -->
+      <div class="bk-pane" data-pane="folio" role="tabpanel">
+        <section class="ui-card ui-list-card" id="folio">
+          <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Charges</h2><span class="ui-list-count">{{ folio.lines|length }} line{{ folio.lines|length|pluralize }}</span></div>
+          <div class="table-responsive">
+            <table class="table ui-pms-folio">
+              <thead><tr><th>Date</th><th>Item</th><th class="num c-qty">Qty</th><th class="num c-net">Amount</th><th class="num c-tax">GST</th><th class="num">Total</th><th></th></tr></thead>
+              <tbody>
+                {% for l in folio.lines %}
+                <tr>
+                  <td class="nowrap">{{ l.date|date:"d M" }}</td>
+                  <td><strong>{{ l.kind }}</strong><br><small class="ui-log-sub">{{ l.description }}</small></td>
+                  <td class="num c-qty">{{ l.quantity|floatformat:"-2" }}</td>
+                  <td class="num c-net {% if l.net < 0 %}ui-text-green{% endif %}">{% if l.net < 0 %}−₹{{ l.net|inr2|cut:"-" }}{% else %}₹{{ l.net|inr2 }}{% endif %}</td>
+                  <td class="num c-tax">₹{{ l.tax|inr2 }}{% if l.tax_percent %}<br><small class="ui-log-sub">{{ l.tax_percent|floatformat:"-2" }}%</small>{% endif %}</td>
+                  <td class="num"><strong>{% if l.total < 0 %}−₹{{ l.total|inr2|cut:"-" }}{% else %}₹{{ l.total|inr2 }}{% endif %}</strong></td>
+                  <td class="num">
+                    {% if l.charge and can_edit %}
+                    <details class="ui-pms-void"><summary title="Void"><i class="fa-solid fa-ellipsis"></i></summary>
+                      <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/charges/{{ l.charge.pk }}/void/" class="ui-inline-fields">{% csrf_token %}
+                        <input class="ui-input" name="reason" placeholder="Reason" required><button class="ui-btn ui-btn-tinted-red ui-btn-sm" type="submit">Void</button></form>
+                    </details>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <dl class="ui-pms-totals">
+            <div><dt>Taxable amount</dt><dd>₹{{ folio.net|inr2 }}</dd></div>
+            <div><dt>GST</dt><dd>₹{{ folio.tax|inr2 }}</dd></div>
+            <div class="is-strong"><dt>Total</dt><dd>₹{{ folio.total|inr2 }}</dd></div>
+            <div><dt>Paid (net of refunds)</dt><dd class="ui-text-green">−₹{{ folio.paid|inr2 }}</dd></div>
+            <div class="is-total"><dt>{% if folio.balance < 0 %}Credit due to guest{% else %}Balance due{% endif %}</dt><dd>₹{{ folio.balance|inr2 }}</dd></div>
+          </dl>
+          {% if folio.voided %}
+          <details class="ui-pms-voided"><summary>{{ folio.voided|length }} voided charge{{ folio.voided|length|pluralize }}</summary>
+            <ul class="ui-dash-mini">{% for c in folio.voided %}<li><span><s>{{ c.get_kind_display }} · {{ c.description }}</s> — {{ c.void_reason }}{% if c.voided_by %} ({{ c.voided_by.username }}){% endif %}</span><strong><s>₹{{ c.total|inr2 }}</s></strong></li>{% endfor %}</ul>
+          </details>
+          {% endif %}
+          {% if can_edit and b.booking_status != 'CANCELLED' and b.booking_status != 'NO_SHOW' %}
+          <details class="bk-action">
+            <summary><i class="fa-solid fa-plus"></i>Post a charge<i class="fa-solid fa-chevron-down bk-chev"></i></summary>
+            <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/charges/add/" class="ui-pms-addform" id="chargeForm">{% csrf_token %}
+              <div class="ui-field"><label for="chKind">Charge</label>
+                <select id="chKind" class="ui-input" name="kind">{% for k, l in charge_kinds %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></div>
+              <div class="ui-field is-wide"><label for="chDesc">Description</label><input id="chDesc" class="ui-input" name="description" placeholder="e.g. Dinner — bill 1042" maxlength="200"></div>
+              <div class="ui-field"><label for="chQty">Qty</label><input id="chQty" class="ui-input" name="quantity" type="number" min="0.01" step="0.01" value="1"></div>
+              <div class="ui-field"><label for="chPrice">Rate ₹ (before GST)</label><input id="chPrice" class="ui-input" name="unit_price" type="number" min="0.01" step="0.01" required></div>
+              <div class="ui-field"><label for="chTax">GST %</label><input id="chTax" class="ui-input" name="tax_percent" type="number" min="0" max="28" step="0.01" value="18"></div>
+              <div class="ui-field"><label for="chDate">Date</label><input id="chDate" class="ui-input" name="service_date" type="date" value="{{ today|date:'Y-m-d' }}"></div>
+              <div class="ui-field"><label for="chRef">Bill / ref</label><input id="chRef" class="ui-input" name="reference" maxlength="80"></div>
+              <div class="ui-filter-actions"><button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-plus"></i><span>Post charge</span></button></div>
+            </form>
+          </details>
+          {% endif %}
+        </section>
+
+        <section class="ui-card ui-list-card" id="payments" style="margin-top:16px">
+          <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Payments</h2><span class="ui-list-count">₹{{ folio.paid|inr2 }} received</span></div>
+          {% if folio.payments %}
+          <div class="table-responsive"><table class="table">
+            <thead><tr><th>When</th><th>Type</th><th>Method</th><th>Reference</th><th class="num">Amount</th><th></th></tr></thead>
+            <tbody>{% for p in folio.payments %}
+              <tr class="{% if p.is_void %}is-void{% endif %}">
+                <td class="nowrap">{{ p.received_at|date:"d M, h:i A" }}{% if p.received_by %}<br><small class="ui-log-sub">{{ p.received_by.username }}</small>{% endif %}</td>
+                <td><span class="ui-chip ui-chip-{% if p.is_void %}gray{% elif p.kind == 'REFUND' %}purple{% else %}green{% endif %}">{% if p.is_void %}Void{% else %}{{ p.get_kind_display }}{% endif %}</span></td>
+                <td>{{ p.get_method_display }}</td>
+                <td>{{ p.reference|default:"—" }}{% if p.note %}<br><small class="ui-log-sub">{{ p.note }}</small>{% endif %}{% if p.is_void %}<br><small class="ui-log-sub">Voided: {{ p.void_reason }}</small>{% endif %}</td>
+                <td class="num">{% if p.kind == 'REFUND' %}−{% endif %}₹{{ p.amount|inr2 }}</td>
+                <td class="num">{% if can_edit and not p.is_void %}
                   <details class="ui-pms-void"><summary title="Void"><i class="fa-solid fa-ellipsis"></i></summary>
-                    <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/charges/{{ l.charge.pk }}/void/" class="ui-inline-fields">{% csrf_token %}
+                    <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/payments/{{ p.pk }}/void/" class="ui-inline-fields">{% csrf_token %}
                       <input class="ui-input" name="reason" placeholder="Reason" required><button class="ui-btn ui-btn-tinted-red ui-btn-sm" type="submit">Void</button></form>
-                  </details>
-                  {% endif %}
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        <dl class="ui-pms-totals">
-          <div><dt>Taxable amount</dt><dd>₹{{ folio.net|inr2 }}</dd></div>
-          <div><dt>GST</dt><dd>₹{{ folio.tax|inr2 }}</dd></div>
-          <div class="is-strong"><dt>Total</dt><dd>₹{{ folio.total|inr2 }}</dd></div>
-          <div><dt>Paid (net of refunds)</dt><dd class="ui-text-green">−₹{{ folio.paid|inr2 }}</dd></div>
-          <div class="is-total"><dt>{% if folio.balance < 0 %}Credit due to guest{% else %}Balance due{% endif %}</dt><dd>₹{{ folio.balance|inr2 }}</dd></div>
-        </dl>
-        {% if folio.voided %}
-        <details class="ui-pms-voided"><summary>{{ folio.voided|length }} voided charge{{ folio.voided|length|pluralize }}</summary>
-          <ul class="ui-dash-mini">{% for c in folio.voided %}<li><span><s>{{ c.get_kind_display }} · {{ c.description }}</s> — {{ c.void_reason }}{% if c.voided_by %} ({{ c.voided_by.username }}){% endif %}</span><strong><s>₹{{ c.total|inr2 }}</s></strong></li>{% endfor %}</ul>
-        </details>
+                  </details>{% endif %}</td>
+              </tr>{% endfor %}</tbody>
+          </table></div>
+          {% else %}<p class="ui-pad ui-log-sub" style="margin:0">No payments yet.</p>{% endif %}
+          {% if can_edit %}
+          <details class="bk-action" {% if folio.balance > 0 and b.booking_status == 'CHECKED_IN' %}open{% endif %}>
+            <summary><i class="fa-solid fa-indian-rupee-sign"></i>{% if folio.balance > 0 %}Collect ₹{{ folio.balance|inr2 }}{% else %}Record payment or refund{% endif %}<i class="fa-solid fa-chevron-down bk-chev"></i></summary>
+            <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/payments/add/" class="ui-pms-addform">{% csrf_token %}
+              <div class="ui-field"><label for="pyKind">Type</label><select id="pyKind" class="ui-input" name="kind"><option value="PAYMENT">Payment received</option><option value="REFUND">Refund paid out</option></select></div>
+              <div class="ui-field"><label for="pyAmt">Amount ₹</label><input id="pyAmt" class="ui-input" name="amount" type="number" min="0.01" step="0.01" value="{% if folio.balance > 0 %}{{ folio.balance|stringformat:'s' }}{% endif %}" required></div>
+              <div class="ui-field"><label for="pyMethod">Method</label><select id="pyMethod" class="ui-input" name="method">{% for k, l in methods %}{% if k != 'COMPANY' or accounts %}<option value="{{ k }}">{% if k == 'COMPANY' %}Bill to company (city ledger){% else %}{{ l }}{% endif %}</option>{% endif %}{% endfor %}</select></div>
+              {% if accounts %}<div class="ui-field" id="pyCompanyWrap" hidden><label for="pyCompany">Company account</label><select id="pyCompany" class="ui-input" name="company_account">{% for a in accounts %}<option value="{{ a.pk }}" {% if b.company_account_id == a.pk %}selected{% endif %}>{{ a.name }}</option>{% endfor %}</select>
+                <label class="ui-pms-check" style="margin-top:6px"><input type="checkbox" name="override_limit" value="1"> Override credit limit</label></div>{% endif %}
+              <div class="ui-field"><label for="pyRef">UTR / slip no.</label><input id="pyRef" class="ui-input" name="reference" maxlength="100"></div>
+              <div class="ui-field is-wide"><label for="pyNote">Note</label><input id="pyNote" class="ui-input" name="note" maxlength="200"></div>
+              <div class="ui-filter-actions"><button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-indian-rupee-sign"></i><span>Record</span></button></div>
+            </form>
+          </details>
+          {% endif %}
+        </section>
+      </div>
+
+      <!-- ---------- ACTIVITY ---------- -->
+      <div class="bk-pane" data-pane="activity" role="tabpanel">
+        {% if not history and not cabs and not tasks %}
+        <section class="ui-card ui-pad"><p class="ui-log-sub" style="margin:0">No previous stays, cab trips or housekeeping tasks for this booking yet.</p></section>
         {% endif %}
-        {% if can_edit and b.booking_status != 'CANCELLED' and b.booking_status != 'NO_SHOW' %}
-        <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/charges/add/" class="ui-pms-addform" id="chargeForm">{% csrf_token %}
-          <div class="ui-field"><label for="chKind">Charge</label>
-            <select id="chKind" class="ui-input" name="kind">{% for k, l in charge_kinds %}<option value="{{ k }}">{{ l }}</option>{% endfor %}</select></div>
-          <div class="ui-field is-wide"><label for="chDesc">Description</label><input id="chDesc" class="ui-input" name="description" placeholder="e.g. Dinner — bill 1042" maxlength="200"></div>
-          <div class="ui-field"><label for="chQty">Qty</label><input id="chQty" class="ui-input" name="quantity" type="number" min="0.01" step="0.01" value="1"></div>
-          <div class="ui-field"><label for="chPrice">Rate ₹ (before GST)</label><input id="chPrice" class="ui-input" name="unit_price" type="number" min="0.01" step="0.01" required></div>
-          <div class="ui-field"><label for="chTax">GST %</label><input id="chTax" class="ui-input" name="tax_percent" type="number" min="0" max="28" step="0.01" value="18"></div>
-          <div class="ui-field"><label for="chDate">Date</label><input id="chDate" class="ui-input" name="service_date" type="date" value="{{ today|date:'Y-m-d' }}"></div>
-          <div class="ui-field"><label for="chRef">Bill / ref</label><input id="chRef" class="ui-input" name="reference" maxlength="80"></div>
-          <div class="ui-filter-actions"><button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-plus"></i><span>Post charge</span></button></div>
-        </form>
+        {% if history %}
+        <section class="ui-card ui-pad">
+          <h2 class="ui-card-title">Previous stays</h2>
+          <ul class="ui-dash-mini">
+            {% for h in history %}<li><a href="{{ base_url }}bookings/{{ h.pk }}/">{{ h.check_in_date|date:"d M Y" }} · Room {{ h.room.room_number }}</a><strong>{{ h.get_booking_status_display }}</strong></li>{% endfor %}
+          </ul>
+        </section>
         {% endif %}
-      </section>
-
-      <section class="ui-card ui-list-card" id="payments">
-        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Payments</h2><span class="ui-list-count">₹{{ folio.paid|inr2 }} received</span></div>
-        {% if folio.payments %}
-        <div class="table-responsive"><table class="table">
-          <thead><tr><th>When</th><th>Type</th><th>Method</th><th>Reference</th><th class="num">Amount</th><th></th></tr></thead>
-          <tbody>{% for p in folio.payments %}
-            <tr class="{% if p.is_void %}is-void{% endif %}">
-              <td class="nowrap">{{ p.received_at|date:"d M, h:i A" }}{% if p.received_by %}<br><small class="ui-log-sub">{{ p.received_by.username }}</small>{% endif %}</td>
-              <td><span class="ui-chip ui-chip-{% if p.is_void %}gray{% elif p.kind == 'REFUND' %}purple{% else %}green{% endif %}">{% if p.is_void %}Void{% else %}{{ p.get_kind_display }}{% endif %}</span></td>
-              <td>{{ p.get_method_display }}</td>
-              <td>{{ p.reference|default:"—" }}{% if p.note %}<br><small class="ui-log-sub">{{ p.note }}</small>{% endif %}{% if p.is_void %}<br><small class="ui-log-sub">Voided: {{ p.void_reason }}</small>{% endif %}</td>
-              <td class="num">{% if p.kind == 'REFUND' %}−{% endif %}₹{{ p.amount|inr2 }}</td>
-              <td class="num">{% if can_edit and not p.is_void %}
-                <details class="ui-pms-void"><summary title="Void"><i class="fa-solid fa-ellipsis"></i></summary>
-                  <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/payments/{{ p.pk }}/void/" class="ui-inline-fields">{% csrf_token %}
-                    <input class="ui-input" name="reason" placeholder="Reason" required><button class="ui-btn ui-btn-tinted-red ui-btn-sm" type="submit">Void</button></form>
-                </details>{% endif %}</td>
-            </tr>{% endfor %}</tbody>
-        </table></div>
-        {% else %}<p class="ui-pad ui-log-sub" style="margin:0">No payments yet.</p>{% endif %}
-        {% if can_edit %}
-        <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/payments/add/" class="ui-pms-addform">{% csrf_token %}
-          <div class="ui-field"><label for="pyKind">Type</label><select id="pyKind" class="ui-input" name="kind"><option value="PAYMENT">Payment received</option><option value="REFUND">Refund paid out</option></select></div>
-          <div class="ui-field"><label for="pyAmt">Amount ₹</label><input id="pyAmt" class="ui-input" name="amount" type="number" min="0.01" step="0.01" value="{% if folio.balance > 0 %}{{ folio.balance|stringformat:'s' }}{% endif %}" required></div>
-          <div class="ui-field"><label for="pyMethod">Method</label><select id="pyMethod" class="ui-input" name="method">{% for k, l in methods %}{% if k != 'COMPANY' or accounts %}<option value="{{ k }}">{% if k == 'COMPANY' %}Bill to company (city ledger){% else %}{{ l }}{% endif %}</option>{% endif %}{% endfor %}</select></div>
-          {% if accounts %}<div class="ui-field" id="pyCompanyWrap" hidden><label for="pyCompany">Company account</label><select id="pyCompany" class="ui-input" name="company_account">{% for a in accounts %}<option value="{{ a.pk }}" {% if b.company_account_id == a.pk %}selected{% endif %}>{{ a.name }}</option>{% endfor %}</select>
-            <label class="ui-pms-check" style="margin-top:6px"><input type="checkbox" name="override_limit" value="1"> Override credit limit</label></div>{% endif %}
-          <div class="ui-field"><label for="pyRef">UTR / slip no.</label><input id="pyRef" class="ui-input" name="reference" maxlength="100"></div>
-          <div class="ui-field is-wide"><label for="pyNote">Note</label><input id="pyNote" class="ui-input" name="note" maxlength="200"></div>
-          <div class="ui-filter-actions"><button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-indian-rupee-sign"></i><span>Record</span></button></div>
-        </form>
+        {% if cabs %}
+        <section class="ui-card ui-list-card" style="margin-top:16px">
+          <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Cab trips</h2></div>
+          <div class="table-responsive"><table class="table"><thead><tr><th>Pickup</th><th>Route</th><th>Status</th><th>Billing</th><th class="num">Amount</th></tr></thead><tbody>
+            {% for c in cabs %}<tr><td class="nowrap">{{ c.pickup_datetime|date:"d M, h:i A" }}</td><td>{{ c.pickup_location }} → {{ c.drop_location }}</td><td>{{ c.get_trip_status_display }}</td><td>{{ c.get_payment_status_display }}{% if c.payment_status == 'ADDED_TO_FOLIO' %} <small class="ui-log-sub">· on the folio</small>{% endif %}</td><td class="num">₹{{ c.total_amount|inr2 }}</td></tr>{% endfor %}
+          </tbody></table></div>
+        </section>
         {% endif %}
-      </section>
-
-      <section class="ui-card ui-pad" id="guest">
-        <h2 class="ui-card-title">Guest &amp; registration</h2>
-        <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/guest/" enctype="multipart/form-data" class="ui-stack-form">{% csrf_token %}
-          <fieldset class="ui-form-grid" {% if not can_edit %}disabled{% endif %}>
-            <div class="ui-field"><label for="gName">Full name</label><input id="gName" class="ui-input" name="guest_name" value="{{ b.guest_name }}" required maxlength="150"></div>
-            <div class="ui-field"><label for="gPhone">Phone</label><input id="gPhone" class="ui-input" name="guest_phone" value="{{ b.guest_phone }}" maxlength="30"></div>
-            <div class="ui-field"><label for="gEmail">Email</label><input id="gEmail" class="ui-input" type="email" name="guest_email" value="{{ b.guest_email }}"></div>
-            <div class="ui-field"><label for="gAdults">Adults</label><input id="gAdults" class="ui-input" type="number" min="1" max="20" name="adults" value="{{ b.adults }}"></div>
-            <div class="ui-field"><label for="gKids">Children</label><input id="gKids" class="ui-input" type="number" min="0" max="20" name="children" value="{{ b.children }}"></div>
-            <div class="ui-field"><label for="gSource">Source</label><select id="gSource" class="ui-input" name="source">{% for k, l in sources %}<option value="{{ k }}" {% if b.source == k %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
-            <div class="ui-field"><label for="gNat">Nationality</label><input id="gNat" class="ui-input" name="nationality" value="{{ b.nationality }}" list="natList" maxlength="60"><datalist id="natList"><option value="Indian"><option value="American"><option value="British"><option value="German"><option value="French"><option value="Australian"><option value="Canadian"><option value="Nepalese"><option value="Bangladeshi"><option value="Sri Lankan"><option value="Emirati"></datalist></div>
-            <div class="ui-field"><label for="gIdType">ID type</label><select id="gIdType" class="ui-input" name="id_type"><option value="">—</option>{% for k, l in id_types %}<option value="{{ k }}" {% if b.id_type == k %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
-            <div class="ui-field"><label for="gIdNo">ID number</label><input id="gIdNo" class="ui-input" name="id_number" value="{{ b.id_number }}" maxlength="60" autocomplete="off"></div>
-            <div class="ui-field"><label for="gDoc">ID scan (image / PDF, 5 MB)</label><input id="gDoc" class="ui-input" type="file" name="id_document" accept="image/*,application/pdf">{% if b.id_document %}<small><a href="{{ b.id_document.url }}" target="_blank" rel="noopener">View current scan</a></small>{% endif %}</div>
-            <div class="ui-field"><label for="gDob">Date of birth</label><input id="gDob" class="ui-input" type="date" name="date_of_birth" value="{{ b.date_of_birth|date:'Y-m-d' }}"></div>
-            <div class="ui-field"><label for="gPurpose">Purpose of visit</label><input id="gPurpose" class="ui-input" name="purpose_of_visit" value="{{ b.purpose_of_visit }}" list="purposeList" maxlength="100"><datalist id="purposeList"><option value="Leisure"><option value="Business"><option value="Wedding / event"><option value="Medical"><option value="Transit"></datalist></div>
-            <div class="ui-field"><label for="gFrom">Arriving from</label><input id="gFrom" class="ui-input" name="arriving_from" value="{{ b.arriving_from }}" maxlength="120"></div>
-            <div class="ui-field"><label for="gTo">Going to</label><input id="gTo" class="ui-input" name="going_to" value="{{ b.going_to }}" maxlength="120"></div>
-            <div class="ui-field ui-pms-foreign"><label for="gVisa">Visa number</label><input id="gVisa" class="ui-input" name="visa_number" value="{{ b.visa_number }}" maxlength="60"></div>
-            <div class="ui-field ui-pms-foreign"><label for="gVisaTill">Visa valid till</label><input id="gVisaTill" class="ui-input" type="date" name="visa_valid_till" value="{{ b.visa_valid_till|date:'Y-m-d' }}"></div>
-            <div class="ui-field is-wide"><label for="gAddr">Home address</label><textarea id="gAddr" class="ui-input" name="guest_address" rows="2">{{ b.guest_address }}</textarea></div>
-            <div class="ui-field"><label for="gAcct">Company account</label><select id="gAcct" class="ui-input" name="company_account"><option value="">None</option>{% for a in accounts %}<option value="{{ a.pk }}" {% if b.company_account_id == a.pk %}selected{% endif %}>{{ a.name }}</option>{% endfor %}</select></div>
-            <div class="ui-field"><label for="gCo">Company name on invoice</label><input id="gCo" class="ui-input" name="company_name" value="{{ b.company_name }}" maxlength="150"></div>
-            <div class="ui-field"><label for="gGst">Company GSTIN</label><input id="gGst" class="ui-input" name="company_gstin" value="{{ b.company_gstin }}" maxlength="15" style="text-transform:uppercase" placeholder="27AAPFU0939F1ZV"></div>
-            <div class="ui-field is-wide"><label for="gReq">Guest requests</label><textarea id="gReq" class="ui-input" name="special_requests" rows="2">{{ b.special_requests }}</textarea></div>
-            <div class="ui-field is-wide"><label for="gNotes">Staff notes (never shown to the guest)</label><textarea id="gNotes" class="ui-input" name="internal_notes" rows="2">{{ b.internal_notes }}</textarea></div>
-          </fieldset>
-          {% if can_edit %}<div><button class="ui-btn ui-btn-primary" type="submit"><i class="fa-solid fa-floppy-disk"></i><span>Save guest details</span></button></div>{% endif %}
-        </form>
-      </section>
-
-      {% if cabs %}
-      <section class="ui-card ui-list-card">
-        <div class="ui-list-toolbar"><h2 class="ui-card-title" style="margin:0">Cab trips</h2></div>
-        <div class="table-responsive"><table class="table"><thead><tr><th>Pickup</th><th>Route</th><th>Status</th><th>Billing</th><th class="num">Amount</th></tr></thead><tbody>
-          {% for c in cabs %}<tr><td class="nowrap">{{ c.pickup_datetime|date:"d M, h:i A" }}</td><td>{{ c.pickup_location }} → {{ c.drop_location }}</td><td>{{ c.get_trip_status_display }}</td><td>{{ c.get_payment_status_display }}{% if c.payment_status == 'ADDED_TO_FOLIO' %} <small class="ui-log-sub">· on the folio</small>{% endif %}</td><td class="num">₹{{ c.total_amount|inr2 }}</td></tr>{% endfor %}
-        </tbody></table></div>
-      </section>
-      {% endif %}
-
-      {% if tasks %}
-      <section class="ui-card ui-pad">
-        <h2 class="ui-card-title">Housekeeping</h2>
-        <ul class="ui-dash-mini">{% for t in tasks %}<li><span>{{ t.task_date|date:"d M" }} · Room {{ t.room.room_number }} · {{ t.get_kind_display }}{% if t.assigned_to %} · {{ t.assigned_to.name }}{% endif %}</span><strong>{{ t.get_status_display }}</strong></li>{% endfor %}</ul>
-      </section>
-      {% endif %}
+        {% if tasks %}
+        <section class="ui-card ui-pad" style="margin-top:16px">
+          <h2 class="ui-card-title">Housekeeping</h2>
+          <ul class="ui-dash-mini">{% for t in tasks %}<li><span>{{ t.task_date|date:"d M" }} · Room {{ t.room.room_number }} · {{ t.get_kind_display }}{% if t.assigned_to %} · {{ t.assigned_to.name }}{% endif %}</span><strong>{{ t.get_status_display }}</strong></li>{% endfor %}</ul>
+        </section>
+        {% endif %}
+      </div>
     </div>
   </div>
 </div>
 {{ gst_json|json_script:"booking-gst-data" }}
 <script>
 (function () {
+  // ---- Tabs: ?tab=… or legacy #folio / #payments / #guest links; remembers the last tab per booking ----
+  var tabs = document.querySelectorAll('.bk-tabs [data-tab]'), panes = document.querySelectorAll('.bk-pane');
+  var KEY = 'bkTab:{{ b.pk }}';
+  function show(name, push) {
+    var found = false;
+    tabs.forEach(function (t) { var on = t.dataset.tab === name; found = found || on; t.classList.toggle('is-active', on); t.setAttribute('aria-selected', on); });
+    if (!found) return false;
+    panes.forEach(function (p) { p.hidden = p.dataset.pane !== name; });
+    try { sessionStorage.setItem(KEY, name); } catch (e) {}
+    if (push) { var u = new URL(location.href); u.searchParams.set('tab', name); u.hash = ''; history.replaceState(null, '', u); }
+    return true;
+  }
+  var hashMap = { folio: 'folio', payments: 'folio', guest: 'guest' };
+  var serverTab = '{{ active_tab|escapejs }}';
+  var initial = serverTab || hashMap[location.hash.slice(1)];
+  if (!initial) { try { initial = sessionStorage.getItem(KEY); } catch (e) {} }
+  if (!initial) initial = '{% if kyc_items and b.booking_status == "RESERVED" %}guest{% elif b.booking_status == "CHECKED_IN" %}folio{% else %}stay{% endif %}';
+  show(initial) || show('stay');
+  tabs.forEach(function (t) { t.addEventListener('click', function (e) { e.preventDefault(); show(t.dataset.tab, true); }); });
+  document.querySelectorAll('[data-tab-link]').forEach(function (a) {
+    a.addEventListener('click', function (e) { e.preventDefault(); show(a.dataset.tabLink, true); document.querySelector('.bk-tabs').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  });
+  var firstErr = document.querySelector('.ui-field.has-error .ui-input');
+  if (firstErr) { show('guest'); firstErr.focus(); }
+
+  // ---- Folio helpers ----
   var gst = JSON.parse(document.getElementById('booking-gst-data').textContent);
   var kind = document.getElementById('chKind'), tax = document.getElementById('chTax');
   if (kind && tax) {
@@ -273,6 +467,8 @@
     var syncCo = function () { pc.hidden = pm.value !== 'COMPANY' || (pk && pk.value === 'REFUND'); };
     pm.addEventListener('change', syncCo); if (pk) pk.addEventListener('change', syncCo); syncCo();
   }
+
+  // ---- Guest form: foreign-national fields + ID number format hint ----
   var nat = document.getElementById('gNat');
   if (nat) {
     var toggle = function () {
@@ -281,6 +477,12 @@
       document.querySelectorAll('.ui-pms-foreign').forEach(function (el) { el.hidden = !foreign; });
     };
     nat.addEventListener('input', toggle); toggle();
+  }
+  var idType = document.getElementById('gIdType'), idHint = document.getElementById('gIdHint');
+  var hints = { AADHAAR: '12 digits', PAN: 'e.g. ABCDE1234F', PASSPORT: '6–9 letters and digits', VOTER_ID: 'e.g. ABC1234567', DRIVING_LICENCE: 'e.g. MH1420110012345' };
+  if (idType && idHint) {
+    var h = function () { idHint.textContent = hints[idType.value] || ''; };
+    idType.addEventListener('change', h); h();
   }
 })();
 </script>

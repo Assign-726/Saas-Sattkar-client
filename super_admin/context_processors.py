@@ -40,6 +40,12 @@ def activity_log_access(request):
                 if area_key not in CORE_SYSTEM_AREAS and not branch.is_feature_enabled(area_key):
                     access[area_key] = False
 
+    from restaurant_admin.waiter import is_waiter
+    waiter = is_waiter(user)
+    if waiter:  # Waiter / Captain only works the Tables board; guest pages are off-limits
+        for k in ('guests', 'feedback', 'campaigns'):
+            access[k] = False
+
     access['guests_group'] = access.get('guests', False) or access.get('feedback', False) or access.get('campaigns', False)
     can_fin = _can_manage_finance(user)
     if not getattr(user, 'is_superuser', False) and branch and hasattr(branch, 'is_feature_enabled'):
@@ -51,7 +57,7 @@ def activity_log_access(request):
         'can_manage_roles': _can_manage_roles(user),
         'can_view_restaurant_logs': can_view_logs(user, 'restaurant'),
         'can_view_hotel_logs': can_view_logs(user, 'hotel'),
-        'can_view_guests': _can_view_guests(user),
+        'can_view_guests': (not waiter) and _can_view_guests(user),
         'can_manage_integrations': _can_manage_integrations(user),
         'can_manage_finance': can_fin,
         'can_run_campaigns': _can_manage_guests(user),

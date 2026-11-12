@@ -166,6 +166,7 @@
     </div>
 
     <!-- Main Settings Form Container -->
+    <div class="settings-panes">
     <form method="post" enctype="multipart/form-data" novalidate id="branchSettingsForm">
       {% csrf_token %}
 
@@ -1167,6 +1168,21 @@
               </div>
             </div>
 
+            {% if branch %}
+            <div class="p-3 bg-light rounded border">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" name="pos_quick_bill" id="id_pos_quick_bill" {% if branch.pos_quick_bill %}checked{% endif %}>
+                <label class="form-check-label fw-semibold" for="id_pos_quick_bill">Quick bill at the POS (token + bill)</label>
+                <div class="form-text text-muted">
+                  For food courts and token counters without a kitchen flow. The POS shows one <strong>Quick bill</strong>
+                  button instead of <strong>Send to kitchen</strong>: it settles the order and prints the order token (KOT)
+                  and the bill together, one after the other, with a tear line between them.
+                  Turn off to go back to <strong>Send to kitchen</strong> + <strong>Settle &amp; bill</strong>.
+                </div>
+              </div>
+            </div>
+            {% endif %}
+
             <div class="d-flex justify-content-end mt-4 pt-3 border-top">
               <button type="submit" class="btn btn-primary px-4 fw-semibold">
                 <i class="bi bi-check2-circle me-1"></i> Save Printing Templates
@@ -1192,16 +1208,18 @@
           <div class="card-body p-4">
             <!-- Digital Ordering Switch -->
             <h6 class="fw-bold mb-3 text-dark">Customer Digital Ordering</h6>
-            <div class="mb-4 form-check form-switch p-3 bg-light rounded border">
-              <div class="ms-4">
-                {{ form.enable_customer_ordering }}
-                <label class="form-check-label fw-bold" for="id_enable_customer_ordering">Enable Digital Ordering for
+            <div class="mb-4 p-3 bg-light rounded border d-flex align-items-start justify-content-between gap-3">
+              <div>
+                <label class="form-check-label fw-bold d-block" for="id_enable_customer_ordering">Enable Digital Ordering for
                   Customers</label>
-                <div class="form-text text-muted">When enabled, customers can add items to cart and place orders from
+                <div class="form-text text-muted mt-1">When enabled, customers can add items to cart and place orders from
                   the digital menu page. When disabled, the menu operates as a catalog without cart capability.</div>
                 {% if form.enable_customer_ordering.errors %}
                 <div class="text-danger small mt-1">{{ form.enable_customer_ordering.errors|join:', ' }}</div>
                 {% endif %}
+              </div>
+              <div class="form-check form-switch m-0 flex-shrink-0">
+                {{ form.enable_customer_ordering }}
               </div>
             </div>
 
@@ -1687,6 +1705,7 @@
         {% url 'restaurant_admin:two_factor_update' restaurant_slug=rslug as tfa_action %}
         {% include 'core/_two_factor_card.html' with action=tfa_action form_id='tfaForm' with_form=True %}
       </div>
+    </div>
   </div>
 </div>
 

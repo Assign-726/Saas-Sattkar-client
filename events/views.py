@@ -279,22 +279,31 @@ class AdminClubEventViewSet(viewsets.ModelViewSet):
         if security_tok and booking.security_token and security_tok != booking.security_token:
             return Response({'valid': False, 'message': 'Security token mismatch. Possible forged QR pass.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check-in validation
-        if booking.checked_in:
-            return Response({
-                'valid': False,
-                'already_checked_in': True,
-                'checked_in_at': booking.checked_in_at,
-                'message': f'ALREADY SCANNED: Guest was checked in on {timezone.localtime(booking.checked_in_at).strftime("%I:%M %p") if booking.checked_in_at else "earlier"}.',
-                'booking': EventBookingSerializer(booking).data
-            }, status=status.HTTP_400_BAD_REQUEST)
+        # Concurrency safety: Atomically lock booking row for check-in
+        with transaction.atomic():
+            locked_booking = EventBooking.objects.select_for_update().get(pk=booking.pk)
 
-        # Mark checked in
-        success, msg = booking.mark_checked_in(staff_user=request.user)
+            # Check-in validation
+            if locked_booking.checked_in:
+                return Response({
+                    'valid': False,
+                    'already_checked_in': True,
+                    'checked_in_at': locked_booking.checked_in_at,
+                    'message': f'ALREADY SCANNED: Guest was checked in on {timezone.localtime(locked_booking.checked_in_at).strftime("%I:%M %p") if locked_booking.checked_in_at else "earlier"}.',
+                    'booking': EventBookingSerializer(locked_booking).data
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Mark checked in
+            locked_booking.checked_in = True
+            locked_booking.checked_in_at = timezone.now()
+            if request.user and request.user.is_authenticated:
+                locked_booking.checked_in_by = request.user
+            locked_booking.save(update_fields=['checked_in', 'checked_in_at', 'checked_in_by'])
+
         return Response({
             'valid': True,
-            'message': f'Access Granted: Welcome {booking.guest_name} (+{booking.quantity - 1} guests)' if booking.quantity > 1 else f'Access Granted: Welcome {booking.guest_name}',
-            'booking': EventBookingSerializer(booking).data
+            'message': f'Access Granted: Welcome {locked_booking.guest_name} (+{locked_booking.quantity - 1} guests)' if locked_booking.quantity > 1 else f'Access Granted: Welcome {locked_booking.guest_name}',
+            'booking': EventBookingSerializer(locked_booking).data
         }, status=status.HTTP_200_OK)
 
 
@@ -398,29 +407,29 @@ def public_checkout_initiate(request):
     guest_phone = data['guest_phone']
 
     # Auto-expire overdue holds first
+    # Auto-expire overdue holds first
     now = timezone.now()
     EventBooking.objects.filter(
         payment_status=EventBooking.PaymentStatus.PENDING,
         expires_at__lt=now
     ).update(payment_status=EventBooking.PaymentStatus.EXPIRED)
 
+    # Flat pricing calculation: Zero tax
+    unit_price = ticket.base_price
+    tax_amount = Decimal('0.00')
+    total_amount = unit_price * qty
+    amount_in_paise = int(round(total_amount * 100))
+    booking_ref = EventBooking.generate_booking_reference()
+    expires_at = now + timedelta(minutes=15)
+
     with transaction.atomic():
-        # Concurrency safety: Lock row for update
-        locked_ticket = TicketType.objects.select_for_update().select_related('event', 'event__branch').get(pk=ticket.pk)
+        # Concurrency safety: Pessimistic row-level lock on TicketType row only
+        locked_ticket = TicketType.objects.select_for_update().get(pk=ticket.pk)
         
         if locked_ticket.available_quantity < qty:
             return Response({
                 'error': f'Insufficient tickets available. Only {locked_ticket.available_quantity} remaining.'
             }, status=status.HTTP_400_BAD_REQUEST)
-
-        # Flat pricing calculation: Zero tax
-        unit_price = locked_ticket.base_price
-        tax_amount = Decimal('0.00')
-        total_amount = unit_price * qty
-        amount_in_paise = int(round(total_amount * 100))
-
-        booking_ref = EventBooking.generate_booking_reference()
-        expires_at = now + timedelta(minutes=15)
 
         booking = EventBooking.objects.create(
             booking_reference=booking_ref,
@@ -435,43 +444,46 @@ def public_checkout_initiate(request):
             total_amount=total_amount,
             payment_status=EventBooking.PaymentStatus.PENDING,
             payment_method=EventBooking.PaymentMethod.ONLINE,
-            expires_at=expires_at
+            expires_at=expires_at,
+            razorpay_order_id=f"order_evt_{booking_ref.lower()}"
         )
-
-        # Razorpay integration
-        branch = locked_ticket.event.branch
-        key_id, key_secret = _get_branch_razorpay_credentials(branch)
-        razorpay_order_id = None
-
-        if key_id and key_secret and not key_id.startswith('rzp_mock'):
-            url = "https://api.razorpay.com/v1/orders"
-            payload = {
-                "amount": amount_in_paise,
-                "currency": "INR",
-                "receipt": booking_ref[:40]
-            }
-            auth_str = f"{key_id}:{key_secret}"
-            auth_b64 = base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')
-            req = urllib.request.Request(url, method='POST')
-            req.add_header('Content-Type', 'application/json')
-            req.add_header("Authorization", f"Basic {auth_b64}")
-
-            try:
-                req_data = json.dumps(payload).encode('utf-8')
-                with urllib.request.urlopen(req, data=req_data, timeout=10) as resp:
-                    if resp.status in [200, 201]:
-                        resp_data = json.loads(resp.read().decode('utf-8'))
-                        razorpay_order_id = resp_data.get('id')
-            except Exception as e:
-                # Log error and fallback to local order generation for tests/resilience
-                pass
-
-        if not razorpay_order_id:
-            razorpay_order_id = f"order_evt_{booking_ref.lower()}"
-
-        booking.razorpay_order_id = razorpay_order_id
         booking.security_token = booking.generate_security_token()
-        booking.save(update_fields=['razorpay_order_id', 'security_token'])
+        booking.save(update_fields=['security_token'])
+
+    # Database lock released in <1ms!
+    # External network call to Razorpay runs outside the database transaction
+    branch = booking.event.branch
+    key_id, key_secret = _get_branch_razorpay_credentials(branch)
+    razorpay_order_id = None
+
+    if key_id and key_secret and not key_id.startswith('rzp_mock'):
+        url = "https://api.razorpay.com/v1/orders"
+        payload = {
+            "amount": amount_in_paise,
+            "currency": "INR",
+            "receipt": booking_ref[:40]
+        }
+        auth_str = f"{key_id}:{key_secret}"
+        auth_b64 = base64.b64encode(auth_str.encode('utf-8')).decode('utf-8')
+        req = urllib.request.Request(url, method='POST')
+        req.add_header('Content-Type', 'application/json')
+        req.add_header("Authorization", f"Basic {auth_b64}")
+
+        try:
+            req_data = json.dumps(payload).encode('utf-8')
+            with urllib.request.urlopen(req, data=req_data, timeout=10) as resp:
+                if resp.status in [200, 201]:
+                    resp_data = json.loads(resp.read().decode('utf-8'))
+                    razorpay_order_id = resp_data.get('id')
+        except Exception as e:
+            # Fallback to local order generation for tests/resilience
+            pass
+
+    if razorpay_order_id:
+        booking.razorpay_order_id = razorpay_order_id
+        booking.save(update_fields=['razorpay_order_id'])
+    else:
+        razorpay_order_id = booking.razorpay_order_id
 
     return Response({
         'booking_reference': booking.booking_reference,
@@ -482,8 +494,8 @@ def public_checkout_initiate(request):
         'total_amount': str(total_amount),
         'amount_in_paise': amount_in_paise,
         'expires_at': expires_at.isoformat(),
-        'event_title': locked_ticket.event.title,
-        'tier_name': locked_ticket.name,
+        'event_title': booking.event.title,
+        'tier_name': booking.ticket_type.name,
         'quantity': qty,
         'guest_name': guest_name,
     }, status=status.HTTP_201_CREATED)
@@ -540,6 +552,40 @@ def public_verify_payment(request):
         locked_booking = EventBooking.objects.select_for_update().get(pk=booking.pk)
         locked_ticket = TicketType.objects.select_for_update().get(pk=locked_booking.ticket_type_id)
 
+        # 1. Re-check idempotency inside row lock
+        if locked_booking.payment_status == EventBooking.PaymentStatus.SUCCESS:
+            locked_booking.generate_qr_code()
+            res_data = EventBookingSerializer(locked_booking, context={'request': request}).data
+            return Response({
+                'success': True,
+                'message': 'Payment already verified and confirmed.',
+                'booking': res_data
+            }, status=status.HTTP_200_OK)
+
+        # 2. Prevent overselling if hold expired and another buyer claimed remaining capacity
+        now = timezone.now()
+        hold_is_stale = (
+            locked_booking.payment_status in (EventBooking.PaymentStatus.EXPIRED, EventBooking.PaymentStatus.CANCELLED)
+            or (locked_booking.expires_at and locked_booking.expires_at < now)
+        )
+        if hold_is_stale:
+            if locked_ticket.quantity_sold + locked_booking.quantity > locked_ticket.total_allocated:
+                # Capacity exceeded! Do NOT oversell. Mark expired hold with refund flag.
+                locked_booking.payment_status = EventBooking.PaymentStatus.EXPIRED
+                locked_booking.razorpay_payment_id = rzp_payment_id
+                locked_booking.razorpay_signature = rzp_signature
+                stamp = f"[AUTO-REFUND REQUIRED]: Payment received at {now.strftime('%Y-%m-%d %H:%M:%S')} after 15-minute hold expired and tier '{locked_ticket.name}' is sold out ({locked_ticket.quantity_sold}/{locked_ticket.total_allocated})."
+                locked_booking.notes = f"{locked_booking.notes}\n{stamp}".strip()
+                locked_booking.save(update_fields=['payment_status', 'razorpay_payment_id', 'razorpay_signature', 'notes'])
+
+                return Response({
+                    'success': False,
+                    'error': 'Your 15-minute checkout reservation expired and this ticket tier is now completely sold out. A refund will be processed to your original payment method.',
+                    'booking_reference': locked_booking.booking_reference,
+                    'refund_required': True
+                }, status=status.HTTP_409_CONFLICT)
+
+        # 3. Confirm booking and increment sold tickets
         locked_booking.payment_status = EventBooking.PaymentStatus.SUCCESS
         locked_booking.razorpay_payment_id = rzp_payment_id
         locked_booking.razorpay_signature = rzp_signature

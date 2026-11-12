@@ -3,326 +3,355 @@
 
 {% block extra_css %}
 <style>
-    .kanban-col {
+    /* ---------- Stat tiles (double as status filters) ---------- */
+    .rm-stats {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+    .rm-stat {
+        --c: var(--ui-label-2);
+        display: flex; align-items: center; gap: 0.7rem;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        padding: 0.7rem 0.85rem;
+        cursor: pointer;
+        text-align: left;
+        transition: border-color .15s, box-shadow .15s, background .15s;
+        min-width: 0;
+        color: var(--text-main);
+    }
+    .rm-stat:hover { border-color: var(--ui-separator-strong); }
+    .rm-stat.active { border-color: var(--c); box-shadow: 0 0 0 1px var(--c) inset; }
+    .rm-stat-icon {
+        width: 34px; height: 34px; flex-shrink: 0;
+        border-radius: 9px;
+        display: flex; align-items: center; justify-content: center;
+        color: var(--c);
+        background: color-mix(in srgb, var(--c) 14%, transparent);
+        font-size: 0.85rem;
+    }
+    .rm-stat-num { font-family: var(--ui-font-mono); font-size: 1.15rem; font-weight: 700; line-height: 1.1; }
+    .rm-stat-label { font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rm-stat[data-filter="all"]         { --c: var(--ui-label-2); }
+    .rm-stat[data-filter="AVAILABLE"]   { --c: var(--ui-green); }
+    .rm-stat[data-filter="OCCUPIED"]    { --c: var(--ui-accent); }
+    .rm-stat[data-filter="CLEANING"]    { --c: var(--ui-orange); }
+    .rm-stat[data-filter="MAINTENANCE"] { --c: var(--ui-red); }
+
+    /* ---------- Toolbar ---------- */
+    .rm-toolbar {
+        display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center;
+        margin-bottom: 1rem;
+    }
+    .rm-search {
+        position: relative; flex: 1 1 240px; min-width: 0;
+    }
+    .rm-search i { position: absolute; left: 0.8rem; top: 50%; transform: translateY(-50%); color: var(--text-subtle); font-size: 0.8rem; }
+    .rm-search input { padding-left: 2.1rem; height: 40px; }
+    .rm-toolbar .form-select { height: 40px; width: auto; flex: 0 1 180px; min-width: 0; }
+
+    /* ---------- Board ---------- */
+    .rm-board {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.9rem;
+        align-items: start;
+    }
+    .rm-col {
         background: var(--ui-surface-2);
         border: 1px solid var(--card-border);
         border-radius: 14px;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        height: 100%;
+        min-width: 0;
+        display: flex; flex-direction: column;
     }
-
-    .kanban-header {
-        padding: 0.85rem 1rem;
-        background: var(--card-bg);
+    .rm-col-head {
+        display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+        padding: 0.75rem 0.9rem;
         border-bottom: 1px solid var(--card-border);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    .kanban-title {
-        font-size: 0.84rem;
-        font-weight: 700;
-        color: var(--text-main);
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .kanban-dot {
-        width: 10px; height: 10px;
-        border-radius: 50%;
-        display: inline-block;
-        flex-shrink: 0;
-    }
-
-    .kanban-body {
-        padding: 0.75rem;
-        flex: 1;
-        overflow-y: auto;
-        max-height: 70vh;
-        scrollbar-width: thin;
-        scrollbar-color: rgba(0,0,0,0.1) transparent;
-    }
-
-    .room-card {
         background: var(--card-bg);
-        border-radius: 10px;
+        border-radius: 14px 14px 0 0;
+        position: sticky; top: var(--topbar-h); z-index: 2;
+    }
+    .rm-col-title { font-size: 0.82rem; font-weight: 700; display: flex; align-items: center; gap: .5rem; }
+    .rm-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .rm-count { font-family: var(--ui-font-mono); font-size: .72rem; font-weight: 700; padding: .1rem .5rem; border-radius: 20px; background: var(--ui-surface-2); color: var(--text-muted); }
+    .rm-col-body {
+        padding: 0.7rem;
+        display: flex; flex-direction: column; gap: 0.6rem;
+        max-height: calc(100vh - 300px); min-height: 120px;
+        overflow-y: auto; scrollbar-width: thin;
+    }
+    .rm-empty { text-align: center; padding: 2rem 1rem; color: var(--text-muted); font-size: .8rem; }
+    .rm-empty i { display: block; font-size: 1.5rem; opacity: .35; margin-bottom: .4rem; }
+
+    /* ---------- Room card ---------- */
+    .rm-card {
+        --c: var(--ui-label-2);
+        background: var(--card-bg);
         border: 1px solid var(--card-border);
-        padding: 0.85rem;
-        margin-bottom: 0.6rem;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.02);
-        transition: all 0.16s ease;
+        border-left: 3px solid var(--c);
+        border-radius: 10px;
+        padding: 0.7rem 0.75rem;
+        display: flex; flex-direction: column; gap: 0.5rem;
+        transition: box-shadow .15s;
     }
+    .rm-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.06); }
+    .rm-available   { --c: var(--ui-green); }
+    .rm-occupied    { --c: var(--ui-accent); }
+    .rm-cleaning    { --c: var(--ui-orange); }
+    .rm-maintenance { --c: var(--ui-red); }
 
-    .room-card:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        border-color: var(--ui-separator-strong);
+    .rm-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; }
+    .rm-id { display: flex; flex-direction: column; min-width: 0; }
+    .rm-number { font-family: var(--ui-font-mono); font-size: 1.1rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.2; }
+    .rm-cat { font-size: .74rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rm-more {
+        width: 32px; height: 32px; flex-shrink: 0;
+        border: 1px solid transparent; border-radius: 8px;
+        background: transparent; color: var(--text-muted);
+        display: inline-flex; align-items: center; justify-content: center;
     }
+    .rm-more:hover, .rm-more[aria-expanded="true"] { background: var(--ui-surface-2); border-color: var(--card-border); color: var(--text-main); }
 
-    .room-card-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 0.5rem;
+    .rm-meta { display: flex; align-items: center; justify-content: space-between; gap: .5rem; font-size: .74rem; color: var(--text-muted); }
+    .rm-meta i { margin-right: .3rem; opacity: .7; }
+    .rm-price { font-family: var(--ui-font-mono); font-weight: 700; color: var(--ui-green-text); font-size: .8rem; }
+    .rm-price small { font-weight: 500; color: var(--text-muted); font-family: var(--ui-font); }
+
+    .rm-guest { display: flex; align-items: center; gap: .55rem; background: var(--ui-surface-2); border-radius: 8px; padding: .45rem .55rem; min-width: 0; }
+    .rm-avatar { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; background: color-mix(in srgb, var(--ui-accent) 16%, transparent); color: var(--ui-accent-text); font-weight: 700; font-size: .75rem; display: flex; align-items: center; justify-content: center; }
+    .rm-guest-text { display: flex; flex-direction: column; min-width: 0; }
+    .rm-guest-text strong { font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rm-guest-text small { font-size: .7rem; color: var(--text-muted); }
+    .rm-flag { font-weight: 700; }
+    .rm-flag-warn { color: var(--ui-orange-text); }
+
+    .rm-note { font-size: .73rem; border-radius: 7px; padding: .35rem .55rem; display: flex; gap: .4rem; align-items: baseline; }
+    .rm-note-info   { background: color-mix(in srgb, var(--ui-accent) 10%, transparent); color: var(--ui-accent-text); }
+    .rm-note-danger { background: rgba(var(--ui-red-rgb), .1); color: var(--ui-red-text); }
+    .rm-note-muted  { background: var(--ui-surface-2); color: var(--text-muted); }
+
+    .rm-primary {
+        width: 100%; min-height: 36px;
+        display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+        font-size: .78rem; font-weight: 600;
+        border-radius: 8px; border: 1px solid transparent;
+        text-decoration: none; cursor: pointer;
     }
+    .rm-primary-green { background: rgba(var(--ui-green-rgb), .12); color: var(--ui-green-text); border-color: rgba(var(--ui-green-rgb), .35); }
+    .rm-primary-green:hover { background: rgba(var(--ui-green-rgb), .2); }
+    .rm-primary-blue  { background: color-mix(in srgb, var(--ui-accent) 10%, transparent); color: var(--ui-accent-text); border-color: color-mix(in srgb, var(--ui-accent) 30%, transparent); }
+    .rm-primary-blue:hover { background: color-mix(in srgb, var(--ui-accent) 18%, transparent); color: var(--ui-accent-text); }
 
-    .room-number-big {
-        font-family: var(--ui-font-mono);
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: var(--text-main);
-        letter-spacing: -0.02em;
+    .rm-hidden { display: none !important; }
+
+    /* One status selected: show its rooms as a full-width card grid */
+    .rm-board.rm-single { grid-template-columns: minmax(0, 1fr) !important; }
+    .rm-board.rm-single .rm-col-body {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+        max-height: none;
     }
+    .rm-board.rm-single .rm-empty { grid-column: 1 / -1; }
 
-    .room-meta {
-        font-size: 0.74rem;
-        color: var(--text-muted);
-        margin-bottom: 0.6rem;
+    /* ---------- Responsive ---------- */
+    @media (max-width: 1279px) {
+        .rm-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .rm-col-body { max-height: 60vh; }
     }
+    @media (max-width: 767px) {
+        /* Stat tiles become a swipeable filter strip */
+        .rm-stats {
+            display: flex; overflow-x: auto; gap: .5rem;
+            margin: 0 -1rem 0.75rem; padding: 0 1rem 2px;
+            scroll-snap-type: x proximity; scrollbar-width: none;
+        }
+        .rm-stats::-webkit-scrollbar { display: none; }
+        .rm-stat { flex: 0 0 auto; padding: .5rem .75rem; gap: .5rem; scroll-snap-align: start; border-radius: 22px; }
+        .rm-stat-icon { width: 26px; height: 26px; font-size: .72rem; border-radius: 50%; }
+        .rm-stat-num { font-size: .95rem; }
+        .rm-stat-text { display: flex; align-items: baseline; gap: .35rem; }
 
-    .room-card-footer {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        border-top: 1px solid var(--ui-separator);
-        padding-top: 0.55rem;
-        margin-top: 0.55rem;
+        .rm-toolbar .form-select { flex: 1 1 calc(50% - .3rem); }
+        .rm-search { flex-basis: 100%; }
+
+        /* One column; cards in a 2-up grid where space allows */
+        .rm-board { grid-template-columns: minmax(0, 1fr); gap: .75rem; }
+        .rm-col-head { top: var(--topbar-h); }
+        .rm-col-body { max-height: none; min-height: 0; }
+        .rm-more { width: 40px; height: 40px; }
+        .rm-primary { min-height: 42px; font-size: .82rem; }
+        .page-actions, .page-actions .btn-pms-primary { width: 100%; justify-content: center; }
     }
-
-    .btn-room-action {
-        font-size: 0.74rem;
-        font-weight: 600;
-        padding: 0.3rem 0.7rem;
-        border-radius: 7px;
-        border: none;
-        cursor: pointer;
-        transition: all 0.14s;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
+    @media (min-width: 520px) and (max-width: 767px) {
+        .rm-col-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .rm-col-body .rm-empty { grid-column: 1 / -1; }
     }
-
-    .btn-mark-clean    { background:rgba(var(--ui-green-rgb), 0.12); color:var(--ui-green-text); border:1px solid #86efac; }
-    .btn-mark-clean:hover { background:rgba(var(--ui-green-rgb), 0.16); }
-    .btn-mark-repaired { background:rgba(var(--ui-green-rgb), 0.12); color:var(--ui-green-text); border:1px solid #86efac; }
-    .btn-mark-repaired:hover { background:rgba(var(--ui-green-rgb), 0.16); }
-    .btn-quick-status  { background:var(--ui-surface-2); color:var(--ui-label-2); border:1px solid var(--ui-separator); }
-    .btn-quick-status:hover { background:var(--ui-surface-2); }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Page Header -->
 <div class="page-header">
     <div>
         <h1 class="page-title">Rooms &amp; Housekeeping Board</h1>
-        <p class="page-subtitle">Track real-time room readiness, housekeeping turnover queue, and out-of-order units</p>
+        <p class="page-subtitle">Live room readiness, turnover queue and out-of-order units</p>
     </div>
     {% if can_manage_physical_rooms %}
     <div class="page-actions">
         <button type="button" class="btn-pms-primary" data-bs-toggle="modal" data-bs-target="#addRoomModal">
-            <i class="fa-solid fa-plus"></i>Add Physical Room
+            <i class="fa-solid fa-plus"></i>Add Room
         </button>
     </div>
     {% endif %}
 </div>
 
-<!-- Summary Pills Row -->
-<div class="d-flex flex-wrap gap-2 mb-4">
-    <span class="pill pill-success"><span class="kanban-dot" style="background:var(--ui-green);"></span>{{ kanban.AVAILABLE|length }} Available</span>
-    <span class="pill pill-primary"><span class="kanban-dot" style="background:var(--ui-accent);"></span>{{ kanban.OCCUPIED|length }} Occupied</span>
-    <span class="pill pill-warning"><span class="kanban-dot" style="background:var(--ui-orange);"></span>{{ kanban.CLEANING|length }} Needs Cleaning</span>
-    <span class="pill pill-danger"><span class="kanban-dot" style="background:var(--ui-red);"></span>{{ kanban.MAINTENANCE|length }} Maintenance</span>
+<!-- Status tiles: tap to filter the board -->
+<div class="rm-stats" role="tablist" aria-label="Filter rooms by status">
+    <button type="button" class="rm-stat active" data-filter="all" role="tab" aria-selected="true">
+        <span class="rm-stat-icon"><i class="fa-solid fa-hotel"></i></span>
+        <span class="rm-stat-text"><span class="rm-stat-num">{{ total_rooms }}</span><span class="rm-stat-label">All rooms</span></span>
+    </button>
+    <button type="button" class="rm-stat" data-filter="AVAILABLE" role="tab" aria-selected="false">
+        <span class="rm-stat-icon"><i class="fa-solid fa-circle-check"></i></span>
+        <span class="rm-stat-text"><span class="rm-stat-num">{{ kanban.AVAILABLE|length }}</span><span class="rm-stat-label">Available</span></span>
+    </button>
+    <button type="button" class="rm-stat" data-filter="OCCUPIED" role="tab" aria-selected="false">
+        <span class="rm-stat-icon"><i class="fa-solid fa-bed"></i></span>
+        <span class="rm-stat-text"><span class="rm-stat-num">{{ kanban.OCCUPIED|length }}</span><span class="rm-stat-label">Occupied</span></span>
+    </button>
+    <button type="button" class="rm-stat" data-filter="CLEANING" role="tab" aria-selected="false">
+        <span class="rm-stat-icon"><i class="fa-solid fa-broom"></i></span>
+        <span class="rm-stat-text"><span class="rm-stat-num">{{ kanban.CLEANING|length }}</span><span class="rm-stat-label">Needs cleaning</span></span>
+    </button>
+    <button type="button" class="rm-stat" data-filter="MAINTENANCE" role="tab" aria-selected="false">
+        <span class="rm-stat-icon"><i class="fa-solid fa-screwdriver-wrench"></i></span>
+        <span class="rm-stat-text"><span class="rm-stat-num">{{ kanban.MAINTENANCE|length }}</span><span class="rm-stat-label">Maintenance</span></span>
+    </button>
 </div>
 
-<!-- Kanban Board -->
-<div class="row g-3">
-    <!-- Available Column -->
-    <div class="col-md-6 col-xl-3">
-        <div class="kanban-col">
-            <div class="kanban-header">
-                <div class="kanban-title">
-                    <span class="kanban-dot" style="background:var(--ui-green);"></span>
-                    Available &amp; Clean
-                </div>
-                <span class="pill pill-success font-mono" style="font-size:0.68rem;">{{ kanban.AVAILABLE|length }}</span>
-            </div>
-            <div class="kanban-body">
-                {% for r in kanban.AVAILABLE %}
-                <div class="room-card" style="border-left:3px solid var(--ui-green);">
-                    <div class="room-card-header">
-                        <span class="room-number-big">#{{ r.room_number }}</span>
-                        <span class="status-tag tag-available" style="font-size:0.68rem;">{{ r.get_status_display }}</span>
-                    </div>
-                    <div class="room-meta">{{ r.category.name }} &bull; Floor {{ r.floor }}</div>
-                    <div class="room-card-footer">
-                        <span class="font-mono fw-semibold" style="font-size:0.8rem;color:var(--ui-green-text);">₹{{ r.category.base_price_per_night }}/nt</span>
-                        <div class="dropdown">
-                            <button class="btn-room-action btn-quick-status dropdown-toggle" type="button" data-bs-toggle="dropdown">Status</button>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li>
-                                    <form method="POST" action="{% url 'hotel_admin:room_status_update' restaurant_slug=rslug room_id=r.id %}">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="status" value="CLEANING">
-                                        <button type="submit" class="dropdown-item"><i class="fa-solid fa-broom" style="color:var(--ui-orange-text);"></i>Mark Dirty / Needs Cleaning</button>
-                                    </form>
-                                </li>
-                                <li>
-                                    <form method="POST" action="{% url 'hotel_admin:room_status_update' restaurant_slug=rslug room_id=r.id %}">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="status" value="MAINTENANCE">
-                                        <button type="submit" class="dropdown-item"><i class="fa-solid fa-screwdriver-wrench" style="color:var(--ui-red-text);"></i>Mark Under Maintenance</button>
-                                    </form>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-                {% empty %}
-                <div style="text-align:center;padding:2.5rem 1rem;color:var(--text-muted);">
-                    <i class="fa-solid fa-bed" style="font-size:1.8rem;opacity:0.2;display:block;margin-bottom:0.5rem;"></i>
-                    <div style="font-size:0.8rem;">No clean rooms available</div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
+<!-- Search & filters (client-side, instant) -->
+<div class="rm-toolbar">
+    <div class="rm-search">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="search" id="rmSearch" class="form-control" placeholder="Search room number or guest" autocomplete="off">
     </div>
-
-    <!-- Occupied Column -->
-    <div class="col-md-6 col-xl-3">
-        <div class="kanban-col">
-            <div class="kanban-header">
-                <div class="kanban-title">
-                    <span class="kanban-dot" style="background:var(--ui-accent);"></span>
-                    Occupied (In-House)
-                </div>
-                <span class="pill pill-primary font-mono" style="font-size:0.68rem;">{{ kanban.OCCUPIED|length }}</span>
-            </div>
-            <div class="kanban-body">
-                {% for r in kanban.OCCUPIED %}
-                <div class="room-card" style="border-left:3px solid var(--ui-accent);">
-                    <div class="room-card-header">
-                        <span class="room-number-big">#{{ r.room_number }}</span>
-                        <span class="status-tag tag-occupied" style="font-size:0.68rem;">{{ r.get_status_display }}</span>
-                    </div>
-                    <div class="room-meta">{{ r.category.name }} &bull; Floor {{ r.floor }}</div>
-                    <div class="room-card-footer">
-                        <span style="font-size:0.76rem;color:var(--ui-accent-text);font-weight:600;">In-House Guest</span>
-                        <div class="dropdown">
-                            <button class="btn-room-action btn-quick-status dropdown-toggle" type="button" data-bs-toggle="dropdown">Options</button>
-                            <ul class="dropdown-menu dropdown-menu-end">
-                                <li>
-                                    <form method="POST" action="{% url 'hotel_admin:room_status_update' restaurant_slug=rslug room_id=r.id %}">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="status" value="CLEANING">
-                                        <button type="submit" class="dropdown-item"><i class="fa-solid fa-broom" style="color:var(--ui-orange-text);"></i>Set to Cleaning</button>
-                                    </form>
-                                </li>
-                                <li>
-                                    <form method="POST" action="{% url 'hotel_admin:room_status_update' restaurant_slug=rslug room_id=r.id %}">
-                                        {% csrf_token %}
-                                        <input type="hidden" name="status" value="AVAILABLE">
-                                        <button type="submit" class="dropdown-item"><i class="fa-solid fa-check" style="color:var(--ui-green-text);"></i>Release to Available</button>
-                                    </form>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-                {% empty %}
-                <div style="text-align:center;padding:2.5rem 1rem;color:var(--text-muted);">
-                    <i class="fa-solid fa-moon" style="font-size:1.8rem;opacity:0.2;display:block;margin-bottom:0.5rem;"></i>
-                    <div style="font-size:0.8rem;">No rooms currently occupied</div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
-
-    <!-- Cleaning Column -->
-    <div class="col-md-6 col-xl-3">
-        <div class="kanban-col">
-            <div class="kanban-header">
-                <div class="kanban-title">
-                    <span class="kanban-dot" style="background:var(--ui-orange);"></span>
-                    Dirty / Cleaning
-                </div>
-                <span class="pill pill-warning font-mono" style="font-size:0.68rem;">{{ kanban.CLEANING|length }}</span>
-            </div>
-            <div class="kanban-body">
-                {% for r in kanban.CLEANING %}
-                <div class="room-card" style="border-left:3px solid var(--ui-orange);">
-                    <div class="room-card-header">
-                        <span class="room-number-big">#{{ r.room_number }}</span>
-                        <span class="status-tag tag-cleaning" style="font-size:0.68rem;">{{ r.get_status_display }}</span>
-                    </div>
-                    <div class="room-meta">{{ r.category.name }} &bull; Floor {{ r.floor }}</div>
-                    <form method="POST" action="{% url 'hotel_admin:room_status_update' restaurant_slug=rslug room_id=r.id %}" style="margin-top:0.5rem;">
-                        {% csrf_token %}
-                        <input type="hidden" name="status" value="AVAILABLE">
-                        <button type="submit" class="btn-mark-clean" style="width:100%;justify-content:center;">
-                            <i class="fa-solid fa-check"></i>Mark Clean &amp; Ready
-                        </button>
-                    </form>
-                </div>
-                {% empty %}
-                <div style="text-align:center;padding:2.5rem 1rem;color:var(--text-muted);">
-                    <i class="fa-solid fa-sparkles" style="font-size:1.8rem;color:var(--ui-green-text);opacity:0.6;display:block;margin-bottom:0.5rem;"></i>
-                    <div style="font-size:0.8rem;">All rooms are clean &amp; ready!</div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
-
-    <!-- Maintenance Column -->
-    <div class="col-md-6 col-xl-3">
-        <div class="kanban-col">
-            <div class="kanban-header">
-                <div class="kanban-title">
-                    <span class="kanban-dot" style="background:var(--ui-red);"></span>
-                    Maintenance
-                </div>
-                <span class="pill pill-danger font-mono" style="font-size:0.68rem;">{{ kanban.MAINTENANCE|length }}</span>
-            </div>
-            <div class="kanban-body">
-                {% for r in kanban.MAINTENANCE %}
-                <div class="room-card" style="border-left:3px solid var(--ui-red);">
-                    <div class="room-card-header">
-                        <span class="room-number-big">#{{ r.room_number }}</span>
-                        <span class="status-tag tag-maintenance" style="font-size:0.68rem;">{{ r.get_status_display }}</span>
-                    </div>
-                    <div class="room-meta">{{ r.category.name }} &bull; Floor {{ r.floor }}</div>
-                    {% if r.notes %}
-                    <div style="background:rgba(var(--ui-red-rgb), 0.1);border:1px solid rgba(var(--ui-red-rgb), 0.3);border-radius:7px;padding:0.4rem 0.6rem;font-size:0.73rem;color:var(--ui-red-text);margin-bottom:0.5rem;">{{ r.notes }}</div>
-                    {% endif %}
-                    <form method="POST" action="{% url 'hotel_admin:room_status_update' restaurant_slug=rslug room_id=r.id %}" style="margin-top:0.3rem;">
-                        {% csrf_token %}
-                        <input type="hidden" name="status" value="AVAILABLE">
-                        <button type="submit" class="btn-mark-repaired" style="width:100%;justify-content:center;">
-                            <i class="fa-solid fa-screwdriver-wrench"></i>Mark Repaired &amp; Ready
-                        </button>
-                    </form>
-                </div>
-                {% empty %}
-                <div style="text-align:center;padding:2.5rem 1rem;color:var(--text-muted);">
-                    <i class="fa-solid fa-circle-check" style="font-size:1.8rem;color:var(--ui-green-text);opacity:0.5;display:block;margin-bottom:0.5rem;"></i>
-                    <div style="font-size:0.8rem;">No rooms out of service</div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
+    {% if floors|length > 1 %}
+    <select id="rmFloor" class="form-select" aria-label="Filter by floor">
+        <option value="">All floors</option>
+        {% for f in floors %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
+    </select>
+    {% endif %}
+    {% if categories|length > 1 %}
+    <select id="rmCategory" class="form-select" aria-label="Filter by category">
+        <option value="">All categories</option>
+        {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+    </select>
+    {% endif %}
 </div>
+
+<div class="rm-board" id="rmBoard">
+    <section class="rm-col" data-status="CLEANING">
+        <header class="rm-col-head">
+            <span class="rm-col-title"><span class="rm-dot" style="background:var(--ui-orange);"></span>Needs cleaning</span>
+            <span class="rm-count" data-count>{{ kanban.CLEANING|length }}</span>
+        </header>
+        <div class="rm-col-body">
+            {% for r in kanban.CLEANING %}{% include 'hotel_admin/_room_card.html' %}{% endfor %}
+            <div class="rm-empty{% if kanban.CLEANING %} rm-hidden{% endif %}" data-empty><i class="fa-solid fa-sparkles"></i>All rooms are clean</div>
+        </div>
+    </section>
+
+    <section class="rm-col" data-status="AVAILABLE">
+        <header class="rm-col-head">
+            <span class="rm-col-title"><span class="rm-dot" style="background:var(--ui-green);"></span>Available &amp; clean</span>
+            <span class="rm-count" data-count>{{ kanban.AVAILABLE|length }}</span>
+        </header>
+        <div class="rm-col-body">
+            {% for r in kanban.AVAILABLE %}{% include 'hotel_admin/_room_card.html' %}{% endfor %}
+            <div class="rm-empty{% if kanban.AVAILABLE %} rm-hidden{% endif %}" data-empty><i class="fa-solid fa-bed"></i>No rooms available</div>
+        </div>
+    </section>
+
+    <section class="rm-col" data-status="OCCUPIED">
+        <header class="rm-col-head">
+            <span class="rm-col-title"><span class="rm-dot" style="background:var(--ui-accent);"></span>Occupied</span>
+            <span class="rm-count" data-count>{{ kanban.OCCUPIED|length }}</span>
+        </header>
+        <div class="rm-col-body">
+            {% for r in kanban.OCCUPIED %}{% include 'hotel_admin/_room_card.html' %}{% endfor %}
+            <div class="rm-empty{% if kanban.OCCUPIED %} rm-hidden{% endif %}" data-empty><i class="fa-solid fa-moon"></i>No rooms occupied</div>
+        </div>
+    </section>
+
+    <section class="rm-col" data-status="MAINTENANCE">
+        <header class="rm-col-head">
+            <span class="rm-col-title"><span class="rm-dot" style="background:var(--ui-red);"></span>Maintenance</span>
+            <span class="rm-count" data-count>{{ kanban.MAINTENANCE|length }}</span>
+        </header>
+        <div class="rm-col-body">
+            {% for r in kanban.MAINTENANCE %}{% include 'hotel_admin/_room_card.html' %}{% endfor %}
+            <div class="rm-empty{% if kanban.MAINTENANCE %} rm-hidden{% endif %}" data-empty><i class="fa-solid fa-circle-check"></i>No rooms out of service</div>
+        </div>
+    </section>
+</div>
+
+<script>
+(function () {
+    var board = document.getElementById('rmBoard');
+    if (!board) return;
+    var tiles = document.querySelectorAll('.rm-stat');
+    var search = document.getElementById('rmSearch');
+    var floor = document.getElementById('rmFloor');
+    var cat = document.getElementById('rmCategory');
+    var status = 'all';
+    var KEY = 'rmBoardStatus';
+    try { var saved = sessionStorage.getItem(KEY); if (saved) status = saved; } catch (e) {}
+
+    function apply() {
+        var q = (search && search.value || '').trim().toLowerCase();
+        var f = floor ? floor.value : '';
+        var c = cat ? cat.value : '';
+        tiles.forEach(function (t) {
+            var on = t.dataset.filter === status;
+            t.classList.toggle('active', on);
+            t.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        board.querySelectorAll('.rm-col').forEach(function (col) {
+            col.classList.toggle('rm-hidden', status !== 'all' && col.dataset.status !== status);
+            var shown = 0;
+            col.querySelectorAll('.rm-card').forEach(function (card) {
+                var ok = (!q || card.dataset.room.indexOf(q) !== -1 || card.dataset.guest.indexOf(q) !== -1)
+                      && (!f || card.dataset.floor === f)
+                      && (!c || card.dataset.category === c);
+                card.classList.toggle('rm-hidden', !ok);
+                if (ok) shown++;
+            });
+            col.querySelector('[data-count]').textContent = shown;
+            col.querySelector('[data-empty]').classList.toggle('rm-hidden', shown > 0);
+        });
+        // A single filtered column can use the full width on desktop
+        board.classList.toggle('rm-single', status !== 'all');
+    }
+
+    tiles.forEach(function (t) {
+        t.addEventListener('click', function () {
+            status = (status === t.dataset.filter) ? 'all' : t.dataset.filter;
+            try { sessionStorage.setItem(KEY, status); } catch (e) {}
+            apply();
+        });
+    });
+    [search, floor, cat].forEach(function (el) { if (el) el.addEventListener('input', apply); });
+    apply();
+})();
+</script>
 
 {% if can_manage_physical_rooms %}
 <!-- Add Room Modal -->
 <div class="modal fade" id="addRoomModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <form method="POST" action="{% url 'hotel_admin:room_create_edit' restaurant_slug=rslug %}">
                 {% csrf_token %}
@@ -331,7 +360,7 @@
                         <div class="stat-icon" style="width:34px;height:34px;font-size:0.9rem;background:rgba(99,102,241,0.2);color:#a5b4fc;"><i class="fa-solid fa-bed"></i></div>
                         <div class="modal-title">Add Physical Room Unit</div>
                     </div>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">

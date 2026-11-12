@@ -20,6 +20,12 @@ import re
 from core.request_cache import branch_by_id, first_branch
 
 _KITCHEN_ORDER_PAGES = re.compile(r'^orders/\d+/(kot|mark-ready)/$')
+_WAITER_ORDER_PAGES = re.compile(r'^orders/\d+/(kot|update-status)/$')
+# Waiter / Captain: the table board, the POS (send to kitchen) and what the POS page loads
+_WAITER_ALLOWED_PREFIXES = (
+    'waiter/', 'orders/create/', 'orders/draft/', 'orders/api/smart-menu/', 'orders/stream/',
+    'api/notifications/', 'guests/pos-lookup/', 'shifts/api/active/',
+)
 
 
 def _dashboard_tail(path):
@@ -164,8 +170,24 @@ class BranchContextMiddleware:
                             from django.shortcuts import redirect
                             return redirect('restaurant_admin:kitchen_kds', restaurant_slug=slug)
 
-                    # 5. Cashier & Waiter restrictions (respect granular permissions)
-                    if user_role in ['CASHIER', 'WAITER'] and request.path.startswith('/dashboard/'):
+                    # 5a. Waiter / Captain isolation: tables -> POS -> kitchen; billing stays at the counter
+                    if user_role == 'WAITER' and request.path.startswith('/dashboard/'):
+                        is_waiter_allowed = (
+                            tail.startswith(_WAITER_ALLOWED_PREFIXES) or
+                            bool(_WAITER_ORDER_PAGES.match(tail)) or
+                            request.path.endswith('/logout/') or
+                            (getattr(profile, 'can_manage_menu', False) and tail.startswith('menu/')) or
+                            (getattr(profile, 'can_view_analytics', False) and tail.startswith('analytics/'))
+                        )
+                        if not is_waiter_allowed:
+                            from django.shortcuts import redirect
+                            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or '/api/' in request.path:
+                                from django.http import JsonResponse
+                                return JsonResponse({'success': False, 'error': 'Not available for waiter logins.'}, status=403)
+                            return redirect('restaurant_admin:waiter_tables', restaurant_slug=slug)
+
+                    # 5. Cashier restrictions (respect granular permissions)
+                    if user_role in ['CASHIER'] and request.path.startswith('/dashboard/'):
                         slug = restaurant.slug if restaurant else 'default'
                         restricted = ['staff/']
                         if not getattr(profile, 'can_view_analytics', False):

@@ -39,7 +39,9 @@ def redirect_to_home(user, restaurant_slug):
         return redirect('hotel_admin:dashboard', restaurant_slug=restaurant_slug)
     if role == RestaurantUser.Role.KITCHEN:
         return redirect('restaurant_admin:kitchen_kds', restaurant_slug=restaurant_slug)
-    if role in [RestaurantUser.Role.CASHIER, RestaurantUser.Role.WAITER]:
+    if role == RestaurantUser.Role.WAITER:
+        return redirect('restaurant_admin:waiter_tables', restaurant_slug=restaurant_slug)
+    if role == RestaurantUser.Role.CASHIER:
         return redirect('restaurant_admin:transaction_desk_create', restaurant_slug=restaurant_slug)
     return redirect('restaurant_admin:dashboard', restaurant_slug=restaurant_slug)
 
