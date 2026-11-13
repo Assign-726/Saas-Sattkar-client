@@ -114,6 +114,12 @@
     .plan-pricing-card.enterprise {
         border-color: var(--ui-accent);
     }
+    .plan-pricing-card.cms-active {
+        border-color: rgba(16, 185, 129, 0.4);
+    }
+    .plan-pricing-card.cms-inactive {
+        border-color: rgba(245, 158, 11, 0.4);
+    }
 
     .feature-tag {
         display: flex;
@@ -931,7 +937,7 @@
             </div>
 
             <!-- Brand Dynamic Website Capability Card -->
-            <div class="plan-pricing-card" style="margin: 0; display: flex; flex-direction: column; justify-content: space-between; border-color: {% if ENABLE_WEBSITE_CMS %}rgba(16, 185, 129, 0.4){% else %}rgba(245, 158, 11, 0.4){% endif %};">
+            <div class="plan-pricing-card {% if ENABLE_WEBSITE_CMS %}cms-active{% else %}cms-inactive{% endif %}" style="margin: 0; display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
                     <!-- Header -->
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
@@ -1338,7 +1344,9 @@
                         <span id="addonPricingNoteText">You pay now only for the rest of the current billing period (+18% GST); the add-on is then included in every renewal.</span>
                     </div>
 
-                    <!-- Category 1: Global Brand-Level Add-Ons -->
+                    <!-- Category 1: Global Brand-Level Add-Ons (Alcohol / State VAT) — hidden for now.
+                         Re-enable by removing the {% comment %} wrapper; the JS skips it while absent. -->
+                    {% comment %}
                     <div style="margin-bottom: 24px;">
                         <div style="font-size: 13px; font-weight: 700; text-transform: none; letter-spacing: 0; color: var(--text); margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
                             <i class="fa-solid fa-globe" style="color: var(--ui-accent-text);"></i>
@@ -1346,6 +1354,7 @@
                         </div>
                         <div id="brandAddonsList" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;"></div>
                     </div>
+                    {% endcomment %}
 
                     <!-- Category 2: Branch / Outlet Specific Add-Ons -->
                     <div style="margin-bottom: 24px;">
@@ -1825,14 +1834,16 @@
         const branchContainer = document.getElementById('branchAddonsList');
         const newOutletContainer = document.getElementById('newOutletModulesList');
 
-        brandContainer.innerHTML = '';
+        if (brandContainer) brandContainer.innerHTML = '';
         branchContainer.innerHTML = '';
         newOutletContainer.innerHTML = '';
 
         const brandItems = available.filter(a => a.scope === 'BRAND' || a.outlet_index == null);
         const branchItems = available.filter(a => a.scope === 'BRANCH' && a.outlet_index != null);
 
-        if (brandItems.length === 0) {
+        if (!brandContainer) {
+            // Global (brand-level) add-ons section is hidden for now — render nothing.
+        } else if (brandItems.length === 0) {
             brandContainer.innerHTML = '<div style="font-size:12.5px; color:var(--muted); padding:10px;">All brand modules are already active on this plan.</div>';
         } else {
             brandItems.forEach(item => {

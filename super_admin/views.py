@@ -1739,7 +1739,70 @@ def api_billing_addons_catalog(request):
     """
     restaurant = Restaurant.objects.first()
     data = MasterBillingService.fetch_addons(restaurant=restaurant)
+    if isinstance(data, dict) and isinstance(data.get('available'), list):
+        data['available'] = _drop_owned_branch_addons(restaurant, data['available'])
     return JsonResponse(data)
+
+
+def _addon_capability(item):
+    """Maps a Master catalog add-on to the local module it unlocks on an outlet.
+
+    The Master catalog can hold several modules that switch on the same local feature
+    (e.g. "Club & Event Ticketing Passes" and a custom "Event Management" both enable
+    Club & Events here), so the store must compare on capability, not on catalog key.
+    """
+    text = f"{item.get('key', '')} {item.get('title', '')}".lower()
+    if 'spa' in text or 'wellness' in text:
+        return 'hotel_spa'
+    if 'cab' in text or 'transport' in text:
+        return 'hotel_cabs'
+    if 'hotel' in text:
+        return 'hotel'
+    if 'club' in text or 'event' in text:
+        return 'club'
+    return None
+
+
+def _branch_has_capability(branch, capability):
+    try:
+        if capability == 'club':
+            return bool(branch.has_club_module and branch.is_module_licensed('club'))
+        if capability == 'hotel':
+            return bool(branch.has_hotel_module and branch.is_module_licensed('hotel'))
+        if capability in ('hotel_spa', 'hotel_cabs'):
+            return bool(branch.has_hotel_module and branch.is_module_licensed(capability))
+    except Exception:
+        return False
+    return False
+
+
+def _drop_owned_branch_addons(restaurant, available):
+    """Hides outlet add-ons the outlet already has active, so the store only offers real upgrades."""
+    if not restaurant:
+        return available
+    try:
+        branches = list(restaurant.branches.all().order_by('id'))
+    except Exception:
+        return available
+    by_name = {(b.name or '').strip().lower(): b for b in branches}
+
+    kept = []
+    for item in available:
+        idx = item.get('outlet_index') if isinstance(item, dict) else None
+        if item.get('scope') != 'BRANCH' or idx is None:
+            kept.append(item)
+            continue
+        branch = by_name.get((item.get('outlet_name') or '').strip().lower())
+        if branch is None and isinstance(idx, int) and 0 <= idx < len(branches):
+            branch = branches[idx]
+        capability = _addon_capability(item)
+        if branch is not None and capability and _branch_has_capability(branch, capability):
+            continue
+        # Spa / Cabs are Hotel sub-modules: not offered until Hotel PMS is active on that outlet.
+        if branch is not None and capability in ('hotel_spa', 'hotel_cabs') and not _branch_has_capability(branch, 'hotel'):
+            continue
+        kept.append(item)
+    return kept
 
 
 @superuser_required

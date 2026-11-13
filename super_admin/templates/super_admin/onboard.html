@@ -3469,6 +3469,56 @@
       const mappedKey = (val === 'alcohol_vat') ? 'alcohol' : (val === 'events' ? 'club' : (val === 'website_cms' ? 'website' : val));
       const isTier = val.startsWith('tier_');
       const bName = branches[currentReqBranchIdx]?.name || `Outlet #${currentReqBranchIdx+1}`;
+
+      // A branch-type (package tier) change is not an add-on module: the add-on order API
+      // rejects it ("Choose at least one add-on"). Send it to Sattkar as a tier upgrade request
+      // instead; Master Admin approves it and the new branch type syncs back down.
+      if (isTier) {
+        const b = branches[currentReqBranchIdx] || {};
+        const pkg = PACKAGE_TIER_CATALOG[val] || {};
+        const fromType = b.outlet_type || b.branch_type || 'restaurant_standard';
+        const fromName = (BRANCH_TYPE_CONFIG[fromType] || {}).name || fromType;
+        const toType = val.replace('tier_', '');
+        const tierResp = await fetch("{% url 'super_admin:api_request_plan_upgrade' %}", {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
+          },
+          body: JSON.stringify({
+            plan_name: `Branch Tier Upgrade: ${pkg.name || toType}`,
+            notes: `[TIER UPGRADE] Branch '${bName}': ${fromName} -> ${pkg.name || toType} (${pkg.price || ''}). ${notes}`.trim(),
+            stack_configuration: {
+              request_type: 'BRANCH_TIER_UPGRADE',
+              branch_index: currentReqBranchIdx,
+              branch_id: b.id || null,
+              branch_name: bName,
+              from_branch_type: fromType,
+              to_branch_type: toType,
+              to_package_name: pkg.name || toType,
+              monthly_rate: pkg.rate || null,
+            },
+          })
+        });
+        const tierRes = await tierResp.json();
+        statusMsg.style.display = 'block';
+        if (tierRes.status === 'success') {
+          statusMsg.style.background = 'rgba(16,185,129,0.12)';
+          statusMsg.style.color = '#065f46';
+          statusMsg.style.border = '1px solid rgba(16,185,129,0.3)';
+          statusMsg.innerHTML = `<i class="fa-solid fa-circle-check"></i> <strong>Tier upgrade requested!</strong> Sattkar will review it, and '${escapeHtml(bName)}' will switch to ${escapeHtml(pkg.name || toType)} once approved.`;
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<i class="fa-solid fa-check"></i> Request Sent';
+        } else {
+          statusMsg.style.background = 'rgba(239,68,68,0.1)';
+          statusMsg.style.color = '#991b1b';
+          statusMsg.style.border = '1px solid rgba(239,68,68,0.25)';
+          statusMsg.textContent = tierRes.message || 'Could not send the tier upgrade request to Sattkar. Please try again.';
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Request to Sattkar';
+        }
+        return;
+      }
       const finalNotes = isTier
         ? `[TIER UPGRADE] Branch '${bName}' -> ${val.replace('tier_', '')}. ${notes}`.trim()
         : `[ADD-ON REQUEST] Branch '${bName}'. ${notes}`.trim();
