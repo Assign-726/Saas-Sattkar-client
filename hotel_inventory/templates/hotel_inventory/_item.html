@@ -1,0 +1,428 @@
+{% load static %}
+<div class="ui-stores">
+  {% include 'hotel_inventory/_nav.html' %}
+
+  <div class="mb-3">
+    <a href="{% url 'hotel_admin:stores_items' restaurant_slug=rslug %}" class="btn btn-sm btn-link text-muted p-0">
+      <i class="fa-solid fa-arrow-left me-1"></i> Back to Items
+    </a>
+  </div>
+
+  <div class="ui-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <div class="d-flex align-items-center gap-2">
+        <h1 class="h3 fw-bold mb-0">{{ item.name }}</h1>
+        <span class="badge text-bg-light border text-secondary">{{ item.get_kind_display }}</span>
+        {% if item.is_active %}
+          <span class="badge text-bg-success">Active</span>
+        {% else %}
+          <span class="badge text-bg-secondary">Hidden</span>
+        {% endif %}
+      </div>
+      <p class="text-muted mb-0 small">
+        {% if item.category %}Category: <strong>{{ item.category }}</strong> &bull; {% endif %}
+        Base Unit: <strong>{{ item.unit }}</strong>
+        {% if item.sku %}&bull; SKU: <code>{{ item.sku }}</code>{% endif %}
+        {% if item.barcode %}&bull; Barcode: <code>{{ item.barcode }}</code>{% endif %}
+      </p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      {% if can_edit %}
+        <button type="button" class="btn btn-outline-primary btn-sm rounded-pill" data-bs-toggle="modal" data-bs-target="#editItemModal">
+          <i class="fa-solid fa-pen-to-square me-1"></i> Edit Item
+        </button>
+        <form method="post" action="{% url 'hotel_admin:stores_item_save' restaurant_slug=rslug %}" class="d-inline">
+          {% csrf_token %}
+          <input type="hidden" name="pk" value="{{ item.pk }}">
+          <input type="hidden" name="op" value="{% if item.is_active %}deactivate{% else %}activate{% endif %}">
+          <button type="submit" class="btn btn-outline-secondary btn-sm rounded-pill">
+            {% if item.is_active %}<i class="fa-solid fa-eye-slash me-1"></i> Hide{% else %}<i class="fa-solid fa-eye me-1"></i> Restore{% endif %}
+          </button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Item Stats Summary -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm rounded-3 p-3 bg-white">
+        <span class="text-muted small fw-bold text-uppercase">Total On Hand</span>
+        <div class="h4 fw-bold mb-0 text-primary">{{ total|floatformat:2 }} {{ item.unit }}</div>
+        <div class="text-muted small">Across all locations</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm rounded-3 p-3 bg-white">
+        <span class="text-muted small fw-bold text-uppercase">Weighted Avg Cost (WAC)</span>
+        <div class="h4 fw-bold mb-0">₹{{ item.wac|floatformat:2 }}</div>
+        <div class="text-muted small">Per {{ item.unit }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm rounded-3 p-3 bg-white">
+        <span class="text-muted small fw-bold text-uppercase">Total Valuation</span>
+        <div class="h4 fw-bold mb-0 text-success">₹{{ value|floatformat:2 }}</div>
+        <div class="text-muted small">Current holding value</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm rounded-3 p-3 bg-white">
+        <span class="text-muted small fw-bold text-uppercase">Reorder Point</span>
+        <div class="h4 fw-bold mb-0 {% if item.reorder_level > 0 and total <= item.reorder_level %}text-danger{% endif %}">
+          {% if item.reorder_level > 0 %}{{ item.reorder_level|floatformat:0 }} {{ item.unit }}{% else %}Off{% endif %}
+        </div>
+        <div class="text-muted small">Usual order: {{ item.reorder_qty|floatformat:0|default:"—" }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <!-- Stock per Location -->
+    <div class="col-12 col-lg-7">
+      <div class="card border-0 shadow-sm rounded-3 bg-white h-100">
+        <div class="card-header bg-transparent border-bottom d-flex align-items-center justify-content-between py-3">
+          <h5 class="h6 fw-bold mb-0"><i class="fa-solid fa-sitemap text-primary me-1"></i> Stock by Location &amp; Par Levels</h5>
+          {% if can_edit and other_locations %}
+            <button type="button" class="btn btn-sm py-0 btn-outline-primary rounded-pill px-2" data-bs-toggle="modal" data-bs-target="#addLevelModal">
+              <i class="fa-solid fa-plus me-1"></i> Set Par for Location
+            </button>
+          {% endif %}
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="bg-light text-muted small text-uppercase">
+              <tr>
+                <th class="py-2 px-3">Location</th>
+                <th class="py-2 text-end">On Hand</th>
+                <th class="py-2 text-end">Min Level</th>
+                <th class="py-2 text-end">Par Level</th>
+                <th class="py-2 text-center">Status</th>
+                {% if can_edit %}<th class="py-2 text-end px-3">Edit</th>{% endif %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for lvl in levels %}
+                <tr>
+                  <td class="px-3 fw-bold">{{ lvl.location.path }}</td>
+                  <td class="text-end fw-bold {% if lvl.is_low %}text-danger{% endif %}">
+                    {{ lvl.quantity|floatformat:2 }} {{ item.unit }}
+                  </td>
+                  <td class="text-end text-muted small">{{ lvl.min_level|floatformat:0 }}</td>
+                  <td class="text-end text-muted small">{{ lvl.par_level|floatformat:0 }}</td>
+                  <td class="text-center">
+                    {% if lvl.is_low %}
+                      <span class="badge text-bg-danger">Below Min</span>
+                    {% else %}
+                      <span class="badge text-bg-success">OK</span>
+                    {% endif %}
+                  </td>
+                  {% if can_edit %}
+                    <td class="text-end px-3">
+                      <button type="button" class="btn btn-sm py-0 btn-outline-secondary rounded-pill" data-bs-toggle="modal" data-bs-target="#editLevelModal{{ lvl.pk }}">
+                        Adjust Par
+                      </button>
+
+                      <!-- Modal for adjusting level -->
+                      <div class="modal fade text-start" id="editLevelModal{{ lvl.pk }}" tabindex="-1" role="dialog" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
+                          <div class="modal-content border-0 shadow rounded-3">
+                            <form method="post" action="{% url 'hotel_admin:stores_level_save' restaurant_slug=rslug %}">
+                              {% csrf_token %}
+                              <input type="hidden" name="item" value="{{ item.pk }}">
+                              <input type="hidden" name="location" value="{{ lvl.location.pk }}">
+                              <div class="modal-header border-bottom">
+                                <h6 class="modal-title fw-bold">Par Levels for {{ lvl.location.name }}</h6>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                              </div>
+                              <div class="modal-body p-3">
+                                <div class="mb-2">
+                                  <label class="small text-muted fw-bold">Minimum Alert Level</label>
+                                  <input type="number" step="0.001" name="min_level" value="{{ lvl.min_level }}" class="form-control form-control-sm">
+                                </div>
+                                <div class="mb-0">
+                                  <label class="small text-muted fw-bold">Target Par Level</label>
+                                  <input type="number" step="0.001" name="par_level" value="{{ lvl.par_level }}" class="form-control form-control-sm">
+                                </div>
+                              </div>
+                              <div class="modal-footer border-top bg-light p-2">
+                                <button type="submit" class="btn btn-primary btn-sm rounded-pill w-100">Save Levels</button>
+                              </div>
+                            </form>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  {% endif %}
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="6" class="text-center py-4 text-muted">No stock has been placed in any location yet.</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pack Sizes / Conversions -->
+    <div class="col-12 col-lg-5">
+      <div class="card border-0 shadow-sm rounded-3 bg-white h-100">
+        <div class="card-header bg-transparent border-bottom d-flex align-items-center justify-content-between py-3">
+          <h5 class="h6 fw-bold mb-0"><i class="fa-solid fa-boxes-packing text-primary me-1"></i> Pack Sizes (UOM Conversion)</h5>
+          {% if can_edit %}
+            <button type="button" class="btn btn-sm py-0 btn-outline-primary rounded-pill px-2" data-bs-toggle="modal" data-bs-target="#addUnitModal">
+              <i class="fa-solid fa-plus me-1"></i> Add Pack Size
+            </button>
+          {% endif %}
+        </div>
+        <div class="p-3">
+          <div class="p-2 bg-light rounded-3 mb-3 d-flex align-items-center justify-content-between">
+            <div>
+              <span class="badge text-bg-primary me-2">Base Unit</span>
+              <strong>1 {{ item.unit }}</strong>
+            </div>
+            <span class="text-muted small">Standard issue &amp; inventory unit</span>
+          </div>
+
+          <div class="list-group list-group-flush">
+            {% for u in units %}
+              <div class="list-group-item d-flex align-items-center justify-content-between px-0 py-2">
+                <div>
+                  <strong>1 {{ u.name }}</strong> = <span class="text-primary fw-bold">{{ u.factor|floatformat:4 }} {{ item.unit }}</span>
+                  {% if u.is_purchase_default %}<span class="badge text-bg-info ms-1">Default Purchase Unit</span>{% endif %}
+                </div>
+                {% if can_edit %}
+                  <form method="post" action="{% url 'hotel_admin:stores_unit_save' restaurant_slug=rslug %}" onsubmit="return confirm('Remove pack size {{ u.name }}?');">
+                    {% csrf_token %}
+                    <input type="hidden" name="item" value="{{ item.pk }}">
+                    <input type="hidden" name="pk" value="{{ u.pk }}">
+                    <input type="hidden" name="op" value="delete">
+                    <button type="submit" class="btn btn-sm py-0 btn-link text-danger p-0"><i class="fa-solid fa-trash-can"></i></button>
+                  </form>
+                {% endif %}
+              </div>
+            {% empty %}
+              <p class="text-muted small mb-0">No alternate pack sizes configured. Item is purchased and issued in base units ({{ item.unit }}).</p>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Movement History for this item -->
+  <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white mb-4">
+    <div class="card-header bg-transparent border-bottom py-3">
+      <h5 class="h6 fw-bold mb-0"><i class="fa-solid fa-book-journal-whills text-primary me-1"></i> Movement Ledger History</h5>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 small">
+        <thead class="bg-light text-muted text-uppercase">
+          <tr>
+            <th class="py-2 px-3">Date &amp; Time</th>
+            <th class="py-2">Type</th>
+            <th class="py-2">Source / Destination</th>
+            <th class="py-2 text-end">Quantity</th>
+            <th class="py-2 text-end">Cost</th>
+            <th class="py-2 text-end">Value</th>
+            <th class="py-2">Reference / Note</th>
+            <th class="py-2">By</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in moves %}
+            <tr>
+              <td class="px-3">{{ m.created_at|date:"d M Y H:i" }}</td>
+              <td><span class="badge text-bg-light border">{{ m.get_move_type_display }}</span></td>
+              <td>
+                {% if m.from_location %}From: {{ m.from_location.name }}{% endif %}
+                {% if m.to_location %}&rarr; To: {{ m.to_location.name }}{% endif %}
+              </td>
+              <td class="text-end fw-bold">{{ m.quantity|floatformat:2 }} {{ item.unit }}</td>
+              <td class="text-end text-muted">₹{{ m.unit_cost|floatformat:2 }}</td>
+              <td class="text-end fw-bold">₹{{ m.value|floatformat:2 }}</td>
+              <td>
+                {% if m.ref_label %}<code>{{ m.ref_label }}</code>{% endif %}
+                {{ m.note }}
+              </td>
+              <td class="text-muted">{{ m.performed_by.username|default:"System" }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="8" class="text-center py-4 text-muted">No transactions posted for this item yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add Pack Size -->
+<div class="modal fade" id="addUnitModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
+    <div class="modal-content border-0 shadow rounded-3">
+      <form method="post" action="{% url 'hotel_admin:stores_unit_save' restaurant_slug=rslug %}">
+        {% csrf_token %}
+        <input type="hidden" name="item" value="{{ item.pk }}">
+        <div class="modal-header border-bottom">
+          <h6 class="modal-title fw-bold">Add Pack Size</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-3">
+          <div class="mb-2">
+            <label class="small text-muted fw-bold">Pack Name *</label>
+            <input type="text" name="name" class="form-control form-control-sm" placeholder="e.g. case, carton, box, can" required>
+          </div>
+          <div class="mb-2">
+            <label class="small text-muted fw-bold">Conversion Factor *</label>
+            <input type="number" step="0.0001" name="factor" class="form-control form-control-sm" placeholder="How many {{ item.unit }} in 1 pack?" required>
+          </div>
+          <div class="form-check mb-0">
+            <input type="checkbox" name="is_purchase_default" class="form-check-input" id="defaultPurchaseCheck">
+            <label class="form-check-label small fw-bold text-muted" for="defaultPurchaseCheck">Default Purchase Unit</label>
+          </div>
+        </div>
+        <div class="modal-footer border-top bg-light p-2">
+          <button type="submit" class="btn btn-primary btn-sm rounded-pill w-100">Save Pack Size</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add Level for another location -->
+<div class="modal fade" id="addLevelModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
+    <div class="modal-content border-0 shadow rounded-3">
+      <form method="post" action="{% url 'hotel_admin:stores_level_save' restaurant_slug=rslug %}">
+        {% csrf_token %}
+        <input type="hidden" name="item" value="{{ item.pk }}">
+        <div class="modal-header border-bottom">
+          <h6 class="modal-title fw-bold">Set Par for Location</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-3">
+          <div class="mb-2">
+            <label class="small text-muted fw-bold">Location *</label>
+            <select name="location" class="form-select form-select-sm" required>
+              {% for l in other_locations %}
+                <option value="{{ l.pk }}">{{ l.path }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="small text-muted fw-bold">Minimum Alert Level</label>
+            <input type="number" step="0.001" name="min_level" value="0" class="form-control form-control-sm">
+          </div>
+          <div class="mb-0">
+            <label class="small text-muted fw-bold">Target Par Level</label>
+            <input type="number" step="0.001" name="par_level" value="0" class="form-control form-control-sm">
+          </div>
+        </div>
+        <div class="modal-footer border-top bg-light p-2">
+          <button type="submit" class="btn btn-primary btn-sm rounded-pill w-100">Save Location Par</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Edit Item -->
+<div class="modal fade" id="editItemModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+    <div class="modal-content border-0 shadow rounded-3">
+      <form method="post" action="{% url 'hotel_admin:stores_item_save' restaurant_slug=rslug %}">
+        {% csrf_token %}
+        <input type="hidden" name="pk" value="{{ item.pk }}">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold"><i class="fa-solid fa-pen-to-square text-primary me-1"></i> Edit Item: {{ item.name }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="row g-3">
+            <div class="col-12 col-md-8 mb-3">
+              <label class="small fw-bold text-muted">Item Name *</label>
+              <input type="text" name="name" value="{{ item.name }}" class="form-control" required>
+            </div>
+            <div class="col-12 col-md-4 mb-3">
+              <label class="small fw-bold text-muted">Item Kind *</label>
+              <select name="kind" class="form-select" required>
+                {% for k, l in kinds %}
+                  <option value="{{ k }}" {% if item.kind == k %}selected{% endif %}>{{ l }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="row g-3">
+            <div class="col-12 col-md-4 mb-3">
+              <label class="small fw-bold text-muted">Category</label>
+              <select name="category" class="form-select">
+                <option value="">None</option>
+                {% for c in categories %}
+                  <option value="{{ c.pk }}" {% if item.category_id == c.pk %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12 col-md-4 mb-3">
+              <label class="small fw-bold text-muted">Base Unit</label>
+              <input type="text" name="unit" value="{{ item.unit }}" class="form-control" required>
+            </div>
+            <div class="col-12 col-md-4 mb-3">
+              <label class="small fw-bold text-muted">Preferred Vendor</label>
+              <select name="preferred_vendor" class="form-select">
+                <option value="">None</option>
+                {% for v in vendors %}
+                  <option value="{{ v.pk }}" {% if item.preferred_vendor_id == v.pk %}selected{% endif %}>{{ v.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="row g-3">
+            <div class="col-12 col-md-4 mb-3">
+              <label class="small fw-bold text-muted">SKU</label>
+              <input type="text" name="sku" value="{{ item.sku }}" class="form-control">
+            </div>
+            <div class="col-12 col-md-4 mb-3">
+              <label class="small fw-bold text-muted">Barcode</label>
+              <input type="text" name="barcode" value="{{ item.barcode }}" class="form-control">
+            </div>
+            <div class="col-12 col-md-4 mb-3">
+              <label class="small fw-bold text-muted">HSN Code</label>
+              <input type="text" name="hsn_code" value="{{ item.hsn_code }}" class="form-control">
+            </div>
+          </div>
+          <div class="row g-3">
+            <div class="col-12 col-md-3 mb-3">
+              <label class="small fw-bold text-muted">GST Rate (%)</label>
+              <input type="number" step="0.01" name="gst_rate" value="{{ item.gst_rate|default:'' }}" class="form-control">
+            </div>
+            <div class="col-12 col-md-3 mb-3">
+              <label class="small fw-bold text-muted">Guest Price (₹)</label>
+              <input type="number" step="0.01" name="sale_price" value="{{ item.sale_price|default:'' }}" class="form-control">
+            </div>
+            <div class="col-12 col-md-3 mb-3">
+              <label class="small fw-bold text-muted">Reorder Level</label>
+              <input type="number" step="0.001" name="reorder_level" value="{{ item.reorder_level }}" class="form-control">
+            </div>
+            <div class="col-12 col-md-3 mb-3">
+              <label class="small fw-bold text-muted">Reorder Qty</label>
+              <input type="number" step="0.001" name="reorder_qty" value="{{ item.reorder_qty }}" class="form-control">
+            </div>
+          </div>
+          <div class="form-check">
+            <input type="checkbox" name="track_expiry" class="form-check-input" id="editTrackExpiry" {% if item.track_expiry %}checked{% endif %}>
+            <label class="form-check-label small fw-bold" for="editTrackExpiry">Track batch &amp; expiry on goods receipts</label>
+          </div>
+        </div>
+        <div class="modal-footer border-top bg-light">
+          <button type="button" class="btn btn-secondary btn-sm rounded-pill" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4">Update Item</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+

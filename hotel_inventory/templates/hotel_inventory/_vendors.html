@@ -1,0 +1,175 @@
+{% load static %}
+<div class="ui-stores">
+  {% include 'hotel_inventory/_nav.html' %}
+
+  <div class="ui-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h1 class="h3 fw-bold mb-1">Store Vendors &amp; Suppliers</h1>
+      <p class="text-muted mb-0">Vendors supplying amenities, linen, minibar beverages, and maintenance supplies to hotel stores.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      {% if can_edit %}
+        <button type="button" class="btn btn-primary btn-sm rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#vendorModal">
+          <i class="fa-solid fa-plus me-1"></i> Add Vendor
+        </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Search -->
+  <div class="card border-0 shadow-sm rounded-3 mb-4 bg-white p-3">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-12 col-md-6">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text bg-light border-end-0"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
+          <input type="search" name="q" value="{{ q }}" class="form-control border-start-0" placeholder="Search by vendor name, GSTIN, or phone...">
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <select name="show" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="" {% if show != 'all' %}selected{% endif %}>Active Vendors</option>
+          <option value="all" {% if show == 'all' %}selected{% endif %}>All (including inactive)</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-3 d-flex align-items-center justify-content-end gap-2">
+        <button type="submit" class="btn btn-sm btn-primary rounded-pill px-3">Search</button>
+        {% if q or show %}
+          <a href="{% url 'hotel_admin:stores_vendors' restaurant_slug=rslug %}" class="btn btn-sm btn-light border rounded-pill">Reset</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
+  <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white mb-4">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="bg-light text-muted small text-uppercase">
+          <tr>
+            <th class="py-3 px-3">Vendor Name</th>
+            <th class="py-3">Contact Person</th>
+            <th class="py-3">Phone / Email</th>
+            <th class="py-3">GSTIN</th>
+            <th class="py-3">State / Place of Supply</th>
+            <th class="py-3 text-center">Credit Period</th>
+            <th class="py-3 text-center">Catalog Items</th>
+            <th class="py-3 text-center">Status</th>
+            {% if can_edit %}<th class="py-3 text-end px-3">Action</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in rows %}
+            <tr class="{% if not v.is_active %}table-secondary text-muted{% endif %}">
+              <td class="px-3 fw-bold text-dark">{{ v.name }}</td>
+              <td>{{ v.contact_person|default:"—" }}</td>
+              <td>
+                <div>{{ v.phone|default:"—" }}</div>
+                <div class="small text-muted">{{ v.email }}</div>
+              </td>
+              <td><code>{{ v.gstin|default:"—" }}</code></td>
+              <td>{{ v.state|default:"—" }}</td>
+              <td class="text-center fw-bold">{{ v.payment_terms_days }} days</td>
+              <td class="text-center"><span class="badge text-bg-light border">{{ v.n_items }}</span></td>
+              <td class="text-center">
+                {% if v.is_active %}
+                  <span class="badge text-bg-success px-2 py-1">Active</span>
+                {% else %}
+                  <span class="badge text-bg-secondary px-2 py-1">Inactive</span>
+                {% endif %}
+              </td>
+              {% if can_edit %}
+                <td class="text-end px-3">
+                  <form method="post" action="{% url 'hotel_admin:stores_vendor_save' restaurant_slug=rslug %}" class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="pk" value="{{ v.pk }}">
+                    <input type="hidden" name="op" value="{% if v.is_active %}deactivate{% else %}activate{% endif %}">
+                    <button type="submit" class="btn btn-sm py-0 btn-outline-secondary rounded-pill px-2">
+                      {% if v.is_active %}Deactivate{% else %}Activate{% endif %}
+                    </button>
+                  </form>
+                </td>
+              {% endif %}
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="9" class="text-center py-5 text-muted">No vendors added yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if page_obj.has_other_pages %}
+      <div class="p-3 border-top d-flex align-items-center justify-content-between">
+        <span class="small text-muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        <div class="btn-group btn-group-sm">
+          {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}" class="btn btn-outline-secondary">Previous</a>
+          {% endif %}
+          {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}" class="btn btn-outline-secondary">Next</a>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Add Vendor Modal -->
+<div class="modal fade" id="vendorModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+    <div class="modal-content border-0 shadow rounded-3">
+      <form method="post" action="{% url 'hotel_admin:stores_vendor_save' restaurant_slug=rslug %}">
+        {% csrf_token %}
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold"><i class="fa-solid fa-truck text-primary me-1"></i> New Vendor Profile</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="row g-3">
+            <div class="col-12 col-md-6 mb-3">
+              <label class="small fw-bold text-muted">Vendor / Company Name *</label>
+              <input type="text" name="name" class="form-control" placeholder="e.g. PureLinen Fabrics Pvt Ltd" required>
+            </div>
+            <div class="col-12 col-md-6 mb-3">
+              <label class="small fw-bold text-muted">Contact Person</label>
+              <input type="text" name="contact_person" class="form-control" placeholder="Account manager / rep">
+            </div>
+          </div>
+          <div class="row g-3">
+            <div class="col-12 col-md-6 mb-3">
+              <label class="small fw-bold text-muted">Phone Number</label>
+              <input type="tel" name="phone" class="form-control" placeholder="e.g. +91 9876543210">
+            </div>
+            <div class="col-12 col-md-6 mb-3">
+              <label class="small fw-bold text-muted">Email</label>
+              <input type="email" name="email" class="form-control" placeholder="orders@supplier.com">
+            </div>
+          </div>
+          <div class="row g-3">
+            <div class="col-12 col-md-4 mb-3">
+              <label class="small fw-bold text-muted">GSTIN</label>
+              <input type="text" name="gstin" class="form-control text-uppercase" placeholder="15-character GSTIN">
+            </div>
+            <div class="col-12 col-md-4 mb-3">
+              <label class="small fw-bold text-muted">State (Place of supply)</label>
+              <input type="text" name="state" class="form-control" placeholder="e.g. Rajasthan, Maharashtra">
+            </div>
+            <div class="col-12 col-md-4 mb-3">
+              <label class="small fw-bold text-muted">Payment Credit Terms (Days)</label>
+              <input type="number" name="payment_terms_days" class="form-control" value="30">
+            </div>
+          </div>
+          <div class="mb-0">
+            <label class="small fw-bold text-muted">Address</label>
+            <textarea name="address" class="form-control" rows="2" placeholder="Billing & warehouse address"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer border-top bg-light">
+          <button type="button" class="btn btn-secondary btn-sm rounded-pill" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4">Save Vendor</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+

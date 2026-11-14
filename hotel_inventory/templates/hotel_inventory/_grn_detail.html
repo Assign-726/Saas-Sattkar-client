@@ -1,0 +1,174 @@
+{% load static %}
+<div class="ui-stores">
+  {% include 'hotel_inventory/_nav.html' %}
+
+  <div class="mb-3">
+    <a href="{% url 'hotel_admin:stores_grns' restaurant_slug=rslug %}" class="btn btn-sm btn-link text-muted p-0">
+      <i class="fa-solid fa-arrow-left me-1"></i> Back to Goods Receipts
+    </a>
+  </div>
+
+  <div class="ui-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <div class="d-flex align-items-center gap-2">
+        <h1 class="h3 fw-bold mb-0">GRN {{ grn.grn_number }}</h1>
+        <span class="badge text-bg-success px-2 py-1">Received</span>
+        {% if grn.is_itc_eligible %}<span class="badge text-bg-info px-2 py-1">ITC Eligible</span>{% endif %}
+      </div>
+      <p class="text-muted mb-0 small">
+        Vendor: <strong>{{ grn.vendor.name }}</strong> &bull; Received into: <strong>{{ grn.location.path }}</strong>
+        &bull; Date: <strong>{{ grn.created_at|date:"d M Y H:i" }}</strong>
+        {% if grn.received_by %}&bull; Received by: <strong>{{ grn.received_by.username }}</strong>{% endif %}
+      </p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill" onclick="window.print()">
+        <i class="fa-solid fa-print me-1"></i> Print Receipt
+      </button>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-md-4">
+      <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+        <h6 class="small fw-bold text-uppercase text-muted mb-2">Invoice &amp; Vendor</h6>
+        <div class="fw-bold">{{ grn.vendor.name }}</div>
+        <div class="small text-muted">GSTIN: <code>{{ grn.vendor.gstin|default:"Unregistered" }}</code></div>
+        <div class="small text-muted mt-2">Vendor Invoice No: <strong>{{ grn.invoice_number|default:"Not specified" }}</strong></div>
+        <div class="small text-muted">Invoice Date: <strong>{{ grn.invoice_date|date:"d M Y"|default:"—" }}</strong></div>
+        {% if grn.po %}
+          <div class="small text-muted mt-2">Against PO: <a href="{% url 'hotel_admin:stores_po_detail' restaurant_slug=rslug pk=grn.po.pk %}"><strong>{{ grn.po.po_number }}</strong></a></div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+        <h6 class="small fw-bold text-uppercase text-muted mb-2">Tax Breakdown (GST)</h6>
+        <div class="d-flex justify-content-between small py-1">
+          <span class="text-muted">Taxable Subtotal:</span>
+          <strong>₹{{ grn.subtotal|floatformat:2 }}</strong>
+        </div>
+        <div class="d-flex justify-content-between small py-1">
+          <span class="text-muted">CGST:</span>
+          <span>₹{{ grn.cgst_amount|floatformat:2 }}</span>
+        </div>
+        <div class="d-flex justify-content-between small py-1">
+          <span class="text-muted">SGST:</span>
+          <span>₹{{ grn.sgst_amount|floatformat:2 }}</span>
+        </div>
+        <div class="d-flex justify-content-between small py-1">
+          <span class="text-muted">IGST (Interstate):</span>
+          <span>₹{{ grn.igst_amount|floatformat:2 }}</span>
+        </div>
+        <div class="d-flex justify-content-between fw-bold border-top pt-1 mt-1">
+          <span>Total Tax:</span>
+          <span>₹{{ grn.tax_amount|floatformat:2 }}</span>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+        <h6 class="small fw-bold text-uppercase text-muted mb-2">Vendor Bill</h6>
+        <div class="h3 fw-bold text-primary mb-1">₹{{ grn.total_amount|floatformat:2 }}</div>
+        <div class="small text-muted mb-2">Value at the rates on this GRN</div>
+        {% if grn.bill %}
+          <div class="d-flex justify-content-between small mb-1">
+            <span class="text-muted">Billed on:</span>
+            <a href="{% url 'hotel_admin:stores_bill_detail' restaurant_slug=rslug pk=grn.bill.pk %}"><strong>Bill {{ grn.bill.invoice_number }}</strong></a>
+          </div>
+          <div class="d-flex justify-content-between small">
+            <span class="text-muted">Bill balance:</span>
+            <strong class="{% if grn.bill.due_amount > 0 %}text-danger{% else %}text-success{% endif %}">₹{{ grn.bill.due_amount|floatformat:2 }}</strong>
+          </div>
+        {% elif grn.status == 'CANCELLED' %}
+          <span class="badge text-bg-secondary">Cancelled</span>
+        {% else %}
+          <div class="small text-warning fw-bold mb-2">Waiting for the vendor's bill{% if grn.paid_amount > 0 %} · ₹{{ grn.paid_amount|floatformat:2 }} paid in advance{% endif %}</div>
+          {% if can_edit %}
+            <a href="{% url 'hotel_admin:stores_bill_new' restaurant_slug=rslug %}?vendor={{ grn.vendor_id }}&grn={{ grn.pk }}" class="btn btn-sm btn-primary rounded-pill"><i class="fa-solid fa-file-invoice me-1"></i> Enter bill</a>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Lines Table -->
+  <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white mb-4">
+    <div class="card-header bg-transparent border-bottom py-3">
+      <h5 class="h6 fw-bold mb-0">Received Items &amp; Batches</h5>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="bg-light text-muted small text-uppercase">
+          <tr>
+            <th class="py-3 px-3">Item Name</th>
+            <th class="py-3 text-end">Accepted Qty</th>
+            <th class="py-3 text-end">Rejected Qty</th>
+            <th class="py-3">Batch #</th>
+            <th class="py-3">Expiry Date</th>
+            <th class="py-3 text-end">Unit Rate (₹)</th>
+            <th class="py-3 text-end">GST %</th>
+            <th class="py-3 text-end px-3">Line Total (₹)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in lines %}
+            <tr>
+              <td class="px-3 fw-bold">
+                {{ l.item.name }}
+                <div class="small text-muted">{{ l.item.sku }}</div>
+              </td>
+              <td class="text-end fw-bold text-success">{{ l.received_qty|floatformat:2 }} {{ l.unit_name|default:l.item.unit }}</td>
+              <td class="text-end {% if l.rejected_qty > 0 %}text-danger fw-bold{% else %}text-muted{% endif %}">{{ l.rejected_qty|floatformat:2 }}</td>
+              <td><code>{{ l.batch_number|default:"—" }}</code></td>
+              <td>{{ l.expiry_date|date:"d M Y"|default:"—" }}</td>
+              <td class="text-end">₹{{ l.unit_cost|floatformat:2 }}</td>
+              <td class="text-end text-muted">{{ l.tax_percent }}%</td>
+              <td class="text-end fw-bold px-3">₹{{ l.total_amount|floatformat:2 }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="bg-light fw-bold">
+          <tr>
+            <td colspan="7" class="text-end py-3 px-3">Total Invoice Bill Amount:</td>
+            <td class="text-end py-3 px-3 text-primary h6 mb-0">₹{{ grn.total_amount|floatformat:2 }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- Payments Recorded against this GRN -->
+  {% if payments %}
+    <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white mb-4">
+      <div class="card-header bg-transparent border-bottom py-3">
+        <h5 class="h6 fw-bold mb-0">Recorded Payments Against this GRN</h5>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 small">
+          <thead class="bg-light text-muted text-uppercase">
+            <tr>
+              <th class="py-2 px-3">Date</th>
+              <th class="py-2">Method</th>
+              <th class="py-2">Reference</th>
+              <th class="py-2 text-end">Amount Paid</th>
+              <th class="py-2">Recorded By</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in payments %}
+              <tr>
+                <td class="px-3">{{ p.payment_date|date:"d M Y" }}</td>
+                <td><span class="badge text-bg-light border">{{ p.get_payment_method_display }}</span></td>
+                <td><code>{{ p.reference|default:"—" }}</code></td>
+                <td class="text-end fw-bold text-success">₹{{ p.amount|floatformat:2 }}</td>
+                <td class="text-muted">{{ p.created_by.username|default:"System" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+</div>
+

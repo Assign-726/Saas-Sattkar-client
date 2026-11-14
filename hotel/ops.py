@@ -544,6 +544,26 @@ def action_items(branch, levels):
     foreign = [b for b in RoomBooking.objects.filter(branch=branch, booking_status='CHECKED_IN') if b.is_foreign_national]
     add('front_desk', 'fa-passport', 'orange', 'Foreign guests in house (check Form C is filed)', len(foreign),
         _url(branch, 'reports') + '?tab=formc')
+
+    # Stores & inventory action items
+    try:
+        from hotel_inventory import services as store_services
+        from hotel_inventory.models import Requisition, PurchaseOrder
+        low_lvls, low_its = store_services.low_stock(branch)
+        tot_low = len(low_lvls) + len(low_its)
+        add('stores', 'fa-boxes-stacked', 'orange', 'Store items below minimum or par level', tot_low,
+            _url(branch, 'stores') + '?low=1')
+
+        pending_reqs = Requisition.objects.filter(branch=branch, status=Requisition.Status.SUBMITTED).count()
+        add('stores', 'fa-file-lines', 'blue', 'Requisitions waiting for approval', pending_reqs,
+            _url(branch, 'stores_requisitions'))
+
+        pending_pos = PurchaseOrder.objects.filter(branch=branch, status__in=[PurchaseOrder.Status.APPROVED, PurchaseOrder.Status.PARTIALLY_RECEIVED]).count()
+        add('stores', 'fa-truck-fast', 'indigo', 'Purchase orders awaiting delivery', pending_pos,
+            _url(branch, 'stores_pos'))
+    except Exception:
+        pass
+
     order = {'red': 0, 'orange': 1, 'indigo': 2, 'purple': 2, 'blue': 3, 'gray': 4}
     items.sort(key=lambda i: order.get(i['tone'], 5))
     return items

@@ -1,0 +1,156 @@
+{% load static %}
+<style>
+  .loc-depth-0 { padding-left: 1rem !important; }
+  .loc-depth-1 { padding-left: 2rem !important; }
+  .loc-depth-2 { padding-left: 3rem !important; }
+  .loc-depth-3 { padding-left: 4rem !important; }
+  .loc-depth-4 { padding-left: 5rem !important; }
+  .loc-depth-5 { padding-left: 6rem !important; }
+</style>
+<div class="ui-stores">
+  {% include 'hotel_inventory/_nav.html' %}
+
+  <div class="ui-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h1 class="h3 fw-bold mb-1">Store Locations &amp; Pantries</h1>
+      <p class="text-muted mb-0">Location hierarchy: Main Stores, Floor Pantries, Housekeeping Carts, Room Minibars, Departments, and Linen state locations.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      {% if can_edit %}
+        <button type="button" class="btn btn-primary btn-sm rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#locationModal">
+          <i class="fa-solid fa-plus me-1"></i> Add Location
+        </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white mb-4">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="bg-light text-muted small text-uppercase">
+          <tr>
+            <th class="py-3 px-3">Location Hierarchy</th>
+            <th class="py-3">Type / Kind</th>
+            <th class="py-3">Department</th>
+            <th class="py-3 text-center">Items Stocked</th>
+            <th class="py-3 text-end">Holding Value</th>
+            <th class="py-3 text-center">Status</th>
+            {% if can_edit %}<th class="py-3 text-end px-3">Actions</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+            <tr class="{% if not r.is_active %}table-secondary text-muted{% endif %}">
+              <td class="px-3 loc-depth-{{ r.depth|default:0 }}">
+                {% if r.depth > 0 %}<span class="text-muted me-1">&boxur;</span>{% endif %}
+                <span class="fw-bold text-dark">{{ r.name }}</span>
+                {% if r.room %}<span class="badge text-bg-info ms-1">Room {{ r.room.room_number }}</span>{% endif %}
+              </td>
+              <td><span class="badge text-bg-light border text-secondary">{{ r.get_kind_display }}</span></td>
+              <td>{{ r.get_department_display|default:"—" }}</td>
+              <td class="text-center fw-bold">{{ r.n_items }}</td>
+              <td class="text-end fw-bold">₹{{ r.value|floatformat:2 }}</td>
+              <td class="text-center">
+                {% if r.is_active %}
+                  <span class="badge text-bg-success px-2 py-1">Active</span>
+                {% else %}
+                  <span class="badge text-bg-secondary px-2 py-1">Closed</span>
+                {% endif %}
+              </td>
+              {% if can_edit %}
+                <td class="text-end px-3">
+                  <form method="post" action="{% url 'hotel_admin:stores_location_save' restaurant_slug=rslug %}" class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="pk" value="{{ r.pk }}">
+                    <input type="hidden" name="op" value="{% if r.is_active %}close{% else %}reopen{% endif %}">
+                    <button type="submit" class="btn btn-sm py-0 btn-outline-secondary rounded-pill px-2">
+                      {% if r.is_active %}Close{% else %}Reopen{% endif %}
+                    </button>
+                  </form>
+                </td>
+              {% endif %}
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7" class="text-center py-5 text-muted">
+                <i class="fa-solid fa-sitemap fa-3x text-light mb-2"></i>
+                <h5>No locations defined</h5>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Add Location Modal -->
+<div class="modal fade" id="locationModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content border-0 shadow rounded-3">
+      <form method="post" action="{% url 'hotel_admin:stores_location_save' restaurant_slug=rslug %}">
+        {% csrf_token %}
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold"><i class="fa-solid fa-map-pin text-primary me-1"></i> New Store Location</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="mb-3">
+            <label class="small fw-bold text-muted">Location Name *</label>
+            <input type="text" name="name" class="form-control" placeholder="e.g. 2nd Floor Pantry, HK Cart A, Main Linen Clean Store" required>
+          </div>
+          <div class="mb-3">
+            <label class="small fw-bold text-muted">Parent Location (Optional - for nesting)</label>
+            <select name="parent" class="form-select">
+              <option value="">Root Location</option>
+              {% for p in parents %}
+                <option value="{{ p.pk }}">{{ p.path }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="small fw-bold text-muted">Location Kind *</label>
+              <select name="kind" id="locKindSelect" class="form-select" required onchange="toggleRoomSelect(this.value)">
+                {% for k, l in kinds %}
+                  <option value="{{ k }}">{{ l }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="small fw-bold text-muted">Department (if applicable)</label>
+              <select name="department" class="form-select">
+                <option value="">None</option>
+                {% for d, dl in departments %}
+                  <option value="{{ d }}">{{ dl }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="mb-0" id="roomSelectGroup" style="display: none;">
+            <label class="small fw-bold text-muted">Link to Room (for Minibar)</label>
+            <select name="room" class="form-select">
+              <option value="">None</option>
+              {% for rm in rooms %}
+                <option value="{{ rm.pk }}">Room {{ rm.room_number }} ({{ rm.category.name|default:"Standard" }})</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer border-top bg-light">
+          <button type="button" class="btn btn-secondary btn-sm rounded-pill" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4">Create Location</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleRoomSelect(kind) {
+  var grp = document.getElementById('roomSelectGroup');
+  if (grp) {
+    grp.style.display = (kind === 'MINIBAR') ? 'block' : 'none';
+  }
+}
+</script>

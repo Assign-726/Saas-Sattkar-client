@@ -1,0 +1,131 @@
+{% load static %}
+<div class="ui-stores">
+  {% include 'hotel_inventory/_nav.html' %}
+
+  <div class="mb-3">
+    <a href="{% url 'hotel_admin:stores_pos' restaurant_slug=rslug %}" class="btn btn-sm btn-link text-muted p-0">
+      <i class="fa-solid fa-arrow-left me-1"></i> Back to Purchase Orders
+    </a>
+  </div>
+
+  <div class="ui-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <div class="d-flex align-items-center gap-2">
+        <h1 class="h3 fw-bold mb-0">PO {{ po.po_number }}</h1>
+        {% if po.status == 'DRAFT' %}<span class="badge text-bg-secondary px-2 py-1">Draft</span>
+        {% elif po.status == 'APPROVED' %}<span class="badge text-bg-primary px-2 py-1">Approved</span>
+        {% elif po.status == 'PARTIALLY_RECEIVED' %}<span class="badge text-bg-warning px-2 py-1">Partially Received</span>
+        {% elif po.status == 'RECEIVED' %}<span class="badge text-bg-success px-2 py-1">Received</span>
+        {% elif po.status == 'CANCELLED' %}<span class="badge text-bg-danger px-2 py-1">Cancelled</span>
+        {% endif %}
+      </div>
+      <p class="text-muted mb-0 small">
+        Vendor: <strong>{{ po.vendor.name }}</strong> &bull; Created: <strong>{{ po.created_at|date:"d M Y" }}</strong>
+        {% if po.approved_by %}&bull; Approved by: <strong>{{ po.approved_by.username }}</strong> on {{ po.approved_at|date:"d M Y" }}{% endif %}
+      </p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      {% if can_edit and po.status == 'DRAFT' %}
+        <form method="post" action="{% url 'hotel_admin:stores_po_action' restaurant_slug=rslug pk=po.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="op" value="approve">
+          <button type="submit" class="btn btn-primary btn-sm rounded-pill shadow-sm">
+            <i class="fa-solid fa-check me-1"></i> Approve PO
+          </button>
+        </form>
+      {% endif %}
+      {% if can_edit and po.status in 'APPROVED,PARTIALLY_RECEIVED' %}
+        <a href="{% url 'hotel_admin:stores_grns' restaurant_slug=rslug %}?po={{ po.pk }}" class="btn btn-success btn-sm rounded-pill shadow-sm">
+          <i class="fa-solid fa-truck-ramp-box me-1"></i> Receive GRN Against PO
+        </a>
+      {% endif %}
+      {% if can_edit and po.status in 'DRAFT,APPROVED' %}
+        <form method="post" action="{% url 'hotel_admin:stores_po_action' restaurant_slug=rslug pk=po.pk %}" onsubmit="return confirm('Cancel this purchase order?');">
+          {% csrf_token %}
+          <input type="hidden" name="op" value="cancel">
+          <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill">
+            <i class="fa-solid fa-ban me-1"></i> Cancel PO
+          </button>
+        </form>
+      {% endif %}
+      <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill" onclick="window.print()">
+        <i class="fa-solid fa-print me-1"></i> Print PO
+      </button>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-md-4">
+      <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+        <h6 class="small fw-bold text-uppercase text-muted mb-2">Vendor Information</h6>
+        <div class="fw-bold">{{ po.vendor.name }}</div>
+        <div class="small text-muted mb-1">{{ po.vendor.contact_person }}</div>
+        <div class="small text-muted">{{ po.vendor.phone }} &bull; {{ po.vendor.email }}</div>
+        <div class="small text-muted">GSTIN: <code>{{ po.vendor.gstin|default:"Unregistered" }}</code></div>
+        <div class="small text-muted mt-2">Payment Terms: <strong>{{ po.vendor.payment_terms_days }} days credit</strong></div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+        <h6 class="small fw-bold text-uppercase text-muted mb-2">Delivery &amp; Details</h6>
+        <div>Expected Delivery: <strong>{{ po.expected_date|date:"d M Y"|default:"Immediate" }}</strong></div>
+        <div class="small text-muted mt-2">Notes:</div>
+        <div class="small text-dark fst-italic">{{ po.notes|default:"No special notes provided." }}</div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+        <h6 class="small fw-bold text-uppercase text-muted mb-2">Financial Summary</h6>
+        <div class="h3 fw-bold text-primary mb-1">₹{{ po.total_amount|floatformat:2 }}</div>
+        <div class="small text-muted">Total including taxes</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PO Lines Table -->
+  <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white mb-4">
+    <div class="card-header bg-transparent border-bottom py-3">
+      <h5 class="h6 fw-bold mb-0">Ordered Items</h5>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="bg-light text-muted small text-uppercase">
+          <tr>
+            <th class="py-3 px-3">Item Name</th>
+            <th class="py-3 text-end">Ordered Qty</th>
+            <th class="py-3 text-end">Received Qty</th>
+            <th class="py-3 text-end">Pending Qty</th>
+            <th class="py-3 text-end">Rate (₹)</th>
+            <th class="py-3 text-end">GST %</th>
+            <th class="py-3 text-end px-3">Line Total (₹)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in lines %}
+            <tr>
+              <td class="px-3 fw-bold">
+                {{ l.item.name }}
+                <div class="small text-muted">{{ l.item.sku }}</div>
+              </td>
+              <td class="text-end fw-bold">{{ l.quantity|floatformat:2 }} {{ l.unit_name|default:l.item.unit }}</td>
+              <td class="text-end text-success fw-bold">{{ l.received_qty|floatformat:2 }}</td>
+              <td class="text-end fw-bold {% if l.pending_qty > 0 %}text-warning{% endif %}">
+                {{ l.pending_qty|floatformat:2 }}
+              </td>
+              <td class="text-end text-muted">₹{{ l.unit_price|floatformat:2 }}</td>
+              <td class="text-end text-muted">{{ l.tax_percent }}%</td>
+              <td class="text-end fw-bold px-3">₹{{ l.total_amount|floatformat:2 }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="bg-light fw-bold">
+          <tr>
+            <td colspan="6" class="text-end py-3 px-3">Total Purchase Order Value:</td>
+            <td class="text-end py-3 px-3 text-primary h6 mb-0">₹{{ po.total_amount|floatformat:2 }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+

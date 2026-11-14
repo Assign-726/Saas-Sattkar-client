@@ -3,6 +3,8 @@ from hotel import views_admin
 from hotel import views_staff_hotel
 from hotel import views_pms
 from hotel import views_ops
+from hotel_inventory import views as store_views
+from hotel_inventory import views_bills as store_bill_views
 from notifications import views as notification_views
 from super_admin import views_logs
 from guests import views as guest_views
@@ -261,4 +263,75 @@ urlpatterns = [
     # Forecast
     path('reports/forecast/', views_ops.reports_forecast, name='reports_forecast'),
     path('rates/suggestion/apply/', views_ops.rate_suggest_apply, name='rate_suggest_apply'),
+
+    # Hotel Stores & Inventory (standalone app hotel_inventory)
+    path('stores/', store_views.stock, name='stores'),
+    path('stores/opening/save/', store_views.opening_save, name='stores_opening_save'),
+    path('stores/opening/import/', store_views.opening_import, name='stores_opening_import'),
+    path('stores/export/', store_views.stock_export, name='stores_stock_export'),
+    path('stores/template/<str:kind>/', store_views.csv_template, name='stores_csv_template'),
+
+    path('stores/items/', store_views.items, name='stores_items'),
+    path('stores/items/save/', store_views.item_save, name='stores_item_save'),
+    path('stores/items/<int:pk>/', store_views.item_detail, name='stores_item'),
+    path('stores/items/import/', store_views.items_import, name='stores_items_import'),
+    path('stores/units/save/', store_views.unit_save, name='stores_unit_save'),
+    path('stores/levels/save/', store_views.level_save, name='stores_level_save'),
+    path('stores/categories/save/', store_views.category_save, name='stores_category_save'),
+
+    path('stores/locations/', store_views.locations, name='stores_locations'),
+    path('stores/locations/save/', store_views.location_save, name='stores_location_save'),
+
+    path('stores/vendors/', store_views.vendors, name='stores_vendors'),
+    path('stores/vendors/save/', store_views.vendor_save, name='stores_vendor_save'),
+
+    path('stores/pos/', store_views.pos, name='stores_pos'),
+    path('stores/pos/save/', store_views.po_save, name='stores_po_save'),
+    path('stores/pos/autodraft/', store_views.po_autodraft, name='stores_po_autodraft'),
+    path('stores/pos/<int:pk>/', store_views.po_detail, name='stores_po_detail'),
+    path('stores/pos/<int:pk>/action/', store_views.po_action, name='stores_po_action'),
+
+    path('stores/grns/', store_views.grns, name='stores_grns'),
+    path('stores/grns/save/', store_views.grn_save, name='stores_grn_save'),
+    path('stores/grns/<int:pk>/', store_views.grn_detail, name='stores_grn_detail'),
+
+    path('stores/bills/', store_bill_views.bills, name='stores_bills'),
+    path('stores/bills/new/', store_bill_views.bill_new, name='stores_bill_new'),
+    path('stores/bills/save/', store_bill_views.bill_save, name='stores_bill_save'),
+    path('stores/bills/<int:pk>/', store_bill_views.bill_detail, name='stores_bill_detail'),
+    path('stores/bills/<int:pk>/cancel/', store_bill_views.bill_cancel, name='stores_bill_cancel'),
+
+    path('stores/payments/', store_views.payments, name='stores_payments'),
+    path('stores/payments/save/', store_views.payment_save, name='stores_payment_save'),
+
+    path('stores/requisitions/', store_views.requisitions, name='stores_requisitions'),
+    path('stores/requisitions/save/', store_views.requisition_save, name='stores_requisition_save'),
+    path('stores/requisitions/<int:pk>/', store_views.requisition_detail, name='stores_requisition_detail'),
+    path('stores/requisitions/<int:pk>/action/', store_views.requisition_action, name='stores_requisition_action'),
+
+    path('stores/adjustments/', store_views.adjustments, name='stores_adjustments'),
+    path('stores/adjustments/save/', store_views.adjustment_save, name='stores_adjustment_save'),
+
+    path('stores/counts/', store_views.counts, name='stores_counts'),
+    path('stores/counts/create/', store_views.count_create, name='stores_count_create'),
+    path('stores/counts/<int:pk>/', store_views.count_detail, name='stores_count_detail'),
+    path('stores/counts/<int:pk>/post/', store_views.count_post, name='stores_count_post'),
+
+    path('stores/minibar/', store_views.minibar, name='stores_minibar'),
+    path('stores/minibar/profiles/save/', store_views.minibar_profile_save, name='stores_minibar_profile_save'),
+    path('stores/minibar/refill/<int:room_id>/', store_views.minibar_refill_action, name='stores_minibar_refill_action'),
+
+    path('stores/linen/', store_views.linen, name='stores_linen'),
+    path('stores/linen/pars/save/', store_views.linen_par_save, name='stores_linen_par_save'),
+    path('stores/linen/send/', store_views.linen_send, name='stores_linen_send'),
+    path('stores/linen/receive/', store_views.linen_receive, name='stores_linen_receive'),
+    path('stores/linen/retire/', store_views.linen_retire, name='stores_linen_retire'),
+
+    path('stores/reports/', store_views.reports, name='stores_reports'),
+    path('stores/barcode/', store_views.barcode, name='stores_barcode'),
+    path('stores/barcode/lookup/', store_views.barcode_lookup_api, name='stores_barcode_lookup_api'),
+
+    path('stores/ledger/', store_views.ledger, name='stores_ledger'),
+    path('stores/ledger/export/', store_views.ledger_export, name='stores_ledger_export'),
+    path('stores/ledger/<int:pk>/reverse/', store_views.move_reverse, name='stores_move_reverse'),
 ]

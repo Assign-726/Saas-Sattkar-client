@@ -1,0 +1,193 @@
+{% load static %}
+<div class="ui-stores">
+  {% include 'hotel_inventory/_nav.html' %}
+
+  <div class="ui-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h1 class="h3 fw-bold mb-1">Vendor Payables &amp; Ageing</h1>
+      <p class="text-muted mb-0">Track supplier bills, outstanding liabilities, ageing analysis (0-30, 31-60, 61-90, 90+ days), and payment settlements.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      {% if can_edit %}
+        <button type="button" class="btn btn-primary btn-sm rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#recordPaymentModal">
+          <i class="fa-solid fa-money-bill-transfer me-1"></i> Record Vendor Payment
+        </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- KPI summary -->
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-md-4">
+      <div class="card border-0 shadow-sm rounded-3 p-3 bg-white">
+        <span class="text-muted small fw-bold text-uppercase">Total Accounts Payable</span>
+        <div class="h3 fw-bold mb-0 text-danger">₹{{ total_balance|floatformat:2 }}</div>
+        <div class="text-muted small">Outstanding liability to suppliers</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Payables Ageing Table -->
+  <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white mb-4">
+    <div class="card-header bg-transparent border-bottom py-3">
+      <h5 class="h6 fw-bold mb-0"><i class="fa-solid fa-clock-rotate-left text-primary me-1"></i> Supplier Ledger &amp; Ageing Analysis</h5>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="bg-light text-muted small text-uppercase">
+          <tr>
+            <th class="py-3 px-3">Vendor</th>
+            <th class="py-3 text-end">Total Billed</th>
+            <th class="py-3 text-end">Total Paid</th>
+            <th class="py-3 text-end">Balance Due</th>
+            <th class="py-3 text-end">0 - 30 Days</th>
+            <th class="py-3 text-end">31 - 60 Days</th>
+            <th class="py-3 text-end">61 - 90 Days</th>
+            <th class="py-3 text-end px-3">90+ Days</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in payables %}
+            <tr>
+              <td class="px-3 fw-bold">
+                {{ p.vendor.name }}
+                <div class="small text-muted">{{ p.vendor.payment_terms_days }} days credit{% if p.unbilled_grns %} · {{ p.unbilled_grns }} deliver{{ p.unbilled_grns|pluralize:"y,ies" }} not billed yet{% endif %}{% if p.advance %} · <span class="text-success">₹{{ p.advance|floatformat:2 }} paid in advance</span>{% endif %}</div>
+              </td>
+              <td class="text-end">₹{{ p.total_billed|floatformat:2 }}</td>
+              <td class="text-end text-success">₹{{ p.total_paid|floatformat:2 }}</td>
+              <td class="text-end fw-bold {% if p.balance > 0 %}text-danger{% else %}text-muted{% endif %}">
+                ₹{{ p.balance|floatformat:2 }}
+              </td>
+              <td class="text-end">₹{{ p.current|floatformat:2 }}</td>
+              <td class="text-end {% if p.days_31_60 > 0 %}text-warning fw-bold{% endif %}">₹{{ p.days_31_60|floatformat:2 }}</td>
+              <td class="text-end {% if p.days_61_90 > 0 %}text-warning fw-bold{% endif %}">₹{{ p.days_61_90|floatformat:2 }}</td>
+              <td class="text-end px-3 {% if p.days_90_plus > 0 %}text-danger fw-bold{% endif %}">₹{{ p.days_90_plus|floatformat:2 }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="8" class="text-center py-4 text-muted">No vendor payables found.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Recent Payments History -->
+  <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white mb-4">
+    <div class="card-header bg-transparent border-bottom py-3">
+      <h5 class="h6 fw-bold mb-0"><i class="fa-solid fa-receipt text-primary me-1"></i> Recent Supplier Payments</h5>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 small">
+        <thead class="bg-light text-muted text-uppercase">
+          <tr>
+            <th class="py-2 px-3">Date</th>
+            <th class="py-2">Vendor</th>
+            <th class="py-2">Against</th>
+            <th class="py-2">Method</th>
+            <th class="py-2">Reference / Cheque</th>
+            <th class="py-2 text-end">Amount (₹)</th>
+            <th class="py-2">Recorded By</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for pay in recent_payments %}
+            <tr>
+              <td class="px-3">{{ pay.payment_date|date:"d M Y" }}</td>
+              <td class="fw-bold">{{ pay.vendor.name }}</td>
+              <td>{% if pay.bill %}<a href="{% url 'hotel_admin:stores_bill_detail' restaurant_slug=rslug pk=pay.bill.pk %}">Bill {{ pay.bill.invoice_number }}</a>{% elif pay.grn %}<code>{{ pay.grn.grn_number }}</code>{% else %}On account{% endif %}</td>
+              <td><span class="badge text-bg-light border">{{ pay.get_payment_method_display }}</span></td>
+              <td><code>{{ pay.reference|default:"—" }}</code></td>
+              <td class="text-end fw-bold text-success">₹{{ pay.amount|floatformat:2 }}</td>
+              <td class="text-muted">{{ pay.created_by.username|default:"System" }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7" class="text-center py-4 text-muted">No payments recorded yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Record Vendor Payment -->
+<div class="modal fade" id="recordPaymentModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content border-0 shadow rounded-3">
+      <form method="post" action="{% url 'hotel_admin:stores_payment_save' restaurant_slug=rslug %}">
+        {% csrf_token %}
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold"><i class="fa-solid fa-money-bill-transfer text-primary me-1"></i> Record Vendor Payment</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="mb-3">
+            <label class="small fw-bold text-muted">Vendor *</label>
+            <select name="vendor" class="form-select" required>
+              <option value="">Select Vendor...</option>
+              {% for v in vendors %}
+                <option value="{{ v.pk }}">{{ v.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="small fw-bold text-muted">Against (optional)</label>
+            <select name="against" class="form-select">
+              <option value="">On account (general balance)</option>
+              {% if unpaid_bills %}
+                <optgroup label="Vendor bills">
+                  {% for b in unpaid_bills %}
+                    <option value="bill:{{ b.pk }}" {% if preselect_bill == b.pk|stringformat:"s" %}selected{% endif %}>Bill {{ b.invoice_number }} &bull; {{ b.vendor.name }} (due ₹{{ b.due_amount|floatformat:2 }}{% if b.is_overdue %}, overdue{% endif %})</option>
+                  {% endfor %}
+                </optgroup>
+              {% endif %}
+              {% if unpaid_grns %}
+                <optgroup label="Deliveries waiting for a bill (advance)">
+                  {% for g in unpaid_grns %}
+                    <option value="grn:{{ g.pk }}">{{ g.grn_number }} &bull; {{ g.vendor.name }} (₹{{ g.due_amount|floatformat:2 }})</option>
+                  {% endfor %}
+                </optgroup>
+              {% endif %}
+            </select>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="small fw-bold text-muted">Amount (₹) *</label>
+              <input type="number" step="0.01" name="amount" class="form-control" placeholder="Amount" required>
+            </div>
+            <div class="col-6">
+              <label class="small fw-bold text-muted">Payment Date *</label>
+              <input type="date" name="payment_date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+            </div>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="small fw-bold text-muted">Payment Method</label>
+              <select name="payment_method" class="form-select">
+                {% for m_k, m_l in methods %}
+                  <option value="{{ m_k }}">{{ m_l }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="small fw-bold text-muted">UTR / Cheque / Ref #</label>
+              <input type="text" name="reference" class="form-control" placeholder="Transaction ref">
+            </div>
+          </div>
+          <div class="mb-0">
+            <label class="small fw-bold text-muted">Notes</label>
+            <input type="text" name="notes" class="form-control" placeholder="Remarks / memo">
+          </div>
+        </div>
+        <div class="modal-footer border-top bg-light">
+          <button type="button" class="btn btn-secondary btn-sm rounded-pill" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4">Post Payment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+

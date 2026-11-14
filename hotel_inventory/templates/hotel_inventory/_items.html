@@ -1,0 +1,376 @@
+{% load static %}
+<div class="ui-stores">
+  {% include 'hotel_inventory/_nav.html' %}
+
+  <div class="ui-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h1 class="h3 fw-bold mb-1">Store Items &amp; Catalog</h1>
+      <p class="text-muted mb-0">Manage guest amenities, housekeeping supplies, linen items, minibar snacks, and engineering spares.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      {% if can_edit %}
+        <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill" data-bs-toggle="modal" data-bs-target="#importItemsModal">
+          <i class="fa-solid fa-file-import me-1"></i> Import CSV
+        </button>
+        <button type="button" class="btn btn-outline-primary btn-sm rounded-pill" data-bs-toggle="modal" data-bs-target="#categoryModal">
+          <i class="fa-solid fa-folder-plus me-1"></i> New Category
+        </button>
+        <button type="button" class="btn btn-primary btn-sm rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#itemModal">
+          <i class="fa-solid fa-plus me-1"></i> Add Store Item
+        </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Sub Tabs: Items / Categories -->
+  <ul class="nav nav-pills mb-3">
+    <li class="nav-item">
+      <a class="nav-link {% if tab != 'categories' %}active{% endif %} rounded-pill px-3 py-1 fw-bold" href="?tab=items">
+        <i class="fa-solid fa-boxes-stacked me-1"></i> Items ({{ page_obj.paginator.count }})
+      </a>
+    </li>
+    <li class="nav-item ms-2">
+      <a class="nav-link {% if tab == 'categories' %}active{% endif %} rounded-pill px-3 py-1 fw-bold" href="?tab=categories">
+        <i class="fa-solid fa-sitemap me-1"></i> Categories ({{ categories|length }})
+      </a>
+    </li>
+  </ul>
+
+  {% if tab == 'categories' %}
+    <!-- Categories List -->
+    <div class="card border-0 shadow-sm rounded-3 bg-white overflow-hidden mb-4">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="bg-light text-muted small text-uppercase">
+            <tr>
+              <th class="py-3 px-3">Category Name</th>
+              <th class="py-3">Parent Group</th>
+              <th class="py-3">HSN Code</th>
+              <th class="py-3">GST Rate</th>
+              <th class="py-3 text-center">Items Inside</th>
+              <th class="py-3 text-end px-3">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in categories %}
+              <tr>
+                <td class="px-3 fw-bold text-dark">{{ c.name }}</td>
+                <td>{% if c.parent %}{{ c.parent.name }}{% else %}Root category{% endif %}</td>
+                <td><code>{{ c.hsn_code|default:"—" }}</code></td>
+                <td>{% if c.gst_rate %}{{ c.gst_rate }}%{% else %}—{% endif %}</td>
+                <td class="text-center"><span class="badge text-bg-light border">{{ c.n }}</span></td>
+                <td class="text-end px-3">
+                  {% if can_edit %}
+                    <form method="post" action="{% url 'hotel_admin:stores_category_save' restaurant_slug=rslug %}" class="d-inline" onsubmit="return confirm('Remove category {{ c.name }}?');">
+                      {% csrf_token %}
+                      <input type="hidden" name="pk" value="{{ c.pk }}">
+                      <input type="hidden" name="op" value="delete">
+                      <button type="submit" class="btn btn-sm py-0 btn-outline-danger rounded-pill px-2">Delete</button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="6" class="text-center py-5 text-muted">No categories created yet.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% else %}
+    <!-- Search & Filters -->
+    <div class="card border-0 shadow-sm rounded-3 mb-4 bg-white p-3">
+      <form method="get" class="row g-2 align-items-center">
+        <div class="col-12 col-md-6">
+          <div class="input-group input-group-sm">
+            <span class="input-group-text bg-light border-end-0"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
+            <input type="search" name="q" value="{{ q }}" class="form-control border-start-0" placeholder="Search by item name, SKU, or barcode...">
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <select name="show" class="form-select form-select-sm" onchange="this.form.submit()">
+            <option value="" {% if show != 'all' %}selected{% endif %}>Active Items Only</option>
+            <option value="all" {% if show == 'all' %}selected{% endif %}>All Items (including hidden)</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-3 d-flex align-items-center justify-content-end gap-2">
+          <button type="submit" class="btn btn-sm btn-primary rounded-pill px-3">Search</button>
+          {% if q or show %}
+            <a href="{% url 'hotel_admin:stores_items' restaurant_slug=rslug %}" class="btn btn-sm btn-light border rounded-pill">Reset</a>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+
+    <!-- Items Table -->
+    <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white mb-4">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="bg-light text-muted small text-uppercase">
+            <tr>
+              <th class="py-3 px-3">Item Name</th>
+              <th class="py-3">Category</th>
+              <th class="py-3">Kind</th>
+              <th class="py-3">Base Unit</th>
+              <th class="py-3 text-end">WAC Cost</th>
+              <th class="py-3 text-end">Guest Price</th>
+              <th class="py-3 text-end">Reorder Level</th>
+              <th class="py-3">Preferred Vendor</th>
+              <th class="py-3 text-center">Status</th>
+              <th class="py-3 text-end px-3">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for it in rows %}
+              <tr class="{% if not it.is_active %}table-secondary text-muted{% endif %}">
+                <td class="px-3">
+                  <a href="{% url 'hotel_admin:stores_item' restaurant_slug=rslug pk=it.pk %}" class="fw-bold text-dark text-decoration-none">
+                    {{ it.name }}
+                  </a>
+                  <div class="small text-muted">
+                    {% if it.sku %}SKU: <code>{{ it.sku }}</code>{% endif %}
+                    {% if it.barcode %}&bull; Barcode: <code>{{ it.barcode }}</code>{% endif %}
+                    {% if it.n_units %}&bull; {{ it.n_units }} pack size(s){% endif %}
+                  </div>
+                </td>
+                <td>{{ it.category|default:"—" }}</td>
+                <td>
+                  <span class="badge text-bg-light border text-secondary fw-normal">{{ it.get_kind_display }}</span>
+                </td>
+                <td><span class="fw-bold">{{ it.unit }}</span></td>
+                <td class="text-end">₹{{ it.wac|floatformat:2 }}</td>
+                <td class="text-end">{% if it.sale_price %}₹{{ it.sale_price|floatformat:2 }}{% else %}—{% endif %}</td>
+                <td class="text-end">{% if it.reorder_level > 0 %}{{ it.reorder_level|floatformat:0 }} {{ it.unit }}{% else %}—{% endif %}</td>
+                <td>{% if it.preferred_vendor %}{{ it.preferred_vendor.name }}{% else %}—{% endif %}</td>
+                <td class="text-center">
+                  {% if it.is_active %}
+                    <span class="badge text-bg-success px-2 py-1">Active</span>
+                  {% else %}
+                    <span class="badge text-bg-secondary px-2 py-1">Hidden</span>
+                  {% endif %}
+                </td>
+                <td class="text-end px-3">
+                  <a href="{% url 'hotel_admin:stores_item' restaurant_slug=rslug pk=it.pk %}" class="btn btn-sm py-0 btn-outline-secondary rounded-pill px-2">
+                    Detail <i class="fa-solid fa-chevron-right ms-1"></i>
+                  </a>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="10" class="text-center py-5 text-muted">
+                  <div class="mb-2"><i class="fa-solid fa-dolly fa-3x text-light"></i></div>
+                  <h5>No items found</h5>
+                  <p class="small mb-0">Add your first store item or import via CSV.</p>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pager -->
+      {% if page_obj.has_other_pages %}
+        <div class="p-3 border-top d-flex align-items-center justify-content-between">
+          <span class="small text-muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+          <div class="btn-group btn-group-sm">
+            {% if page_obj.has_previous %}
+              <a href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if show %}&show={{ show }}{% endif %}" class="btn btn-outline-secondary">Previous</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+              <a href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if show %}&show={{ show }}{% endif %}" class="btn btn-outline-secondary">Next</a>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+
+<!-- Add/Edit Store Item Modal -->
+<div class="modal fade" id="itemModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+    <div class="modal-content border-0 shadow rounded-3">
+      <form method="post" action="{% url 'hotel_admin:stores_item_save' restaurant_slug=rslug %}">
+        {% csrf_token %}
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold"><i class="fa-solid fa-box text-primary me-1"></i> New Store Item</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="row g-3">
+            <div class="col-12 col-md-8 mb-3">
+              <label class="small fw-bold text-muted">Item Name *</label>
+              <input type="text" name="name" class="form-control" placeholder="e.g. Bath Soap 30g, Bed Sheet King, Mineral Water 500ml" required>
+            </div>
+            <div class="col-12 col-md-4 mb-3">
+              <label class="small fw-bold text-muted">Item Kind / Usage *</label>
+              <select name="kind" class="form-select" required>
+                {% for k, l in kinds %}
+                  <option value="{{ k }}">{{ l }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="row g-3">
+            <div class="col-12 col-md-4 mb-3">
+              <label class="small fw-bold text-muted">Category</label>
+              <select name="category" class="form-select">
+                <option value="">None (General)</option>
+                {% for c in categories %}
+                  <option value="{{ c.pk }}">{{ c }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-12 col-md-4 mb-3">
+              <label class="small fw-bold text-muted">Base Issue Unit *</label>
+              <input type="text" name="unit" class="form-control" placeholder="pc, bottle, kg, L, meter" value="pc" required>
+              <small class="form-text text-muted">Unit stock is kept and issued in.</small>
+            </div>
+            <div class="col-12 col-md-4 mb-3">
+              <label class="small fw-bold text-muted">Preferred Vendor</label>
+              <select name="preferred_vendor" class="form-select">
+                <option value="">None</option>
+                {% for v in vendors %}
+                  <option value="{{ v.pk }}">{{ v.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="row g-3">
+            <div class="col-12 col-md-4 mb-3">
+              <label class="small fw-bold text-muted">SKU Code</label>
+              <input type="text" name="sku" class="form-control" placeholder="e.g. AM-001">
+            </div>
+            <div class="col-12 col-md-4 mb-3">
+              <label class="small fw-bold text-muted">Barcode / QR</label>
+              <input type="text" name="barcode" class="form-control" placeholder="Scannable barcode string">
+            </div>
+            <div class="col-12 col-md-4 mb-3">
+              <label class="small fw-bold text-muted">HSN Code</label>
+              <input type="text" name="hsn_code" class="form-control" placeholder="e.g. 3401">
+            </div>
+          </div>
+          <div class="row g-3">
+            <div class="col-12 col-md-3 mb-3">
+              <label class="small fw-bold text-muted">GST Rate (%)</label>
+              <input type="number" step="0.01" name="gst_rate" class="form-control" placeholder="e.g. 18">
+            </div>
+            <div class="col-12 col-md-3 mb-3">
+              <label class="small fw-bold text-muted">Guest Price (₹)</label>
+              <input type="number" step="0.01" name="sale_price" class="form-control" placeholder="For chargeable/minibar">
+            </div>
+            <div class="col-12 col-md-3 mb-3">
+              <label class="small fw-bold text-muted">Reorder Level</label>
+              <input type="number" step="0.001" name="reorder_level" class="form-control" placeholder="Alert threshold">
+            </div>
+            <div class="col-12 col-md-3 mb-3">
+              <label class="small fw-bold text-muted">Reorder Quantity</label>
+              <input type="number" step="0.001" name="reorder_qty" class="form-control" placeholder="Usual order quantity">
+            </div>
+          </div>
+          <div class="form-check mb-3">
+            <input type="checkbox" name="track_expiry" class="form-check-input" id="newTrackExpiry">
+            <label class="form-check-label small fw-bold" for="newTrackExpiry">Track batch &amp; expiry on goods receipts</label>
+          </div>
+          <div class="border-top pt-3">
+            <h6 class="small fw-bold text-uppercase text-muted mb-2">Optional Pack Unit (Purchase conversion)</h6>
+            <div class="row g-2">
+              <div class="col-6">
+                <input type="text" name="pack_unit" class="form-control" placeholder="Pack name: case, carton, box, can">
+              </div>
+              <div class="col-6">
+                <input type="number" step="0.0001" name="pack_factor" class="form-control" placeholder="How many base units in 1 pack? (e.g. 500)">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-top bg-light">
+          <button type="button" class="btn btn-secondary btn-sm rounded-pill" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4">Create Store Item</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Add Category Modal -->
+<div class="modal fade" id="categoryModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content border-0 shadow rounded-3">
+      <form method="post" action="{% url 'hotel_admin:stores_category_save' restaurant_slug=rslug %}">
+        {% csrf_token %}
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold"><i class="fa-solid fa-folder text-primary me-1"></i> New Category</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="mb-3">
+            <label class="small fw-bold text-muted">Category Name *</label>
+            <input type="text" name="name" class="form-control" placeholder="e.g. Guest Amenities, Bath, Linen, Cleaning Chemicals" required>
+          </div>
+          <div class="mb-3">
+            <label class="small fw-bold text-muted">Parent Category (optional)</label>
+            <select name="parent" class="form-select">
+              <option value="">Root (No Parent)</option>
+              {% for c in categories %}
+                {% if not c.parent_id %}
+                  <option value="{{ c.pk }}">{{ c.name }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+          </div>
+          <div class="row g-2">
+            <div class="col-6 mb-0">
+              <label class="small fw-bold text-muted">Default HSN</label>
+              <input type="text" name="hsn_code" class="form-control" placeholder="e.g. 3401">
+            </div>
+            <div class="col-6 mb-0">
+              <label class="small fw-bold text-muted">Default GST %</label>
+              <input type="number" step="0.01" name="gst_rate" class="form-control" placeholder="18">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-top bg-light">
+          <button type="button" class="btn btn-secondary btn-sm rounded-pill" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4">Save Category</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Import Items CSV Modal -->
+<div class="modal fade" id="importItemsModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content border-0 shadow rounded-3">
+      <form method="post" action="{% url 'hotel_admin:stores_items_import' restaurant_slug=rslug %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold"><i class="fa-solid fa-file-csv text-primary me-1"></i> Import Store Items CSV</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <p class="small text-muted mb-3">
+            Bulk upload or update items from a CSV spreadsheet.
+          </p>
+          <div class="mb-3">
+            <a href="{% url 'hotel_admin:stores_csv_template' restaurant_slug=rslug kind='items' %}" class="btn btn-outline-secondary btn-sm rounded-pill">
+              <i class="fa-solid fa-download me-1"></i> Download Items Template
+            </a>
+          </div>
+          <div class="mb-0">
+            <label class="small fw-bold text-muted">Choose CSV File *</label>
+            <input type="file" name="file" accept=".csv" class="form-control border rounded p-2" required>
+          </div>
+        </div>
+        <div class="modal-footer border-top bg-light">
+          <button type="button" class="btn btn-secondary btn-sm rounded-pill" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4">Upload &amp; Import</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+

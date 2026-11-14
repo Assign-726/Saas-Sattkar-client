@@ -113,6 +113,7 @@ INSTALLED_APPS = [
     'reservations',
     'events',
     'hotel',
+    'hotel_inventory',
     'guests',
     'integrations',
     'finance',

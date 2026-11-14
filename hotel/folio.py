@@ -158,6 +158,26 @@ def post_charge(booking, user, kind, description, unit_price, quantity=1, tax_pe
         booking=booking, kind=kind, description=(description or '').strip()[:200] or FolioCharge.Kind(kind).label,
         unit_price=unit_price, quantity=quantity, tax_percent=tax_percent,
         service_date=service_date or timezone.localdate(), reference=(reference or '')[:80], posted_by=user, amount=0)
+
+    # Hotel inventory minibar hook
+    if kind == FolioCharge.Kind.MINIBAR and booking.room:
+        try:
+            from hotel_inventory import services as store_services
+            from hotel_inventory.models import StoreItem
+            store_item = None
+            ref_str = (reference or '').strip()
+            if ref_str.isdigit():
+                store_item = StoreItem.objects.filter(branch=booking.branch, pk=int(ref_str)).first()
+            if not store_item and description:
+                desc_clean = description.strip()
+                store_item = StoreItem.objects.filter(branch=booking.branch, name__iexact=desc_clean).first()
+            if not store_item and ref_str:
+                store_item = StoreItem.objects.filter(branch=booking.branch, barcode=ref_str).first()
+            if store_item:
+                store_services.minibar_consume(booking, store_item, quantity, user=user, charge_id=charge.pk)
+        except Exception:
+            pass
+
     sync_payment_status(booking)
     return charge, None
 
@@ -169,6 +189,15 @@ def void_charge(charge, user, reason):
         return 'Give a reason for voiding the charge.'
     charge.is_void, charge.void_reason, charge.voided_by, charge.voided_at = True, reason.strip()[:200], user, timezone.now()
     charge.save(update_fields=['is_void', 'void_reason', 'voided_by', 'voided_at'])
+
+    # Hotel inventory minibar reversal hook
+    if charge.kind == FolioCharge.Kind.MINIBAR:
+        try:
+            from hotel_inventory import services as store_services
+            store_services.minibar_reverse_consume(charge, user=user)
+        except Exception:
+            pass
+
     sync_payment_status(charge.booking)
     return None
 

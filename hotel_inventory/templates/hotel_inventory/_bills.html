@@ -1,0 +1,148 @@
+<div class="ui-stores">
+  {% include 'hotel_inventory/_nav.html' %}
+
+  <div class="ui-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h1 class="h3 fw-bold mb-1">Purchase Bills</h1>
+      <p class="text-muted mb-0">Enter the vendor's bill against the goods you received. The bill fixes the real cost of the stock and what the hotel owes.</p>
+    </div>
+    {% if can_edit %}
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <a href="{% url 'hotel_admin:stores_bill_new' restaurant_slug=rslug %}?direct=1" class="btn btn-outline-primary btn-sm rounded-pill">
+          <i class="fa-solid fa-bolt me-1"></i> Direct Purchase Bill
+        </a>
+        <a href="{% url 'hotel_admin:stores_bill_new' restaurant_slug=rslug %}" class="btn btn-primary btn-sm rounded-pill shadow-sm">
+          <i class="fa-solid fa-file-invoice me-1"></i> Enter Bill for Deliveries
+        </a>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+        <span class="text-muted small fw-bold">Deliveries waiting for a bill</span>
+        <div class="h4 fw-bold mb-0 {% if kpis.pending_count %}text-warning{% endif %}">{{ kpis.pending_count }}</div>
+        <div class="text-muted small">₹{{ kpis.pending_value|floatformat:2 }} at GRN value</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+        <span class="text-muted small fw-bold">Owed on bills</span>
+        <div class="h4 fw-bold mb-0 text-danger">₹{{ kpis.due|floatformat:2 }}</div>
+        <div class="text-muted small">Unpaid balance</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+        <span class="text-muted small fw-bold">Overdue bills</span>
+        <div class="h4 fw-bold mb-0 {% if kpis.overdue %}text-danger{% endif %}">{{ kpis.overdue }}</div>
+        <div class="text-muted small">Past the vendor's credit days</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+        <span class="text-muted small fw-bold">Billed this month</span>
+        <div class="h4 fw-bold mb-0">₹{{ kpis.month|floatformat:2 }}</div>
+        <div class="text-muted small">By bill date</div>
+      </div>
+    </div>
+  </div>
+
+  {% if pending_by_vendor %}
+    <div class="card border-0 shadow-sm rounded-3 bg-white mb-4">
+      <div class="card-header bg-transparent border-bottom py-3">
+        <h5 class="h6 fw-bold mb-0"><i class="fa-solid fa-hourglass-half text-warning me-1"></i> Waiting for the vendor's bill</h5>
+      </div>
+      <div class="list-group list-group-flush">
+        {% for v, grns in pending_by_vendor %}
+          <div class="list-group-item d-flex align-items-center justify-content-between flex-wrap gap-2 py-3">
+            <div>
+              <div class="fw-bold">{{ v.name }}</div>
+              <div class="small text-muted">
+                {% for g in grns %}<code>{{ g.grn_number }}</code> ({{ g.created_at|date:"d M" }}, ₹{{ g.total_amount|floatformat:0 }}){% if not forloop.last %} · {% endif %}{% endfor %}
+              </div>
+            </div>
+            {% if can_edit %}
+              <a href="{% url 'hotel_admin:stores_bill_new' restaurant_slug=rslug %}?vendor={{ v.pk }}{% for g in grns %}&grn={{ g.pk }}{% endfor %}" class="btn btn-sm btn-outline-primary rounded-pill">
+                Enter bill <i class="fa-solid fa-chevron-right ms-1"></i>
+              </a>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="card border-0 shadow-sm rounded-3 mb-4 bg-white p-3">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-12 col-md-4">
+        <input type="search" name="q" value="{{ q }}" class="form-control form-control-sm" placeholder="Search bill no., our ref or vendor…">
+      </div>
+      <div class="col-6 col-md-3">
+        <select name="vendor" class="form-select form-select-sm">
+          <option value="">All vendors</option>
+          {% for v in vendors %}<option value="{{ v.pk }}" {% if vendor and vendor.pk == v.pk %}selected{% endif %}>{{ v.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <select name="show" class="form-select form-select-sm">
+          <option value="">All bills</option>
+          <option value="unpaid" {% if show == 'unpaid' %}selected{% endif %}>Unpaid</option>
+          <option value="overdue" {% if show == 'overdue' %}selected{% endif %}>Overdue</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-2 d-flex gap-2 justify-content-end">
+        <button type="submit" class="btn btn-sm btn-primary rounded-pill px-3">Filter</button>
+        {% if q or vendor or show %}<a href="{% url 'hotel_admin:stores_bills' restaurant_slug=rslug %}" class="btn btn-sm btn-light border rounded-pill">Reset</a>{% endif %}
+      </div>
+    </form>
+  </div>
+
+  <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white mb-4">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="bg-light text-muted small">
+          <tr>
+            <th class="py-3 px-3">Bill</th>
+            <th class="py-3">Vendor</th>
+            <th class="py-3">Bill date</th>
+            <th class="py-3">Due</th>
+            <th class="py-3 text-end">Total</th>
+            <th class="py-3 text-end">Balance</th>
+            <th class="py-3 text-center">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in rows %}
+            <tr class="{% if b.status == 'CANCELLED' %}text-muted{% endif %}">
+              <td class="px-3">
+                <a href="{% url 'hotel_admin:stores_bill_detail' restaurant_slug=rslug pk=b.pk %}" class="fw-bold text-decoration-none">{{ b.invoice_number }}</a>
+                <div class="small text-muted"><code>{{ b.bill_number }}</code>{% if b.is_direct %} · direct purchase{% endif %}</div>
+              </td>
+              <td class="fw-bold">{{ b.vendor.name }}</td>
+              <td>{{ b.invoice_date|date:"d M Y" }}</td>
+              <td>{% if b.due_date %}{{ b.due_date|date:"d M Y" }}{% else %}—{% endif %}</td>
+              <td class="text-end">₹{{ b.total_amount|floatformat:2 }}</td>
+              <td class="text-end fw-bold {% if b.due_amount > 0 %}text-danger{% endif %}">₹{{ b.due_amount|floatformat:2 }}</td>
+              <td class="text-center">
+                {% if b.status == 'CANCELLED' %}<span class="badge text-bg-secondary">Cancelled</span>
+                {% elif b.is_paid %}<span class="badge text-bg-success">Paid</span>
+                {% elif b.is_overdue %}<span class="badge text-bg-danger">Overdue</span>
+                {% elif b.paid_amount > 0 %}<span class="badge text-bg-warning">Part paid</span>
+                {% else %}<span class="badge text-bg-light border">Unpaid</span>{% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7" class="text-center py-5 text-muted">
+              <i class="fa-solid fa-file-invoice fa-2x mb-2"></i>
+              <div>No purchase bills yet.</div>
+              <div class="small">When a vendor's bill arrives, enter it here against the deliveries it covers.</div>
+            </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "hotel_admin/_pager.html" with page=page_obj noun="bills" %}
+  </div>
+</div>

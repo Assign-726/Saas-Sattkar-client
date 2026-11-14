@@ -1,0 +1,380 @@
+{% load static %}
+<div class="ui-stores">
+  {% include 'hotel_inventory/_nav.html' %}
+
+  <div class="ui-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h1 class="h3 fw-bold mb-1">Linen Pool &amp; Laundry Manifests</h1>
+      <p class="text-muted mb-0">Track circulating bedsheets, bath towels, and robes across Clean Store, In-Rooms, Soiled, At-Laundry, and Scrap.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      {% if can_edit %}
+        <button type="button" class="btn btn-outline-danger btn-sm rounded-pill" data-bs-toggle="modal" data-bs-target="#retireLinenModal">
+          <i class="fa-solid fa-scissors me-1"></i> Retire to Scrap
+        </button>
+        <button type="button" class="btn btn-outline-success btn-sm rounded-pill" data-bs-toggle="modal" data-bs-target="#receiveLinenModal">
+          <i class="fa-solid fa-truck-ramp-box me-1"></i> Receive from Laundry
+        </button>
+        <button type="button" class="btn btn-primary btn-sm rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#sendLinenModal">
+          <i class="fa-solid fa-truck-fast me-1"></i> Send to Laundry
+        </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Linen Pool Status Cards -->
+  <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white mb-4">
+    <div class="card-header bg-transparent border-bottom py-3">
+      <h5 class="h6 fw-bold mb-0"><i class="fa-solid fa-shirt text-primary me-1"></i> Circulating Linen Stock Across Lifecycle States</h5>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="bg-light text-muted small text-uppercase">
+          <tr>
+            <th class="py-3 px-3">Linen Item</th>
+            <th class="py-3 text-end">Clean Store</th>
+            <th class="py-3 text-end">In Rooms</th>
+            <th class="py-3 text-end">Soiled</th>
+            <th class="py-3 text-end">At Laundry</th>
+            <th class="py-3 text-end">Total Circulating</th>
+            <th class="py-3 text-end px-3 text-danger">Scrapped / Retired</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for isum in item_summaries %}
+            <tr>
+              <td class="px-3 fw-bold text-dark">{{ isum.item.name }}</td>
+              <td class="text-end fw-bold text-success">{{ isum.clean|floatformat:0 }}</td>
+              <td class="text-end fw-bold text-primary">{{ isum.in_use|floatformat:0 }}</td>
+              <td class="text-end fw-bold text-warning">{{ isum.soiled|floatformat:0 }}</td>
+              <td class="text-end fw-bold text-info">{{ isum.laundry|floatformat:0 }}</td>
+              <td class="text-end fw-bold">{{ isum.total_active|floatformat:0 }} {{ isum.item.unit }}</td>
+              <td class="text-end fw-bold text-danger px-3">{{ isum.scrap|floatformat:0 }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7" class="text-center py-4 text-muted">No circulating linen items defined yet. Add items with kind "Circulating (linen, robes)".</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Tabs: Laundry Manifests / Linen Pars -->
+  <ul class="nav nav-pills mb-3" id="linenTabs" role="tablist">
+    <li class="nav-item">
+      <a class="nav-link active rounded-pill px-3 py-1 fw-bold" id="manifests-tab" data-bs-toggle="pill" href="#manifestsContent" role="tab">
+        <i class="fa-solid fa-receipt me-1"></i> Laundry Manifests ({{ manifests|length }})
+      </a>
+    </li>
+    <li class="nav-item ms-2">
+      <a class="nav-link rounded-pill px-3 py-1 fw-bold" id="pars-tab" data-bs-toggle="pill" href="#parsContent" role="tab">
+        <i class="fa-solid fa-sliders me-1"></i> Room Category Pars
+      </a>
+    </li>
+  </ul>
+
+  <div class="tab-content" id="linenTabsContent">
+    <!-- Tab 1: Manifests -->
+    <div class="tab-pane fade show active" id="manifestsContent" role="tabpanel">
+      <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white mb-4">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="bg-light text-muted small text-uppercase">
+              <tr>
+                <th class="py-3 px-3">Manifest #</th>
+                <th class="py-3">Date</th>
+                <th class="py-3">Type</th>
+                <th class="py-3">Laundry Vendor</th>
+                <th class="py-3">Related Outbound</th>
+                <th class="py-3 text-center">Status</th>
+                <th class="py-3">Handled By</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for mnf in manifests %}
+                <tr>
+                  <td class="px-3 fw-bold"><code>{{ mnf.manifest_number }}</code></td>
+                  <td>{{ mnf.date|date:"d M Y" }}</td>
+                  <td>
+                    {% if mnf.manifest_type == 'OUTBOUND' %}
+                      <span class="badge text-bg-warning"><i class="fa-solid fa-arrow-up me-1"></i> Outbound (To Laundry)</span>
+                    {% else %}
+                      <span class="badge text-bg-success"><i class="fa-solid fa-arrow-down me-1"></i> Inbound (From Laundry)</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ mnf.vendor.name|default:"In-House Laundry" }}</td>
+                  <td>{% if mnf.related_outbound %}{{ mnf.related_outbound.manifest_number }}{% else %}—{% endif %}</td>
+                  <td class="text-center">
+                    {% if mnf.status == 'RECONCILED' %}
+                      <span class="badge text-bg-success px-2 py-1">Reconciled</span>
+                    {% elif mnf.status == 'SENT' %}
+                      <span class="badge text-bg-warning px-2 py-1">At Laundry</span>
+                    {% else %}
+                      <span class="badge text-bg-light border">{{ mnf.get_status_display }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-muted small">{{ mnf.created_by.username|default:"Staff" }}</td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="7" class="text-center py-4 text-muted">No laundry manifests posted yet.</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 2: Category Pars -->
+    <div class="tab-pane fade" id="parsContent" role="tabpanel">
+      <div class="row g-3">
+        {% for cat in categories %}
+          <div class="col-12 col-md-6 mb-3">
+            <div class="card border-0 shadow-sm rounded-3 bg-white h-100">
+              <div class="card-header bg-transparent border-bottom d-flex align-items-center justify-content-between py-3">
+                <h5 class="h6 fw-bold mb-0">{{ cat.name }}</h5>
+                {% if can_edit %}
+                  <button type="button" class="btn btn-sm py-0 btn-outline-primary rounded-pill px-2" data-bs-toggle="modal" data-bs-target="#addLinenParModal{{ cat.pk }}">
+                    <i class="fa-solid fa-plus me-1"></i> Add Par
+                  </button>
+                {% endif %}
+              </div>
+              <div class="card-body p-3">
+                <div class="list-group list-group-flush mb-0">
+                  {% for p in cat.par_rows %}
+                    <div class="list-group-item d-flex align-items-center justify-content-between px-0 py-2">
+                      <span><strong>{{ p.item.name }}</strong></span>
+                      <div class="d-flex align-items-center gap-2">
+                        <span class="badge text-bg-info">{{ p.par_per_room|floatformat:0 }} / room</span>
+                        {% if can_edit %}
+                          <form method="post" action="{% url 'hotel_admin:stores_linen_par_save' restaurant_slug=rslug %}" onsubmit="return confirm('Remove par?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="pk" value="{{ p.pk }}">
+                            <input type="hidden" name="op" value="delete">
+                            <button type="submit" class="btn btn-sm py-0 btn-link text-danger p-0 ms-2"><i class="fa-solid fa-trash-can"></i></button>
+                          </form>
+                        {% endif %}
+                      </div>
+                    </div>
+                  {% empty %}
+                    <p class="text-muted small mb-0">No linen par set for this category.</p>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+
+            <!-- Modal to add par for this category -->
+            <div class="modal fade" id="addLinenParModal{{ cat.pk }}" tabindex="-1" role="dialog" aria-hidden="true">
+              <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
+                <div class="modal-content border-0 shadow rounded-3">
+                  <form method="post" action="{% url 'hotel_admin:stores_linen_par_save' restaurant_slug=rslug %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="room_category" value="{{ cat.pk }}">
+                    <div class="modal-header border-bottom">
+                      <h6 class="modal-title fw-bold">Set Linen Par for {{ cat.name }}</h6>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-3">
+                      <div class="mb-2">
+                        <label class="small text-muted fw-bold">Linen Item *</label>
+                        <select name="item" class="form-select form-select-sm" required>
+                          {% for it in items %}
+                            <option value="{{ it.pk }}">{{ it.name }}</option>
+                          {% endfor %}
+                        </select>
+                      </div>
+                      <div class="mb-0">
+                        <label class="small text-muted fw-bold">Par Quantity per Room *</label>
+                        <input type="number" step="0.001" name="par_per_room" class="form-control form-control-sm" value="3" required>
+                      </div>
+                    </div>
+                    <div class="modal-footer border-top bg-light p-2">
+                      <button type="submit" class="btn btn-primary btn-sm rounded-pill w-100">Save Par</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Send Linen to Laundry -->
+<div class="modal fade" id="sendLinenModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+    <div class="modal-content border-0 shadow rounded-3">
+      <form method="post" action="{% url 'hotel_admin:stores_linen_send' restaurant_slug=rslug %}">
+        {% csrf_token %}
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold text-primary"><i class="fa-solid fa-truck-fast me-1"></i> Send Soiled Linen to Laundry</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="mb-3">
+            <label class="small fw-bold text-muted">Laundry Vendor (Optional if In-House)</label>
+            <select name="vendor" class="form-select">
+              <option value="">In-House Laundry</option>
+              {% for v in vendors %}
+                <option value="{{ v.pk }}">{{ v.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <h6 class="small fw-bold text-uppercase text-muted border-top pt-3 mb-2">Linen Items Sent</h6>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+              <thead class="bg-light small">
+                <tr>
+                  <th>Item</th>
+                  <th style="width: 150px;">Sent Quantity</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for it in items %}
+                  <tr>
+                    <td>
+                      <input type="hidden" name="item_id" value="{{ it.pk }}">
+                      <strong>{{ it.name }}</strong> ({{ it.unit }})
+                    </td>
+                    <td>
+                      <input type="number" step="0.001" name="quantity" class="form-control form-control-sm text-end" value="0">
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="mb-0">
+            <label class="small fw-bold text-muted">Notes / Driver Details</label>
+            <input type="text" name="notes" class="form-control" placeholder="Challan / gate pass ref">
+          </div>
+        </div>
+        <div class="modal-footer border-top bg-light">
+          <button type="button" class="btn btn-secondary btn-sm rounded-pill" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm rounded-pill px-4">Generate Outbound Manifest</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Receive Clean Linen from Laundry -->
+<div class="modal fade" id="receiveLinenModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+    <div class="modal-content border-0 shadow rounded-3">
+      <form method="post" action="{% url 'hotel_admin:stores_linen_receive' restaurant_slug=rslug %}">
+        {% csrf_token %}
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold text-success"><i class="fa-solid fa-truck-ramp-box me-1"></i> Receive Clean Linen from Laundry</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="mb-3">
+            <label class="small fw-bold text-muted">Link Outbound Manifest (for reconciliation)</label>
+            <select name="outbound_manifest" class="form-select">
+              <option value="">Direct Return (No Outbound Link)</option>
+              {% for ob in open_outbound %}
+                <option value="{{ ob.pk }}">{{ ob.manifest_number }} &bull; {{ ob.vendor.name|default:"In-House" }} ({{ ob.date|date:"d M Y" }})</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <h6 class="small fw-bold text-uppercase text-muted border-top pt-3 mb-2">Returned Linen Counts &amp; Quality Check</h6>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+              <thead class="bg-light small">
+                <tr>
+                  <th>Item</th>
+                  <th class="text-end" style="width: 120px;">Returned Clean</th>
+                  <th class="text-end" style="width: 120px;">Torn / Damaged</th>
+                  <th class="text-end" style="width: 120px;">Missing / Lost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for it in items %}
+                  <tr>
+                    <td>
+                      <input type="hidden" name="item_id" value="{{ it.pk }}">
+                      <strong>{{ it.name }}</strong> ({{ it.unit }})
+                    </td>
+                    <td>
+                      <input type="number" step="0.001" name="returned_qty" class="form-control form-control-sm text-end" value="0">
+                    </td>
+                    <td>
+                      <input type="number" step="0.001" name="damaged_qty" class="form-control form-control-sm text-end text-danger" value="0">
+                    </td>
+                    <td>
+                      <input type="number" step="0.001" name="missing_qty" class="form-control form-control-sm text-end text-warning" value="0">
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="mb-0">
+            <label class="small fw-bold text-muted">Notes / Delivery Challan Ref</label>
+            <input type="text" name="notes" class="form-control" placeholder="Vendor return delivery note">
+          </div>
+        </div>
+        <div class="modal-footer border-top bg-light">
+          <button type="button" class="btn btn-secondary btn-sm rounded-pill" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success btn-sm rounded-pill px-4">Receive &amp; Reconcile</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Retire Linen to Scrap -->
+<div class="modal fade" id="retireLinenModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
+    <div class="modal-content border-0 shadow rounded-3">
+      <form method="post" action="{% url 'hotel_admin:stores_linen_retire' restaurant_slug=rslug %}">
+        {% csrf_token %}
+        <div class="modal-header border-bottom">
+          <h6 class="modal-title fw-bold text-danger">Retire Linen to Scrap</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-3">
+          <div class="mb-2">
+            <label class="small text-muted fw-bold">Item *</label>
+            <select name="item" class="form-select form-select-sm" required>
+              {% for it in items %}
+                <option value="{{ it.pk }}">{{ it.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="small text-muted fw-bold">Source Location *</label>
+            <select name="location" class="form-select form-select-sm" required>
+              {% for l in locations %}
+                <option value="{{ l.pk }}">{{ l.path }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="small text-muted fw-bold">Quantity to Retire *</label>
+            <input type="number" step="0.001" name="quantity" class="form-control form-control-sm" required>
+          </div>
+          <div class="mb-0">
+            <label class="small text-muted fw-bold">Retirement Reason</label>
+            <input type="text" name="reason" class="form-control form-control-sm" value="Torn / Stained / Lifespan expired">
+          </div>
+        </div>
+        <div class="modal-footer border-top bg-light p-2">
+          <button type="button" class="btn btn-secondary btn-sm rounded-pill" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger btn-sm rounded-pill">Retire to Scrap</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+

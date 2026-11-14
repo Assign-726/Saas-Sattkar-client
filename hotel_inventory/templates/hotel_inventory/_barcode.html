@@ -1,0 +1,257 @@
+{% load static %}
+<div class="ui-stores">
+  {% include 'hotel_inventory/_nav.html' %}
+
+  <div class="ui-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h1 class="h3 fw-bold mb-1">Barcode Scanner &amp; Label Printing</h1>
+      <p class="text-muted mb-0">Scan barcodes via device camera or handheld USB scanner, and print barcode sticker labels for store bins, shelves, and linen.</p>
+    </div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <!-- Section 1: Live Scanner & Item Lookup -->
+    <div class="col-12 col-lg-6">
+      <div class="card border-0 shadow-sm rounded-3 bg-white h-100">
+        <div class="card-header bg-transparent border-bottom py-3">
+          <h5 class="h6 fw-bold mb-0"><i class="fa-solid fa-camera text-primary me-1"></i> Scan Barcode / QR Code</h5>
+        </div>
+        <div class="card-body p-4">
+          <!-- Text / USB Input -->
+          <div class="mb-3">
+            <label class="small fw-bold text-muted">USB / Handheld Scanner Input (Auto-detects Enter)</label>
+            <div class="input-group">
+              <input type="text" id="manualBarcodeInput" class="form-control" placeholder="Scan or type barcode / SKU..." autofocus>
+              <button type="button" class="btn btn-primary" onclick="lookupBarcode(document.getElementById('manualBarcodeInput').value)">
+                  <i class="fa-solid fa-magnifying-glass me-1"></i> Lookup
+                </button>
+            </div>
+          </div>
+
+          <!-- Camera Stream -->
+          <div class="border rounded-3 p-3 bg-light text-center mb-3">
+            <video id="barcodeVideo" style="width: 100%; max-height: 240px; object-fit: cover; border-radius: 8px; display: none;"></video>
+            <div id="cameraPlaceholder" class="py-4 text-muted">
+              <i class="fa-solid fa-camera fa-2x mb-2 text-secondary"></i>
+              <p class="small mb-0">Camera scanner inactive</p>
+            </div>
+            <div class="mt-2">
+              <button type="button" id="startCamBtn" class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="toggleCameraScanner()">
+                <i class="fa-solid fa-video me-1"></i> Start Camera Scan
+              </button>
+            </div>
+          </div>
+
+          <!-- Scanned Result Card -->
+          <div id="scanResultCard" class="card border border-primary rounded-3 p-3 bg-light" style="display: none;">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <h6 class="fw-bold text-primary mb-0" id="resItemName"></h6>
+              <span class="badge text-bg-primary" id="resItemKind"></span>
+            </div>
+            <div class="small text-muted mb-2">
+              Barcode: <code id="resBarcode"></code> &bull; SKU: <code id="resSKU"></code>
+            </div>
+            <div class="d-flex justify-content-between small py-1 border-top">
+              <span class="text-muted">Total Stock:</span>
+              <strong id="resOnHand"></strong>
+            </div>
+            <div class="d-flex justify-content-between small py-1">
+              <span class="text-muted">Unit WAC:</span>
+              <strong id="resWAC"></strong>
+            </div>
+            <div id="resLevelsContainer" class="small border-top pt-2 mt-1"></div>
+            <div class="mt-3">
+              <a href="#" id="resDetailLink" class="btn btn-sm btn-primary rounded-pill w-100">
+                View Full Item Page <i class="fa-solid fa-arrow-right ms-1"></i>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 2: Printable Barcode Labels -->
+    <div class="col-12 col-lg-6">
+      <div class="card border-0 shadow-sm rounded-3 bg-white h-100">
+        <div class="card-header bg-transparent border-bottom py-3">
+          <h5 class="h6 fw-bold mb-0"><i class="fa-solid fa-print text-primary me-1"></i> Print Barcode Labels</h5>
+        </div>
+        <div class="card-body p-4">
+          <p class="small text-muted mb-3">
+            Select items to generate a printable sticker label sheet (compatible with standard 24 / 48 label A4 sheets).
+          </p>
+          <div class="mb-3">
+            <label class="small fw-bold text-muted">Select Item *</label>
+            <select id="labelItemSelect" class="form-select">
+              <option value="">Choose item...</option>
+              {% for it in items %}
+                <option value="{{ it.pk }}" data-name="{{ it.name }}" data-code="{{ it.barcode|default:it.sku }}" data-sku="{{ it.sku }}" data-price="{{ it.sale_price|default:'' }}">
+                  {{ it.name }} ({{ it.barcode|default:it.sku|default:"No code" }})
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="small fw-bold text-muted">Number of Labels to Print</label>
+            <input type="number" id="labelCountInput" class="form-control" value="8" min="1" max="100">
+          </div>
+          <button type="button" class="btn btn-primary btn-sm rounded-pill px-4 shadow-sm" onclick="generateLabels()">
+            <i class="fa-solid fa-tags me-1"></i> Generate Labels Preview
+          </button>
+
+          <!-- Label Sheet Preview -->
+          <div id="labelsPrintArea" class="mt-4 border rounded p-3 bg-light" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center mb-3 no-print">
+              <span class="small fw-bold text-muted">Label Preview</span>
+              <button type="button" class="btn btn-sm btn-dark rounded-pill" onclick="window.print()">
+                <i class="fa-solid fa-print me-1"></i> Print Sheet
+              </button>
+            </div>
+            <div id="labelsGrid" class="row g-2"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+@media print {
+  body * { visibility: hidden; }
+  #labelsPrintArea, #labelsPrintArea * { visibility: visible; }
+  #labelsPrintArea { position: absolute; left: 0; top: 0; width: 100%; border: none !important; background: #fff !important; }
+  #labelsPrintArea .no-print { display: none !important; }
+}
+.barcode-card-sticker { border: 1px dashed #ccc; padding: 8px; text-align: center; background: #fff; color: #111; border-radius: 4px; }
+.barcode-card-sticker svg { max-width: 100%; height: auto; }
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
+<script>
+(function () {
+  var LOOKUP_URL = "{% url 'hotel_admin:stores_barcode_lookup_api' restaurant_slug=rslug %}";
+  var ITEMS_URL = "{% url 'hotel_admin:stores_items' restaurant_slug=rslug %}";
+  var videoElem = document.getElementById('barcodeVideo');
+  var placeholderElem = document.getElementById('cameraPlaceholder');
+  var camBtn = document.getElementById('startCamBtn');
+  var stream = null, scanTimer = null, lastCode = '', lastAt = 0, busy = false;
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;  // textContent: names typed by staff are never parsed as HTML
+    return e;
+  }
+
+  function lookupBarcode(code) {
+    code = (code || '').trim();
+    if (!code || busy) return;
+    busy = true;
+    fetch(LOOKUP_URL + '?code=' + encodeURIComponent(code), { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.found) { alert(data.message || data.error || 'Item not found'); return; }
+        var it = data.item;
+        document.getElementById('resItemName').textContent = it.name;
+        document.getElementById('resItemKind').textContent = it.kind;
+        document.getElementById('resBarcode').textContent = it.barcode || '—';
+        document.getElementById('resSKU').textContent = it.sku || '—';
+        document.getElementById('resOnHand').textContent = it.total_on_hand + ' ' + it.unit;
+        document.getElementById('resWAC').textContent = '₹' + parseFloat(it.wac || 0).toFixed(2);
+        document.getElementById('resDetailLink').href = ITEMS_URL + it.id + '/';
+        var box = document.getElementById('resLevelsContainer');
+        box.replaceChildren(el('div', 'text-muted fw-bold mb-1', 'Location balances:'));
+        if (it.levels.length) {
+          it.levels.forEach(function (l) {
+            var row = el('div', 'd-flex justify-content-between');
+            row.append(el('span', '', l.location), el('strong', '', l.quantity + ' ' + it.unit));
+            box.append(row);
+          });
+        } else {
+          box.append(el('span', 'text-muted', 'No stock placed yet.'));
+        }
+        document.getElementById('scanResultCard').style.display = 'block';
+      })
+      .catch(function () { alert('Could not look the code up. Check the connection and try again.'); })
+      .finally(function () { busy = false; });
+  }
+  window.lookupBarcode = lookupBarcode;
+
+  document.getElementById('manualBarcodeInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); lookupBarcode(this.value); this.select(); }
+  });
+
+  function stopCamera() {
+    if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
+    if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+    videoElem.style.display = 'none';
+    placeholderElem.style.display = 'block';
+    camBtn.innerHTML = '<i class="fa-solid fa-video me-1"></i> Start Camera Scan';
+  }
+
+  window.toggleCameraScanner = function () {
+    if (stream) { stopCamera(); return; }
+    if (!('BarcodeDetector' in window)) {
+      alert('This browser cannot read barcodes from the camera (use Chrome or Edge on Android / desktop). ' +
+            'A USB or Bluetooth scanner, or typing the code, works everywhere.');
+      return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert('Camera access needs a secure (https) connection.');
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(function (s) {
+      stream = s;
+      videoElem.srcObject = s;
+      videoElem.setAttribute('playsinline', '');
+      videoElem.style.display = 'block';
+      placeholderElem.style.display = 'none';
+      videoElem.play();
+      camBtn.innerHTML = '<i class="fa-solid fa-stop me-1"></i> Stop Camera';
+      var detector = new BarcodeDetector();
+      scanTimer = setInterval(function () {
+        if (!stream || videoElem.readyState < 2) return;
+        detector.detect(videoElem).then(function (codes) {
+          if (!codes.length) return;
+          var code = codes[0].rawValue, now = Date.now();
+          if (code === lastCode && now - lastAt < 3000) return;  // the same label held in view
+          lastCode = code; lastAt = now;
+          if (navigator.vibrate) navigator.vibrate(80);
+          lookupBarcode(code);
+        }).catch(function () {});
+      }, 400);
+    }).catch(function (err) {
+      alert('Camera permission denied or no camera found (' + err.name + ').');
+    });
+  };
+  window.addEventListener('pagehide', stopCamera);
+
+  window.generateLabels = function () {
+    var sel = document.getElementById('labelItemSelect');
+    var opt = sel.options[sel.selectedIndex];
+    if (!opt || !opt.value) { alert('Please select an item.'); return; }
+    var name = opt.getAttribute('data-name');
+    var code = opt.getAttribute('data-code') || ('ITEM-' + opt.value);
+    var price = opt.getAttribute('data-price');
+    var count = Math.min(Math.max(parseInt(document.getElementById('labelCountInput').value, 10) || 8, 1), 100);
+    var grid = document.getElementById('labelsGrid');
+    grid.replaceChildren();
+    for (var i = 0; i < count; i++) {
+      var col = el('div', 'col-6 col-md-4 mb-2');
+      var card = el('div', 'barcode-card-sticker');
+      card.append(el('div', 'fw-bold text-truncate small', name));
+      var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      card.append(svg);
+      if (price) card.append(el('div', 'small fw-bold', '₹' + parseFloat(price).toFixed(2)));
+      col.append(card);
+      grid.append(col);
+      if (window.JsBarcode) {
+        JsBarcode(svg, code, { format: 'CODE128', height: 40, width: 1.6, fontSize: 12, margin: 4 });
+      } else {
+        card.replaceChild(el('code', '', code), svg);  // library blocked: still print the code as text
+      }
+    }
+    document.getElementById('labelsPrintArea').style.display = 'block';
+  };
+})();
+</script>

@@ -443,6 +443,14 @@ HOTEL_ADMIN_FEATURES: Dict[str, Dict[str, Any]] = {
         'is_addon': True,
         'addon_label': 'Cabs & Transportation Add-on',
     },
+    'stores': {
+        'key': 'stores',
+        'name': 'Stores & Inventory',
+        'admin_group': 'hotel_admin',
+        'icon': 'fa-boxes-stacked',
+        'desc': 'Hotel stores, requisitions, purchases and stock ledger',
+        'is_addon': False,
+    },
 }
 
 EVENTS_ADMIN_FEATURES: Dict[str, Dict[str, Any]] = {
@@ -718,7 +726,7 @@ def get_branch_effective_features(branch) -> Set[str]:
     # Hotel PMS (Rooms, Front Desk, Tape Chart, Folios, Housekeeping)
     is_hotel_licensed = branch.is_module_licensed('hotel') if hasattr(branch, 'is_module_licensed') else True
     if getattr(branch, 'has_hotel_module', False) and is_hotel_licensed and getattr(r, 'feature_hotel_pms', True):
-        features.update(['hotel', 'hotel_rooms', 'front_desk', 'tape_chart', 'hotel_folios', 'housekeeping'])
+        features.update(['hotel', 'hotel_rooms', 'front_desk', 'tape_chart', 'hotel_folios', 'housekeeping', 'stores'])
 
         # Sub-options under Hotel: Spas & Wellness and Cabs (only active when licensed & selected)
         is_spa_licensed = branch.is_module_licensed('hotel_spa') if hasattr(branch, 'is_module_licensed') else True
@@ -733,7 +741,7 @@ def get_branch_effective_features(branch) -> Set[str]:
         else:
             features.discard('hotel_cabs')
     else:
-        features.difference_update(['hotel', 'hotel_rooms', 'front_desk', 'tape_chart', 'hotel_folios', 'housekeeping', 'hotel_spa', 'hotel_cabs'])
+        features.difference_update(['hotel', 'hotel_rooms', 'front_desk', 'tape_chart', 'hotel_folios', 'housekeeping', 'hotel_spa', 'hotel_cabs', 'stores'])
 
     # Club & Events (Events, Tiers, Gate Scanner, Guestlist)
     is_club_licensed = branch.is_module_licensed('club') if hasattr(branch, 'is_module_licensed') else True

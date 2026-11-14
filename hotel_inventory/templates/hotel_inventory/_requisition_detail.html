@@ -1,0 +1,214 @@
+{% load static %}
+<div class="ui-stores">
+  {% include 'hotel_inventory/_nav.html' %}
+
+  <div class="mb-3">
+    <a href="{% url 'hotel_admin:stores_requisitions' restaurant_slug=rslug %}" class="btn btn-sm btn-link text-muted p-0">
+      <i class="fa-solid fa-arrow-left me-1"></i> Back to Requisitions
+    </a>
+  </div>
+
+  <div class="ui-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <div class="d-flex align-items-center gap-2">
+        <h1 class="h3 fw-bold mb-0">Requisition {{ req.req_number }}</h1>
+        {% if req.status == 'DRAFT' %}<span class="badge text-bg-secondary px-2 py-1">Draft</span>
+        {% elif req.status == 'SUBMITTED' %}<span class="badge text-bg-warning px-2 py-1">Submitted</span>
+        {% elif req.status == 'APPROVED' %}<span class="badge text-bg-primary px-2 py-1">Approved</span>
+        {% elif req.status == 'PARTIALLY_ISSUED' %}<span class="badge text-bg-info px-2 py-1">Partially Issued</span>
+        {% elif req.status == 'ISSUED' %}<span class="badge text-bg-success px-2 py-1">Fully Issued</span>
+        {% elif req.status == 'REJECTED' %}<span class="badge text-bg-danger px-2 py-1">Rejected</span>
+        {% endif %}
+      </div>
+      <p class="text-muted mb-0 small">
+        Department: <strong>{{ req.get_department_display }}</strong> &bull;
+        Requested by: <strong>{{ req.requested_by.username|default:"Staff" }}</strong> on {{ req.created_at|date:"d M Y H:i" }}
+        {% if req.approved_by %}&bull; Approved by: <strong>{{ req.approved_by.username }}</strong> on {{ req.approved_at|date:"d M Y" }}{% endif %}
+        {% if req.issued_by %}&bull; Issued by: <strong>{{ req.issued_by.username }}</strong> on {{ req.issued_at|date:"d M Y" }}{% endif %}
+      </p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      {% if req.status == 'DRAFT' %}
+        <form method="post" action="{% url 'hotel_admin:stores_requisition_action' restaurant_slug=rslug pk=req.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="op" value="submit">
+          <button type="submit" class="btn btn-primary btn-sm rounded-pill shadow-sm">
+            <i class="fa-solid fa-paper-plane me-1"></i> Submit for Approval
+          </button>
+        </form>
+      {% endif %}
+
+      {% if can_edit and req.status == 'SUBMITTED' %}
+        <form method="post" action="{% url 'hotel_admin:stores_requisition_action' restaurant_slug=rslug pk=req.pk %}" class="d-inline">
+          {% csrf_token %}
+          <input type="hidden" name="op" value="approve">
+          <button type="submit" class="btn btn-primary btn-sm rounded-pill shadow-sm">
+            <i class="fa-solid fa-check me-1"></i> Approve Requisition
+          </button>
+        </form>
+        <button type="button" class="btn btn-outline-danger btn-sm rounded-pill" data-bs-toggle="modal" data-bs-target="#rejectModal">
+          <i class="fa-solid fa-xmark me-1"></i> Reject
+        </button>
+      {% endif %}
+
+      {% if can_edit and req.status in 'APPROVED,PARTIALLY_ISSUED' %}
+        <button type="button" class="btn btn-success btn-sm rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#issueModal">
+          <i class="fa-solid fa-dolly me-1"></i> Issue Stock (Transfer)
+        </button>
+      {% endif %}
+
+      <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill" onclick="window.print()">
+        <i class="fa-solid fa-print me-1"></i> Print
+      </button>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-md-6">
+      <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+        <h6 class="small fw-bold text-uppercase text-muted mb-2">Location Route</h6>
+        <div class="d-flex align-items-center gap-3">
+          <div>
+            <span class="small text-muted d-block">Source Store:</span>
+            <strong class="text-primary">{{ req.from_location.path }}</strong>
+          </div>
+          <i class="fa-solid fa-arrow-right text-muted"></i>
+          <div>
+            <span class="small text-muted d-block">Destination:</span>
+            <strong class="text-success">{{ req.to_location.path }}</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-6">
+      <div class="card border-0 shadow-sm rounded-3 p-3 bg-white h-100">
+        <h6 class="small fw-bold text-uppercase text-muted mb-2">Notes &amp; Remarks</h6>
+        <p class="small text-muted mb-0 fst-italic">{{ req.notes|default:"No notes entered." }}</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Requisition Line Items -->
+  <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white mb-4">
+    <div class="card-header bg-transparent border-bottom py-3">
+      <h5 class="h6 fw-bold mb-0">Requisition Items</h5>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="bg-light text-muted small text-uppercase">
+          <tr>
+            <th class="py-3 px-3">Item Name</th>
+            <th class="py-3 text-end">Available in Source</th>
+            <th class="py-3 text-end">Requested Qty</th>
+            <th class="py-3 text-end">Approved Qty</th>
+            <th class="py-3 text-end px-3">Issued Qty</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in lines %}
+            <tr>
+              <td class="px-3 fw-bold">
+                {{ l.item.name }}
+                <div class="small text-muted">{{ l.item.sku }}</div>
+              </td>
+              <td class="text-end text-muted">
+                {{ l.source_on_hand|floatformat:2 }} {{ l.item.unit }}
+              </td>
+              <td class="text-end fw-bold">
+                {{ l.requested_qty|floatformat:2 }} {{ l.unit_name|default:l.item.unit }}
+              </td>
+              <td class="text-end text-primary fw-bold">
+                {{ l.approved_qty|floatformat:2 }}
+              </td>
+              <td class="text-end fw-bold px-3 text-success">
+                {{ l.issued_qty|floatformat:2 }}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Issue Requisition -->
+{% if can_edit and req.status in 'APPROVED,PARTIALLY_ISSUED' %}
+<div class="modal fade" id="issueModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+    <div class="modal-content border-0 shadow rounded-3">
+      <form method="post" action="{% url 'hotel_admin:stores_requisition_action' restaurant_slug=rslug pk=req.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="op" value="issue">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-bold"><i class="fa-solid fa-dolly text-success me-1"></i> Issue Stock for {{ req.req_number }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <p class="small text-muted mb-3">
+            Transfer approved quantities from <strong>{{ req.from_location.name }}</strong> to <strong>{{ req.to_location.name }}</strong>.
+          </p>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+              <thead class="bg-light small">
+                <tr>
+                  <th>Item</th>
+                  <th class="text-end">Approved</th>
+                  <th class="text-end">Already Issued</th>
+                  <th class="text-end" style="width: 140px;">Issue Now</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for l in lines %}
+                  <tr>
+                    <td>{{ l.item.name }} ({{ l.item.unit }})</td>
+                    <td class="text-end">{{ l.approved_qty|floatformat:2 }}</td>
+                    <td class="text-end">{{ l.issued_qty|floatformat:2 }}</td>
+                    <td>
+                      <input type="number" step="0.001" name="issue_qty_{{ l.pk }}"
+                             class="form-control form-control-sm text-end"
+                             value="0" min="0">
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer border-top bg-light">
+          <button type="button" class="btn btn-secondary btn-sm rounded-pill" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success btn-sm rounded-pill px-4">Post Stock Issue</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Modal: Reject Requisition -->
+{% if can_edit and req.status == 'SUBMITTED' %}
+<div class="modal fade" id="rejectModal" tabindex="-1" role="dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-sm" role="document">
+    <div class="modal-content border-0 shadow rounded-3">
+      <form method="post" action="{% url 'hotel_admin:stores_requisition_action' restaurant_slug=rslug pk=req.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="op" value="reject">
+        <div class="modal-header border-bottom">
+          <h6 class="modal-title fw-bold text-danger">Reject Requisition</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-3">
+          <div class="mb-0">
+            <label class="small text-muted fw-bold">Reason for Rejection *</label>
+            <input type="text" name="reason" class="form-control form-control-sm" placeholder="Insufficient budget, out of stock, etc." required>
+          </div>
+        </div>
+        <div class="modal-footer border-top bg-light p-2">
+          <button type="button" class="btn btn-secondary btn-sm rounded-pill" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger btn-sm rounded-pill">Reject</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+

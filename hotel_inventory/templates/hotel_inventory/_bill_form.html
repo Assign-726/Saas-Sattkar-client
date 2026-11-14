@@ -1,0 +1,274 @@
+<div class="ui-stores">
+  {% include 'hotel_inventory/_nav.html' %}
+
+  <div class="mb-3">
+    <a href="{% url 'hotel_admin:stores_bills' restaurant_slug=rslug %}" class="btn btn-sm btn-link text-muted p-0"><i class="fa-solid fa-arrow-left me-1"></i> Back to Purchase Bills</a>
+  </div>
+
+  <div class="ui-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h1 class="h3 fw-bold mb-1">{% if direct %}Direct Purchase Bill{% else %}Enter Vendor Bill{% endif %}</h1>
+      <p class="text-muted mb-0">
+        {% if direct %}For small purchases where the goods come with the bill (local market, cash buys). Stock is received and billed in one step.
+        {% else %}Pick the deliveries this bill covers. Quantities come from what was accepted on the GRN — confirm the bill's rate and GST.{% endif %}
+      </p>
+    </div>
+    <div class="btn-group btn-group-sm">
+      <a href="{% url 'hotel_admin:stores_bill_new' restaurant_slug=rslug %}" class="btn {% if not direct %}btn-primary{% else %}btn-outline-primary{% endif %}">Against deliveries</a>
+      <a href="{% url 'hotel_admin:stores_bill_new' restaurant_slug=rslug %}?direct=1" class="btn {% if direct %}btn-primary{% else %}btn-outline-primary{% endif %}">Direct purchase</a>
+    </div>
+  </div>
+
+  {% if not direct %}
+    {# ---- Step 1: vendor and deliveries (a GET form, so the page can be reloaded or shared) ---- #}
+    <div class="card border-0 shadow-sm rounded-3 bg-white p-3 mb-4">
+      <form method="get" id="pickForm">
+        <div class="row g-3 align-items-end">
+          <div class="col-12 col-md-5">
+            <label class="small fw-bold text-muted" for="pickVendor">1. Vendor</label>
+            <select id="pickVendor" name="vendor" class="form-select" onchange="this.form.submit()">
+              <option value="">Choose the vendor…</option>
+              {% for v in vendors %}<option value="{{ v.pk }}" {% if vendor and vendor.pk == v.pk %}selected{% endif %}>{{ v.name }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        {% if vendor %}
+          <div class="mt-3">
+            <div class="small fw-bold text-muted mb-2">2. Deliveries from {{ vendor.name }} waiting for a bill</div>
+            {% for g in pending %}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="grn" value="{{ g.pk }}" id="pg{{ g.pk }}" {% if g.pk in chosen_ids %}checked{% endif %}>
+                <label class="form-check-label" for="pg{{ g.pk }}">
+                  <strong>{{ g.grn_number }}</strong> · {{ g.created_at|date:"d M Y" }} · {{ g.location.name }} · ₹{{ g.total_amount|floatformat:2 }}
+                  {% if g.invoice_number %}<span class="text-muted small">(challan/bill no. on GRN: {{ g.invoice_number }})</span>{% endif %}
+                </label>
+              </div>
+            {% empty %}
+              <div class="text-muted small">Nothing from this vendor is waiting for a bill. For goods that came with the bill, use <a href="?direct=1&vendor={{ vendor.pk }}">Direct purchase</a>.</div>
+            {% endfor %}
+            {% if pending %}<button type="submit" class="btn btn-sm btn-outline-primary rounded-pill mt-2">Load items from selected deliveries</button>{% endif %}
+          </div>
+        {% endif %}
+      </form>
+    </div>
+  {% endif %}
+
+  {% if direct or chosen %}
+  <form method="post" action="{% url 'hotel_admin:stores_bill_save' restaurant_slug=rslug %}" enctype="multipart/form-data" id="billForm">
+    {% csrf_token %}
+    <input type="hidden" name="direct" value="{% if direct %}1{% else %}0{% endif %}">
+    {% if not direct %}
+      <input type="hidden" name="vendor" value="{{ vendor.pk }}">
+      {% for g in chosen %}<input type="hidden" name="grn" value="{{ g.pk }}">{% endfor %}
+    {% endif %}
+
+    <div class="card border-0 shadow-sm rounded-3 bg-white p-3 mb-4">
+      <h6 class="small fw-bold text-muted mb-3">{% if direct %}Bill details{% else %}3. Bill details{% endif %}</h6>
+      <div class="row g-3">
+        {% if direct %}
+          <div class="col-12 col-md-4">
+            <label class="small fw-bold text-muted" for="bVendor">Vendor *</label>
+            <select id="bVendor" name="vendor" class="form-select" required>
+              <option value="">Choose…</option>
+              {% for v in vendors %}<option value="{{ v.pk }}" {% if vendor and vendor.pk == v.pk %}selected{% endif %}>{{ v.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="small fw-bold text-muted" for="bLoc">Goods put away at *</label>
+            <select id="bLoc" name="location" class="form-select" required>
+              {% for l in locations %}<option value="{{ l.pk }}" {% if l.kind == 'STORE' and not l.parent_id %}selected{% endif %}>{{ l.path }}</option>{% endfor %}
+            </select>
+          </div>
+        {% else %}
+          <div class="col-12 col-md-4">
+            <label class="small fw-bold text-muted">Vendor</label>
+            <div class="form-control bg-light">{{ vendor.name }}{% if vendor.gstin %} · {{ vendor.gstin }}{% endif %}</div>
+          </div>
+        {% endif %}
+        <div class="col-6 col-md-2">
+          <label class="small fw-bold text-muted" for="bNo">Bill no. *</label>
+          <input id="bNo" type="text" name="invoice_number" class="form-control" maxlength="60" required placeholder="As printed">
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="small fw-bold text-muted" for="bDate">Bill date *</label>
+          <input id="bDate" type="date" name="invoice_date" class="form-control" value="{{ today|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}" required>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="small fw-bold text-muted" for="bFile">Bill copy (photo / PDF)</label>
+          <input id="bFile" type="file" name="attachment" class="form-control" accept="image/*,application/pdf" capture="environment">
+        </div>
+        <div class="col-12 col-md-8 d-flex align-items-end">
+          <div class="form-check">
+            <input type="checkbox" name="is_itc_eligible" class="form-check-input" id="bItc" checked>
+            <label class="form-check-label" for="bItc"><strong>GST can be claimed back (ITC)</strong>
+              <span class="small text-muted d-block">Untick if the hotel cannot claim this GST — it is then added to the cost of the items.</span></label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white mb-4">
+      <div class="card-header bg-transparent border-bottom py-3 d-flex justify-content-between align-items-center">
+        <h5 class="h6 fw-bold mb-0">Items on the bill</h5>
+        {% if direct %}<button type="button" class="btn btn-sm btn-outline-primary rounded-pill" id="addLine"><i class="fa-solid fa-plus me-1"></i> Add line</button>{% endif %}
+      </div>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0" id="billLines">
+          <thead class="bg-light text-muted small">
+            <tr>
+              <th class="px-3" style="min-width:200px">Item</th>
+              <th class="text-end" style="width:110px">Qty</th>
+              <th style="width:110px">Unit</th>
+              {% if not direct %}<th class="text-end" style="width:110px">GRN rate</th>{% endif %}
+              <th class="text-end" style="width:130px">Bill rate ₹</th>
+              <th class="text-end" style="width:90px">GST %</th>
+              <th class="text-end px-3" style="width:130px">Amount ₹</th>
+              {% if direct %}<th style="width:40px"></th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% if direct %}
+              <tr class="bill-line">
+                <td class="px-3">
+                  <select name="item_id" class="form-select form-select-sm js-item" required>
+                    <option value="">Choose item…</option>
+                    {% for it in items %}<option value="{{ it.pk }}" data-units="{{ it.unit }}{% for u in it.units.all %}|{{ u.name }}{% endfor %}" data-gst="{{ it.effective_gst_rate|default:'0' }}" data-rate="{{ it.wac }}">{{ it.name }}</option>{% endfor %}
+                  </select>
+                </td>
+                <td><input type="number" name="quantity" step="0.001" min="0.001" class="form-control form-control-sm text-end js-qty" required></td>
+                <td><select name="unit_name" class="form-select form-select-sm js-unit"></select></td>
+                <td><input type="number" name="rate" step="0.0001" min="0" class="form-control form-control-sm text-end js-rate" required></td>
+                <td><input type="number" name="tax_percent" step="0.01" min="0" max="28" class="form-control form-control-sm text-end js-gst" value="0"></td>
+                <td class="text-end px-3 fw-bold js-amount">0.00</td>
+                <td><button type="button" class="btn btn-sm btn-link text-danger p-0 js-remove" aria-label="Remove line"><i class="fa-solid fa-xmark"></i></button></td>
+              </tr>
+            {% else %}
+              {% for r in lines %}
+                <tr class="bill-line">
+                  <td class="px-3"><input type="hidden" name="grn_line" value="{{ r.gl.pk }}">
+                    <div class="fw-bold">{{ r.gl.item.name }}</div><div class="small text-muted">{{ r.grn.grn_number }}</div></td>
+                  <td class="text-end"><span class="js-qty-val" data-qty="{{ r.qty }}">{{ r.qty|floatformat:"-3" }}</span></td>
+                  <td>{{ r.unit }}</td>
+                  <td class="text-end text-muted">₹{{ r.gl.unit_cost|floatformat:2 }}</td>
+                  <td><input type="number" name="rate" step="0.0001" min="0" class="form-control form-control-sm text-end js-rate" value="{{ r.gl.unit_cost|stringformat:'s' }}" data-grn="{{ r.gl.unit_cost|stringformat:'s' }}" required></td>
+                  <td><input type="number" name="tax_percent" step="0.01" min="0" max="28" class="form-control form-control-sm text-end js-gst" value="{{ r.gl.tax_percent|stringformat:'s' }}"></td>
+                  <td class="text-end px-3 fw-bold js-amount">0.00</td>
+                </tr>
+              {% endfor %}
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+      <div class="col-12 col-lg-6">
+        <div class="card border-0 shadow-sm rounded-3 bg-white p-3 h-100">
+          <h6 class="small fw-bold text-muted mb-3">Charges on the bill</h6>
+          <div class="row g-2">
+            <div class="col-4"><label class="small text-muted" for="bChg">Delivery / loading ₹</label><input id="bChg" type="number" name="other_charges" step="0.01" min="0" value="0" class="form-control js-total-input"></div>
+            <div class="col-4"><label class="small text-muted" for="bDisc">Discount ₹</label><input id="bDisc" type="number" name="discount" step="0.01" min="0" value="0" class="form-control js-total-input"></div>
+            <div class="col-4"><label class="small text-muted" for="bRound">Round off ₹</label><input id="bRound" type="number" name="round_off" step="0.01" min="-10" max="10" value="0" class="form-control js-total-input"></div>
+          </div>
+          <p class="small text-muted mt-2 mb-0">Delivery less discount is spread over the items by value, so it becomes part of their cost.</p>
+          <label class="small text-muted mt-3" for="bNotes">Notes</label>
+          <textarea id="bNotes" name="notes" rows="2" class="form-control"></textarea>
+        </div>
+      </div>
+      <div class="col-12 col-lg-6">
+        <div class="card border-0 shadow-sm rounded-3 bg-white p-3 h-100">
+          <h6 class="small fw-bold text-muted mb-3">Bill total</h6>
+          <div class="d-flex justify-content-between py-1"><span class="text-muted">Items (taxable)</span><span id="tTaxable">₹0.00</span></div>
+          <div class="d-flex justify-content-between py-1"><span class="text-muted">GST</span><span id="tGst">₹0.00</span></div>
+          <div class="d-flex justify-content-between py-1"><span class="text-muted">Delivery − discount</span><span id="tCharges">₹0.00</span></div>
+          <div class="d-flex justify-content-between py-1"><span class="text-muted">Round off</span><span id="tRound">₹0.00</span></div>
+          <div class="d-flex justify-content-between pt-2 mt-1 border-top h5 fw-bold mb-0"><span>Total payable</span><span id="tTotal">₹0.00</span></div>
+          {% if not direct %}<div class="small mt-2" id="tDiff"></div>{% endif %}
+          <button type="submit" class="btn btn-primary rounded-pill mt-3 w-100"><i class="fa-solid fa-check me-1"></i> Post Bill</button>
+        </div>
+      </div>
+    </div>
+  </form>
+  {% endif %}
+</div>
+
+<script>
+(function () {
+  var form = document.getElementById('billForm');
+  if (!form) return;
+  var tbody = form.querySelector('#billLines tbody');
+  function num(v) { var n = parseFloat(v); return isFinite(n) ? n : 0; }
+  function money(n) { return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+  function recalc() {
+    var taxable = 0, gst = 0, grnValue = 0;
+    tbody.querySelectorAll('.bill-line').forEach(function (row) {
+      var qtyEl = row.querySelector('.js-qty') || row.querySelector('.js-qty-val');
+      var qty = qtyEl.classList.contains('js-qty-val') ? num(qtyEl.dataset.qty) : num(qtyEl.value);
+      var rateEl = row.querySelector('.js-rate');
+      var amt = Math.round(qty * num(rateEl.value) * 100) / 100;
+      taxable += amt;
+      gst += Math.round(amt * num(row.querySelector('.js-gst').value)) / 100;
+      if (rateEl.dataset.grn !== undefined) grnValue += qty * num(rateEl.dataset.grn);
+      row.querySelector('.js-amount').textContent = amt.toFixed(2);
+    });
+    var charges = num(form.other_charges.value) - num(form.discount.value), round = num(form.round_off.value);
+    document.getElementById('tTaxable').textContent = money(taxable);
+    document.getElementById('tGst').textContent = money(gst);
+    document.getElementById('tCharges').textContent = money(charges);
+    document.getElementById('tRound').textContent = money(round);
+    document.getElementById('tTotal').textContent = money(taxable + gst + charges + round);
+    var diffEl = document.getElementById('tDiff');
+    if (diffEl) {
+      var cost = taxable + charges + (form.is_itc_eligible.checked ? 0 : gst), d = Math.round((cost - grnValue) * 100) / 100;
+      diffEl.className = 'small mt-2 ' + (d > 0 ? 'text-danger' : d < 0 ? 'text-success' : 'text-muted');
+      diffEl.textContent = d === 0 ? 'Same cost as the deliveries — stock value will not change.'
+        : 'Stock cost will be ' + (d > 0 ? 'raised' : 'lowered') + ' by ' + money(Math.abs(d)) + ' to match this bill.';
+    }
+  }
+
+  function fillUnits(row) {
+    var opt = row.querySelector('.js-item').selectedOptions[0];
+    var unitSel = row.querySelector('.js-unit');
+    unitSel.replaceChildren();
+    if (!opt || !opt.value) return;
+    opt.dataset.units.split('|').forEach(function (u, i) {
+      var o = document.createElement('option');
+      o.value = u; o.textContent = u + (i === 0 ? ' (base)' : '');
+      unitSel.append(o);
+    });
+    row.querySelector('.js-gst').value = num(opt.dataset.gst);
+    var rate = row.querySelector('.js-rate');
+    if (!rate.value && num(opt.dataset.rate) > 0) rate.value = num(opt.dataset.rate).toFixed(2);  // last average cost as a hint
+  }
+
+  tbody.addEventListener('input', recalc);
+  tbody.addEventListener('change', function (e) {
+    if (e.target.classList.contains('js-item')) fillUnits(e.target.closest('.bill-line'));
+    recalc();
+  });
+  tbody.addEventListener('click', function (e) {
+    var btn = e.target.closest('.js-remove');
+    if (btn && tbody.querySelectorAll('.bill-line').length > 1) { btn.closest('.bill-line').remove(); recalc(); }
+  });
+  form.querySelectorAll('.js-total-input, #bItc').forEach(function (el) { el.addEventListener('input', recalc); el.addEventListener('change', recalc); });
+
+  var add = document.getElementById('addLine');
+  if (add) add.addEventListener('click', function () {
+    var row = tbody.querySelector('.bill-line').cloneNode(true);
+    row.querySelectorAll('input').forEach(function (i) { i.value = i.classList.contains('js-gst') ? '0' : ''; });
+    row.querySelector('.js-item').selectedIndex = 0;
+    row.querySelector('.js-unit').replaceChildren();
+    row.querySelector('.js-amount').textContent = '0.00';
+    tbody.append(row);
+  });
+
+  form.addEventListener('submit', function (e) {
+    var btn = form.querySelector('button[type=submit]');
+    if (btn.disabled) { e.preventDefault(); return; }
+    btn.disabled = true;  // one click posts one bill
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Posting…';
+  });
+  recalc();
+})();
+</script>

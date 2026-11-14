@@ -1,0 +1,150 @@
+{% load static %}
+<div class="ui-stores">
+  {% include 'hotel_inventory/_nav.html' %}
+
+  <div class="ui-page-header d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div>
+      <h1 class="h3 fw-bold mb-1">Stock Movement Ledger</h1>
+      <p class="text-muted mb-0">Append-only audit trail of every inward receipt, department issue, transfer, minibar charge, and damage loss.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <a class="btn btn-outline-secondary btn-sm rounded-pill" href="{% url 'hotel_admin:stores_ledger_export' restaurant_slug=rslug %}?{{ query }}">
+        <i class="fa-solid fa-file-csv me-1"></i> Export Ledger CSV
+      </a>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="card border-0 shadow-sm rounded-3 mb-4 bg-white p-3">
+    <form method="get" class="row g-2 align-items-center">
+      <div class="col-12 col-md-3">
+        <select name="item" class="form-select form-select-sm">
+          <option value="">All Items</option>
+          {% for it in items %}
+            <option value="{{ it.pk }}" {% if f.item and f.item.pk == it.pk %}selected{% endif %}>{{ it.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <select name="loc" class="form-select form-select-sm">
+          <option value="">All Locations</option>
+          {% for l in locations %}
+            <option value="{{ l.pk }}" {% if f.loc and f.loc.pk == l.pk %}selected{% endif %}>{{ l.path }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <select name="type" class="form-select form-select-sm">
+          <option value="">All Move Types</option>
+          {% for tk, tl in types %}
+            <option value="{{ tk }}" {% if f.type == tk %}selected{% endif %}>{{ tl }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <input type="date" name="from" value="{{ f.from|date:'Y-m-d' }}" class="form-control form-control-sm" title="From Date">
+      </div>
+      <div class="col-6 col-md-2 d-flex align-items-center justify-content-end gap-1">
+        <button type="submit" class="btn btn-sm btn-primary rounded-pill px-3">Filter</button>
+        {% if f.item or f.loc or f.type or f.from or f.to %}
+          <a href="{% url 'hotel_admin:stores_ledger' restaurant_slug=rslug %}" class="btn btn-sm btn-light border rounded-pill">Reset</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
+  <!-- Ledger Table -->
+  <div class="card border-0 shadow-sm rounded-3 overflow-hidden bg-white mb-4">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 small">
+        <thead class="bg-light text-muted text-uppercase">
+          <tr>
+            <th class="py-2 px-3">#</th>
+            <th class="py-2">Date &amp; Time</th>
+            <th class="py-2">Type</th>
+            <th class="py-2">Item</th>
+            <th class="py-2">From &rarr; To Location</th>
+            <th class="py-2 text-end">Quantity</th>
+            <th class="py-2 text-end">Unit Cost</th>
+            <th class="py-2 text-end">Value (₹)</th>
+            <th class="py-2">Ref / Reason</th>
+            <th class="py-2">By</th>
+            {% if can_edit %}<th class="py-2 text-end px-3">Reverse</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in rows %}
+            <tr>
+              <td class="px-3 text-muted"><code>#{{ m.pk }}</code></td>
+              <td>{{ m.created_at|date:"d M Y H:i" }}</td>
+              <td>
+                <span class="badge {% if m.move_type == 'RECEIPT' or m.move_type == 'OPENING' or m.move_type == 'LINEN_IN' %}text-bg-success{% elif m.move_type == 'ISSUE' or m.move_type == 'TRANSFER' or m.move_type == 'LINEN_OUT' %}text-bg-primary{% elif m.move_type == 'WASTAGE' or m.move_type == 'BREAKAGE' or m.move_type == 'RETIRE' or m.move_type == 'RETURN_OUT' %}text-bg-danger{% elif m.move_type == 'MINIBAR' or m.move_type == 'CONSUME' %}text-bg-info{% elif m.move_type == 'REVERSAL' %}text-bg-secondary{% else %}text-bg-light border{% endif %}">
+                  {{ m.get_move_type_display }}
+                </span>
+              </td>
+              <td class="fw-bold text-dark">
+                <a href="{% url 'hotel_admin:stores_item' restaurant_slug=rslug pk=m.item.pk %}" class="text-dark text-decoration-none">
+                  {{ m.item.name }}
+                </a>
+              </td>
+              <td>
+                {% if m.direction == 'value' %}
+                  <em class="text-muted">Value only — no stock moved</em>
+                {% else %}
+                  {% if m.from_location %}<span class="text-muted">{{ m.from_location.name }}</span>{% else %}<em>External / Supplier</em>{% endif %}
+                  <i class="fa-solid fa-arrow-right mx-1 small text-muted"></i>
+                  {% if m.to_location %}<span class="fw-bold">{{ m.to_location.name }}</span>{% else %}<em>Consumption / Loss</em>{% endif %}
+                {% endif %}
+              </td>
+              <td class="text-end fw-bold">
+                {% if m.direction == 'value' %}—{% else %}
+                {{ m.quantity|floatformat:2 }} {{ m.item.unit }}
+                {% if m.entered_unit %}<div class="text-muted" style="font-size:10px;">({{ m.entered_qty|floatformat:2 }} {{ m.entered_unit }})</div>{% endif %}
+                {% endif %}
+              </td>
+              <td class="text-end text-muted">{% if m.direction == 'value' %}avg now ₹{{ m.wac_after|floatformat:2 }}{% else %}₹{{ m.unit_cost|floatformat:2 }}{% endif %}</td>
+              <td class="text-end fw-bold">₹{{ m.value|floatformat:2 }}</td>
+              <td>
+                {% if m.ref_label %}<code>{{ m.ref_label }}</code>{% endif %}
+                {{ m.reason }}
+                {% if m.note %}<span class="text-muted fst-italic">({{ m.note }})</span>{% endif %}
+              </td>
+              <td class="text-muted">{{ m.performed_by.username|default:"System" }}</td>
+              {% if can_edit %}
+                <td class="text-end px-3">
+                  {% if not m.reverses and m.move_type != 'REVERSAL' and not m.ref_type %}
+                    <form method="post" action="{% url 'hotel_admin:stores_move_reverse' restaurant_slug=rslug pk=m.pk %}" onsubmit="return confirm('Reverse movement #{{ m.pk }}? An equal and opposite entry will be posted.');">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm py-0 btn-outline-danger rounded-pill px-2" title="Reverse move">
+                        Undo
+                      </button>
+                    </form>
+                  {% endif %}
+                </td>
+              {% endif %}
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="11" class="text-center py-5 text-muted">No stock movement transactions recorded yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if page_obj.has_other_pages %}
+      <div class="p-3 border-top d-flex align-items-center justify-content-between">
+        <span class="small text-muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        <div class="btn-group btn-group-sm">
+          {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}{% if query %}&{{ query }}{% endif %}" class="btn btn-outline-secondary">Previous</a>
+          {% endif %}
+          {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}{% if query %}&{{ query }}{% endif %}" class="btn btn-outline-secondary">Next</a>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
