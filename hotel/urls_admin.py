@@ -155,6 +155,8 @@ urlpatterns = [
     path('staff/attendance/', views_staff_hotel.hotel_muster_roll_view, name='muster_roll'),
     path('staff/attendance/api/mark-all-present/', views_staff_hotel.hotel_api_mark_all_present, name='api_mark_all_present'),
     path('staff/attendance/api/save/', views_staff_hotel.hotel_api_save_single_attendance, name='api_save_single_attendance'),
+    path('staff/attendance/api/toggle-lock/', views_staff_hotel.hotel_api_toggle_muster_lock, name='api_toggle_muster_lock'),
+    path('staff/attendance/api/bulk-action/', views_staff_hotel.hotel_api_bulk_muster_action, name='api_bulk_muster_action'),
 
     # Phase 2: Ground Staff Directory (Housekeeping, Room Attendants, Bellhops)
     path('staff/ground-staff/', views_staff_hotel.hotel_ground_staff_list, name='ground_staff_list'),

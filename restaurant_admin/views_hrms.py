@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
@@ -18,9 +19,11 @@ from super_admin.modules import RESTAURANT, RESTAURANT_DEPARTMENTS, department_c
 from restaurant_admin.models import (
     Department,
     ShiftType,
+    SHIFT_STANDARD_TIMINGS,
     StaffMember,
     AttendanceStatus,
     DailyAttendance,
+    DailyMusterLock,
     MonthlyPayroll,
     SOPShiftTiming,
     DailySOPTask,
@@ -89,6 +92,36 @@ def number_to_words(n):
 # PHASE 1: FAST-TRACK DAILY MUSTER ROLL & DEPARTMENT ALLOCATION
 # ==============================================================================
 
+def check_muster_locked(restaurant, active_branch, target_date):
+    """
+    Determines whether attendance for the target date is locked against edits.
+    Returns: (is_locked: bool, reason: str, is_payroll_finalized: bool, lock_obj: DailyMusterLock or None)
+    """
+    # Check 1: Monthly payroll finalized for this month
+    finalized_payroll = MonthlyPayroll.objects.filter(
+        restaurant=restaurant,
+        year=target_date.year,
+        month=target_date.month,
+        is_finalized=True
+    ).exists()
+    if finalized_payroll:
+        month_name = calendar.month_name[target_date.month]
+        return True, f"Payroll for {month_name} {target_date.year} is already finalized. Attendance records are permanently locked.", True, None
+
+    # Check 2: Day-level muster roll lock
+    lock_qs = DailyMusterLock.objects.filter(restaurant=restaurant, date=target_date, is_locked=True)
+    if active_branch:
+        lock_qs = lock_qs.filter(models.Q(branch=active_branch) | models.Q(branch__isnull=True))
+    lock = lock_qs.first()
+    if lock:
+        user_name = lock.locked_by.get_full_name() or lock.locked_by.username if lock.locked_by else "Management"
+        at_str = f" at {lock.locked_at.strftime('%H:%M, %d %b')}" if lock.locked_at else ""
+        reason = f"Muster roll finalized & locked by {user_name}{at_str}."
+        return True, reason, False, lock
+
+    return False, "", False, None
+
+
 @login_required
 def muster_roll_view(request, restaurant_slug=None):
     if not is_management_user(request.user):
@@ -111,6 +144,9 @@ def muster_roll_view(request, restaurant_slug=None):
     prev_date = selected_date - timedelta(days=1)
     next_date = selected_date + timedelta(days=1)
     is_today = (selected_date == date.today())
+
+    # Check lock status for the selected date
+    is_locked, lock_reason, is_payroll_finalized, lock_obj = check_muster_locked(restaurant, active_branch, selected_date)
 
     # Department filter
     dept_filter = request.GET.get('department', 'ALL').strip()
@@ -143,7 +179,7 @@ def muster_roll_view(request, restaurant_slug=None):
             staff_member__department__in=RESTAURANT_DEPARTMENTS,
             date=selected_date,
             staff_member__in=staff_members
-        ).select_related('staff_member')
+        ).select_related('staff_member', 'marked_by')
     }
 
     # Aggregate daily status counters across ALL active staff for this date
@@ -158,7 +194,7 @@ def muster_roll_view(request, restaurant_slug=None):
 
     all_attendances_today = DailyAttendance.objects.filter(
         restaurant=restaurant,
-            staff_member__department__in=RESTAURANT_DEPARTMENTS,
+        staff_member__department__in=RESTAURANT_DEPARTMENTS,
         date=selected_date,
         staff_member_id__in=all_active_ids
     )
@@ -187,18 +223,46 @@ def muster_roll_view(request, restaurant_slug=None):
     grid_rows = []
     for staff in staff_members:
         att = existing_attendance.get(staff.id)
+        current_shift = att.shift_type if (att and att.shift_type) else staff.default_shift
+        shift_info = SHIFT_STANDARD_TIMINGS.get(current_shift, SHIFT_STANDARD_TIMINGS[ShiftType.GENERAL])
+        hours_worked = float(att.hours_worked) if att else 0.0
+        suggested_ot = float(att.suggested_ot_hours) if att else 0.0
+        shift_variance = float(att.shift_variance) if att else 0.0
+        is_late = att.is_late_arrival if att else False
+        marked_by_name = (att.marked_by.get_full_name() or att.marked_by.username) if (att and att.marked_by) else ''
+        updated_at_str = att.updated_at.strftime('%H:%M') if att else ''
+
         grid_rows.append({
             'staff': staff,
             'attendance': att,
             'is_marked': att is not None,
             'status': att.status if att else '',
-            'shift_type': att.shift_type if att else staff.default_shift,
+            'shift_type': current_shift,
             'check_in': att.check_in_time.strftime('%H:%M') if (att and att.check_in_time) else '',
             'check_out': att.check_out_time.strftime('%H:%M') if (att and att.check_out_time) else '',
+            'hours_worked': hours_worked,
+            'suggested_ot': suggested_ot,
+            'shift_variance': shift_variance,
+            'is_late': is_late,
             'ot_hours': float(att.ot_hours) if (att and att.ot_hours) else 0.0,
             'penalty_amount': float(att.penalty_amount) if (att and att.penalty_amount) else 0.0,
             'notes': att.notes if att else '',
+            'marked_by_name': marked_by_name,
+            'updated_at_str': updated_at_str,
+            'standard_hours': float(staff.standard_shift_hours or Decimal('9.0')),
+            'default_shift_in': shift_info['in'],
+            'default_shift_out': shift_info['out'],
         })
+
+    shift_timings_dict = {
+        k: {
+            'in': v['in'],
+            'out': v['out'],
+            'hours': float(v['hours']),
+            'name': v['name']
+        }
+        for k, v in SHIFT_STANDARD_TIMINGS.items()
+    }
 
     context = {
         'restaurant': restaurant,
@@ -212,6 +276,10 @@ def muster_roll_view(request, restaurant_slug=None):
         'prev_date_str': prev_date.isoformat(),
         'next_date_str': next_date.isoformat(),
         'is_today': is_today,
+        'is_locked': is_locked,
+        'lock_reason': lock_reason,
+        'is_payroll_finalized': is_payroll_finalized,
+        'lock_obj': lock_obj,
         'selected_department': dept_filter,
         'search_query': search_query,
         'grid_rows': grid_rows,
@@ -228,7 +296,32 @@ def muster_roll_view(request, restaurant_slug=None):
         'dept_counts': dept_counts,
         'departments': RESTAURANT_DEPARTMENT_CHOICES,
         'shift_types': ShiftType.choices,
+        'shift_timings_json': json.dumps(shift_timings_dict),
         'attendance_statuses': AttendanceStatus.choices,
+        'muster_config': {
+            'selectedDate': selected_date.isoformat(),
+            'selectedDepartment': dept_filter if dept_filter else 'ALL',
+            'isLocked': is_locked,
+            'lockReason': lock_reason,
+            'isPayrollFinalized': is_payroll_finalized,
+            'shiftTimings': shift_timings_dict,
+            'metrics': {
+                'present': present_count,
+                'absent': absent_count,
+                'half_day': half_day_count,
+                'leave': leave_count,
+                'weekly_off': weekly_off_count,
+                'total_ot': total_ot_hours_today,
+                'marked': marked_count,
+                'total_staff': len(all_active_ids),
+            },
+            'urls': {
+                'saveAttendance': reverse('restaurant_admin:api_save_single_attendance', kwargs={'restaurant_slug': restaurant_slug}),
+                'toggleLock': reverse('restaurant_admin:api_toggle_muster_lock', kwargs={'restaurant_slug': restaurant_slug}),
+                'markAllPresent': reverse('restaurant_admin:api_mark_all_present', kwargs={'restaurant_slug': restaurant_slug}),
+                'bulkAction': reverse('restaurant_admin:api_bulk_muster_action', kwargs={'restaurant_slug': restaurant_slug}),
+            }
+        },
     }
     return render(request, 'restaurant_admin/staff/muster_roll.html', context)
 
@@ -239,6 +332,7 @@ def api_mark_all_present(request, restaurant_slug=None):
     """
     Exposes a 'Mark All Present' batch-creation endpoint to populate DailyAttendance
     records instantly for the selected date across all (or department-filtered) staff.
+    Supports pre-filling standard shift timings.
     """
     if not is_management_user(request.user):
         return JsonResponse({'success': False, 'error': 'Forbidden'}, status=403)
@@ -256,11 +350,17 @@ def api_mark_all_present(request, restaurant_slug=None):
 
     date_str = data.get('date', '').strip()
     dept_filter = data.get('department', 'ALL').strip()
+    fill_shift_times = bool(data.get('fill_shift_times', False))
 
     try:
         att_date = datetime.strptime(date_str, '%Y-%m-%d').date() if date_str else date.today()
     except ValueError:
         return JsonResponse({'success': False, 'error': 'Invalid date format'}, status=400)
+
+    # Check lock status
+    is_locked, lock_reason, _, _ = check_muster_locked(restaurant, active_branch, att_date)
+    if is_locked:
+        return JsonResponse({'success': False, 'error': f"Cannot mark attendance: {lock_reason}"}, status=403)
 
     staff_qs = StaffMember.objects.filter(restaurant=restaurant, department__in=RESTAURANT_DEPARTMENTS, is_active=True)
     if active_branch:
@@ -272,6 +372,11 @@ def api_mark_all_present(request, restaurant_slug=None):
     updated_count = 0
     with transaction.atomic():
         for staff in staff_qs:
+            shift_to_use = staff.default_shift
+            std_timing = SHIFT_STANDARD_TIMINGS.get(shift_to_use, SHIFT_STANDARD_TIMINGS[ShiftType.GENERAL])
+            c_in = datetime.strptime(std_timing['in'], '%H:%M').time() if fill_shift_times else None
+            c_out = datetime.strptime(std_timing['out'], '%H:%M').time() if fill_shift_times else None
+
             att, created = DailyAttendance.objects.get_or_create(
                 staff_member=staff,
                 date=att_date,
@@ -279,17 +384,21 @@ def api_mark_all_present(request, restaurant_slug=None):
                     'restaurant': restaurant,
                     'branch': active_branch,
                     'status': AttendanceStatus.PRESENT,
-                    'shift_type': staff.default_shift,
+                    'shift_type': shift_to_use,
+                    'check_in_time': c_in,
+                    'check_out_time': c_out,
                     'ot_hours': Decimal('0.0'),
                     'penalty_amount': Decimal('0.00'),
                     'marked_by': request.user,
                 }
             )
             if not created:
-                # If already marked, update to PRESENT and set marked_by
                 att.status = AttendanceStatus.PRESENT
                 if not att.shift_type:
-                    att.shift_type = staff.default_shift
+                    att.shift_type = shift_to_use
+                if fill_shift_times and not att.check_in_time:
+                    att.check_in_time = c_in
+                    att.check_out_time = c_out
                 att.marked_by = request.user
                 att.save()
             updated_count += 1
@@ -306,7 +415,8 @@ def api_mark_all_present(request, restaurant_slug=None):
 @require_POST
 def api_save_single_attendance(request, restaurant_slug=None):
     """
-    Dynamic fast auto-save endpoint utilizing Alpine.js or HTMX without full-page reloads.
+    Dynamic fast auto-save endpoint utilizing Alpine.js without full-page reloads.
+    Enforces day lock protection, auto-calculates total hours and overtime.
     """
     if not is_management_user(request.user):
         return JsonResponse({'success': False, 'error': 'Forbidden'}, status=403)
@@ -331,6 +441,7 @@ def api_save_single_attendance(request, restaurant_slug=None):
     notes_val = data.get('notes', '').strip()
     check_in_str = data.get('check_in_time', '').strip()
     check_out_str = data.get('check_out_time', '').strip()
+    auto_calc_ot = bool(data.get('auto_calc_ot', False))
 
     staff = get_object_or_404(StaffMember, id=staff_id, restaurant=restaurant, department__in=RESTAURANT_DEPARTMENTS)
 
@@ -338,6 +449,11 @@ def api_save_single_attendance(request, restaurant_slug=None):
         att_date = datetime.strptime(date_str, '%Y-%m-%d').date()
     except (ValueError, TypeError):
         return JsonResponse({'success': False, 'error': 'Invalid date'}, status=400)
+
+    # Enforce day lock / payroll finalization protection
+    is_locked, lock_reason, _, _ = check_muster_locked(restaurant, active_branch, att_date)
+    if is_locked:
+        return JsonResponse({'success': False, 'error': f"Attendance locked: {lock_reason}"}, status=403)
 
     check_in_time = None
     if check_in_str:
@@ -357,6 +473,19 @@ def api_save_single_attendance(request, restaurant_slug=None):
         ot_hours = Decimal(str(max(0.0, float(ot_hours_val))))
     except (ValueError, TypeError):
         ot_hours = Decimal('0.0')
+
+    # If auto-calculate OT requested or times are given and ot_hours wasn't manually overridden:
+    if auto_calc_ot and check_in_time and check_out_time:
+        in_m = check_in_time.hour * 60 + check_in_time.minute
+        out_m = check_out_time.hour * 60 + check_out_time.minute
+        if out_m < in_m:
+            out_m += 1440
+        dur_h = (out_m - in_m) / 60.0
+        std_h = float(staff.standard_shift_hours or Decimal('9.0'))
+        if dur_h > std_h:
+            ot_hours = Decimal(str(round(dur_h - std_h, 1)))
+        else:
+            ot_hours = Decimal('0.0')
 
     try:
         penalty_amount = Decimal(str(max(0.0, float(penalty_val))))
@@ -395,8 +524,16 @@ def api_save_single_attendance(request, restaurant_slug=None):
         'attendance_id': att.id,
         'status': att.status,
         'status_display': att.get_status_display(),
+        'check_in': att.check_in_time.strftime('%H:%M') if att.check_in_time else '',
+        'check_out': att.check_out_time.strftime('%H:%M') if att.check_out_time else '',
+        'hours_worked': float(att.hours_worked),
+        'suggested_ot': float(att.suggested_ot_hours),
+        'shift_variance': float(att.shift_variance),
+        'is_late': att.is_late_arrival,
         'ot_hours': float(att.ot_hours),
         'penalty_amount': float(att.penalty_amount),
+        'marked_by_name': request.user.get_full_name() or request.user.username,
+        'updated_at': att.updated_at.strftime('%H:%M'),
         'summary': {
             'marked': today_records.count(),
             'present': today_records.filter(status=AttendanceStatus.PRESENT).count(),
@@ -406,6 +543,190 @@ def api_save_single_attendance(request, restaurant_slug=None):
             'weekly_off': today_records.filter(status=AttendanceStatus.WEEKLY_OFF).count(),
             'total_ot': float(today_records.aggregate(models.Sum('ot_hours'))['ot_hours__sum'] or 0.0),
         }
+    })
+
+
+@login_required
+@require_POST
+def api_toggle_muster_lock(request, restaurant_slug=None):
+    """
+    Manager endpoint to lock or unlock daily attendance for a specific date.
+    Prevents unauthorized or accidental edits once attendance has been finalized.
+    """
+    if not is_management_user(request.user):
+        return JsonResponse({'success': False, 'error': 'Forbidden: Manager access required.'}, status=403)
+
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return JsonResponse({'success': False, 'error': 'Invalid restaurant'}, status=400)
+
+    active_branch = get_active_branch(request, restaurant)
+
+    try:
+        data = json.loads(request.body.decode('utf-8')) if request.body else request.POST
+    except Exception:
+        data = request.POST
+
+    date_str = data.get('date', '').strip()
+    try:
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': 'Invalid date format'}, status=400)
+
+    # Check if payroll for this month is finalized - if so, cannot unlock!
+    if MonthlyPayroll.objects.filter(
+        restaurant=restaurant,
+        year=target_date.year,
+        month=target_date.month,
+        is_finalized=True
+    ).exists():
+        return JsonResponse({
+            'success': False,
+            'error': f'Cannot modify lock: Payroll for {calendar.month_name[target_date.month]} {target_date.year} is already finalized.'
+        }, status=400)
+
+    lock_obj, created = DailyMusterLock.objects.get_or_create(
+        restaurant=restaurant,
+        branch=active_branch,
+        date=target_date,
+        defaults={'is_locked': False}
+    )
+
+    if lock_obj.is_locked:
+        lock_obj.is_locked = False
+        lock_obj.unlocked_by = request.user
+        lock_obj.unlocked_at = timezone.now()
+        msg = f"Muster roll unlocked for {target_date.strftime('%d %b %Y')}. Attendance edits are now permitted."
+    else:
+        lock_obj.is_locked = True
+        lock_obj.locked_by = request.user
+        lock_obj.locked_at = timezone.now()
+        lock_obj.lock_reason = data.get('reason', '').strip() or "Verified and finalized by management"
+        msg = f"Muster roll locked for {target_date.strftime('%d %b %Y')}. Attendance is protected against changes."
+
+    lock_obj.save()
+
+    return JsonResponse({
+        'success': True,
+        'is_locked': lock_obj.is_locked,
+        'message': msg,
+        'locked_by': lock_obj.locked_by.get_full_name() or lock_obj.locked_by.username if lock_obj.locked_by else None,
+        'locked_at': lock_obj.locked_at.strftime('%H:%M, %d %b') if lock_obj.locked_at else None,
+        'lock_reason': lock_obj.lock_reason or "Verified and finalized by management",
+    })
+
+
+@login_required
+@require_POST
+def api_bulk_muster_action(request, restaurant_slug=None):
+    """
+    Bulk operations for faster timekeeping:
+    1. 'mark_unmarked_absent': Marks all staff without an attendance entry as ABSENT.
+    2. 'fill_shift_timings': Fills standard shift in/out times for all staff currently marked PRESENT.
+    3. 'recalculate_all_ot': Auto-calculates and updates OT hours based on recorded check-in/out times.
+    """
+    if not is_management_user(request.user):
+        return JsonResponse({'success': False, 'error': 'Forbidden'}, status=403)
+
+    restaurant = resolve_restaurant(request, restaurant_slug)
+    if not isinstance(restaurant, Restaurant):
+        return JsonResponse({'success': False, 'error': 'Invalid restaurant'}, status=400)
+
+    active_branch = get_active_branch(request, restaurant)
+
+    try:
+        data = json.loads(request.body.decode('utf-8')) if request.body else request.POST
+    except Exception:
+        data = request.POST
+
+    action = data.get('action', '').strip()
+    date_str = data.get('date', '').strip()
+    dept_filter = data.get('department', 'ALL').strip()
+
+    try:
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return JsonResponse({'success': False, 'error': 'Invalid date format'}, status=400)
+
+    is_locked, lock_reason, _, _ = check_muster_locked(restaurant, active_branch, target_date)
+    if is_locked:
+        return JsonResponse({'success': False, 'error': f"Cannot execute bulk action: {lock_reason}"}, status=403)
+
+    staff_qs = StaffMember.objects.filter(restaurant=restaurant, department__in=RESTAURANT_DEPARTMENTS, is_active=True)
+    if active_branch:
+        staff_qs = staff_qs.filter(models.Q(branch=active_branch) | models.Q(branch__isnull=True))
+    if dept_filter and dept_filter != 'ALL':
+        staff_qs = staff_qs.filter(department=dept_filter)
+
+    updated_count = 0
+    with transaction.atomic():
+        if action == 'mark_unmarked_absent':
+            existing_ids = DailyAttendance.objects.filter(
+                restaurant=restaurant,
+                date=target_date,
+                staff_member__in=staff_qs
+            ).values_list('staff_member_id', flat=True)
+
+            unmarked_staff = staff_qs.exclude(id__in=existing_ids)
+            for staff in unmarked_staff:
+                DailyAttendance.objects.create(
+                    restaurant=restaurant,
+                    branch=active_branch,
+                    staff_member=staff,
+                    date=target_date,
+                    status=AttendanceStatus.ABSENT,
+                    shift_type=staff.default_shift,
+                    ot_hours=Decimal('0.0'),
+                    penalty_amount=Decimal('0.00'),
+                    marked_by=request.user,
+                    notes='Marked absent via bulk close'
+                )
+                updated_count += 1
+            msg = f"Marked {updated_count} unmarked staff member(s) as Absent."
+
+        elif action == 'fill_shift_timings':
+            present_records = DailyAttendance.objects.filter(
+                restaurant=restaurant,
+                date=target_date,
+                status=AttendanceStatus.PRESENT,
+                staff_member__in=staff_qs
+            ).select_related('staff_member')
+
+            for att in present_records:
+                shift_key = att.shift_type or att.staff_member.default_shift
+                std_timing = SHIFT_STANDARD_TIMINGS.get(shift_key, SHIFT_STANDARD_TIMINGS[ShiftType.GENERAL])
+                att.check_in_time = datetime.strptime(std_timing['in'], '%H:%M').time()
+                att.check_out_time = datetime.strptime(std_timing['out'], '%H:%M').time()
+                att.marked_by = request.user
+                att.save()
+                updated_count += 1
+            msg = f"Applied standard shift timings for {updated_count} present staff member(s)."
+
+        elif action == 'recalculate_all_ot':
+            records_with_times = DailyAttendance.objects.filter(
+                restaurant=restaurant,
+                date=target_date,
+                check_in_time__isnull=False,
+                check_out_time__isnull=False,
+                staff_member__in=staff_qs
+            ).select_related('staff_member')
+
+            for att in records_with_times:
+                new_ot = att.suggested_ot_hours
+                att.ot_hours = new_ot
+                att.marked_by = request.user
+                att.save()
+                updated_count += 1
+            msg = f"Recalculated overtime for {updated_count} staff member(s)."
+
+        else:
+            return JsonResponse({'success': False, 'error': f"Unknown bulk action '{action}'"}, status=400)
+
+    return JsonResponse({
+        'success': True,
+        'count': updated_count,
+        'message': msg,
+        'action': action
     })
 
 

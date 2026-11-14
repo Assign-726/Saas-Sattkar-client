@@ -1,58 +1,395 @@
 {% extends 'hotel_admin/base_hotel.html' %}
 {% load static %}
 
-{% block title %}Daily Muster Roll Attendance - {{ current_restaurant.name }}{% endblock %}
+{% block title %}Hotel Daily Muster Roll - {{ current_restaurant.name }}{% endblock %}
 
 {% block extra_css %}
 <style>
-    .muster-table th {
-        font-size: 0.76rem;
-        text-transform: none;
-        letter-spacing: 0;
-        font-weight: 700;
-        color: var(--ui-label-2);
-        background-color: var(--ui-surface-2);
-        vertical-align: middle;
-        white-space: nowrap;
-        padding: 0.75rem 0.65rem;
+    /* ---------------------------------------------------------
+       1. Base Adaptive Theming Tokens & Shared Classes
+       --------------------------------------------------------- */
+    .staff-nav-card {
+        background: var(--ui-surface, #ffffff) !important;
+        border: 1px solid var(--ui-separator, #e2e8f0) !important;
     }
-    .muster-table td {
-        vertical-align: middle;
-        padding: 0.55rem 0.65rem;
-        font-size: 0.85rem;
+    .btn-staff-nav-inactive {
+        background: var(--ui-surface-2, #f8fafc) !important;
+        color: var(--ui-label-2, #475569) !important;
+        border: 1px solid var(--ui-separator, #e2e8f0) !important;
     }
-    .muster-row:hover {
-        background-color: var(--ui-surface-2);
+    .btn-staff-nav-inactive:hover {
+        background: var(--ui-fill-hover, #e2e8f0) !important;
+        color: var(--ui-label, #0f172a) !important;
     }
-    .badge-dept {
-        font-size: 0.72rem;
-        font-weight: 600;
-        padding: 3px 8px;
-        border-radius: 6px;
-    }
-    .badge-dept-housekeeping { background: rgba(var(--ui-green-rgb), 0.12); color: #166534; border: 1px solid rgba(var(--ui-green-rgb), 0.35); }
-    .badge-dept-frontdesk { background: rgba(var(--ui-accent-rgb), 0.1); color: var(--ui-accent-text); border: 1px solid rgba(var(--ui-accent-rgb), 0.3); }
-    .badge-dept-kitchen { background: rgba(var(--ui-orange-rgb), 0.12); color: var(--ui-orange-text); border: 1px solid rgba(var(--ui-orange-rgb), 0.35); }
-    .badge-dept-bar { background: #faf5ff; color: #7e22ce; border: 1px solid #e9d5ff; }
-    .badge-dept-floor { background: rgba(var(--ui-green-rgb), 0.12); color: var(--ui-green-text); border: 1px solid rgba(var(--ui-green-rgb), 0.35); }
-    .badge-dept-security { background: var(--ui-surface-2); color: var(--ui-label-2); border: 1px solid var(--ui-separator-strong); }
-    .badge-dept-general { background: var(--ui-surface-2); color: #374151; border: 1px solid var(--ui-separator); }
 
-    .status-select {
+    /* KPI Cards */
+    .kpi-card {
+        background: var(--ui-surface, #ffffff) !important;
+        border: 1px solid var(--ui-separator, #e2e8f0) !important;
+        border-radius: 10px;
+    }
+
+    /* Date Navigator Pill */
+    .date-nav-pill {
+        background: var(--ui-surface, #ffffff) !important;
+        border: 1px solid var(--ui-separator, #e2e8f0) !important;
+    }
+    .btn-nav-step {
+        background: var(--ui-surface-2, #f1f5f9) !important;
+        color: var(--ui-label, #1e293b) !important;
+        border: 1px solid var(--ui-separator, transparent) !important;
+        width: 26px;
+        height: 26px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .btn-nav-step:hover {
+        background: var(--ui-fill-hover, #e2e8f0) !important;
+        color: var(--ui-label, #0f172a) !important;
+    }
+    .date-nav-pill input[type="date"] {
+        color: var(--ui-label, #1e293b) !important;
+        color-scheme: light dark;
+    }
+
+    /* Lock Day Toggle Button */
+    .btn-lock-toggle {
+        background: var(--ui-surface, #ffffff) !important;
+        color: var(--ui-label, #334155) !important;
+        border: 1px solid var(--ui-separator, #cbd5e1) !important;
+    }
+    .btn-lock-toggle:hover {
+        background: var(--ui-surface-2, #f1f5f9) !important;
+        color: var(--ui-label, #0f172a) !important;
+    }
+
+    /* Department Filter Pills */
+    .btn-dept-active {
+        background: var(--brand, var(--ui-accent, #6366f1)) !important;
+        color: #ffffff !important;
+        border: 1px solid var(--brand, var(--ui-accent, #6366f1)) !important;
+        box-shadow: 0 1px 3px rgba(99, 102, 241, 0.35) !important;
+    }
+    .btn-dept-inactive {
+        background: var(--ui-surface, #ffffff) !important;
+        color: var(--ui-label-2, #475569) !important;
+        border: 1px solid var(--ui-separator, #cbd5e1) !important;
+    }
+    .btn-dept-inactive:hover {
+        background: var(--ui-surface-2, #f1f5f9) !important;
+        color: var(--ui-label, #0f172a) !important;
+    }
+
+    /* Search Input Group */
+    .input-themed-group .input-group-text,
+    .input-themed-group input,
+    .input-themed-group button {
+        background-color: var(--ui-surface, #ffffff) !important;
+        border-color: var(--ui-separator, #e2e8f0) !important;
+        color: var(--ui-label, #1e293b) !important;
+    }
+    .input-themed-group input::placeholder {
+        color: var(--ui-label-3, #94a3b8) !important;
+    }
+
+    /* View Switcher Controls */
+    .view-switcher-pill {
+        display: inline-flex;
+        background: var(--ui-surface-2, #f1f5f9) !important;
+        border: 1px solid var(--ui-separator, #e2e8f0) !important;
+        border-radius: 20px;
+        padding: 2px;
+    }
+    .view-switcher-btn {
+        border: none;
+        background: transparent;
+        font-size: 0.75rem;
         font-weight: 700;
-        border-radius: 6px;
-        font-size: 0.82rem;
-        padding: 0.35rem 0.6rem;
+        padding: 4px 10px;
+        border-radius: 18px;
+        color: var(--ui-label-2, #64748b);
         cursor: pointer;
         transition: all 0.15s ease;
     }
-    .status-select.status-PRESENT { background-color: rgba(var(--ui-green-rgb), 0.12); color: var(--ui-green-text); border: 1.5px solid var(--ui-green); }
-    .status-select.status-ABSENT { background-color: rgba(var(--ui-red-rgb), 0.1); color: var(--ui-red-text); border: 1.5px solid var(--ui-red); }
-    .status-select.status-HALF_DAY { background-color: rgba(var(--ui-orange-rgb), 0.12); color: var(--ui-orange-text); border: 1.5px solid var(--ui-orange); }
-    .status-select.status-PAID_LEAVE { background-color: rgba(var(--ui-accent-rgb), 0.1); color: var(--ui-accent-text); border: 1.5px solid var(--ui-accent); }
-    .status-select.status-WEEKLY_OFF { background-color: #f5f3ff; color: #6d28d9; border: 1.5px solid #8b5cf6; }
-    .status-select.status-UNPAID_LEAVE { background-color: var(--ui-surface-2); color: #4b5563; border: 1.5px solid #9ca3af; }
-    .status-select.status-UNMARKED { background-color: var(--ui-surface); color: var(--ui-label-3); border: 1.5px dashed var(--ui-separator-strong); }
+    .view-switcher-btn:hover {
+        color: var(--ui-label, #0f172a);
+    }
+    .view-switcher-btn.active {
+        background: var(--ui-surface, #ffffff) !important;
+        color: var(--ui-label, #0f172a) !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    }
+
+    /* ---------------------------------------------------------
+       2. Table View Styles (Desktop / Tablet)
+       --------------------------------------------------------- */
+    .muster-table-container {
+        position: relative;
+        border-radius: 12px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        background: var(--ui-surface, #ffffff) !important;
+        border: 1px solid var(--ui-separator, #e2e8f0) !important;
+    }
+    .muster-table th {
+        font-size: 0.74rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 700;
+        color: var(--ui-label-2, #64748b) !important;
+        background-color: var(--ui-surface-2, #f8fafc) !important;
+        vertical-align: middle;
+        white-space: nowrap;
+        padding: 0.75rem 0.65rem;
+        border-bottom: 2px solid var(--ui-separator, #e2e8f0) !important;
+    }
+    .muster-table td {
+        vertical-align: middle;
+        padding: 0.6rem 0.65rem;
+        font-size: 0.84rem;
+        border-bottom: 1px solid var(--ui-separator, #f1f5f9) !important;
+        background-color: var(--ui-surface, #ffffff) !important;
+        color: var(--ui-label, #1e293b) !important;
+    }
+    .muster-row:hover td {
+        background-color: var(--ui-surface-2, #f8fafc) !important;
+    }
+    .muster-row.row-locked td {
+        background-color: var(--ui-surface-2, #fafbfc) !important;
+        opacity: 0.94;
+    }
+
+    /* ---------------------------------------------------------
+       3. Staff Attendance Card (Card View)
+       --------------------------------------------------------- */
+    .muster-card {
+        border-radius: 12px;
+        background: var(--ui-surface, #ffffff) !important;
+        border: 1px solid var(--ui-separator, #e2e8f0) !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        padding: 0.9rem;
+        transition: transform 0.1s ease, box-shadow 0.15s ease;
+    }
+    .muster-card:hover {
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.09);
+    }
+    .muster-card.card-locked {
+        background: var(--ui-surface-2, #fafbfc) !important;
+        border-color: var(--ui-separator, #cbd5e1) !important;
+    }
+
+    /* Card Header Profile & Typography */
+    .staff-name {
+        color: var(--ui-label, #0f172a) !important;
+        font-weight: 700;
+    }
+    .staff-badge {
+        background: var(--ui-surface-2, #f1f5f9) !important;
+        color: var(--ui-label-2, #64748b) !important;
+        border: 1px solid var(--ui-separator, #e2e8f0) !important;
+    }
+    .staff-subtext {
+        color: var(--ui-label-3, #94a3b8) !important;
+    }
+
+    /* Shift Select Styling (Generous right padding so chevron NEVER touches text) */
+    .shift-select {
+        font-size: 0.78rem !important;
+        font-weight: 500 !important;
+        border-radius: 6px !important;
+        padding-top: 0.32rem !important;
+        padding-bottom: 0.32rem !important;
+        padding-left: 0.6rem !important;
+        padding-right: 2.25rem !important;
+        background-color: var(--ui-surface-2, #ffffff) !important;
+        color: var(--ui-label, #1e293b) !important;
+        border: 1px solid var(--ui-separator, #cbd5e1) !important;
+        background-position: right 0.65rem center !important;
+        background-size: 14px 10px !important;
+        min-width: 215px !important;
+        width: 100% !important;
+        cursor: pointer;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+
+    /* Number input spinner suppress (Fixes clipped numbers in OT and Penalty) */
+    input[type=number].no-spinners::-webkit-inner-spin-button,
+    input[type=number].no-spinners::-webkit-outer-spin-button {
+        -webkit-appearance: none !important;
+        margin: 0 !important;
+    }
+    input[type=number].no-spinners {
+        -moz-appearance: textfield !important;
+        appearance: textfield !important;
+    }
+
+    /* Segmented 1-Click Status Buttons (Desktop / Table) */
+    .status-btn-group {
+        display: inline-flex;
+        border-radius: 8px;
+        background: var(--ui-surface-2, #f1f5f9) !important;
+        border: 1px solid var(--ui-separator, #e2e8f0) !important;
+        padding: 2px;
+        gap: 2px;
+    }
+    .status-btn {
+        border: none;
+        background: transparent;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 4px 8px;
+        border-radius: 6px;
+        color: var(--ui-label-2, #64748b);
+        cursor: pointer;
+        transition: all 0.15s ease;
+        line-height: 1.2;
+    }
+    .status-btn:hover:not(:disabled) {
+        background: var(--ui-fill-hover, rgba(0, 0, 0, 0.06));
+        color: var(--ui-label, #1e293b);
+    }
+    .status-btn.active.status-PRESENT { background: #10b981; color: #ffffff; box-shadow: 0 1px 3px rgba(16, 185, 129, 0.35); }
+    .status-btn.active.status-ABSENT { background: #ef4444; color: #ffffff; box-shadow: 0 1px 3px rgba(239, 68, 68, 0.35); }
+    .status-btn.active.status-HALF_DAY { background: #f59e0b; color: #ffffff; box-shadow: 0 1px 3px rgba(245, 158, 11, 0.35); }
+    .status-btn.active.status-WEEKLY_OFF { background: #8b5cf6; color: #ffffff; box-shadow: 0 1px 3px rgba(139, 92, 246, 0.35); }
+    .status-btn.active.status-PAID_LEAVE { background: #3b82f6; color: #ffffff; box-shadow: 0 1px 3px rgba(59, 130, 246, 0.35); }
+    .status-btn.active.status-UNPAID_LEAVE { background: #64748b; color: #ffffff; }
+    .status-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* Mobile / Tablet Touch-Optimized Status Buttons (Card View) */
+    .card-status-btn-group {
+        display: flex;
+        width: 100%;
+        border-radius: 10px;
+        background: var(--ui-surface-2, #f1f5f9) !important;
+        border: 1px solid var(--ui-separator, #e2e8f0) !important;
+        padding: 3px;
+        gap: 3px;
+    }
+    .card-status-btn {
+        flex: 1;
+        border: none;
+        background: transparent;
+        font-size: 0.82rem;
+        font-weight: 700;
+        height: 38px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        color: var(--ui-label-2, #475569);
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .card-status-btn:hover:not(:disabled) {
+        background: var(--ui-fill-hover, rgba(0, 0, 0, 0.05));
+        color: var(--ui-label, #0f172a);
+    }
+    .card-status-btn.active.status-PRESENT { background: #10b981; color: #fff; box-shadow: 0 2px 4px rgba(16, 185, 129, 0.35); }
+    .card-status-btn.active.status-ABSENT { background: #ef4444; color: #fff; box-shadow: 0 2px 4px rgba(239, 68, 68, 0.35); }
+    .card-status-btn.active.status-HALF_DAY { background: #f59e0b; color: #fff; box-shadow: 0 2px 4px rgba(245, 158, 11, 0.35); }
+    .card-status-btn.active.status-WEEKLY_OFF { background: #8b5cf6; color: #fff; box-shadow: 0 2px 4px rgba(139, 92, 246, 0.35); }
+    .card-status-btn.active.status-PAID_LEAVE { background: #3b82f6; color: #fff; box-shadow: 0 2px 4px rgba(59, 130, 246, 0.35); }
+    .card-status-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* In/Out Time & Working Hours Box (Card View) */
+    .time-calc-box {
+        background: var(--ui-surface-2, #f8fafc) !important;
+        border: 1px solid var(--ui-separator, #e2e8f0) !important;
+        border-radius: 10px;
+    }
+    .time-calc-box .time-badge {
+        background: var(--ui-surface-3, #e2e8f0) !important;
+        color: var(--ui-label-2, #475569) !important;
+        border: 1px solid var(--ui-separator, transparent);
+        font-size: 0.68rem;
+        font-weight: 700;
+    }
+    .time-calc-box input[type="time"] {
+        background: var(--ui-surface, #ffffff) !important;
+        color: var(--ui-label, #1e293b) !important;
+        border: 1px solid var(--ui-separator, #cbd5e1) !important;
+        color-scheme: light dark;
+    }
+
+    /* Working Hours & Variance Badges */
+    .hours-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: var(--ui-label, #1e293b) !important;
+    }
+    .variance-badge {
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        white-space: nowrap;
+    }
+    .variance-ot {
+        background: rgba(16, 185, 129, 0.16) !important;
+        color: #10b981 !important;
+        border: 1px solid rgba(16, 185, 129, 0.38) !important;
+    }
+    .variance-met {
+        background: rgba(59, 130, 246, 0.14) !important;
+        color: #3b82f6 !important;
+        border: 1px solid rgba(59, 130, 246, 0.32) !important;
+    }
+    .variance-short {
+        background: rgba(245, 158, 11, 0.15) !important;
+        color: #f59e0b !important;
+        border: 1px solid rgba(245, 158, 11, 0.35) !important;
+    }
+    .variance-late {
+        background: rgba(239, 68, 68, 0.14) !important;
+        color: #ef4444 !important;
+        border: 1px solid rgba(239, 68, 68, 0.35) !important;
+    }
+
+    /* Quick Time Buttons */
+    .btn-time-action {
+        border: 1px solid var(--ui-separator, transparent) !important;
+        background: var(--ui-surface-3, #f1f5f9) !important;
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 3px 6px;
+        border-radius: 4px;
+        color: var(--ui-label, #475569) !important;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .btn-time-action:hover:not(:disabled) {
+        background: var(--ui-fill-hover, #e2e8f0) !important;
+        color: var(--ui-label, #0f172a) !important;
+    }
+
+    /* Form Controls Theming (Card & Table) */
+    .muster-card input.form-control,
+    .muster-table input.form-control,
+    .muster-card .input-group-text,
+    .muster-table .input-group-text {
+        background-color: var(--ui-surface-2, #ffffff) !important;
+        color: var(--ui-label, #1e293b) !important;
+        border-color: var(--ui-separator, #cbd5e1) !important;
+    }
+    .muster-card .input-group-text,
+    .muster-table .input-group-text {
+        background-color: var(--ui-surface-3, #f1f5f9) !important;
+        color: var(--ui-label-2, #64748b) !important;
+    }
+    .muster-card input::placeholder,
+    .muster-table input::placeholder {
+        color: var(--ui-label-3, #94a3b8) !important;
+    }
 
     .save-indicator {
         width: 22px;
@@ -61,429 +398,1224 @@
         align-items: center;
         justify-content: center;
         border-radius: 50%;
-        font-size: 0.75rem;
+        font-size: 0.72rem;
+        flex-shrink: 0;
     }
-    .save-indicator.saved { background: rgba(var(--ui-green-rgb), 0.16); color: var(--ui-green-text); }
-    .save-indicator.saving { background: rgba(var(--ui-orange-rgb), 0.14); color: var(--ui-orange-text); }
-    .save-indicator.error { background: rgba(var(--ui-red-rgb), 0.14); color: var(--ui-red-text); }
+    .save-indicator.saved { background: rgba(16, 185, 129, 0.18); color: #10b981; }
+    .save-indicator.saving { background: rgba(245, 158, 11, 0.18); color: #f59e0b; }
+    .save-indicator.error { background: rgba(239, 68, 68, 0.18); color: #ef4444; }
+    .save-indicator.locked { background: var(--ui-surface-3, #f1f5f9); color: var(--ui-label-3, #64748b); }
 
     .avatar-circle {
-        width: 34px;
-        height: 34px;
+        width: 36px;
+        height: 36px;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
         font-weight: 700;
-        font-size: 0.8rem;
+        font-size: 0.85rem;
         color: #ffffff;
-        background: linear-gradient(135deg, var(--ui-accent), var(--ui-accent));
+        background: linear-gradient(135deg, #6366f1, #4f46e5);
         flex-shrink: 0;
+    }
+
+    .audit-subtext {
+        font-size: 0.7rem;
+        color: var(--ui-label-3, #94a3b8) !important;
+        line-height: 1.1;
+        margin-top: 3px;
+    }
+
+    /* Department badges - Hotel departments styling */
+    .badge-dept {
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 6px;
+        display: inline-block;
+        white-space: nowrap;
+    }
+    .badge-dept-housekeeping {
+        background: rgba(14, 165, 233, 0.14) !important;
+        color: #0284c7 !important;
+        border: 1px solid rgba(14, 165, 233, 0.35) !important;
+    }
+    .badge-dept-front_desk,
+    .badge-dept-frontdesk {
+        background: rgba(99, 102, 241, 0.14) !important;
+        color: #6366f1 !important;
+        border: 1px solid rgba(99, 102, 241, 0.35) !important;
+    }
+    .badge-dept-security {
+        background: rgba(100, 116, 139, 0.14) !important;
+        color: #64748b !important;
+        border: 1px solid rgba(100, 116, 139, 0.35) !important;
+    }
+    .badge-dept-management {
+        background: rgba(234, 179, 8, 0.14) !important;
+        color: #ca8a04 !important;
+        border: 1px solid rgba(234, 179, 8, 0.35) !important;
+    }
+    .badge-dept-kitchen {
+        background: rgba(249, 115, 22, 0.14) !important;
+        color: #ea580c !important;
+        border: 1px solid rgba(249, 115, 22, 0.35) !important;
+    }
+    .badge-dept-general {
+        background: var(--ui-surface-2, #f1f5f9) !important;
+        color: var(--ui-label-2, #475569) !important;
+        border: 1px solid var(--ui-separator, #e2e8f0) !important;
+    }
+
+    /* Horizontal scroll containers for smooth touch navigation */
+    .scroll-container-touch {
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    .scroll-container-touch::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* Lock status banner */
+    .lock-banner {
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+    }
+    .lock-banner.is-locked {
+        background: var(--ui-surface-2, #fffbeb) !important;
+        border: 1.5px solid rgba(245, 158, 11, 0.4) !important;
+        color: #d97706 !important;
+    }
+    .lock-banner.is-payroll {
+        background: var(--ui-surface-2, #f5f3ff) !important;
+        border: 1.5px solid rgba(139, 92, 246, 0.4) !important;
+        color: #7c3aed !important;
+    }
+
+    /* ---------------------------------------------------------
+       4. Explicit Dark Mode Enhancements & SVG Select Chevron
+       --------------------------------------------------------- */
+    :root[data-theme="dark"],
+    :root[data-bs-theme="dark"],
+    html.dark-theme {
+        /* Crisp white chevron arrow for selects in dark mode */
+        .shift-select,
+        select.form-select {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23f5f5f7' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e") !important;
+        }
+
+        .muster-card,
+        .muster-table td {
+            background-color: #1C1C1E !important;
+        }
+        .muster-table th,
+        .muster-row:hover td,
+        .time-calc-box,
+        .card-status-btn-group,
+        .status-btn-group,
+        .view-switcher-pill {
+            background-color: #242426 !important;
+        }
+        .time-calc-box input[type="time"],
+        .muster-card input.form-control,
+        .muster-table input.form-control,
+        .shift-select {
+            background-color: #242426 !important;
+            color: #F5F5F7 !important;
+            border-color: rgba(255, 255, 255, 0.15) !important;
+        }
+        .input-group-text {
+            background-color: #2C2C2E !important;
+            color: #A1A1A6 !important;
+            border-color: rgba(255, 255, 255, 0.15) !important;
+        }
+        .btn-time-action {
+            background-color: #2C2C2E !important;
+            color: #F5F5F7 !important;
+            border-color: rgba(255, 255, 255, 0.12) !important;
+        }
+        .btn-time-action:hover {
+            background-color: #3A3A3C !important;
+        }
+        .card-status-btn,
+        .status-btn {
+            color: #A1A1A6 !important;
+        }
+        .card-status-btn:hover,
+        .status-btn:hover {
+            background-color: rgba(255, 255, 255, 0.08) !important;
+            color: #F5F5F7 !important;
+        }
+        .view-switcher-btn.active {
+            background-color: #3A3A3C !important;
+            color: #FFFFFF !important;
+        }
+        .date-nav-pill,
+        .btn-dept-inactive,
+        .btn-lock-toggle,
+        .input-themed-group .input-group-text,
+        .input-themed-group input,
+        .input-themed-group button {
+            background-color: #1C1C1E !important;
+            color: #F5F5F7 !important;
+            border-color: rgba(255, 255, 255, 0.15) !important;
+        }
+        .date-nav-pill .btn-nav-step {
+            background-color: #2C2C2E !important;
+            color: #F5F5F7 !important;
+        }
+        .staff-name {
+            color: #F5F5F7 !important;
+        }
+        .staff-badge {
+            background-color: #2C2C2E !important;
+            color: #A1A1A6 !important;
+            border-color: rgba(255, 255, 255, 0.15) !important;
+        }
+        .staff-subtext {
+            color: #8D8D93 !important;
+        }
+        .dropdown-menu {
+            background-color: #1C1C1E !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        }
+        .dropdown-item {
+            color: #F5F5F7 !important;
+        }
+        .dropdown-item:hover {
+            background-color: #2C2C2E !important;
+        }
+
+        .badge-dept-housekeeping {
+            color: #38bdf8 !important;
+        }
+        .badge-dept-front_desk,
+        .badge-dept-frontdesk {
+            color: #818cf8 !important;
+        }
+        .badge-dept-security {
+            color: #94a3b8 !important;
+        }
+        .badge-dept-management {
+            color: #facc15 !important;
+        }
+        .lock-banner.is-locked {
+            background: #242426 !important;
+            color: #f59e0b !important;
+        }
+        .lock-banner.is-payroll {
+            background: #242426 !important;
+            color: #a78bfa !important;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid px-0" x-data="musterRollApp()">
+<div class="container-fluid px-2 px-sm-3 px-md-4 py-2 py-md-3" x-data="musterRollApp()">
 
-    <!-- Sub-Navigation Cockpit Header -->
+    <!-- Top Navigation Header -->
     {% include 'hotel_admin/staff/includes/staff_nav.html' %}
 
-    <!-- Page Title & Date Controller Header -->
-    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-4">
-        <div>
-            <div class="d-flex align-items-center gap-2">
-                <h1 class="h3 fw-bold text-dark mb-0">Hotel Daily Muster Roll</h1>
-                <span class="badge text-white rounded-pill px-3 py-1 font-mono" style="background: var(--brand, var(--ui-accent)); font-size: 0.78rem;">
-                    {{ total_active_staff }} Active Staff
+    <!-- Security & Lock Status Banner (Tamper-evident & Anti-accidental editing) -->
+    {% if is_payroll_finalized %}
+    <div class="lock-banner is-payroll shadow-xs">
+        <div class="d-flex align-items-center gap-2.5">
+            <i class="bi bi-shield-fill-check fs-4" style="color: #8b5cf6;"></i>
+            <div>
+                <strong class="d-block" style="font-size: 0.88rem;">Monthly Payroll Finalized &amp; Archived</strong>
+                <span style="font-size: 0.78rem;">
+                    Payroll for {{ selected_date|date:"F Y" }} is finalized. All daily attendance records for this month are permanently locked.
                 </span>
             </div>
-            <p class="text-muted small mb-0 mt-1">
-                Fast-track ground staff timekeeping for <strong>{{ current_branch.name|default:current_restaurant.name }}</strong>. Mark all attendants in 1-click, record split shifts &amp; overtime.
+        </div>
+        <span class="badge bg-purple-subtle text-purple border px-3 py-1.5 rounded-pill fw-semibold" style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6; border-color: rgba(139, 92, 246, 0.3) !important;">
+            <i class="bi bi-lock-fill me-1"></i>Permanently Locked
+        </span>
+    </div>
+    {% elif is_locked %}
+    <div class="lock-banner is-locked shadow-xs">
+        <div class="d-flex align-items-center gap-2.5">
+            <i class="bi bi-lock-fill fs-4 text-warning"></i>
+            <div>
+                <strong class="d-block" style="font-size: 0.88rem;">Hotel Muster Roll Finalized &amp; Locked</strong>
+                <span style="font-size: 0.78rem;" x-text="lockReason">{{ lock_reason }}</span>
+            </div>
+        </div>
+        <button type="button" 
+                class="btn btn-sm btn-outline-dark rounded-pill px-3 py-1 fw-semibold d-inline-flex align-items-center gap-1.5"
+                @click="toggleLock()"
+                :disabled="isTogglingLock">
+            <i class="bi bi-unlock-fill" x-show="!isTogglingLock"></i>
+            <span class="spinner-border spinner-border-sm" x-show="isTogglingLock" style="width: 0.8rem; height: 0.8rem;"></span>
+            <span>Unlock Day to Edit</span>
+        </button>
+    </div>
+    {% endif %}
+
+    <!-- Page Title & Header Bar -->
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-2 gap-md-3 mb-3 mb-md-4">
+        <div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <h1 class="h4 h3-md fw-bold text-dark mb-0">Hotel Daily Muster Roll</h1>
+                <span class="badge text-white rounded-pill px-2.5 py-1" style="background: var(--brand, #6366f1); font-size: 0.76rem;">
+                    {{ total_active_staff }} Active Staff
+                </span>
+                <span class="badge rounded-pill px-2 py-0.5 text-uppercase"
+                      :class="isLocked ? 'bg-warning-subtle text-warning border border-warning' : 'bg-success-subtle text-success border border-success'"
+                      style="font-size: 0.7rem; letter-spacing: 0.3px;">
+                    <i class="bi" :class="isLocked ? 'bi-lock-fill' : 'bi-unlock-fill'"></i>
+                    <span x-text="isLocked ? 'Locked' : 'Open'"></span>
+                </span>
+            </div>
+            <p class="text-muted small mb-0 mt-1 d-none d-sm-block">
+                Precision timekeeping cockpit for <strong>{{ current_branch.name|default:current_restaurant.name }}</strong>. 1-click attendance marking, automatic shift &amp; overtime calculation, and tamper-proof daily muster locking.
             </p>
         </div>
 
-        <!-- Date Navigator Controls -->
-        <div class="d-flex align-items-center gap-2 flex-wrap bg-white p-1.5 rounded-pill shadow-xs border">
-            <a href="?date={{ prev_date_str }}{% if selected_department != 'ALL' %}&department={{ selected_department }}{% endif %}" 
-               class="btn btn-sm btn-light rounded-circle p-1.5" title="Previous Day">
-                <i class="fa-solid fa-chevron-left"></i>
-            </a>
+        <!-- Date Navigator Controls, Lock & View Mode Switcher -->
+        <div class="d-flex align-items-center gap-2 flex-wrap w-100 w-lg-auto justify-content-between justify-content-lg-end">
+            <!-- Date Navigator -->
+            <div class="d-flex align-items-center gap-1 p-1 rounded-pill shadow-xs date-nav-pill">
+                <a href="?date={{ prev_date_str }}{% if selected_department != 'ALL' %}&department={{ selected_department }}{% endif %}" 
+                   class="btn btn-sm btn-nav-step rounded-circle p-1" title="Previous Day">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
 
-            <div class="d-flex align-items-center gap-1.5 px-2">
-                <i class="fa-regular fa-calendar text-primary"></i>
-                <input type="date" 
-                       class="form-control form-control-sm border-0 fw-semibold bg-transparent p-0" 
-                       style="width: 130px; font-size: 0.85rem;" 
-                       value="{{ selected_date_str }}"
-                       @change="changeDate($event.target.value)">
+                <div class="d-flex align-items-center gap-1 px-1">
+                    <i class="bi bi-calendar-event text-primary" style="font-size: 0.82rem;"></i>
+                    <input type="date" 
+                           class="form-control form-control-sm border-0 fw-semibold bg-transparent p-0" 
+                           style="width: 118px; font-size: 0.82rem;" 
+                           value="{{ selected_date_str }}"
+                           @change="changeDate($event.target.value)">
+                </div>
+
+                <a href="?date={{ next_date_str }}{% if selected_department != 'ALL' %}&department={{ selected_department }}{% endif %}" 
+                   class="btn btn-sm btn-nav-step rounded-circle p-1" title="Next Day">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+
+                {% if not is_today %}
+                <a href="?date={% now 'Y-m-d' %}{% if selected_department != 'ALL' %}&department={{ selected_department }}{% endif %}" 
+                   class="btn btn-sm btn-outline-primary rounded-pill px-2 py-0.5" style="font-size: 0.72rem;">
+                    Today
+                </a>
+                {% endif %}
             </div>
 
-            <a href="?date={{ next_date_str }}{% if selected_department != 'ALL' %}&department={{ selected_department }}{% endif %}" 
-               class="btn btn-sm btn-light rounded-circle p-1.5" title="Next Day">
-                <i class="fa-solid fa-chevron-right"></i>
-            </a>
+            <!-- View Switcher (Cards on Mobile/Tablet vs Spreadsheet Table) -->
+            <div class="view-switcher-pill border">
+                <button type="button" 
+                        class="view-switcher-btn"
+                        :class="{'active': viewMode === 'cards'}"
+                        @click="setViewMode('cards')"
+                        title="Touch-friendly Card Grid View">
+                    <i class="bi bi-grid-fill me-1"></i>Cards
+                </button>
+                <button type="button" 
+                        class="view-switcher-btn"
+                        :class="{'active': viewMode === 'table'}"
+                        @click="setViewMode('table')"
+                        title="Dense Spreadsheet Table View">
+                    <i class="bi bi-table me-1"></i>Table
+                </button>
+            </div>
 
-            {% if not is_today %}
-            <a href="?date={% now 'Y-m-d' %}{% if selected_department != 'ALL' %}&department={{ selected_department }}{% endif %}" 
-               class="btn btn-sm btn-outline-primary rounded-pill px-2.5 py-0.5" style="font-size: 0.76rem;">
-                Today
-            </a>
-            {% endif %}
+            <div class="d-flex align-items-center gap-1.5 ms-auto ms-lg-0">
+                <!-- Lock / Finalize Day Toggle Button -->
+                {% if not is_payroll_finalized %}
+                <button type="button"
+                        class="btn btn-sm rounded-pill px-2.5 px-md-3 py-1 fw-semibold d-inline-flex align-items-center gap-1 shadow-xs"
+                        :class="isLocked ? 'btn-outline-warning' : 'btn-lock-toggle'"
+                        @click="toggleLock()"
+                        :disabled="isTogglingLock"
+                        title="Lock/unlock muster roll">
+                    <i class="bi" :class="isLocked ? 'bi-unlock-fill text-warning' : 'bi-lock-fill text-secondary'" x-show="!isTogglingLock"></i>
+                    <span class="spinner-border spinner-border-sm" x-show="isTogglingLock" style="width: 0.8rem; height: 0.8rem;"></span>
+                    <span class="d-none d-sm-inline" x-text="isLocked ? 'Unlock Day' : 'Lock Day'"></span>
+                </button>
+                {% endif %}
 
-            <!-- Batch Action Button -->
-            <button type="button" 
-                    class="btn btn-sm btn-success rounded-pill px-3 py-1 fw-semibold d-inline-flex align-items-center gap-1 shadow-xs"
-                    @click="markAllPresent()"
-                    :disabled="isBatchMarking">
-                <i class="fa-solid fa-check-double" x-show="!isBatchMarking"></i>
-                <span class="spinner-border spinner-border-sm" x-show="isBatchMarking" style="width: 0.8rem; height: 0.8rem;"></span>
-                <span>Mark All Present</span>
-            </button>
+                <!-- Bulk Operations Dropdown -->
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-primary rounded-pill px-2.5 px-md-3 py-1 fw-semibold d-inline-flex align-items-center gap-1 shadow-xs dropdown-toggle" 
+                            type="button" 
+                            data-bs-toggle="dropdown" 
+                            aria-expanded="false"
+                            :disabled="isLocked || isBatchMarking">
+                        <i class="bi bi-lightning-charge-fill"></i>
+                        <span class="d-none d-sm-inline">Bulk Actions</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0" style="font-size: 0.84rem; min-width: 250px;">
+                        <li>
+                            <h6 class="dropdown-header text-uppercase text-muted" style="font-size: 0.7rem;">Quick Crew Marking</h6>
+                        </li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="javascript:void(0)" @click="markAllPresent(false)">
+                                <i class="bi bi-check2-all text-success fs-6"></i>
+                                <div>
+                                    <div class="fw-semibold">Mark All Present</div>
+                                    <div class="text-muted small" style="font-size: 0.72rem;">Sets status to Present for active crew</div>
+                                </div>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="javascript:void(0)" @click="markAllPresent(true)">
+                                <i class="bi bi-clock-history text-primary fs-6"></i>
+                                <div>
+                                    <div class="fw-semibold">Mark All Present + Shift Times</div>
+                                    <div class="text-muted small" style="font-size: 0.72rem;">Pre-fills standard shift In &amp; Out hours</div>
+                                </div>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="javascript:void(0)" @click="runBulkAction('mark_unmarked_absent')">
+                                <i class="bi bi-person-x-fill text-danger fs-6"></i>
+                                <div>
+                                    <div class="fw-semibold">Mark Unmarked as Absent</div>
+                                    <div class="text-muted small" style="font-size: 0.72rem;">Sets Absent for all unmarked staff</div>
+                                </div>
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider my-1"></li>
+                        <li>
+                            <h6 class="dropdown-header text-uppercase text-muted" style="font-size: 0.7rem;">Time &amp; Overtime</h6>
+                        </li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="javascript:void(0)" @click="runBulkAction('fill_shift_timings')">
+                                <i class="bi bi-box-arrow-in-right text-info fs-6"></i>
+                                <div>
+                                    <div class="fw-semibold">Fill Shift Hours for Present</div>
+                                    <div class="text-muted small" style="font-size: 0.72rem;">Applies shift start/end times</div>
+                                </div>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center gap-2 py-2" href="javascript:void(0)" @click="runBulkAction('recalculate_all_ot')">
+                                <i class="bi bi-stopwatch text-warning fs-6"></i>
+                                <div>
+                                    <div class="fw-semibold">Auto-Calculate All Overtime</div>
+                                    <div class="text-muted small" style="font-size: 0.72rem;">Computes OT from In/Out vs Shift hrs</div>
+                                </div>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
         </div>
     </div>
 
     <!-- Live KPI Summary Counters -->
-    <div class="row g-3 mb-4">
+    <div class="row g-2 g-md-3 mb-3 mb-md-4">
         <!-- Present -->
-        <div class="col-6 col-md-4 col-xl-2">
-            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid var(--ui-green) !important;">
+        <div class="col-4 col-sm-4 col-md-4 col-xl-2">
+            <div class="card border-0 shadow-sm p-2 p-md-3 h-100 kpi-card" style="border-radius: 10px; border-left: 3.5px solid #10b981 !important;">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
-                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem; letter-spacing: 0;">Present (P)</div>
-                        <div class="h3 fw-bold text-success mb-0 mt-1 font-mono" x-text="metrics.present">{{ present_count }}</div>
+                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.65rem;">Present</div>
+                        <div class="h4 fw-bold text-success mb-0 mt-0.5" x-text="metrics.present">{{ present_count }}</div>
                     </div>
-                    <div class="rounded-circle p-2" style="background: rgba(16,185,129,0.12); color: var(--ui-green-text);">
-                        <i class="fa-solid fa-user-check fs-5"></i>
+                    <div class="rounded-circle p-1.5 p-md-2 bg-success-subtle text-success d-none d-sm-block">
+                        <i class="bi bi-person-check-fill fs-6 fs-md-5"></i>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Absent -->
-        <div class="col-6 col-md-4 col-xl-2">
-            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid var(--ui-red) !important;">
+        <div class="col-4 col-sm-4 col-md-4 col-xl-2">
+            <div class="card border-0 shadow-sm p-2 p-md-3 h-100 kpi-card" style="border-radius: 10px; border-left: 3.5px solid #ef4444 !important;">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
-                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem; letter-spacing: 0;">Absent (A)</div>
-                        <div class="h3 fw-bold text-danger mb-0 mt-1 font-mono" x-text="metrics.absent">{{ absent_count }}</div>
+                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.65rem;">Absent</div>
+                        <div class="h4 fw-bold text-danger mb-0 mt-0.5" x-text="metrics.absent">{{ absent_count }}</div>
                     </div>
-                    <div class="rounded-circle p-2" style="background: rgba(239,68,68,0.12); color: var(--ui-red-text);">
-                        <i class="fa-solid fa-user-xmark fs-5"></i>
+                    <div class="rounded-circle p-1.5 p-md-2 bg-danger-subtle text-danger d-none d-sm-block">
+                        <i class="bi bi-person-x-fill fs-6 fs-md-5"></i>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Half Day -->
-        <div class="col-6 col-md-4 col-xl-2">
-            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid var(--ui-orange) !important;">
+        <div class="col-4 col-sm-4 col-md-4 col-xl-2">
+            <div class="card border-0 shadow-sm p-2 p-md-3 h-100 kpi-card" style="border-radius: 10px; border-left: 3.5px solid #f59e0b !important;">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
-                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem; letter-spacing: 0;">Half Day (HD)</div>
-                        <div class="h3 fw-bold text-warning mb-0 mt-1 font-mono" x-text="metrics.half_day">{{ half_day_count }}</div>
+                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.65rem;">Half Day</div>
+                        <div class="h4 fw-bold text-warning mb-0 mt-0.5" x-text="metrics.half_day">{{ half_day_count }}</div>
                     </div>
-                    <div class="rounded-circle p-2" style="background: rgba(245,158,11,0.14); color: var(--ui-orange-text);">
-                        <i class="fa-solid fa-clock-half-empty fs-5"></i>
+                    <div class="rounded-circle p-1.5 p-md-2 bg-warning-subtle text-warning d-none d-sm-block">
+                        <i class="bi bi-clock-history fs-6 fs-md-5"></i>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Paid Leave -->
-        <div class="col-6 col-md-4 col-xl-2">
-            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid var(--ui-accent) !important;">
+        <!-- Leaves & Offs -->
+        <div class="col-4 col-sm-4 col-md-4 col-xl-2">
+            <div class="card border-0 shadow-sm p-2 p-md-3 h-100 kpi-card" style="border-radius: 10px; border-left: 3.5px solid #8b5cf6 !important;">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
-                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem; letter-spacing: 0;">Leaves (PL)</div>
-                        <div class="h3 fw-bold text-primary mb-0 mt-1 font-mono" x-text="metrics.leave">{{ leave_count }}</div>
-                    </div>
-                    <div class="rounded-circle p-2" style="background: rgba(59,130,246,0.12); color: var(--ui-accent-text);">
-                        <i class="fa-solid fa-plane-departure fs-5"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Overtime Hours -->
-        <div class="col-6 col-md-4 col-xl-2">
-            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid var(--ui-accent) !important;">
-                <div class="d-flex align-items-center justify-content-between">
-                    <div>
-                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem; letter-spacing: 0;">OT Logged</div>
-                        <div class="h3 fw-bold mb-0 mt-1 font-mono" style="color: var(--ui-accent-text);" x-text="metrics.total_ot + ' hrs'">{{ total_ot_hours_today }} hrs</div>
-                    </div>
-                    <div class="rounded-circle p-2" style="background: rgba(var(--ui-accent-rgb),0.12); color: var(--ui-accent-text);">
-                        <i class="fa-solid fa-bolt fs-5"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Completion Meter -->
-        <div class="col-6 col-md-4 col-xl-2">
-            <div class="card border-0 shadow-sm p-3 h-100 bg-white" style="border-radius: 12px; border-left: 4px solid #64748b !important;">
-                <div class="d-flex align-items-center justify-content-between">
-                    <div>
-                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.7rem; letter-spacing: 0;">Turnout / Total</div>
-                        <div class="h3 fw-bold text-secondary mb-0 mt-1 font-mono">
-                            <span x-text="metrics.marked">{{ marked_count }}</span> / <span x-text="metrics.total_staff">{{ total_active_staff }}</span>
+                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.65rem;">Off / Leave</div>
+                        <div class="h4 fw-bold mb-0 mt-0.5" style="color: #8b5cf6;" x-text="metrics.leave + metrics.weekly_off">
+                            {{ leave_count|add:weekly_off_count }}
                         </div>
                     </div>
-                    <div class="rounded-circle p-2 bg-light text-secondary">
-                        <i class="fa-solid fa-chart-pie fs-5"></i>
+                    <div class="rounded-circle p-1.5 p-md-2 d-none d-sm-block" style="background: #f5f3ff; color: #8b5cf6;">
+                        <i class="bi bi-cup-hot-fill fs-6 fs-md-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- OT Hours -->
+        <div class="col-4 col-sm-4 col-md-4 col-xl-2">
+            <div class="card border-0 shadow-sm p-2 p-md-3 h-100 kpi-card" style="border-radius: 10px; border-left: 3.5px solid #06b6d4 !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.65rem;">OT Logged</div>
+                        <div class="h4 fw-bold text-info mb-0 mt-0.5" x-text="metrics.total_ot + 'h'">{{ total_ot_hours_today }}h</div>
+                    </div>
+                    <div class="rounded-circle p-1.5 p-md-2 bg-info-subtle text-info d-none d-sm-block">
+                        <i class="bi bi-stopwatch-fill fs-6 fs-md-5"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendance Completion Progress -->
+        <div class="col-4 col-sm-4 col-md-4 col-xl-2">
+            <div class="card border-0 shadow-sm p-2 p-md-3 h-100 kpi-card" style="border-radius: 10px; border-left: 3.5px solid #3b82f6 !important;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="w-100">
+                        <div class="text-muted text-uppercase fw-semibold" style="font-size: 0.65rem;">Progress</div>
+                        <div class="h5 h4-md fw-bold text-primary mb-1 mt-0.5">
+                            <span x-text="metrics.marked">{{ marked_count }}</span>/<span x-text="metrics.total_staff">{{ total_active_staff }}</span>
+                        </div>
+                        <div class="progress" style="height: 3px;">
+                            <div class="progress-bar bg-primary" role="progressbar" :style="'width: ' + completionPercent() + '%'"></div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Department Filter Bar & Search -->
-    <div class="card border-0 shadow-sm mb-4 bg-white" style="border-radius: 12px;">
-        <div class="card-body p-2 p-md-3">
-            <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2">
-                <!-- Department Tabs -->
-                <div class="d-flex align-items-center gap-1.5 flex-wrap">
-                    <a href="?date={{ selected_date_str }}&department=ALL{% if search_query %}&q={{ search_query }}{% endif %}" 
-                       class="btn btn-sm {% if selected_department == 'ALL' %}btn-primary text-white{% else %}btn-light text-dark{% endif %} rounded-pill px-3 py-1 font-weight-600" style="font-size: 0.8rem;">
-                        All Departments ({{ total_active_staff }})
-                    </a>
-                    {% for d in dept_counts %}
-                    <a href="?date={{ selected_date_str }}&department={{ d.code }}{% if search_query %}&q={{ search_query }}{% endif %}" 
-                       class="btn btn-sm {% if selected_department == d.code %}btn-primary text-white{% else %}btn-light text-dark{% endif %} rounded-pill px-3 py-1 font-weight-600" style="font-size: 0.8rem;">
-                        {{ d.label }} ({{ d.total }})
-                    </a>
-                    {% endfor %}
-                </div>
+    <!-- Department Swipeable Chips Bar & Search Bar -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-stretch align-items-md-center gap-2 mb-3">
+        <!-- Swipeable Department Pills (Horizontal touch scrolling on mobile) -->
+        <div class="scroll-container-touch d-flex align-items-center gap-1.5 py-1">
+            <button type="button"
+                    class="btn btn-sm rounded-pill px-3 py-1 fw-semibold text-nowrap flex-shrink-0" 
+                    :class="selectedDepartment === 'ALL' ? 'btn-dept-active' : 'btn-dept-inactive'"
+                    @click="setDepartment('ALL')" 
+                    style="font-size: 0.78rem;">
+                All ({{ total_active_staff }})
+            </button>
+            {% for d in dept_counts %}
+            <button type="button"
+                    class="btn btn-sm rounded-pill px-3 py-1 fw-semibold text-nowrap flex-shrink-0" 
+                    :class="selectedDepartment === '{{ d.code }}' ? 'btn-dept-active' : 'btn-dept-inactive'"
+                    @click="setDepartment('{{ d.code }}')" 
+                    style="font-size: 0.78rem;">
+                {{ d.label }} ({{ d.total }})
+            </button>
+            {% endfor %}
+        </div>
 
-                <!-- Search Input -->
-                <form method="get" class="d-flex align-items-center gap-1.5 w-100 w-md-auto">
-                    <input type="hidden" name="date" value="{{ selected_date_str }}">
-                    <input type="hidden" name="department" value="{{ selected_department }}">
-                    <div class="input-group input-group-sm">
-                        <span class="input-group-text bg-light border-end-0"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
-                        <input type="text" name="q" class="form-control form-control-sm border-start-0" 
-                               placeholder="Search staff, code..." value="{{ search_query }}">
-                        {% if search_query %}
-                        <a href="?date={{ selected_date_str }}&department={{ selected_department }}" class="btn btn-sm btn-outline-secondary">
-                            <i class="fa-solid fa-xmark"></i>
-                        </a>
-                        {% endif %}
-                    </div>
-                </form>
+        <!-- Real-Time Client Search & Add Staff -->
+        <div class="d-flex align-items-center gap-2">
+            <div class="input-group input-group-sm flex-grow-1 input-themed-group" style="min-width: 180px;">
+                <span class="input-group-text border-end-0"><i class="bi bi-search text-muted"></i></span>
+                <input type="text" 
+                       x-model="searchQuery" 
+                       class="form-control border-start-0" 
+                       placeholder="Search name, ID, role...">
+                <button class="btn border-start-0" type="button" x-show="searchQuery" @click="searchQuery = ''">
+                    <i class="bi bi-x"></i>
+                </button>
             </div>
+
+            <a href="{% url 'hotel_admin:ground_staff_create' restaurant_slug=rslug %}" class="btn btn-sm btn-primary rounded-pill px-2.5 px-sm-3 text-nowrap d-inline-flex align-items-center gap-1">
+                <i class="bi bi-plus-lg"></i>
+                <span class="d-none d-sm-inline">Add Staff</span>
+            </a>
         </div>
     </div>
 
-    <!-- Muster Roll Attendance Spreadsheet Table -->
-    <div class="card border-0 shadow-sm bg-white" style="border-radius: 12px; overflow: hidden;">
-        <div class="table-responsive">
-            <table class="table table-hover muster-table mb-0 align-middle">
-                <thead>
-                    <tr>
-                        <th style="width: 50px;" class="text-center">#</th>
-                        <th style="min-width: 200px;">Staff Member</th>
-                        <th style="width: 140px;">Department</th>
-                        <th style="width: 170px;">Status</th>
-                        <th style="width: 130px;">Shift Allocation</th>
-                        <th style="width: 160px;">Check-In / Out</th>
-                        <th style="width: 100px;">OT Hours</th>
-                        <th style="width: 110px;">Penalty / Fine</th>
-                        <th style="min-width: 180px;">Manager Notes</th>
-                        <th style="width: 60px;" class="text-center">Sync</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in grid_rows %}
-                    <tr class="muster-row" 
-                        x-data="rowItem({
-                            staffId: {{ row.staff.id }},
-                            name: '{{ row.staff.name|escapejs }}',
-                            date: '{{ selected_date_str }}',
-                            status: '{{ row.status|default:'' }}',
-                            shiftType: '{{ row.shift_type|default:'GENERAL' }}',
-                            checkIn: '{{ row.check_in|default:'' }}',
-                            checkOut: '{{ row.check_out|default:'' }}',
-                            otHours: {{ row.ot_hours|default:0.0 }},
-                            penalty: {{ row.penalty_amount|default:0.0 }},
-                            notes: '{{ row.notes|default:''|escapejs }}'
-                        })">
-                        
-                        <!-- Row index -->
-                        <td class="text-center text-muted font-mono" style="font-size: 0.78rem;">
-                            {{ forloop.counter }}
-                        </td>
+    <!-- ============================================================== -->
+    <!-- VIEW MODE 1: MOBILE & TABLET TOUCH CARDS VIEW                  -->
+    <!-- ============================================================== -->
+    <div x-show="viewMode === 'cards'" x-cloak>
+        <div class="row g-2 g-md-3">
+            {% for row in grid_rows %}
+            <div class="col-12 col-md-6 col-xl-4"
+                 x-data="rowItem({
+                     staffId: {{ row.staff.id }},
+                     name: '{{ row.staff.name|escapejs }}',
+                     employeeId: '{{ row.staff.employee_id|escapejs }}',
+                     department: '{{ row.staff.department|escapejs }}',
+                     designation: '{{ row.staff.designation|escapejs }}',
+                     date: '{{ selected_date_str }}',
+                     status: '{{ row.status|default:"" }}',
+                     shiftType: '{{ row.shift_type|default:row.staff.default_shift }}',
+                     checkIn: '{{ row.check_in }}',
+                     checkOut: '{{ row.check_out }}',
+                     standardHours: {{ row.standard_hours|default:9.0 }},
+                     hoursWorked: {{ row.hours_worked|default:0.0 }},
+                     suggestedOt: {{ row.suggested_ot|default:0.0 }},
+                     shiftVariance: {{ row.shift_variance|default:0.0 }},
+                     isLate: {{ row.is_late|yesno:"true,false" }},
+                     otHours: {{ row.ot_hours|default:0.0 }},
+                     penalty: {{ row.penalty_amount|default:0.0 }},
+                     notes: '{{ row.notes|escapejs }}',
+                     markedBy: '{{ row.marked_by_name|escapejs }}',
+                     updatedAt: '{{ row.updated_at_str|escapejs }}',
+                     defaultShiftIn: '{{ row.default_shift_in }}',
+                     defaultShiftOut: '{{ row.default_shift_out }}'
+                 })"
+                 x-show="matchesFilter()"
+                 :key="'card-' + staffId">
 
-                        <!-- Staff Avatar & Identity -->
-                        <td>
-                            <div class="d-flex align-items-center gap-2">
-                                <div class="avatar-circle">
-                                    {{ row.staff.name|slice:":1"|upper }}
+                <div class="muster-card" :class="{'card-locked': isLocked}">
+                    <!-- Card Header: Profile Info & Department -->
+                    <div class="d-flex align-items-start justify-content-between gap-2 mb-2 pb-2 border-bottom">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="avatar-circle">
+                                {{ row.staff.name|slice:":1"|upper }}
+                            </div>
+                            <div class="lh-sm">
+                                <div class="fw-bold staff-name text-truncate" style="max-width: 170px;" x-text="name"></div>
+                                <div class="staff-subtext d-flex align-items-center gap-1" style="font-size: 0.74rem;">
+                                    <span class="badge staff-badge px-1 py-0.5 rounded" x-text="employeeId"></span>
+                                    <span class="text-truncate" style="max-width: 120px;" x-text="designation"></span>
                                 </div>
-                                <div class="overflow-hidden">
-                                    <div class="fw-bold text-dark text-truncate" style="font-size: 0.88rem;">{{ row.staff.name }}</div>
-                                    <div class="text-muted d-flex align-items-center gap-1 font-mono" style="font-size: 0.74rem;">
-                                        <span>{{ row.staff.employee_id }}</span>
-                                        <span>•</span>
-                                        <span>{{ row.staff.designation|default:'Attendant' }}</span>
+                            </div>
+                        </div>
+
+                        <div class="d-flex flex-column align-items-end gap-1">
+                            <div class="d-flex align-items-center gap-1">
+                                <span class="badge badge-dept badge-dept-{{ row.staff.department|lower }}">
+                                    {{ row.staff.get_department_display }}
+                                </span>
+                                <!-- Save indicator -->
+                                <span class="save-indicator" :class="saveState" :title="saveTooltip">
+                                    <i class="bi bi-check-lg" x-show="saveState === 'saved'"></i>
+                                    <span class="spinner-border spinner-border-sm" x-show="saveState === 'saving'" style="width: 0.75rem; height: 0.75rem;"></span>
+                                    <i class="bi bi-exclamation-triangle" x-show="saveState === 'error'"></i>
+                                    <i class="bi bi-lock-fill" x-show="saveState === 'locked'"></i>
+                                    <i class="bi bi-circle text-muted" style="font-size: 0.55rem;" x-show="saveState === 'idle'"></i>
+                                </span>
+                            </div>
+                            <div class="text-muted small" style="font-size: 0.7rem;">
+                                ₹{{ row.staff.monthly_base_salary|floatformat:0 }}/mo · {{ row.staff.standard_shift_hours }}h shift
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Shift Selector Row -->
+                    <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                        <span class="text-muted fw-semibold" style="font-size: 0.72rem;">Shift Worked:</span>
+                        <select class="form-select form-select-sm shift-select" 
+                                style="width: auto; max-width: 240px;"
+                                x-model="shiftType" 
+                                :disabled="isLocked"
+                                @change="onShiftChange()">
+                            {% for sh_code, sh_label in shift_types %}
+                            <option value="{{ sh_code }}">{{ sh_label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Touch-Friendly 1-Click Status Segmented Control -->
+                    <div class="mb-2">
+                        <div class="card-status-btn-group">
+                            <button type="button" 
+                                    class="card-status-btn" 
+                                    :class="{'active status-PRESENT': status === 'PRESENT'}"
+                                    :disabled="isLocked"
+                                    @click="setStatus('PRESENT')">
+                                Present
+                            </button>
+                            <button type="button" 
+                                    class="card-status-btn" 
+                                    :class="{'active status-ABSENT': status === 'ABSENT'}"
+                                    :disabled="isLocked"
+                                    @click="setStatus('ABSENT')">
+                                Absent
+                            </button>
+                            <button type="button" 
+                                    class="card-status-btn" 
+                                    :class="{'active status-HALF_DAY': status === 'HALF_DAY'}"
+                                    :disabled="isLocked"
+                                    @click="setStatus('HALF_DAY')">
+                                Half Day
+                            </button>
+                            <button type="button" 
+                                    class="card-status-btn" 
+                                    :class="{'active status-WEEKLY_OFF': status === 'WEEKLY_OFF'}"
+                                    :disabled="isLocked"
+                                    @click="setStatus('WEEKLY_OFF')">
+                                Off
+                            </button>
+                            <button type="button" 
+                                    class="card-status-btn" 
+                                    :class="{'active status-PAID_LEAVE': status === 'PAID_LEAVE'}"
+                                    :disabled="isLocked"
+                                    @click="setStatus('PAID_LEAVE')">
+                                Leave
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- In/Out Time & Working Hours Calculation Box -->
+                    <div class="p-2 rounded-3 time-calc-box mb-2">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-1.5">
+                            <!-- In Time -->
+                            <div class="d-flex align-items-center gap-1">
+                                <span class="badge time-badge px-1.5 py-1 fw-bold">IN</span>
+                                <input type="time" 
+                                       class="form-control form-control-sm p-1" 
+                                       style="width: 82px; font-size: 0.78rem;" 
+                                       x-model="checkIn" 
+                                       :disabled="isLocked"
+                                       @change="onTimeChange()">
+                                <button type="button" 
+                                        class="btn-time-action" 
+                                        :disabled="isLocked"
+                                        @click="setInNow()" 
+                                        title="Clock In Now">
+                                    Now
+                                </button>
+                            </div>
+
+                            <!-- Out Time -->
+                            <div class="d-flex align-items-center gap-1">
+                                <span class="badge time-badge px-1.5 py-1 fw-bold">OUT</span>
+                                <input type="time" 
+                                       class="form-control form-control-sm p-1" 
+                                       style="width: 82px; font-size: 0.78rem;" 
+                                       x-model="checkOut" 
+                                       :disabled="isLocked"
+                                       @change="onTimeChange()">
+                                <button type="button" 
+                                        class="btn-time-action" 
+                                        :disabled="isLocked"
+                                        @click="setOutNow()" 
+                                        title="Clock Out Now">
+                                    Now
+                                </button>
+                                <button type="button" 
+                                        class="btn-time-action text-primary" 
+                                        :disabled="isLocked"
+                                        @click="fillShiftTimes(true)" 
+                                        title="Fill standard shift hours">
+                                    <i class="bi bi-lightning-fill"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Live Calculated Hours & Overtime Banner -->
+                        <div class="d-flex align-items-center justify-content-between pt-1 border-top" style="border-color: var(--ui-separator) !important;">
+                            <div class="hours-pill">
+                                <i class="bi bi-clock-history text-secondary"></i>
+                                <span>Duration: <strong x-text="hoursWorked > 0 ? (hoursWorked + ' hrs') : '--'"></strong></span>
+                            </div>
+
+                            <div>
+                                <template x-if="suggestedOt > 0">
+                                    <span class="variance-badge variance-ot">
+                                        +<span x-text="suggestedOt"></span>h OT
+                                    </span>
+                                </template>
+                                <template x-if="hoursWorked > 0 && suggestedOt <= 0 && shiftVariance >= 0">
+                                    <span class="variance-badge variance-met">
+                                        <i class="bi bi-check-lg"></i>Shift Met
+                                    </span>
+                                </template>
+                                <template x-if="hoursWorked > 0 && shiftVariance < 0">
+                                    <span class="variance-badge variance-short">
+                                        <span x-text="shiftVariance"></span>h Short
+                                    </span>
+                                </template>
+                                <template x-if="isLate">
+                                    <span class="variance-badge variance-late ms-1">Late</span>
+                                </template>
+                                <template x-if="otHours !== suggestedOt && !isLocked && hoursWorked > 0">
+                                    <button type="button" 
+                                            class="btn btn-xs btn-outline-info p-0 px-1.5 border-0 fw-bold ms-1" 
+                                            style="font-size: 0.68rem;"
+                                            @click="syncOt()" 
+                                            :title="'Sync overtime to calculated ' + suggestedOt + 'h'">
+                                        ⚡Sync (<span x-text="suggestedOt"></span>h)
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- OT, Penalty & Notes Row -->
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label text-muted fw-semibold mb-0" style="font-size: 0.68rem;">Overtime (hrs)</label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" 
+                                       step="0.5" 
+                                       min="0" 
+                                       max="24" 
+                                       class="form-control form-control-sm text-center fw-bold text-info no-spinners" 
+                                       style="font-size: 0.85rem;"
+                                       x-model.number="otHours" 
+                                       :disabled="isLocked"
+                                       @change="autoSave()">
+                                <span class="input-group-text px-2 text-muted fw-semibold" style="font-size: 0.72rem;">hrs</span>
+                            </div>
+                        </div>
+
+                        <div class="col-6">
+                            <label class="form-label text-muted fw-semibold mb-0" style="font-size: 0.68rem;">Penalty (₹)</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text px-1 text-muted" style="font-size: 0.7rem;">₹</span>
+                                <input type="number" 
+                                       step="50" 
+                                       min="0" 
+                                       class="form-control form-control-sm text-center fw-semibold text-danger no-spinners" 
+                                       style="border-radius: 6px; font-size: 0.82rem;"
+                                       x-model.number="penalty" 
+                                       :disabled="isLocked"
+                                       @change="autoSave()">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notes Input & Audit Accountability -->
+                    <div>
+                        <input type="text" 
+                               class="form-control form-control-sm" 
+                               style="font-size: 0.76rem; border-radius: 6px;" 
+                               placeholder="Duty notes / remarks..." 
+                               x-model="notes" 
+                               :disabled="isLocked"
+                               @blur="autoSave()">
+                        <div class="audit-subtext d-flex align-items-center justify-content-between mt-1">
+                            <span><i class="bi bi-person-check me-1"></i><span x-text="markedBy ? ('By ' + markedBy) : 'Unmarked'"></span></span>
+                            <span x-show="updatedAt" x-text="updatedAt"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12 text-center py-5">
+                <div class="text-muted">
+                    <i class="bi bi-people fs-1 text-secondary opacity-50 mb-2"></i>
+                    <p class="mb-2">No hotel staff members found matching this filter.</p>
+                    <a href="{% url 'hotel_admin:ground_staff_create' restaurant_slug=rslug %}" class="btn btn-sm btn-primary rounded-pill px-3">
+                        <i class="bi bi-person-plus-fill me-1"></i>Add Staff Member
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- VIEW MODE 2: DESKTOP & TABLE SPREADSHEET GRID VIEW             -->
+    <!-- ============================================================== -->
+    <div x-show="viewMode === 'table'" x-cloak>
+        <div class="muster-table-container card border-0 shadow-sm">
+            <div class="table-responsive">
+                <table class="table muster-table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th style="min-width: 200px;">Staff Member</th>
+                            <th style="min-width: 235px;">Department &amp; Shift</th>
+                            <th style="min-width: 190px;">Attendance Status</th>
+                            <th style="min-width: 170px;">In / Out Time</th>
+                            <th style="min-width: 140px;">Working Hours</th>
+                            <th style="min-width: 125px; text-align: center;">OT Hours</th>
+                            <th style="min-width: 110px; text-align: center;">Penalty (₹)</th>
+                            <th>Duty Notes / Audit</th>
+                            <th style="width: 45px; text-align: center;">Save</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in grid_rows %}
+                        <tr class="muster-row" 
+                            :class="{'row-locked': isLocked}"
+                            x-data="rowItem({
+                                staffId: {{ row.staff.id }},
+                                name: '{{ row.staff.name|escapejs }}',
+                                employeeId: '{{ row.staff.employee_id|escapejs }}',
+                                department: '{{ row.staff.department|escapejs }}',
+                                designation: '{{ row.staff.designation|escapejs }}',
+                                date: '{{ selected_date_str }}',
+                                status: '{{ row.status|default:"" }}',
+                                shiftType: '{{ row.shift_type|default:row.staff.default_shift }}',
+                                checkIn: '{{ row.check_in }}',
+                                checkOut: '{{ row.check_out }}',
+                                standardHours: {{ row.standard_hours|default:9.0 }},
+                                hoursWorked: {{ row.hours_worked|default:0.0 }},
+                                suggestedOt: {{ row.suggested_ot|default:0.0 }},
+                                shiftVariance: {{ row.shift_variance|default:0.0 }},
+                                isLate: {{ row.is_late|yesno:"true,false" }},
+                                otHours: {{ row.ot_hours|default:0.0 }},
+                                penalty: {{ row.penalty_amount|default:0.0 }},
+                                notes: '{{ row.notes|escapejs }}',
+                                markedBy: '{{ row.marked_by_name|escapejs }}',
+                                updatedAt: '{{ row.updated_at_str|escapejs }}',
+                                defaultShiftIn: '{{ row.default_shift_in }}',
+                                defaultShiftOut: '{{ row.default_shift_out }}'
+                            })"
+                            x-show="matchesFilter()"
+                            :key="'table-' + staffId">
+                            
+                            <!-- Staff Profile Column -->
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="avatar-circle">
+                                        {{ row.staff.name|slice:":1"|upper }}
+                                    </div>
+                                    <div class="lh-sm">
+                                        <div class="fw-bold staff-name text-truncate" style="max-width: 155px;" x-text="name"></div>
+                                        <div class="staff-subtext d-flex align-items-center gap-1" style="font-size: 0.72rem;">
+                                            <span class="badge staff-badge px-1 py-0.5 rounded" x-text="employeeId"></span>
+                                            <span class="text-truncate" style="max-width: 100px;" x-text="designation"></span>
+                                        </div>
+                                        <div class="staff-subtext small" style="font-size: 0.7rem;">
+                                            ₹{{ row.staff.monthly_base_salary|floatformat:0 }}/mo · {{ row.staff.standard_shift_hours }}h
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        </td>
+                            </td>
 
-                        <!-- Department Badge -->
-                        <td>
-                            {% if row.staff.department == 'HOUSEKEEPING' %}
-                            <span class="badge-dept badge-dept-housekeeping"><i class="fa-solid fa-broom me-1"></i>Housekeeping</span>
-                            {% elif row.staff.department == 'FRONT_DESK' %}
-                            <span class="badge-dept badge-dept-frontdesk"><i class="fa-solid fa-bell-concierge me-1"></i>Front Desk</span>
-                            {% elif row.staff.department == 'SECURITY' %}
-                            <span class="badge-dept badge-dept-security"><i class="fa-solid fa-shield-halved me-1"></i>Security</span>
-                            {% elif row.staff.department == 'MANAGEMENT' %}
-                            <span class="badge-dept badge-dept-general"><i class="fa-solid fa-screwdriver-wrench me-1"></i>Maintenance</span>
-                            {% else %}
-                            <span class="badge-dept badge-dept-general">{{ row.staff.get_department_display }}</span>
-                            {% endif %}
-                        </td>
+                            <!-- Department & Shift Type (Ample width & clean margin before chevron) -->
+                            <td>
+                                <div>
+                                    <span class="badge badge-dept badge-dept-{{ row.staff.department|lower }} mb-1">
+                                        {{ row.staff.get_department_display }}
+                                    </span>
+                                    <select class="form-select form-select-sm shift-select" 
+                                            x-model="shiftType" 
+                                            :disabled="isLocked"
+                                            @change="onShiftChange()">
+                                        {% for sh_code, sh_label in shift_types %}
+                                        <option value="{{ sh_code }}">{{ sh_label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </td>
 
-                        <!-- Attendance Status Pill Selector -->
-                        <td>
-                            <select class="form-select form-select-sm status-select" 
-                                    :class="'status-' + (status || 'UNMARKED')"
-                                    x-model="status" 
-                                    @change="autoSave()">
-                                <option value="" class="text-muted">-- Mark Status --</option>
-                                <option value="PRESENT">✔ Present (Full Day)</option>
-                                <option value="ABSENT">✖ Absent</option>
-                                <option value="HALF_DAY">◐ Half Day</option>
-                                <option value="PAID_LEAVE">★ Paid Leave</option>
-                                <option value="WEEKLY_OFF">☉ Weekly Off</option>
-                                <option value="UNPAID_LEAVE">⊘ Unpaid Leave</option>
-                            </select>
-                        </td>
+                            <!-- Attendance Status (1-Click Selector) -->
+                            <td>
+                                <div>
+                                    <div class="status-btn-group mb-1">
+                                        <button type="button" 
+                                                class="status-btn" 
+                                                :class="{'active status-PRESENT': status === 'PRESENT'}"
+                                                :disabled="isLocked"
+                                                @click="setStatus('PRESENT')"
+                                                title="Mark Present">
+                                            P
+                                        </button>
+                                        <button type="button" 
+                                                class="status-btn" 
+                                                :class="{'active status-ABSENT': status === 'ABSENT'}"
+                                                :disabled="isLocked"
+                                                @click="setStatus('ABSENT')"
+                                                title="Mark Absent">
+                                            A
+                                        </button>
+                                        <button type="button" 
+                                                class="status-btn" 
+                                                :class="{'active status-HALF_DAY': status === 'HALF_DAY'}"
+                                                :disabled="isLocked"
+                                                @click="setStatus('HALF_DAY')"
+                                                title="Mark Half Day">
+                                            HD
+                                        </button>
+                                        <button type="button" 
+                                                class="status-btn" 
+                                                :class="{'active status-WEEKLY_OFF': status === 'WEEKLY_OFF'}"
+                                                :disabled="isLocked"
+                                                @click="setStatus('WEEKLY_OFF')"
+                                                title="Mark Weekly Off">
+                                            WO
+                                        </button>
+                                        <button type="button" 
+                                                class="status-btn" 
+                                                :class="{'active status-PAID_LEAVE': status === 'PAID_LEAVE'}"
+                                                :disabled="isLocked"
+                                                @click="setStatus('PAID_LEAVE')"
+                                                title="Mark Paid Leave">
+                                            PL
+                                        </button>
+                                    </div>
 
-                        <!-- Shift Allocation -->
-                        <td>
-                            <select class="form-select form-select-sm border-0 bg-light" 
-                                    style="font-size: 0.8rem; font-weight: 500;"
-                                    x-model="shiftType" 
-                                    @change="autoSave()">
-                                {% for s_val, s_lbl in shift_types %}
-                                <option value="{{ s_val }}">{{ s_lbl }}</option>
-                                {% endfor %}
-                            </select>
-                        </td>
+                                    <select class="form-select form-select-sm py-0 px-1" 
+                                            style="font-size: 0.72rem; height: 22px; border-radius: 4px;"
+                                            x-model="status" 
+                                            :disabled="isLocked"
+                                            @change="autoSave()">
+                                        <option value="" disabled :selected="!status">-- Mark Status --</option>
+                                        {% for s_code, s_label in attendance_statuses %}
+                                        <option value="{{ s_code }}">{{ s_label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </td>
 
-                        <!-- In / Out Time -->
-                        <td>
-                            <div class="d-flex align-items-center gap-1">
-                                <input type="time" class="form-control form-control-sm text-center px-1 border-0 bg-light font-mono" 
-                                       style="width: 74px; font-size: 0.78rem;" 
-                                       placeholder="In" 
-                                       x-model="checkIn" 
-                                       @change="autoSave()">
-                                <span class="text-muted">-</span>
-                                <input type="time" class="form-control form-control-sm text-center px-1 border-0 bg-light font-mono" 
-                                       style="width: 74px; font-size: 0.78rem;" 
-                                       placeholder="Out" 
-                                       x-model="checkOut" 
-                                       @change="autoSave()">
-                            </div>
-                        </td>
+                            <!-- In / Out Time -->
+                            <td>
+                                <div class="d-flex flex-column gap-1">
+                                    <!-- In -->
+                                    <div class="d-flex align-items-center gap-1">
+                                        <span class="text-muted fw-bold" style="font-size: 0.68rem; width: 22px;">IN</span>
+                                        <input type="time" 
+                                               class="form-control form-control-sm p-1" 
+                                               style="font-size: 0.74rem; border-radius: 4px; width: 85px;"
+                                               x-model="checkIn" 
+                                               :disabled="isLocked"
+                                               @change="onTimeChange()">
+                                        <button type="button" 
+                                                class="btn-time-action" 
+                                                :disabled="isLocked"
+                                                @click="setInNow()" 
+                                                title="Clock In Now">
+                                            Now
+                                        </button>
+                                    </div>
 
-                        <!-- Overtime Hours -->
-                        <td>
-                            <div class="input-group input-group-sm">
-                                <input type="number" step="0.5" min="0" max="24" 
-                                       class="form-control form-control-sm text-center px-1 border-0 bg-light font-mono" 
-                                       style="font-size: 0.8rem;" 
-                                       x-model="otHours" 
-                                       @change="autoSave()">
-                                <span class="input-group-text border-0 bg-light text-muted px-1" style="font-size: 0.72rem;">hrs</span>
-                            </div>
-                        </td>
+                                    <!-- Out -->
+                                    <div class="d-flex align-items-center gap-1">
+                                        <span class="text-muted fw-bold" style="font-size: 0.68rem; width: 22px;">OUT</span>
+                                        <input type="time" 
+                                               class="form-control form-control-sm p-1" 
+                                               style="font-size: 0.74rem; border-radius: 4px; width: 85px;"
+                                               x-model="checkOut" 
+                                               :disabled="isLocked"
+                                               @change="onTimeChange()">
+                                        <button type="button" 
+                                                class="btn-time-action" 
+                                                :disabled="isLocked"
+                                                @click="setOutNow()" 
+                                                title="Clock Out Now">
+                                            Now
+                                        </button>
+                                        <button type="button" 
+                                                class="btn-time-action text-primary" 
+                                                :disabled="isLocked"
+                                                @click="fillShiftTimes(true)" 
+                                                title="Fill standard shift hours">
+                                            <i class="bi bi-lightning-fill"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </td>
 
-                        <!-- Penalty / Fine -->
-                        <td>
-                            <div class="input-group input-group-sm">
-                                <span class="input-group-text border-0 bg-light text-muted px-1" style="font-size: 0.72rem;">₹</span>
-                                <input type="number" step="10" min="0" 
-                                       class="form-control form-control-sm text-center px-1 border-0 bg-light font-mono" 
-                                       style="font-size: 0.8rem;" 
-                                       x-model="penalty" 
-                                       @change="autoSave()">
-                            </div>
-                        </td>
+                            <!-- Working Hours & Variance -->
+                            <td>
+                                <div>
+                                    <div class="hours-pill mb-1">
+                                        <i class="bi bi-clock-history text-secondary" style="font-size: 0.75rem;"></i>
+                                        <span x-text="hoursWorked > 0 ? (hoursWorked + 'h') : '--'"></span>
+                                    </div>
 
-                        <!-- Manager Notes -->
-                        <td>
-                            <input type="text" class="form-control form-control-sm border-0 bg-light" 
-                                   placeholder="Reason for late, shift swap, room tasks..." 
-                                   style="font-size: 0.78rem;" 
-                                   x-model="notes" 
-                                   @blur="autoSave()">
-                        </td>
+                                    <div class="d-flex flex-column gap-1">
+                                        <template x-if="suggestedOt > 0">
+                                            <span class="variance-badge variance-ot">
+                                                +<span x-text="suggestedOt"></span>h OT
+                                            </span>
+                                        </template>
+                                        <template x-if="hoursWorked > 0 && suggestedOt <= 0 && shiftVariance >= 0">
+                                            <span class="variance-badge variance-met">
+                                                <i class="bi bi-check-lg"></i>Shift Met
+                                            </span>
+                                        </template>
+                                        <template x-if="hoursWorked > 0 && shiftVariance < 0">
+                                            <span class="variance-badge variance-short">
+                                                <span x-text="shiftVariance"></span>h Short
+                                            </span>
+                                        </template>
+                                        <template x-if="isLate">
+                                            <span class="variance-badge variance-late">Late</span>
+                                        </template>
+                                        <template x-if="otHours !== suggestedOt && !isLocked && hoursWorked > 0">
+                                            <button type="button" 
+                                                    class="btn btn-xs btn-outline-info p-0 px-1 border-0 fw-bold" 
+                                                    style="font-size: 0.68rem;"
+                                                    @click="syncOt()" 
+                                                    :title="'Sync overtime to calculated ' + suggestedOt + 'h'">
+                                                ⚡Sync (<span x-text="suggestedOt"></span>h)
+                                            </button>
+                                        </template>
+                                        <template x-if="hoursWorked === 0">
+                                            <span class="text-muted" style="font-size: 0.7rem;">--</span>
+                                        </template>
+                                    </div>
+                                </div>
+                            </td>
 
-                        <!-- Live Sync Indicator -->
-                        <td class="text-center">
-                            <span class="save-indicator" 
-                                  :class="saveState" 
-                                  :title="saveTooltip">
-                                <i class="fa-solid fa-check" x-show="saveState === 'saved'"></i>
-                                <span class="spinner-border spinner-border-sm" x-show="saveState === 'saving'" style="width: 10px; height: 10px;"></span>
-                                <i class="fa-solid fa-circle-exclamation" x-show="saveState === 'error'"></i>
-                                <i class="fa-regular fa-circle text-muted" x-show="saveState === 'idle'" style="font-size: 0.6rem;"></i>
-                            </span>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="10" class="text-center py-5">
-                            <div class="d-flex flex-column align-items-center">
-                                <i class="fa-solid fa-users text-muted mb-2" style="font-size: 2.5rem;"></i>
-                                <h6 class="fw-bold text-dark">No ground staff found</h6>
-                                <p class="text-muted small mb-3">Add housekeeping and hotel operational staff to start tracking muster attendance.</p>
-                                <a href="{% url 'hotel_admin:ground_staff_create' restaurant_slug=rslug %}" class="btn btn-sm btn-primary rounded-pill px-3">
-                                    <i class="fa-solid fa-user-plus me-1"></i> Add Ground Staff Member
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                            <!-- OT Hours (Centered number, clean spacing, no spinner collision) -->
+                            <td class="text-center">
+                                <div class="input-group input-group-sm mx-auto" style="max-width: 110px;">
+                                    <input type="number" 
+                                           step="0.5" 
+                                           min="0" 
+                                           max="24" 
+                                           class="form-control form-control-sm text-center fw-bold text-info no-spinners" 
+                                           style="font-size: 0.85rem;"
+                                           x-model.number="otHours" 
+                                           :disabled="isLocked"
+                                           @change="autoSave()">
+                                    <span class="input-group-text px-2 text-muted fw-semibold" style="font-size: 0.72rem;">hrs</span>
+                                </div>
+                            </td>
+
+                            <!-- Penalty -->
+                            <td class="text-center">
+                                <div class="input-group input-group-sm mx-auto" style="max-width: 100px;">
+                                    <span class="input-group-text px-2 text-muted" style="font-size: 0.68rem;">₹</span>
+                                    <input type="number" 
+                                           step="50" 
+                                           min="0" 
+                                           class="form-control form-control-sm text-center fw-semibold text-danger no-spinners" 
+                                           style="font-size: 0.82rem;" 
+                                           x-model.number="penalty" 
+                                           :disabled="isLocked"
+                                           @change="autoSave()">
+                                </div>
+                            </td>
+
+                            <!-- Notes & Audit -->
+                            <td>
+                                <div>
+                                    <input type="text" 
+                                           class="form-control form-control-sm" 
+                                           style="font-size: 0.76rem; border-radius: 6px;" 
+                                           placeholder="Duty notes..." 
+                                           x-model="notes" 
+                                           :disabled="isLocked"
+                                           @blur="autoSave()">
+                                    <div class="audit-subtext text-truncate" style="max-width: 190px;">
+                                        <i class="bi bi-person-check me-1"></i><span x-text="markedBy ? ('By ' + markedBy) : 'Unmarked'"></span>
+                                        <span x-show="updatedAt" x-text="' · ' + updatedAt"></span>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <!-- Auto-Save Status -->
+                            <td class="text-center">
+                                <span class="save-indicator" :class="saveState" :title="saveTooltip">
+                                    <i class="bi bi-check-lg" x-show="saveState === 'saved'"></i>
+                                    <span class="spinner-border spinner-border-sm" x-show="saveState === 'saving'" style="width: 0.75rem; height: 0.75rem;"></span>
+                                    <i class="bi bi-exclamation-triangle" x-show="saveState === 'error'"></i>
+                                    <i class="bi bi-lock-fill" x-show="saveState === 'locked'"></i>
+                                    <i class="bi bi-circle text-muted" style="font-size: 0.55rem;" x-show="saveState === 'idle'"></i>
+                                </span>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center py-5">
+                                <div class="text-muted">
+                                    <i class="bi bi-people fs-1 text-secondary opacity-50 mb-2"></i>
+                                    <p class="mb-2">No hotel staff members found matching this filter.</p>
+                                    <a href="{% url 'hotel_admin:ground_staff_create' restaurant_slug=rslug %}" class="btn btn-sm btn-primary rounded-pill px-3">
+                                        <i class="bi bi-person-plus-fill me-1"></i>Add Staff Member
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
-        <div class="card-footer bg-white border-top py-2.5 px-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
-            <div class="text-muted small">
-                <i class="fa-solid fa-circle-info text-primary me-1"></i>
-                Auto-saves on input. Data directly feeds into the <strong>Hotel Monthly Payroll Engine</strong>.
-            </div>
-            <div>
-                <a href="{% url 'hotel_admin:payroll_dashboard' restaurant_slug=rslug %}" class="btn btn-sm btn-outline-primary rounded-pill px-3">
-                    <i class="fa-solid fa-arrow-right me-1"></i> Review Month's Payroll
-                </a>
-            </div>
+    </div>
+
+    <!-- Quick Footer Action Bar -->
+    <div class="d-flex justify-content-between align-items-center mt-3 text-muted small flex-wrap gap-2">
+        <div>
+            <i class="bi bi-shield-check text-success me-1"></i>Anti-tamper muster timekeeping: All changes are recorded with audit trails and auto-calculated OT. Data directly feeds into the Hotel Monthly Payroll Engine.
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" onclick="window.print()">
+                <i class="bi bi-printer me-1"></i>Print Muster Sheet
+            </button>
+            <a href="{% url 'hotel_admin:payroll_dashboard' restaurant_slug=rslug %}" class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                <i class="bi bi-calculator me-1"></i>Review Monthly Payroll
+            </a>
         </div>
     </div>
 </div>
+
+<!-- Safe Django JSON Configuration Block (100% Validated by Django json_script) -->
+{{ muster_config|json_script:"muster-config-data" }}
 {% endblock %}
 
 {% block extra_js %}
 <script>
+    function getMusterConfig() {
+        const el = document.getElementById('muster-config-data');
+        if (!el) return {};
+        try {
+            return JSON.parse(el.textContent || '{}');
+        } catch (e) {
+            return {};
+        }
+    }
+
     function musterRollApp() {
+        const config = getMusterConfig();
+        const metrics = config.metrics || {};
+        let initialView = localStorage.getItem('muster_view_mode');
+        if (!initialView) {
+            initialView = window.innerWidth < 992 ? 'cards' : 'table';
+        }
+
         return {
-            selectedDate: '{{ selected_date_str }}',
-            selectedDepartment: '{{ selected_department }}',
+            viewMode: initialView,
+            selectedDate: config.selectedDate || '',
+            selectedDepartment: config.selectedDepartment || 'ALL',
+            searchQuery: '',
+            isLocked: Boolean(config.isLocked),
+            lockReason: config.lockReason || '',
+            isPayrollFinalized: Boolean(config.isPayrollFinalized),
+            isTogglingLock: false,
             isBatchMarking: false,
+            shiftTimings: config.shiftTimings || {},
+            urls: config.urls || {},
             metrics: {
-                present: parseInt("{{ present_count|default:0 }}", 10),
-                absent: parseInt("{{ absent_count|default:0 }}", 10),
-                half_day: parseInt("{{ half_day_count|default:0 }}", 10),
-                leave: parseInt("{{ leave_count|default:0 }}", 10),
-                weekly_off: parseInt("{{ weekly_off_count|default:0 }}", 10),
-                total_ot: parseFloat("{{ total_ot_hours_today|default:0 }}"),
-                marked: parseInt("{{ marked_count|default:0 }}", 10),
-                total_staff: parseInt("{{ total_active_staff|default:0 }}", 10)
+                present: parseInt(metrics.present || 0, 10),
+                absent: parseInt(metrics.absent || 0, 10),
+                half_day: parseInt(metrics.half_day || 0, 10),
+                leave: parseInt(metrics.leave || 0, 10),
+                weekly_off: parseInt(metrics.weekly_off || 0, 10),
+                total_ot: parseFloat(metrics.total_ot || 0),
+                marked: parseInt(metrics.marked || 0, 10),
+                total_staff: parseInt(metrics.total_staff || 0, 10)
+            },
+            setViewMode(mode) {
+                this.viewMode = mode;
+                localStorage.setItem('muster_view_mode', mode);
+            },
+            completionPercent() {
+                if (this.metrics.total_staff <= 0) return 0;
+                return Math.min(100, Math.round((this.metrics.marked / this.metrics.total_staff) * 100));
+            },
+            setDepartment(dept) {
+                this.selectedDepartment = dept;
             },
             changeDate(newDate) {
                 if (newDate) {
@@ -491,21 +1623,65 @@
                     window.location.href = '?date=' + newDate + deptParam;
                 }
             },
-            async markAllPresent() {
-                if (!confirm("Are you sure you want to mark all active hotel staff as 'Present' for " + this.selectedDate + "?")) {
+            async toggleLock() {
+                if (this.isPayrollFinalized) {
+                    alert("This month's payroll is already finalized and cannot be unlocked.");
                     return;
                 }
-                this.isBatchMarking = true;
+                const promptMsg = this.isLocked
+                    ? "Unlock muster roll for " + this.selectedDate + "? This will allow attendance edits."
+                    : "Finalize & lock muster roll for " + this.selectedDate + "? This protects all attendance and overtime entries from accidental edits.";
+                if (!confirm(promptMsg)) return;
+
+                this.isTogglingLock = true;
                 try {
-                    const response = await fetch("{% url 'hotel_admin:api_mark_all_present' restaurant_slug=rslug %}", {
+                    const res = await fetch(this.urls.toggleLock, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'X-CSRFToken': getCookie('csrftoken'),
+                            'X-CSRFToken': getCookie('csrftoken')
                         },
                         body: JSON.stringify({
                             date: this.selectedDate,
-                            department: this.selectedDepartment
+                            reason: this.isLocked ? "Unlocked by management" : "Verified & locked by management"
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        this.isLocked = data.is_locked;
+                        this.lockReason = data.message;
+                        window.location.reload();
+                    } else {
+                        alert(data.error || 'Failed to toggle muster lock.');
+                    }
+                } catch (e) {
+                    alert('Network error while toggling lock: ' + e.message);
+                } finally {
+                    this.isTogglingLock = false;
+                }
+            },
+            async markAllPresent(fillShiftTimes = false) {
+                if (this.isLocked) {
+                    alert("Muster roll is locked. Please unlock first.");
+                    return;
+                }
+                const confirmText = fillShiftTimes
+                    ? "Mark all active hotel staff as 'Present' with standard shift hours for " + this.selectedDate + "?"
+                    : "Mark all active hotel staff as 'Present' for " + this.selectedDate + "?";
+                if (!confirm(confirmText)) return;
+
+                this.isBatchMarking = true;
+                try {
+                    const response = await fetch(this.urls.markAllPresent, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: JSON.stringify({
+                            date: this.selectedDate,
+                            department: this.selectedDepartment,
+                            fill_shift_times: fillShiftTimes
                         })
                     });
                     const res = await response.json();
@@ -515,7 +1691,45 @@
                         alert(res.error || 'Failed to mark attendance.');
                     }
                 } catch (e) {
-                    alert('Network error while marking all present: ' + e.message);
+                    alert('Network error: ' + e.message);
+                } finally {
+                    this.isBatchMarking = false;
+                }
+            },
+            async runBulkAction(action) {
+                if (this.isLocked) {
+                    alert("Muster roll is locked. Please unlock first.");
+                    return;
+                }
+                let confirmMsg = "Execute bulk action?";
+                if (action === 'mark_unmarked_absent') confirmMsg = "Mark all unmarked hotel staff as 'Absent' for " + this.selectedDate + "?";
+                if (action === 'fill_shift_timings') confirmMsg = "Apply standard shift timings to all present hotel staff for " + this.selectedDate + "?";
+                if (action === 'recalculate_all_ot') confirmMsg = "Recalculate overtime hours for all hotel staff with recorded times for " + this.selectedDate + "?";
+
+                if (!confirm(confirmMsg)) return;
+
+                this.isBatchMarking = true;
+                try {
+                    const response = await fetch(this.urls.bulkAction, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        },
+                        body: JSON.stringify({
+                            action: action,
+                            date: this.selectedDate,
+                            department: this.selectedDepartment
+                        })
+                    });
+                    const res = await response.json();
+                    if (res.success) {
+                        window.location.reload();
+                    } else {
+                        alert(res.error || 'Action failed.');
+                    }
+                } catch (e) {
+                    alert('Network error: ' + e.message);
                 } finally {
                     this.isBatchMarking = false;
                 }
@@ -527,22 +1741,183 @@
         return {
             staffId: initial.staffId,
             name: initial.name,
+            employeeId: initial.employeeId,
+            department: initial.department,
+            designation: initial.designation,
             date: initial.date,
             status: initial.status,
             shiftType: initial.shiftType,
             checkIn: initial.checkIn,
             checkOut: initial.checkOut,
+            standardHours: initial.standardHours,
+            hoursWorked: initial.hoursWorked,
+            suggestedOt: initial.suggestedOt,
+            shiftVariance: initial.shiftVariance,
+            isLate: initial.isLate,
             otHours: initial.otHours,
             penalty: initial.penalty,
             notes: initial.notes,
+            markedBy: initial.markedBy,
+            updatedAt: initial.updatedAt,
+            defaultShiftIn: initial.defaultShiftIn,
+            defaultShiftOut: initial.defaultShiftOut,
             saveState: initial.status ? 'saved' : 'idle',
-            saveTooltip: initial.status ? 'Saved' : 'Unsaved',
+            saveTooltip: initial.status ? ('Saved' + (initial.markedBy ? ' by ' + initial.markedBy : '')) : 'Unsaved',
+
+            matchesFilter() {
+                const parent = this.$root._x_dataStack ? this.$root._x_dataStack[0] : null;
+                if (!parent) return true;
+
+                if (parent.selectedDepartment && parent.selectedDepartment !== 'ALL') {
+                    if (this.department !== parent.selectedDepartment) return false;
+                }
+
+                if (parent.searchQuery) {
+                    const q = parent.searchQuery.trim().toLowerCase();
+                    const matchName = this.name && this.name.toLowerCase().includes(q);
+                    const matchId = this.employeeId && this.employeeId.toLowerCase().includes(q);
+                    const matchDesig = this.designation && this.designation.toLowerCase().includes(q);
+                    if (!matchName && !matchId && !matchDesig) return false;
+                }
+
+                return true;
+            },
+
+            calculateHours() {
+                if (!this.checkIn || !this.checkOut) {
+                    this.hoursWorked = 0.0;
+                    this.suggestedOt = 0.0;
+                    this.shiftVariance = 0.0;
+                    this.isLate = false;
+                    return;
+                }
+                const inParts = this.checkIn.split(':').map(Number);
+                const outParts = this.checkOut.split(':').map(Number);
+                let inMins = inParts[0] * 60 + inParts[1];
+                let outMins = outParts[0] * 60 + outParts[1];
+
+                if (outMins < inMins) {
+                    outMins += 1440; // overnight crossover
+                }
+                const diffMins = outMins - inMins;
+                this.hoursWorked = Math.round((diffMins / 60.0) * 10) / 10;
+                const std = this.standardHours || 9.0;
+                this.shiftVariance = Math.round((this.hoursWorked - std) * 10) / 10;
+                this.suggestedOt = Math.max(0, this.shiftVariance);
+
+                // Late detection
+                const parent = this.$root._x_dataStack ? this.$root._x_dataStack[0] : null;
+                if (parent && parent.shiftTimings && parent.shiftTimings[this.shiftType]) {
+                    const stdInParts = parent.shiftTimings[this.shiftType].in.split(':').map(Number);
+                    const stdInMins = stdInParts[0] * 60 + stdInParts[1];
+                    this.isLate = (inMins - stdInMins) > 15;
+                }
+            },
+
+            setStatus(newStatus) {
+                const parent = this.$root._x_dataStack ? this.$root._x_dataStack[0] : null;
+                if (parent && parent.isLocked) return;
+
+                this.status = newStatus;
+                if (newStatus === 'PRESENT') {
+                    if (!this.checkIn || !this.checkOut) {
+                        this.fillShiftTimes(false);
+                    }
+                } else if (newStatus === 'ABSENT' || newStatus === 'WEEKLY_OFF') {
+                    this.checkIn = '';
+                    this.checkOut = '';
+                    this.hoursWorked = 0.0;
+                    this.suggestedOt = 0.0;
+                    this.shiftVariance = 0.0;
+                    this.otHours = 0.0;
+                }
+                this.autoSave();
+            },
+
+            onShiftChange() {
+                const parent = this.$root._x_dataStack ? this.$root._x_dataStack[0] : null;
+                if (parent && parent.shiftTimings && parent.shiftTimings[this.shiftType]) {
+                    const st = parent.shiftTimings[this.shiftType];
+                    this.defaultShiftIn = st.in;
+                    this.defaultShiftOut = st.out;
+                }
+                if (this.status === 'PRESENT' && (!this.checkIn || !this.checkOut)) {
+                    this.fillShiftTimes(false);
+                } else if (this.checkIn && this.checkOut) {
+                    this.calculateHours();
+                    this.otHours = this.suggestedOt;
+                }
+                this.autoSave();
+            },
+
+            fillShiftTimes(triggerSave = true) {
+                const parent = this.$root._x_dataStack ? this.$root._x_dataStack[0] : null;
+                if (parent && parent.shiftTimings && parent.shiftTimings[this.shiftType]) {
+                    const st = parent.shiftTimings[this.shiftType];
+                    this.checkIn = st.in;
+                    this.checkOut = st.out;
+                } else if (this.defaultShiftIn && this.defaultShiftOut) {
+                    this.checkIn = this.defaultShiftIn;
+                    this.checkOut = this.defaultShiftOut;
+                } else {
+                    this.checkIn = '09:00';
+                    this.checkOut = '18:00';
+                }
+                this.calculateHours();
+                this.otHours = this.suggestedOt;
+                if (triggerSave) this.autoSave();
+            },
+
+            setInNow() {
+                const now = new Date();
+                const hh = String(now.getHours()).padStart(2, '0');
+                const mm = String(now.getMinutes()).padStart(2, '0');
+                this.checkIn = `${hh}:${mm}`;
+                this.calculateHours();
+                this.otHours = this.suggestedOt;
+                this.autoSave();
+            },
+
+            setOutNow() {
+                const now = new Date();
+                const hh = String(now.getHours()).padStart(2, '0');
+                const mm = String(now.getMinutes()).padStart(2, '0');
+                this.checkOut = `${hh}:${mm}`;
+                this.calculateHours();
+                this.otHours = this.suggestedOt;
+                this.autoSave();
+            },
+
+            syncOt() {
+                this.calculateHours();
+                this.otHours = this.suggestedOt;
+                this.autoSave();
+            },
+
+            onTimeChange() {
+                this.calculateHours();
+                this.otHours = this.suggestedOt;
+                this.autoSave();
+            },
+
             async autoSave() {
                 if (!this.status) return;
+                const parent = this.$root._x_dataStack ? this.$root._x_dataStack[0] : null;
+                if (parent && parent.isLocked) {
+                    this.saveState = 'locked';
+                    this.saveTooltip = 'Locked';
+                    return;
+                }
+
                 this.saveState = 'saving';
                 this.saveTooltip = 'Saving...';
+
                 try {
-                    const res = await fetch("{% url 'hotel_admin:api_save_single_attendance' restaurant_slug=rslug %}", {
+                    const saveUrl = (parent && parent.urls && parent.urls.saveAttendance)
+                        ? parent.urls.saveAttendance
+                        : window.location.pathname.replace(/\/$/, '') + '/api/save/';
+
+                    const res = await fetch(saveUrl, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -557,16 +1932,35 @@
                             check_out_time: this.checkOut,
                             ot_hours: this.otHours,
                             penalty_amount: this.penalty,
-                            notes: this.notes
+                            notes: this.notes,
+                            auto_calc_ot: false
                         })
                     });
                     const data = await res.json();
                     if (data.success) {
                         this.saveState = 'saved';
-                        this.saveTooltip = 'Saved at ' + new Date().toLocaleTimeString();
+                        this.hoursWorked = data.hours_worked;
+                        this.suggestedOt = data.suggested_ot;
+                        this.shiftVariance = data.shift_variance;
+                        this.isLate = data.is_late;
+                        this.otHours = data.ot_hours;
+                        this.markedBy = data.marked_by_name;
+                        this.updatedAt = data.updated_at;
+                        this.saveTooltip = 'Saved by ' + data.marked_by_name + ' at ' + data.updated_at;
+
+                        if (data.summary && parent && parent.metrics) {
+                            parent.metrics.present = data.summary.present;
+                            parent.metrics.absent = data.summary.absent;
+                            parent.metrics.half_day = data.summary.half_day;
+                            parent.metrics.leave = data.summary.leave;
+                            parent.metrics.weekly_off = data.summary.weekly_off;
+                            parent.metrics.total_ot = data.summary.total_ot;
+                            parent.metrics.marked = data.summary.marked;
+                        }
                     } else {
                         this.saveState = 'error';
                         this.saveTooltip = data.error || 'Failed to save';
+                        alert(data.error || 'Failed to save attendance.');
                     }
                 } catch (e) {
                     this.saveState = 'error';

@@ -11,9 +11,11 @@ from super_admin.models import Restaurant, RestaurantBranch, RestaurantUser
 from restaurant_admin.models import (
     Department,
     ShiftType,
+    SHIFT_STANDARD_TIMINGS,
     StaffMember,
     AttendanceStatus,
     DailyAttendance,
+    DailyMusterLock,
     MonthlyPayroll,
     SOPShiftTiming,
     DailySOPTask,
@@ -343,3 +345,207 @@ class HRMSOperationsTests(TestCase):
         self.assertEqual(log.status, DailyTaskLog.TaskStatus.COMPLETED)
         self.assertEqual(log.completed_by, self.user)
         self.assertEqual(log.numeric_reading, '-19.2')
+
+    def test_daily_attendance_hours_worked_and_ot_property(self):
+        """Test model properties: hours_worked, suggested_ot_hours, shift_variance, is_late_arrival."""
+        staff = StaffMember.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            name="Rahul Sharma",
+            employee_id="EMP-RS01",
+            department=Department.KITCHEN,
+            designation="Sous Chef",
+            standard_shift_hours=Decimal('9.0'),
+            default_shift=ShiftType.GENERAL
+        )
+
+        # 1. Normal shift with 1.5h overtime: 09:00 to 19:30 = 10.5h
+        att = DailyAttendance.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            staff_member=staff,
+            date=date(2026, 10, 1),
+            shift_type=ShiftType.GENERAL,
+            check_in_time=datetime.strptime('09:00', '%H:%M').time(),
+            check_out_time=datetime.strptime('19:30', '%H:%M').time(),
+        )
+        self.assertEqual(att.hours_worked, Decimal('10.50'))
+        self.assertEqual(att.suggested_ot_hours, Decimal('1.5'))
+        self.assertEqual(att.shift_variance, Decimal('1.5'))
+        self.assertFalse(att.is_late_arrival)
+
+        # 2. Overnight night shift: 23:00 to 07:30 = 8.5h
+        att_night = DailyAttendance.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            staff_member=staff,
+            date=date(2026, 10, 2),
+            shift_type=ShiftType.NIGHT,
+            check_in_time=datetime.strptime('23:00', '%H:%M').time(),
+            check_out_time=datetime.strptime('07:30', '%H:%M').time(),
+        )
+        self.assertEqual(att_night.hours_worked, Decimal('8.50'))
+        self.assertEqual(att_night.suggested_ot_hours, Decimal('0.0'))
+        self.assertFalse(att_night.is_late_arrival)
+
+        # 3. Late arrival: shift starts at 09:00, arrives at 09:45 (>15 mins late)
+        att_late = DailyAttendance.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            staff_member=staff,
+            date=date(2026, 10, 3),
+            shift_type=ShiftType.GENERAL,
+            check_in_time=datetime.strptime('09:45', '%H:%M').time(),
+            check_out_time=datetime.strptime('18:00', '%H:%M').time(),
+        )
+        self.assertTrue(att_late.is_late_arrival)
+        self.assertEqual(att_late.hours_worked, Decimal('8.25'))
+        self.assertEqual(att_late.shift_variance, Decimal('-0.8'))
+
+    def test_muster_roll_lock_and_unlock_protection(self):
+        """Test that locking muster roll prevents edits, and unlocking re-allows edits."""
+        staff = StaffMember.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            name="Amit Bartender",
+            employee_id="EMP-AB01",
+            department=Department.BAR,
+            designation="Bartender",
+            standard_shift_hours=Decimal('9.0'),
+            default_shift=ShiftType.GENERAL
+        )
+        target_date = "2026-10-18"
+
+        # Lock muster roll via endpoint
+        lock_url = reverse('restaurant_admin:api_toggle_muster_lock', kwargs={'restaurant_slug': self.restaurant.slug})
+        resp = self.client.post(lock_url, data=json.dumps({'date': target_date}), content_type='application/json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()['is_locked'])
+
+        # Attempt to save attendance on locked date -> should be 403 Forbidden!
+        save_url = reverse('restaurant_admin:api_save_single_attendance', kwargs={'restaurant_slug': self.restaurant.slug})
+        save_resp = self.client.post(save_url, data=json.dumps({
+            'staff_id': staff.id,
+            'date': target_date,
+            'status': AttendanceStatus.PRESENT,
+            'check_in_time': '09:00',
+            'check_out_time': '18:00'
+        }), content_type='application/json')
+        self.assertEqual(save_resp.status_code, 403)
+        self.assertFalse(save_resp.json()['success'])
+        self.assertIn('locked', save_resp.json()['error'].lower())
+
+        # Unlock muster roll
+        unlock_resp = self.client.post(lock_url, data=json.dumps({'date': target_date}), content_type='application/json')
+        self.assertEqual(unlock_resp.status_code, 200)
+        self.assertFalse(unlock_resp.json()['is_locked'])
+
+        # Now save attendance should succeed
+        save_resp2 = self.client.post(save_url, data=json.dumps({
+            'staff_id': staff.id,
+            'date': target_date,
+            'status': AttendanceStatus.PRESENT,
+            'check_in_time': '09:00',
+            'check_out_time': '18:00'
+        }), content_type='application/json')
+        self.assertEqual(save_resp2.status_code, 200)
+        self.assertTrue(save_resp2.json()['success'])
+        self.assertEqual(save_resp2.json()['hours_worked'], 9.0)
+
+    def test_finalized_payroll_locks_attendance_permanently(self):
+        """Test that once monthly payroll is finalized, daily attendance cannot be edited or unlocked."""
+        staff = StaffMember.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            name="Suresh Captain",
+            employee_id="EMP-SC01",
+            department=Department.FLOOR,
+            designation="Captain",
+            monthly_base_salary=Decimal('22000.00'),
+            standard_shift_hours=Decimal('9.0')
+        )
+        # Create finalized payroll for September 2026
+        MonthlyPayroll.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            staff_member=staff,
+            year=2026,
+            month=9,
+            monthly_base_salary=Decimal('22000.00'),
+            is_finalized=True
+        )
+
+        target_date = "2026-09-15"
+        save_url = reverse('restaurant_admin:api_save_single_attendance', kwargs={'restaurant_slug': self.restaurant.slug})
+        resp = self.client.post(save_url, data=json.dumps({
+            'staff_id': staff.id,
+            'date': target_date,
+            'status': AttendanceStatus.PRESENT
+        }), content_type='application/json')
+        self.assertEqual(resp.status_code, 403)
+        self.assertIn('finalized', resp.json()['error'].lower())
+
+        # Attempting to toggle lock should also fail
+        lock_url = reverse('restaurant_admin:api_toggle_muster_lock', kwargs={'restaurant_slug': self.restaurant.slug})
+        lock_resp = self.client.post(lock_url, data=json.dumps({'date': target_date}), content_type='application/json')
+        self.assertEqual(lock_resp.status_code, 400)
+        self.assertIn('already finalized', lock_resp.json()['error'].lower())
+
+    def test_bulk_muster_actions(self):
+        """Test bulk operations: mark_unmarked_absent, fill_shift_timings, recalculate_all_ot."""
+        staff1 = StaffMember.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            name="Staff One",
+            employee_id="EMP-B01",
+            department=Department.KITCHEN,
+            default_shift=ShiftType.GENERAL,
+            standard_shift_hours=Decimal('9.0')
+        )
+        staff2 = StaffMember.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            name="Staff Two",
+            employee_id="EMP-B02",
+            department=Department.KITCHEN,
+            default_shift=ShiftType.GENERAL,
+            standard_shift_hours=Decimal('9.0')
+        )
+        target_date = "2026-10-20"
+
+        # Mark staff1 as PRESENT with custom times (09:00 to 20:00 = 11h => 2h OT)
+        DailyAttendance.objects.create(
+            restaurant=self.restaurant,
+            branch=self.branch,
+            staff_member=staff1,
+            date=date(2026, 10, 20),
+            status=AttendanceStatus.PRESENT,
+            shift_type=ShiftType.GENERAL,
+            check_in_time=datetime.strptime('09:00', '%H:%M').time(),
+            check_out_time=datetime.strptime('20:00', '%H:%M').time(),
+            ot_hours=Decimal('0.0')  # initially 0
+        )
+
+        bulk_url = reverse('restaurant_admin:api_bulk_muster_action', kwargs={'restaurant_slug': self.restaurant.slug})
+
+        # 1. Action: recalculate_all_ot -> staff1 should now have 2.0h OT
+        resp_ot = self.client.post(bulk_url, data=json.dumps({
+            'action': 'recalculate_all_ot',
+            'date': target_date,
+            'department': 'ALL'
+        }), content_type='application/json')
+        self.assertEqual(resp_ot.status_code, 200)
+        self.assertTrue(resp_ot.json()['success'])
+        att1 = DailyAttendance.objects.get(staff_member=staff1, date=target_date)
+        self.assertEqual(att1.ot_hours, Decimal('2.0'))
+
+        # 2. Action: mark_unmarked_absent -> staff2 should be marked ABSENT
+        resp_absent = self.client.post(bulk_url, data=json.dumps({
+            'action': 'mark_unmarked_absent',
+            'date': target_date,
+            'department': 'ALL'
+        }), content_type='application/json')
+        self.assertEqual(resp_absent.status_code, 200)
+        self.assertTrue(resp_absent.json()['success'])
+        att2 = DailyAttendance.objects.get(staff_member=staff2, date=target_date)
+        self.assertEqual(att2.status, AttendanceStatus.ABSENT)

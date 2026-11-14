@@ -18,11 +18,20 @@ class Department(models.TextChoices):
 
 
 class ShiftType(models.TextChoices):
-    MORNING = 'MORNING', 'Morning Shift (07:00 - 15:30)'
-    EVENING = 'EVENING', 'Evening Shift (15:30 - 00:00)'
-    NIGHT = 'NIGHT', 'Night Shift (23:00 - 07:30)'
-    SPLIT = 'SPLIT', 'Hospitality Split Shift (Lunch & Dinner)'
-    GENERAL = 'GENERAL', 'General Shift (09:00 - 18:00)'
+    MORNING = 'MORNING', 'Morning (07:00 - 15:30)'
+    EVENING = 'EVENING', 'Evening (15:30 - 00:00)'
+    NIGHT = 'NIGHT', 'Night (23:00 - 07:30)'
+    SPLIT = 'SPLIT', 'Split (Lunch & Dinner)'
+    GENERAL = 'GENERAL', 'General (09:00 - 18:00)'
+
+
+SHIFT_STANDARD_TIMINGS = {
+    ShiftType.MORNING: {'in': '07:00', 'out': '15:30', 'hours': Decimal('8.5'), 'name': 'Morning'},
+    ShiftType.EVENING: {'in': '15:30', 'out': '00:00', 'hours': Decimal('8.5'), 'name': 'Evening'},
+    ShiftType.NIGHT:   {'in': '23:00', 'out': '07:30', 'hours': Decimal('8.5'), 'name': 'Night'},
+    ShiftType.SPLIT:   {'in': '11:00', 'out': '23:00', 'hours': Decimal('9.0'), 'name': 'Split'},
+    ShiftType.GENERAL: {'in': '09:00', 'out': '18:00', 'hours': Decimal('9.0'), 'name': 'General'},
+}
 
 
 class StaffMember(models.Model):
@@ -123,6 +132,78 @@ class DailyAttendance(models.Model):
 
     def __str__(self):
         return f"{self.staff_member.name} [{self.date}] - {self.get_status_display()}"
+
+    @property
+    def hours_worked(self):
+        """Calculates duration in decimal hours between check_in_time and check_out_time."""
+        if not self.check_in_time or not self.check_out_time:
+            return Decimal('0.0')
+        in_mins = self.check_in_time.hour * 60 + self.check_in_time.minute
+        out_mins = self.check_out_time.hour * 60 + self.check_out_time.minute
+        if out_mins < in_mins:
+            out_mins += 24 * 60  # overnight shift crossover
+        diff_mins = out_mins - in_mins
+        return Decimal(str(round(diff_mins / 60.0, 2)))
+
+    @property
+    def suggested_ot_hours(self):
+        """Auto-computes overtime above standard shift hours."""
+        hw = self.hours_worked
+        std = self.staff_member.standard_shift_hours if (self.staff_member and self.staff_member.standard_shift_hours > 0) else Decimal('9.0')
+        if hw > std:
+            return (hw - std).quantize(Decimal('0.1'), rounding=ROUND_HALF_UP)
+        return Decimal('0.0')
+
+    @property
+    def shift_variance(self):
+        """Variance between hours worked and standard shift hours."""
+        if not self.check_in_time or not self.check_out_time:
+            return Decimal('0.0')
+        std = self.staff_member.standard_shift_hours if (self.staff_member and self.staff_member.standard_shift_hours > 0) else Decimal('9.0')
+        return (self.hours_worked - std).quantize(Decimal('0.1'), rounding=ROUND_HALF_UP)
+
+    @property
+    def is_late_arrival(self):
+        """Checks if check-in time exceeds scheduled shift start by over 15 minutes."""
+        if not self.check_in_time:
+            return False
+        std_shift = SHIFT_STANDARD_TIMINGS.get(self.shift_type)
+        if not std_shift:
+            return False
+        start_h, start_m = map(int, std_shift['in'].split(':'))
+        start_mins = start_h * 60 + start_m
+        in_mins = self.check_in_time.hour * 60 + self.check_in_time.minute
+        return (in_mins - start_mins) > 15
+
+
+class DailyMusterLock(models.Model):
+    """
+    Stores day-level lock and finalization status for muster roll attendance.
+    Prevents unauthorized or accidental edits once attendance is verified by management.
+    """
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='muster_locks')
+    branch = models.ForeignKey(RestaurantBranch, on_delete=models.SET_NULL, null=True, blank=True, related_name='muster_locks')
+    date = models.DateField(db_index=True)
+    is_locked = models.BooleanField(default=False)
+    locked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='locked_musters')
+    locked_at = models.DateTimeField(null=True, blank=True)
+    unlocked_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='unlocked_musters')
+    unlocked_at = models.DateTimeField(null=True, blank=True)
+    lock_reason = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date']
+        indexes = [
+            models.Index(fields=['restaurant', 'date']),
+        ]
+        verbose_name = 'Daily Muster Lock'
+        verbose_name_plural = 'Daily Muster Locks'
+
+    def __str__(self):
+        status = "LOCKED" if self.is_locked else "OPEN"
+        return f"{self.restaurant.name} [{self.date}] - {status}"
 
 
 class MonthlyPayroll(models.Model):

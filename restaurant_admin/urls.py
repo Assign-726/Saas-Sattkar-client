@@ -306,6 +306,8 @@ urlpatterns = [
     path('staff/attendance/', views_hrms.muster_roll_view, name='muster_roll'),
     path('staff/attendance/api/mark-all-present/', views_hrms.api_mark_all_present, name='api_mark_all_present'),
     path('staff/attendance/api/save/', views_hrms.api_save_single_attendance, name='api_save_single_attendance'),
+    path('staff/attendance/api/toggle-lock/', views_hrms.api_toggle_muster_lock, name='api_toggle_muster_lock'),
+    path('staff/attendance/api/bulk-action/', views_hrms.api_bulk_muster_action, name='api_bulk_muster_action'),
 
     # Ground Staff Directory (Chefs, Stewards, Housekeeping - No Django User required)
     path('staff/ground-staff/', views_hrms.ground_staff_list, name='ground_staff_list'),

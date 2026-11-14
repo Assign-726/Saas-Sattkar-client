@@ -2,6 +2,7 @@ from django.contrib import admin
 from restaurant_admin.models import (
     StaffMember,
     DailyAttendance,
+    DailyMusterLock,
     MonthlyPayroll,
     DailySOPTask,
     DailyTaskLog,
@@ -20,6 +21,13 @@ class DailyAttendanceAdmin(admin.ModelAdmin):
     list_display = ('staff_member', 'date', 'status', 'shift_type', 'ot_hours', 'penalty_amount', 'restaurant')
     list_filter = ('restaurant', 'status', 'shift_type', 'date')
     search_fields = ('staff_member__name', 'staff_member__employee_id')
+    date_hierarchy = 'date'
+
+
+@admin.register(DailyMusterLock)
+class DailyMusterLockAdmin(admin.ModelAdmin):
+    list_display = ('restaurant', 'branch', 'date', 'is_locked', 'locked_by', 'locked_at')
+    list_filter = ('restaurant', 'is_locked', 'date')
     date_hierarchy = 'date'
 
 
