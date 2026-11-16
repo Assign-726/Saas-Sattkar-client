@@ -694,7 +694,7 @@
                                         </li>
                                         <li><hr class="dropdown-divider"></li>
                                         <li>
-                                            <form method="POST" action="{% url 'hotel_admin:cab_status' restaurant_slug=rslug cab_id=b.id %}" onsubmit="return confirm('Cancel this ride?')">
+                                            <form method="POST" action="{% url 'hotel_admin:cab_status' restaurant_slug=rslug cab_id=b.id %}" data-confirm="The ride will be cancelled and the driver released." data-confirm-title="Cancel this ride?" data-confirm-ok="Cancel ride" data-confirm-cancel="Keep ride">
                                                 {% csrf_token %}
                                                 <input type="hidden" name="status" value="CANCELLED">
                                                 <button class="dropdown-item text-danger" type="submit"><i class="fa-solid fa-xmark me-2"></i>Cancel Ride</button>
@@ -1112,7 +1112,7 @@
                                     <button type="button" class="btn btn-sm btn-outline-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#editVehicleModal{{ v.id }}" title="Edit Vehicle &amp; Driver Details">
                                         <i class="fa-solid fa-pen-to-square me-1"></i>Edit
                                     </button>
-                                    <form method="POST" action="{% url 'hotel_admin:cab_fleet_delete' restaurant_slug=rslug vehicle_id=v.id %}" onsubmit="return confirm('Remove vehicle {{ v.vehicle_number }}?')" class="d-inline">
+                                    <form method="POST" action="{% url 'hotel_admin:cab_fleet_delete' restaurant_slug=rslug vehicle_id=v.id %}" data-confirm="Remove vehicle {{ v.vehicle_number }}?" class="d-inline">
                                         {% csrf_token %}
                                         <button class="btn btn-sm btn-outline-danger shadow-sm" type="submit" title="Delete vehicle">
                                             <i class="fa-solid fa-trash"></i>
@@ -1623,7 +1623,7 @@ Spacious Boot Space{% endif %}</textarea>
                             <button type="button" class="btn-pms-outline py-1 px-2.5" style="font-size:0.78rem;" data-bs-toggle="modal" data-bs-target="#editPackageModal{{ p.id }}">
                                 <i class="fa-solid fa-pen-to-square me-1"></i>Edit
                             </button>
-                            <form method="POST" action="{% url 'hotel_admin:cab_package_delete' restaurant_slug=rslug package_id=p.id %}" onsubmit="return confirm('Delete package {{ p.title }}?')">
+                            <form method="POST" action="{% url 'hotel_admin:cab_package_delete' restaurant_slug=rslug package_id=p.id %}" data-confirm="Delete package {{ p.title }}?">
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn-sm btn-outline-danger py-1 px-2" style="font-size:0.78rem;"><i class="fa-solid fa-trash me-1"></i>Delete</button>
                             </form>
@@ -2296,7 +2296,7 @@ Spacious Boot Space</textarea>
         const badge = document.getElementById(badgeId);
         
         if (count > maxAllowed) {
-            alert('Maximum ' + maxAllowed + ' gallery photos allowed. You selected ' + count + ' files. Please re-select up to 10 images.');
+            UIDialog.alert('Maximum ' + maxAllowed + ' gallery photos allowed. You selected ' + count + ' files. Please re-select up to 10 images.');
             input.value = '';
             if (badge) {
                 badge.innerText = '0 / ' + maxAllowed + ' selected';
@@ -2372,8 +2372,8 @@ Spacious Boot Space</textarea>
     }
 
     // Remove an existing gallery photo with AJAX delete and UI fade-out
-    function removeCabGalleryPhoto(vehicleId, cardIndex, imageUrl, deleteApiUrl) {
-        if (!confirm('Are you sure you want to remove this photo?')) {
+    async function removeCabGalleryPhoto(vehicleId, cardIndex, imageUrl, deleteApiUrl) {
+        if (!await UIDialog.confirm('Are you sure you want to remove this photo?')) {
             return;
         }
 
@@ -2422,7 +2422,7 @@ Spacious Boot Space</textarea>
                     }
                 }
             } else {
-                alert('Could not remove image: ' + (data.error || 'Server error'));
+                UIDialog.alert('Could not remove image: ' + (data.error || 'Server error'));
                 if (card) {
                     card.style.opacity = '1';
                     card.style.transform = 'none';

@@ -7,7 +7,7 @@
     </a>
     <div class="d-flex flex-wrap gap-2">
       {% if can_edit %}
-      <form method="post" action="{{ base_url }}spa/setup/reset-catalog/" class="d-inline" onsubmit="return confirm('Restore default catalog items? Your existing custom services and specialists will be kept.');">
+      <form method="post" action="{{ base_url }}spa/setup/reset-catalog/" class="d-inline" data-confirm="Restore default catalog items? Your existing custom services and specialists will be kept.">
         {% csrf_token %}
         <button type="submit" class="ui-btn ui-btn-gray ui-btn-sm text-secondary" title="Restore default catalog templates if deleted">
           <i class="fa-solid fa-arrows-rotate me-1"></i> Restore Defaults
@@ -231,7 +231,7 @@
                 <button type="button" class="btn btn-primary btn-sm rounded-pill flex-grow-1 fw-semibold d-inline-flex align-items-center justify-content-center gap-1.5 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalEditTreatment{{ t.pk }}">
                   <i class="fa-solid fa-pen-to-square"></i> Edit &amp; Upload Photos
                 </button>
-                <form method="post" action="{{ base_url }}spa/setup/delete/" onsubmit="return confirm('Are you sure you want to delete treatment \'{{ t.name|escapejs }}\'? This action cannot be undone.');">
+                <form method="post" action="{{ base_url }}spa/setup/delete/" data-confirm="Are you sure you want to delete treatment '{{ t.name }}'? This action cannot be undone.">
                   {% csrf_token %}
                   <input type="hidden" name="kind" value="treatment">
                   <input type="hidden" name="pk" value="{{ t.pk }}">
@@ -589,7 +589,7 @@
               <button type="button" class="btn btn-primary btn-sm rounded-pill flex-grow-1 fw-semibold d-inline-flex align-items-center justify-content-center gap-1.5 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalEditTherapist{{ s.pk }}">
                 <i class="fa-solid fa-pen-to-square"></i> Edit Profile
               </button>
-              <form method="post" action="{{ base_url }}spa/setup/delete/" onsubmit="return confirm('Delete specialist \'{{ s.name|escapejs }}\'?');">
+              <form method="post" action="{{ base_url }}spa/setup/delete/" data-confirm="Delete specialist '{{ s.name }}'?">
                 {% csrf_token %}
                 <input type="hidden" name="kind" value="therapist">
                 <input type="hidden" name="pk" value="{{ s.pk }}">
@@ -800,7 +800,7 @@
                 <button type="button" class="btn btn-primary btn-sm rounded-pill flex-grow-1 fw-semibold d-inline-flex align-items-center justify-content-center gap-1.5 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalEditPackage{{ p.pk }}">
                   <i class="fa-solid fa-pen-to-square"></i> Edit Package
                 </button>
-                <form method="post" action="{{ base_url }}spa/setup/delete/" onsubmit="return confirm('Delete package \'{{ p.title|escapejs }}\'?');">
+                <form method="post" action="{{ base_url }}spa/setup/delete/" data-confirm="Delete package '{{ p.title }}'?">
                   {% csrf_token %}
                   <input type="hidden" name="kind" value="package">
                   <input type="hidden" name="pk" value="{{ p.pk }}">
@@ -1388,7 +1388,7 @@
       const file = input.files[0];
       if (file.size > MAX_IMAGE_SIZE_BYTES) {
         const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-        alert(`Selected image '${file.name}' is too large (${sizeMB} MB).\nMaximum allowed image size is less than 2 MB.`);
+        UIDialog.alert(`Selected image '${file.name}' is too large (${sizeMB} MB).\nMaximum allowed image size is less than 2 MB.`);
         input.value = '';
         return false;
       }
@@ -1435,7 +1435,7 @@
       const file = input.files[i];
       if (file.size > MAX_IMAGE_SIZE_BYTES) {
         const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-        alert(`File '${file.name}' is too large (${sizeMB} MB).\nEach uploaded image must be less than 2 MB.`);
+        UIDialog.alert(`File '${file.name}' is too large (${sizeMB} MB).\nEach uploaded image must be less than 2 MB.`);
         input.value = '';
         return false;
       }
@@ -1450,7 +1450,7 @@
     const availableSlots = Math.max(0, MAX_ALLOWED - currentTotal);
 
     if (input.files.length > availableSlots) {
-      alert(`Strict Limit: Maximum ${MAX_ALLOWED} images allowed per service!\nYou currently have ${currentTotal} image(s).\nYou can only upload up to ${availableSlots} more image(s).`);
+      UIDialog.alert(`Strict Limit: Maximum ${MAX_ALLOWED} images allowed per service!\nYou currently have ${currentTotal} image(s).\nYou can only upload up to ${availableSlots} more image(s).`);
       input.value = '';
       return false;
     }
@@ -1484,7 +1484,7 @@
       const file = input.files[i];
       if (file.size > MAX_IMAGE_SIZE_BYTES) {
         const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-        alert(`File '${file.name}' is too large (${sizeMB} MB).\nEach uploaded image must be less than 2 MB.`);
+        UIDialog.alert(`File '${file.name}' is too large (${sizeMB} MB).\nEach uploaded image must be less than 2 MB.`);
         input.value = '';
         updateNewServiceSlots();
         return false;
@@ -1497,7 +1497,7 @@
     const available = 5 - (hasCover ? 1 : 0);
 
     if (input.files.length > available) {
-      alert(`Strict Limit: Maximum 5 images total allowed per service!\n${hasCover ? '1 cover image is selected. ' : ''}You can select up to ${available} gallery image(s).`);
+      UIDialog.alert(`Strict Limit: Maximum 5 images total allowed per service!\n${hasCover ? '1 cover image is selected. ' : ''}You can select up to ${available} gallery image(s).`);
       input.value = '';
       updateNewServiceSlots();
       return false;

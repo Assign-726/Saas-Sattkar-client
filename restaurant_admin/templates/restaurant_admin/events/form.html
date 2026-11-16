@@ -249,13 +249,13 @@ document.addEventListener('DOMContentLoaded', function () {
         box.lastElementChild.querySelector('[name="tier_name[]"]').focus();
         summary();
     });
-    box.addEventListener('click', e => {
+    box.addEventListener('click', async e => {
         const row = e.target.closest('.tier-row');
         if (!row) return;
         if (e.target.closest('.remove-tier-btn')) {
-            if (box.querySelectorAll('.tier-row').length === 1) { alert('An event needs at least one ticket tier.'); return; }
+            if (box.querySelectorAll('.tier-row').length === 1) { UIDialog.alert('An event needs at least one ticket tier.'); return; }
             const sold = parseInt(e.target.closest('.remove-tier-btn').dataset.sold, 10) || 0;
-            if (sold && !confirm(`${sold} ticket(s) of this tier are sold. It will be hidden from sale but existing passes stay valid. Remove it?`)) return;
+            if (sold && !await UIDialog.confirm(`${sold} ticket(s) of this tier are sold. It will be hidden from sale but existing passes stay valid. Remove it?`)) return;
             row.remove(); summary();
         } else if (e.target.closest('[data-move]') && row.previousElementSibling) {
             box.insertBefore(row, row.previousElementSibling);

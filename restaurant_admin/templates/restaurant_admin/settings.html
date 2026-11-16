@@ -1281,7 +1281,7 @@
                   placeholder="Paste Google Maps link, or lat, lng (e.g. 26.9196, 75.7878)"
                   oninput="parseCoordinatesFromInput(this.value)">
                 <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap"
-                  onclick="if(navigator.clipboard && navigator.clipboard.readText){ navigator.clipboard.readText().then(t=>{ document.getElementById('geoPasteInput').value=t; parseCoordinatesFromInput(t); }); }else{ alert('Please paste directly in the text box.'); }">
+                  onclick="if(navigator.clipboard && navigator.clipboard.readText){ navigator.clipboard.readText().then(t=>{ document.getElementById('geoPasteInput').value=t; parseCoordinatesFromInput(t); }); }else{ UIDialog.alert('Please paste directly in the text box.'); }">
                   <i class="bi bi-clipboard"></i> Paste
                 </button>
                 <a href="https://maps.google.com" target="_blank" class="btn btn-sm btn-outline-primary text-nowrap"
@@ -1855,8 +1855,8 @@
     submitDeleteCharge(btn.dataset.deleteUrl, btn.dataset.chargeName);
   }
 
-  function submitDeleteCharge(url, name) {
-    if (confirm("Delete charge '" + name + "'?")) {
+  async function submitDeleteCharge(url, name) {
+    if (await UIDialog.confirm("Delete charge '" + name + "'?", { title: 'Delete charge?', confirmText: 'Delete' })) {
       var f = document.getElementById('deleteChargeForm');
       f.action = url;
       f.submit();

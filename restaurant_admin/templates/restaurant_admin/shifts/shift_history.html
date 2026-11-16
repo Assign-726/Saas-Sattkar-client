@@ -295,10 +295,11 @@
 
 <script>
 async function forceCloseShift(shiftId, counterName, cashierName) {
-    const cashStr = prompt(`Manager Force Close: Enter counted physical cash for Shift #${shiftId} (${cashierName} on ${counterName}):`, "0.00");
+    const cashStr = await UIDialog.prompt(`Enter the counted physical cash for Shift #${shiftId} (${cashierName} on ${counterName}):`, { title: 'Manager force close', defaultValue: '0.00', confirmText: 'Next' });
     if (cashStr === null) return;
     const closingCash = parseFloat(cashStr) || 0;
-    const notes = prompt("Enter manager closure remarks (e.g., 'Cashier left station without closing'):", "Manager administrative close");
+    const notes = await UIDialog.prompt("Enter manager closure remarks (e.g., 'Cashier left station without closing'):", { title: 'Closure remarks', defaultValue: 'Manager administrative close', confirmText: 'Force close shift' });
+    if (notes === null) return;
 
     try {
         const url = "{% url 'restaurant_admin:pos_close_shift_id_api' shift_id=0 restaurant_slug=rslug %}".replace('/0/', '/' + shiftId + '/');
@@ -315,13 +316,13 @@ async function forceCloseShift(shiftId, counterName, cashierName) {
         });
         const data = await resp.json();
         if (data.success) {
-            alert(data.message || 'Shift closed successfully.');
+            await UIDialog.alert(data.message || 'Shift closed successfully.', { title: 'Shift closed', tone: 'success' });
             window.location.reload();
         } else {
-            alert(data.error || 'Failed to force close shift.');
+            UIDialog.alert(data.error || 'Failed to force close shift.');
         }
     } catch (err) {
-        alert('Network error closing shift: ' + err.message);
+        UIDialog.alert('Network error closing shift: ' + err.message);
     }
 }
 </script>

@@ -505,11 +505,41 @@ def table_edit(request, restaurant_slug=None, pk=None):
 def table_delete(request, restaurant_slug=None, pk=None):
     restaurant = _slug_restaurant(request, restaurant_slug)
     table = get_object_or_404(Table, pk=pk, restaurant=restaurant)
+
+    from core.models import Order
+    pending_orders = table.orders.exclude(
+        status__in=[Order.OrderStatus.CANCELLED, 'C']
+    ).exclude(
+        status__in=[Order.OrderStatus.COMPLETED, 'COMPLETED'],
+        payment_status__in=['paid', 'refunded']
+    )
+    has_pending = pending_orders.exists()
+    pending_count = pending_orders.count()
+
     if request.method == 'POST':
+        if has_pending:
+            messages.error(
+                request,
+                f'Cannot delete table "{table.name}" because it has {pending_count} pending/active order(s). Please complete or cancel all active orders first.'
+            )
+            return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)
+        table_name = table.name
         table.delete()
-        messages.success(request, 'Table deleted successfully.')
+        messages.success(request, f'Table "{table_name}" deleted successfully.')
         return redirect('restaurant_admin:table_list', restaurant_slug=restaurant_slug)
-    return render(request, 'restaurant_admin/confirm_delete.html', {'object': table, 'restaurant': restaurant, 'restaurant_slug': restaurant_slug})
+
+    return render(
+        request,
+        'restaurant_admin/confirm_delete.html',
+        {
+            'object': table,
+            'restaurant': restaurant,
+            'restaurant_slug': restaurant_slug,
+            'active_menu': 'tables',
+            'has_pending_orders': has_pending,
+            'pending_orders_count': pending_count,
+        }
+    )
 
 
 @login_required

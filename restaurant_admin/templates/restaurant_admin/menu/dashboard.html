@@ -618,39 +618,18 @@
                             </a>
 
                             <!-- Delete -->
-                            <button type="button" 
-                                    class="btn-action-icon text-danger" 
-                                    data-bs-toggle="modal" 
-                                    data-bs-target="#deleteModal{{ item.id }}" 
-                                    title="Delete Item">
-                                <i class="fas fa-trash-alt"></i>
-                            </button>
+                            <form action="{% url 'restaurant_admin:menu_delete' restaurant_slug=rslug pk=item.id %}" method="post" class="d-inline m-0"
+                                  data-confirm="&quot;{{ item.name }}&quot; will be permanently deleted. This action cannot be undone."
+                                  data-confirm-title="Delete menu item?" data-confirm-ok="Delete">
+                                {% csrf_token %}
+                                <button type="submit" class="btn-action-icon text-danger" title="Delete Item">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </div>
 
-            </div>
-
-            <!-- Delete Confirmation Modal -->
-            <div class="modal fade" id="deleteModal{{ item.id }}" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-dialog-centered modal-sm">
-                    <div class="modal-content border-0 shadow-lg rounded-3">
-                        <div class="modal-body text-center p-4">
-                            <div class="mb-3 text-danger">
-                                <i class="fas fa-exclamation-triangle fa-3x"></i>
-                            </div>
-                            <h6 class="fw-bold mb-2">Delete Menu Item?</h6>
-                            <p class="text-muted small mb-4">Are you sure you want to delete <strong>"{{ item.name }}"</strong>? This action cannot be undone.</p>
-                            <div class="d-flex justify-content-center gap-2">
-                                <button type="button" class="btn btn-sm btn-light border px-3" data-bs-dismiss="modal">Cancel</button>
-                                <form action="{% url 'restaurant_admin:menu_delete' restaurant_slug=rslug pk=item.id %}" method="post" class="d-inline">
-                                    {% csrf_token %}
-                                    <button type="submit" class="btn btn-sm btn-danger px-3">Delete</button>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
             {% empty %}
             <div class="col-12">
@@ -762,13 +741,14 @@
                                        title="Edit">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                    <button type="button" 
-                                            class="btn-action-icon text-danger" 
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#deleteModal{{ item.id }}" 
-                                            title="Delete">
-                                        <i class="fas fa-trash-alt"></i>
-                                    </button>
+                                    <form action="{% url 'restaurant_admin:menu_delete' restaurant_slug=rslug pk=item.id %}" method="post" class="d-inline m-0"
+                                          data-confirm="&quot;{{ item.name }}&quot; will be permanently deleted. This action cannot be undone."
+                                          data-confirm-title="Delete menu item?" data-confirm-ok="Delete">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn-action-icon text-danger" title="Delete">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </form>
                                 </div>
                             </td>
                         </tr>

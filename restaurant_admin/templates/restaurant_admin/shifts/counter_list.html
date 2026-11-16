@@ -250,10 +250,10 @@ async function saveCounter(e) {
         if (data.success) {
             window.location.reload();
         } else {
-            alert(data.error || 'Failed to save counter.');
+            UIDialog.alert(data.error || 'Failed to save counter.');
         }
     } catch (err) {
-        alert('Network error saving counter: ' + err.message);
+        UIDialog.alert('Network error saving counter: ' + err.message);
     } finally {
         btn.disabled = false;
         btn.innerHTML = oldHtml;
@@ -261,7 +261,7 @@ async function saveCounter(e) {
 }
 
 async function toggleCounterStatus(id) {
-    if (!confirm('Change active status for this counter?')) return;
+    if (!await UIDialog.confirm('Change active status for this counter?', { title: 'Change counter status?', tone: 'warning' })) return;
     try {
         const url = "{% url 'restaurant_admin:pos_counter_toggle_api' pk=0 restaurant_slug=rslug %}".replace('/0/', '/' + id + '/');
         const resp = await fetch(url, {
@@ -274,15 +274,15 @@ async function toggleCounterStatus(id) {
         if (data.success) {
             window.location.reload();
         } else {
-            alert(data.error || 'Failed to update counter status.');
+            UIDialog.alert(data.error || 'Failed to update counter status.');
         }
     } catch (err) {
-        alert('Network error updating counter: ' + err.message);
+        UIDialog.alert('Network error updating counter: ' + err.message);
     }
 }
 
 async function deleteCounter(id, name) {
-    if (!confirm(`Are you sure you want to remove counter "${name}"? If it has past shifts, it will be safely deactivated.`)) return;
+    if (!await UIDialog.confirm(`"${name}" will be removed. If it has past shifts, it will be safely deactivated instead.`, { title: 'Delete counter?', confirmText: 'Delete' })) return;
     try {
         const url = "{% url 'restaurant_admin:pos_counter_delete_api' pk=0 restaurant_slug=rslug %}".replace('/0/', '/' + id + '/');
         const resp = await fetch(url, {
@@ -295,10 +295,10 @@ async function deleteCounter(id, name) {
         if (data.success) {
             window.location.reload();
         } else {
-            alert(data.error || 'Failed to delete counter.');
+            UIDialog.alert(data.error || 'Failed to delete counter.');
         }
     } catch (err) {
-        alert('Network error deleting counter: ' + err.message);
+        UIDialog.alert('Network error deleting counter: ' + err.message);
     }
 }
 </script>

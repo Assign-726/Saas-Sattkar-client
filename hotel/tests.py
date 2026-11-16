@@ -518,7 +518,7 @@ class HotelModuleTests(TestCase):
                 continue
             checked += 1
             self.assertEqual(resp.content.count(b'id="newBookingModal"'), 1, pattern.name)
-            self.assertIn(b'Room #101', resp.content, pattern.name)
+            self.assertIn(b'Room 101', resp.content, pattern.name)
         self.assertGreater(checked, 10)
 
     def test_front_desk_sidebar_and_feature_isolation(self):

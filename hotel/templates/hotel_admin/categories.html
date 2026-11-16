@@ -462,7 +462,7 @@
                         <button type="button" class="cat-room-btn" title="Edit room {{ r.room_number }}"
                                 data-bs-toggle="collapse" data-bs-target="#roomEdit{{ r.id }}" aria-expanded="false"><i class="fa-solid fa-pen"></i></button>
                         <form method="POST" action="{% url 'hotel_admin:room_remove' restaurant_slug=rslug room_id=r.id %}"
-                              data-confirm="Remove room {{ r.room_number }} from inventory?" onsubmit="return confirm(this.dataset.confirm);">
+                              data-confirm="Remove room {{ r.room_number }} from inventory?">
                             {% csrf_token %}
                             <input type="hidden" name="next" value="{{ request.get_full_path }}">
                             <button type="submit" class="cat-room-btn cat-room-btn-danger" title="Remove room {{ r.room_number }}"><i class="fa-solid fa-trash-can"></i></button>
@@ -1236,15 +1236,15 @@ function onVideoFilesChanged(input) {
 
     const maxAllowedNew = Math.max(0, MAX_VIDEOS - savedVideos - urlVideos);
     if (input.files.length > maxAllowedNew) {
-        alert(`Maximum ${MAX_VIDEOS} videos allowed per category.\nYou already have ${savedVideos + urlVideos} video(s). You can upload at most ${maxAllowedNew} video file(s).`);
+        UIDialog.alert(`Maximum ${MAX_VIDEOS} videos allowed per category.\nYou already have ${savedVideos + urlVideos} video(s). You can upload at most ${maxAllowedNew} video file(s).`);
         input.value = '';
     }
     updateQuotaPreview();
 }
 
 // Delete Primary Cover Image via AJAX
-function deleteCategoryCover() {
-    if (!confirm("Are you sure you want to remove the cover photo?")) return;
+async function deleteCategoryCover() {
+    if (!await UIDialog.confirm("Are you sure you want to remove the cover photo?")) return;
 
     const catId = document.getElementById('catFormId').value;
 
@@ -1283,7 +1283,7 @@ function deleteCategoryCover() {
         if (data.status === 'ok') {
             finalizeCoverRemoval();
         } else {
-            alert(data.error || "Failed to remove cover photo.");
+            UIDialog.alert(data.error || "Failed to remove cover photo.");
         }
     })
     .catch(err => {
@@ -1320,8 +1320,8 @@ function setAsCategoryCover(imageId, imageUrl) {
 }
 
 // Delete individual gallery photo via AJAX
-function deleteCategoryPhoto(photoId) {
-    if (!confirm("Are you sure you want to remove this photo?")) return;
+async function deleteCategoryPhoto(photoId) {
+    if (!await UIDialog.confirm("Are you sure you want to remove this photo?")) return;
 
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
     const deleteUrl = "{% url 'hotel_admin:category_delete_image' restaurant_slug=rslug image_id=999999 %}".replace('999999', photoId);
@@ -1347,7 +1347,7 @@ function deleteCategoryPhoto(photoId) {
 }
 
 // Delete video from category via AJAX
-function deleteCategoryVideo(vIdx) {
+async function deleteCategoryVideo(vIdx) {
     const catId = document.getElementById('catFormId').value;
     if (!catId) {
         currentVideosState.splice(vIdx, 1);
@@ -1356,7 +1356,7 @@ function deleteCategoryVideo(vIdx) {
         return;
     }
 
-    if (!confirm("Are you sure you want to remove this video?")) return;
+    if (!await UIDialog.confirm("Are you sure you want to remove this video?")) return;
 
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
     const deleteUrl = "{% url 'hotel_admin:category_delete_video' restaurant_slug=rslug category_id=999999 video_idx=888888 %}".replace('999999', catId).replace('888888', vIdx);

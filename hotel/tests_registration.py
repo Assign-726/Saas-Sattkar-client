@@ -100,3 +100,59 @@ class PaginationTests(TestCase):
         self.assertEqual(len(second.context['bookings']), 5)
         small = self.client.get(url, {'per_page': 10})
         self.assertEqual(len(small.context['bookings']), 10)
+
+
+class WalkInReservationTests(TestCase):
+    setUp_base = hotel_tests.HotelModuleTests.setUp
+
+    def setUp(self):
+        self.setUp_base()
+        HotelSettings.objects.filter(branch=self.branch).update(require_id_at_check_in=True, require_id_document=True)
+        self.client.force_login(self.hotel_admin_user)
+        self.url = f'/hotel-admin/{self.restaurant.slug}/bookings/create/'
+        self.out = (timezone.localdate() + timedelta(days=2)).isoformat()
+
+    def base(self, **extra):
+        data = {'mode': 'walk_in', 'room_id': self.room101.id, 'check_out_date': self.out, 'adults': '2', 'children': '0',
+                'guest_name': 'Lakhveer Singh', 'guest_phone': '98765 43210', 'nationality': 'Indian',
+                'next': f'/hotel-admin/{self.restaurant.slug}/bookings/'}
+        data.update(extra)
+        return data
+
+    def test_walk_in_without_id_is_rejected_and_draft_kept(self):
+        resp = self.client.post(self.url, self.base())
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(RoomBooking.objects.exists())
+        draft = self.client.session['nb_draft']
+        self.assertEqual(draft['values']['guest_name'], 'Lakhveer Singh')
+        self.assertIn('id_type', draft['errors'])
+        self.assertIn('id_document', draft['errors'])
+        self.assertIn('guest_address', draft['errors'])
+        # The next page shows the modal again with the values (and clears the draft)
+        page = self.client.get(f'/hotel-admin/{self.restaurant.slug}/bookings/')
+        self.assertContains(page, 'Lakhveer Singh')
+        self.assertNotIn('nb_draft', self.client.session)
+
+    def test_walk_in_with_registration_is_checked_in(self):
+        resp = self.client.post(self.url, self.base(
+            id_type='AADHAAR', id_number='2345 6789 0123', guest_address='12 MG Road, Jalandhar',
+            id_document=SimpleUploadedFile('id.jpg', b'\xff\xd8\xff', content_type='image/jpeg')))
+        b = RoomBooking.objects.get()
+        self.assertRedirects(resp, f'/hotel-admin/{self.restaurant.slug}/bookings/{b.pk}/', fetch_redirect_response=False)
+        self.assertEqual((b.booking_status, b.source, b.check_in_date, b.adults), ('CHECKED_IN', 'WALK_IN', timezone.localdate(), 2))
+        self.assertEqual(b.id_number, '234567890123')
+        self.assertTrue(b.id_document)
+
+    def test_occupancy_and_phone_checked(self):
+        self.client.post(self.url, self.base(adults='3', children='2', guest_phone='12345'))
+        errs = self.client.session['nb_draft']['errors']
+        self.assertIn('adults', errs)
+        self.assertIn('guest_phone', errs)
+
+    def test_advance_reservation_does_not_need_id(self):
+        self.client.post(self.url, {'mode': 'reserve', 'room_id': self.room102.id,
+                                    'check_in_date': (timezone.localdate() + timedelta(days=5)).isoformat(),
+                                    'check_out_date': (timezone.localdate() + timedelta(days=6)).isoformat(),
+                                    'adults': '1', 'guest_name': 'Phone Guest', 'guest_phone': '9123456789'})
+        b = RoomBooking.objects.get()
+        self.assertEqual((b.booking_status, b.id_type), ('RESERVED', ''))

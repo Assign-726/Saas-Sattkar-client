@@ -881,14 +881,14 @@
      ══════════════════════════════════════════════════════════════════ */
   function executeRefundSubmission() {
     if (!state.selectedInvoice) {
-      alert('Please select an invoice first.');
+      UIDialog.alert('Please select an invoice first.');
       setTallyFocus(dom.searchInvoice);
       return;
     }
 
     if (state.selectedInvoice.has_credit_note || state.selectedInvoice.can_issue_credit_note === false || state.selectedInvoice.is_refunded || state.selectedInvoice.is_cancelled) {
       const cnMsg = state.selectedInvoice.credit_note_number ? `Credit Note #${state.selectedInvoice.credit_note_number} already exists for this invoice.` : 'This order has already been refunded / cancelled.';
-      alert(`Operation Blocked: ${cnMsg} Duplicate credit notes are strictly prohibited.`);
+      UIDialog.alert(`Operation Blocked: ${cnMsg} Duplicate credit notes are strictly prohibited.`);
       return;
     }
 
@@ -975,7 +975,7 @@
 
         // Trigger success alert after 600ms
         setTimeout(() => {
-          alert('✅ Credit Note Processed Successfully!');
+          UIDialog.alert('✅ Credit Note Processed Successfully!');
           if (data.thermal_url) {
             try {
               let iframe = document.getElementById('cnPrintIframe');

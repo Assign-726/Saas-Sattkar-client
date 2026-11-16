@@ -15,6 +15,7 @@ from django.views.decorators.http import require_POST
 
 from hotel import folio as F
 from hotel.paging import paginate
+from hotel.validation import EMAIL_RE, GSTIN_RE, ID_RULES, MAX_UPLOAD, PHONE_RE
 from hotel import pricing, reports
 from hotel import groups as G
 from hotel import ledger as L
@@ -24,19 +25,8 @@ from hotel.views_admin import hotel_admin_required
 from super_admin import permissions as P
 
 SHELL = 'guests/shell_hotel.html'
-GSTIN_RE = re.compile(r'^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$')
 DEFAULT_GST = {'RESTAURANT': 5, 'ROOM_SERVICE': 5, 'MINIBAR': 18, 'LAUNDRY': 18, 'SPA': 18, 'TRANSPORT': 5,
                'DAMAGE': 18, 'MISC': 18, 'DISCOUNT': 0}
-MAX_UPLOAD = 5 * 1024 * 1024
-PHONE_RE = re.compile(r'^(?:\+?91)?[6-9]\d{9}$|^\+[1-9]\d{6,14}$')
-EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-ID_RULES = {
-    'AADHAAR': (re.compile(r'^[2-9]\d{11}$'), "Aadhaar numbers have 12 digits and don't start with 0 or 1."),
-    'PAN': (re.compile(r'^[A-Z]{5}\d{4}[A-Z]$'), 'PAN looks like ABCDE1234F.'),
-    'PASSPORT': (re.compile(r'^[A-Z0-9]{6,9}$'), 'Passport numbers are 6-9 letters and digits.'),
-    'VOTER_ID': (re.compile(r'^[A-Z]{3}\d{7}$'), 'Voter ID (EPIC) looks like ABC1234567.'),
-    'DRIVING_LICENCE': (re.compile(r'^[A-Z]{2}[0-9A-Z-]{8,16}$'), 'Driving licence numbers start with the 2-letter state code, e.g. MH1420110012345.'),
-}
 
 
 def _base(slug):

@@ -150,7 +150,7 @@
     fetch(LOOKUP_URL + '?code=' + encodeURIComponent(code), { headers: { 'Accept': 'application/json' } })
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        if (!data.found) { alert(data.message || data.error || 'Item not found'); return; }
+        if (!data.found) { UIDialog.alert(data.message || data.error || 'Item not found'); return; }
         var it = data.item;
         document.getElementById('resItemName').textContent = it.name;
         document.getElementById('resItemKind').textContent = it.kind;
@@ -172,7 +172,7 @@
         }
         document.getElementById('scanResultCard').style.display = 'block';
       })
-      .catch(function () { alert('Could not look the code up. Check the connection and try again.'); })
+      .catch(function () { UIDialog.alert('Could not look the code up. Check the connection and try again.'); })
       .finally(function () { busy = false; });
   }
   window.lookupBarcode = lookupBarcode;
@@ -192,12 +192,12 @@
   window.toggleCameraScanner = function () {
     if (stream) { stopCamera(); return; }
     if (!('BarcodeDetector' in window)) {
-      alert('This browser cannot read barcodes from the camera (use Chrome or Edge on Android / desktop). ' +
+      UIDialog.alert('This browser cannot read barcodes from the camera (use Chrome or Edge on Android / desktop). ' +
             'A USB or Bluetooth scanner, or typing the code, works everywhere.');
       return;
     }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      alert('Camera access needs a secure (https) connection.');
+      UIDialog.alert('Camera access needs a secure (https) connection.');
       return;
     }
     navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(function (s) {
@@ -221,7 +221,7 @@
         }).catch(function () {});
       }, 400);
     }).catch(function (err) {
-      alert('Camera permission denied or no camera found (' + err.name + ').');
+      UIDialog.alert('Camera permission denied or no camera found (' + err.name + ').');
     });
   };
   window.addEventListener('pagehide', stopCamera);
@@ -229,7 +229,7 @@
   window.generateLabels = function () {
     var sel = document.getElementById('labelItemSelect');
     var opt = sel.options[sel.selectedIndex];
-    if (!opt || !opt.value) { alert('Please select an item.'); return; }
+    if (!opt || !opt.value) { UIDialog.alert('Please select an item.'); return; }
     var name = opt.getAttribute('data-name');
     var code = opt.getAttribute('data-code') || ('ITEM-' + opt.value);
     var price = opt.getAttribute('data-price');

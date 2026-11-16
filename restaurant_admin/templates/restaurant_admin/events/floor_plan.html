@@ -260,13 +260,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function assign(bookingId, tableId, force) {
         const d = await post(URLS.assign, { booking_id: bookingId, table_id: tableId, force_swap: !!force });
-        if (d.conflict && confirm(d.error)) return assign(bookingId, tableId, true);
+        if (d.conflict && await UIDialog.confirm(d.error, { title: 'Table already taken', confirmText: 'Assign anyway', tone: 'warning' })) return assign(bookingId, tableId, true);
         if (!d.success) { if (!d.conflict) toast(d.error || 'Could not seat the guest.', true); return; }
         toast(d.message); picked = null; drawer.hide(); await reload();
     }
     $('dAssign').addEventListener('click', () => { const id = parseInt($('dPick').value, 10); if (id && current) assign(id, current.id); });
     $('dUnassign').addEventListener('click', async () => {
-        if (!current || !current.booking || !confirm(`Free ${current.name}? ${current.booking.guest_name} goes back to the “Need a table” list.`)) return;
+        if (!current || !current.booking || !await UIDialog.confirm(`Free ${current.name}? ${current.booking.guest_name} goes back to the “Need a table” list.`)) return;
         const d = await post(URLS.assign, { booking_id: current.booking.id, table_id: null });
         if (!d.success) return toast(d.error || 'Could not free the table.', true);
         toast(d.message); drawer.hide(); await reload();

@@ -11,6 +11,15 @@
             <div class="card-body">
                 <p>Are you sure you want to delete <strong>{{ object }}</strong>?</p>
                 
+                {% if has_pending_orders %}
+                <div class="alert alert-danger d-flex align-items-center mb-3">
+                    <i class="bi bi-exclamation-octagon-fill me-2 fs-5"></i>
+                    <div>
+                        <strong>Cannot delete table:</strong> This table has <strong>{{ pending_orders_count }}</strong> pending/active order{{ pending_orders_count|pluralize }}. Please complete or cancel all active orders before deleting this table.
+                    </div>
+                </div>
+                {% endif %}
+
                 {% if object.menu_items_count > 0 %}
                 <div class="alert alert-warning">
                     <i class="bi bi-exclamation-triangle-fill me-2"></i>
@@ -25,7 +34,7 @@
                         <a href="{{ request.META.HTTP_REFERER|default:'javascript:history.back()' }}" class="btn btn-secondary">
                             <i class="bi bi-x-lg"></i> Cancel
                         </a>
-                        <button type="submit" class="btn btn-danger">
+                        <button type="submit" class="btn btn-danger" {% if has_pending_orders %}disabled title="Cannot delete table with active/pending orders"{% endif %}>
                             <i class="bi bi-trash"></i> Delete
                         </button>
                     </div>

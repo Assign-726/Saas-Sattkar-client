@@ -216,7 +216,7 @@
 
 <script>
   async function cancelReceipt(id, receiptNo) {
-    if (!confirm(`Are you sure you want to cancel Payment Receipt ${receiptNo}?`)) return;
+    if (!await UIDialog.confirm(`Payment Receipt ${receiptNo} will be cancelled.`, { title: 'Cancel this receipt?', confirmText: 'Cancel receipt', cancelText: 'Keep receipt' })) return;
 
     try {
       const resp = await fetch(`/dashboard/{{ rslug }}/receipts/${id}/cancel/`, {
@@ -230,10 +230,10 @@
       if (res.success) {
         window.location.reload();
       } else {
-        alert(res.error || 'Failed to cancel receipt.');
+        UIDialog.alert(res.error || 'Failed to cancel receipt.');
       }
     } catch (err) {
-      alert('Error cancelling receipt.');
+      UIDialog.alert('Error cancelling receipt.');
     }
   }
 

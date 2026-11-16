@@ -111,7 +111,7 @@ class EntirePropertyTests(TestCase):
         b = RoomBooking.objects.get(room=unit)
         self.assertEqual((b.event_type, b.expected_headcount, b.event_notes), ('PARTY', 40, 'DJ till 11pm'))
 
-        self.client.post(self.url('bookings/create/'), {**common, 'room_id': self.room101.id})
+        self.client.post(self.url('bookings/create/'), {**common, 'room_id': self.room101.id, 'num_guests': '2'})
         r = RoomBooking.objects.get(room=self.room101)
         self.assertEqual((r.event_type, r.expected_headcount), ('', None))
 

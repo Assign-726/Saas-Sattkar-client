@@ -1625,13 +1625,13 @@
             },
             async toggleLock() {
                 if (this.isPayrollFinalized) {
-                    alert("This month's payroll is already finalized and cannot be unlocked.");
+                    UIDialog.alert("This month's payroll is already finalized and cannot be unlocked.");
                     return;
                 }
                 const promptMsg = this.isLocked
                     ? "Unlock muster roll for " + this.selectedDate + "? This will allow attendance edits."
                     : "Finalize & lock muster roll for " + this.selectedDate + "? This protects all attendance and overtime entries from accidental edits.";
-                if (!confirm(promptMsg)) return;
+                if (!await UIDialog.confirm(promptMsg)) return;
 
                 this.isTogglingLock = true;
                 try {
@@ -1652,23 +1652,23 @@
                         this.lockReason = data.message;
                         window.location.reload();
                     } else {
-                        alert(data.error || 'Failed to toggle muster lock.');
+                        UIDialog.alert(data.error || 'Failed to toggle muster lock.');
                     }
                 } catch (e) {
-                    alert('Network error while toggling lock: ' + e.message);
+                    UIDialog.alert('Network error while toggling lock: ' + e.message);
                 } finally {
                     this.isTogglingLock = false;
                 }
             },
             async markAllPresent(fillShiftTimes = false) {
                 if (this.isLocked) {
-                    alert("Muster roll is locked. Please unlock first.");
+                    UIDialog.alert("Muster roll is locked. Please unlock first.");
                     return;
                 }
                 const confirmText = fillShiftTimes
                     ? "Mark all active hotel staff as 'Present' with standard shift hours for " + this.selectedDate + "?"
                     : "Mark all active hotel staff as 'Present' for " + this.selectedDate + "?";
-                if (!confirm(confirmText)) return;
+                if (!await UIDialog.confirm(confirmText)) return;
 
                 this.isBatchMarking = true;
                 try {
@@ -1688,17 +1688,17 @@
                     if (res.success) {
                         window.location.reload();
                     } else {
-                        alert(res.error || 'Failed to mark attendance.');
+                        UIDialog.alert(res.error || 'Failed to mark attendance.');
                     }
                 } catch (e) {
-                    alert('Network error: ' + e.message);
+                    UIDialog.alert('Network error: ' + e.message);
                 } finally {
                     this.isBatchMarking = false;
                 }
             },
             async runBulkAction(action) {
                 if (this.isLocked) {
-                    alert("Muster roll is locked. Please unlock first.");
+                    UIDialog.alert("Muster roll is locked. Please unlock first.");
                     return;
                 }
                 let confirmMsg = "Execute bulk action?";
@@ -1706,7 +1706,7 @@
                 if (action === 'fill_shift_timings') confirmMsg = "Apply standard shift timings to all present hotel staff for " + this.selectedDate + "?";
                 if (action === 'recalculate_all_ot') confirmMsg = "Recalculate overtime hours for all hotel staff with recorded times for " + this.selectedDate + "?";
 
-                if (!confirm(confirmMsg)) return;
+                if (!await UIDialog.confirm(confirmMsg)) return;
 
                 this.isBatchMarking = true;
                 try {
@@ -1726,10 +1726,10 @@
                     if (res.success) {
                         window.location.reload();
                     } else {
-                        alert(res.error || 'Action failed.');
+                        UIDialog.alert(res.error || 'Action failed.');
                     }
                 } catch (e) {
-                    alert('Network error: ' + e.message);
+                    UIDialog.alert('Network error: ' + e.message);
                 } finally {
                     this.isBatchMarking = false;
                 }
@@ -1960,7 +1960,7 @@
                     } else {
                         this.saveState = 'error';
                         this.saveTooltip = data.error || 'Failed to save';
-                        alert(data.error || 'Failed to save attendance.');
+                        UIDialog.alert(data.error || 'Failed to save attendance.');
                     }
                 } catch (e) {
                     this.saveState = 'error';

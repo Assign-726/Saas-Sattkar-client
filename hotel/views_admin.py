@@ -1139,101 +1139,170 @@ def category_delete_image_action(request, restaurant_slug, ctx, image_id):
 @hotel_admin_required
 def booking_create_action(request, restaurant_slug, ctx):
     """
-    Create a new reservation from the front desk with date overlap validation.
+    New reservation from the front desk.
+    mode=reserve  -> advance booking; guest ID optional (completed at check-in).
+    mode=walk_in  -> guest is at the desk: arrival is today, registration is validated and the guest is checked in.
+    Any validation error sends the typed values back to the modal (session draft) instead of losing them.
     """
+    from hotel import folio, pricing
+    from hotel import validation as V
     branch = ctx['current_branch']
-    if request.method == 'POST':
-        room_id = request.POST.get('room_id')
-        guest_name = request.POST.get('guest_name', '').strip()
-        guest_email = request.POST.get('guest_email', '').strip()
-        guest_phone = request.POST.get('guest_phone', '').strip()
-        check_in_str = request.POST.get('check_in_date')
-        check_out_str = request.POST.get('check_out_date')
-        try:
-            num_guests = max(1, int(request.POST.get('num_guests') or 1))
-        except ValueError:
-            num_guests = 1
-        payment_status = request.POST.get('payment_status', RoomBooking.PaymentStatus.PENDING)
-        source = request.POST.get('source') if request.POST.get('source') in RoomBooking.Source.values else RoomBooking.Source.DIRECT
-        special_requests = request.POST.get('special_requests', '').strip()
+    back = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug})
+    if request.method != 'POST':
+        return redirect(back)
 
-        if not room_id or not guest_name or not check_in_str or not check_out_str:
-            messages.error(request, "Room, guest name, and check-in/out dates are required.")
-            return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
+    p = request.POST
+    walk_in = p.get('mode') == 'walk_in'
+    settings_obj = HotelSettings.get_settings(branch)
+    today = timezone.localdate()
+    errors = {}
 
-        try:
-            check_in_date = datetime.date.fromisoformat(check_in_str)
-            check_out_date = datetime.date.fromisoformat(check_out_str)
-        except ValueError:
-            messages.error(request, "Invalid dates provided. Format must be YYYY-MM-DD.")
-            return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
+    def fail(message=None):
+        draft = {k: v for k, v in p.items() if k not in ('csrfmiddlewaretoken',)}
+        request.session['nb_draft'] = {'values': draft, 'errors': errors}
+        messages.error(request, message or 'Reservation not saved. Fix the highlighted fields in the form.')
+        return redirect(back)
 
-        if check_out_date <= check_in_date:
-            messages.error(request, "Check-out date must be strictly after check-in date.")
-            return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
+    def text(name, limit=None):
+        v = (p.get(name) or '').strip()
+        return v[:limit] if limit else v
 
-        advance = None
-        try:
-            advance = Decimal(str(request.POST.get('advance_amount') or '0').replace(',', ''))
-        except Exception:
-            advance = None
-        if payment_status == RoomBooking.PaymentStatus.PARTIALLY_PAID and not (advance and advance > 0):
-            messages.error(request, "Enter the advance amount received for a partially paid booking.")
-            return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
+    # ---- Stay ----
+    room = Room.objects.filter(id=p.get('room_id') or 0, branch=branch, is_active=True).select_related('category').first()
+    if not room:
+        errors['room_id'] = 'Choose a room.'
+    check_in_date = today if walk_in else V.parse_date(p.get('check_in_date'))
+    check_out_date = V.parse_date(p.get('check_out_date'))
+    if not check_in_date:
+        errors['check_in_date'] = 'Choose the arrival date.'
+    elif not walk_in and check_in_date < today:
+        errors['check_in_date'] = 'Arrival cannot be in the past.'
+    if not check_out_date:
+        errors['check_out_date'] = 'Choose the departure date.'
+    elif check_in_date and check_out_date <= check_in_date:
+        errors['check_out_date'] = 'Departure must be after arrival.'
 
-        from django.db import transaction
+    try:
+        adults = int(p.get('adults') or p.get('num_guests') or 1)
+        children = int(p.get('children') or 0)
+    except ValueError:
+        adults, children = 0, 0
+    if adults < 1:
+        errors['adults'] = 'At least one adult is required.'
+    elif children < 0:
+        errors['children'] = 'Children cannot be negative.'
+    elif room and adults + children > room.category.max_occupancy:
+        errors['adults'] = f'{room.category.name} takes at most {room.category.max_occupancy} guests.'
+
+    # ---- Guest ----
+    guest_name = text('guest_name', 150)
+    guest_phone = V.clean_phone(p.get('guest_phone'))
+    guest_email = text('guest_email', 254)
+    if len(guest_name) < 2:
+        errors['guest_name'] = "Enter the guest's full name."
+    if V.phone_error(guest_phone):
+        errors['guest_phone'] = V.phone_error(guest_phone)
+    if V.email_error(guest_email):
+        errors['guest_email'] = V.email_error(guest_email)
+
+    # ---- Registration (required for walk-ins when the hotel's ID rule is on) ----
+    need_id = walk_in and settings_obj.require_id_at_check_in
+    nationality = text('nationality', 60) or ('Indian' if walk_in else '')
+    foreign = nationality.lower() not in V.INDIAN
+    id_type = p.get('id_type') if p.get('id_type') in RoomBooking.IdType.values else ''
+    id_number = V.clean_id_number(p.get('id_number'))
+    errors.update(V.id_errors(id_type, id_number, nationality, require=need_id))
+    dob = V.parse_date(p.get('date_of_birth'))
+    if V.dob_error(p.get('date_of_birth'), dob):
+        errors['date_of_birth'] = V.dob_error(p.get('date_of_birth'), dob)
+    visa_number = text('visa_number', 60)
+    visa_valid_till = V.parse_date(p.get('visa_valid_till'))
+    if foreign and need_id:
+        if not visa_number:
+            errors['visa_number'] = 'Visa number is required for foreign nationals.'
+        if not visa_valid_till:
+            errors['visa_valid_till'] = 'Visa expiry date is required.'
+    if visa_valid_till and check_out_date and visa_valid_till < check_in_date:
+        errors['visa_valid_till'] = 'The visa expires before the arrival date.'
+    doc = request.FILES.get('id_document')
+    if V.document_error(doc):
+        errors['id_document'] = V.document_error(doc)
+    elif need_id and settings_obj.require_id_document and not doc:
+        errors['id_document'] = 'Upload a photo or scan of the ID.'
+    guest_address = text('guest_address')
+    if walk_in and not guest_address:
+        errors['guest_address'] = 'Home address is required for the guest register.'
+
+    # ---- Payment ----
+    payment_status = p.get('payment_status', RoomBooking.PaymentStatus.PENDING)
+    try:
+        advance = Decimal(str(p.get('advance_amount') or '0').replace(',', ''))
+    except Exception:
+        advance = Decimal('0')
+    if payment_status == RoomBooking.PaymentStatus.PARTIALLY_PAID and advance <= 0:
+        errors['advance_amount'] = 'Enter the advance amount received.'
+
+    if errors:
+        return fail()
+
+    source = p.get('source') if p.get('source') in RoomBooking.Source.values else RoomBooking.Source.DIRECT
+    if walk_in:
+        source = RoomBooking.Source.WALK_IN
+
+    class CheckInFailed(Exception):
+        pass
+
+    try:
         with transaction.atomic():
-            room = Room.objects.select_for_update().filter(id=room_id, branch=branch).first()
-            if not room:
-                messages.error(request, "Selected room is not active or does not exist.")
-                return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
-
-            # Overlap, out-of-order and rate restrictions (hotel/pricing.py)
-            from hotel import pricing, folio
+            room = Room.objects.select_for_update().select_related('category').get(pk=room.pk)
             conflict = pricing.room_conflict(room, check_in_date, check_out_date)
             if conflict:
-                messages.error(request, conflict + " Please choose another room or date.")
-                return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
-            quote = pricing.quote(room.category, check_in_date, check_out_date, HotelSettings.get_settings(branch))
-            if quote['restriction'] and request.POST.get('override_restriction') != '1':
-                messages.error(request, quote['restriction'] + " Tick “Override rate restrictions” to book it anyway.")
-                return redirect(request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug}))
+                errors['room_id'] = conflict
+                return fail(conflict + ' Choose another room or other dates.')
+            quote = pricing.quote(room.category, check_in_date, check_out_date, settings_obj)
+            if quote['restriction'] and p.get('override_restriction') != '1':
+                return fail(quote['restriction'] + ' Tick "Override rate restrictions" to book it anyway.')
 
             booking = RoomBooking.objects.create(
-                room=room,
-                branch=branch,
-                guest_name=guest_name,
-                guest_email=guest_email,
-                guest_phone=guest_phone,
-                check_in_date=check_in_date,
-                check_out_date=check_out_date,
-                num_guests=num_guests,
-                adults=num_guests,
-                source=source,
-                total_room_charges=quote['net'],
-                taxes=quote['tax'],
-                grand_total=quote['total'],
+                room=room, branch=branch,
+                guest_name=guest_name, guest_email=guest_email, guest_phone=guest_phone,
+                check_in_date=check_in_date, check_out_date=check_out_date,
+                num_guests=adults + children, adults=adults, children=children, source=source,
+                total_room_charges=quote['net'], taxes=quote['tax'], grand_total=quote['total'],
                 booking_status=RoomBooking.BookingStatus.RESERVED,
                 payment_status=RoomBooking.PaymentStatus.PAID if payment_status == RoomBooking.PaymentStatus.PAID else RoomBooking.PaymentStatus.PENDING,
-                payment_method=request.POST.get('payment_method') or 'PAY_AT_DESK',
-                special_requests=special_requests,
-                **_event_fields(request.POST, room),
+                payment_method=p.get('payment_method') or 'PAY_AT_DESK',
+                special_requests=text('special_requests'),
+                nationality=nationality, id_type=id_type, id_number=id_number, date_of_birth=dob,
+                visa_number=visa_number if foreign else '', visa_valid_till=visa_valid_till if foreign else None,
+                guest_address=guest_address, purpose_of_visit=text('purpose_of_visit', 100),
+                arriving_from=text('arriving_from', 120), going_to=text('going_to', 120),
+                id_document=doc or None,
+                **_event_fields(p, room),
             )
-            if payment_status == RoomBooking.PaymentStatus.PARTIALLY_PAID and advance:
-                method = request.POST.get('payment_method') if request.POST.get('payment_method') in FolioPayment.Method.values else 'CASH'
+            if payment_status == RoomBooking.PaymentStatus.PARTIALLY_PAID and advance > 0:
+                method = p.get('payment_method') if p.get('payment_method') in FolioPayment.Method.values else 'CASH'
                 folio.record_payment(booking, request.user, advance, method, note='Advance at booking')
+            if walk_in:
+                err = folio.check_in(booking, request.user)
+                if err:
+                    raise CheckInFailed(err)
+    except CheckInFailed as e:
+        return fail(f'Guest not checked in: {e}')
 
-        # Dispatch hotel reservation voucher email
-        try:
-            from core.emails import send_hotel_booking_email
-            send_hotel_booking_email(booking, request=request)
-        except Exception as email_err:
-            logger.warning(f"Could not send admin booking voucher email for {booking.booking_id}: {email_err}")
+    try:
+        from core.emails import send_hotel_booking_email
+        send_hotel_booking_email(booking, request=request)
+    except Exception as email_err:
+        logger.warning(f"Could not send admin booking voucher email for {booking.booking_id}: {email_err}")
 
-        messages.success(request, f"Reservation confirmed! Booking ID: {booking.booking_id} for Room {room.room_number}.")
-
-    next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('hotel_admin:bookings', kwargs={'restaurant_slug': restaurant_slug})
-    return redirect(next_url)
+    if walk_in:
+        messages.success(request, f"{booking.guest_name} is checked in to Room {room.room_number} (booking {booking.booking_id}).")
+        return redirect('hotel_admin:booking_detail', restaurant_slug=restaurant_slug, booking_id=booking.pk)
+    missing = booking.kyc_missing_items(require_document=settings_obj.require_id_document)
+    note = f" Collect at check-in: {', '.join(missing)}." if missing and settings_obj.require_id_at_check_in else ''
+    messages.success(request, f"Reservation confirmed! Booking ID: {booking.booking_id} for Room {room.room_number}.{note}")
+    return redirect(back)
 
 
 @hotel_admin_required

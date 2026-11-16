@@ -1,48 +1,100 @@
-{% load hotel_booking %}{% bookable_rooms current_branch as nb_rooms %}
+{% load hotel_booking %}{% bookable_rooms current_branch as nb_rooms %}{% reservation_draft as nb_draft %}{% hotel_rules current_branch as nb_rules %}
 <!-- New Reservation (header button, available on every hotel page) -->
+<style>
+  #newBookingModal .nb-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 1.1rem; }
+  #newBookingModal .nb-mode input { position: absolute; opacity: 0; pointer-events: none; }
+  #newBookingModal .nb-mode label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--card-border); border-radius: 12px; cursor: pointer; margin: 0; background: var(--card-bg); transition: border-color .15s, box-shadow .15s; }
+  #newBookingModal .nb-mode label i { margin-top: 2px; color: var(--text-muted); }
+  #newBookingModal .nb-mode strong { display: block; font-size: .86rem; color: var(--text-main); }
+  #newBookingModal .nb-mode small { display: block; font-size: .72rem; color: var(--text-muted); line-height: 1.3; }
+  #newBookingModal .nb-mode input:checked + label { border-color: var(--ui-accent); box-shadow: 0 0 0 1px var(--ui-accent) inset; background: rgba(var(--ui-accent-rgb), .06); }
+  #newBookingModal .nb-mode input:checked + label i { color: var(--ui-accent); }
+  #newBookingModal .nb-mode input:focus-visible + label { box-shadow: 0 0 0 3px rgba(var(--ui-accent-rgb), .3); }
+  #newBookingModal .nb-section { border-top: 1px solid var(--card-border); padding-top: 1rem; margin-top: 1rem; }
+  #newBookingModal .nb-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: .75rem; }
+  #newBookingModal .nb-section-head .modal-section-title { margin: 0; }
+  #newBookingModal .nb-badge { font-size: .68rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+  #newBookingModal .nb-badge-req { background: rgba(var(--ui-red-rgb), .1); color: var(--ui-red-text); }
+  #newBookingModal .nb-badge-opt { background: var(--ui-surface-2); color: var(--text-muted); }
+  #newBookingModal .nb-req::after { content: " *"; color: var(--ui-red-text); }
+  #newBookingModal .nb-err { display: block; color: var(--ui-red-text); font-size: .74rem; margin-top: 4px; }
+  #newBookingModal .is-invalid { border-color: var(--ui-red) !important; }
+  #newBookingModal .nb-hint { display: block; color: var(--text-muted); font-size: .72rem; margin-top: 4px; }
+  #newBookingModal .nb-estimate { padding: .7rem 1rem; background: rgba(var(--ui-accent-rgb), .08); border: 1px solid rgba(var(--ui-accent-rgb), .25); border-radius: 10px; display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; margin-top: .9rem; }
+  #newBookingModal .nb-today { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; border-radius: 8px; background: var(--ui-surface-2); font-weight: 600; font-size: .88rem; }
+  #newBookingModal [data-only]:not(.nb-show) { display: none !important; }
+  @media (max-width: 575.98px) { #newBookingModal .nb-mode { grid-template-columns: 1fr; } }
+</style>
 <div class="modal fade" id="newBookingModal" tabindex="-1" aria-labelledby="newBookingModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
-            <form method="POST" action="{% url 'hotel_admin:booking_create' restaurant_slug=rslug %}" id="pmsBookingForm">
+            <form method="POST" action="{% url 'hotel_admin:booking_create' restaurant_slug=rslug %}" id="pmsBookingForm" enctype="multipart/form-data">
                 {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
                 <div class="modal-header">
                     <div class="d-flex align-items-center gap-2">
-                        <div class="stat-icon" style="width:34px;height:34px;font-size:0.9rem;background:rgba(99,102,241,0.2);color:#a5b4fc;"><i class="fa-solid fa-calendar-plus"></i></div>
+                        <div class="stat-icon" style="width:34px;height:34px;font-size:0.9rem;background:rgba(99,102,241,0.2);color:#6366f1;"><i class="fa-solid fa-calendar-plus"></i></div>
                         <div>
                             <div class="modal-title" id="newBookingModalLabel">New Guest Reservation</div>
-                            <div style="font-size:0.73rem;color:var(--ui-label-3);">Create a direct walk-in or advance booking</div>
+                            <div style="font-size:0.73rem;color:var(--ui-label-3);" id="nbSubtitle">Guest is at the desk: register and check in now</div>
                         </div>
                     </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
+
                 <div class="modal-body">
-                    <div class="modal-section-title"><i class="fa-solid fa-bed me-1"></i>Room &amp; Stay Details</div>
-                    <div class="row g-3 mb-3">
+                    <!-- What kind of booking -->
+                    <div class="nb-mode" role="radiogroup" aria-label="Booking type">
+                        <input type="radio" name="mode" id="nbModeWalk" value="walk_in" checked>
+                        <label for="nbModeWalk"><i class="fa-solid fa-person-walking-luggage"></i><span><strong>Walk-in · check in now</strong><small>Guest is here. Collect ID and hand over the key.</small></span></label>
+                        <input type="radio" name="mode" id="nbModeRes" value="reserve">
+                        <label for="nbModeRes"><i class="fa-solid fa-calendar-days"></i><span><strong>Advance reservation</strong><small>Phone / email booking. ID can be collected at check-in.</small></span></label>
+                    </div>
+
+                    <!-- 1. Stay -->
+                    <div class="modal-section-title"><i class="fa-solid fa-bed me-1"></i>Room &amp; stay</div>
+                    <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label">Physical Room *</label>
+                            <label class="form-label nb-req" for="nbRoom">Room</label>
                             <select name="room_id" id="nbRoom" class="form-select" required>
-                                <option value="" data-price="0">— Select Physical Room —</option>
-                                {% for r in nb_rooms %}
-                                <option value="{{ r.id }}" data-price="{{ r.category.base_price_per_night }}" data-entire="{% if r.category.is_entire_property %}1{% endif %}" data-max="{{ r.category.max_occupancy }}">{% if r.category.is_entire_property %}Entire property: {{ r.category.name }}{% else %}Room #{{ r.room_number }} ({{ r.category.name }}){% endif %} — ₹{{ r.category.base_price_per_night }}/nt [{{ r.get_status_display }}]</option>
+                                <option value="" data-price="0">Select a room…</option>
+                                {% regroup nb_rooms by category as nb_groups %}
+                                {% for grp in nb_groups %}
+                                <optgroup label="{% if grp.grouper.is_entire_property %}Entire property · {% endif %}{{ grp.grouper.name }} · ₹{{ grp.grouper.base_price_per_night|floatformat:0 }}/night · max {{ grp.grouper.max_occupancy }}">
+                                    {% for r in grp.list %}
+                                    <option value="{{ r.id }}" data-price="{{ r.category.base_price_per_night }}" data-entire="{% if r.category.is_entire_property %}1{% endif %}" data-max="{{ r.category.max_occupancy }}" data-status="{{ r.status }}">{% if r.category.is_entire_property %}{{ r.category.name }} (whole property){% else %}Room {{ r.room_number }}{% endif %}{% if r.status != 'AVAILABLE' %} · {{ r.get_status_display|lower }}{% endif %}</option>
+                                    {% endfor %}
+                                </optgroup>
                                 {% empty %}
                                 <option value="" disabled>No rooms set up for this branch yet</option>
                                 {% endfor %}
                             </select>
+                            <small class="nb-hint" id="nbRoomHint"></small>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Number of Guests</label>
-                            <input type="number" name="num_guests" id="nbGuests" class="form-control" value="1" min="1" max="10">
+                        <div class="col-6 col-md-3">
+                            <label class="form-label nb-req" for="nbAdults">Adults</label>
+                            <input type="number" name="adults" id="nbAdults" class="form-control" value="1" min="1" max="10" required>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Check-In Date *</label>
-                            <input type="date" name="check_in_date" id="nbIn" class="form-control" required>
+                        <div class="col-6 col-md-3">
+                            <label class="form-label" for="nbKids">Children</label>
+                            <input type="number" name="children" id="nbKids" class="form-control" value="0" min="0" max="10">
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Check-Out Date *</label>
+                        <div class="col-6">
+                            <label class="form-label nb-req" for="nbIn">Arrival</label>
+                            <div class="nb-today" data-only="walk"><i class="fa-solid fa-calendar-check" style="color:var(--ui-green-text)"></i>Today, {% now "d M Y" %}</div>
+                            <input type="date" name="check_in_date" id="nbIn" class="form-control" data-only="res">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label nb-req" for="nbOut">Departure</label>
                             <input type="date" name="check_out_date" id="nbOut" class="form-control" required>
                         </div>
                     </div>
-                    <div id="nbEvent" class="row g-3 mb-3" style="display:none;">
+                    <div class="nb-estimate">
+                        <span style="font-size:0.82rem;font-weight:600;color:var(--ui-accent-text);"><i class="fa-solid fa-receipt me-1"></i>Estimated room charges <small class="text-muted fw-normal">(before GST)</small></span>
+                        <span class="font-mono fw-bold" style="color:var(--ui-accent-text);" id="nbEstimate">Select a room</span>
+                    </div>
+
+                    <div id="nbEvent" class="row g-3 mt-1" style="display:none;">
                         <div class="col-12"><div class="modal-section-title mb-0"><i class="fa-solid fa-champagne-glasses me-1"></i>Event details <span class="text-muted fw-normal" style="font-size:0.72rem;">(optional)</span></div></div>
                         <div class="col-md-6">
                             <label class="form-label" for="nbEventType">Occasion</label>
@@ -64,106 +116,262 @@
                             <textarea name="event_notes" id="nbEventNotes" class="form-control" rows="2" placeholder="e.g. DJ till 11pm, poolside decor, catering for 40"></textarea>
                         </div>
                     </div>
-                    <div style="padding:0.7rem 1rem;background:rgba(var(--ui-accent-rgb), 0.1);border:1px solid rgba(var(--ui-accent-rgb), 0.3);border-radius:9px;display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">
-                        <span style="font-size:0.82rem;font-weight:600;color:var(--ui-accent-text);"><i class="fa-solid fa-receipt me-1"></i>Estimated Stay Cost</span>
-                        <span class="font-mono fw-bold" style="color:var(--ui-accent-text);" id="nbEstimate">₹0 (0 Nights)</span>
+
+                    <!-- 2. Guest -->
+                    <div class="nb-section">
+                        <div class="modal-section-title"><i class="fa-solid fa-user me-1"></i>Guest</div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label nb-req" for="nbName">Full name (as on ID)</label>
+                                <input type="text" name="guest_name" id="nbName" class="form-control" placeholder="e.g. Rahul Sharma" required minlength="2" maxlength="150" autocomplete="off">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label nb-req" for="nbPhone">Phone</label>
+                                <input type="tel" name="guest_phone" id="nbPhone" class="form-control" placeholder="98765 43210 or +44…" required inputmode="tel" pattern="^[\s()\-]*(\+?91)?[\s()\-]*[6-9]([\s\-]*\d){9}[\s]*$|^\s*\+[1-9]([\s\-]*\d){6,14}\s*$" title="10-digit Indian mobile, or + and country code">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="nbEmail">Email</label>
+                                <input type="email" name="guest_email" id="nbEmail" class="form-control" placeholder="guest@example.com">
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="modal-section-title"><i class="fa-solid fa-user me-1"></i>Guest Information</div>
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-4">
-                            <label class="form-label">Guest Full Name *</label>
-                            <input type="text" name="guest_name" class="form-control" placeholder="e.g. Rahul Sharma" required>
+                    <!-- 3. Registration (ID) -->
+                    <div class="nb-section">
+                        <div class="nb-section-head">
+                            <div class="modal-section-title"><i class="fa-solid fa-id-card me-1"></i>Guest registration (ID)</div>
+                            <span class="nb-badge nb-badge-req" data-only="walk">Required for check-in</span>
+                            <span class="nb-badge nb-badge-opt" data-only="res">Optional now · needed at check-in</span>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Phone Number *</label>
-                            <input type="tel" name="guest_phone" class="form-control" placeholder="+91 98765 43210" required>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Email Address</label>
-                            <input type="email" name="guest_email" class="form-control" placeholder="guest@example.com">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label" for="nbNat">Nationality</label>
+                                <input type="text" name="nationality" id="nbNat" class="form-control" value="Indian" list="nbNatList" maxlength="60">
+                                <datalist id="nbNatList"><option value="Indian"><option value="American"><option value="British"><option value="German"><option value="French"><option value="Australian"><option value="Canadian"><option value="Nepalese"><option value="Bangladeshi"><option value="Sri Lankan"><option value="Emirati"></datalist>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="nbIdType" data-walk-req>ID type</label>
+                                <select name="id_type" id="nbIdType" class="form-select" data-walk-req>
+                                    <option value="">Choose…</option>
+                                    <option value="AADHAAR">Aadhaar</option>
+                                    <option value="PASSPORT">Passport</option>
+                                    <option value="DRIVING_LICENCE">Driving licence</option>
+                                    <option value="VOTER_ID">Voter ID</option>
+                                    <option value="PAN">PAN card</option>
+                                    <option value="OTHER">Other</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="nbIdNo" data-walk-req>ID number</label>
+                                <input type="text" name="id_number" id="nbIdNo" class="form-control" maxlength="60" autocomplete="off" style="text-transform:uppercase" data-walk-req>
+                                <small class="nb-hint" id="nbIdHint"></small>
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label" for="nbDoc"{% if current_branch %} data-walk-req-doc{% endif %}>ID photo / scan <small class="text-muted">(image or PDF, up to 5 MB)</small></label>
+                                <input type="file" name="id_document" id="nbDoc" class="form-control" accept="image/*,application/pdf" capture="environment">
+                                <small class="nb-hint">On a phone or tablet this opens the camera.</small>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="nbDob">Date of birth</label>
+                                <input type="date" name="date_of_birth" id="nbDob" class="form-control" max="{% now 'Y-m-d' %}">
+                            </div>
+                            <div class="col-md-6 nb-foreign" hidden>
+                                <label class="form-label" for="nbVisa" data-walk-req-foreign>Visa number</label>
+                                <input type="text" name="visa_number" id="nbVisa" class="form-control" maxlength="60">
+                            </div>
+                            <div class="col-md-6 nb-foreign" hidden>
+                                <label class="form-label" for="nbVisaTill" data-walk-req-foreign>Visa valid till</label>
+                                <input type="date" name="visa_valid_till" id="nbVisaTill" class="form-control">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" for="nbAddr" data-walk-req>Home address</label>
+                                <textarea name="guest_address" id="nbAddr" class="form-control" rows="2" placeholder="House, street, city, state, PIN" data-walk-req></textarea>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="nbPurpose">Purpose of visit</label>
+                                <input type="text" name="purpose_of_visit" id="nbPurpose" class="form-control" list="nbPurposeList" maxlength="100">
+                                <datalist id="nbPurposeList"><option value="Leisure"><option value="Business"><option value="Wedding / event"><option value="Medical"><option value="Transit"></datalist>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="nbFrom">Arriving from</label>
+                                <input type="text" name="arriving_from" id="nbFrom" class="form-control" maxlength="120" placeholder="City">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="nbTo">Going to</label>
+                                <input type="text" name="going_to" id="nbTo" class="form-control" maxlength="120" placeholder="City">
+                            </div>
                         </div>
                     </div>
 
-                    <div class="modal-section-title"><i class="fa-solid fa-credit-card me-1"></i>Payment &amp; Notes</div>
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label">Payment</label>
-                            <select name="payment_status" class="form-select" onchange="document.getElementById('nbAdvWrap').hidden = this.value !== 'PARTIALLY_PAID'">
-                                <option value="PENDING">Pending (Pay at Check-In)</option>
-                                <option value="PAID">Paid in Full</option>
-                                <option value="PARTIALLY_PAID">Advance received</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Paid by</label>
-                            <select name="payment_method" class="form-select">
-                                <option value="CASH">Cash</option>
-                                <option value="UPI">UPI</option>
-                                <option value="CARD">Card</option>
-                                <option value="BANK">Bank transfer</option>
-                                <option value="OTA">Collected by OTA</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4" id="nbAdvWrap" hidden>
-                            <label class="form-label">Advance amount (₹)</label>
-                            <input type="number" name="advance_amount" class="form-control" min="1" step="0.01" placeholder="e.g. 2000">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Booking source</label>
-                            <select name="source" class="form-select">
-                                <option value="DIRECT">Front desk / phone</option>
-                                <option value="WALK_IN">Walk-in</option>
-                                <option value="CORPORATE">Corporate</option>
-                                <option value="AGENT">Travel agent</option>
-                                <option value="OTA">OTA / channel</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Special Requests / Notes</label>
-                            <input type="text" name="special_requests" class="form-control" placeholder="e.g. Extra pillows, late arrival">
-                        </div>
-                        <div class="col-12">
-                            <label class="form-check-label" style="font-size:0.8rem;"><input type="checkbox" class="form-check-input me-1" name="override_restriction" value="1">Override rate restrictions (minimum stay / closed dates)</label>
+                    <!-- 4. Payment -->
+                    <div class="nb-section">
+                        <div class="modal-section-title"><i class="fa-solid fa-credit-card me-1"></i>Payment &amp; notes</div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label" for="nbPay">Payment</label>
+                                <select name="payment_status" id="nbPay" class="form-select">
+                                    <option value="PENDING">Pay at check-out</option>
+                                    <option value="PARTIALLY_PAID">Advance received</option>
+                                    <option value="PAID">Paid in full</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label" for="nbMethod">Paid by</label>
+                                <select name="payment_method" id="nbMethod" class="form-select">
+                                    <option value="CASH">Cash</option>
+                                    <option value="UPI">UPI</option>
+                                    <option value="CARD">Card</option>
+                                    <option value="BANK">Bank transfer</option>
+                                    <option value="OTA">Collected by OTA</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4" id="nbAdvWrap" hidden>
+                                <label class="form-label nb-req" for="nbAdv">Advance amount (₹)</label>
+                                <input type="number" name="advance_amount" id="nbAdv" class="form-control" min="1" step="0.01" placeholder="e.g. 2000">
+                            </div>
+                            <div class="col-md-6" data-only="res">
+                                <label class="form-label" for="nbSource">Booking source</label>
+                                <select name="source" id="nbSource" class="form-select">
+                                    <option value="DIRECT">Front desk / phone</option>
+                                    <option value="CORPORATE">Corporate</option>
+                                    <option value="AGENT">Travel agent</option>
+                                    <option value="OTA">OTA / channel</option>
+                                    <option value="WALK_IN">Walk-in</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="nbReq">Special requests</label>
+                                <input type="text" name="special_requests" id="nbReq" class="form-control" placeholder="e.g. Extra pillows, late arrival">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-check-label" style="font-size:0.8rem;"><input type="checkbox" class="form-check-input me-1" name="override_restriction" value="1">Override rate restrictions (minimum stay / closed dates)</label>
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer d-flex justify-content-between">
                     <button type="button" class="btn-pms-outline" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn-pms-primary"><i class="fa-solid fa-check"></i>Confirm Reservation</button>
+                    <button type="submit" class="btn-pms-primary" id="nbSubmit"><i class="fa-solid fa-key"></i><span>Check in guest</span></button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+{{ nb_draft|json_script:"nb-draft" }}
 <script>
 (function () {
-    var room = document.getElementById('nbRoom'), inD = document.getElementById('nbIn'),
-        outD = document.getElementById('nbOut'), est = document.getElementById('nbEstimate');
-    if (!room || !inD || !outD || !est) return;
+    var form = document.getElementById('pmsBookingForm');
+    if (!form) return;
+    var $ = function (id) { return document.getElementById(id); };
+    var room = $('nbRoom'), inD = $('nbIn'), outD = $('nbOut'), est = $('nbEstimate');
+    var adults = $('nbAdults'), kids = $('nbKids'), nat = $('nbNat');
+    var ID_RULE_REQUIRED = {% if nb_rules.require_id_at_check_in %}true{% else %}false{% endif %};
+    var DOC_REQUIRED = {% if nb_rules.require_id_document %}true{% else %}false{% endif %};
+
     function iso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
-    var t = new Date(), tm = new Date(t); tm.setDate(t.getDate() + 1);
-    inD.value = iso(t); outD.value = iso(tm);
-    function calc() {
-        var price = parseFloat((room.options[room.selectedIndex] || {}).getAttribute && room.options[room.selectedIndex].getAttribute('data-price') || 0);
-        var nights = Math.max(1, Math.round((new Date(outD.value) - new Date(inD.value)) / 86400000)) || 1;
-        est.textContent = '₹' + (price * nights).toLocaleString('en-IN') + ' (' + nights + ' Night' + (nights > 1 ? 's' : '') + ' @ ₹' + price + '/nt)';
+    var today = new Date(), tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+    inD.value = iso(today); inD.min = iso(today); outD.value = iso(tomorrow); outD.min = iso(tomorrow);
+
+    function mode() { return form.querySelector('input[name="mode"]:checked').value; }
+    function walk() { return mode() === 'walk_in'; }
+    function opt() { return room.options[room.selectedIndex]; }
+    function arrival() { return walk() ? iso(today) : inD.value; }
+    function isForeign() { var v = (nat.value || '').trim().toLowerCase(); return v && ['indian', 'india', 'in'].indexOf(v) === -1; }
+
+    function setRequired(el, on) { if (el.tagName !== 'LABEL') el.required = on; else el.classList.toggle('nb-req', on); }
+
+    function syncMode() {
+        var w = walk();
+        form.querySelectorAll('[data-only]').forEach(function (el) { el.classList.toggle('nb-show', el.dataset.only === (w ? 'walk' : 'res')); });
+        inD.required = !w;
+        var need = w && ID_RULE_REQUIRED;
+        form.querySelectorAll('[data-walk-req]').forEach(function (el) { setRequired(el, el.id === 'nbAddr' || el.getAttribute('for') === 'nbAddr' ? w : need); });
+        form.querySelectorAll('[data-walk-req-doc]').forEach(function (el) { setRequired(el, need && DOC_REQUIRED); });
+        $('nbDoc').required = need && DOC_REQUIRED;
+        syncForeign();
+        $('nbSubtitle').textContent = w ? 'Guest is at the desk: register and check in now' : 'Phone, email or advance booking';
+        $('nbSubmit').innerHTML = w ? '<i class="fa-solid fa-key"></i><span>Check in guest</span>' : '<i class="fa-solid fa-check"></i><span>Confirm reservation</span>';
+        syncDates();
     }
-    inD.addEventListener('change', function () {
-        if (outD.value <= inD.value) { var d = new Date(inD.value); d.setDate(d.getDate() + 1); outD.value = iso(d); }
+    function syncForeign() {
+        var f = isForeign(), need = walk() && ID_RULE_REQUIRED && f;
+        form.querySelectorAll('.nb-foreign').forEach(function (el) { el.hidden = !f; });
+        form.querySelectorAll('[data-walk-req-foreign]').forEach(function (el) { setRequired(el, need); });
+        $('nbVisa').required = need; $('nbVisaTill').required = need;
+        if (f && $('nbIdType').value === '') $('nbIdType').value = 'PASSPORT';
+    }
+    function syncDates() {
+        var a = new Date(arrival()); var min = new Date(a); min.setDate(a.getDate() + 1);
+        outD.min = iso(min);
+        if (!outD.value || outD.value <= arrival()) outD.value = iso(min);
         calc();
-    });
-    var ev = document.getElementById('nbEvent'), guests = document.getElementById('nbGuests');
-    function syncEntire() {
-        var opt = room.options[room.selectedIndex];
-        var entire = !!(opt && opt.getAttribute('data-entire'));
-        if (ev) ev.style.display = entire ? '' : 'none';
-        if (guests) guests.max = (opt && opt.getAttribute('data-max')) || 10;
     }
-    room.addEventListener('change', syncEntire);
-    syncEntire();
-    room.addEventListener('change', calc);
+    function syncRoom() {
+        var o = opt(), max = parseInt(o && o.getAttribute('data-max'), 10) || 10;
+        adults.max = max; kids.max = Math.max(0, max - 1);
+        var ev = $('nbEvent'); if (ev) ev.style.display = o && o.getAttribute('data-entire') ? '' : 'none';
+        var st = o && o.getAttribute('data-status'), hint = $('nbRoomHint');
+        hint.textContent = !o || !o.value ? '' : (walk() && st && st !== 'AVAILABLE' ? 'Heads-up: this room is marked ' + st.toLowerCase() + ' right now.' : 'Up to ' + max + ' guests.');
+        hint.style.color = walk() && st && st !== 'AVAILABLE' ? 'var(--ui-orange-text)' : '';
+        checkGuests(); calc();
+    }
+    function checkGuests() {
+        var o = opt(), max = parseInt(o && o.getAttribute('data-max'), 10) || 10;
+        var total = (parseInt(adults.value, 10) || 0) + (parseInt(kids.value, 10) || 0);
+        adults.setCustomValidity(total > max ? 'This room takes at most ' + max + ' guests.' : '');
+    }
+    function calc() {
+        var o = opt(), price = parseFloat(o && o.getAttribute('data-price')) || 0;
+        var nights = Math.max(1, Math.round((new Date(outD.value) - new Date(arrival())) / 86400000)) || 1;
+        est.textContent = price ? '₹' + (price * nights).toLocaleString('en-IN') + ' · ' + nights + ' night' + (nights > 1 ? 's' : '') + ' × ₹' + price.toLocaleString('en-IN') : 'Select a room';
+    }
+
+    var hints = { AADHAAR: '12 digits', PAN: 'e.g. ABCDE1234F', PASSPORT: '6–9 letters and digits', VOTER_ID: 'e.g. ABC1234567', DRIVING_LICENCE: 'e.g. MH1420110012345' };
+    $('nbIdType').addEventListener('change', function () { $('nbIdHint').textContent = hints[this.value] || ''; });
+    $('nbPay').addEventListener('change', function () { $('nbAdvWrap').hidden = this.value !== 'PARTIALLY_PAID'; $('nbAdv').required = this.value === 'PARTIALLY_PAID'; });
+    form.querySelectorAll('input[name="mode"]').forEach(function (r) { r.addEventListener('change', syncMode); });
+    room.addEventListener('change', syncRoom);
+    inD.addEventListener('change', syncDates);
     outD.addEventListener('change', calc);
-    calc();
+    adults.addEventListener('input', checkGuests); kids.addEventListener('input', checkGuests);
+    nat.addEventListener('input', syncForeign);
+
+    // Re-open with the typed values and field errors when the server rejected the form
+    var draft = JSON.parse(document.getElementById('nb-draft').textContent || '{}');
+    if (draft && draft.values) {
+        var v = draft.values;
+        Object.keys(v).forEach(function (k) {
+            var els = form.querySelectorAll('[name="' + k + '"]');
+            els.forEach(function (el) {
+                if (el.type === 'file' || el.type === 'hidden' && k === 'next') return;
+                if (el.type === 'radio') el.checked = el.value === v[k];
+                else if (el.type === 'checkbox') el.checked = !!v[k];
+                else el.value = v[k];
+            });
+        });
+        $('nbPay').dispatchEvent(new Event('change'));
+        $('nbIdType').dispatchEvent(new Event('change'));
+    }
+    syncMode(); syncRoom();
+    if (draft && draft.values) {
+        var errs = draft.errors || {}, first = null;
+        Object.keys(errs).forEach(function (k) {
+            var el = form.querySelector('[name="' + k + '"]');
+            if (!el) return;
+            el.classList.add('is-invalid');
+            var s = document.createElement('small'); s.className = 'nb-err'; s.textContent = errs[k];
+            el.insertAdjacentElement('afterend', s);
+            el.addEventListener('input', function () { el.classList.remove('is-invalid'); if (s.parentNode) s.remove(); }, { once: true });
+            first = first || el;
+        });
+        if (v && v.id_document === undefined && errs && Object.keys(errs).length) {
+            var doc = $('nbDoc'); var n = document.createElement('small'); n.className = 'nb-hint'; n.style.color = 'var(--ui-orange-text)';
+            n.textContent = 'Please attach the ID scan again.'; if (doc.required) doc.insertAdjacentElement('afterend', n);
+        }
+        var modalEl = document.getElementById('newBookingModal');
+        if (first) modalEl.addEventListener('shown.bs.modal', function () { first.focus(); }, { once: true });
+        var open = function () { if (window.bootstrap) bootstrap.Modal.getOrCreateInstance(modalEl).show(); };
+        if (document.readyState === 'complete') open(); else window.addEventListener('load', open);
+    }
 })();
 </script>

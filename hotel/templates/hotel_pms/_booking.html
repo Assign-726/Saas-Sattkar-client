@@ -114,7 +114,7 @@
               <button class="ui-btn ui-btn-primary" type="submit" {% if b.check_in_date > today %}disabled title="Arrives {{ b.check_in_date|date:'d M' }}"{% endif %}><i class="fa-solid fa-key"></i><span>Check in</span></button></form>
             {% endif %}
             {% if b.check_in_date <= today %}
-            <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/no-show/" class="bk-secondary" data-confirm="Mark {{ b.guest_name }} as a no-show? The room is released." onsubmit="return confirm(this.dataset.confirm);">{% csrf_token %}
+            <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/no-show/" class="bk-secondary" data-confirm="Mark {{ b.guest_name }} as a no-show? The room is released.">{% csrf_token %}
               <label class="ui-pms-check"><input type="checkbox" name="charge" value="1"> Charge first night</label>
               <button class="ui-btn ui-btn-gray ui-btn-sm" type="submit"><i class="fa-solid fa-user-slash"></i><span>Mark no-show</span></button></form>
             {% endif %}
@@ -141,7 +141,7 @@
       {% if can_edit and b.booking_status == 'RESERVED' or can_edit and b.booking_status == 'CHECKED_IN' %}
       <details class="bk-danger">
         <summary><i class="fa-solid fa-ban"></i>Cancel this booking…</summary>
-        <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/cancel/" onsubmit="return confirm('Cancel this booking? This cannot be undone.');">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}">
+        <form method="post" action="{{ base_url }}bookings/{{ b.pk }}/cancel/" data-confirm="Cancel this booking? This cannot be undone.">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}">
           <div class="ui-field"><label for="cxReason">Reason for cancelling</label><input id="cxReason" class="ui-input" name="reason" placeholder="e.g. Guest changed plans" required></div>
           <button class="ui-btn ui-btn-tinted-red" type="submit"><i class="fa-solid fa-ban"></i><span>Confirm cancellation</span></button>
         </form>

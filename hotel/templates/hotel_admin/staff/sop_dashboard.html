@@ -411,7 +411,7 @@
             },
             async submitNewTask() {
                 if (!this.newTask.title.trim()) {
-                    alert('Please enter a task title.');
+                    UIDialog.alert('Please enter a task title.');
                     return;
                 }
                 this.isSubmittingTask = true;
@@ -428,16 +428,16 @@
                     if (data.success) {
                         window.location.reload();
                     } else {
-                        alert(data.error || 'Failed to create SOP task.');
+                        UIDialog.alert(data.error || 'Failed to create SOP task.');
                     }
                 } catch (e) {
-                    alert('Error creating task: ' + e.message);
+                    UIDialog.alert('Error creating task: ' + e.message);
                 } finally {
                     this.isSubmittingTask = false;
                 }
             },
             async deleteTask(taskId, title) {
-                if (!confirm(`Are you sure you want to permanently delete SOP routine "${title}"?`)) {
+                if (!await UIDialog.confirm(`"${title}" will be permanently removed from the SOP board.`, { title: "Delete SOP routine?", confirmText: "Delete" })) {
                     return;
                 }
                 try {
@@ -454,10 +454,10 @@
                     if (data.success) {
                         window.location.reload();
                     } else {
-                        alert(data.error || 'Failed to delete task.');
+                        UIDialog.alert(data.error || 'Failed to delete task.');
                     }
                 } catch (e) {
-                    alert('Error: ' + e.message);
+                    UIDialog.alert('Error: ' + e.message);
                 }
             },
             changeDate(newDate) {
@@ -468,7 +468,7 @@
                 }
             },
             async seedDefaults() {
-                if (!confirm("Pre-seed standard hotel SOP templates (Checkout Room Turnover, Linen par stock, Public Area Vacuum, Night Audit)?")) {
+                if (!await UIDialog.confirm("Add the standard hotel SOP templates (Checkout Room Turnover, Linen par stock, Public Area Vacuum, Night Audit)?", { title: "Seed default SOPs?", confirmText: "Seed SOPs" })) {
                     return;
                 }
                 this.isSeeding = true;
@@ -485,10 +485,10 @@
                     if (data.success) {
                         window.location.reload();
                     } else {
-                        alert(data.error || 'Failed to seed SOPs.');
+                        UIDialog.alert(data.error || 'Failed to seed SOPs.');
                     }
                 } catch (e) {
-                    alert('Error: ' + e.message);
+                    UIDialog.alert('Error: ' + e.message);
                 } finally {
                     this.isSeeding = false;
                 }
@@ -510,7 +510,7 @@
             async deleteTask(taskId, title) {
                 const id = taskId || this.taskId;
                 const name = title || 'this task';
-                if (!confirm(`Are you sure you want to permanently delete SOP routine "${name}"?`)) {
+                if (!await UIDialog.confirm(`"${name}" will be permanently removed from the SOP board.`, { title: "Delete SOP routine?", confirmText: "Delete" })) {
                     return;
                 }
                 try {
@@ -527,10 +527,10 @@
                     if (data.success) {
                         window.location.reload();
                     } else {
-                        alert(data.error || 'Failed to delete task.');
+                        UIDialog.alert(data.error || 'Failed to delete task.');
                     }
                 } catch (e) {
-                    alert('Error deleting task: ' + e.message);
+                    UIDialog.alert('Error deleting task: ' + e.message);
                 }
             },
             async toggleCheck() {

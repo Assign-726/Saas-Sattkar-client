@@ -1182,10 +1182,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             <i class="fas fa-eye"></i>
                         </a>
                     ` : `
-                        <button type="button" class="table-action-btn" title="No active order on this table" onclick="alert('No active order on this table.')">
+                        <button type="button" class="table-action-btn" title="No active order on this table" onclick="UIDialog.alert('No active order on this table.')">
                             <i class="fas fa-print" style="opacity:0.35;"></i>
                         </button>
-                        <button type="button" class="table-action-btn" title="No active order on this table" onclick="alert('No active order on this table.')">
+                        <button type="button" class="table-action-btn" title="No active order on this table" onclick="UIDialog.alert('No active order on this table.')">
                             <i class="fas fa-eye" style="opacity:0.35;"></i>
                         </button>
                     `}
@@ -1688,15 +1688,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const partyNotes = document.getElementById('partyNotes')?.value.trim();
 
             if (isZone && !zoneId) {
-                alert('Please select a Zone/Floor.');
+                UIDialog.alert('Please select a Zone/Floor.');
                 return;
             }
             if (!isZone && selectedTableIds.length === 0) {
-                alert('Please select at least one table for the party.');
+                UIDialog.alert('Please select at least one table for the party.');
                 return;
             }
             if (!partyName && !partyHost) {
-                alert('Please enter a Party/Event Name or Host Customer Name.');
+                UIDialog.alert('Please enter a Party/Event Name or Host Customer Name.');
                 return;
             }
 
@@ -1729,14 +1729,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.getElementById('bookPartyForm')?.reset();
                     fetchFloorPlanData();
                 } else {
-                    alert('Error booking party: ' + (data.error || 'Unknown error'));
+                    UIDialog.alert('Error booking party: ' + (data.error || 'Unknown error'));
                 }
             })
             .catch(err => {
                 btnSubmitBookParty.disabled = false;
                 btnSubmitBookParty.innerHTML = '<i class="fas fa-check-circle me-1"></i> Confirm &amp; Reserve Floor';
                 console.error(err);
-                alert('Failed to connect to server.');
+                UIDialog.alert('Failed to connect to server.');
             });
         });
     }
@@ -1789,11 +1789,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const groupName = document.getElementById('mergeGroupName')?.value.trim();
 
             if (!masterId) {
-                alert('Please select a Master Table.');
+                UIDialog.alert('Please select a Master Table.');
                 return;
             }
             if (childIds.length === 0) {
-                alert('Please select at least one table to merge with the master table.');
+                UIDialog.alert('Please select at least one table to merge with the master table.');
                 return;
             }
 
@@ -1820,14 +1820,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     bootstrap.Modal.getInstance(document.getElementById('mergeTablesModal'))?.hide();
                     fetchFloorPlanData();
                 } else {
-                    alert('Error merging tables: ' + (data.error || 'Unknown error'));
+                    UIDialog.alert('Error merging tables: ' + (data.error || 'Unknown error'));
                 }
             })
             .catch(err => {
                 btnSubmitMergeTables.disabled = false;
                 btnSubmitMergeTables.innerHTML = '<i class="fas fa-link me-1"></i> Merge Tables';
                 console.error(err);
-                alert('Failed to connect to server.');
+                UIDialog.alert('Failed to connect to server.');
             });
         });
     }
@@ -1909,9 +1909,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Release Entire Party
     const btnReleasePartyAll = document.getElementById('btnReleasePartyAll');
     if (btnReleasePartyAll) {
-        btnReleasePartyAll.addEventListener('click', () => {
+        btnReleasePartyAll.addEventListener('click', async () => {
             if (!currentSelectedPartyTable) return;
-            if (!confirm(`Are you sure you want to release the entire party booking "${currentSelectedPartyTable.party_name}"? All linked tables will be freed.`)) {
+            if (!await UIDialog.confirm(`Are you sure you want to release the entire party booking "${currentSelectedPartyTable.party_name}"? All linked tables will be freed.`)) {
                 return;
             }
 
@@ -1934,13 +1934,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     bootstrap.Modal.getInstance(document.getElementById('partyInfoModal'))?.hide();
                     fetchFloorPlanData();
                 } else {
-                    alert('Error: ' + (data.error || 'Failed to release party.'));
+                    UIDialog.alert('Error: ' + (data.error || 'Failed to release party.'));
                 }
             })
             .catch(err => {
                 btnReleasePartyAll.disabled = false;
                 console.error(err);
-                alert('Failed to connect to server.');
+                UIDialog.alert('Failed to connect to server.');
             });
         });
     }
@@ -1948,9 +1948,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Release Single Table Only
     const btnReleaseSingleTable = document.getElementById('btnReleaseSingleTable');
     if (btnReleaseSingleTable) {
-        btnReleaseSingleTable.addEventListener('click', () => {
+        btnReleaseSingleTable.addEventListener('click', async () => {
             if (!currentSelectedPartyTable) return;
-            if (!confirm(`Unlink table ${currentSelectedPartyTable.name} from this party?`)) {
+            if (!await UIDialog.confirm(`Unlink table ${currentSelectedPartyTable.name} from this party?`, { tone: 'warning' })) {
                 return;
             }
 
@@ -1973,13 +1973,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     bootstrap.Modal.getInstance(document.getElementById('partyInfoModal'))?.hide();
                     fetchFloorPlanData();
                 } else {
-                    alert('Error: ' + (data.error || 'Failed to unlink table.'));
+                    UIDialog.alert('Error: ' + (data.error || 'Failed to unlink table.'));
                 }
             })
             .catch(err => {
                 btnReleaseSingleTable.disabled = false;
                 console.error(err);
-                alert('Failed to connect to server.');
+                UIDialog.alert('Failed to connect to server.');
             });
         });
     }

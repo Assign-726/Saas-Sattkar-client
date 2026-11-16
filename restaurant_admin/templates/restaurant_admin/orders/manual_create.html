@@ -8025,7 +8025,7 @@
                   data.error || "Failed to register menu item.";
                 errBox.style.display = "flex";
               } else {
-                alert(data.error || "Failed to add menu item.");
+                UIDialog.alert(data.error || "Failed to add menu item.");
               }
             }
           })
@@ -8041,7 +8041,7 @@
                 "Server or network error adding menu item. Please check fields.";
               errBox.style.display = "flex";
             } else {
-              alert("Error adding menu item. Please check inputs.");
+              UIDialog.alert("Error adding menu item. Please check inputs.");
             }
           });
       });
@@ -9258,7 +9258,7 @@
           : menuItems.find((i) => String(i.id) === String(itemOrId));
       if (!item) return;
       if (item.availability === false || item.is_available === false) {
-        alert(item.name + " is sold out");
+        UIDialog.alert(item.name + " is sold out");
         return;
       }
       window.draftItem = null;
@@ -9418,14 +9418,13 @@
                 toast("Already sent — Del voids it instead.", true);
                 return;
               }
-              const q = prompt(
-                "Edit Quantity for " +
+              UIDialog.prompt(
+                "Enter the new quantity for " +
                 item.name +
                 (item.variant_name ? " (" + item.variant_name + ")" : "") +
                 ":",
-                item.quantity,
-              );
-              if (q !== null) setQty(lineId, q, index);
+                { title: "Edit quantity", defaultValue: item.quantity, confirmText: "Update", required: true },
+              ).then((q) => { if (q !== null) setQty(lineId, q, index); });
               return;
             }
             enterCart(index);
@@ -10572,7 +10571,7 @@
     // KOT Fire & Send Event Listener
     document.getElementById("btn-fire-kot")?.addEventListener("click", () => {
       if (state.cart.length === 0) {
-        alert("Please add at least one item to the cart before sending KOT.");
+        UIDialog.alert("Please add at least one item to the cart before sending KOT.");
         return;
       }
       const curTableVal =
@@ -10609,7 +10608,7 @@
       .getElementById("btn-open-settle-modal")
       ?.addEventListener("click", () => {
         if (!state.cart || state.cart.length === 0) {
-          alert(
+          UIDialog.alert(
             "Cannot settle an order with no items. Please add items to the cart.",
           );
           return;
@@ -11392,7 +11391,7 @@
         return;
       }
       if (!state.cart || state.cart.length === 0) {
-        alert(
+        UIDialog.alert(
           "Cannot settle an order with no items. Please add items to the cart.",
         );
         return;
@@ -11642,10 +11641,10 @@
       if (fItem) fItem.focus();
     };
 
-    window.finalizeSettlement = function (printBill = true) {
+    window.finalizeSettlement = async function (printBill = true) {
       if (window._isSubmitting) return;
       if (!state.cart || state.cart.length === 0) {
-        alert("Cannot settle an order with no items.");
+        UIDialog.alert("Cannot settle an order with no items.");
         return;
       }
       const netPayable = Math.max(
@@ -11770,8 +11769,9 @@
           cName === "walk-in" ||
           cName === "walk-in guest"
         ) {
-          const entered = prompt(
+          const entered = await UIDialog.prompt(
             `An unpaid balance of ₹${dueAmt.toFixed(2)} remains.\n\nEnter Customer / Party Name to record on ledger:`,
+            { title: "Customer name needed", placeholder: "Customer / party name", confirmText: "Record on ledger", required: true },
           );
           if (!entered || !entered.trim()) {
             return;
@@ -11822,7 +11822,7 @@
         ) &&
         (!state.cart || state.cart.length === 0)
       ) {
-        alert(
+        UIDialog.alert(
           "Cannot process or settle an order with no items. Please add items to the cart.",
         );
         return;
@@ -11985,7 +11985,7 @@
             data.tender_warnings &&
             data.tender_warnings.length
           ) {
-            alert(
+            UIDialog.alert(
               data.tender_warnings.join("\n") +
               "\n\nThat amount was moved to the balance due.",
             );
@@ -12091,7 +12091,7 @@
               window.location.reload();
             }
           } else {
-            alert(data.error || "Failed to process request. Please try again.");
+            UIDialog.alert(data.error || "Failed to process request. Please try again.");
           }
         })
         .catch((err) => {
@@ -12100,7 +12100,7 @@
           if (fireBtn) fireBtn.disabled = false;
           if (settleBtn) settleBtn.disabled = false;
           console.error(err);
-          alert("An error occurred while communicating with the server.");
+          UIDialog.alert("An error occurred while communicating with the server.");
         });
     }
 
@@ -12244,12 +12244,12 @@
       const reason = reasonSelect ? reasonSelect.value : "Management Courtesy";
 
       if (val < 0) {
-        alert("Discount value cannot be negative.");
+        UIDialog.alert("Discount value cannot be negative.");
         return;
       }
 
       if (isPct && val > 100) {
-        alert("Percentage discount cannot exceed 100%.");
+        UIDialog.alert("Percentage discount cannot exceed 100%.");
         return;
       }
 
@@ -12758,7 +12758,7 @@
     if (!sel) return;
     const opts = Array.from(sel.options).filter((o) => o.value);
     if (opts.length === 0) {
-      alert("No tables configured for this outlet.");
+      UIDialog.alert("No tables configured for this outlet.");
       return;
     }
 
@@ -13496,7 +13496,7 @@
         : 0;
 
     if (grossSubtotal <= 0) {
-      alert(
+      UIDialog.alert(
         "Please add items to the cart first before applying a whole bill discount.",
       );
       return;
@@ -13642,12 +13642,12 @@
     function applyDiscount() {
       const val = parseFloat(valInput.value) || 0;
       if (val <= 0) {
-        alert("Please enter a valid discount amount greater than 0.");
+        UIDialog.alert("Please enter a valid discount amount greater than 0.");
         valInput.focus();
         return;
       }
       if (discType === "percentage" && val > 100) {
-        alert("Percentage discount cannot exceed 100%.");
+        UIDialog.alert("Percentage discount cannot exceed 100%.");
         valInput.focus();
         return;
       }
@@ -14047,7 +14047,7 @@
       const val = parseFloat(valInput.value) || 0;
       if (val < 0) return;
       if (discType === "percentage" && val > 100) {
-        alert("Percentage discount cannot exceed 100%.");
+        UIDialog.alert("Percentage discount cannot exceed 100%.");
         return;
       }
       let calculatedAmt = 0;
@@ -14498,7 +14498,7 @@
     const alt = isMac ? "⌥ Option" : "Alt";
     switch (sc) {
       case "F1":
-        alert(
+        UIDialog.alert(
           "KEYBOARD SHORTCUTS\n" +
           "(F-keys, or " + alt + " + number — e.g. " + alt + "+9 for F9" + (isMac ? "; on a Mac use Fn+F9 for F-keys" : "") + ")\n\n" +
           "• Enter: commit item / add to order\n• Backspace: step back to previous field\n" +
@@ -15240,7 +15240,7 @@
     if (!item) return;
 
     if (item.availability === false || item.is_available === false) {
-      alert(item.name + " is sold out");
+      UIDialog.alert(item.name + " is sold out");
       return;
     }
 
@@ -16312,10 +16312,10 @@
         if (data.success) {
           await window.posCheckShiftStatus();
         } else {
-          alert(data.error || "Failed to create counter.");
+          UIDialog.alert(data.error || "Failed to create counter.");
         }
       } catch (err) {
-        alert("Error creating counter: " + err.message);
+        UIDialog.alert("Error creating counter: " + err.message);
       } finally {
         if (btn) {
           btn.innerHTML = oldHtml;
@@ -16571,7 +16571,7 @@
         document.getElementById("crActualCashInput").value,
       );
       if (isNaN(actual) || actual < 0) {
-        alert("Please enter a valid actual cash count.");
+        UIDialog.alert("Please enter a valid actual cash count.");
         return;
       }
       const notes = (
@@ -16579,7 +16579,7 @@
       ).trim();
 
       if (
-        !confirm(
+        !await UIDialog.confirm(
           "Are you sure you want to finalize and close this register shift? This action will generate the Z-Report and lock the terminal.",
         )
       ) {
@@ -16625,11 +16625,11 @@
           window.posCheckShiftStatus();
         } else {
           window.posClosePreopened([zWin]);
-          alert(data.error || "Failed to close register.");
+          UIDialog.alert(data.error || "Failed to close register.");
         }
       } catch (err) {
         window.posClosePreopened([zWin]);
-        alert("Network error closing register: " + err.message);
+        UIDialog.alert("Network error closing register: " + err.message);
       } finally {
         btn.disabled = false;
         btn.innerHTML = oldHtml;
@@ -17115,7 +17115,7 @@
   window.POS_WAITER_CAN_DISCOUNT = {{ waiter_can_discount|yesno:"true,false" }};
   window.POS_WAITER_TABLES_URL = "{% url 'restaurant_admin:waiter_tables' restaurant_slug=restaurant.slug %}";
   (function () {
-    const say = (m) => (window.toast ? window.toast(m, true) : alert(m));
+    const say = (m) => (window.toast ? window.toast(m, true) : UIDialog.alert(m));
     const typing = (el) => el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
 
     // Keys a waiter has no use for: settle, order type, and discounts unless granted

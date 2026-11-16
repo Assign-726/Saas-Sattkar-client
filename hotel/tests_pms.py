@@ -76,7 +76,7 @@ class PricingTests(PMSTestBase):
 
     def test_admin_booking_uses_seasonal_price(self):
         RateOverride.objects.create(category=self.cat, start_date=self.today, end_date=self.today + datetime.timedelta(days=5), price_per_night=D('5000'))
-        self.client.post(self.url('booking_create'), {'room_id': self.r102.pk, 'guest_name': 'Ravi', 'guest_phone': '98',
+        self.client.post(self.url('booking_create'), {'room_id': self.r102.pk, 'guest_name': 'Ravi', 'guest_phone': '9876543210',
                                                       'check_in_date': self.today.isoformat(),
                                                       'check_out_date': (self.today + datetime.timedelta(days=2)).isoformat(),
                                                       'payment_status': 'PARTIALLY_PAID', 'advance_amount': '3000', 'payment_method': 'UPI',
